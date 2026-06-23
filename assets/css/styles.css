@@ -520,6 +520,9 @@ strong { color: var(--ink); }
   .nav-toggle { display: block; }
   .hero .container { grid-template-columns: 1fr; }
   .hero__media { max-width: 460px; margin-inline: auto; width: 100%; order: -1; }
+  /* on the stacked (tall) mobile hero, size the emblem by width so it keeps
+     its aspect ratio instead of blowing up to 122% of the tall section */
+  .hero__skull { height: auto; width: min(150%, 600px); left: 50%; right: auto; top: 46%; transform: translate(-50%, -50%); }
   .location-grid, .speaker-detail { grid-template-columns: 1fr; }
   .speaker-detail .portrait { position: static; max-width: 360px; }
   .year-block { grid-template-columns: 1fr; }
