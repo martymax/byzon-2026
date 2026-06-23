@@ -299,18 +299,9 @@
     "years": [
       {
         "year": "2025",
-        "kind": "gallery",
+        "kind": "video",
         "local_video": "/assets/video/byzon-2025.mp4",
         "local_video_poster": "/assets/img/2025/08/0793243.jpg",
-        "images": [
-          "/assets/img/2025/08/0793243.jpg",
-          "/assets/img/2025/08/0793241.jpg",
-          "/assets/img/2025/08/0793239.jpg",
-          "/assets/img/2025/08/0793234.jpg",
-          "/assets/img/2025/08/0793230.jpg",
-          "/assets/img/2025/08/0793193.jpg",
-          "/assets/img/2025/08/0793195.jpg"
-        ],
         "button": {
           "label": "Chci vidět fotky z III. ročníku",
           "href": "https://www.facebook.com/media/set/?set=a.778402425249573"
