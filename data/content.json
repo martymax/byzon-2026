@@ -133,7 +133,12 @@
           "Markus Krug je česko-rakouský režisér, který ve své tvorbě posouvá hranice, pracuje s globálními trendy a nebojí se humoru ani nečekaných kontrastů. Věří v sílu příběhů, které dokážou pobavit, dojmout i přimět k zamyšlení.",
           "Studoval film a televizi v USA a má za sebou řadu projektů, které si získaly pozornost širokého publika. Patří mezi ně například reklamní film pro Red Bull Racing a Formuli 1, One Man Show, Praha vs. Prachy nebo spolupráce na reklamních spotech pro značky jako Royal Mail, Carlsberg, Volvo či T‑Mobile.",
           "Aktuálně ho mnozí znají také jako režiséra detektivní hry Zrádci, u které momentálně pracuje na 3. sérii. Jeho tvorba v posledních letech nasbírala stovky milionů zhlédnutí a v roce 2017 byl zařazen do prestižního výběru Forbes 30 pod 30."
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/krugmarkus/",
+          "web": "https://www.markuskrug.com",
+          "instagram": "https://www.instagram.com/markuskrug/"
+        }
       },
       {
         "slug": "lukas-hejlik",
@@ -144,7 +149,10 @@
           "Lukáš Hejlík je český herec a foodbloger. Čtvrtstoletí jezdí po všech luzích Česka i hájích Moravy se svým divadelním projektem Listování.",
           "Posledních 15 let u toho dělá Gastromapu, nezávislého gastronomického průvodce.",
           "Lukáš je takový podcastový tvůrce."
-        ]
+        ],
+        "links": {
+          "instagram": "https://www.instagram.com/lukashejlik/"
+        }
       },
       {
         "slug": "margareta-krizova",
@@ -157,7 +165,12 @@
           "Byla jednou z investorek v české verzi pořadu Den D, v České televizi moderovala pořad zaměřený na finanční gramotnost a v rozhlase uváděla vlastní autorský pořad Podnikání od A do Zet. Vydavatelství Albatros vydalo její knihu Z deníku investorky, která nabízí praktické tipy i inspiraci pro podnikatele a lídry a knihu Třetí kariéra, zaměřenou na osobní a podnikatelský restart po padesátce.",
           "Kromě business a strategického poradenství spolupracuje s firmami jako lektorka, kde se věnuje tématům inovací, business strategie a leadershipu. Je členkou Rady pro komercializaci výsledků vědy a výzkumu České zemědělské univerzity.",
           "Kromě své mentorské a poradenské činnosti aktivně podporuje podnikatelské inovace jako porotkyně v podnikatelských soutěžích. Je propagátorkou principu „modern elder“ – zaměřeného na hodnoty celoživotního vzdělávání, adaptability a mezigenerační spolupráce."
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/margaretakrizova",
+          "web": "https://margaretakrizova.com",
+          "instagram": "https://www.instagram.com/krizovamargee/"
+        }
       },
       {
         "slug": "hana-slacalkova",
@@ -168,7 +181,11 @@
           "Konzultantka pro autentickou komunikaci firem",
           "Po letech v náboru a školení manažerů si uvědomila, že spousta skvělých malých a středních firem má jeden problém – skoro o nich není slyšet. Proto dnes pomáhá firmám ukazovat jejich příběhy, lidi a hodnoty tak, aby byly vidět přirozeně a důvěryhodně.",
           "Věnuje se hlavně osobním značkám zakladatelů, firemnímu ambasadoringu a HR marketingu. Ukazuje firmám, jak propojit online komunikaci, osobní setkávání a dlouhodobé vztahy tak, aby si kolem sebe budovaly komunitu lidí, kteří je přirozeně doporučují dál."
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/hanaslacalkova/",
+          "web": "https://www.slacalkova.cz"
+        }
       },
       {
         "slug": "jiri-jemelka",
@@ -188,7 +205,12 @@
           "Andrea Bohačíková je podnikatelka, mentorka a zakladatelka ekosystému M.arter, který již sedm let mění český pohled na rodičovskou dovolenou, flexibilitu práce, diverzitu, inkluzi a prorodinnou firemní politiku. Pod jejím vedením se M.arter stal lídrem v podpoře rodičů a zaměstnavatelů a vytvořil největší komunitu proaktivních rodičů v České republice.",
           "Dlouhodobě se věnuje systémovým změnám na trhu práce, spolupracuje s firmami, institucemi i státní správou a podílí se na připomínkování legislativy v oblasti zaměstnanosti, rodičovství a slaďování pracovního a rodinného života. Vede 30členný tým fungující ve 100% remote režimu. Kromě M.arter stojí také za dalšími iniciativami a projekty zaměřenými na leadership, podnikání, networking, podporu žen a budování komunit. Je mentorkou startupů i jednotlivců a je známá tím, že místo hledání důvodů, proč něco nejde, systematicky hledá, co se dá změnit.",
           "Za svou práci získala řadu ocenění, mimo jiné titul Žena roku 2024, Most Dedicated Parental Support & Diversity Leader 2024 v rámci CEO Excellence Awards a byla zařazena mezi Deloitte Technology Fast 50 – Impact Stars 2024. M.arter byl oceněn jako příklad dobré praxe Ministerstva práce a sociálních věcí, získal 3. místo v Cenách SDGs v kategorii Diverzita, rovnost a inkluze a ocenění Inovativní zaměstnanecký benefit roku 2023 v rámci Profi HR Awards."
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/andreabohacikova",
+          "web": "https://www.marter.cz",
+          "instagram": "https://www.instagram.com/andyb_original/"
+        }
       },
       {
         "slug": "petr-dvorak",
@@ -224,7 +246,10 @@
         "role": "Chief Executive Officer, Chairman of the Board CZ&SK ve společnosti Trenkwalder Czech Republic",
         "bio": [
           "Úspěšný byznys stojí především na lidech. Michal Veselý vede společnost Trenkwalder v České republice a na Slovensku, má za sebou více než dvě dekády zkušeností v HR a workforce solutions a dlouhodobě pomáhá firmám růst prostřednictvím správných lidí. Vedle role CEO je známý svým lidským přístupem, energií a schopností propojovat obchodní výsledky s firemní kulturou"
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/michal-vesel%C3%BD-a3275424/?locale=cs"
+        }
       },
       {
         "slug": "barbora-tumova",
@@ -233,7 +258,10 @@
         "role": "Specialistka na Employer Branding a ambasadoring v dm drogerie markt",
         "bio": [
           "Bára je specialistka na employer branding v dm drogerie markt, kde čtvrtým rokem rozvíjí značku zaměstnavatele skrze autentické propojování firemní kultury s moderními trendy. Do kampaní na soc. sítích jako je např. LinkedIn, TikTok a Facebook obsazuje výhradně skutečné spolupracovníky a spolupracovnice. Věří, že pravá podstata značky zaměstnavatele se pozná skrze lidi, kteří v déemku skutečně pracují."
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/barboratumova/"
+        }
       },
       {
         "slug": "ondrej-vojacek",
@@ -244,7 +272,11 @@
           "Je najímán jako externí vyjednavač a konzultant při důležitých obchodních vyjednáváních firem různých velikostí. Své firemní i soukromé klienty úspěšně zastupoval v řadě složitých vyjednávání a přinesl výsledky v řádu stovek milionů Kč.",
           "Své know-how předává skrze tréninky vyjednávání a individuální koučink na míru pro CEO a management firem.",
           "Řeší 10 – 15 komplexních vyjednávání ročně a trénuje vyjednávání 20 – 40 dnů v roce."
-        ]
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/ondrejvojacek/",
+          "web": "https://ondrejvojacek.cz/"
+        }
       }
     ]
   },

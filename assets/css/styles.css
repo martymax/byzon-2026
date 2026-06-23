@@ -477,7 +477,14 @@ strong { color: var(--ink); }
 .speaker-detail { display: grid; grid-template-columns: 360px 1fr; gap: clamp(28px, 5vw, 60px); align-items: start; }
 .speaker-detail .portrait { border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow); position: sticky; top: 100px; background: var(--ink); aspect-ratio: 4/5; }
 .speaker-detail .portrait img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
-.speaker-detail .role { font-family: var(--font-display); color: var(--pink); font-size: 1.3rem; font-weight: 500; margin: 6px 0 24px; }
+.speaker-detail .role { font-family: var(--font-display); color: var(--pink); font-size: 1.3rem; font-weight: 500; margin: 6px 0 18px; }
+.speaker-socials { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 28px; }
+.speaker-socials a {
+  width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%;
+  color: var(--pink); background: var(--pink-50); border: 1px solid var(--pink-100);
+  transition: background .25s, transform .25s, color .25s, box-shadow .25s;
+}
+.speaker-socials a:hover { background: var(--pink); color: #fff; transform: translateY(-3px); box-shadow: var(--shadow-pink); }
 .speaker-detail .bio p { margin-bottom: 18px; font-size: 1.1rem; }
 .speaker-back { margin-bottom: 24px; }
 

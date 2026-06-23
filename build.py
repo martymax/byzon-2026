@@ -57,9 +57,20 @@ ICONS = {
     "tool": '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-2.1 2.6-2.4z"/></svg>',
     "award": '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>',
     "facebook": '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>',
+    "linkedin": '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3.4a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8zM3 9h4v12H3V9zm7 0h3.8v1.6h.1c.5-1 1.8-2 3.8-2 4 0 4.8 2.6 4.8 6.1V21h-4v-5.6c0-1.3 0-3-1.9-3s-2.1 1.4-2.1 2.9V21h-4V9z"/></svg>',
+    "web": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>',
     "instagram": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
+    "youtube": '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.2 31.2 0 0 0 0 12c0 2 .2 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.3-1.9.5-3.8.5-5.8s-.2-3.9-.5-5.8zM9.8 15.5v-7l6.2 3.5-6.2 3.5z"/></svg>',
     "mail": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>',
 }
+
+
+SPEAKER_LINKS = (
+    ("linkedin", "LinkedIn"),
+    ("web", "Web"),
+    ("instagram", "Instagram"),
+    ("youtube", "YouTube"),
+)
 
 
 def stage_icon(name):
@@ -282,6 +293,21 @@ def speaker_card(sp):
     return f"""<a class="speaker-card reveal" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
       <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}">
     </a>"""
+
+
+def speaker_socials(sp):
+    links = sp.get("links") or {}
+    items = []
+    for key, label in SPEAKER_LINKS:
+        href = links.get(key)
+        if href:
+            items.append(
+                f'<a href="{att(href)}" target="_blank" rel="noopener" '
+                f'title="{att(label)}" aria-label="{att(label + " – " + sp["name"])}">{ICONS[key]}</a>'
+            )
+    if not items:
+        return ""
+    return f'<nav class="speaker-socials" aria-label="{att("Odkazy řečníka " + sp["name"])}">{"".join(items)}</nav>'
 
 
 def sec_speakers():
@@ -559,6 +585,7 @@ def page_partner():
 def page_speaker(sp):
     cta = C["cta"]
     role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
+    socials = speaker_socials(sp)
     bio = "".join(f"<p>{esc(p)}</p>" for p in sp["bio"])
     body = (
         header("/", solid=True)
@@ -572,6 +599,7 @@ def page_speaker(sp):
         <span class="eyebrow">Řečník BYZON 2026</span>
         <h1>{esc(sp['name'])}</h1>
         {role}
+        {socials}
         <div class="bio">{bio}</div>
         <div class="hero__actions" style="margin-top:30px">
           <a class="btn" href="{att(cta['href'])}">{esc(cta['label'])} {ICONS['arrow']}</a>
