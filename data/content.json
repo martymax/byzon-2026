@@ -476,8 +476,7 @@
               { "time": "9:30 - 11:00", "title": "Workshop: Leonid Kushnir", "meta": "1,5 hod." },
               { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
               { "time": "11:15 - 12:45", "title": "Workshop: Blanka Mrázková", "meta": "1,5 hod." },
-              { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" },
-              { "time": "13:00 - 14:15", "title": "Oběd", "type": "meal" }
+              { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" }
             ]
           },
           {
