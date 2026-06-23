@@ -99,21 +99,25 @@
     reveals.forEach(function (el) { el.classList.add("in"); });
   }
 
-  /* ---- Time-limited ticket tiers: grey out + disable past the deadline -- */
-  doc.querySelectorAll(".price-card[data-deadline]").forEach(function (card) {
-    var end = new Date(card.getAttribute("data-deadline") + "T23:59:59");
-    if (isNaN(end.getTime()) || Date.now() <= end.getTime()) return;
-    card.classList.add("is-expired");
-    card.classList.remove("is-featured");
+  /* ---- Ticket tiers by date window: exactly one active (clickable) ------ */
+  var now = Date.now();
+  doc.querySelectorAll(".price-card[data-active-from], .price-card[data-active-to]").forEach(function (card) {
+    var from = card.getAttribute("data-active-from");
+    var to = card.getAttribute("data-active-to");
+    var f = from ? new Date(from + "T00:00:00").getTime() : -Infinity;
+    var t = to ? new Date(to + "T23:59:59").getTime() : Infinity;
+    if (now >= f && now <= t) {
+      card.classList.add("is-active");
+      return;
+    }
+    card.classList.add("is-inactive");
     var btn = card.querySelector(".btn");
     if (btn) {
       btn.removeAttribute("href");
       btn.setAttribute("aria-disabled", "true");
       btn.setAttribute("tabindex", "-1");
-      btn.textContent = "Prodej ukončen";
+      btn.textContent = (now < f) ? "Již brzy" : "Prodej ukončen";
     }
-    var note = card.querySelector(".expired-note");
-    if (note) note.hidden = false;
   });
 
   /* ---- Year (current) in footer ---------------------------------------- */

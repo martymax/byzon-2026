@@ -255,14 +255,16 @@ def sec_vstupenky():
     deadlines = "".join(f"<li>{ICONS['clock']} {esc(x)}</li>" for x in d["deadlines"])
     tiers = ""
     for t in d["tiers"]:
-        feat = " is-featured" if t.get("featured") else ""
-        dl = f' data-deadline="{att(t["deadline"])}"' if t.get("deadline") else ""
-        tiers += f"""<article class="price-card{feat} reveal"{dl}>
+        win = ""
+        if t.get("active_from"):
+            win += f' data-active-from="{att(t["active_from"])}"'
+        if t.get("active_to"):
+            win += f' data-active-to="{att(t["active_to"])}"'
+        tiers += f"""<article class="price-card reveal"{win}>
         <h3>{esc(t['name'])}</h3>
         <div class="price">{esc(t['price'])}</div>
         <p class="until">Platí {esc(t['note'])}</p>
         <a class="btn btn--block" href="{att(cta['href'])}">{esc(cta['label'])} {ICONS['arrow']}</a>
-        <p class="expired-note" hidden>Prodej této vstupenky byl ukončen.</p>
       </article>"""
     return f"""<section class="section section--soft" id="vstupenky">
   <div class="container">
