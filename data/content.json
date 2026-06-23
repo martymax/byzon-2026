@@ -7,6 +7,10 @@
     "url": "https://byzon.cz/",
     "media_base": "https://byzon.cz/wp-content/uploads",
     "logo": "https://byzon.cz/wp-content/uploads/2025/05/Logo-na-sirku.png",
+    "logo_wordmark": "/assets/img/brand/logo.png",
+    "logo_wordmark_light": "/assets/img/brand/logo-light.png",
+    "skull": "/assets/img/brand/skull.webp",
+    "arrow": "/assets/img/brand/arrow.webp",
     "favicon": "https://byzon.cz/wp-content/uploads/2025/05/Logo-na-sirku-150x150.png",
     "og_image": "https://byzon.cz/wp-content/uploads/2025/05/IMG_3694.jpeg",
     "email": "jsem@byzon.cz",
@@ -40,6 +44,7 @@
   "hero": {
     "eyebrow": "Byzon 2026",
     "title": "Lidskost jako konkurenční výhoda",
+    "title_accent": "konkurenční výhoda",
     "date": "18.–19. září 2026",
     "venue": "Clarion Congress Hotel, České Budějovice",
     "lead": "2 dny LIDSKOSTI v praxi. A energie, která může změnit směr.",

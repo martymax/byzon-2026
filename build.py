@@ -101,7 +101,10 @@ def header(active, solid=False):
     cta = C["cta"]
     return f"""<header class="{cls}">
   <div class="container">
-    <a class="brand" href="/" aria-label="BYZON – domů"><img src="{att(s['logo'])}" alt="Byzon" width="120" height="42" data-fallback="BYZON"></a>
+    <a class="brand" href="/" aria-label="BYZON – domů">
+      <img class="logo-on-dark" src="{att(s['logo_wordmark_light'])}" alt="Byzon" width="190" height="30" data-fallback="BYZON">
+      <img class="logo-on-light" src="{att(s['logo_wordmark'])}" alt="Byzon" width="190" height="30" data-fallback="BYZON">
+    </a>
     <nav class="nav" aria-label="Hlavní navigace">{nav_links}</nav>
     <div class="header-cta">
       <a class="btn btn--sm" href="{att(cta['href'])}">{esc(cta['label'])} {ICONS['arrow']}</a>
@@ -123,7 +126,7 @@ def drawer(active):
   <div class="drawer__scrim" data-drawer-close></div>
   <div class="drawer__panel" role="dialog" aria-modal="true" aria-label="Menu">
     <div class="drawer__head">
-      <img src="{att(s['logo'])}" alt="Byzon" data-fallback="BYZON">
+      <img src="{att(s['logo_wordmark_light'])}" alt="Byzon" data-fallback="BYZON">
       <button class="drawer__close" aria-label="Zavřít menu" data-drawer-close>&times;</button>
     </div>
     {links}
@@ -147,7 +150,7 @@ def footer():
   <div class="container">
     <div class="footer-top">
       <div class="footer-brand">
-        <img src="{att(s['logo'])}" alt="Byzon" data-fallback="BYZON">
+        <img class="footer-logo" src="{att(s['logo_wordmark_light'])}" alt="Byzon" data-fallback="BYZON">
         <p>Byznysová konference, která staví na lidskosti. 18.–19. září 2026, Clarion Congress Hotel, České Budějovice.</p>
         <div class="socials">
           <a href="{att(s['social']['facebook'])}" target="_blank" rel="noopener" aria-label="Facebook">{ICONS['facebook']}</a>
@@ -375,11 +378,16 @@ def page_home():
     s = C["site"]; h = C["hero"]; cta = C["cta"]
     badges = "".join(f'<span class="badge">{esc(b)}</span>' for b in h["badges"])
     imgs = h["images"]
+    title_html = esc(h["title"])
+    if h.get("title_accent"):
+        title_html = title_html.replace(esc(h["title_accent"]),
+                                        f'<span class="accent">{esc(h["title_accent"])}</span>', 1)
     hero = f"""<section class="hero">
+  <img class="hero__skull" src="{att(s['skull'])}" alt="" aria-hidden="true" loading="eager">
   <div class="container">
     <div class="hero__text">
       <span class="eyebrow hero__eyebrow">{esc(h['eyebrow'])}</span>
-      <h1>{esc(h['title'])}</h1>
+      <h1>{title_html}</h1>
       <div class="hero__meta">
         <span>{ICONS['calendar']} {esc(h['date'])}</span>
         <span>{ICONS['pin']} {esc(h['venue'])}</span>
