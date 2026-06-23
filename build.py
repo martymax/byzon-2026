@@ -263,14 +263,8 @@ def sec_vstupenky():
 
 
 def speaker_card(sp):
-    role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
-    return f"""<a class="speaker-card reveal" href="/speaker/{att(sp['slug'])}/">
-      <div class="photo"><img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}"></div>
-      <div class="overlay">
-        <div class="name">{esc(sp['name'])}</div>
-        {role}
-        <span class="more">Zobrazit profil {ICONS['arrow']}</span>
-      </div>
+    return f"""<a class="speaker-card reveal" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
+      <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}">
     </a>"""
 
 
