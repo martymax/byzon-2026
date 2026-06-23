@@ -5,14 +5,14 @@
     "description": "18.–19. září 2026 | Clarion Congress Hotel, České Budějovice 2 dny LIDSKOSTI v praxi: 14 speakerů | 6 leadership case studies | 2 profi workshopy | Řízený networking. A energie, která může změnit směr",
     "lang": "cs",
     "url": "https://byzon.cz/",
-    "media_base": "https://byzon.cz/wp-content/uploads",
-    "logo": "https://byzon.cz/wp-content/uploads/2025/05/Logo-na-sirku.png",
+    "media_base": "/assets/img",
+    "logo": "/assets/img/2025/05/Logo-na-sirku.png",
     "logo_wordmark": "/assets/img/brand/logo.png",
     "logo_wordmark_light": "/assets/img/brand/logo-light.png",
     "skull": "/assets/img/brand/skull.webp",
     "arrow": "/assets/img/brand/arrow.webp",
-    "favicon": "https://byzon.cz/wp-content/uploads/2025/05/Logo-na-sirku-150x150.png",
-    "og_image": "https://byzon.cz/wp-content/uploads/2025/05/IMG_3694.jpeg",
+    "favicon": "/assets/img/2025/05/Logo-na-sirku-150x150.png",
+    "og_image": "/assets/img/2025/05/IMG_3694.jpeg",
     "email": "jsem@byzon.cz",
     "social": {
       "facebook": "https://www.facebook.com/byzoncz",
@@ -55,11 +55,11 @@
       "Řízený networking"
     ],
     "images": [
-      "https://byzon.cz/wp-content/uploads/2025/05/IMG_3694.jpeg",
-      "https://byzon.cz/wp-content/uploads/2025/05/IMG_3702.jpeg",
-      "https://byzon.cz/wp-content/uploads/2025/05/IMG_3703.jpeg",
-      "https://byzon.cz/wp-content/uploads/2025/05/IMG_3692.jpeg",
-      "https://byzon.cz/wp-content/uploads/2025/05/IMG_3693.jpeg"
+      "/assets/img/2025/05/IMG_3694.jpeg",
+      "/assets/img/2025/05/IMG_3702.jpeg",
+      "/assets/img/2025/05/IMG_3703.jpeg",
+      "/assets/img/2025/05/IMG_3692.jpeg",
+      "/assets/img/2025/05/IMG_3693.jpeg"
     ]
   },
   "co_vas_ceka": {
@@ -128,7 +128,7 @@
       {
         "slug": "markus-krug",
         "name": "Markus Krug",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Markus-Krug.png",
+        "photo": "/assets/img/2026/06/Markus-Krug.png",
         "role": "filmový a reklamní režisér, tvůrce pořadu Zrádci a projektů s globálním přesahem",
         "bio": [
           "Markus Krug je česko-rakouský režisér, který ve své tvorbě posouvá hranice, pracuje s globálními trendy a nebojí se humoru ani nečekaných kontrastů. Věří v sílu příběhů, které dokážou pobavit, dojmout i přimět k zamyšlení.",
@@ -139,7 +139,7 @@
       {
         "slug": "lukas-hejlik",
         "name": "Lukáš Hejlík",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Lukas-Hejlik.png",
+        "photo": "/assets/img/2026/06/Lukas-Hejlik.png",
         "role": "Herec, tvůrce Gastromapy a propagátor lokálního podnikání",
         "bio": [
           "Lukáš Hejlík je český herec a foodbloger. Čtvrtstoletí jezdí po všech luzích Česka i hájích Moravy se svým divadelním projektem Listování.",
@@ -150,7 +150,7 @@
       {
         "slug": "margareta-krizova",
         "name": "Margareta Křížová",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Margareta-Krizova.png",
+        "photo": "/assets/img/2026/06/Margareta-Krizova.png",
         "role": "byznys mentorka a poradkyně v oblasti fúzí a akvizic (M&A)",
         "bio": [
           "Margareta Křížová, MBA je byznys mentorka a poradkyně v oblasti fúzí a akvizic (M&A) s více než 30 lety zkušeností. V roce 1993 spoluzaložila poradenskou firmu CEAG, kde vedla tým M&A se zaměřením na vyhledávání investičních příležitostí a management transakčního procesu.",
@@ -163,7 +163,7 @@
       {
         "slug": "hana-slacalkova",
         "name": "Hana Slačálková",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Hana-Slacalkova.png",
+        "photo": "/assets/img/2026/06/Hana-Slacalkova.png",
         "role": "HR marketing, Brand a firemní ambasadoring",
         "bio": [
           "Konzultantka pro autentickou komunikaci firem",
@@ -174,7 +174,7 @@
       {
         "slug": "jiri-jemelka",
         "name": "Jiří Jemelka",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Jiri-Jemelka.png",
+        "photo": "/assets/img/2026/06/Jiri-Jemelka.png",
         "role": "Zakladatel J.I.P. pro firmy, byznys mentor a interim manažer",
         "bio": [
           "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
@@ -183,7 +183,7 @@
       {
         "slug": "andrea-bohacikova",
         "name": "Andrea Bohačíková",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Andrea-Bohacikova1.png",
+        "photo": "/assets/img/2026/06/Andrea-Bohacikova1.png",
         "role": "CEO & Founder, M.arter",
         "bio": [
           "Andrea Bohačíková je podnikatelka, mentorka a zakladatelka ekosystému M.arter, který již sedm let mění český pohled na rodičovskou dovolenou, flexibilitu práce, diverzitu, inkluzi a prorodinnou firemní politiku. Pod jejím vedením se M.arter stal lídrem v podpoře rodičů a zaměstnavatelů a vytvořil největší komunitu proaktivních rodičů v České republice.",
@@ -194,7 +194,7 @@
       {
         "slug": "petr-dvorak",
         "name": "Petr Dvořák",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Petr-Dvorak.png",
+        "photo": "/assets/img/2026/06/Petr-Dvorak.png",
         "role": "",
         "bio": [
           "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
@@ -203,7 +203,7 @@
       {
         "slug": "simon-srp",
         "name": "Šimon Srp",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Simon-Srp.png",
+        "photo": "/assets/img/2026/06/Simon-Srp.png",
         "role": "",
         "bio": [
           "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
@@ -212,7 +212,7 @@
       {
         "slug": "konstancie-zelezna",
         "name": "Konstancie Železná",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Konstancie-Zelezna.png",
+        "photo": "/assets/img/2026/06/Konstancie-Zelezna.png",
         "role": "",
         "bio": [
           "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
@@ -221,7 +221,7 @@
       {
         "slug": "michal-vesely",
         "name": "Michal Veselý",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Michal-Vesely.png",
+        "photo": "/assets/img/2026/06/Michal-Vesely.png",
         "role": "Chief Executive Officer, Chairman of the Board CZ&SK ve společnosti Trenkwalder Czech Republic",
         "bio": [
           "Úspěšný byznys stojí především na lidech. Michal Veselý vede společnost Trenkwalder v České republice a na Slovensku, má za sebou více než dvě dekády zkušeností v HR a workforce solutions a dlouhodobě pomáhá firmám růst prostřednictvím správných lidí. Vedle role CEO je známý svým lidským přístupem, energií a schopností propojovat obchodní výsledky s firemní kulturou"
@@ -230,7 +230,7 @@
       {
         "slug": "barbora-tumova",
         "name": "Barbora Tůmová",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Barbora-Tumova.png",
+        "photo": "/assets/img/2026/06/Barbora-Tumova.png",
         "role": "Specialistka na Employer Branding a ambasadoring v dm drogerie markt",
         "bio": [
           "Bára je specialistka na employer branding v dm drogerie markt, kde čtvrtým rokem rozvíjí značku zaměstnavatele skrze autentické propojování firemní kultury s moderními trendy. Do kampaní na soc. sítích jako je např. LinkedIn, TikTok a Facebook obsazuje výhradně skutečné spolupracovníky a spolupracovnice. Věří, že pravá podstata značky zaměstnavatele se pozná skrze lidi, kteří v déemku skutečně pracují."
@@ -239,7 +239,7 @@
       {
         "slug": "ondrej-vojacek",
         "name": "Ondřej Vojáček",
-        "photo": "https://byzon.cz/wp-content/uploads/2026/06/Ondrej-Vojacek.png",
+        "photo": "/assets/img/2026/06/Ondrej-Vojacek.png",
         "role": "Vyjednavač, konzultant, lektor",
         "bio": [
           "Je najímán jako externí vyjednavač a konzultant při důležitých obchodních vyjednáváních firem různých velikostí. Své firemní i soukromé klienty úspěšně zastupoval v řadě složitých vyjednávání a přinesl výsledky v řádu stovek milionů Kč.",
@@ -253,7 +253,7 @@
     "title": "Kde se bude konference odehrávat",
     "name": "Clarion Congress Hotel v Českých Budějovicích",
     "text": "Hotel je v centru Českých Budějovic. Pokud přijedete vlakem, hotel je kousek od hlavního vlakového nádraží. Pro cestu autem doporučujeme zaparkovat na hotelovém parkovišti za poplatek. U hotelu je zastávka trolejbusů Družba ⁠-⁠ IGY.",
-    "image": "https://byzon.cz/wp-content/uploads/2023/04/clarion.jpg",
+    "image": "/assets/img/2023/04/clarion.jpg",
     "map_query": "Clarion Congress Hotel České Budějovice"
   },
   "rocniky": {
@@ -264,13 +264,13 @@
         "year": "2025",
         "kind": "gallery",
         "images": [
-          "https://byzon.cz/wp-content/uploads/2025/08/0793243.jpg",
-          "https://byzon.cz/wp-content/uploads/2025/08/0793241.jpg",
-          "https://byzon.cz/wp-content/uploads/2025/08/0793239.jpg",
-          "https://byzon.cz/wp-content/uploads/2025/08/0793234.jpg",
-          "https://byzon.cz/wp-content/uploads/2025/08/0793230.jpg",
-          "https://byzon.cz/wp-content/uploads/2025/08/0793193.jpg",
-          "https://byzon.cz/wp-content/uploads/2025/08/0793195.jpg"
+          "/assets/img/2025/08/0793243.jpg",
+          "/assets/img/2025/08/0793241.jpg",
+          "/assets/img/2025/08/0793239.jpg",
+          "/assets/img/2025/08/0793234.jpg",
+          "/assets/img/2025/08/0793230.jpg",
+          "/assets/img/2025/08/0793193.jpg",
+          "/assets/img/2025/08/0793195.jpg"
         ],
         "button": {
           "label": "Chci vidět fotky z III. ročníku",
@@ -304,37 +304,37 @@
     "logos": [
       {
         "name": "JCI Czech Republic",
-        "src": "https://byzon.cz/wp-content/uploads/2026/06/JCI-Czech-Republic-WHITE.svg",
+        "src": "/assets/img/2026/06/JCI-Czech-Republic-WHITE.svg",
         "on_dark": true
       },
       {
         "name": "Finovo",
-        "src": "https://byzon.cz/wp-content/uploads/2026/06/finovo.svg",
+        "src": "/assets/img/2026/06/finovo.svg",
         "on_dark": false
       },
       {
         "name": "Borovka Event",
-        "src": "https://byzon.cz/wp-content/uploads/2025/10/borovka_event-e1780847651744-300x99.png",
+        "src": "/assets/img/2025/10/borovka_event-e1780847651744-300x99.png",
         "on_dark": false
       },
       {
         "name": "BM Viva Marketing",
-        "src": "https://byzon.cz/wp-content/uploads/2025/06/bm_vivamarketing_logo2024_rgb_black-300x212.png",
+        "src": "/assets/img/2025/06/bm_vivamarketing_logo2024_rgb_black-300x212.png",
         "on_dark": false
       },
       {
         "name": "Moderní Leader",
-        "src": "https://byzon.cz/wp-content/uploads/2024/06/Moderní_leader_logo_RGB_modra-3-300x96.png",
+        "src": "/assets/img/2024/06/Moderní_leader_logo_RGB_modra-3-300x96.png",
         "on_dark": false
       },
       {
         "name": "Jihočeská hospodářská komora",
-        "src": "https://byzon.cz/wp-content/uploads/2023/04/JHK_logo_podelne-300x138.png",
+        "src": "/assets/img/2023/04/JHK_logo_podelne-300x138.png",
         "on_dark": false
       },
       {
         "name": "Horizont",
-        "src": "https://byzon.cz/wp-content/uploads/2023/08/horizont_full-removebg-preview-300x81.png",
+        "src": "/assets/img/2023/08/horizont_full-removebg-preview-300x81.png",
         "on_dark": false
       }
     ],
@@ -371,14 +371,14 @@
     "title": "Staňte se partnerem",
     "lead": "Spojte svou značku s konferencí, která staví na lidskosti. Prolistujte si nabídku partnerství.",
     "brochure": [
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0001-1.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0002.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0003.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0004.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0005.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0006-1.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0007-1.jpg",
-      "https://byzon.cz/wp-content/uploads/2026/05/BYZON_Brozura-pro-partnery-0008-1.jpg"
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0001-1.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0002.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0003.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0004.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0005.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0006-1.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0007-1.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0008-1.jpg"
     ]
   },
   "simpleshop": {

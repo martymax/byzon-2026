@@ -62,8 +62,11 @@ def stage_icon(name):
 # ----------------------------------------------------------- components ------
 def head(title, description, page_path, og_image=None):
     s = C["site"]
-    url = "https://byzon.cz" + page_path
+    base = s["url"].rstrip("/")
+    url = base + page_path
     ogi = og_image or s["og_image"]
+    if not ogi.startswith("http"):
+        ogi = base + ogi  # social images must be absolute
     return f"""<!doctype html>
 <html lang="{s['lang']}">
 <head>
