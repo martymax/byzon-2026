@@ -382,22 +382,121 @@
   },
   "program": {
     "title": "Program",
-    "notice": "Časové sloty programu pro vás aktuálně finálně ladíme, již brzy budou zveřejněny.",
+    "notice": "Program je zveřejněný podle aktuálního harmonogramu a může se ještě mírně změnit.",
     "days": [
       {
         "name": "Pátek",
+        "date": "18. září 2026",
         "stages": [
-          "BYZON Stage",
-          "Leadership Stage",
-          "Koučovací zóna",
-          "Networking a afterparty"
+          {
+            "name": "BYZON Stage",
+            "events": [
+              { "time": "8:00 - 9:00", "title": "Registrace", "type": "shared", "span": "all" },
+              { "time": "9:00 - 9:15", "title": "Úvod", "type": "shared" },
+              { "time": "9:15 - 10:00", "title": "Margareta Křížová" },
+              { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček" },
+              { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
+              { "time": "10:45 - 11:15", "title": "Lukáš Hejlík" },
+              { "time": "11:15 - 11:45", "title": "Hana Slačálková" },
+              { "time": "11:45 - 12:15", "title": "Panelová diskuze", "meta": "Konstancie Železná, Vladimír Macoun", "type": "discussion" },
+              { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
+              { "time": "13:15 - 13:45", "title": "David Kolář" },
+              { "time": "13:45 - 14:15", "title": "Andrea Bohačíková" },
+              { "time": "14:15 - 14:45", "title": "Šimon Srp" },
+              { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
+              { "time": "15:15 - 15:45", "title": "Panelová diskuze", "meta": "Barbora Tůmová, Petr Dvořák, Michal Veselý", "type": "discussion" },
+              { "time": "15:45 - 16:15", "title": "Ondřej Vojáček" },
+              { "time": "16:15 - 16:45", "title": "Jiří Jemelka" },
+              { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
+              { "time": "17:00 - 17:45", "title": "Markus Krug", "meta": "rozhovor s moderátorem" },
+              { "time": "17:45 - 18:00", "title": "Tombola, závěr", "type": "shared" },
+              { "time": "18:00 - 18:15", "title": "Společné foto před Clarionem", "meta": "z dronu", "type": "shared" }
+            ]
+          },
+          {
+            "name": "Leadership Stage",
+            "events": [
+              { "time": "9:00 - 10:15", "title": "Společně na BYZON Stage", "type": "shared" },
+              { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
+              { "time": "10:45 - 11:15", "title": "Leonid Kushnir" },
+              { "time": "11:15 - 11:45", "title": "Jan Plojhar" },
+              { "time": "11:45 - 12:15", "title": "Blanka Mrázková" },
+              { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
+              { "time": "13:15 - 13:45", "title": "Patrik Čada" },
+              { "time": "13:45 - 14:15", "title": "Andrea Bílá" },
+              { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
+              { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
+              { "time": "15:15 - 16:45", "title": "Společně na BYZON Stage", "type": "shared" },
+              { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
+              { "time": "17:00 - 18:15", "title": "Společně na BYZON Stage", "type": "shared" },
+              { "time": "18:15 - 19:15", "title": "Volný program", "type": "shared" },
+              { "time": "19:15 - 24:00", "title": "Řízený networking a afterparty", "type": "social" }
+            ]
+          },
+          {
+            "name": "Koučovací zóna",
+            "note": "Koučování probíhá v paralelních 30minutových slotech.",
+            "events": [
+              { "time": "9:15 - 9:45", "title": "Koučovací sloty" },
+              { "time": "9:45 - 10:15", "title": "Koučovací sloty" },
+              { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
+              { "time": "10:45 - 11:15", "title": "Koučovací sloty" },
+              { "time": "11:15 - 11:45", "title": "Koučovací sloty" },
+              { "time": "11:45 - 12:15", "title": "Koučovací sloty" },
+              { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
+              { "time": "13:15 - 13:45", "title": "Koučovací sloty" },
+              { "time": "13:45 - 14:15", "title": "Koučovací sloty" },
+              { "time": "14:15 - 14:45", "title": "Koučovací sloty" },
+              { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
+              { "time": "15:15 - 15:45", "title": "Koučovací sloty" },
+              { "time": "15:45 - 16:15", "title": "Koučovací sloty" },
+              { "time": "16:15 - 16:45", "title": "Koučovací sloty" }
+            ]
+          },
+          {
+            "name": "Networking a afterparty",
+            "events": [
+              { "time": "18:15 - 19:15", "title": "Volný program" },
+              { "time": "19:15 - 20:45", "title": "Tomáš Řezníček", "meta": "řízený networking" },
+              { "time": "20:45 - 24:00", "title": "DJ + program", "type": "social" },
+              { "time": "24:00 - ?", "title": "Ukončení na Clarionu", "meta": "přesun na after-afterparty", "type": "social" }
+            ]
+          }
         ]
       },
       {
         "name": "Sobota",
+        "date": "19. září 2026",
         "stages": [
-          "Leadership Workshopy | Clarion",
-          "Galakoktejl | Solnice"
+          {
+            "name": "IN LOCO Clarion",
+            "events": [
+              { "time": "9:00 - 9:15", "title": "Registrace", "type": "shared" },
+              { "time": "9:15 - 9:30", "title": "Úvod představení JCI", "type": "shared" },
+              { "time": "9:30 - 11:00", "title": "Workshop: Leonid Kushnir", "meta": "1,5 hod." },
+              { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
+              { "time": "11:15 - 12:45", "title": "Workshop: Blanka Mrázková", "meta": "1,5 hod." },
+              { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" },
+              { "time": "13:00 - 14:15", "title": "Oběd", "type": "meal" }
+            ]
+          },
+          {
+            "name": "Předsálí Clarion",
+            "events": [
+              { "time": "9:15 - 9:30", "title": "Společně v sálu IN LOCO", "type": "shared" },
+              { "time": "9:30 - 11:00", "title": "Mastermind část 1", "meta": "Tomáš Ryza" },
+              { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
+              { "time": "11:15 - 12:45", "title": "Mastermind část 2", "meta": "Tomáš Ryza" },
+              { "time": "12:45 - 13:00", "title": "Společně v sálu IN LOCO", "type": "shared" }
+            ]
+          },
+          {
+            "name": "Solnice",
+            "events": [
+              { "time": "15:15 - 17:15", "title": "Finále JCI Debating 2026" },
+              { "time": "17:15 - 18:30", "title": "Galakoktejl - Vyhlášení soutěže Výjimečný Jihočech 2026", "meta": "předání cen JCI awards, nejlepší projekty, leader roku", "type": "social" }
+            ]
+          }
         ]
       }
     ]

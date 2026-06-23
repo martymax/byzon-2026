@@ -72,16 +72,330 @@ SPEAKER_LINKS = (
     ("youtube", "YouTube"),
 )
 
+SPEAKER_SLUGS = {
+    sp["name"]: sp["slug"]
+    for sp in C.get("speakers", {}).get("list", [])
+    if sp.get("name") and sp.get("slug")
+}
+SPEAKER_NAME_RE = re.compile(
+    "|".join(re.escape(n) for n in sorted(SPEAKER_SLUGS, key=len, reverse=True))
+) if SPEAKER_SLUGS else None
+
 
 def stage_icon(name):
     n = name.lower()
     if "byzon stage" in n: return ICONS["mic"]
     if "leadership stage" in n: return ICONS["users"]
+    if "loco" in n or "workshop" in n: return ICONS["tool"]
+    if "předsálí" in n or "predsali" in n: return ICONS["users"]
     if "koučovací" in n or "koucovaci" in n: return ICONS["coffee"]
     if "networking" in n or "afterparty" in n: return ICONS["sparkles"]
     if "workshop" in n: return ICONS["tool"]
     if "galakoktejl" in n or "solnice" in n: return ICONS["award"]
     return ICONS["mic"]
+
+
+def program_kind_class(kind):
+    kind = re.sub(r"[^a-z0-9]+", "-", str(kind or "").lower()).strip("-")
+    return f" program-event--{kind}" if kind else ""
+
+
+def link_speaker_names(text):
+    text = str(text)
+    if not SPEAKER_NAME_RE:
+        return esc(text)
+    out = []
+    pos = 0
+    for match in SPEAKER_NAME_RE.finditer(text):
+        out.append(esc(text[pos:match.start()]))
+        name = match.group(0)
+        out.append(
+            f'<a class="program-speaker-link" href="/speaker/{att(SPEAKER_SLUGS[name])}/">'
+            f'{esc(name)}</a>'
+        )
+        pos = match.end()
+    out.append(esc(text[pos:]))
+    return "".join(out)
+
+
+def program_event(ev):
+    title = ev.get("title", "")
+    time = ev.get("time", "")
+    meta = ev.get("meta")
+    desc = ev.get("description")
+    slug = SPEAKER_SLUGS.get(title)
+    extra_class = " program-event--has-link" if slug else ""
+    meta_html = f'<span class="program-event__meta">{link_speaker_names(meta)}</span>' if meta else ""
+    desc_html = f'<p>{esc(desc)}</p>' if desc else ""
+    title_text = esc(title) if slug else link_speaker_names(title)
+    title_html = f'<strong class="program-event__title">{title_text}</strong>'
+    if slug:
+        body = (
+            f'<a class="program-event__body program-event__body--link" '
+            f'href="/speaker/{att(slug)}/" aria-label="Profil řečníka: {att(title)}">'
+            f'{title_html}{meta_html}{desc_html}</a>'
+        )
+    else:
+        body = f'<div class="program-event__body">{title_html}{meta_html}{desc_html}</div>'
+    return (
+        f'<li class="program-event{program_kind_class(ev.get("type"))}{extra_class}">'
+        f'<span class="program-event__time">{esc(time)}</span>{body}</li>'
+    )
+
+
+def program_stage(stage):
+    if isinstance(stage, str):
+        name = stage
+        events = []
+        note = ""
+    else:
+        name = stage["name"]
+        events = stage.get("events", [])
+        note = stage.get("note", "")
+    note_html = f'<p class="stage-card__note">{esc(note)}</p>' if note else ""
+    if events:
+        content = f'<ol class="program-timeline">{"".join(program_event(ev) for ev in events)}</ol>'
+    else:
+        content = '<p class="soon">Detailní program připravujeme.</p>'
+    return f"""<article class="stage-card stage-card--schedule">
+          <div class="stage-card__head">
+            <div class="stage-card__head-top">
+              <div class="stage-ico">{stage_icon(name)}</div>
+              <h3>{esc(name)}</h3>
+            </div>
+            {note_html}
+          </div>
+          {content}
+        </article>"""
+
+
+SLOT_MINUTES = 15
+
+
+def _clock_to_minutes(value):
+    match = re.match(r"^\s*(\d{1,2}):(\d{2})", str(value or ""))
+    if not match:
+        return None
+    h, m = int(match.group(1)), int(match.group(2))
+    return h * 60 + m
+
+
+def _minutes_to_clock(value):
+    h, m = divmod(int(value), 60)
+    return f"{h}:{m:02d}"
+
+
+def _floor_slot(value):
+    return (value // SLOT_MINUTES) * SLOT_MINUTES
+
+
+def _ceil_slot(value):
+    return ((value + SLOT_MINUTES - 1) // SLOT_MINUTES) * SLOT_MINUTES
+
+
+def program_event_range(ev):
+    time = str(ev.get("time", ""))
+    match = re.search(r"(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})?", time)
+    if not match:
+        return None
+    start = _clock_to_minutes(match.group(1))
+    end = _clock_to_minutes(match.group(2)) if match.group(2) else None
+    if start is None:
+        return None
+    if end is None or end <= start:
+        end = start + 60
+    return start, end
+
+
+def _event_start(ev):
+    rng = program_event_range(ev)
+    return rng[0] if rng else 0
+
+
+def calendar_kind_class(kind):
+    kind = re.sub(r"[^a-z0-9]+", "-", str(kind or "").lower()).strip("-")
+    return f" program-cal-event--{kind}" if kind else ""
+
+
+def is_registration_event(ev):
+    return str(ev.get("title", "")).strip().lower() == "registrace"
+
+
+def is_condensed_calendar_event(ev):
+    return str(ev.get("type", "")).lower() in {"break", "meal"} or is_registration_event(ev)
+
+
+def _slot_overlaps(stage_items, slot_start):
+    slot_end = slot_start + SLOT_MINUTES
+    overlaps = []
+    for stage in stage_items:
+        for ev in stage["events"]:
+            rng = program_event_range(ev)
+            if not rng:
+                continue
+            start, end = rng
+            if start < slot_end and end > slot_start:
+                overlaps.append(ev)
+    return overlaps
+
+
+def program_calendar_slot_rows(stage_items, cal_start, slot_count):
+    rows = []
+    row_by_slot = {}
+    row_number = 2
+    i = 0
+    while i < slot_count:
+        slot_start = cal_start + i * SLOT_MINUTES
+        overlaps = _slot_overlaps(stage_items, slot_start)
+        if not overlaps:
+            while i < slot_count and not _slot_overlaps(stage_items, cal_start + i * SLOT_MINUTES):
+                row_by_slot[cal_start + i * SLOT_MINUTES] = row_number
+                i += 1
+            rows.append("var(--slot-gap-h)")
+            row_number += 1
+        elif all(is_condensed_calendar_event(ev) for ev in overlaps):
+            while i < slot_count:
+                current = cal_start + i * SLOT_MINUTES
+                current_overlaps = _slot_overlaps(stage_items, current)
+                if not current_overlaps or not all(is_condensed_calendar_event(ev) for ev in current_overlaps):
+                    break
+                row_by_slot[current] = row_number
+                i += 1
+            rows.append("var(--slot-compact-short-h)")
+            row_number += 1
+        else:
+            row_by_slot[slot_start] = row_number
+            rows.append("var(--slot-h)")
+            row_number += 1
+            i += 1
+    return " ".join(rows), row_by_slot, len(rows)
+
+
+def program_calendar_event(ev, col, row_by_slot):
+    rng = program_event_range(ev)
+    if not rng:
+        return ""
+    start, end = rng
+    event_slots = range(_floor_slot(start), _ceil_slot(end), SLOT_MINUTES)
+    event_rows = [row_by_slot[slot] for slot in event_slots if slot in row_by_slot]
+    if not event_rows:
+        return ""
+    row = event_rows[0]
+    span = 1 if is_condensed_calendar_event(ev) else max(1, max(event_rows) - row + 1)
+    title = ev.get("title", "")
+    time = ev.get("time", "")
+    meta = ev.get("meta")
+    desc = ev.get("description")
+    slug = SPEAKER_SLUGS.get(title)
+    extra_class = " program-cal-event--has-link" if slug else ""
+    grid_col = "2 / -1" if ev.get("span") == "all" else str(col)
+    if ev.get("span") == "all":
+        extra_class += " program-cal-event--span-all"
+    if span == 1 or is_condensed_calendar_event(ev):
+        extra_class += " program-cal-event--short"
+    meta_html = f'<span class="program-cal-event__meta">{link_speaker_names(meta)}</span>' if meta else ""
+    desc_html = f'<p>{esc(desc)}</p>' if desc else ""
+    title_text = esc(title) if slug else link_speaker_names(title)
+    title_html = f'<strong class="program-cal-event__title">{title_text}</strong>'
+    inner = (
+        f'<span class="program-cal-event__time">{esc(time)}</span>'
+        f'{title_html}{meta_html}{desc_html}'
+    )
+    if slug:
+        body = (
+            f'<a class="program-cal-event__inner program-cal-event__inner--link" '
+            f'href="/speaker/{att(slug)}/" aria-label="Profil řečníka: {att(title)}">{inner}</a>'
+        )
+    else:
+        body = f'<div class="program-cal-event__inner">{inner}</div>'
+    return (
+        f'<article class="program-cal-event{calendar_kind_class(ev.get("type"))}{extra_class}" '
+        f'style="grid-column:{grid_col};grid-row:{row} / span {span}">{body}</article>'
+    )
+
+
+def program_calendar(stages, label=None, modifier=None):
+    stage_items = []
+    for stage in stages:
+        if isinstance(stage, str):
+            stage = {"name": stage, "events": []}
+        events = [ev for ev in stage.get("events", []) if program_event_range(ev)]
+        if events:
+            stage_items.append({**stage, "events": events})
+    if not stage_items:
+        return ""
+    modifier_class = f" program-calendar--{att(modifier)}" if modifier else ""
+    starts = [program_event_range(ev)[0] for stg in stage_items for ev in stg["events"]]
+    ends = [program_event_range(ev)[1] for stg in stage_items for ev in stg["events"]]
+    cal_start = _floor_slot(min(starts))
+    cal_end = _ceil_slot(max(ends))
+    slot_count = max(1, (cal_end - cal_start) // SLOT_MINUTES)
+    slot_rows, row_by_slot, display_row_count = program_calendar_slot_rows(stage_items, cal_start, slot_count)
+    label_html = f'<h2 class="program-calendar-title">{esc(label)}</h2>' if label else ""
+    gridlines = (
+        f'<div class="program-calendar__gridlines" '
+        f'style="grid-column:1 / -1;grid-row:2 / span {display_row_count}"></div>'
+    )
+    headers = ['<div class="program-calendar__time-head" style="grid-column:1;grid-row:1"></div>']
+    events_html = []
+    for idx, stage in enumerate(stage_items, start=2):
+        note = stage.get("note", "")
+        note_html = f'<p>{esc(note)}</p>' if note else ""
+        headers.append(
+            f"""<div class="program-calendar__stage-head" style="grid-column:{idx};grid-row:1">
+              <div class="stage-ico">{stage_icon(stage['name'])}</div>
+              <div><h3>{esc(stage['name'])}</h3>{note_html}</div>
+            </div>"""
+        )
+        events_html.extend(program_calendar_event(ev, idx, row_by_slot) for ev in stage["events"])
+    labels = []
+    first_hour = ((cal_start + 59) // 60) * 60
+    label_points = [cal_start] if cal_start % 60 else []
+    label_points.extend(range(first_hour, cal_end, 60))
+    used_label_rows = set()
+    for value in dict.fromkeys(label_points):
+        row = row_by_slot.get(value)
+        if not row or row in used_label_rows:
+            continue
+        used_label_rows.add(row)
+        labels.append(
+            f'<div class="program-calendar__time-label" style="grid-column:1;grid-row:{row}">{_minutes_to_clock(value)}</div>'
+        )
+    return f"""{label_html}<div class="program-calendar-wrap">
+      <div class="program-calendar program-calendar--cols-{len(stage_items)}{modifier_class}" style="--stage-count:{len(stage_items)};--slot-count:{display_row_count};--slot-rows:{att(slot_rows)}">
+        {gridlines}
+        {"".join(headers)}
+        {"".join(labels)}
+        {"".join(events_html)}
+      </div>
+    </div>"""
+
+
+def program_day_schedule(day):
+    stages = day.get("stages", [])
+    networking = []
+    main = []
+    has_networking = any(
+        "networking" in (stage["name"] if isinstance(stage, dict) else str(stage)).lower()
+        or "afterparty" in (stage["name"] if isinstance(stage, dict) else str(stage)).lower()
+        for stage in stages
+    )
+    for stage in stages:
+        name = stage["name"] if isinstance(stage, dict) else str(stage)
+        if "networking" in name.lower() or "afterparty" in name.lower():
+            networking.append(stage)
+            continue
+        if isinstance(stage, dict) and has_networking:
+            filtered = [ev for ev in stage.get("events", []) if _event_start(ev) < 18 * 60 + 15]
+            if filtered:
+                main.append({**stage, "events": filtered})
+        else:
+            main.append(stage)
+    main_modifier = "dense" if not has_networking else None
+    calendars = [program_calendar(main, modifier=main_modifier)]
+    if networking:
+        calendars.append(program_calendar(networking, "Večerní program", "compact"))
+    return "".join(cal for cal in calendars if cal)
 
 
 # ----------------------------------------------------------- components ------
@@ -472,19 +786,13 @@ def page_program():
     for i, day in enumerate(d["days"]):
         sel = "true" if i == 0 else "false"
         tabs += f'<button class="tab" role="tab" id="tab-{i}" aria-controls="panel-{i}" aria-selected="{sel}">{esc(day["name"])}</button>'
-        cards = ""
-        for stg in day["stages"]:
-            cards += f"""<div class="stage-card">
-          <div class="stage-ico">{stage_icon(stg)}</div>
-          <h3>{esc(stg)}</h3>
-          <p class="soon">Detailní program připravujeme.</p>
-        </div>"""
-        panels += f'<div class="tabpanel" role="tabpanel" id="panel-{i}" aria-labelledby="tab-{i}"{"" if i==0 else " hidden"}><div class="stage-grid">{cards}</div></div>'
+        day_meta = f'<p class="program-day-meta">{esc(day["date"])}</p>' if day.get("date") else ""
+        panels += f'<div class="tabpanel program-day" role="tabpanel" id="panel-{i}" aria-labelledby="tab-{i}"{"" if i==0 else " hidden"}>{day_meta}{program_day_schedule(day)}</div>'
     body = (
         header("/program/", solid=False)
         + '<main id="main">'
         + page_hero(d["title"], crumb_label="Program")
-        + f"""<section class="section">
+        + f"""<section class="section program-section">
   <div class="container">
     <div class="program-notice reveal">{ICONS['info']}<span>{esc(d['notice'])}</span></div>
     <div data-tabs>
