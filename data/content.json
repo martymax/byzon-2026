@@ -267,6 +267,8 @@
       {
         "year": "2025",
         "kind": "gallery",
+        "local_video": "/assets/video/byzon-2025.mp4",
+        "local_video_poster": "/assets/img/2025/08/0793243.jpg",
         "images": [
           "/assets/img/2025/08/0793243.jpg",
           "/assets/img/2025/08/0793241.jpg",
@@ -288,18 +290,14 @@
         "video_title": "Jak vypadal BYZON 2024?",
         "button": {
           "label": "Chci vidět fotky z II. ročníku",
-          "href": "https://byzon.cz/byzon_2024/"
+          "href": "https://jiritvaroh.pixieset.com/byzon/"
         }
       },
       {
         "year": "2023",
         "kind": "video",
         "video": "7U8wHwdw5K4",
-        "video_title": "BYZON - I. ročník byznysové konference",
-        "button": {
-          "label": "Chci vidět fotky z I. ročníku",
-          "href": "https://byzon.cz/byzon_2023/"
-        }
+        "video_title": "BYZON - I. ročník byznysové konference"
       }
     ]
   },
