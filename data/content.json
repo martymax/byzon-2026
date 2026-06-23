@@ -107,13 +107,14 @@
         "name": "Early Bird",
         "price": "Od 3 990 Kč",
         "note": "do 30. 6. 2026",
-        "featured": false
+        "featured": true,
+        "deadline": "2026-06-30"
       },
       {
         "name": "Standard",
         "price": "Od 4 990 Kč",
         "note": "do 11. 9. 2026",
-        "featured": true
+        "featured": false
       },
       {
         "name": "Late Bird",

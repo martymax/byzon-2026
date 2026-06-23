@@ -8,6 +8,7 @@ static site (pure HTML/CSS/JS, no runtime dependencies) into the repo root.
 Usage:  python3 build.py
 Then preview with:  python3 -m http.server  (open http://localhost:8000/)
 """
+import hashlib
 import html
 import json
 import os
@@ -15,7 +16,20 @@ import re
 from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-ASSET_VER = "1"
+
+
+def _asset_ver():
+    """Hash CSS+JS so the ?v= query busts caches automatically on every change."""
+    h = hashlib.md5()
+    for f in ("assets/css/styles.css", "assets/js/main.js"):
+        try:
+            h.update(open(os.path.join(ROOT, f), "rb").read())
+        except OSError:
+            pass
+    return h.hexdigest()[:8]
+
+
+ASSET_VER = _asset_ver()
 
 with open(os.path.join(ROOT, "data", "content.json"), encoding="utf-8") as f:
     C = json.load(f)
@@ -242,11 +256,13 @@ def sec_vstupenky():
     tiers = ""
     for t in d["tiers"]:
         feat = " is-featured" if t.get("featured") else ""
-        tiers += f"""<article class="price-card{feat} reveal">
+        dl = f' data-deadline="{att(t["deadline"])}"' if t.get("deadline") else ""
+        tiers += f"""<article class="price-card{feat} reveal"{dl}>
         <h3>{esc(t['name'])}</h3>
         <div class="price">{esc(t['price'])}</div>
         <p class="until">Platí {esc(t['note'])}</p>
         <a class="btn btn--block" href="{att(cta['href'])}">{esc(cta['label'])} {ICONS['arrow']}</a>
+        <p class="expired-note" hidden>Prodej této vstupenky byl ukončen.</p>
       </article>"""
     return f"""<section class="section section--soft" id="vstupenky">
   <div class="container">

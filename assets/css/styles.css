@@ -308,14 +308,19 @@ strong { color: var(--ink); }
   transition: transform .3s var(--ease), box-shadow .3s var(--ease);
 }
 .price-card:hover { transform: translateY(-6px); box-shadow: var(--shadow); }
+/* light highlight (Early Bird) */
 .price-card.is-featured {
   background: linear-gradient(180deg, #fff, var(--pink-50));
-  border: 2px solid var(--pink); box-shadow: var(--shadow-pink); position: relative;
+  border: 1.5px solid var(--pink-100); position: relative;
 }
-.price-card .tag {
-  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-  background: var(--pink); color: #fff; font-family: var(--font-display); font-weight: 600;
-  font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; padding: .35em 1em; border-radius: var(--r-pill);
+/* expired tier (set by JS after its deadline): greyed + non-clickable */
+.price-card.is-expired { filter: grayscale(1); opacity: .55; }
+.price-card.is-expired .price { color: var(--slate-400); }
+.price-card.is-expired .btn {
+  background: #c9c9cf; box-shadow: none; pointer-events: none; cursor: not-allowed;
+}
+.price-card.is-expired .expired-note {
+  color: var(--slate-400); font-size: .9rem; margin-top: 10px; text-align: center;
 }
 .price-card h3 { color: var(--ink); }
 .price-card .price { font-family: var(--font-display); font-weight: 700; font-size: 2.4rem; color: var(--pink); margin: 6px 0 4px; line-height: 1; }

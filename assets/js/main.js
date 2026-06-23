@@ -99,6 +99,23 @@
     reveals.forEach(function (el) { el.classList.add("in"); });
   }
 
+  /* ---- Time-limited ticket tiers: grey out + disable past the deadline -- */
+  doc.querySelectorAll(".price-card[data-deadline]").forEach(function (card) {
+    var end = new Date(card.getAttribute("data-deadline") + "T23:59:59");
+    if (isNaN(end.getTime()) || Date.now() <= end.getTime()) return;
+    card.classList.add("is-expired");
+    card.classList.remove("is-featured");
+    var btn = card.querySelector(".btn");
+    if (btn) {
+      btn.removeAttribute("href");
+      btn.setAttribute("aria-disabled", "true");
+      btn.setAttribute("tabindex", "-1");
+      btn.textContent = "Prodej ukončen";
+    }
+    var note = card.querySelector(".expired-note");
+    if (note) note.hidden = false;
+  });
+
   /* ---- Year (current) in footer ---------------------------------------- */
   var y = doc.getElementById("js-year");
   if (y) y.textContent = new Date().getFullYear();
