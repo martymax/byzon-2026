@@ -225,10 +225,16 @@
         "slug": "simon-srp",
         "name": "Šimon Srp",
         "photo": "/assets/img/2026/06/Simon-Srp.png",
-        "role": "",
+        "role": "Zakladatel a CEO Simon Says",
         "bio": [
-          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
-        ]
+          "Šimon Srp je zakladatel a CEO Simon Says, týmu externích manažerů, analytiků a konzultantů. Se svým týmem pomáhá firmám v situacích, kdy potřebují převzít řízení, stabilizovat růst, nastavit odpovědnosti nebo dotáhnout zásadní změnové projekty.",
+          "Simon Says dnes působí napříč general managementem firem – od rolí na úrovni CEO přes middle management až po konkrétní transformační, datové a change management projekty. Vedle externího řízení se tým věnuje také analytice, strategickému rozhodování a M&A poradenství při nákupu, prodeji nebo rozvoji firem.",
+          "Šimon do firem přináší praktický, přímočarý pohled na řízení: méně teorie, více odpovědnosti, jasných rozhodnutí a práce s realitou firmy."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/simon-srp/",
+          "web": "https://simon-says.cz/"
+        }
       },
       {
         "slug": "konstancie-zelezna",
