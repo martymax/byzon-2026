@@ -155,7 +155,9 @@ def drawer(active):
 def footer():
     s = C["site"]; f = C["footer"]; org = C["partners"]["organizer"]
     legal = "".join(
-        f'<li><a href="{att(l["href"])}" target="_blank" rel="noopener">{esc(l["label"])}</a></li>'
+        f'<li><a href="{att(l["href"])}"'
+        + (' target="_blank" rel="noopener"' if l["href"].startswith("http") else "")
+        + f'>{esc(l["label"])}</a></li>'
         for l in f["legal"]
     )
     # Auto-updating year: wrap the year in #js-year (main.js sets the current year;
@@ -586,6 +588,25 @@ def page_speaker(sp):
     return head(f"{sp['name']} – Byzon", desc, f"/speaker/{sp['slug']}/", sp["photo"]) + body + footer()
 
 
+def page_legal(lp):
+    frag = open(os.path.join(ROOT, lp["file"]), encoding="utf-8").read()
+    body = (
+        header("/", solid=True)
+        + '<main id="main">'
+        + f"""<section class="section" style="padding-top:calc(var(--header-h) + 48px)">
+  <div class="container">
+    <article class="legal">
+      <nav class="breadcrumb" style="justify-content:flex-start;margin-bottom:18px"><a href="/">‹ Zpět na hlavní stranu</a></nav>
+      <h1 class="legal-title">{esc(lp['title'])}</h1>
+      <div class="legal-body">{frag}</div>
+    </article>
+  </div>
+</section>"""
+        + "</main>"
+    )
+    return head(f"{lp['title']} – Byzon", lp["description"], f"/{lp['slug']}/") + body + footer()
+
+
 # --------------------------------------------------------------- write ------
 def write(path, content):
     full = os.path.join(ROOT, path)
@@ -604,6 +625,8 @@ def main():
     written.append(write("stante-se-partnerem/index.html", page_partner()))
     for sp in C["speakers"]["list"]:
         written.append(write(f"speaker/{sp['slug']}/index.html", page_speaker(sp)))
+    for lp in C.get("legal_pages", []):
+        written.append(write(f"{lp['slug']}/index.html", page_legal(lp)))
     print(f"Generated {len(written)} pages:")
     for p in written:
         print("  -", p)

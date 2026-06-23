@@ -393,13 +393,27 @@
     "legal": [
       {
         "label": "Obchodní podmínky",
-        "href": "https://www.byzon.cz/vseobecne-obchodni-podminky/"
+        "href": "/vseobecne-obchodni-podminky/"
       },
       {
         "label": "Zásady Ochrany Osobních údajů",
-        "href": "https://www.byzon.cz/zasady-ochrany-osobnich-udaju/"
+        "href": "/zasady-ochrany-osobnich-udaju/"
       }
     ],
     "copyright": "© 2026 – Všechna práva vyhrazena Byzon"
-  }
+  },
+  "legal_pages": [
+    {
+      "slug": "vseobecne-obchodni-podminky",
+      "title": "Všeobecné obchodní podmínky",
+      "description": "Všeobecné obchodní podmínky konference BYZON (ENJOiT s.r.o.).",
+      "file": "data/legal/vseobecne-obchodni-podminky.html"
+    },
+    {
+      "slug": "zasady-ochrany-osobnich-udaju",
+      "title": "Zásady ochrany osobních údajů",
+      "description": "Zásady ochrany osobních údajů (GDPR) konference BYZON (ENJOiT s.r.o.).",
+      "file": "data/legal/zasady-ochrany-osobnich-udaju.html"
+    }
+  ]
 }

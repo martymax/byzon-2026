@@ -120,10 +120,10 @@ strong { color: var(--ink); }
   font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; letter-spacing: .01em;
   padding: .72em 1.5em; border-radius: var(--r-pill);
   background: var(--b); color: #fff;
-  transition: transform .25s var(--ease), box-shadow .25s var(--ease), background .2s;
-  box-shadow: var(--shadow-pink); white-space: nowrap;
+  transition: transform .25s var(--ease), background .2s;
+  white-space: nowrap;
 }
-.btn:hover { transform: translateY(-3px); background: var(--pink-600); box-shadow: 0 22px 48px rgba(245,33,142,.36); }
+.btn:hover { transform: translateY(-3px); background: var(--pink-600); }
 .btn:active { transform: translateY(-1px); }
 .btn .arrow { transition: transform .25s var(--ease); }
 .btn:hover .arrow { transform: translateX(4px); }
@@ -480,6 +480,20 @@ strong { color: var(--ink); }
 .speaker-detail .role { font-family: var(--font-display); color: var(--pink); font-size: 1.3rem; font-weight: 500; margin: 6px 0 24px; }
 .speaker-detail .bio p { margin-bottom: 18px; font-size: 1.1rem; }
 .speaker-back { margin-bottom: 24px; }
+
+/* ---------- Legal pages (VOP, GDPR) ------------------------------------- */
+.legal { max-width: 860px; margin: 0 auto; }
+.legal .breadcrumb a { color: var(--pink); }
+.legal-title { font-size: clamp(2rem, 5vw, 3rem); color: var(--ink); margin-bottom: 28px; line-height: 1.08; }
+.legal-body { color: var(--slate); font-size: 1.06rem; line-height: 1.75; }
+.legal-body h2 { font-family: var(--font-display); color: var(--ink); font-size: 1.5rem; font-weight: 600; margin: 34px 0 12px; }
+.legal-body h3 { font-family: var(--font-display); color: var(--ink); font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; }
+.legal-body p { margin-bottom: 14px; }
+.legal-body ul, .legal-body ol { margin: 0 0 16px 1.3em; }
+.legal-body li { margin-bottom: 8px; }
+.legal-body a { color: var(--pink); text-decoration: underline; text-underline-offset: 2px; }
+.legal-body a:hover { color: var(--pink-600); }
+.legal-body strong { color: var(--ink); }
 
 /* ---------- Lightbox ----------------------------------------------------- */
 .lightbox { position: fixed; inset: 0; z-index: 300; background: rgba(20,6,16,.92); display: none; place-items: center; padding: 4vw; }
