@@ -1,0 +1,407 @@
+{
+  "site": {
+    "name": "Byzon",
+    "title": "Byzon – Byznys konference",
+    "description": "18.–19. září 2026 | Clarion Congress Hotel, České Budějovice 2 dny LIDSKOSTI v praxi: 14 speakerů | 6 leadership case studies | 2 profi workshopy | Řízený networking. A energie, která může změnit směr",
+    "lang": "cs",
+    "url": "https://byzon.cz/",
+    "media_base": "/assets/img",
+    "logo": "/assets/img/2025/05/Logo-na-sirku.png",
+    "logo_wordmark": "/assets/img/brand/logo.png",
+    "logo_wordmark_light": "/assets/img/brand/logo-light.png",
+    "skull": "/assets/img/brand/skull.webp",
+    "arrow": "/assets/img/brand/arrow.webp",
+    "favicon": "/assets/img/2025/05/Logo-na-sirku-150x150.png",
+    "og_image": "/assets/img/2025/05/IMG_3694.jpeg",
+    "email": "jsem@byzon.cz",
+    "social": {
+      "facebook": "https://www.facebook.com/byzoncz",
+      "instagram": "https://www.instagram.com/byzoncz"
+    }
+  },
+  "nav": [
+    {
+      "label": "Hlavní strana",
+      "href": "/"
+    },
+    {
+      "label": "Program",
+      "href": "/program/"
+    },
+    {
+      "label": "Minulé ročníky",
+      "href": "/byznys-konference/"
+    },
+    {
+      "label": "Staňte se partnerem",
+      "href": "/stante-se-partnerem/"
+    }
+  ],
+  "cta": {
+    "label": "Ulovte si vstupenku",
+    "href": "/simpleshop/"
+  },
+  "hero": {
+    "eyebrow": "Byzon 2026",
+    "title": "Lidskost jako konkurenční výhoda",
+    "title_accent": "konkurenční výhoda",
+    "date": "18.–19. září 2026",
+    "venue": "Clarion Congress Hotel, České Budějovice",
+    "lead": "2 dny LIDSKOSTI v praxi. A energie, která může změnit směr vašeho podnikání i leadershipu.",
+    "badges": [
+      "14 speakerů",
+      "6 leadership case studies",
+      "2 profi workshopy",
+      "Řízený networking"
+    ],
+    "images": [
+      "/assets/img/2025/05/IMG_3694.jpeg",
+      "/assets/img/2025/05/IMG_3702.jpeg",
+      "/assets/img/2025/05/IMG_3703.jpeg",
+      "/assets/img/2025/05/IMG_3692.jpeg",
+      "/assets/img/2025/05/IMG_3693.jpeg"
+    ]
+  },
+  "co_vas_ceka": {
+    "title": "Co vás čeká",
+    "cards": [
+      {
+        "label": "Páteční konference",
+        "title": "Inspirace od lidí z praxe",
+        "points": [
+          "Dvě stage. Silné příběhy. Otevřené diskuse.",
+          "Zkušenosti lidí, kteří budují firmy, vedou týmy a hledají odpovědi na stejné otázky jako vy.",
+          "Koučovací zóna jako bonus.",
+          "Afterparty s řízeným networkingem a ne(z)řízenou zábavou."
+        ]
+      },
+      {
+        "label": "Sobotní workshopy",
+        "title": "Leadership, na který si sáhnete",
+        "points": [
+          "Méně poslouchání.",
+          "Více práce na vlastních situacích.",
+          "Praktické workshopy zaměřené na komunikaci, vedení lidí a zvládání náročných manažerských momentů."
+        ]
+      },
+      {
+        "label": "Sobotní gala koktejl",
+        "title": "Předávání cen Výjimečný Jihočech 2026",
+        "points": [
+          "Slavnostní finále v historické Solnici.",
+          "Předání ocenění Výjimečný Jihočech 2026.",
+          "Inspirativní příběhy a setkání komunity, která věří, že úspěch má lidskou tvář."
+        ]
+      }
+    ]
+  },
+  "vstupenky": {
+    "title": "Ulovte si vstupenku, než bude pozdě:",
+    "deadlines": [
+      "Early Bird do 30. 6. 2026,",
+      "Standard do 11. 9. 2026,",
+      "Late Bird do vyčerpání volné kapacity."
+    ],
+    "tiers": [
+      {
+        "name": "Early Bird",
+        "price": "Od 3 990 Kč",
+        "note": "do 30. 6. 2026",
+        "active_to": "2026-06-30"
+      },
+      {
+        "name": "Standard",
+        "price": "Od 4 990 Kč",
+        "note": "do 11. 9. 2026",
+        "active_from": "2026-07-01",
+        "active_to": "2026-09-11"
+      },
+      {
+        "name": "Late Bird",
+        "price": "Od 5 990 Kč",
+        "note": "do vyčerpání kapacity",
+        "active_from": "2026-09-12",
+        "active_to": "2026-09-19"
+      }
+    ]
+  },
+  "speakers": {
+    "title": "Na koho se letos můžete těšit:",
+    "note": "Další řečníky budeme postupně odhalovat. Stay tuned!",
+    "list": [
+      {
+        "slug": "markus-krug",
+        "name": "Markus Krug",
+        "photo": "/assets/img/2026/06/Markus-Krug.png",
+        "role": "filmový a reklamní režisér, tvůrce pořadu Zrádci a projektů s globálním přesahem",
+        "bio": [
+          "Markus Krug je česko-rakouský režisér, který ve své tvorbě posouvá hranice, pracuje s globálními trendy a nebojí se humoru ani nečekaných kontrastů. Věří v sílu příběhů, které dokážou pobavit, dojmout i přimět k zamyšlení.",
+          "Studoval film a televizi v USA a má za sebou řadu projektů, které si získaly pozornost širokého publika. Patří mezi ně například reklamní film pro Red Bull Racing a Formuli 1, One Man Show, Praha vs. Prachy nebo spolupráce na reklamních spotech pro značky jako Royal Mail, Carlsberg, Volvo či T‑Mobile.",
+          "Aktuálně ho mnozí znají také jako režiséra detektivní hry Zrádci, u které momentálně pracuje na 3. sérii. Jeho tvorba v posledních letech nasbírala stovky milionů zhlédnutí a v roce 2017 byl zařazen do prestižního výběru Forbes 30 pod 30."
+        ]
+      },
+      {
+        "slug": "lukas-hejlik",
+        "name": "Lukáš Hejlík",
+        "photo": "/assets/img/2026/06/Lukas-Hejlik.png",
+        "role": "Herec, tvůrce Gastromapy a propagátor lokálního podnikání",
+        "bio": [
+          "Lukáš Hejlík je český herec a foodbloger. Čtvrtstoletí jezdí po všech luzích Česka i hájích Moravy se svým divadelním projektem Listování.",
+          "Posledních 15 let u toho dělá Gastromapu, nezávislého gastronomického průvodce.",
+          "Lukáš je takový podcastový tvůrce."
+        ]
+      },
+      {
+        "slug": "margareta-krizova",
+        "name": "Margareta Křížová",
+        "photo": "/assets/img/2026/06/Margareta-Krizova.png",
+        "role": "byznys mentorka a poradkyně v oblasti fúzí a akvizic (M&A)",
+        "bio": [
+          "Margareta Křížová, MBA je byznys mentorka a poradkyně v oblasti fúzí a akvizic (M&A) s více než 30 lety zkušeností. V roce 1993 spoluzaložila poradenskou firmu CEAG, kde vedla tým M&A se zaměřením na vyhledávání investičních příležitostí a management transakčního procesu.",
+          "Od roku 2017 působí jako Margareta Křížová – Business Advisory. Současně vede NEWTON Business Accelerator na NEWTON University v Praze. Vystudovala mezinárodní a veřejné vztahy a získala titul MBA v oboru mezinárodní obchod a marketing na ESCEM School of Business and Management / University of New York.",
+          "Byla jednou z investorek v české verzi pořadu Den D, v České televizi moderovala pořad zaměřený na finanční gramotnost a v rozhlase uváděla vlastní autorský pořad Podnikání od A do Zet. Vydavatelství Albatros vydalo její knihu Z deníku investorky, která nabízí praktické tipy i inspiraci pro podnikatele a lídry a knihu Třetí kariéra, zaměřenou na osobní a podnikatelský restart po padesátce.",
+          "Kromě business a strategického poradenství spolupracuje s firmami jako lektorka, kde se věnuje tématům inovací, business strategie a leadershipu. Je členkou Rady pro komercializaci výsledků vědy a výzkumu České zemědělské univerzity.",
+          "Kromě své mentorské a poradenské činnosti aktivně podporuje podnikatelské inovace jako porotkyně v podnikatelských soutěžích. Je propagátorkou principu „modern elder“ – zaměřeného na hodnoty celoživotního vzdělávání, adaptability a mezigenerační spolupráce."
+        ]
+      },
+      {
+        "slug": "hana-slacalkova",
+        "name": "Hana Slačálková",
+        "photo": "/assets/img/2026/06/Hana-Slacalkova.png",
+        "role": "HR marketing, Brand a firemní ambasadoring",
+        "bio": [
+          "Konzultantka pro autentickou komunikaci firem",
+          "Po letech v náboru a školení manažerů si uvědomila, že spousta skvělých malých a středních firem má jeden problém – skoro o nich není slyšet. Proto dnes pomáhá firmám ukazovat jejich příběhy, lidi a hodnoty tak, aby byly vidět přirozeně a důvěryhodně.",
+          "Věnuje se hlavně osobním značkám zakladatelů, firemnímu ambasadoringu a HR marketingu. Ukazuje firmám, jak propojit online komunikaci, osobní setkávání a dlouhodobé vztahy tak, aby si kolem sebe budovaly komunitu lidí, kteří je přirozeně doporučují dál."
+        ]
+      },
+      {
+        "slug": "jiri-jemelka",
+        "name": "Jiří Jemelka",
+        "photo": "/assets/img/2026/06/Jiri-Jemelka.png",
+        "role": "Zakladatel J.I.P. pro firmy, byznys mentor a interim manažer",
+        "bio": [
+          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
+        ]
+      },
+      {
+        "slug": "andrea-bohacikova",
+        "name": "Andrea Bohačíková",
+        "photo": "/assets/img/2026/06/Andrea-Bohacikova1.png",
+        "role": "CEO & Founder, M.arter",
+        "bio": [
+          "Andrea Bohačíková je podnikatelka, mentorka a zakladatelka ekosystému M.arter, který již sedm let mění český pohled na rodičovskou dovolenou, flexibilitu práce, diverzitu, inkluzi a prorodinnou firemní politiku. Pod jejím vedením se M.arter stal lídrem v podpoře rodičů a zaměstnavatelů a vytvořil největší komunitu proaktivních rodičů v České republice.",
+          "Dlouhodobě se věnuje systémovým změnám na trhu práce, spolupracuje s firmami, institucemi i státní správou a podílí se na připomínkování legislativy v oblasti zaměstnanosti, rodičovství a slaďování pracovního a rodinného života. Vede 30členný tým fungující ve 100% remote režimu. Kromě M.arter stojí také za dalšími iniciativami a projekty zaměřenými na leadership, podnikání, networking, podporu žen a budování komunit. Je mentorkou startupů i jednotlivců a je známá tím, že místo hledání důvodů, proč něco nejde, systematicky hledá, co se dá změnit.",
+          "Za svou práci získala řadu ocenění, mimo jiné titul Žena roku 2024, Most Dedicated Parental Support & Diversity Leader 2024 v rámci CEO Excellence Awards a byla zařazena mezi Deloitte Technology Fast 50 – Impact Stars 2024. M.arter byl oceněn jako příklad dobré praxe Ministerstva práce a sociálních věcí, získal 3. místo v Cenách SDGs v kategorii Diverzita, rovnost a inkluze a ocenění Inovativní zaměstnanecký benefit roku 2023 v rámci Profi HR Awards."
+        ]
+      },
+      {
+        "slug": "petr-dvorak",
+        "name": "Petr Dvořák",
+        "photo": "/assets/img/2026/06/Petr-Dvorak.png",
+        "role": "",
+        "bio": [
+          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
+        ]
+      },
+      {
+        "slug": "simon-srp",
+        "name": "Šimon Srp",
+        "photo": "/assets/img/2026/06/Simon-Srp.png",
+        "role": "",
+        "bio": [
+          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
+        ]
+      },
+      {
+        "slug": "konstancie-zelezna",
+        "name": "Konstancie Železná",
+        "photo": "/assets/img/2026/06/Konstancie-Zelezna.png",
+        "role": "",
+        "bio": [
+          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
+        ]
+      },
+      {
+        "slug": "michal-vesely",
+        "name": "Michal Veselý",
+        "photo": "/assets/img/2026/06/Michal-Vesely.png",
+        "role": "Chief Executive Officer, Chairman of the Board CZ&SK ve společnosti Trenkwalder Czech Republic",
+        "bio": [
+          "Úspěšný byznys stojí především na lidech. Michal Veselý vede společnost Trenkwalder v České republice a na Slovensku, má za sebou více než dvě dekády zkušeností v HR a workforce solutions a dlouhodobě pomáhá firmám růst prostřednictvím správných lidí. Vedle role CEO je známý svým lidským přístupem, energií a schopností propojovat obchodní výsledky s firemní kulturou"
+        ]
+      },
+      {
+        "slug": "barbora-tumova",
+        "name": "Barbora Tůmová",
+        "photo": "/assets/img/2026/06/Barbora-Tumova.png",
+        "role": "Specialistka na Employer Branding a ambasadoring v dm drogerie markt",
+        "bio": [
+          "Bára je specialistka na employer branding v dm drogerie markt, kde čtvrtým rokem rozvíjí značku zaměstnavatele skrze autentické propojování firemní kultury s moderními trendy. Do kampaní na soc. sítích jako je např. LinkedIn, TikTok a Facebook obsazuje výhradně skutečné spolupracovníky a spolupracovnice. Věří, že pravá podstata značky zaměstnavatele se pozná skrze lidi, kteří v déemku skutečně pracují."
+        ]
+      },
+      {
+        "slug": "ondrej-vojacek",
+        "name": "Ondřej Vojáček",
+        "photo": "/assets/img/2026/06/Ondrej-Vojacek.png",
+        "role": "Vyjednavač, konzultant, lektor",
+        "bio": [
+          "Je najímán jako externí vyjednavač a konzultant při důležitých obchodních vyjednáváních firem různých velikostí. Své firemní i soukromé klienty úspěšně zastupoval v řadě složitých vyjednávání a přinesl výsledky v řádu stovek milionů Kč.",
+          "Své know-how předává skrze tréninky vyjednávání a individuální koučink na míru pro CEO a management firem.",
+          "Řeší 10 – 15 komplexních vyjednávání ročně a trénuje vyjednávání 20 – 40 dnů v roce."
+        ]
+      }
+    ]
+  },
+  "location": {
+    "title": "Kde se bude konference odehrávat",
+    "name": "Clarion Congress Hotel v Českých Budějovicích",
+    "text": "Hotel je v centru Českých Budějovic. Pokud přijedete vlakem, hotel je kousek od hlavního vlakového nádraží. Pro cestu autem doporučujeme zaparkovat na hotelovém parkovišti za poplatek. U hotelu je zastávka trolejbusů Družba ⁠-⁠ IGY.",
+    "image": "/assets/img/2023/04/clarion.jpg",
+    "map_query": "Clarion Congress Hotel České Budějovice"
+  },
+  "rocniky": {
+    "title": "Jak probíhaly minulé ročníky",
+    "intro": "Tři ročníky, stovky lidí a spousta příběhů. Podívejte se, jak BYZON žije.",
+    "years": [
+      {
+        "year": "2025",
+        "kind": "gallery",
+        "images": [
+          "/assets/img/2025/08/0793243.jpg",
+          "/assets/img/2025/08/0793241.jpg",
+          "/assets/img/2025/08/0793239.jpg",
+          "/assets/img/2025/08/0793234.jpg",
+          "/assets/img/2025/08/0793230.jpg",
+          "/assets/img/2025/08/0793193.jpg",
+          "/assets/img/2025/08/0793195.jpg"
+        ],
+        "button": {
+          "label": "Chci vidět fotky z III. ročníku",
+          "href": "https://www.facebook.com/media/set/?set=a.778402425249573"
+        }
+      },
+      {
+        "year": "2024",
+        "kind": "video",
+        "video": "JJcujh5FkGU",
+        "video_title": "Jak vypadal BYZON 2024?",
+        "button": {
+          "label": "Chci vidět fotky z II. ročníku",
+          "href": "https://byzon.cz/byzon_2024/"
+        }
+      },
+      {
+        "year": "2023",
+        "kind": "video",
+        "video": "7U8wHwdw5K4",
+        "video_title": "BYZON - I. ročník byznysové konference",
+        "button": {
+          "label": "Chci vidět fotky z I. ročníku",
+          "href": "https://byzon.cz/byzon_2023/"
+        }
+      }
+    ]
+  },
+  "partners": {
+    "title": "Naši partneři",
+    "logos": [
+      {
+        "name": "JCI Czech Republic",
+        "src": "/assets/img/2026/06/JCI-Czech-Republic-WHITE.svg",
+        "on_dark": true
+      },
+      {
+        "name": "Finovo",
+        "src": "/assets/img/2026/06/finovo.svg",
+        "on_dark": false
+      },
+      {
+        "name": "Borovka Event",
+        "src": "/assets/img/2025/10/borovka_event-e1780847651744-300x99.png",
+        "on_dark": false
+      },
+      {
+        "name": "BM Viva Marketing",
+        "src": "/assets/img/2025/06/bm_vivamarketing_logo2024_rgb_black-300x212.png",
+        "on_dark": false
+      },
+      {
+        "name": "Moderní Leader",
+        "src": "/assets/img/2024/06/Moderní_leader_logo_RGB_modra-3-300x96.png",
+        "on_dark": false
+      },
+      {
+        "name": "Jihočeská hospodářská komora",
+        "src": "/assets/img/2023/04/JHK_logo_podelne-300x138.png",
+        "on_dark": false
+      },
+      {
+        "name": "Horizont",
+        "src": "/assets/img/2023/08/horizont_full-removebg-preview-300x81.png",
+        "on_dark": false
+      }
+    ],
+    "organizer": {
+      "label": "Organizátor akce",
+      "name": "ENJOiT s.r.o.",
+      "ic": "IČ: 19295073",
+      "email": "jsem@byzon.cz"
+    }
+  },
+  "program": {
+    "title": "Program",
+    "notice": "Časové sloty programu pro vás aktuálně finálně ladíme, již brzy budou zveřejněny.",
+    "days": [
+      {
+        "name": "Pátek",
+        "stages": [
+          "BYZON Stage",
+          "Leadership Stage",
+          "Koučovací zóna",
+          "Networking a afterparty"
+        ]
+      },
+      {
+        "name": "Sobota",
+        "stages": [
+          "Leadership Workshopy | Clarion",
+          "Galakoktejl | Solnice"
+        ]
+      }
+    ]
+  },
+  "partner_page": {
+    "title": "Staňte se partnerem",
+    "lead": "Spojte svou značku s konferencí, která staví na lidskosti. Prolistujte si nabídku partnerství.",
+    "brochure": [
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0001-1.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0002.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0003.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0004.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0005.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0006-1.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0007-1.jpg",
+      "/assets/img/2026/05/BYZON_Brozura-pro-partnery-0008-1.jpg"
+    ]
+  },
+  "simpleshop": {
+    "title": "Ulovte si vstupenku",
+    "subtitle": "Vyberte si typ vstupenky a dokončete objednávku níže.",
+    "form_id": "0MnNQ",
+    "fallback": "Prodejní formulář je vytvořen v systému <a href=\"https://www.simpleshop.cz/?utm_source=simpleshop&amp;utm_medium=form&amp;utm_campaign=44467\" target=\"_blank\" rel=\"noopener\">SimpleShop.cz</a>."
+  },
+  "footer": {
+    "legal": [
+      {
+        "label": "Obchodní podmínky",
+        "href": "https://www.byzon.cz/vseobecne-obchodni-podminky/"
+      },
+      {
+        "label": "Zásady Ochrany Osobních údajů",
+        "href": "https://www.byzon.cz/zasady-ochrany-osobnich-udaju/"
+      }
+    ],
+    "copyright": "© 2026 – Všechna práva vyhrazena Byzon"
+  }
+}
