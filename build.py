@@ -254,7 +254,6 @@ def sec_co_vas_ceka():
 
 def sec_vstupenky():
     d = C["vstupenky"]; cta = C["cta"]
-    deadlines = "".join(f"<li>{ICONS['clock']} {esc(x)}</li>" for x in d["deadlines"])
     tiers = ""
     for t in d["tiers"]:
         win = ""
@@ -274,7 +273,6 @@ def sec_vstupenky():
       <span class="eyebrow">Vstupenky</span>
       <h2>{esc(d['title'])}</h2>
     </div>
-    <ul class="pricing-deadlines reveal" style="justify-content:center">{deadlines}</ul>
     <div class="pricing-grid">{tiers}</div>
   </div>
 </section>"""

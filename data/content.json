@@ -97,11 +97,6 @@
   },
   "vstupenky": {
     "title": "Ulovte si vstupenku, než bude pozdě:",
-    "deadlines": [
-      "Early Bird do 30. 6. 2026,",
-      "Standard do 11. 9. 2026,",
-      "Late Bird do vyčerpání volné kapacity."
-    ],
     "tiers": [
       {
         "name": "Early Bird",
