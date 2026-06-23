@@ -705,6 +705,9 @@ def sec_co_vas_ceka():
       <h2>{esc(d['title'])}</h2>
     </div>
     <div class="feature-grid">{cards}</div>
+    <div class="feature-cta reveal">
+      <a class="btn btn--ghost" href="/program/">Zobrazit celý program {ICONS['arrow']}</a>
+    </div>
   </div>
 </section>"""
 
@@ -859,6 +862,9 @@ def sec_partners():
       <h2>{esc(d['title'])}</h2>
     </div>
     <div class="partners-grid reveal">{logos}</div>
+    <div class="partners-cta reveal">
+      <a class="btn btn--ghost" href="/stante-se-partnerem/">Staňte se partnerem {ICONS['arrow']}</a>
+    </div>
     <div class="organizer reveal">
       <span class="lbl">{esc(org['label'])}</span>
       <span class="org-name">{esc(org['name'])}</span>
