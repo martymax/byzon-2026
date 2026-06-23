@@ -61,3 +61,9 @@ ErrorDocument 404 /404.html
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/json application/xml
 </IfModule>
+
+<IfModule LiteSpeed>
+  CacheDisable public /
+  RewriteEngine On
+  RewriteRule .* - [E=Cache-Control:no-cache]
+</IfModule>
