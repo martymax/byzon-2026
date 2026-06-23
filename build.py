@@ -354,7 +354,7 @@ def sec_location():
 </section>"""
 
 
-def year_block(y):
+def year_block(y, show_inline_gallery=True):
     btn = y.get("button")
     btn_html = ""
     if btn:
@@ -368,7 +368,7 @@ def year_block(y):
           Váš prohlížeč nepodporuje přehrávání tohoto videa.
         </video>
       </div>"""
-    if y["kind"] == "gallery":
+    if show_inline_gallery and y["kind"] == "gallery":
         items = ""
         for img in y["images"]:
             items += f'<div class="g-item" data-full="{att(img)}"><img src="{att(img)}" alt="BYZON {esc(y["year"])}" loading="lazy"></div>'
@@ -384,9 +384,9 @@ def year_block(y):
     </div>"""
 
 
-def sec_rocniky(soft=True):
+def sec_rocniky(soft=True, show_inline_gallery=True):
     d = C["rocniky"]
-    blocks = "".join(year_block(y) for y in d["years"])
+    blocks = "".join(year_block(y, show_inline_gallery) for y in d["years"])
     cls = "section section--soft" if soft else "section"
     return f"""<section class="{cls}" id="rocniky">
   <div class="container">
@@ -427,12 +427,11 @@ def sec_partners():
 def page_home():
     s = C["site"]; h = C["hero"]; cta = C["cta"]
     badges = "".join(f'<span class="badge">{esc(b)}</span>' for b in h["badges"])
-    imgs = h["images"]
     title_html = esc(h["title"])
     if h.get("title_accent"):
         title_html = title_html.replace(esc(h["title_accent"]),
                                         f'<span class="accent">{esc(h["title_accent"])}</span>', 1)
-    hero = f"""<section class="hero">
+    hero = f"""<section class="hero hero--text-only">
   <img class="hero__skull" src="{att(s['skull'])}" alt="" aria-hidden="true" loading="eager">
   <div class="container">
     <div class="hero__text">
@@ -449,14 +448,6 @@ def page_home():
         <a class="textlink" href="#program-prehled" style="color:#fff">Co vás čeká {ICONS['arrow']}</a>
       </div>
     </div>
-    <div class="hero__media">
-      <div class="collage">
-        <figure class="c1"><img src="{att(imgs[0])}" alt="" loading="eager"></figure>
-        <figure class="c2"><img src="{att(imgs[1])}" alt="" loading="eager"></figure>
-        <figure class="c3"><img src="{att(imgs[2])}" alt="" loading="eager"></figure>
-        <div class="float-badge"><b>18.–19.</b><span>září 2026</span></div>
-      </div>
-    </div>
   </div>
 </section>
 <span id="program-prehled"></span>"""
@@ -468,11 +459,11 @@ def page_home():
         + sec_vstupenky()
         + sec_speakers()
         + sec_location()
-        + sec_rocniky(soft=True)
+        + sec_rocniky(soft=True, show_inline_gallery=False)
         + sec_partners()
         + "</main>"
     )
-    return head(s["title"], s["description"], "/", s["og_image"]) + body + footer()
+    return head(s["title"], s["description"], "/", s["skull"]) + body + footer()
 
 
 def page_program():

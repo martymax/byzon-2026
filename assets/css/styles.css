@@ -232,6 +232,13 @@ strong { color: var(--ink); }
   background: radial-gradient(circle, rgba(88,17,64,.55), transparent 60%); pointer-events: none;
 }
 .hero .container { position: relative; z-index: 2; display: grid; grid-template-columns: 1.05fr .95fr; gap: clamp(30px, 5vw, 70px); align-items: center; }
+.hero--text-only .container { grid-template-columns: minmax(0, 780px); justify-content: center; text-align: center; }
+.hero--text-only .hero__eyebrow,
+.hero--text-only .hero__meta,
+.hero--text-only .hero__badges,
+.hero--text-only .hero__actions { justify-content: center; }
+.hero--text-only h1,
+.hero--text-only .hero__lead { margin-inline: auto; }
 .hero__eyebrow { color: var(--pink); }
 .hero h1 { color: #fff; margin: 18px 0 22px; max-width: 14ch; }
 .hero h1 .accent { color: var(--pink); }
