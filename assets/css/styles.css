@@ -120,10 +120,10 @@ strong { color: var(--ink); }
   font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; letter-spacing: .01em;
   padding: .72em 1.5em; border-radius: var(--r-pill);
   background: var(--b); color: #fff;
-  transition: transform .25s var(--ease), box-shadow .25s var(--ease), background .2s;
-  box-shadow: var(--shadow-pink); white-space: nowrap;
+  transition: transform .25s var(--ease), background .2s;
+  white-space: nowrap;
 }
-.btn:hover { transform: translateY(-3px); background: var(--pink-600); box-shadow: 0 22px 48px rgba(245,33,142,.36); }
+.btn:hover { transform: translateY(-3px); background: var(--pink-600); }
 .btn:active { transform: translateY(-1px); }
 .btn .arrow { transition: transform .25s var(--ease); }
 .btn:hover .arrow { transform: translateX(4px); }
