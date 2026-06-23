@@ -686,6 +686,8 @@ strong { color: var(--ink); }
   color: inherit; font-weight: inherit; text-decoration: none;
 }
 .program-speaker-link:hover { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.program-mobile-title,
+.program-mobile-agenda { display: none; }
 
 /* ---------- SimpleShop --------------------------------------------------- */
 .shop-wrap { max-width: 920px; margin-inline: auto; }
@@ -845,6 +847,108 @@ strong { color: var(--ink); }
     grid-template-rows: 98px var(--slot-rows);
   }
   .program-calendar--compact .program-calendar__stage-head { padding: 14px 16px; }
+  .program-section .program-calendar-title,
+  .program-section .program-calendar-wrap {
+    display: none;
+  }
+  .program-mobile-title {
+    display: block; margin: 28px 0 12px; color: var(--ink);
+    font-size: 1.45rem; line-height: 1.1;
+  }
+  .program-mobile-agenda {
+    display: block; width: 100%; margin-top: 18px;
+  }
+  .program-mobile-filters {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px;
+  }
+  .program-mobile-filter {
+    min-height: 44px; padding: 0 14px; border: 1px solid rgba(20,6,16,.12);
+    border-radius: 8px; background: #fff; color: var(--ink); font-family: var(--font-display);
+    font-size: 1rem; font-weight: 600; line-height: 1; touch-action: manipulation;
+    transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
+  }
+  .program-mobile-filter:hover,
+  .program-mobile-filter:focus-visible {
+    border-color: rgba(245,33,142,.45); box-shadow: 0 0 0 3px rgba(245,33,142,.12);
+  }
+  .program-mobile-filter.is-active {
+    background: var(--ink); border-color: var(--ink); color: #fff;
+  }
+  .program-mobile-list {
+    display: grid; gap: 14px;
+  }
+  .program-mobile-time-group {
+    display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; align-items: start;
+  }
+  .program-mobile-time-group.is-hidden {
+    display: none;
+  }
+  .program-mobile-time {
+    min-height: 32px; display: flex; align-items: center;
+    justify-content: flex-end; padding-top: 6px; color: #5f5660; font-family: var(--font-display);
+    font-size: .98rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .program-mobile-time-events {
+    display: grid; gap: 8px; min-width: 0;
+  }
+  .program-mobile-event {
+    position: relative; min-width: 0; padding: 11px 12px 12px 14px;
+    border: 1px solid #ded9de; border-left: 5px solid var(--pink); border-radius: 8px;
+    background: #fff; box-shadow: 0 6px 16px rgba(20,6,16,.045);
+  }
+  .program-mobile-event.is-hidden {
+    display: none;
+  }
+  .program-mobile-event__top {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 7px;
+  }
+  .program-mobile-event__stage,
+  .program-mobile-event__time {
+    display: inline-flex; align-items: center; min-height: 26px; border-radius: 6px;
+    font-family: var(--font-display); font-size: .84rem; font-weight: 600;
+    line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .program-mobile-event__stage {
+    padding: 0 8px; background: #f5f2f4; color: var(--ink);
+  }
+  .program-mobile-event__time {
+    padding: 0 8px; background: var(--pink-50); color: var(--pink-700);
+  }
+  .program-mobile-event__title {
+    display: block; color: var(--ink); font-family: var(--font-display);
+    font-size: 1.08rem; font-weight: 600; line-height: 1.12; overflow-wrap: anywhere;
+  }
+  .program-mobile-event__title--link {
+    transition: color .2s var(--ease);
+  }
+  .program-mobile-event__title--link:hover,
+  .program-mobile-event__title--link:focus-visible {
+    color: var(--pink);
+  }
+  .program-mobile-event__meta {
+    display: block; margin-top: 4px; color: #766d75; font-size: .95rem; line-height: 1.28;
+  }
+  .program-mobile-event p {
+    margin-top: 6px; color: #766d75; font-size: .95rem; line-height: 1.35;
+  }
+  .program-mobile-event--break {
+    border-left-color: #f59e0b; background: #fffaf3;
+  }
+  .program-mobile-event--break .program-mobile-event__time {
+    background: #fff4e2; color: #9a3412;
+  }
+  .program-mobile-event--meal {
+    border-left-color: #65a30d; background: #fbfdf7;
+  }
+  .program-mobile-event--meal .program-mobile-event__time {
+    background: #f2f8e9; color: #3f6212;
+  }
+  .program-mobile-event--shared {
+    border-left-color: #2563eb; background: #fbfcff;
+  }
+  .program-mobile-event--social {
+    border-left-color: #a855f7; background: #fdf9ff;
+  }
   h1 { font-size: clamp(2.4rem, 11vw, 3.2rem); }
 }
 @media (max-width: 380px) {

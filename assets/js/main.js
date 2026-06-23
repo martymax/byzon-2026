@@ -43,6 +43,36 @@
     });
   });
 
+  /* ---- Mobile program stage filters ------------------------------------ */
+  doc.querySelectorAll("[data-mobile-agenda]").forEach(function (agenda) {
+    var buttons = agenda.querySelectorAll("[data-stage-filter]");
+    if (!buttons.length) return;
+    var events = agenda.querySelectorAll(".program-mobile-event");
+    var groups = agenda.querySelectorAll("[data-mobile-time-group]");
+    function applyFilter(value) {
+      events.forEach(function (event) {
+        var ids = (event.getAttribute("data-stage-ids") || "").split(/\s+/);
+        var visible = value === "all" || ids.indexOf(value) !== -1;
+        event.classList.toggle("is-hidden", !visible);
+      });
+      groups.forEach(function (group) {
+        var visibleEvents = group.querySelectorAll(".program-mobile-event:not(.is-hidden)");
+        group.classList.toggle("is-hidden", visibleEvents.length === 0);
+      });
+    }
+    buttons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        var value = button.getAttribute("data-stage-filter") || "all";
+        buttons.forEach(function (btn) {
+          var selected = btn === button;
+          btn.classList.toggle("is-active", selected);
+          btn.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        applyFilter(value);
+      });
+    });
+  });
+
   /* ---- Image fallback for hotlinked media ------------------------------- */
   doc.querySelectorAll("img[data-fallback]").forEach(function (img) {
     img.addEventListener("error", function () {

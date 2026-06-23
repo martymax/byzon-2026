@@ -217,6 +217,11 @@ def calendar_kind_class(kind):
     return f" program-cal-event--{kind}" if kind else ""
 
 
+def mobile_kind_class(kind):
+    kind = re.sub(r"[^a-z0-9]+", "-", str(kind or "").lower()).strip("-")
+    return f" program-mobile-event--{kind}" if kind else ""
+
+
 def is_registration_event(ev):
     return str(ev.get("title", "")).strip().lower() == "registrace"
 
@@ -314,6 +319,132 @@ def program_calendar_event(ev, col, row_by_slot):
     )
 
 
+def _mobile_stage_id(index):
+    return f"stage-{index}"
+
+
+def _mobile_stage_label(names, total_count):
+    unique = list(dict.fromkeys(names))
+    if total_count > 1 and len(unique) == total_count:
+        return "Všechny stage"
+    if len(unique) > 2:
+        return f"{len(unique)} stage"
+    return ", ".join(unique)
+
+
+def program_mobile_event(item, total_count):
+    ev = item["event"]
+    title = ev.get("title", "")
+    time = ev.get("time", "")
+    meta = ev.get("meta")
+    desc = ev.get("description")
+    slug = SPEAKER_SLUGS.get(title)
+    stage_label = _mobile_stage_label(item["stage_names"], total_count)
+    stage_ids = " ".join(item["stage_ids"])
+    meta_html = f'<span class="program-mobile-event__meta">{link_speaker_names(meta)}</span>' if meta else ""
+    desc_html = f'<p>{esc(desc)}</p>' if desc else ""
+    title_text = esc(title) if slug else link_speaker_names(title)
+    if slug:
+        title_html = (
+            f'<a class="program-mobile-event__title program-mobile-event__title--link" '
+            f'href="/speaker/{att(slug)}/" aria-label="Profil řečníka: {att(title)}">'
+            f'{title_text}</a>'
+        )
+    else:
+        title_html = f'<strong class="program-mobile-event__title">{title_text}</strong>'
+    return f"""<article class="program-mobile-event{mobile_kind_class(ev.get("type"))}" data-stage-ids="{att(stage_ids)}">
+              <div class="program-mobile-event__top">
+                <span class="program-mobile-event__stage">{esc(stage_label)}</span>
+                <span class="program-mobile-event__time">{esc(time)}</span>
+              </div>
+              {title_html}{meta_html}{desc_html}
+            </article>"""
+
+
+def program_mobile_agenda(stages, label=None):
+    stage_items = []
+    for index, stage in enumerate(stages):
+        if isinstance(stage, str):
+            stage = {"name": stage, "events": []}
+        events = [ev for ev in stage.get("events", []) if program_event_range(ev)]
+        if events:
+            stage_items.append({
+                **stage,
+                "events": events,
+                "mobile_id": _mobile_stage_id(index),
+            })
+    if not stage_items:
+        return ""
+
+    all_stage_ids = [stage["mobile_id"] for stage in stage_items]
+    all_stage_names = [stage["name"] for stage in stage_items]
+    merged = {}
+    order = 0
+    for stage_index, stage in enumerate(stage_items):
+        for ev in stage["events"]:
+            rng = program_event_range(ev)
+            if not rng:
+                continue
+            start, end = rng
+            shared_all = ev.get("span") == "all"
+            if shared_all:
+                stage_ids = all_stage_ids
+                stage_names = all_stage_names
+                key = ("all", start, end, ev.get("time", ""), ev.get("title", ""), ev.get("meta", ""), ev.get("description", ""), ev.get("type", ""))
+            elif is_condensed_calendar_event(ev):
+                stage_ids = [stage["mobile_id"]]
+                stage_names = [stage["name"]]
+                key = ("condensed", start, end, ev.get("time", ""), ev.get("title", ""), ev.get("meta", ""), ev.get("description", ""), ev.get("type", ""))
+            else:
+                stage_ids = [stage["mobile_id"]]
+                stage_names = [stage["name"]]
+                key = ("event", start, end, stage_index, order)
+            if key not in merged:
+                merged[key] = {
+                    "event": ev,
+                    "start": start,
+                    "end": end,
+                    "order": order,
+                    "stage_ids": [],
+                    "stage_names": [],
+                }
+            merged[key]["stage_ids"].extend(stage_ids)
+            merged[key]["stage_names"].extend(stage_names)
+            order += 1
+
+    items = []
+    for item in merged.values():
+        item["stage_ids"] = list(dict.fromkeys(item["stage_ids"]))
+        item["stage_names"] = list(dict.fromkeys(item["stage_names"]))
+        items.append(item)
+    items.sort(key=lambda item: (item["start"], item["end"], item["order"]))
+
+    filters = ""
+    if len(stage_items) > 1:
+        buttons = ['<button class="program-mobile-filter is-active" type="button" data-stage-filter="all" aria-pressed="true">Vše</button>']
+        buttons.extend(
+            f'<button class="program-mobile-filter" type="button" data-stage-filter="{att(stage["mobile_id"])}" aria-pressed="false">{esc(stage["name"])}</button>'
+            for stage in stage_items
+        )
+        filters = f'<div class="program-mobile-filters" role="group" aria-label="Filtrovat program podle místa">{"".join(buttons)}</div>'
+
+    groups = []
+    for start in dict.fromkeys(item["start"] for item in items):
+        group_items = [item for item in items if item["start"] == start]
+        groups.append(
+            f"""<section class="program-mobile-time-group" data-mobile-time-group>
+              <div class="program-mobile-time">{_minutes_to_clock(start)}</div>
+              <div class="program-mobile-time-events">{"".join(program_mobile_event(item, len(stage_items)) for item in group_items)}</div>
+            </section>"""
+        )
+
+    title_html = f'<h2 class="program-mobile-title">{esc(label)}</h2>' if label else ""
+    filter_html = f"\n          {filters}" if filters else ""
+    return f"""{title_html}<div class="program-mobile-agenda" data-mobile-agenda>{filter_html}
+          <div class="program-mobile-list">{"".join(groups)}</div>
+        </div>"""
+
+
 def program_calendar(stages, label=None, modifier=None):
     stage_items = []
     for stage in stages:
@@ -392,9 +523,10 @@ def program_day_schedule(day):
         else:
             main.append(stage)
     main_modifier = "dense" if not has_networking else None
-    calendars = [program_calendar(main, modifier=main_modifier)]
+    calendars = [program_calendar(main, modifier=main_modifier), program_mobile_agenda(main)]
     if networking:
         calendars.append(program_calendar(networking, "Večerní program", "compact"))
+        calendars.append(program_mobile_agenda(networking, "Večerní program"))
     return "".join(cal for cal in calendars if cal)
 
 
