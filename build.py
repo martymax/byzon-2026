@@ -100,7 +100,7 @@ def head(title, description, page_path, og_image=None):
 <link rel="apple-touch-icon" href="{att(s['logo'])}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Khand:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Khand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/css/styles.css?v={ASSET_VER}">
 </head>
 <body>
@@ -329,21 +329,32 @@ def sec_location():
 
 
 def year_block(y):
-    btn = y["button"]
-    btn_html = f'<a class="btn btn--ghost btn--sm" href="{att(btn["href"])}" target="_blank" rel="noopener">{esc(btn["label"])} {ICONS["arrow"]}</a>'
+    btn = y.get("button")
+    btn_html = ""
+    if btn:
+        btn_html = f'<a class="btn btn--ghost btn--sm" href="{att(btn["href"])}" target="_blank" rel="noopener">{esc(btn["label"])} {ICONS["arrow"]}</a>'
+    media = ""
+    if y.get("local_video"):
+        poster = f' poster="{att(y["local_video_poster"])}"' if y.get("local_video_poster") else ""
+        media += f"""<div class="video-embed">
+        <video controls preload="metadata" playsinline{poster}>
+          <source src="{att(y['local_video'])}" type="video/mp4">
+          Váš prohlížeč nepodporuje přehrávání tohoto videa.
+        </video>
+      </div>"""
     if y["kind"] == "gallery":
         items = ""
         for img in y["images"]:
             items += f'<div class="g-item" data-full="{att(img)}"><img src="{att(img)}" alt="BYZON {esc(y["year"])}" loading="lazy"></div>'
-        body = f'<div class="gallery" data-gallery>{items}</div>{btn_html}'
-    else:
-        body = f"""<div class="video-embed">
+        media += f'<div class="gallery" data-gallery>{items}</div>'
+    elif y.get("video"):
+        media += f"""<div class="video-embed">
         <iframe loading="lazy" title="{att(y.get('video_title',''))}" src="https://www.youtube.com/embed/{att(y['video'])}"
           frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-      </div>{btn_html}"""
+      </div>"""
     return f"""<div class="year-block reveal">
       <div class="year-tag">{esc(y['year'])}</div>
-      <div class="year-body">{body}</div>
+      <div class="year-body">{media}{btn_html}</div>
     </div>"""
 
 
