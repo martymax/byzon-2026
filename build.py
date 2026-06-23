@@ -431,7 +431,7 @@ def page_home():
     if h.get("title_accent"):
         title_html = title_html.replace(esc(h["title_accent"]),
                                         f'<span class="accent">{esc(h["title_accent"])}</span>', 1)
-    hero = f"""<section class="hero hero--text-only">
+    hero = f"""<section class="hero hero--brand">
   <img class="hero__skull" src="{att(s['skull'])}" alt="" aria-hidden="true" loading="eager">
   <div class="container">
     <div class="hero__text">
