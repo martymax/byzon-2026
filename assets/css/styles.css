@@ -164,10 +164,12 @@ strong { color: var(--ink); }
 .nav a[aria-current="page"] { color: var(--pink); }
 .header-cta { display: flex; align-items: center; gap: 14px; }
 
-/* default (transparent over hero) → light text */
+/* default (transparent over hero) → light text + white (contrasting) logo */
 .site-header:not(.is-scrolled):not(.is-solid) .brand-mark,
 .site-header:not(.is-scrolled):not(.is-solid) .nav a { color: #fff; }
 .site-header:not(.is-scrolled):not(.is-solid) .nav a:hover { color: var(--pink-100); }
+.site-header:not(.is-scrolled):not(.is-solid) .brand img { filter: brightness(0) invert(1); }
+.brand img { transition: filter .3s; }
 .site-header.is-solid { position: fixed; }
 
 .nav-toggle { display: none; width: 46px; height: 46px; border-radius: 12px; position: relative; }
@@ -192,7 +194,7 @@ strong { color: var(--ink); }
 .drawer.is-open .drawer__scrim { opacity: 1; }
 .drawer.is-open .drawer__panel { transform: translateX(0); }
 .drawer__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-.drawer__head img { height: 38px; }
+.drawer__head img { height: 38px; filter: brightness(0) invert(1); } /* white logo on dark drawer */
 .drawer__close { font-size: 2rem; line-height: 1; width: 44px; height: 44px; color: #fff; }
 .drawer a.nav-link {
   font-family: var(--font-display); font-size: 1.5rem; font-weight: 500; padding: .45em 0;

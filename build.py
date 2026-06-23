@@ -138,6 +138,11 @@ def footer():
         f'<li><a href="{att(l["href"])}" target="_blank" rel="noopener">{esc(l["label"])}</a></li>'
         for l in f["legal"]
     )
+    # Auto-updating year: wrap the year in #js-year (main.js sets the current year;
+    # the static value is the no-JS fallback).
+    copyright_html = re.sub(r"\b(?:19|20)\d{2}\b",
+                            '<span id="js-year">\\g<0></span>',
+                            esc(f["copyright"]), count=1)
     return f"""<footer class="site-footer">
   <div class="container">
     <div class="footer-top">
@@ -169,7 +174,7 @@ def footer():
       </div>
     </div>
     <div class="footer-bottom">
-      <p>{esc(f['copyright'])}</p>
+      <p>{copyright_html}</p>
       <ul style="display:flex;gap:18px;flex-wrap:wrap">{legal}</ul>
     </div>
   </div>
