@@ -242,9 +242,7 @@ def sec_vstupenky():
     tiers = ""
     for t in d["tiers"]:
         feat = " is-featured" if t.get("featured") else ""
-        tag = '<span class="tag">Nejoblíbenější</span>' if t.get("featured") else ""
         tiers += f"""<article class="price-card{feat} reveal">
-        {tag}
         <h3>{esc(t['name'])}</h3>
         <div class="price">{esc(t['price'])}</div>
         <p class="until">Platí {esc(t['note'])}</p>
