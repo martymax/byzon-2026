@@ -607,6 +607,23 @@ def page_legal(lp):
     return head(f"{lp['title']} – Byzon", lp["description"], f"/{lp['slug']}/") + body + footer()
 
 
+def page_404():
+    body = (
+        header("/", solid=True)
+        + '<main id="main">'
+        + f"""<section class="section" style="padding-top:calc(var(--header-h) + 60px);text-align:center">
+  <div class="container">
+    <span class="eyebrow">404</span>
+    <h1>Stránka nenalezena</h1>
+    <p style="max-width:540px;margin:14px auto 30px">Omlouváme se, tahle stránka neexistuje nebo byla přesunuta.</p>
+    <a class="btn" href="/">Zpět na hlavní stranu {ICONS['arrow']}</a>
+  </div>
+</section>"""
+        + "</main>"
+    )
+    return head("Stránka nenalezena – Byzon", "Stránka nenalezena.", "/404.html") + body + footer()
+
+
 # --------------------------------------------------------------- write ------
 def write(path, content):
     full = os.path.join(ROOT, path)
@@ -614,6 +631,26 @@ def write(path, content):
     with open(full, "w", encoding="utf-8") as f:
         f.write(content)
     return path
+
+
+def url_for(page_path):
+    if page_path == "index.html":
+        return "/"
+    return "/" + page_path[: -len("index.html")]
+
+
+def write_sitemap(pages):
+    base = C["site"]["url"].rstrip("/")
+    urls = "".join(f"  <url><loc>{base}{url_for(p)}</loc></url>\n" for p in pages)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+           f"{urls}</urlset>\n")
+    return write("sitemap.xml", xml)
+
+
+def write_robots():
+    base = C["site"]["url"].rstrip("/")
+    return write("robots.txt", f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n")
 
 
 def main():
@@ -627,8 +664,14 @@ def main():
         written.append(write(f"speaker/{sp['slug']}/index.html", page_speaker(sp)))
     for lp in C.get("legal_pages", []):
         written.append(write(f"{lp['slug']}/index.html", page_legal(lp)))
-    print(f"Generated {len(written)} pages:")
-    for p in written:
+    # production extras
+    extras = [
+        write("404.html", page_404()),
+        write_sitemap(written),
+        write_robots(),
+    ]
+    print(f"Generated {len(written)} pages + {len(extras)} extra files:")
+    for p in written + extras:
         print("  -", p)
 
 

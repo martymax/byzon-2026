@@ -1,0 +1,63 @@
+# ============================================================
+#  byzon.cz – statický web (Apache / LiteSpeed)
+# ============================================================
+
+# Výchozí soubor adresáře (/program/ -> /program/index.html)
+DirectoryIndex index.html
+
+# Nezobrazovat výpis složek
+Options -Indexes
+
+# Vlastní 404
+ErrorDocument 404 /404.html
+
+# ------------------------------------------------------------
+#  Přesměrování: www -> bez www  a  http -> https
+#  (kanonická doména je https://byzon.cz)
+# ------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # www.byzon.cz -> byzon.cz
+  RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+  RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L]
+
+  # http -> https
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+</IfModule>
+
+# ------------------------------------------------------------
+#  MIME typy
+# ------------------------------------------------------------
+<IfModule mod_mime.c>
+  AddType image/webp .webp
+  AddType image/svg+xml .svg
+  AddType video/mp4 .mp4
+  AddType font/woff2 .woff2
+  AddType application/vnd.openxmlformats-officedocument.wordprocessingml.document .docx
+</IfModule>
+
+# ------------------------------------------------------------
+#  Cache (assety mají v URL ?v=hash, takže je bezpečné cachovat dlouho;
+#  HTML se necachuje, aby se změny projevily hned)
+# ------------------------------------------------------------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType video/mp4 "access plus 1 month"
+</IfModule>
+
+# ------------------------------------------------------------
+#  Komprese
+# ------------------------------------------------------------
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/json application/xml
+</IfModule>
