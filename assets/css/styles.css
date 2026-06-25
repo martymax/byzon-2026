@@ -220,7 +220,7 @@ strong { color: var(--ink); }
 /* skull emblem watermark behind the hero */
 .hero__skull {
   position: absolute; z-index: 1; right: -7%; top: 50%; transform: translateY(-50%);
-  height: 122%; width: auto; opacity: .14; pointer-events: none; user-select: none;
+  height: 122%; width: auto; max-width: none; opacity: .14; pointer-events: none; user-select: none;
 }
 .hero::before { /* pink glow */
   content: ""; position: absolute; width: 60vw; height: 60vw; right: -10vw; top: -16vw;
@@ -520,6 +520,8 @@ strong { color: var(--ink); }
   .nav-toggle { display: block; }
   .hero .container { grid-template-columns: 1fr; }
   .hero__media { max-width: 460px; margin-inline: auto; width: 100%; order: -1; }
+  /* watermark sized by width on mobile so it stays proportional, not stretched */
+  .hero__skull { height: auto; width: 72%; right: -12%; opacity: .1; }
   .location-grid, .speaker-detail { grid-template-columns: 1fr; }
   .speaker-detail .portrait { position: static; max-width: 360px; }
   .year-block { grid-template-columns: 1fr; }
