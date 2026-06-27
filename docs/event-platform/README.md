@@ -2,33 +2,36 @@
 
 Plán rozšíření webu [byzon.cz](https://byzon.cz) o **aplikaci pro správu akce** (před akcí) a **event-day aplikaci** (během akce). Cílem je proměnit pozicování *„Lidskost jako konkurenční výhoda“* a *řízený networking* z claimu na reálnou funkci: personalizovaná agenda, networking a domlouvání schůzek, živá interakce (Q&A, ankety), sběr podkladů od řečníků, check-in a sdílení prezentací.
 
-> **Status:** návrh k odsouhlasení. Tohle je plánovací dokumentace, **ne kód**. Vznikla nad reálným stavem repozitáře, ale samotná aplikace se zatím nestaví — nejdřív je potřeba odsouhlasit rozsah a zodpovědět [otevřené otázky](./07-otevrene-otazky-a-rizika.md).
+> **Status:** rozsah a stack **odsouhlaseny** — viz **[00 — Rozhodnutí (závazné)](./00-rozhodnuti.md)**. Tohle je stále plánovací dokumentace, **ne kód**; navazovat bude technická specifikace a scaffold Fáze 0.
 
 ---
 
-## TL;DR — klíčová doporučení
+## TL;DR — zvolený směr
 
-| Rozhodnutí | Doporučení | Proč |
-|---|---|---|
-| **Vztah k webu** | Marketingový web (`build.py` → `content.json` → FTP) **zůstává beze změny** jako neměnné jádro. Aplikace žije samostatně na **subdoméně `app.byzon.cz`**. | Nerozbijeme to, co funguje a má nulovou údržbu. `content.json` zůstává jediným zdrojem pravdy pro program a řečníky — app si je naimportuje. |
-| **Backend** | **Buy managed backend** → **Supabase** (Postgres + Auth + Realtime + Storage + RLS, **EU region Frankfurt**). | Malý tým, rychlost, realtime i GDPR/EU hosting „z krabice“. Mezi ročníky lze uspat na free tier. |
-| **Frontend** | **Build vlastní** → **PWA** (SvelteKit / Cloudflare Pages), instalovatelná, offline, web push. Sladěná s brandem (Khand/Inter, `#f5218e`). | Event-day potřebuje offline a notifikace; PWA = bez app-storů, jeden kód. |
-| **Přihlášení** | **Bez hesel** — magic-link / OTP e-mailem, párované se zaplacenou vstupenkou ze SimpleShopu. | Nejnižší tření = nejvyšší adopce. |
-| **Q&A / ankety** | Pro 2026 **embednout Slido** (stejný vzor jako dnešní SimpleShop embed), vlastní řešení až 2027. | Moderaci a anti-abuse nestavět od nuly pár týdnů před akcí. |
-| **Soukromí** | **Privacy-by-default**: networking opt-in **vypnutý**, data minimization, RLS místo „trust the client“, retence + výmaz po akci. | GDPR čl. 25, publikum jsou byznys profily — důvěra je podmínka adopce. |
-| **Rozsah 2026** | **Redukovaný MVP** (registrace + agenda + check-in + oznámení/push + Slido). Plný rozsah (vlastní Q&A, pokročilý matchmaking, gamifikace) → **ročník 2027**. | Akce je za ~12 týdnů; full scope se do září reálně neodladí na stovkách lidí. |
+Závazná rozhodnutí jsou v **[00 — Rozhodnutí](./00-rozhodnuti.md)**. Cíl: **plný rozsah pro ročník 2026** (akce 18.–19. 9. 2026), staví **jeden člověk s AI agenty (Claude Code + Codex)**, aplikaci **vlastní zadavatel**.
+
+| Oblast | Volba |
+|---|---|
+| **Vztah k webu** | Marketingový web (`build.py` → `content.json` → FTP) **zůstává beze změny**. Aplikace samostatně na **subdoméně `app.byzon.cz`**. `content.json` = zdroj pravdy pro program/řečníky (seed do DB). |
+| **Stack** | **Next.js + PostgreSQL na Railway**, **Cloudflare** na DNS. Vlastní full-stack, plná kontrola dat, max. podpora AI agentů. |
+| **Auth / storage / realtime** | **Auth.js** magic-link (bez hesel) · **Cloudflare R2** (soubory) · **SSE + Postgres `LISTEN/NOTIFY`** (realtime). |
+| **Frontend** | **PWA** (Next.js + Serwist) — instalovatelná, offline, web push; brand Khand/Inter, `#f5218e`. |
+| **Přihlášení** | Magic-link e-mailem, párovaný se zaplacenou vstupenkou; **CSV import** ze SimpleShopu jako primární cesta (API neověřeno). |
+| **Q&A / ankety** | **Vlastní** (na Postgres + SSE), ne Slido. |
+| **Soukromí** | Privacy-by-default: networking opt-in **vypnutý**, data minimization, autorizace na úrovni app + DB, retence + výmaz po akci. |
+| **Strategie 2026** | **Vertikální řezy dle priority** — must-have → nice-to-have, každý přírůstek hned live. |
 
 ---
 
-## ⚠️ Začni tady: rozhodnutí, která blokují start
+## ⚠️ Otevřená sub-rozhodnutí (neblokují start)
 
-Než se napíše první řádek aplikace, potřebuje pořadatel (ENJOiT) rozhodnout několik věcí. Plný seznam s kontextem a doporučenou default volbou je v **[07 — Otevřené otázky a rizika](./07-otevrene-otazky-a-rizika.md)**. Nejdůležitější:
+Hlavní rozhodnutí padla; zbývá doladit (detail v [00 §5](./00-rozhodnuti.md#5-otevřená-sub-rozhodnutí-a-rizika-k-hlídání)):
 
-1. **Stavíme app už pro 2026, nebo až 2027?** (default: redukované MVP pro 2026)
-2. **Rozpočet a kdo to staví** — interní kapacita vs. dodavatel.
-3. **Kdo aplikaci vlastní a provozuje mezi ročníky** (doména, secrets, GDPR retence).
-4. **SimpleShop**: máme reálně webhook + API, nebo jen CSV export? Sbírá formulář potřebná pole?
-5. **Firemní/hromadné vstupenky** — jak přiřadit jména účastníků (nutné pro check-in a jmenovky).
+1. **SimpleShop** — webhook/API vs. CSV (neověřeno → jedeme CSV-first). Doplnit do formuláře chybějící pole **před koncem Early Bird**.
+2. **Hromadné/firemní vstupenky** — přiřazení jmen účastníků (rozhodne se později).
+3. **E-mail provider** — Resend (EU) vs. Postmark.
+4. **Realtime mechanismus** — potvrdit SSE + `LISTEN/NOTIFY` vs. Pusher/Ably.
+5. **EU data residency + DPA** — Railway / R2 / e-mail.
 
 ---
 
@@ -36,6 +39,7 @@ Než se napíše první řádek aplikace, potřebuje pořadatel (ENJOiT) rozhodn
 
 | # | Dokument | Co obsahuje |
 |---|---|---|
+| 00 | **[Rozhodnutí (závazné)](./00-rozhodnuti.md)** | Odsouhlasený rozsah a stack; má přednost před staršími doporučeními. **Číst první.** |
 | 01 | **[Katalog funkcí](./01-funkce.md)** | „Co by v tom mělo být.“ 7 funkčních domén, každá funkce s prioritou (MoSCoW) a odhadem složitosti. |
 | 02 | **[Architektura](./02-architektura.md)** | Topologie, volba stacku (rozhodovací matice), PWA, realtime, build-vs-buy, prostředí, náklady. |
 | 03 | **[Datový model](./03-datovy-model.md)** | Entity, vztahy a schéma napříč funkcemi; napojení na stávající `content.json`. |

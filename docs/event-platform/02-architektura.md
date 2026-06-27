@@ -2,6 +2,8 @@
 
 > Plán: **BYZON — event platforma** · [⌂ Přehled](./README.md) · Další: [Datový model »](./03-datovy-model.md)
 
+> ⚠️ **Aktualizováno rozhodnutím.** Závazná volba stacku je v [00 — Rozhodnutí](./00-rozhodnuti.md): **Next.js + PostgreSQL na Railway + Cloudflare DNS**, **Auth.js** magic-link, **Cloudflare R2** úložiště, **vlastní Q&A** (SSE + Postgres `LISTEN/NOTIFY`), plný rozsah pro 2026. Níže uvedené **Supabase / SvelteKit / Slido** jsou *zvažované varianty* — rozhodovací matice a obecné principy (topologie, PWA, realtime, prostředí, náklady) ale platí dál.
+
 ---
 
 ## Cílová architektura a tech stack
