@@ -2,7 +2,7 @@
   "site": {
     "name": "Byzon",
     "title": "Byzon – Byznys konference",
-    "description": "18.–19. září 2026 | Clarion Congress Hotel, České Budějovice 2 dny LIDSKOSTI v praxi: 14 speakerů | 6 leadership case studies | 2 profi workshopy | Řízený networking. A energie, která může změnit směr",
+    "description": "18.–19. září 2026 | Clarion Congress Hotel, České Budějovice 2 dny LIDSKOSTI v praxi: 17 speakerů | 6 leadership case studies | 2 profi workshopy | Řízený networking. A energie, která může změnit směr",
     "lang": "cs",
     "url": "https://byzon.cz/",
     "media_base": "/assets/img",
@@ -49,7 +49,7 @@
     "venue": "Clarion Congress Hotel, České Budějovice",
     "lead": "2 dny LIDSKOSTI v praxi. A energie, která může změnit směr vašeho podnikání i leadershipu.",
     "badges": [
-      "14 speakerů",
+      "17 speakerů",
       "6 leadership case studies",
       "2 profi workshopy",
       "Řízený networking"
@@ -312,6 +312,46 @@
           "linkedin": "https://www.linkedin.com/in/leonidkushnir",
           "web": "https://www.byleonid.com",
           "youtube": "https://www.youtube.com/playlist?list=PLXKxEU5ip9QKQLKXug3udWF1EgEOVj2SJ"
+        }
+      },
+      {
+        "slug": "blanka-mrazkova",
+        "name": "Blanka Mrázková",
+        "photo": "/assets/img/2026/06/Blanka-Mrazkova.png",
+        "role": "trenérka human skills, zakladatelka a majitelka Moderní Leader",
+        "bio": [
+          "Blanka je zakladatelkou a majitelkou společnosti Moderní Leader a autorkou Tréninku moderního leadershipu. S více než 13 lety zkušeností s vedením týmů a více než 1000 hodinami praxe jako profesionální kouč se zaměřuje na vzdělávání a rozvoj manažerských týmů a majitelů firem.",
+          "Blanka je aktivní členkou mezinárodní leadershipové organizace JCI a pravidelně přednáší na odborných konferencích. Ve firmách i na individuální úrovni se věnuje rozvoji human skills, klíčového prvku moderního leadershipu."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/blankamrazkova/",
+          "web": "https://www.modernileader.cz"
+        }
+      },
+      {
+        "slug": "andrea-bila",
+        "name": "Andrea Bílá",
+        "photo": "/assets/img/2026/06/Andrea-Bila.png",
+        "role": "programová manažerka Institutu ekonomického vzdělávání INEV a manažerka Mikroregionu Radbuza",
+        "bio": [
+          "Andrea Bílá působí v Institutu ekonomického vzdělávání (INEV), kde se jako programová manažerka podílí na realizaci a vedení vzdělávacích projektů – například Peníze a Bitcoin do škol a dalších, ale hlavně Ekonomické olympiády. Současně zastává pozici manažerky Mikroregionu Radbuza a aktivně se věnuje rozvoji regionu, vzdělávání a podpoře mladých lidí.",
+          "Je členkou organizace JCI, která rozvíjí budoucí lídry a podnikatele. Ve své profesní dráze propojuje leadership, projektový management a budování spolupráce mezi vzdělávacím a podnikatelským sektorem. Především je však maminkou dvou dětí, díky kterým neztrácí nadhled, energii ani motivaci hledat cesty, jak věci (vy)řešit."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/andrea-bila/"
+        }
+      },
+      {
+        "slug": "jakub-zikmund",
+        "name": "Jakub Zikmund",
+        "photo": "/assets/img/2026/06/Jakub-Zikmund.png",
+        "role": "backend developer a člen core týmu Hope to See, projektový manažer Plzeňský Business Kotel",
+        "bio": [
+          "Jakub se profesně pohybuje převážně ve světě softwarového vývoje a IT s přesahem do byznysu, jako zástupce generace Z se ale rozhodl nejít tak úplně s davem. Vydal se do světa vedení lidí, kde na někoho v jeho věku narazíte spíše výjimečně.",
+          "Za téměř tři roky působení v neziskové organizaci JCI, v rámci které dnes vede byznysový projekt Business Kotel, si ověřil jednu zásadní věc: úspěšné vedení lidí nestojí na povrchní publicitě nebo velkém egu, ale na schopnosti vnímat skutečné potřeby týmu a na budování pevných vztahů."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/jakub-zikmund"
         }
       }
     ]
