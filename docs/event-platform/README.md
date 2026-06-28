@@ -39,7 +39,7 @@ Hlavní rozhodnutí padla; zbývá doladit (detail v [00 §5](./00-rozhodnuti.md
 
 | # | Dokument | Co obsahuje |
 |---|---|---|
-| ★ | **[Popis pro stakeholdery](./STAKEHOLDER-popis.md)** | Lidsky srozumitelný popis (k připomínkám) pro vedení, partnery a business ownery. Bez žargonu. *(Sdílí se jako Google Doc.)* |
+| ★ | **[Popis pro stakeholdery](./STAKEHOLDER-popis.md)** | Věcný přehled funkcí a rozsahu pro vedení, partnery a tým (k připomínkám). Bez žargonu. *(Sdílí se jako Google Doc.)* |
 | 00 | **[Rozhodnutí (závazné)](./00-rozhodnuti.md)** | Odsouhlasený rozsah a stack; má přednost před staršími doporučeními. **Číst první.** |
 | 01 | **[Katalog funkcí](./01-funkce.md)** | „Co by v tom mělo být.“ 7 funkčních domén, každá funkce s prioritou (MoSCoW) a odhadem složitosti. |
 | 02 | **[Architektura](./02-architektura.md)** | Topologie, volba stacku (rozhodovací matice), PWA, realtime, build-vs-buy, prostředí, náklady. |
