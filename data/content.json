@@ -283,6 +283,36 @@
           "linkedin": "https://www.linkedin.com/in/ondrejvojacek/",
           "web": "https://ondrejvojacek.cz/"
         }
+      },
+      {
+        "slug": "patrik-cada",
+        "name": "Patrik Čada",
+        "photo": "/assets/img/2026/06/Patrik-Cada.png",
+        "role": "zakladatel a jednatel Wexia Digital",
+        "bio": [
+          "Patrik je zakladatelem a jednatelem Wexia Digital s.r.o. a již tři roky buduje firmu bez klasické hierarchie — na principech tyrkysového řízení, kde každý člen týmu rozhoduje samostatně a nese za svá rozhodnutí plnou odpovědnost. Pomáhá majitelům a vedení firem propojovat AI, digitalizaci a firemní kulturu do jednoho funkčního celku. V rámci konzultací pracuje s firmami, které hledají jasný směr a chtějí technologie využívat tak, aby podporovaly jejich lidi i byznys. Věří, že technologie samy o sobě firmu nezmění — skutečná transformace začíná u lidí, procesů a způsobu, jakým firma funguje.",
+          "Ve Wexii se zaměřují na digitální transformaci firem, návrh a implementaci systémů na míru, automatizaci procesů a strategické využití AI v podnikání. Cílem není zavádět další nástroje, ale vytvářet řešení, která firmám dlouhodobě dávají smysl a přinášejí reálné výsledky."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/patrik-cada/",
+          "web": "https://www.wexia.digital"
+        }
+      },
+      {
+        "slug": "leonid-kushnir",
+        "name": "Leonid Kushnir",
+        "photo": "/assets/img/2026/06/Leonid-Kushnir.png",
+        "role": "jediný akreditovaný školitel facilitátorů metody LEGO® SERIOUS PLAY® v ČR a SR",
+        "bio": [
+          "Leon je jediný akreditovaný školitel facilitátorů metody LEGO® SERIOUS PLAY® schválený spoluautorem metody, profesorem Johanem S. Roosem, pro ČR a SK.",
+          "Je to člověk orientovaný na lidi a výsledky, který se zaměřuje na úspěch zákazníků a neustále usiluje o efektivitu a výkonnost. Za posledních 15 let své profesní kariéry prošel rolemi v oblasti technologií, obchodních procesů, projektového řízení, poradenství v oblasti vzdělávání a facilitace od USA až po Japonsko.",
+          "Zaměřuje se především na zefektivňování interních procesů, hledání správné kombinace nástrojů pro úspěšnou transformaci a digitalizaci řízení firem a jejich posun do další fáze rozvoje."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/leonidkushnir",
+          "web": "https://www.byleonid.com",
+          "youtube": "https://www.youtube.com/playlist?list=PLXKxEU5ip9QKQLKXug3udWF1EgEOVj2SJ"
+        }
       }
     ]
   },
