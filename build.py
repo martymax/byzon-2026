@@ -30,6 +30,13 @@ def _asset_ver():
 
 
 ASSET_VER = _asset_ver()
+GTM_HEAD_SNIPPET = """<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-MSBB9L9');</script>
+<!-- End Google Tag Manager -->"""
 
 with open(os.path.join(ROOT, "data", "content.json"), encoding="utf-8") as f:
     C = json.load(f)
@@ -541,6 +548,7 @@ def head(title, description, page_path, og_image=None):
     return f"""<!doctype html>
 <html lang="{s['lang']}">
 <head>
+{GTM_HEAD_SNIPPET}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>document.documentElement.classList.add('js');</script>
