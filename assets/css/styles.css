@@ -399,7 +399,7 @@ strong { color: var(--ink); }
 }
 .partner-logo:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--pink-100); }
 .partner-logo.on-dark { background: var(--ink); border-color: transparent; }
-.partner-logo img { max-width: min(230px, 86%); max-height: 72px; width: auto; object-fit: contain; filter: grayscale(1); opacity: .8; transition: filter .3s, opacity .3s; }
+.partner-logo img { width: min(230px, 86%); height: 74px; object-fit: contain; filter: grayscale(1); opacity: .8; transition: filter .3s, opacity .3s; }
 .partner-logo:hover img { filter: grayscale(0); opacity: 1; }
 .partner-fallback { font-family: var(--font-display); font-weight: 600; color: var(--slate); text-align: center; }
 .partner-logo.on-dark .partner-fallback { color: #fff; }
