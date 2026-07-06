@@ -30,6 +30,20 @@ def _asset_ver():
 
 
 ASSET_VER = _asset_ver()
+
+
+def versioned_asset(src):
+    src = str(src)
+    if not src.startswith("/assets/") or "?" in src:
+        return src
+    try:
+        with open(os.path.join(ROOT, src.lstrip("/")), "rb") as f:
+            digest = hashlib.md5(f.read()).hexdigest()[:8]
+    except OSError:
+        return src
+    return f"{src}?v={digest}"
+
+
 GTM_HEAD_SNIPPET = """<!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -862,7 +876,7 @@ def sec_partners():
     logos = ""
     for lg in d["logos"]:
         dark = " on-dark" if lg.get("on_dark") else ""
-        logos += f'<div class="partner-logo{dark}"><img src="{att(lg["src"])}" alt="{att(lg["name"])}" loading="lazy" data-fallback="{att(lg["name"])}"></div>'
+        logos += f'<div class="partner-logo{dark}"><img src="{att(versioned_asset(lg["src"]))}" alt="{att(lg["name"])}" loading="lazy" data-fallback="{att(lg["name"])}"></div>'
     return f"""<section class="section" id="partneri">
   <div class="container">
     <div class="section-head section-head--center reveal">
