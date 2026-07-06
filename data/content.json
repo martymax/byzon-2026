@@ -409,8 +409,8 @@
     "logos": [
       {
         "name": "JCI Czech Republic",
-        "src": "/assets/img/2026/06/JCI-Czech-Republic-WHITE.svg",
-        "on_dark": true
+        "src": "/assets/img/2026/07/jci-czech-republic.png",
+        "on_dark": false
       },
       {
         "name": "Finovo",
