@@ -240,10 +240,18 @@
         "slug": "konstancie-zelezna",
         "name": "Konstancie Železná",
         "photo": "/assets/img/2026/06/Konstancie-Zelezna.png",
-        "role": "",
+        "role": "Vede rodinné projekty skupiny Tanzberg",
         "bio": [
-          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
-        ]
+          "Konstancie Železná vede rodinné projekty skupiny Tanzberg – vinařství, hotel, galerii i soukromou školu. Její pracovní den tak může začít řešením prodeje vína, pokračovat změnou jídelního lístku, zápůjčkou obrazu na výstavu a skončit zápisem dětí do první třídy.",
+          "Na konferenci BYZON vystoupí poprvé před podnikatelským publikem tohoto typu. Této příležitosti si velmi váží, o to víc, že je rodačkou ze Strakonic.",
+          "Ve své přednášce nebude mluvit o teorii ani o manažerských poučkách. Podělí se o vlastní zkušenost s vedením rodinné firmy, budováním důvěry v týmu a prosazováním změn v prostředí, kde se každý den potkávají tradice, emoce, odpovědnost i běžný provoz.",
+          "Otevřeně popíše, jak zjistila, že největší změna nezačíná u zaměstnanců, ale u člověka, který firmu vede. Že nestačí znát své silné stránky, ale je potřeba přiznat si i vlastní limity. A také to, že empatie je sice velkou předností, ale bez jasně nastavených hranic může být při vedení firmy překážkou.",
+          "Její příspěvek bude osobním svědectvím o tom, že důvěra v týmu nevzniká tím, že ji člověk vyhlásí na poradě. Buduje se postupně – v každodenních rozhodnutích, rozhovorech, chybách i ochotě podívat se nejdřív do zrcadla, než ho nastavíme ostatním."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/konstanciezelezna/",
+          "instagram": "https://www.instagram.com/konstancie_z/"
+        }
       },
       {
         "slug": "michal-vesely",
