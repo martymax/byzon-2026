@@ -25,12 +25,11 @@
 - Pracovní větev: `stage/00-foundation`.
 - Vzdálená větev: `origin/stage/00-foundation`.
 - Výchozí větev `main`: commit `2993342`.
-- Poslední dokončená práce: přidání detailního implementačního plánu a dvanácti
-  architektonických rozhodnutí (ADR).
-- Poslední publikovaný commit před tímto handoverem: `c0e06f1` –
-  `docs: add architecture decision records`.
-- Stav při vytvoření handoveru: pracovní strom byl čistý a lokální etapová větev
-  odpovídala vzdálené větvi.
+- Poslední dokončená práce: `P0-06`, inventura `data/content.json` a lokálních
+  assetů s mapováním na cílové entity v `docs/content-inventory.md`.
+- Poslední publikovaný commit: `f442f97` – `docs: add project handover`.
+- Aktuální lokální změny obsahují pouze scope `P0-06`; větev před jejich
+  vytvořením odpovídala vzdálené větvi.
 
 ## Co bylo dokončeno
 
@@ -38,11 +37,13 @@
 - `docs/adr/README.md` a ADR-001 až ADR-012 byly přidány v commitu `c0e06f1`.
 - Oba commity byly pushnuty na `origin/stage/00-foundation` a následně ověřeny
   pomocí fetch a porovnání lokálního a vzdáleného SHA.
+- `P0-06` zmapoval 17 řečníků, 66 programových položek, 7 partnerů a 58
+  lokálních assetů. Všechny souborové cesty odkazované z JSON existují.
 
 ## Rozpracovaná práce
 
-- Žádná implementační práce není rozpracovaná.
-- Etapa 00 zatím obsahuje pouze plánovací a architektonickou dokumentaci.
+- `P0-06` je implementován a lokálně ověřen, ale dosud nebyl uživatelem
+  schválen ke commitu ani pushnut.
 
 ## Otevřené body a rizika
 
@@ -53,17 +54,18 @@
 - Commit, push, vytvoření nebo aktualizace PR a merge se řídí schvalovacími
   pravidly v `AI_IMPLEMENTATION_PLAN.md`.
 - PR pro `stage/00-foundation` zatím nebyl v rámci této práce vytvořen.
+- Programová data nemají stabilní ID ani strukturované časy; položka `24:00 - ?`
+  není bezpečně importovatelná. Koučovací sloty postrádají kouče a kapacity.
+- `P0-02` zůstává blokován chybějícím ukázkovým SimpleShop exportem.
 
 ## Doporučený další krok
 
-Najít v `AI_IMPLEMENTATION_PLAN.md` první nehotový a neblokovaný úkol etapy 00,
-ověřit jeho Definition of Ready a před implementací uživateli stručně potvrdit
-zamýšlený scope.
+Po schválení uživatelem commitnout a pushnout pouze scope `P0-06`. Poté
+realizovat `P0-07`: baseline a regresní smoke test současného veřejného buildu.
 
 ## Poslední ověření
 
-- `git status -sb`: větev byla před vytvořením tohoto souboru čistá a
-  synchronizovaná s `origin/stage/00-foundation`.
-- Kontrola dokumentace: `git diff --cached --check` proběhla u předchozích dvou
-  dokumentačních commitů bez chyb.
-- V adresáři `docs/` bylo publikováno 13 Markdown souborů, celkem 519 řádků.
+- `jq` inventura: 17 řečníků, 2 dny, 7 scén/sekcí, 66 programových položek,
+  7 partnerů a 3 cenové hladiny.
+- Kontrola cest: žádný souborový odkaz z `data/content.json` nechybí.
+- Produktové zadání v1.0 bylo ověřeno na revizi uvedené v implementačním plánu.
