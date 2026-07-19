@@ -1343,7 +1343,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 - [ ] `P0-04` Potvrdit kapacitní/waitlist/transfer pravidla v seznamu blokátorů.
 - [ ] `P0-05` Potvrdit event-day zařízení, počet check-in míst a očekávaný počet účastníků.
 - [x] `P0-06` Udělat asset/content inventuru `data/content.json` → cílové entity. Výsledek: [`docs/content-inventory.md`](docs/content-inventory.md).
-- [ ] `P0-07` Změřit současný veřejný web a vytvořit regresní smoke test, že monorepo změny jej nerozbijí.
+- [x] `P0-07` Změřit současný veřejný web a vytvořit regresní smoke test, že monorepo změny jej nerozbijí. Baseline: [`docs/static-site-baseline.md`](docs/static-site-baseline.md), test: `python3 tests/static_site_smoke.py`.
 - [ ] `P0-08` Vybrat produkční e-mail provider a potvrdit DPA/region až před etapou 8; zatím fake provider.
 - [ ] `P0-09` Založit decision/blocker registry v tomto dokumentu a jmenovat vlastníky.
 
@@ -1770,3 +1770,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.1 | 20. 7. 2026 | Dokončen `P0-01`: ADR-001 až ADR-012 byly převedeny do samostatných závazných záznamů; doplněn `BLOCKER-INFRA-01`. |
 | 1.2 | 20. 7. 2026 | Zavedeny etapové větve a povinné explicitní schválení každého kroku před commitem/pushem i samostatné schválení PR/merge. |
 | 1.3 | 20. 7. 2026 | Dokončen `P0-06`: zdrojový obsah a assety byly zmapovány na cílové entity včetně migračních hranic, validačních nálezů a kontraktu budoucího draftového importu. |
+| 1.4 | 20. 7. 2026 | Dokončen `P0-07`: změřen root statický web a přidán izolovaný deterministický smoke test generovaných souborů, lokálních odkazů a kritických embedů. |

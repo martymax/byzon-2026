@@ -23,8 +23,21 @@ Po úpravě znovu vygeneruj stránky:
 python3 build.py
 ```
 
-Generátor sestaví všech 17 stránek (homepage, program, minulé ročníky, vstupenky,
-partneři + 12 detailů řečníků) ze sdílených komponent v [`build.py`](./build.py).
+Generátor aktuálně sestaví 24 stránek (homepage, program, minulé ročníky,
+vstupenky, partneři, 17 detailů řečníků a 2 právní stránky) ze sdílených
+komponent v [`build.py`](./build.py); navíc vytváří 404, sitemapu a robots.txt.
+
+## Regresní kontrola veřejného webu
+
+Po změně generátoru, obsahu nebo při úpravě repozitářového toolchainu spusťte:
+
+```bash
+python3 tests/static_site_smoke.py
+```
+
+Kontrola provede izolovaný build, porovná jej s commitnutými výstupy a ověří
+kritické lokální odkazy a SimpleShop embed. Aktuální měření je v
+[`docs/static-site-baseline.md`](./docs/static-site-baseline.md).
 
 ## Struktura
 

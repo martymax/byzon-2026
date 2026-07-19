@@ -25,10 +25,11 @@
 - Pracovní větev: `stage/00-foundation`.
 - Vzdálená větev: `origin/stage/00-foundation`.
 - Výchozí větev `main`: commit `2993342`.
-- Poslední dokončená práce: `P0-06`, inventura `data/content.json` a lokálních
-  assetů s mapováním na cílové entity v `docs/content-inventory.md`.
-- Poslední publikovaný commit: `f442f97` – `docs: add project handover`.
-- Aktuální lokální změny obsahují pouze scope `P0-06`; větev před jejich
+- Poslední dokončená práce: `P0-07`, baseline a regresní smoke test současného
+  veřejného statického webu.
+- Poslední publikovaný commit: `62b0478` –
+  `docs(P0-06): inventory content and assets`.
+- Aktuální lokální změny obsahují pouze scope `P0-07`; větev před jejich
   vytvořením odpovídala vzdálené větvi.
 
 ## Co bylo dokončeno
@@ -39,10 +40,13 @@
   pomocí fetch a porovnání lokálního a vzdáleného SHA.
 - `P0-06` zmapoval 17 řečníků, 66 programových položek, 7 partnerů a 58
   lokálních assetů. Všechny souborové cesty odkazované z JSON existují.
+- `P0-07` přidal `tests/static_site_smoke.py` a baseline v
+  `docs/static-site-baseline.md`. Test provádí izolovaný build, byte-level
+  porovnání, kontrolu lokálních odkazů a kritických embedů bez nové závislosti.
 
 ## Rozpracovaná práce
 
-- `P0-06` je implementován a lokálně ověřen, ale dosud nebyl uživatelem
+- `P0-07` je implementován a lokálně ověřen, ale dosud nebyl uživatelem
   schválen ke commitu ani pushnut.
 
 ## Otevřené body a rizika
@@ -60,8 +64,9 @@
 
 ## Doporučený další krok
 
-Po schválení uživatelem commitnout a pushnout pouze scope `P0-06`. Poté
-realizovat `P0-07`: baseline a regresní smoke test současného veřejného buildu.
+Po schválení uživatelem commitnout a pushnout pouze scope `P0-07`. Poté vyřešit
+`P0-09` (registry už existuje, je třeba ověřit úplnost vlastníků/gates), nebo po
+potvrzení vstupů pokračovat některým z blokovaných úkolů `P0-02` až `P0-05`.
 
 ## Poslední ověření
 
@@ -69,3 +74,6 @@ realizovat `P0-07`: baseline a regresní smoke test současného veřejného bui
   7 partnerů a 3 cenové hladiny.
 - Kontrola cest: žádný souborový odkaz z `data/content.json` nechybí.
 - Produktové zadání v1.0 bylo ověřeno na revizi uvedené v implementačním plánu.
+- `python3 tests/static_site_smoke.py`: prošel izolovaný build, shoda všech 27
+  generovaných souborů, lokální odkazy a kritické kontrakty.
+- Baseline: 25 HTML výstupů / 351 715 B a 58 assetů / 57 613 828 B.
