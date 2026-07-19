@@ -140,20 +140,20 @@ Nová aplikace se přidá do stejného repozitáře jako monorepo. Přesun nebo 
 
 ## 4. Závazná technická rozhodnutí
 
-| ID | Rozhodnutí | Důvod a důsledek |
-| --- | --- | --- |
-| [ADR-001](docs/adr/001-monorepo.md) | Jeden GitHub repozitář, monorepo | Sdílení značky, typů a doménových pravidel; nezávislé Railway služby přes root/watch paths. |
-| [ADR-002](docs/adr/002-nextjs-react-typescript.md) | Next.js App Router + React + TypeScript strict | Jeden full-stack kód, serverové renderování, Route Handlers, PWA podpora, dobrý Railway deployment. |
-| [ADR-003](docs/adr/003-postgresql-drizzle.md) | PostgreSQL + Drizzle ORM | Transakce a databázová omezení pro kapacity, vstupenky a check-in; explicitní SQL migrace. |
-| [ADR-004](docs/adr/004-better-auth.md) | Better Auth pro identity, relace a magic link | Nevytvářet vlastní správu relací; ticket claim zůstává vlastní doménová vrstva. |
-| [ADR-005](docs/adr/005-redis-bullmq-worker.md) | Redis + BullMQ worker | Asynchronní e-maily, připomínky, waitlist, retence, exporty a retry bez blokování web requestů. |
-| [ADR-006](docs/adr/006-rest-sse.md) | REST JSON API `/api/v1` + SSE | Offline klient potřebuje stabilní HTTP rozhraní; živé funkce jsou převážně server → klient. |
-| [ADR-007](docs/adr/007-private-object-storage.md) | Railway private Storage Bucket | Soukromé materiály řečníků, obrázky a exporty; přístup pouze krátkodobými podepsanými URL/proxy. |
-| [ADR-008](docs/adr/008-database-published-content-source.md) | DB jako jediný zdroj publikovaného programu a profilů | Admin spravuje obsah bez vývojáře; `byzon.cz` obsah pouze synchronizuje/konzumuje. |
-| [ADR-009](docs/adr/009-service-worker-indexeddb.md) | Service worker + IndexedDB | Offline čtení programu/agendy/informací; explicitní synchronizační fronta jen pro bezpečné operace. |
-| [ADR-010](docs/adr/010-eu-railway-region.md) | EU Railway region pro web, worker, DB, Redis i bucket | Soulad se zadáním; externí zpracovatelé vyžadují samostatné právní schválení. |
-| [ADR-011](docs/adr/011-event-feature-flags.md) | Feature flags per event | Bezpečné oddělení priorit B/C a postupné zpřístupňování funkcí. |
-| [ADR-012](docs/adr/012-multi-event-data-model.md) | Multi-event datový model od začátku | Opakované použití pro další ročník bez sdílení dat mezi akcemi. |
+| ID | Rozhodnutí | Vlastník | Důvod a důsledek |
+| --- | --- | --- | --- |
+| [ADR-001](docs/adr/001-monorepo.md) | Jeden GitHub repozitář, monorepo | Tech lead | Sdílení značky, typů a doménových pravidel; nezávislé Railway služby přes root/watch paths. |
+| [ADR-002](docs/adr/002-nextjs-react-typescript.md) | Next.js App Router + React + TypeScript strict | Tech lead | Jeden full-stack kód, serverové renderování, Route Handlers, PWA podpora, dobrý Railway deployment. |
+| [ADR-003](docs/adr/003-postgresql-drizzle.md) | PostgreSQL + Drizzle ORM | Tech lead | Transakce a databázová omezení pro kapacity, vstupenky a check-in; explicitní SQL migrace. |
+| [ADR-004](docs/adr/004-better-auth.md) | Better Auth pro identity, relace a magic link | Tech lead + security | Nevytvářet vlastní správu relací; ticket claim zůstává vlastní doménová vrstva. |
+| [ADR-005](docs/adr/005-redis-bullmq-worker.md) | Redis + BullMQ worker | Tech lead | Asynchronní e-maily, připomínky, waitlist, retence, exporty a retry bez blokování web requestů. |
+| [ADR-006](docs/adr/006-rest-sse.md) | REST JSON API `/api/v1` + SSE | Tech lead | Offline klient potřebuje stabilní HTTP rozhraní; živé funkce jsou převážně server → klient. |
+| [ADR-007](docs/adr/007-private-object-storage.md) | Railway private Storage Bucket | Tech lead + ENJOiT | Soukromé materiály řečníků, obrázky a exporty; přístup pouze krátkodobými podepsanými URL/proxy. |
+| [ADR-008](docs/adr/008-database-published-content-source.md) | DB jako jediný zdroj publikovaného programu a profilů | Produkt + tech lead | Admin spravuje obsah bez vývojáře; `byzon.cz` obsah pouze synchronizuje/konzumuje. |
+| [ADR-009](docs/adr/009-service-worker-indexeddb.md) | Service worker + IndexedDB | Tech lead | Offline čtení programu/agendy/informací; explicitní synchronizační fronta jen pro bezpečné operace. |
+| [ADR-010](docs/adr/010-eu-railway-region.md) | EU Railway region pro web, worker, DB, Redis i bucket | ENJOiT + tech lead | Soulad se zadáním; externí zpracovatelé vyžadují samostatné právní schválení. |
+| [ADR-011](docs/adr/011-event-feature-flags.md) | Feature flags per event | Produkt + tech lead | Bezpečné oddělení priorit B/C a postupné zpřístupňování funkcí. |
+| [ADR-012](docs/adr/012-multi-event-data-model.md) | Multi-event datový model od začátku | Produkt + tech lead | Opakované použití pro další ročník bez sdílení dat mezi akcemi. |
 
 Nezafixované externí služby (e-mail, error tracking, uptime monitor, případný malware scanner) se implementují přes rozhraní/adaptéry. Produkční provider musí být vybrán a právně schválen před příslušnou launch gate.
 
@@ -1345,7 +1345,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 - [x] `P0-06` Udělat asset/content inventuru `data/content.json` → cílové entity. Výsledek: [`docs/content-inventory.md`](docs/content-inventory.md).
 - [x] `P0-07` Změřit současný veřejný web a vytvořit regresní smoke test, že monorepo změny jej nerozbijí. Baseline: [`docs/static-site-baseline.md`](docs/static-site-baseline.md), test: `python3 tests/static_site_smoke.py`.
 - [ ] `P0-08` Vybrat produkční e-mail provider a potvrdit DPA/region až před etapou 8; zatím fake provider.
-- [ ] `P0-09` Založit decision/blocker registry v tomto dokumentu a jmenovat vlastníky.
+- [x] `P0-09` Založit decision/blocker registry v tomto dokumentu a jmenovat vlastníky. Registr rozhodnutí je v §4, blockery s vlastníky a gates v §22.
 
 **Akceptace:** existující `python3 build.py` generuje stejný web; všechny nejasnosti mají ID, vlastníka a gate; nic nebylo nasazeno do produkce.
 
@@ -1607,29 +1607,34 @@ Zahájit jen po formálním potvrzení, že Gate A i všechny Priority B jsou ho
 
 ---
 
-## 22. Blokátory a otevřené vstupy
+## 22. Decision/blocker registry
 
 Tyto body nejsou důvodem zastavit celý projekt. Zastavují pouze uvedenou část.
+Přijatá architektonická rozhodnutí, jejich vlastníci a odkazy na samostatné
+záznamy jsou vedeny v §4. Následující tabulka je autoritativní registr otevřených
+vstupů. `Gate` určuje nejzazší krok, před kterým musí vlastník dodat a nechat
+zaznamenat rozhodnutí; bezpečný výchozí postup není automatické produktové
+rozhodnutí ani souhlas s produkčním nasazením.
 
-| ID | Potřebný vstup | Blokuje | Vlastník | Bezpečný výchozí postup |
-| --- | --- | --- | --- | --- |
-| BLOCKER-TKT-01 | Ukázkový SimpleShop export a přesné sloupce | P4 apply | Organizátor | Implementovat staging/mapování přes adapter, bez prod apply. |
-| BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno | P4 stavy | Organizátor | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat. |
-| BLOCKER-TKT-03 | Frekvence a kanál změn SimpleShop | Prod sync | Organizátor | Ruční idempotentní import. |
-| BLOCKER-TKT-04 | Entropie/formát kódů | Claim/offline check-in security | Organizátor + tech | HMAC storage; offline manifest disabled. |
-| BLOCKER-RES-01 | Kapacity, uzávěrky a waitlist mode per session | P5 prod konfigurace | Organizační tým | Schéma podporuje obě politiky, feature zůstane neveřejná. |
-| BLOCKER-RES-02 | Coaching délka/paralelnost/pravidla | Coaching UI | Organizační tým | Model generalizované sessions/rooms/coaches. |
-| BLOCKER-RES-03 | Co s rezervacemi při transferu/stornu | P4/P5 edge cases | Produkt | Výchozí: rezervace zrušit a uvolnit waitlist, ale nenasazovat bez potvrzení. |
-| BLOCKER-RES-04 | Nabídka místa vs automatická promotion | Waitlist worker | Produkt | Podporovat obojí konfiguračně. |
-| BLOCKER-OPS-01 | Počet vstupů, zařízení, operátorů, očekávaná špička | Load/check-in gate | Organizace | Vývoj s parametrizovaným load profilem. |
-| BLOCKER-OPS-02 | Nouzový check-in a autorita ručních záznamů | P6 gate | Organizace + tech | Online autorita + exportní fallback. |
-| BLOCKER-LIVE-01 | Sessions s otázkami/anketami, moderátoři a projekce | P12 | Organizace | Feature off. |
-| BLOCKER-CONTENT-01 | Finální program, plánek, FAQ a cutoffs | Obsah UAT | Organizace | Testovací seed jasně označený. |
-| BLOCKER-LEGAL-01 | Schválené účely, texty, retence a souhlasy | Production onboarding/networking | ENJOiT | Verze draft, žádné produkční opt-in. |
-| BLOCKER-VENDOR-01 | E-mail provider + DPA/region | Prod e-mail | ENJOiT + tech | Fake/sink adapter. |
-| BLOCKER-VENDOR-02 | Error/uptime provider + privacy nastavení | Go-live monitor | Tech + ENJOiT | Redacted logs + Railway, ale launch gate zůstává otevřená. |
-| BLOCKER-INFRA-01 | Railway DPA, subprocesory, datová rezidence a bezpečnost/retence bucketu | Produkční PII a privátní soubory | ENJOiT + tech | Pouze syntetický/anonymizovaný staging; bez produkčních PII a privátních souborů. |
-| BLOCKER-WEB-01 | Hosting/deploy trigger `byzon.cz` | P14 | Tech | Public API + no-op adapter + sync_pending. |
+| ID | Potřebný vstup | Blokuje | Vlastník | Gate | Bezpečný výchozí postup |
+| --- | --- | --- | --- | --- | --- |
+| BLOCKER-TKT-01 | Ukázkový SimpleShop export a přesné sloupce | P4 apply | Organizátor | P4-02 preview | Implementovat staging/mapování přes adapter, bez prod apply. |
+| BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno | P4 stavy | Organizátor | P4-01 stavový model | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat. |
+| BLOCKER-TKT-03 | Frekvence a kanál změn SimpleShop | Prod sync | Organizátor | P4 produkční import | Ruční idempotentní import. |
+| BLOCKER-TKT-04 | Entropie/formát kódů | Claim/offline check-in security | Organizátor + tech lead | P4-01 test vectors | HMAC storage; offline manifest disabled. |
+| BLOCKER-RES-01 | Kapacity, uzávěrky a waitlist mode per session | P5 prod konfigurace | Organizační tým | P5 UAT/publikace | Schéma podporuje obě politiky, feature zůstane neveřejná. |
+| BLOCKER-RES-02 | Coaching délka/paralelnost/pravidla | Coaching UI | Organizační tým | P5-06 | Model generalizované sessions/rooms/coaches. |
+| BLOCKER-RES-03 | Co s rezervacemi při transferu/stornu | P4/P5 edge cases | Produkt | P4-09 / P5-05 | Výchozí: rezervace zrušit a uvolnit waitlist, ale nenasazovat bez potvrzení. |
+| BLOCKER-RES-04 | Nabídka místa vs automatická promotion | Waitlist worker | Produkt | P5-04 | Podporovat obojí konfiguračně. |
+| BLOCKER-OPS-01 | Počet vstupů, zařízení, operátorů, očekávaná špička | Load/check-in gate | Organizace | P6-10 load profil | Vývoj s parametrizovaným load profilem. |
+| BLOCKER-OPS-02 | Nouzový check-in a autorita ručních záznamů | P6 gate | Organizace + tech lead | P6-08 runbook | Online autorita + exportní fallback. |
+| BLOCKER-LIVE-01 | Sessions s otázkami/anketami, moderátoři a projekce | P12 | Organizace | P12-01 scope | Feature off. |
+| BLOCKER-CONTENT-01 | Finální program, plánek, FAQ a cutoffs | Obsah UAT | Organizace | Gate A obsah UAT | Testovací seed jasně označený. |
+| BLOCKER-LEGAL-01 | Schválené účely, texty, retence a souhlasy | Production onboarding/networking | ENJOiT | Gate A onboarding UAT | Verze draft, žádné produkční opt-in. |
+| BLOCKER-VENDOR-01 | E-mail provider + DPA/region | Prod e-mail | ENJOiT + tech lead | P8-03 | Fake/sink adapter. |
+| BLOCKER-VENDOR-02 | Error/uptime provider + privacy nastavení | Go-live monitor | Tech lead + ENJOiT | P15-11 | Redacted logs + Railway, ale launch gate zůstává otevřená. |
+| BLOCKER-INFRA-01 | Railway DPA, subprocesory, datová rezidence a bezpečnost/retence bucketu | Produkční PII a privátní soubory | ENJOiT + tech lead | První produkční PII / P10-03 | Pouze syntetický/anonymizovaný staging; bez produkčních PII a privátních souborů. |
+| BLOCKER-WEB-01 | Hosting/deploy trigger `byzon.cz` | P14 | Tech lead | P14-03 | Public API + no-op adapter + sync_pending. |
 
 ---
 
@@ -1771,3 +1776,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.2 | 20. 7. 2026 | Zavedeny etapové větve a povinné explicitní schválení každého kroku před commitem/pushem i samostatné schválení PR/merge. |
 | 1.3 | 20. 7. 2026 | Dokončen `P0-06`: zdrojový obsah a assety byly zmapovány na cílové entity včetně migračních hranic, validačních nálezů a kontraktu budoucího draftového importu. |
 | 1.4 | 20. 7. 2026 | Dokončen `P0-07`: změřen root statický web a přidán izolovaný deterministický smoke test generovaných souborů, lokálních odkazů a kritických embedů. |
+| 1.5 | 20. 7. 2026 | Dokončen `P0-09`: registr přijatých rozhodnutí dostal vlastníky a každý otevřený blocker explicitního vlastníka, gate a bezpečný postup. |

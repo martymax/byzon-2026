@@ -25,11 +25,11 @@
 - Pracovní větev: `stage/00-foundation`.
 - Vzdálená větev: `origin/stage/00-foundation`.
 - Výchozí větev `main`: commit `2993342`.
-- Poslední dokončená práce: `P0-07`, baseline a regresní smoke test současného
-  veřejného statického webu.
-- Poslední publikovaný commit: `62b0478` –
-  `docs(P0-06): inventory content and assets`.
-- Aktuální lokální změny obsahují pouze scope `P0-07`; větev před jejich
+- Poslední dokončená práce: `P0-09`, doplnění vlastníků přijatých rozhodnutí a
+  explicitních gates všech otevřených blockerů.
+- Poslední publikovaný commit: `bf2e4ab` –
+  `test(P0-07): protect static site build`.
+- Aktuální lokální změny obsahují pouze scope `P0-09`; větev před jejich
   vytvořením odpovídala vzdálené větvi.
 
 ## Co bylo dokončeno
@@ -43,10 +43,12 @@
 - `P0-07` přidal `tests/static_site_smoke.py` a baseline v
   `docs/static-site-baseline.md`. Test provádí izolovaný build, byte-level
   porovnání, kontrolu lokálních odkazů a kritických embedů bez nové závislosti.
+- `P0-09` rozšířil registry v §4 a §22 plánu: všech 12 ADR má odpovědné role a
+  všech 17 otevřených blockerů má vlastníka, gate a bezpečný výchozí postup.
 
 ## Rozpracovaná práce
 
-- `P0-07` je implementován a lokálně ověřen, ale dosud nebyl uživatelem
+- `P0-09` je implementován a lokálně ověřen, ale dosud nebyl uživatelem
   schválen ke commitu ani pushnut.
 
 ## Otevřené body a rizika
@@ -64,9 +66,10 @@
 
 ## Doporučený další krok
 
-Po schválení uživatelem commitnout a pushnout pouze scope `P0-07`. Poté vyřešit
-`P0-09` (registry už existuje, je třeba ověřit úplnost vlastníků/gates), nebo po
-potvrzení vstupů pokračovat některým z blokovaných úkolů `P0-02` až `P0-05`.
+Po schválení uživatelem commitnout a pushnout pouze scope `P0-09`. Další úkoly
+etapy 0 vyžadují vstup vlastníků: SimpleShop export (`P0-02`), hosting veřejného
+webu (`P0-03`), produktová rezervační pravidla (`P0-04`) a onsite profil
+(`P0-05`). `P0-08` je záměrně odložen před etapu 8 a do té doby platí fake mail.
 
 ## Poslední ověření
 
