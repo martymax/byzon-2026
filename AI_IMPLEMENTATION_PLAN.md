@@ -1353,18 +1353,18 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 
 **Cíl:** prázdná, brandovaná a monitorovatelná aplikace se stejným buildem lokálně, v CI a Railway staging.
 
-- [ ] `P1-01` Přidat pnpm workspace bez změny Python static build workflow.
-- [ ] `P1-02` Scaffold `apps/conference` s aktuální stabilní Next.js/React/TypeScript verzí a standalone output.
-- [ ] `P1-03` Scaffold `apps/worker` a sdílené packages.
-- [ ] `P1-04` Zafixovat Node Active LTS, pnpm a lockfile; přidat Renovate/Dependabot pravidla.
-- [ ] `P1-05` Přidat strict TS, lint, format, module boundaries a root scripts.
-- [ ] `P1-06` Přenést základní BYZON tokeny, fonty a aplikační shell; nepřenášet zbytečné marketingové komponenty.
-- [ ] `P1-07` Přidat manifest, ikony, offline fallback page a instalovatelnost bez datové cache.
-- [ ] `P1-08` Implementovat `/health/live`, `/health/ready`, request ID a redacted logger.
-- [ ] `P1-09` Přidat env schema a `.env.example` bez tajných hodnot.
-- [ ] `P1-10` GitHub Actions CI pro root static build i nové aplikace.
-- [ ] `P1-11` Railway config-as-code, root/watch paths, web/worker start commands a staging služby.
-- [ ] `P1-12` Smoke test veřejného webu a conference shellu.
+- [x] `P1-01` Přidat pnpm workspace bez změny Python static build workflow.
+- [x] `P1-02` Scaffold `apps/conference` s aktuální stabilní Next.js/React/TypeScript verzí a standalone output.
+- [x] `P1-03` Scaffold `apps/worker` a sdílené packages.
+- [x] `P1-04` Zafixovat Node Active LTS, pnpm a lockfile; přidat Renovate/Dependabot pravidla.
+- [x] `P1-05` Přidat strict TS, lint, format, module boundaries a root scripts.
+- [x] `P1-06` Přenést základní BYZON tokeny, fonty a aplikační shell; nepřenášet zbytečné marketingové komponenty.
+- [x] `P1-07` Přidat manifest, ikony, offline fallback page a instalovatelnost bez datové cache.
+- [x] `P1-08` Implementovat `/health/live`, `/health/ready`, request ID a redacted logger.
+- [x] `P1-09` Přidat env schema a `.env.example` bez tajných hodnot.
+- [x] `P1-10` GitHub Actions CI pro root static build i nové aplikace.
+- [~] `P1-11` Railway config-as-code, root/watch paths, web/worker start commands a staging služby. Config a runbook jsou hotové; založení a smoke skutečných staging služeb čeká na přístup k Railway projektu.
+- [x] `P1-12` Smoke test veřejného webu a conference shellu.
 
 **Akceptace:** čistý checkout se reprodukovatelně nainstaluje a sestaví; `build.py` zůstává funkční; staging web/worker startují; healthchecky a CI jsou zelené.
 

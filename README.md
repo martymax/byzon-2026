@@ -63,3 +63,17 @@ program/  byznys-konference/  simpleshop/  stante-se-partnerem/  speaker/<jmeno>
 
 Jde o statické soubory — nasaditelné kamkoli (Nginx, Netlify, Vercel, GitHub Pages,
 nebo zpět do WordPressu). Stačí servírovat kořen repozitáře.
+
+## Konferenční aplikace
+
+Nová aplikace žije vedle veřejného webu v pnpm monorepu. Vyžaduje Node verze z
+`.nvmrc` a pnpm verze uvedené v `package.json`.
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Kontroly aplikace spustíte přes `pnpm run ci`, browser smoke přes `pnpm test:e2e`.
+Railway staging postup je v `docs/runbooks/railway-staging.md`.

@@ -1,0 +1,34 @@
+{
+  "name": "byzon-2026",
+  "private": true,
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=24.18.0 <25"
+  },
+  "packageManager": "pnpm@11.15.1",
+  "scripts": {
+    "build": "pnpm build:web && pnpm build:worker",
+    "build:web": "pnpm --filter @byzon/conference build",
+    "build:worker": "pnpm --filter @byzon/worker build",
+    "dev": "pnpm --parallel --filter @byzon/conference --filter @byzon/worker dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:static": "python3 tests/static_site_smoke.py",
+    "test:e2e": "playwright test",
+    "ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:static"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/node": "24.3.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.10",
+    "prettier": "3.9.5",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}
