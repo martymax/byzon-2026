@@ -14,8 +14,10 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - Pracovní větev: `stage/02-database-auth`, založená z `main` na `db2d1c8`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
-- Poslední dokončený úkol: `P2-01` – první Drizzle schema doménového kernelu.
-- Změny nejsou commitnuté ani pushnuté.
+- Poslední publikovaný úkol: `P2-01`, commit `0f60f34` na
+  `origin/stage/02-database-auth`.
+- Dokončený lokální úkol: `P2-02` – první migrace a event seed; změny nejsou
+  commitnuté ani pushnuté.
 
 ## Dokončená práce
 
@@ -27,26 +29,31 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
   složený cizí klíč, který brání propojení dat různých eventů.
 - Přidáno 12 schema-level testů pro event scope, Better Auth tabulky, složenou
   vazbu legal documentu a částečné/deduplication unique indexy.
-- Migrace a seed jsou záměrně až `P2-02`.
+- `P2-01` neobsahoval databázovou migraci; ta vzniká v navazujícím `P2-02`.
+
+## Dokončená lokální práce
+
+- `P2-02` přidává Drizzle Kit config, první verzovanou SQL migraci, snapshot a
+  migration journal.
+- Idempotentní seed zakládá draft `byzon-2026` a archivovaný
+  `byzon-isolation-test`; opakované spuštění nepřepisuje provozní stav.
+- Před první migrací byly doplněny všechny feature flags z §7.5 a odstraněny
+  databázové UUIDv4 defaulty. Identifikátory bude generovat server jako UUIDv7.
 
 ## Otevřené body a rizika
 
-- Lokální Node byl aktualizován na projektovou verzi `24.18.0`. Ze shell profilu
-  byl odstraněn zastaralý natvrdo zadaný Homebrew Node `24.1.0`; CI poté prošlo
-  bez engine warningu. Tato úprava prostředí není součástí Git diffu projektu.
 - `support_operator` není ve schématu vytvořen, protože plán jej zakazuje bez
   potvrzené potřeby.
 - P0 produktové blockery zůstávají otevřené, ale `P2-01` neblokují.
 
 ## Doporučený další krok
 
-Předložit ověřený diff `P2-01` uživateli ke schválení commitu a pushe. Po
-schválení pokračovat samostatným `P2-02` (SQL migrace, migration journal a dva
-seed eventy pro izolační testy).
+Předložit ověřený diff `P2-02` uživateli ke schválení commitu a pushe.
+Následující úkol je `P2-03` – connection pooling a transakční helpery.
 
 ## Poslední ověření
 
-- `pnpm run ci`: prošel format, lint, typecheck, 16 testů, conference/worker
-  build a regresní static-site smoke.
-- `@byzon/database`: 12/12 testů prošlo.
-- Veřejný web: 25 HTML stran, 351 715 B HTML, 58 assetů, 57 613 828 B.
+- `P2-01`: `pnpm run ci` prošel na Node `24.18.0` bez engine warningu.
+- `P2-02`: `pnpm run ci` prošel; z celkem 21 testů bylo 17 databázových.
+- První migrace a dvakrát spuštěný seed prošly proti dočasnému PostgreSQL;
+  výsledkem byly přesně dva eventy a dva řádky feature flags.

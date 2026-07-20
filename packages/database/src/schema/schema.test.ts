@@ -76,6 +76,34 @@ describe('stage 2 database schema', () => {
     ).toBe(true);
   });
 
+  it('exposes all event feature gates required by the implementation plan', () => {
+    const featureColumns = getTableConfig(eventFeatures).columns.map(
+      (column) => column.name,
+    );
+    expect(featureColumns).toEqual(
+      expect.arrayContaining([
+        'networking_enabled',
+        'announcements_enabled',
+        'speaker_portal_enabled',
+        'questions_enabled',
+        'polls_enabled',
+        'ratings_enabled',
+        'social_wall_enabled',
+        'offline_checkin_enabled',
+        'public_content_sync_enabled',
+      ]),
+    );
+  });
+
+  it('leaves identifiers to the server-side UUIDv7 generator', () => {
+    for (const table of tables) {
+      const id = getTableConfig(table).columns.find(
+        (column) => column.name === 'id',
+      );
+      if (id) expect(id.hasDefault).toBe(false);
+    }
+  });
+
   it('declares the partial uniqueness required by current legal versions and active roles', () => {
     expect(
       getTableConfig(legalDocuments).indexes.some(

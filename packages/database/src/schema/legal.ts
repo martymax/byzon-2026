@@ -31,7 +31,7 @@ export const consentDecision = pgEnum('consent_decision', [
 export const legalDocuments = pgTable(
   'legal_documents',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
@@ -60,7 +60,7 @@ export const legalDocuments = pgTable(
 export const consentRecords = pgTable(
   'consent_records',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'restrict' }),

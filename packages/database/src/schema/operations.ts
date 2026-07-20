@@ -25,7 +25,7 @@ export const outboxStatus = pgEnum('outbox_status', [
 export const auditLogs = pgTable(
   'audit_logs',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'restrict' }),
@@ -56,7 +56,7 @@ export const auditLogs = pgTable(
 export const outboxEvents = pgTable(
   'outbox_events',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'restrict' }),
@@ -89,7 +89,7 @@ export const outboxEvents = pgTable(
 export const idempotencyKeys = pgTable(
   'idempotency_keys',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),

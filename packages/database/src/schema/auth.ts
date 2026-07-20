@@ -12,7 +12,7 @@ import {
 export const users = pgTable(
   'user',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     name: text('name').notNull(),
     email: varchar('email', { length: 320 }).notNull(),
     emailVerified: boolean('email_verified').default(false).notNull(),
@@ -30,7 +30,7 @@ export const users = pgTable(
 export const sessions = pgTable(
   'session',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -55,7 +55,7 @@ export const sessions = pgTable(
 export const accounts = pgTable(
   'account',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -91,7 +91,7 @@ export const accounts = pgTable(
 export const verifications = pgTable(
   'verification',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

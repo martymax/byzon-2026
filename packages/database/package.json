@@ -9,6 +9,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "psql \"$DATABASE_URL\" --set ON_ERROR_STOP=1 --file drizzle/seed/events.sql",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -18,6 +21,7 @@
     "pg": "8.22.0"
   },
   "devDependencies": {
-    "@types/pg": "8.20.0"
+    "@types/pg": "8.20.0",
+    "drizzle-kit": "0.31.10"
   }
 }

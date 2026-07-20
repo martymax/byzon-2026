@@ -41,7 +41,7 @@ export const eventRole = pgEnum('event_role', [
 export const events = pgTable(
   'events',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     slug: varchar('slug', { length: 128 }).notNull(),
     name: text('name').notNull(),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
@@ -79,10 +79,16 @@ export const eventFeatures = pgTable('event_features', {
   speakerPortalEnabled: boolean('speaker_portal_enabled')
     .default(false)
     .notNull(),
-  liveInteractionEnabled: boolean('live_interaction_enabled')
+  questionsEnabled: boolean('questions_enabled').default(false).notNull(),
+  pollsEnabled: boolean('polls_enabled').default(false).notNull(),
+  ratingsEnabled: boolean('ratings_enabled').default(false).notNull(),
+  socialWallEnabled: boolean('social_wall_enabled').default(false).notNull(),
+  offlineCheckinEnabled: boolean('offline_checkin_enabled')
     .default(false)
     .notNull(),
-  socialWallEnabled: boolean('social_wall_enabled').default(false).notNull(),
+  publicContentSyncEnabled: boolean('public_content_sync_enabled')
+    .default(false)
+    .notNull(),
   updatedBy: uuid('updated_by').references(() => users.id, {
     onDelete: 'set null',
   }),
@@ -118,7 +124,7 @@ export const eventMemberships = pgTable(
 export const eventRoles = pgTable(
   'event_roles',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
+    id: uuid('id').primaryKey(),
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
