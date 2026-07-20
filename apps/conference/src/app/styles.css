@@ -1,0 +1,180 @@
+:root {
+  --pink: #f5218e;
+  --pink-dark: #d3197a;
+  --ink: #140610;
+  --slate: #454f5e;
+  --soft: #faf7f9;
+  --line: #ececf0;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+html {
+  background: var(--soft);
+}
+body {
+  min-height: 100vh;
+  color: var(--slate);
+  background:
+    radial-gradient(circle at 85% 10%, #fce1ef 0, transparent 32rem),
+    var(--soft);
+  font-family: var(--font-khand), system-ui, sans-serif;
+  font-size: 1.125rem;
+}
+a {
+  color: inherit;
+}
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 10;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  background: var(--pink);
+  color: white;
+}
+.app-header {
+  height: 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 76rem;
+  margin: auto;
+  padding: 0 clamp(1.25rem, 5vw, 3rem);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.brand b {
+  color: var(--pink);
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.75rem;
+  background: var(--pink);
+  color: white;
+  font-size: 1.5rem;
+  transform: rotate(-4deg);
+}
+.shell-badge {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+}
+.hero {
+  min-height: calc(100vh - 5rem);
+  display: grid;
+  place-items: center;
+  padding: 3rem 1.25rem 7rem;
+}
+.hero-card {
+  width: min(100%, 58rem);
+}
+.eyebrow {
+  color: var(--pink-dark);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 0.65rem 0 1.25rem;
+  color: var(--ink);
+  font-size: clamp(3.5rem, 12vw, 8.5rem);
+  line-height: 0.78;
+  letter-spacing: -0.045em;
+}
+h1 span {
+  color: var(--pink);
+}
+.lead {
+  max-width: 38rem;
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  line-height: 1.35;
+}
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: fit-content;
+  margin-top: 2.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 12px 40px rgba(20, 6, 16, 0.08);
+}
+.status-card strong,
+.status-card small {
+  display: block;
+}
+.status-card strong {
+  color: var(--ink);
+}
+.status-card small {
+  font-size: 0.9rem;
+}
+.status-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: #2aa56b;
+  box-shadow: 0 0 0 0.3rem #d9f3e7;
+}
+.message-page {
+  max-width: 42rem;
+  padding: 12vh 1.25rem;
+  margin: auto;
+}
+.message-page h1 {
+  font-size: clamp(3rem, 10vw, 6rem);
+  line-height: 0.9;
+}
+.message-page p:not(.eyebrow) {
+  font-size: 1.3rem;
+  max-width: 34rem;
+}
+.button {
+  display: inline-block;
+  margin-top: 1.75rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  background: var(--pink);
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+}
+@media (max-width: 36rem) {
+  .shell-badge {
+    display: none;
+  }
+  .status-card {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .brand-mark {
+    transition: transform 0.2s;
+  }
+  .brand:hover .brand-mark {
+    transform: rotate(2deg) scale(1.05);
+  }
+}

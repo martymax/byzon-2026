@@ -1,0 +1,17 @@
+.next
+dist
+node_modules
+playwright-report
+test-results
+assets
+*.html
+pnpm-lock.yaml
+apps/conference/next-env.d.ts
+AI_IMPLEMENTATION_PLAN.md
+ANALYZA.md
+README.md
+handover.md
+data
+docs/adr
+docs/content-inventory.md
+docs/static-site-baseline.md

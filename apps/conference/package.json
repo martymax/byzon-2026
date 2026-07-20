@@ -1,0 +1,21 @@
+{
+  "name": "@byzon/conference",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "eslint .",
+    "start": "node .next/standalone/apps/conference/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@byzon/config": "workspace:*",
+    "next": "16.2.10",
+    "pino": "10.3.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "catalog:"
+  }
+}

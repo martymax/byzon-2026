@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "watchPatterns": [
+      "/apps/conference/**",
+      "/packages/**",
+      "/package.json",
+      "/pnpm-lock.yaml",
+      "/pnpm-workspace.yaml",
+      "/tsconfig.base.json"
+    ],
+    "buildCommand": "pnpm build:web"
+  },
+  "deploy": {
+    "startCommand": "pnpm --filter @byzon/conference start",
+    "healthcheckPath": "/health/ready",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3,
+    "drainingSeconds": 10
+  }
+}
