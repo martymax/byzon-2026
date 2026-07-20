@@ -83,5 +83,11 @@ export const consentRecords = pgTable(
     }).onDelete('restrict'),
     index('consent_records_event_id_idx').on(table.eventId),
     index('consent_records_user_id_idx').on(table.userId),
+    uniqueIndex('consent_records_request_document_unique').on(
+      table.eventId,
+      table.userId,
+      table.requestId,
+      table.legalDocumentId,
+    ),
   ],
 );

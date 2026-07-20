@@ -8,6 +8,13 @@
       "when": 1784532643004,
       "tag": "0000_special_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784549953879,
+      "tag": "0001_strong_venus",
+      "breakpoints": true
     }
   ]
 }

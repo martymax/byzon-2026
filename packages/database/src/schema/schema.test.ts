@@ -12,6 +12,7 @@ import {
   idempotencyKeys,
   legalDocuments,
   outboxEvents,
+  participantProfiles,
   sessions,
   users,
   verifications,
@@ -31,6 +32,7 @@ const tables = [
   auditLogs,
   outboxEvents,
   idempotencyKeys,
+  participantProfiles,
 ];
 
 describe('stage 2 database schema', () => {
@@ -57,10 +59,38 @@ describe('stage 2 database schema', () => {
     auditLogs,
     outboxEvents,
     idempotencyKeys,
+    participantProfiles,
   ])('$0 is explicitly event-scoped', (table) => {
     expect(
       getTableConfig(table).columns.map((column) => column.name),
     ).toContain('event_id');
+  });
+
+  it('stores onboarding minimum per event without changing the global identity', () => {
+    const columns = getTableConfig(participantProfiles).columns.map(
+      (column) => column.name,
+    );
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        'event_id',
+        'user_id',
+        'first_name',
+        'last_name',
+        'contact_email',
+        'networking_enabled',
+        'onboarding_completed_at',
+      ]),
+    );
+  });
+
+  it('deduplicates consent records for a retried onboarding request', () => {
+    expect(
+      getTableConfig(consentRecords).indexes.some(
+        (index) =>
+          index.config.name === 'consent_records_request_document_unique' &&
+          index.config.unique,
+      ),
+    ).toBe(true);
   });
 
   it('guards the cross-event legal-document relationship with a composite foreign key', () => {
