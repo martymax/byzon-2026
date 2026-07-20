@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { readConferenceEnv } from '@byzon/config';
 import { database } from '@/server/database';
+import { logger } from '@/server/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,8 @@ export async function GET() {
   const env = readConferenceEnv(process.env);
   try {
     await database.ping();
-  } catch {
+  } catch (error) {
+    logger.warn({ err: error, requestId }, 'Database readiness check failed');
     return Response.json(
       {
         status: 'not_ready',

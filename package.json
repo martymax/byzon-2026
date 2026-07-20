@@ -9,7 +9,7 @@
   "scripts": {
     "build": "pnpm build:web && pnpm build:worker",
     "build:web": "pnpm --filter @byzon/database build && pnpm --filter @byzon/conference build",
-    "build:worker": "pnpm --filter @byzon/database build && pnpm --filter @byzon/worker build",
+    "build:worker": "pnpm --filter @byzon/worker build",
     "dev": "pnpm --parallel --filter @byzon/conference --filter @byzon/worker dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

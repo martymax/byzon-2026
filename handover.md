@@ -16,8 +16,9 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
   je `P1-11` uzavřen.
 - Poslední publikovaný úkol: `P2-02`, commit `ca66410` na
   `origin/stage/02-database-auth`.
-- Dokončený lokální úkol: `P2-03` – pooling a transakční helpery; změny nejsou
-  commitnuté ani pushnuté.
+- `P2-03` je na commitu `2a91594` v etapové větvi i `main`, ale první Railway
+  deploy odhalil runtime packaging chybu workeru. Lokální hotfix není commitnutý
+  ani pushnutý.
 
 ## Dokončená práce
 
@@ -50,12 +51,19 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - P0 produktové blockery zůstávají otevřené, ale `P2-01` neblokují.
 - Railway staging má služby `@byzon/conference`, `@byzon/worker` a `Postgres`.
   Uživatel potvrdil reference `DATABASE_URL` a pool limity ve webu i workeru.
+- Worker na Railway nenašel `@byzon/database/dist/index.js`, protože runtime
+  image nezahrnul build výstup workspace balíčku. Hotfix bundluje config i DB
+  workspace kód do `apps/worker/dist/index.js` a deklaruje externí runtime
+  závislosti přímo ve workeru.
+- Web proces startuje, ale healthcheck končí 502; hotfix přidává bezpečný log
+  konkrétní chyby DB readiness. Další deploy určí, zda jde o DNS/reference nebo
+  databázovou dostupnost.
 
 ## Doporučený další krok
 
-Commitnout a pushnout uživatelem schválené `P2-03`, poté sledovat migraci, seed,
-web readiness a start workeru. Následující implementační úkol je `P2-04` –
-Better Auth a fake mail provider.
+Po schválení commitnout a pushnout Railway packaging hotfix, fast-forwardnout
+`main` a sledovat worker start a nový DB readiness log. Teprve po zeleném deployi
+pokračovat `P2-04`.
 
 ## Poslední ověření
 
@@ -64,3 +72,6 @@ Better Auth a fake mail provider.
 - Produkční conference build a worker build prošly.
 - Runtime smoke: readiness s DB `200`, bez DB `503`; worker se připojil a při
   `SIGINT` pool korektně uzavřel.
+- Hotfix: format, lint, typecheck, 24 unit testů a oba produkční buildy prošly;
+  worker bundle neobsahuje runtime odkaz na workspace balíčky. Statický smoke
+  byl přerušen při pomalém kopírování 58 nezměněných assetů z lokálního disku.

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --alias:@byzon/config=../../packages/config/src/index.ts --alias:@byzon/database=../../packages/database/src/index.ts --outfile=dist/index.js",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
     "start": "node dist/index.js",
@@ -14,10 +14,13 @@
   "dependencies": {
     "@byzon/config": "workspace:*",
     "@byzon/database": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "pg": "8.22.0",
     "pino": "10.3.1",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "esbuild": "0.25.12",
     "tsx": "4.23.1"
   }
 }
