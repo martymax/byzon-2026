@@ -1,0 +1,99 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  eventPermissions,
+  eventRoles,
+  hasEventPermission,
+  type EventPermission,
+  type EventRole,
+} from './permissions.js';
+
+const allowed = (role: EventRole, permission: EventPermission): boolean =>
+  hasEventPermission([role], permission, {
+    ownsResource: true,
+    networkingOptedIn: true,
+    acceptedConnection: true,
+    assignedSession: true,
+    assignedRoom: true,
+    moderatorCanAnnounce: true,
+    auditedException: true,
+  });
+
+describe('event permission matrix', () => {
+  it('keeps the full role and permission matrix explicit', () => {
+    expect(eventRoles).toHaveLength(7);
+    expect(eventPermissions).toHaveLength(20);
+    expect(eventRoles).not.toContain('support_operator');
+  });
+
+  it.each([
+    ['participant', 'agenda:own:write', true],
+    ['speaker', 'agenda:own:write', false],
+    ['speaker', 'program:own-materials:write', true],
+    ['checkin_operator', 'checkin:perform', true],
+    ['checkin_operator', 'reservation:assigned:read', false],
+    ['moderator', 'session:assigned:moderate', true],
+    ['room_operator', 'reservation:assigned:read', true],
+    ['room_operator', 'checkin:perform', false],
+    ['organizer_admin', 'program:manage', true],
+    ['organizer_admin', 'networking:directory:read', false],
+    ['system_worker', 'program:published:read', false],
+  ] satisfies [EventRole, EventPermission, boolean][])(
+    '%s / %s is %s',
+    (role, permission, expected) => {
+      expect(allowed(role, permission)).toBe(expected);
+    },
+  );
+
+  it('combines roles without implying participant rights for a speaker', () => {
+    expect(
+      hasEventPermission(['speaker'], 'agenda:own:write', {
+        ownsResource: true,
+      }),
+    ).toBe(false);
+    expect(
+      hasEventPermission(['speaker', 'participant'], 'agenda:own:write', {
+        ownsResource: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasEventPermission(['speaker'], 'networking:directory:read', {
+        networkingOptedIn: true,
+      }),
+    ).toBe(false);
+    expect(
+      hasEventPermission(
+        ['speaker', 'participant'],
+        'networking:directory:read',
+        { networkingOptedIn: true },
+      ),
+    ).toBe(true);
+  });
+
+  it('fails closed when conditional policy context is absent', () => {
+    expect(hasEventPermission(['participant'], 'agenda:own:write')).toBe(false);
+    expect(
+      hasEventPermission(['participant'], 'networking:directory:read'),
+    ).toBe(false);
+    expect(hasEventPermission(['moderator'], 'session:assigned:moderate')).toBe(
+      false,
+    );
+    expect(
+      hasEventPermission(['room_operator'], 'reservation:assigned:read'),
+    ).toBe(false);
+  });
+
+  it('lets an admin act broadly but requires an audit marker for exceptions', () => {
+    expect(hasEventPermission(['organizer_admin'], 'program:manage')).toBe(
+      true,
+    );
+    expect(hasEventPermission(['organizer_admin'], 'agenda:any:override')).toBe(
+      false,
+    );
+    expect(
+      hasEventPermission(['organizer_admin'], 'agenda:any:override', {
+        auditedException: true,
+      }),
+    ).toBe(true);
+  });
+});

@@ -71,8 +71,23 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 
 ## Doporučený další krok
 
-Pokračovat `P2-05` serverovými policy helpery a permission matrix testy. Nadále
-zbývá ověřit Railway worker a oba seed eventy z provozního follow-upu `P2-03`.
+Dokončit ověření `P2-05` spuštěním připraveného PostgreSQL IDOR testu s
+`TEST_DATABASE_URL`; po zeleném výsledku označit krok jako hotový a předložit jej
+ke schválení. Nadále zbývá ověřit Railway worker a oba seed eventy z provozního
+follow-upu `P2-03`.
+
+## Rozpracovaná lokální práce (`P2-05`)
+
+- `@byzon/domain` obsahuje explicitní event role, permission matrix a fail-closed
+  podmínky pro vlastnictví, networking opt-in/spojení, přidělené bloky/místnosti
+  a auditovanou admin výjimku; `support_operator` zůstává záměrně mimo model.
+- Conference server načítá aktivní membership a nerevokované role výhradně z DB
+  pro zadané `actor.userId` a `eventId`; odmítnutí používá neenumerující chybu.
+- Přidán PostgreSQL integrační test, který stejnému uživateli nedovolí přenést
+  admin roli do izolačního eventu a odmítne suspendovanou membership.
+- Unit testy, typecheck, lint, format check a produkční conference build prošly.
+  DB integrační test se lokálně přeskočil, protože není nastavené
+  `TEST_DATABASE_URL`, PostgreSQL neposlouchá a Docker daemon neběží.
 
 ## Dokončená lokální práce (`P2-04`)
 
