@@ -1363,7 +1363,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 - [x] `P1-08` Implementovat `/health/live`, `/health/ready`, request ID a redacted logger.
 - [x] `P1-09` Přidat env schema a `.env.example` bez tajných hodnot.
 - [x] `P1-10` GitHub Actions CI pro root static build i nové aplikace.
-- [~] `P1-11` Railway config-as-code, root/watch paths, web/worker start commands a staging služby. Config a runbook jsou hotové; založení a smoke skutečných staging služeb čeká na přístup k Railway projektu.
+- [x] `P1-11` Railway config-as-code, root/watch paths, web/worker start commands a staging služby. Deployment a smoke staging skeletonu potvrdil provozovatel 20. 7. 2026.
 - [x] `P1-12` Smoke test veřejného webu a conference shellu.
 
 **Akceptace:** čistý checkout se reprodukovatelně nainstaluje a sestaví; `build.py` zůstává funkční; staging web/worker startují; healthchecky a CI jsou zelené.
@@ -1372,7 +1372,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 
 **Cíl:** bezpečná identita a víceeventový základ bez ještě otevřené aktivace.
 
-- [ ] `P2-01` Drizzle schema pro events, features, Better Auth tabulky, memberships, roles, legal documents, consents, audit, outbox/idempotency.
+- [x] `P2-01` Drizzle schema pro events, features, Better Auth tabulky, memberships, roles, legal documents, consents, audit, outbox/idempotency. Implementováno v `packages/database`; schema metadata kryje 12 testů.
 - [ ] `P2-02` Migrace, seed BYZON 2026 a testovací event; migration journal v repu.
 - [ ] `P2-03` DB connection pooling a transakční helpery.
 - [ ] `P2-04` Better Auth session + magic link s fake mail providerem.
