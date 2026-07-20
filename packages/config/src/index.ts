@@ -26,6 +26,10 @@ const workerEnvSchema = baseEnvSchema.extend({
   WORKER_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(4),
 });
 
+const conferenceEnvSchema = baseEnvSchema.extend({
+  BETTER_AUTH_SECRET: z.string().min(32),
+});
+
 export type BaseEnv = z.infer<typeof baseEnvSchema>;
 const developmentDefaults = {
   NODE_ENV: 'development',
@@ -33,6 +37,7 @@ const developmentDefaults = {
   APP_BASE_URL: 'http://localhost:3000',
   PUBLIC_SITE_URL: 'http://localhost:8000',
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/byzon',
+  BETTER_AUTH_SECRET: 'local-only-better-auth-secret-change-me',
 } as const;
 
 const withDevelopmentDefaults = (
@@ -45,7 +50,9 @@ const withDevelopmentDefaults = (
 export const readBaseEnv = (
   input: NodeJS.ProcessEnv | Record<string, unknown>,
 ): BaseEnv => baseEnvSchema.parse(withDevelopmentDefaults(input));
-export const readConferenceEnv = readBaseEnv;
+export const readConferenceEnv = (
+  input: NodeJS.ProcessEnv | Record<string, unknown>,
+) => conferenceEnvSchema.parse(withDevelopmentDefaults(input));
 export const readWorkerEnv = (
   input: NodeJS.ProcessEnv | Record<string, unknown>,
 ) => workerEnvSchema.parse(withDevelopmentDefaults(input));

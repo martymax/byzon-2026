@@ -14,11 +14,14 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - Pracovní větev: `stage/02-database-auth`, založená z `main` na `db2d1c8`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
-- Poslední publikovaný úkol: `P2-02`, commit `ca66410` na
-  `origin/stage/02-database-auth`.
-- `P2-03` je na commitu `2a91594` v etapové větvi i `main`, ale první Railway
-  deploy odhalil runtime packaging chybu workeru. Lokální hotfix není commitnutý
-  ani pushnutý.
+- Poslední publikovaný úkol: `P2-04` (tento tematický commit); je v etapové
+  větvi i `main`.
+- Railway packaging hotfix je commit `02e3b43`; je pushnutý do
+  `origin/stage/02-database-auth`, fast-forwardnutý do `main` a pushnutý do
+  `origin/main`.
+- Railway conference readiness je po hotfixi a doplnění konfigurace zelená:
+  `status=ready`, `environment=staging`, release
+  `02e3b43fb1c37c72a70305ef14931ec29ea6e2d2` a `database=ready`.
 
 ## Dokončená práce
 
@@ -32,7 +35,7 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
   vazbu legal documentu a částečné/deduplication unique indexy.
 - `P2-01` neobsahoval databázovou migraci; ta vzniká v navazujícím `P2-02`.
 
-## Dokončená lokální práce (`P2-03`)
+## Dokončená práce (`P2-03`)
 
 - `@byzon/database` poskytuje bounded `pg` pool, Drizzle client, transakční
   wrapper a transaction-scoped advisory lock.
@@ -43,6 +46,12 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
   default bez produkčních dat.
 - Web Railway config spouští migraci pouze jednou; ve staging prostředí navíc
   idempotentní seed. Worker migraci nespouští.
+- Worker hotfix bundluje workspace config a databázový kód do samostatného
+  `apps/worker/dist/index.js`, takže Railway runtime nepotřebuje chybějící
+  `@byzon/database/dist/index.js`.
+- Conference Railway služba používá `/railway.web.json`, poslouchá na
+  `0.0.0.0:8080` a má `NODE_ENV=production`, `APP_ENV=staging`, staging URL a
+  `RELEASE_SHA=${{RAILWAY_GIT_COMMIT_SHA}}`.
 
 ## Otevřené body a rizika
 
@@ -51,19 +60,30 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - P0 produktové blockery zůstávají otevřené, ale `P2-01` neblokují.
 - Railway staging má služby `@byzon/conference`, `@byzon/worker` a `Postgres`.
   Uživatel potvrdil reference `DATABASE_URL` a pool limity ve webu i workeru.
-- Worker na Railway nenašel `@byzon/database/dist/index.js`, protože runtime
-  image nezahrnul build výstup workspace balíčku. Hotfix bundluje config i DB
-  workspace kód do `apps/worker/dist/index.js` a deklaruje externí runtime
-  závislosti přímo ve workeru.
-- Web proces startuje, ale healthcheck končí 502; hotfix přidává bezpečný log
-  konkrétní chyby DB readiness. Další deploy určí, zda jde o DNS/reference nebo
-  databázovou dostupnost.
+- Původní Railway 502 webu je vyřešený. `GET /health/ready` na
+  `https://byzonconference-staging.up.railway.app` vrací `200` a potvrzuje
+  dostupnou databázi.
+- Po posledním redeployi zatím nebyl dodán nový startovací log ani stav služby
+  `@byzon/worker`; před definitivním uzavřením `P2-03` je nutné ověřit, že běží
+  bez restart loopu.
+- Ještě je vhodné potvrdit, že staging seed vytvořil právě eventy `byzon-2026`
+  a `byzon-isolation-test`.
 
 ## Doporučený další krok
 
-Po schválení commitnout a pushnout Railway packaging hotfix, fast-forwardnout
-`main` a sledovat worker start a nový DB readiness log. Teprve po zeleném deployi
-pokračovat `P2-04`.
+Pokračovat `P2-05` serverovými policy helpery a permission matrix testy. Nadále
+zbývá ověřit Railway worker a oba seed eventy z provozního follow-upu `P2-03`.
+
+## Dokončená lokální práce (`P2-04`)
+
+- Přidán Better Auth `1.6.23` s Drizzle adapterem nad existujícími core auth
+  tabulkami a Next.js handlerem `/api/auth/[...all]`.
+- Magic link expiruje za pět minut, v DB se ukládá hashovaně, Better Auth jej
+  spotřebuje atomicky a callback/origin je omezen na `APP_BASE_URL`.
+- Fake auth mail provider drží doručené odkazy pouze v paměti a nic neloguje;
+  produkční mail provider zůstává navazující integrační prací.
+- `BETTER_AUTH_SECRET` je povinný minimálně 32 znaků ve staging/production;
+  lokální vývoj používá výslovně neprodukční default.
 
 ## Poslední ověření
 
@@ -75,3 +95,10 @@ pokračovat `P2-04`.
 - Hotfix: format, lint, typecheck, 24 unit testů a oba produkční buildy prošly;
   worker bundle neobsahuje runtime odkaz na workspace balíčky. Statický smoke
   byl přerušen při pomalém kopírování 58 nezměněných assetů z lokálního disku.
+- Railway conference ověření po deployi: `/health/ready` vrací `200`, staging
+  release `02e3b43fb1c37c72a70305ef14931ec29ea6e2d2` a
+  `dependencies.database=ready`.
+- `P2-04`: lint, typecheck, 27 unit/schema testů a produkční web build prošly.
+- V izolované PostgreSQL prošla migrace, všech 19 databázových testů a všech 5
+  conference testů včetně magic-link integrace: raw token nebyl uložen, první
+  použití vydalo session cookie a opakované použití bylo odmítnuto.

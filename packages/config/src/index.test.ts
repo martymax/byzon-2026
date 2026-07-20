@@ -24,3 +24,21 @@ describe('database environment', () => {
     ).toThrow();
   });
 });
+
+describe('conference authentication environment', () => {
+  it('provides a local-only development secret', () => {
+    expect(readConferenceEnv({}).BETTER_AUTH_SECRET).toHaveLength(39);
+  });
+
+  it('requires an explicit sufficiently long secret in staging', () => {
+    expect(() =>
+      readConferenceEnv({
+        NODE_ENV: 'production',
+        APP_ENV: 'staging',
+        APP_BASE_URL: 'https://staging-app.byzon.cz',
+        PUBLIC_SITE_URL: 'https://byzon.cz',
+        DATABASE_URL: 'postgresql://example.invalid/byzon',
+      }),
+    ).toThrow();
+  });
+});

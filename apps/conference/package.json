@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.6.23",
     "@byzon/config": "workspace:*",
     "@byzon/database": "workspace:*",
+    "better-auth": "1.6.23",
     "next": "16.2.10",
     "pino": "10.3.1",
     "react": "19.2.7",
