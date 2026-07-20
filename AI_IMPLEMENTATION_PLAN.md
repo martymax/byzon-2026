@@ -1385,7 +1385,10 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
   endpointem. Interní transakční operace a `db:bootstrap-admin` udělují pouze
   event-scoped `organizer_admin`, bezpečně zvládají souběžné opakování,
   odmítají neaktivní membership a zapisují audit bez e-mailu.
-- [ ] `P2-08` Audit helper s redaction a testem, že se raw secrets/PII nezapisují.
+- [x] `P2-08` Audit helper s redaction a testem, že se raw secrets/PII
+  nezapisují. Sdílený `writeAuditLog` validuje technická metadata, rekurzivně
+  rediguje citlivé klíče a textové hodnoty a je jedinou cestou současných
+  onboarding/bootstrap zápisů; unit i PostgreSQL integrační testy prošly.
 - [ ] `P2-09` API problem response, idempotency middleware a rate-limit abstraction.
 - [ ] `P2-10` Auth/session E2E včetně expirace a logout-all.
 
@@ -1784,3 +1787,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.4 | 20. 7. 2026 | Dokončen `P0-07`: změřen root statický web a přidán izolovaný deterministický smoke test generovaných souborů, lokálních odkazů a kritických embedů. |
 | 1.5 | 20. 7. 2026 | Dokončen `P0-09`: registr přijatých rozhodnutí dostal vlastníky a každý otevřený blocker explicitního vlastníka, gate a bezpečný postup. |
 | 1.6 | 20. 7. 2026 | Dokončen `P2-07`: přidán explicitní event-scoped organizer admin bootstrap přes auditované idempotentní CLI bez veřejného endpointu. |
+| 1.7 | 20. 7. 2026 | Dokončen `P2-08`: všechny audit zápisy používají sdílený helper s rekurzivní redakcí secrets/PII a databázovým negativním testem. |

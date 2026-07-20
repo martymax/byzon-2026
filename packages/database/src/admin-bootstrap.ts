@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
+import { writeAuditLog } from './audit.js';
 import {
   acquireTransactionLock,
   type Database,
@@ -150,8 +151,7 @@ export const bootstrapOrganizerAdmin = async (
         scope: {},
       });
     }
-    await transaction.insert(schema.auditLogs).values({
-      id: generateUuidV7(),
+    await writeAuditLog(transaction, {
       eventId: event.id,
       actorId: null,
       actorType: 'bootstrap_cli',
