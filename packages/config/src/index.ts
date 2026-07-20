@@ -42,10 +42,27 @@ const developmentDefaults = {
 
 const withDevelopmentDefaults = (
   input: NodeJS.ProcessEnv | Record<string, unknown>,
-) =>
-  input.APP_ENV === 'staging' || input.APP_ENV === 'production'
-    ? input
-    : { ...developmentDefaults, ...input };
+) => {
+  const withDefaults =
+    input.APP_ENV === 'staging' || input.APP_ENV === 'production'
+      ? input
+      : { ...developmentDefaults, ...input };
+
+  const explicitRelease =
+    typeof input.RELEASE_SHA === 'string' && input.RELEASE_SHA.length > 0
+      ? input.RELEASE_SHA
+      : undefined;
+  const railwayRelease =
+    typeof input.RAILWAY_GIT_COMMIT_SHA === 'string' &&
+    input.RAILWAY_GIT_COMMIT_SHA.length > 0
+      ? input.RAILWAY_GIT_COMMIT_SHA
+      : undefined;
+
+  return {
+    ...withDefaults,
+    RELEASE_SHA: explicitRelease ?? railwayRelease ?? withDefaults.RELEASE_SHA,
+  };
+};
 
 export const readBaseEnv = (
   input: NodeJS.ProcessEnv | Record<string, unknown>,

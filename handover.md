@@ -102,3 +102,6 @@ zbývá ověřit Railway worker a oba seed eventy z provozního follow-upu `P2-0
 - V izolované PostgreSQL prošla migrace, všech 19 databázových testů a všech 5
   conference testů včetně magic-link integrace: raw token nebyl uložen, první
   použití vydalo session cookie a opakované použití bylo odmítnuto.
+- Railway release hotfix načítá `RAILWAY_GIT_COMMIT_SHA` přímo jako fallback
+  pro chybějící nebo prázdný `RELEASE_SHA`; ruční neprázdný override má nadále
+  přednost. Regresní config testy kryjí všechny tři varianty.
