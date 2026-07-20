@@ -14,8 +14,8 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - Pracovní větev: `stage/02-database-auth`, založená z `main` na `db2d1c8`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
-- Poslední publikovaný úkol: `P2-04` (tento tematický commit); je v etapové
-  větvi i `main`.
+- Poslední publikovaný úkol: `P2-05`, commit `7e0a234`; je v etapové větvi,
+  zatím ne v `main`.
 - Railway packaging hotfix je commit `02e3b43`; je pushnutý do
   `origin/stage/02-database-auth`, fast-forwardnutý do `main` a pushnutý do
   `origin/main`.
@@ -63,20 +63,17 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - Původní Railway 502 webu je vyřešený. `GET /health/ready` na
   `https://byzonconference-staging.up.railway.app` vrací `200` a potvrzuje
   dostupnou databázi.
-- Po posledním redeployi zatím nebyl dodán nový startovací log ani stav služby
-  `@byzon/worker`; před definitivním uzavřením `P2-03` je nutné ověřit, že běží
-  bez restart loopu.
-- Ještě je vhodné potvrdit, že staging seed vytvořil právě eventy `byzon-2026`
-  a `byzon-isolation-test`.
+- Railway CLI potvrdilo staging worker ve stavu `SUCCESS`; neběží v restart
+  loopu.
+- PostgreSQL IDOR test načetl oba seed eventy `byzon-2026` a
+  `byzon-isolation-test`, takže staging seed je potvrzený.
 
 ## Doporučený další krok
 
-Dokončit ověření `P2-05` spuštěním připraveného PostgreSQL IDOR testu s
-`TEST_DATABASE_URL`; po zeleném výsledku označit krok jako hotový a předložit jej
-ke schválení. Nadále zbývá ověřit Railway worker a oba seed eventy z provozního
-follow-upu `P2-03`.
+Pokračovat `P2-06` onboarding state machine a versionovaným právním
+acknowledgement.
 
-## Rozpracovaná lokální práce (`P2-05`)
+## Dokončená práce (`P2-05`)
 
 - `@byzon/domain` obsahuje explicitní event role, permission matrix a fail-closed
   podmínky pro vlastnictví, networking opt-in/spojení, přidělené bloky/místnosti
@@ -86,8 +83,13 @@ follow-upu `P2-03`.
 - Přidán PostgreSQL integrační test, který stejnému uživateli nedovolí přenést
   admin roli do izolačního eventu a odmítne suspendovanou membership.
 - Unit testy, typecheck, lint, format check a produkční conference build prošly.
-  DB integrační test se lokálně přeskočil, protože není nastavené
-  `TEST_DATABASE_URL`, PostgreSQL neposlouchá a Docker daemon neběží.
+- PostgreSQL IDOR test byl spuštěn proti Railway staging DB přes Railway-managed
+  connection proměnnou bez vypsání credentialů; oba scénáře prošly a syntetický
+  uživatel byl po testu odstraněn.
+- Commit `7e0a234` je pushnutý do `origin/stage/02-database-auth`.
+- Ruční upload deployment conference `9cdaa2ce-7b11-4466-a97a-3a5f928a30cf`
+  zůstal na Railway ve stavu `INITIALIZING` bez přiřazeného buildu; je zastavený
+  a dosavadní zdravý staging release `85666aa` zůstal aktivní a ready.
 
 ## Dokončená lokální práce (`P2-04`)
 

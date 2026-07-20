@@ -1376,7 +1376,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 - [x] `P2-02` Migrace, seed BYZON 2026 a testovací event; migration journal v repu. První Drizzle migrace a idempotentní seed jsou v `packages/database/drizzle` a byly ověřeny proti PostgreSQL.
 - [x] `P2-03` DB connection pooling a transakční helpery. Sdílený bounded `pg` pool, Drizzle klient, transakce a advisory lock jsou zapojené do web readiness a worker lifecycle a ověřené proti PostgreSQL.
 - [x] `P2-04` Better Auth session + magic link s fake mail providerem. Serverová konfigurace, Next.js route, hashované pětiminutové tokeny, přesný trusted origin a fake provider jsou implementované; jednorázovost a session byly ověřeny proti PostgreSQL.
-- [~] `P2-05` Serverové policy helpers a permission matrix testy. Doménová matice a DB-backed event policy jsou implementované; unit kontroly a produkční web build prošly. Připravený PostgreSQL IDOR test ještě čeká na prostředí s `TEST_DATABASE_URL`.
+- [x] `P2-05` Serverové policy helpers a permission matrix testy. Doménová matice a DB-backed event policy jsou implementované; unit kontroly, produkční web build a PostgreSQL IDOR test proti Railway staging DB prošly.
 - [ ] `P2-06` Onboarding state machine a versionované právní acknowledgement.
 - [ ] `P2-07` Admin bootstrap role pouze explicitním seedem/CLI, ne veřejným endpointem.
 - [ ] `P2-08` Audit helper s redaction a testem, že se raw secrets/PII nezapisují.
