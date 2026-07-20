@@ -26,6 +26,26 @@ The seed is idempotent. It creates the draft `byzon-2026` event and an archived
 second event used by event-isolation tests. Re-running it does not overwrite
 existing operational state or feature flags.
 
+## Bootstrap the first organizer admin
+
+There is intentionally no public endpoint that can grant the
+`organizer_admin` role. The target user must first sign in once so Better Auth
+creates the global identity. Then run the explicit CLI against the intended
+database and event:
+
+```bash
+DATABASE_URL=postgresql://... \
+  pnpm --filter @byzon/database db:bootstrap-admin \
+  --event-slug byzon-2026 \
+  --user-email organizer@example.invalid
+```
+
+The command creates a missing active event membership and grants only the
+event-scoped organizer role. It is idempotent, writes an audit record without
+the email address, and refuses to reactivate a suspended or revoked membership.
+Use the environment-specific `DATABASE_URL`; the command has no implicit local
+or production fallback.
+
 ## Runtime client
 
 `createDatabaseClient` creates a bounded `pg` pool and Drizzle client. Every
