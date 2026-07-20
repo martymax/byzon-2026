@@ -1389,7 +1389,10 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
   nezapisují. Sdílený `writeAuditLog` validuje technická metadata, rekurzivně
   rediguje citlivé klíče a textové hodnoty a je jedinou cestou současných
   onboarding/bootstrap zápisů; unit i PostgreSQL integrační testy prošly.
-- [ ] `P2-09` API problem response, idempotency middleware a rate-limit abstraction.
+- [x] `P2-09` API problem response, idempotency middleware a rate-limit
+  abstraction. Přidán bezpečný `application/problem+json` kontrakt, transakční
+  PostgreSQL replay wrapper s hashovaným klíčem/requestem a provider-neutral
+  atomický rate-limit kontrakt s fail-closed chováním a `429` hlavičkami.
 - [ ] `P2-10` Auth/session E2E včetně expirace a logout-all.
 
 **Akceptace:** neautorizovaný uživatel nečte event data; role jsou event-scoped; magic link je jednorázový; souhlasy jsou versionované a auditovatelné.
@@ -1788,3 +1791,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.5 | 20. 7. 2026 | Dokončen `P0-09`: registr přijatých rozhodnutí dostal vlastníky a každý otevřený blocker explicitního vlastníka, gate a bezpečný postup. |
 | 1.6 | 20. 7. 2026 | Dokončen `P2-07`: přidán explicitní event-scoped organizer admin bootstrap přes auditované idempotentní CLI bez veřejného endpointu. |
 | 1.7 | 20. 7. 2026 | Dokončen `P2-08`: všechny audit zápisy používají sdílený helper s rekurzivní redakcí secrets/PII a databázovým negativním testem. |
+| 1.8 | 20. 7. 2026 | Dokončen `P2-09`: standardizovány problem responses, databázová idempotence mutací a víceinstanční rate-limit rozhraní. |

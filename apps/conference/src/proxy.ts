@@ -1,13 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-
-const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
+import { getRequestId } from '@/server/api/problem';
 
 export function proxy(request: NextRequest) {
-  const supplied = request.headers.get('x-request-id');
-  const requestId =
-    supplied && REQUEST_ID_PATTERN.test(supplied)
-      ? supplied
-      : crypto.randomUUID();
+  const requestId = getRequestId(request.headers);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-request-id', requestId);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
