@@ -25,3 +25,11 @@ pnpm --filter @byzon/database db:seed
 The seed is idempotent. It creates the draft `byzon-2026` event and an archived
 second event used by event-isolation tests. Re-running it does not overwrite
 existing operational state or feature flags.
+
+## Runtime client
+
+`createDatabaseClient` creates a bounded `pg` pool and Drizzle client. Every
+service must supply its own application name, limits/timeouts and an unexpected
+idle-client error handler. `withTransaction` preserves Drizzle transaction
+typing; `acquireTransactionLock` holds a PostgreSQL advisory lock only until the
+current transaction ends.

@@ -9,6 +9,16 @@ const baseEnvSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
   RELEASE_SHA: z.string().min(1).default('local'),
+  DATABASE_URL: z
+    .string()
+    .regex(/^postgres(?:ql)?:\/\//, 'DATABASE_URL must be a PostgreSQL URL'),
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().max(50).default(10),
+  DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  DATABASE_CONNECT_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5_000),
 });
 
 const workerEnvSchema = baseEnvSchema.extend({
@@ -22,6 +32,7 @@ const developmentDefaults = {
   APP_ENV: 'development',
   APP_BASE_URL: 'http://localhost:3000',
   PUBLIC_SITE_URL: 'http://localhost:8000',
+  DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/byzon',
 } as const;
 
 const withDevelopmentDefaults = (

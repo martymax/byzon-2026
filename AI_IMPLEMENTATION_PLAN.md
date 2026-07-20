@@ -1374,7 +1374,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 
 - [x] `P2-01` Drizzle schema pro events, features, Better Auth tabulky, memberships, roles, legal documents, consents, audit, outbox/idempotency. Implementováno v `packages/database`; schema metadata kryje 12 testů.
 - [x] `P2-02` Migrace, seed BYZON 2026 a testovací event; migration journal v repu. První Drizzle migrace a idempotentní seed jsou v `packages/database/drizzle` a byly ověřeny proti PostgreSQL.
-- [ ] `P2-03` DB connection pooling a transakční helpery.
+- [x] `P2-03` DB connection pooling a transakční helpery. Sdílený bounded `pg` pool, Drizzle klient, transakce a advisory lock jsou zapojené do web readiness a worker lifecycle a ověřené proti PostgreSQL.
 - [ ] `P2-04` Better Auth session + magic link s fake mail providerem.
 - [ ] `P2-05` Serverové policy helpers a permission matrix testy.
 - [ ] `P2-06` Onboarding state machine a versionované právní acknowledgement.

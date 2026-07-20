@@ -14,9 +14,9 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - Pracovní větev: `stage/02-database-auth`, založená z `main` na `db2d1c8`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
-- Poslední publikovaný úkol: `P2-01`, commit `0f60f34` na
+- Poslední publikovaný úkol: `P2-02`, commit `ca66410` na
   `origin/stage/02-database-auth`.
-- Dokončený lokální úkol: `P2-02` – první migrace a event seed; změny nejsou
+- Dokončený lokální úkol: `P2-03` – pooling a transakční helpery; změny nejsou
   commitnuté ani pushnuté.
 
 ## Dokončená práce
@@ -31,29 +31,36 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
   vazbu legal documentu a částečné/deduplication unique indexy.
 - `P2-01` neobsahoval databázovou migraci; ta vzniká v navazujícím `P2-02`.
 
-## Dokončená lokální práce
+## Dokončená lokální práce (`P2-03`)
 
-- `P2-02` přidává Drizzle Kit config, první verzovanou SQL migraci, snapshot a
-  migration journal.
-- Idempotentní seed zakládá draft `byzon-2026` a archivovaný
-  `byzon-isolation-test`; opakované spuštění nepřepisuje provozní stav.
-- Před první migrací byly doplněny všechny feature flags z §7.5 a odstraněny
-  databázové UUIDv4 defaulty. Identifikátory bude generovat server jako UUIDv7.
+- `@byzon/database` poskytuje bounded `pg` pool, Drizzle client, transakční
+  wrapper a transaction-scoped advisory lock.
+- Web readiness vrací `200/database=ready` jen při dostupné DB a bezpečné
+  `503/database=unavailable` při výpadku. Worker DB ověří při startu a pool
+  zavře při shutdownu.
+- Staging env vyžaduje explicitní `DATABASE_URL`; lokální vývoj má pouze lokální
+  default bez produkčních dat.
+- Web Railway config spouští migraci pouze jednou; ve staging prostředí navíc
+  idempotentní seed. Worker migraci nespouští.
 
 ## Otevřené body a rizika
 
 - `support_operator` není ve schématu vytvořen, protože plán jej zakazuje bez
   potvrzené potřeby.
 - P0 produktové blockery zůstávají otevřené, ale `P2-01` neblokují.
+- Railway staging má služby `@byzon/conference`, `@byzon/worker` a `Postgres`.
+  Uživatel potvrdil reference `DATABASE_URL` a pool limity ve webu i workeru.
 
 ## Doporučený další krok
 
-Předložit ověřený diff `P2-02` uživateli ke schválení commitu a pushe.
-Následující úkol je `P2-03` – connection pooling a transakční helpery.
+Commitnout a pushnout uživatelem schválené `P2-03`, poté sledovat migraci, seed,
+web readiness a start workeru. Následující implementační úkol je `P2-04` –
+Better Auth a fake mail provider.
 
 ## Poslední ověření
 
-- `P2-01`: `pnpm run ci` prošel na Node `24.18.0` bez engine warningu.
-- `P2-02`: `pnpm run ci` prošel; z celkem 21 testů bylo 17 databázových.
-- První migrace a dvakrát spuštěný seed prošly proti dočasnému PostgreSQL;
-  výsledkem byly přesně dva eventy a dva řádky feature flags.
+- PostgreSQL integrace: migrace, dvakrát spuštěný Node seed a 19 databázových
+  testů prošly; commit/rollback/advisory lock i uzavření poolu byly ověřeny.
+- Produkční conference build a worker build prošly.
+- Runtime smoke: readiness s DB `200`, bez DB `503`; worker se připojil a při
+  `SIGINT` pool korektně uzavřel.

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@byzon/config": "workspace:*",
+    "@byzon/database": "workspace:*",
     "next": "16.2.10",
     "pino": "10.3.1",
     "react": "19.2.7",

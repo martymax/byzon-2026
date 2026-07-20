@@ -8,6 +8,7 @@ const valid = {
   PUBLIC_SITE_URL: 'https://byzon.cz',
   LOG_LEVEL: 'info',
   RELEASE_SHA: 'abc123',
+  DATABASE_URL: 'postgresql://postgres.internal:5432/railway',
 };
 
 describe('environment schema', () => {
