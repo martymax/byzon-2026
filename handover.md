@@ -14,8 +14,8 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 - Pracovní větev: `stage/02-database-auth`, založená z `main` na `db2d1c8`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
-- Poslední publikovaný úkol: `P2-05`, commit `7e0a234`; je v etapové větvi,
-  zatím ne v `main`.
+- Nejnovější schválený implementační úkol je `P2-06`; stav implementace a
+  ověření je zaznamenaný níže.
 - Railway packaging hotfix je commit `02e3b43`; je pushnutý do
   `origin/stage/02-database-auth`, fast-forwardnutý do `main` a pushnutý do
   `origin/main`.
@@ -70,8 +70,25 @@ soubor. Commit ani push nedělej bez explicitního schválení uživatelem.
 
 ## Doporučený další krok
 
-Pokračovat `P2-06` onboarding state machine a versionovaným právním
-acknowledgement.
+Pokračovat `P2-07`: admin bootstrap role pouze explicitním seedem/CLI, nikdy
+veřejným endpointem.
+
+## Dokončená práce (`P2-06`)
+
+- Přidána čistá onboarding state machine pro povinný eventový profil, aktuální
+  verze podmínek/privacy notice a samostatnou networking volbu.
+- Přidána tabulka `participant_profiles` a deduplikační index pro consent records
+  z opakovaného requestu; dopředná migrace je `0001_strong_venus.sql`.
+- Conference server dokončuje onboarding v transakci serializované per-user
+  advisory lockem, s event membership kontrolou, feature flagem, append-only
+  consent records a auditní stopou bez jména/e-mailu.
+- PostgreSQL integrace na izolované lokální DB prošla: 24 databázových testů a
+  12 conference testů včetně retry, cross-event odmítnutí, opt-in/opt-out a nové
+  aktuální právní verze.
+- Globální `pnpm run ci` prošlo: format, lint, typecheck, běžné testy, produkční
+  conference/worker build a smoke test statického veřejného webu.
+- Finální právní texty se neseedují; testovací právní fixtures jsou označené jako
+  draft a produkční networking zůstává blokovaný `BLOCKER-LEGAL-01`.
 
 ## Dokončená práce (`P2-05`)
 

@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
+    "pretest": "pnpm --filter @byzon/database build && pnpm --filter @byzon/domain build",
     "start": "node .next/standalone/apps/conference/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
