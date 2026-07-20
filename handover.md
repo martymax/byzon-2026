@@ -87,6 +87,9 @@ veřejným endpointem.
   aktuální právní verze.
 - Globální `pnpm run ci` prošlo: format, lint, typecheck, běžné testy, produkční
   conference/worker build a smoke test statického veřejného webu.
+- GitHub Actions `application` job nově spouští PostgreSQL 17, migraci a seed;
+  readiness E2E proto nečeká na chybějící DB a PostgreSQL integrační testy běží
+  i v CI.
 - Finální právní texty se neseedují; testovací právní fixtures jsou označené jako
   draft a produkční networking zůstává blokovaný `BLOCKER-LEGAL-01`.
 
