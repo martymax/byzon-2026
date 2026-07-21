@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v1.2
+> Stav: implementační plán v1.9
 >
 > Datum sestavení: 20. července 2026
 >
@@ -73,6 +73,27 @@ Tento soubor je hlavní prováděcí plán pro vývoj pomocí AI agentů. Produk
 - Po dokončení všech úkolů a akceptačních podmínek etapy se etapová větev sloučí přes PR do `staging`; vytvoření/aktualizace PR a merge vyžadují explicitní schválení uživatele.
 - Po staging CI a UAT se `staging` sloučí do `main` samostatným schváleným release krokem. Přímý push do `staging` nebo `main` se nepoužívá.
 - Schválení se nevztahuje automaticky na pozdější opravy nebo rozšíření. Každá dodatečná změna se znovu ověří a před commitem/pushem znovu schválí.
+
+### 1.6 Povinný závěrečný review gate každé etapy
+
+Po dokončení implementačních úkolů a před uzavřením nebo merge každé etapy
+proveď v tomto pořadí:
+
+1. **Security review:** zkontroluj celý rozsah etapy se zaměřením na threat
+   model, autentizaci a autorizaci, event scope/IDOR, ochranu secrets a PII,
+   validaci vstupů, dependency/configuration rizika, migrace a bezpečné chování
+   při chybách.
+2. **Code review:** zkontroluj úplný etapový diff/PR z hlediska funkční
+   správnosti, architektury, souběhu, idempotence, testovacího pokrytí,
+   provozních dopadů a udržovatelnosti. Rozliš actionable nálezy od
+   nízkohodnotových stylistických návrhů a false positives.
+3. **Okamžité zapracování nálezů:** všechny potvrzené actionable nálezy z obou
+   review oprav v rámci stejné etapy, doplň regresní testy a znovu spusť
+   relevantní kontroly a CI. Zamítnutý nález musí mít stručně zaznamenaný důvod.
+
+Etapu nelze označit za dokončenou ani sloučit, dokud nejsou potvrzené nálezy
+opravené a ověřené. Samotné provedení review bez následného zapracování nálezů
+nesplňuje tento gate. Commit, push a merge i zde podléhají schválením z §1.5.
 
 ---
 
@@ -1331,7 +1352,9 @@ No flaky retry jako trvalé řešení. Flaky test se opraví nebo dočasně izol
 
 ## 21. Implementační etapy
 
-Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
+Každá etapa končí nasaditelným a demonstrovatelným stavem a musí před uzavřením
+splnit security review, code review a zapracování nálezů podle §1.6. Pořadí je
+závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 
 ### Etapa 0 – rozhodnutí, inventura a bezpečný základ
 
@@ -1795,3 +1818,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.6 | 20. 7. 2026 | Dokončen `P2-07`: přidán explicitní event-scoped organizer admin bootstrap přes auditované idempotentní CLI bez veřejného endpointu. |
 | 1.7 | 20. 7. 2026 | Dokončen `P2-08`: všechny audit zápisy používají sdílený helper s rekurzivní redakcí secrets/PII a databázovým negativním testem. |
 | 1.8 | 20. 7. 2026 | Dokončen `P2-09`: standardizovány problem responses, databázová idempotence mutací a víceinstanční rate-limit rozhraní. |
+| 1.9 | 21. 7. 2026 | Přidán povinný závěrečný gate každé etapy: security review, code review a okamžité zapracování potvrzených nálezů včetně regresních testů a opakovaného ověření. |
