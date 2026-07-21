@@ -5,7 +5,7 @@
 
 ## Kontext
 
-Veřejný `byzon.cz` je statický web generovaný skriptem `build.py` a musí zůstat
+Veřejný `byzon.cz` je statický web generovaný skriptem `static-site/build.py` a musí zůstat
 provozně nedotčený. Nová aplikace potřebuje webový proces, worker a sdílené
 doménové, databázové a UI balíčky. Samostatné repozitáře by zvyšovaly riziko
 rozjezdu kontraktů a značky.
@@ -26,8 +26,9 @@ Railway služby s vlastními root/watch paths a start příkazy.
 
 ## Hranice
 
-Rozhodnutí nepovoluje přesun, přepis ani změnu hostingu veřejného webu. Tyto
-změny vyžadují vlastní úkol a případně nový ADR.
+Zdroj a FTP-ready výstup veřejného webu jsou oddělené v `static-site/`; celý
+obsah `static-site/public/` je nasaditelný na FTP. Změna hostingu veřejného webu
+vyžaduje vlastní úkol a případně nový ADR.
 
 ## Vazby
 

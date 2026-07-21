@@ -3,10 +3,10 @@
 BYZON 2026 — static site generator.
 
 Reads the content model from data/content.json and renders the redesigned
-static site (pure HTML/CSS/JS, no runtime dependencies) into the repo root.
+static site (pure HTML/CSS/JS, no runtime dependencies) into public/.
 
-Usage:  python3 build.py
-Then preview with:  python3 -m http.server  (open http://localhost:8000/)
+Usage:  python3 static-site/build.py
+Then preview with:  python3 -m http.server --directory static-site/public
 """
 import hashlib
 import html
@@ -16,6 +16,7 @@ import re
 from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+PUBLIC = os.path.join(ROOT, "public")
 
 
 def _asset_ver():
@@ -23,7 +24,7 @@ def _asset_ver():
     h = hashlib.md5()
     for f in ("assets/css/styles.css", "assets/js/main.js"):
         try:
-            h.update(open(os.path.join(ROOT, f), "rb").read())
+            h.update(open(os.path.join(PUBLIC, f), "rb").read())
         except OSError:
             pass
     return h.hexdigest()[:8]
@@ -37,7 +38,7 @@ def versioned_asset(src):
     if not src.startswith("/assets/") or "?" in src:
         return src
     try:
-        with open(os.path.join(ROOT, src.lstrip("/")), "rb") as f:
+        with open(os.path.join(PUBLIC, src.lstrip("/")), "rb") as f:
             digest = hashlib.md5(f.read()).hexdigest()[:8]
     except OSError:
         return src
@@ -1111,7 +1112,7 @@ def page_404():
 
 # --------------------------------------------------------------- write ------
 def write(path, content):
-    full = os.path.join(ROOT, path)
+    full = os.path.join(PUBLIC, path)
     os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
     with open(full, "w", encoding="utf-8") as f:
         f.write(content)

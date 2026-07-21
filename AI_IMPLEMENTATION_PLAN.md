@@ -83,8 +83,8 @@ Při sestavení plánu je větev `main` čistá a sleduje `origin/main`. Výchoz
 Současný veřejný web:
 
 - je statický HTML/CSS/JS web;
-- generuje se Python skriptem `build.py`;
-- používá `data/content.json` jako současný zdroj obsahu;
+- generuje se Python skriptem `static-site/build.py`;
+- používá `static-site/data/content.json` jako současný zdroj obsahu;
 - nemá Node runtime ani balíčkové závislosti;
 - používá SimpleShop embed pro nákup;
 - musí zůstat během vývoje aplikace provozně nedotčený.
@@ -276,9 +276,11 @@ Na jedné etapové větvi vzniká po tomto approval gate více malých commitů,
 ├── pnpm-workspace.yaml
 ├── package.json
 ├── pnpm-lock.yaml
-├── build.py                              # existující veřejný web
-├── data/content.json                     # migrační vstup, později exportovaný snapshot
-└── ... existující statický web
+├── static-site/
+│   ├── build.py                          # generátor existujícího veřejného webu
+│   ├── data/content.json                 # migrační vstup, později exportovaný snapshot
+│   └── public/                           # kompletní FTP-ready výstup pro byzon.cz
+└── ...
 ```
 
 ### 6.1 Hranice modulů v `apps/conference/src/modules`
@@ -1087,10 +1089,10 @@ Každý e-mail má deduplication key, provider message ID, retry policy a plain-
 
 ### 15.5 Synchronizace s `byzon.cz`
 
-1. Migrační skript převede relevantní `data/content.json` do DB draftu.
+1. Migrační skript převede relevantní `static-site/data/content.json` do DB draftu.
 2. Admin publish vytvoří content publication version.
 3. Veřejné API poskytne bezpečný, verzovaný JSON snapshot.
-4. `build.py` dostane volitelný deterministický vstup z exportovaného snapshotu; při CI nesmí tiše použít zastaralá data.
+4. `static-site/build.py` dostane volitelný deterministický vstup z exportovaného snapshotu; při CI nesmí tiše použít zastaralá data.
 5. Publish vytvoří outbox událost a přes adapter vyvolá rebuild/deploy veřejného webu nebo označí `sync_pending`.
 6. Admin dashboard porovná publication version veřejného webu a aplikace.
 7. Launch gate vyžaduje end-to-end test: změna programu → publish → aplikace → veřejný web → cílené oznámení dotčeným účastníkům.
@@ -1342,12 +1344,12 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 - [ ] `P0-03` Potvrdit cílový hosting/deploy veřejného `byzon.cz` a způsob triggeru rebuildu.
 - [ ] `P0-04` Potvrdit kapacitní/waitlist/transfer pravidla v seznamu blokátorů.
 - [ ] `P0-05` Potvrdit event-day zařízení, počet check-in míst a očekávaný počet účastníků.
-- [x] `P0-06` Udělat asset/content inventuru `data/content.json` → cílové entity. Výsledek: [`docs/content-inventory.md`](docs/content-inventory.md).
+- [x] `P0-06` Udělat asset/content inventuru `static-site/data/content.json` → cílové entity. Výsledek: [`docs/content-inventory.md`](docs/content-inventory.md).
 - [x] `P0-07` Změřit současný veřejný web a vytvořit regresní smoke test, že monorepo změny jej nerozbijí. Baseline: [`docs/static-site-baseline.md`](docs/static-site-baseline.md), test: `python3 tests/static_site_smoke.py`.
 - [ ] `P0-08` Vybrat produkční e-mail provider a potvrdit DPA/region až před etapou 8; zatím fake provider.
 - [x] `P0-09` Založit decision/blocker registry v tomto dokumentu a jmenovat vlastníky. Registr rozhodnutí je v §4, blockery s vlastníky a gates v §22.
 
-**Akceptace:** existující `python3 build.py` generuje stejný web; všechny nejasnosti mají ID, vlastníka a gate; nic nebylo nasazeno do produkce.
+**Akceptace:** `pnpm build:static` generuje stejný web; všechny nejasnosti mají ID, vlastníka a gate; nic nebylo nasazeno do produkce.
 
 ### Etapa 1 – monorepo, aplikace, CI a Railway skeleton
 
@@ -1362,11 +1364,11 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 - [x] `P1-07` Přidat manifest, ikony, offline fallback page a instalovatelnost bez datové cache.
 - [x] `P1-08` Implementovat `/health/live`, `/health/ready`, request ID a redacted logger.
 - [x] `P1-09` Přidat env schema a `.env.example` bez tajných hodnot.
-- [x] `P1-10` GitHub Actions CI pro root static build i nové aplikace.
+- [x] `P1-10` GitHub Actions CI pro statický web i nové aplikace.
 - [x] `P1-11` Railway config-as-code, root/watch paths, web/worker start commands a staging služby. Deployment a smoke staging skeletonu potvrdil provozovatel 20. 7. 2026.
 - [x] `P1-12` Smoke test veřejného webu a conference shellu.
 
-**Akceptace:** čistý checkout se reprodukovatelně nainstaluje a sestaví; `build.py` zůstává funkční; staging web/worker startují; healthchecky a CI jsou zelené.
+**Akceptace:** čistý checkout se reprodukovatelně nainstaluje a sestaví; `static-site/build.py` zůstává funkční; staging web/worker startují; healthchecky a CI jsou zelené.
 
 ### Etapa 2 – databáze, auth, audit a doménový kernel
 
@@ -1405,7 +1407,7 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 **Cíl:** DB se stane zdrojem pravdy pro aplikaci a administrátor spravuje/publikuje program bez vývojáře.
 
 - [ ] `P3-01` Schéma program/content/speakers/partners/assets/publications.
-- [ ] `P3-02` Jednorázový idempotentní import `data/content.json` do draftu; report nepřevedených polí.
+- [ ] `P3-02` Jednorázový idempotentní import `static-site/data/content.json` do draftu; report nepřevedených polí.
 - [ ] `P3-03` Participant read API s ETag/version a filtry.
 - [ ] `P3-04` Mobile program, detail, speaker/partner/practical pages.
 - [ ] `P3-05` Admin CRUD pro dny, místnosti, sessions, speaker/partner/FAQ/page.
@@ -1585,7 +1587,7 @@ Před zahájením social/networking detailů musí být na staging akceptováno:
 
 ### Etapa 14 – plná synchronizace `byzon.cz`
 
-- [ ] `P14-01` Public snapshot schema a compatibility test s `build.py`.
+- [ ] `P14-01` Public snapshot schema a compatibility test se `static-site/build.py`.
 - [ ] `P14-02` Deterministický static import/build bez ručního dvojího editování.
 - [ ] `P14-03` Deployment trigger adapter podle potvrzeného hostingu.
 - [ ] `P14-04` Publication version marker na obou webech a drift monitoring.

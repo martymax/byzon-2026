@@ -1,6 +1,6 @@
 # P0-06: Inventura obsahu a assetů
 
-> Stav zdroje: `data/content.json` na větvi `stage/00-foundation`, 20. července 2026
+> Stav zdroje: `static-site/data/content.json` na větvi `stage/00-foundation`, 20. července 2026
 >
 > Účel: určit, co se v etapě 3 převede do cílových entit aplikace, co zůstane
 > pouze obsahem veřejného webu a které údaje před importem vyžadují doplnění.
@@ -19,15 +19,18 @@
 | Historie/marketing | hero, očekávaný obsah, 3 minulé ročníky a partnerská brožura |
 | Lokální assety | 58 souborů mimo `.DS_Store`; 52 je přímo odkazováno z JSON |
 
-Všech 52 souborových cest odkazovaných z `data/content.json` existuje. Hodnota
+Všech 52 souborových cest odkazovaných ze `static-site/data/content.json` existuje. Hodnota
 `site.media_base` je adresář, nikoli samostatný asset. Šest dalších souborů je
 použito přímo buildem nebo jde o starší/neaktivní varianty:
 
-- `assets/css/styles.css` a `assets/js/main.js` používá veřejný web mimo JSON;
-- `assets/docs/vzor-odstoupeni-od-smlouvy-byzon.docx` je veřejná příloha;
-- `assets/img/2024/06/Moderní_leader_logo_RGB_modra-3-300x96.png`,
-  `assets/img/2025/06/bm_vivamarketing_logo2024_rgb_black-300x212.png` a
-  `assets/img/2026/06/JCI-Czech-Republic-WHITE.svg` jsou neaktivní varianty log.
+- `static-site/public/assets/css/styles.css` a
+  `static-site/public/assets/js/main.js` používá veřejný web mimo JSON;
+- `static-site/public/assets/docs/vzor-odstoupeni-od-smlouvy-byzon.docx` je
+  veřejná příloha;
+- `static-site/public/assets/img/2024/06/Moderní_leader_logo_RGB_modra-3-300x96.png`,
+  `static-site/public/assets/img/2025/06/bm_vivamarketing_logo2024_rgb_black-300x212.png`
+  a `static-site/public/assets/img/2026/06/JCI-Czech-Republic-WHITE.svg` jsou
+  neaktivní varianty log.
 
 ## Mapování na cílové entity
 
@@ -77,7 +80,7 @@ ani pro draftový import s reportem nepřevedených polí.
 
 ## Kontrakt pro budoucí import
 
-Úkol `P3-02` má zachovat `data/content.json` beze změny a provést opakovatelný
+Úkol `P3-02` má zachovat `static-site/data/content.json` beze změny a provést opakovatelný
 import do draftu pro event `byzon-2026`. Import musí:
 
 1. validovat zdroj a lokální assety před zápisem;
@@ -90,7 +93,7 @@ import do draftu pro event `byzon-2026`. Import musí:
 
 ## Ověření inventury
 
-- struktura a počty byly získány přes `jq` z celého `data/content.json`;
+- struktura a počty byly získány přes `jq` z celého `static-site/data/content.json`;
 - existence lokálních cest byla porovnána s pracovním stromem;
 - mapování bylo porovnáno s produktovým zadáním v1.0, ADR-008 a datovým modelem
   v §9 implementačního plánu;

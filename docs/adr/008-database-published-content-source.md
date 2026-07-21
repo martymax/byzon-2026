@@ -18,9 +18,9 @@ veřejné. Publish vytvoří neměnnou, verzovanou publication snapshot; aplikac
 veřejný web čtou nebo synchronizují stejnou publikovanou verzi přes bezpečné
 veřejné API.
 
-Stávající `data/content.json` zůstává během prvních etap vstupem současného
+Stávající `static-site/data/content.json` zůstává během prvních etap vstupem současného
 statického buildu. Později se použije jako idempotentní migrační vstup a
-`build.py` dostane deterministický exportovaný snapshot.
+`static-site/build.py` dostane deterministický exportovaný snapshot.
 
 ## Důsledky
 

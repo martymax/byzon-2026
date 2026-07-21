@@ -26,7 +26,7 @@ konzistentního a brandově silného designového systému.
 
 | Vrstva | Originál | Redesign |
 | --- | --- | --- |
-| CMS / render | WordPress + Gutenberg + Greenshift | Statický web (HTML/CSS/JS), generovaný `build.py` |
+| CMS / render | WordPress + Gutenberg + Greenshift | Statický web (HTML/CSS/JS), generovaný `static-site/build.py` |
 | Typografie | **Khand** (Google Fonts), 300–700 | **Khand** (nadpisy) + **Inter** (text) |
 | Objednávky | SimpleShop embed (`SimpleShopService.js`) | **Beze změny** — vložený 1:1 |
 | Mapa | Leaflet | Embed Google Maps (dotaz na Clarion CB) |
@@ -147,11 +147,12 @@ a `@font-face` definic originálu, takže redesign zůstává brandově věrný.
 ## 9. Technické řešení redesignu
 
 - **Bez build závislostí pro provoz** — výstupem je čisté HTML/CSS/JS.
-- **Jeden zdroj obsahu** — `data/content.json`; generátor `build.py` z něj sestaví
-  všech 17 stránek. Úprava textu = úprava JSONu + `python3 build.py`.
+- **Jeden zdroj obsahu** — `static-site/data/content.json`; generátor
+  `static-site/build.py` z něj sestaví všech 17 stránek. Úprava textu = úprava
+  JSONu + `pnpm build:static`.
 - **Média** jsou prozatím odkazována na původní URL (`byzon.cz/wp-content/...`), takže
   zůstávají bitově identická. Pro plně samostatný web stačí soubory stáhnout do
-  `/assets/img/` a přepsat `media_base` v `data/content.json`.
+  `/assets/img/` a přepsat `media_base` ve `static-site/data/content.json`.
 
 > Pozn.: URL loga partnera „Moderní Leader“ obsahuje diakritiku; pokud by se nenačetlo,
 > má (jako všechna hotlinkovaná loga) textový fallback se jménem partnera.

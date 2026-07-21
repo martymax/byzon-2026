@@ -8,7 +8,7 @@ v [`ANALYZA.md`](./ANALYZA.md).
 ## Rychlý start (náhled)
 
 ```bash
-python3 -m http.server      # poté otevři http://localhost:8000/
+pnpm preview:static      # poté otevři http://localhost:8000/
 ```
 
 > Web používá „hezké“ URL (`/program/`, `/speaker/...`), proto je potřeba spustit přes
@@ -16,16 +16,32 @@ python3 -m http.server      # poté otevři http://localhost:8000/
 
 ## Úprava obsahu
 
-Veškerý obsah je v jednom souboru: [`data/content.json`](./data/content.json).
+Veškerý obsah je v jednom souboru:
+[`static-site/data/content.json`](./static-site/data/content.json).
 Po úpravě znovu vygeneruj stránky:
 
 ```bash
-python3 build.py
+pnpm build:static
 ```
 
 Generátor aktuálně sestaví 24 stránek (homepage, program, minulé ročníky,
 vstupenky, partneři, 17 detailů řečníků a 2 právní stránky) ze sdílených
-komponent v [`build.py`](./build.py); navíc vytváří 404, sitemapu a robots.txt.
+komponent v [`static-site/build.py`](./static-site/build.py); navíc vytváří 404,
+sitemapu a robots.txt.
+
+## Nasazení na FTP
+
+Na FTP kořen webu `byzon.cz` zkopíruj **celý obsah** složky
+[`static-site/public/`](./static-site/public/) — nic dalšího z repozitáře tam
+nepatří. Složka už obsahuje HTML, assety, `404.html`, `robots.txt`, `sitemap.xml`
+i skrytý serverový soubor `.htaccess`.
+
+Po každé změně obsahu nebo generátoru nejdřív spusť:
+
+```bash
+pnpm build:static
+pnpm test:static
+```
 
 ## Regresní kontrola veřejného webu
 
@@ -42,12 +58,20 @@ kritické lokální odkazy a SimpleShop embed. Aktuální měření je v
 ## Struktura
 
 ```
-build.py                 generátor (HTML ze šablon + data/content.json)
-data/content.json        zdroj obsahu (texty, řečníci, ceny, partneři, média)
-assets/css/styles.css    designový systém a komponenty
-assets/js/main.js        header, mobilní menu, taby, lightbox, scroll-reveal
-index.html               vygenerované stránky (committed) ...
-program/  byznys-konference/  simpleshop/  stante-se-partnerem/  speaker/<jmeno>/
+static-site/
+├── build.py             generátor HTML
+├── data/                zdrojový obsah a právní texty (na FTP nepatří)
+└── public/              kompletní obsah určený ke zkopírování na FTP
+    ├── assets/          CSS, JS, obrázky, video a veřejné dokumenty
+    ├── index.html
+    ├── program/
+    ├── byznys-konference/
+    ├── simpleshop/
+    ├── stante-se-partnerem/
+    └── speaker/<jmeno>/
+
+apps/                    aplikace a worker pro app.byzon.cz (Railway)
+packages/                sdílené balíčky aplikace
 ```
 
 ## Důležité poznámky
@@ -55,14 +79,10 @@ program/  byznys-konference/  simpleshop/  stante-se-partnerem/  speaker/<jmeno>
 - **SimpleShop** je vložen 1:1 (`data-simpleshopform="0MnNQ"`, `createForm("0MnNQ")`).
   Formulář se načítá z `form.simpleshop.cz` v prohlížeči návštěvníka.
 - **Média** jsou odkazována na původní URL `byzon.cz/wp-content/...` (zůstávají
-  identická). Pro samostatný web je stáhni do `assets/img/` a uprav `media_base`
-  v `data/content.json`. Hotlinkovaná loga mají textový fallback při nedostupnosti.
+  identická). Pro samostatný web je stáhni do `static-site/public/assets/img/`
+  a uprav `media_base` v `static-site/data/content.json`. Hotlinkovaná loga mají
+  textový fallback při nedostupnosti.
 - **Fonty** (Khand + Inter) se načítají z Google Fonts.
-
-## Nasazení
-
-Jde o statické soubory — nasaditelné kamkoli (Nginx, Netlify, Vercel, GitHub Pages,
-nebo zpět do WordPressu). Stačí servírovat kořen repozitáře.
 
 ## Konferenční aplikace
 

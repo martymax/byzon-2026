@@ -8,9 +8,11 @@
   "packageManager": "pnpm@11.15.1",
   "scripts": {
     "build": "pnpm build:web && pnpm build:worker",
+    "build:static": "python3 static-site/build.py",
     "build:web": "pnpm --filter @byzon/database build && pnpm --filter @byzon/conference build",
     "build:worker": "pnpm --filter @byzon/worker build",
     "dev": "pnpm --parallel --filter @byzon/conference --filter @byzon/worker dev",
+    "preview:static": "python3 -m http.server --directory static-site/public 8000",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm -r lint",
