@@ -20,6 +20,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-05` je dokončený a před commitem: admin CRUD API pro dny, místnosti,
+  sessions, řečníky, partnery, stránky a FAQ plus `/admin/obsah`. Čtení i mutace
+  vyžadují event-scoped `program:manage`; mutace navíc same-origin kontrolu,
+  optimistic version a audit. Participant dostává nerozlišující `404`.
+- Conference sada prošla 43 PostgreSQL-backed testy včetně create/list/update,
+  stale update, archive, auditu, IDOR a cross-origin odmítnutí. Produkční build
+  obsahuje admin UI i obě dynamické CRUD routes; bez migrace a nové env.
 - `P3-04` je dokončený a před commitem: mobilní `/app` navigace, program s
   filtry a detailem, řečníci a profily, partneři a praktické informace. Nový
   participant content endpoint vrací pouze explicitně whitelisted pole
