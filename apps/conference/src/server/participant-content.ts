@@ -7,7 +7,7 @@ import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const uuid = z.string().uuid();
 const status = z.enum(['draft', 'published', 'archived']);
-const snapshotSchema = z.object({
+export const participantContentSchema = z.object({
   event: z.object({
     id: uuid,
     slug: z.string(),
@@ -94,7 +94,7 @@ const snapshotSchema = z.object({
   }),
 });
 
-export type ParticipantContent = z.infer<typeof snapshotSchema>;
+export type ParticipantContent = z.infer<typeof participantContentSchema>;
 
 export const readParticipantContent = async (
   request: Request,
@@ -144,7 +144,7 @@ export const readParticipantContent = async (
         columns: { version: true, snapshot: true, checksumSha256: true },
       });
     const parsed =
-      publication && snapshotSchema.safeParse(publication.snapshot);
+      publication && participantContentSchema.safeParse(publication.snapshot);
     if (!publication || !parsed || !parsed.success)
       throw new ApiProblemError({
         status: 404,
@@ -168,7 +168,6 @@ export const readParticipantContent = async (
         eventId,
         version: publication.version,
         content: parsed.data,
-        requestId,
       },
       {
         headers: {

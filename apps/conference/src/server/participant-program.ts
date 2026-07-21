@@ -21,7 +21,7 @@ const sessionType = z.enum([
   'gala',
   'other',
 ]);
-const programSnapshot = z.object({
+export const programSnapshotSchema = z.object({
   program: z.object({
     days: z.array(
       z.object({
@@ -51,6 +51,7 @@ const programSnapshot = z.object({
         summary: z.string().nullable().optional(),
         description: z.string().nullable().optional(),
         type: sessionType,
+        status: z.enum(['published', 'cancelled']).optional(),
         startsAt: z.string().datetime({ offset: true }),
         endsAt: z.string().datetime({ offset: true }),
         sortOrder: z.number().int().nonnegative(),
@@ -216,7 +217,7 @@ export const readParticipantProgram = async (
         'Program not found',
         'A published program is not available.',
       );
-    const parsed = programSnapshot.safeParse(publication.snapshot);
+    const parsed = programSnapshotSchema.safeParse(publication.snapshot);
     if (!parsed.success) throw new Error('Invalid publication snapshot');
 
     const selectedDay = filters.day
@@ -265,7 +266,6 @@ export const readParticipantProgram = async (
           room: filters.room ?? null,
           type: filters.type ?? null,
         },
-        requestId,
       }),
       { status: 200, headers: responseHeaders(requestId, etag) },
     );

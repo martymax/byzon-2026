@@ -20,6 +20,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-09` je dokončený a před commitem: veřejné routes pro bootstrap, content a
+  `calendar.ics` nad event slugem. Vrací jen whitelisted publication data,
+  veřejnou ETag cache/304 a žádný transient request ID v cacheovaném těle.
+- ICS používá CRLF, escaping/folding, UTC, stabilní UID, publication SEQUENCE,
+  místnost a `STATUS:CANCELLED`. Conference sada prošla 53 testy včetně veřejné
+  odpovědi bez auth, odstranění neznámého admin pole, ETag a chybějící publikace.
 - `P3-08` je dokončený a před commitem: snapshot diff detekuje změnu času,
   místnosti, stavu/zrušení, odebrání session i přejmenování/přesun místnosti.
   Publish ukládá jen při neprázdném cíli deduplikovanou `program.changed`
