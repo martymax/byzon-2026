@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v2.8
+> Stav: implementační plán v2.9
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1436,7 +1436,7 @@ závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 - [x] `P3-07` Preview a atomická publication snapshot.
 - [x] `P3-08` Program change detection a outbox bez odesílání e-mailu.
 - [x] `P3-09` Veřejné content API a `.ics`.
-- [ ] `P3-10` Přístupnost a responzivní testy programu.
+- [x] `P3-10` Přístupnost a responzivní testy programu.
 
 **Akceptace:** participant nikdy nevidí draft; publish je atomický; stejná version vrací deterministický JSON; významná změna vytváří cílitelnou událost.
 
@@ -1828,3 +1828,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 2.6 | 21. 7. 2026 | Dokončen `P3-07`: kanonický preview a atomický publish vytváří immutable snapshot s optimistic publication version, auditem a synchronizační outbox událostí. |
 | 2.7 | 21. 7. 2026 | Dokončen `P3-08`: porovnání publication snapshotů detekuje významné změny času, stavu a místa a ukládá cílitelnou deduplikovanou outbox událost bez přímého odesílání. |
 | 2.8 | 21. 7. 2026 | Dokončen `P3-09`: veřejné bootstrap/content API a RFC 5545 kalendář čtou pouze whitelisted publication snapshot, podporují veřejnou ETag cache a stabilní UID/SEQUENCE. |
+| 2.9 | 21. 7. 2026 | Dokončen `P3-10`: mobilní Playwright ověřuje landmarky, skip link a focus, navigaci, touch targety, vodorovný overflow a reduced-motion chování participant shellu. |

@@ -36,7 +36,7 @@ a {
   z-index: 10;
   padding: 0.7rem 1rem;
   border-radius: 999px;
-  background: var(--pink);
+  background: var(--pink-dark);
   color: white;
 }
 .app-header {
@@ -176,6 +176,7 @@ h1 span {
 }
 .participant-nav a {
   flex: none;
+  min-height: 2.75rem;
   padding: 0.55rem 0.8rem;
   border-radius: 999px;
   color: var(--ink);
@@ -342,6 +343,7 @@ h1 span {
   background: white;
 }
 .publication-control button {
+  min-height: 2.75rem;
   padding: 0.55rem 0.9rem;
   border: 1px solid var(--pink);
   border-radius: 0.7rem;
@@ -418,6 +420,7 @@ h1 span {
   display: block;
 }
 .admin-list button {
+  min-height: 2.75rem;
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 0.6rem;

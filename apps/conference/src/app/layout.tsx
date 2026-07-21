@@ -44,7 +44,9 @@ export default function RootLayout({
           </Link>
           <span className="shell-badge">Konferenční aplikace</span>
         </header>
-        <main id="main">{children}</main>
+        <main id="main" tabIndex={-1}>
+          {children}
+        </main>
         <ServiceWorkerRegistration />
       </body>
     </html>

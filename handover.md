@@ -20,6 +20,11 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-10` je dokončený a před commitem: mobilní Playwright testy kontrolují
+  participant landmarky/navigaci, keyboard skip link a focus hlavního obsahu,
+  minimální 44px touch targety, absenci horizontálního overflow a reduced-motion
+  vypnutí dekorativních přechodů. Kontrast brand marku používá tmavší růžovou.
+- Všechny 3 mobile Chromium E2E testy prošly nad migrovanou lokální PostgreSQL.
 - `P3-09` je dokončený a před commitem: veřejné routes pro bootstrap, content a
   `calendar.ics` nad event slugem. Vrací jen whitelisted publication data,
   veřejnou ETag cache/304 a žádný transient request ID v cacheovaném těle.
