@@ -28,6 +28,28 @@ describe('public calendar', () => {
     expect(calendar).toContain('SUMMARY:Talk\\; one');
     expect(calendar).toContain('STATUS:CANCELLED');
     expect(calendar.endsWith('\r\n')).toBe(true);
+    expect(
+      calendar.split('\r\n').every((line) => Buffer.byteLength(line) <= 75),
+    ).toBe(true);
+    const unicode = toCalendar(
+      'byzon-2026',
+      3,
+      new Date('2026-07-21T10:00:00Z'),
+      'BYZON',
+      [
+        {
+          id: 'unicode',
+          title: '🦬'.repeat(40),
+          startsAt: '2026-09-18T08:00:00Z',
+          endsAt: '2026-09-18T09:00:00Z',
+          roomId: null,
+        },
+      ],
+    );
+    expect(unicode).not.toContain('�');
+    expect(
+      unicode.split('\r\n').every((line) => Buffer.byteLength(line) <= 75),
+    ).toBe(true);
   });
 });
 integration('public content integration', () => {
@@ -121,9 +143,21 @@ integration('public content integration', () => {
     );
     expect(first.status).toBe(200);
     expect(first.headers.get('cache-control')).toContain('public');
-    const body = await first.json();
+    const firstText = await first.text();
+    const body = JSON.parse(firstText) as Record<string, unknown> & {
+      program: { sessions: Array<{ id: string }> };
+    };
     expect(body).not.toHaveProperty('privateAdminNote');
-    expect(body.program.sessions[0].id).toBe(sessionId);
+    expect(body.program.sessions[0]!.id).toBe(sessionId);
+    const repeated = await readPublicContent(
+      new Request(
+        `https://app.byzon.test/api/v1/public/events/${slug}/content`,
+      ),
+      slug,
+      'content',
+      client.db,
+    );
+    expect(await repeated.text()).toBe(firstText);
     const second = await readPublicContent(
       new Request(
         `https://app.byzon.test/api/v1/public/events/${slug}/content`,

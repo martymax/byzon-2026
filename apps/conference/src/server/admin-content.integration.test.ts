@@ -170,4 +170,77 @@ integration('admin content CRUD integration', () => {
     );
     expect(crossOrigin.status).toBe(403);
   });
+
+  it('rejects unsafe URL schemes and timestamps without an explicit offset', async () => {
+    const unsafeUrl = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          slug: 'unsafe-link',
+          name: 'Unsafe',
+          websiteUrl: 'javascript:alert(1)',
+          sortOrder: 2,
+        }),
+      }),
+      eventId,
+      'partners',
+      null,
+      dependencies(organizerId),
+    );
+    expect(unsafeUrl.status).toBe(400);
+
+    const localTimestamp = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          dayId: generateUuidV7(),
+          slug: 'missing-offset',
+          title: 'Missing offset',
+          type: 'talk',
+          startsAt: '2026-09-18T10:00:00',
+          endsAt: '2026-09-18T11:00:00',
+          sortOrder: 0,
+        }),
+      }),
+      eventId,
+      'sessions',
+      null,
+      dependencies(organizerId),
+    );
+    expect(localTimestamp.status).toBe(400);
+  });
+
+  it('returns a safe conflict when a day is still used by a session', async () => {
+    const dayId = generateUuidV7();
+    await client.db.insert(schema.eventDays).values({
+      id: dayId,
+      eventId,
+      localDate: '2026-09-18',
+      title: 'Used day',
+      sortOrder: 99,
+    });
+    await client.db.insert(schema.programSessions).values({
+      id: generateUuidV7(),
+      eventId,
+      dayId,
+      slug: `used-day-${dayId}`,
+      title: 'Used day session',
+      startsAt: new Date('2026-09-18T12:00:00Z'),
+      endsAt: new Date('2026-09-18T13:00:00Z'),
+      sortOrder: 0,
+    });
+    const response = await handleAdminContent(
+      new Request(`${origin}/api`, { method: 'DELETE', headers: { origin } }),
+      eventId,
+      'days',
+      dayId,
+      dependencies(organizerId),
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'CONTENT_IN_USE',
+    });
+  });
 });

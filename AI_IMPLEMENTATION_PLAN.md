@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v2.9
+> Stav: implementační plán v3.0
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1829,3 +1829,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 2.7 | 21. 7. 2026 | Dokončen `P3-08`: porovnání publication snapshotů detekuje významné změny času, stavu a místa a ukládá cílitelnou deduplikovanou outbox událost bez přímého odesílání. |
 | 2.8 | 21. 7. 2026 | Dokončen `P3-09`: veřejné bootstrap/content API a RFC 5545 kalendář čtou pouze whitelisted publication snapshot, podporují veřejnou ETag cache a stabilní UID/SEQUENCE. |
 | 2.9 | 21. 7. 2026 | Dokončen `P3-10`: mobilní Playwright ověřuje landmarky, skip link a focus, navigaci, touch targety, vodorovný overflow a reduced-motion chování participant shellu. |
+| 3.0 | 21. 7. 2026 | Dokončen závěrečný security/code review etapy 3: omezeny externí URL protokoly, zpřesněna timezone/FK validace, dokončen použitelný venue/reference/update admin flow a opraveno Unicode-safe ICS folding; nálezy mají regresní testy. |

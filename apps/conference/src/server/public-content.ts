@@ -121,14 +121,16 @@ const icsDate = (value: Date | string) =>
     .replace(/\.\d{3}/, '');
 const fold = (line: string) => {
   const chunks: string[] = [];
-  let rest = line;
-  while (Buffer.byteLength(rest, 'utf8') > 75) {
-    let index = Math.min(73, rest.length);
-    while (Buffer.byteLength(rest.slice(0, index), 'utf8') > 73) index -= 1;
-    chunks.push(rest.slice(0, index));
-    rest = ` ${rest.slice(index)}`;
+  let current = '';
+  for (const character of line) {
+    if (Buffer.byteLength(current + character, 'utf8') > 75) {
+      chunks.push(current);
+      current = ` ${character}`;
+    } else {
+      current += character;
+    }
   }
-  chunks.push(rest);
+  chunks.push(current);
   return chunks.join('\r\n');
 };
 export const toCalendar = (

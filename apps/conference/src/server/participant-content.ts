@@ -7,6 +7,10 @@ import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const uuid = z.string().uuid();
 const status = z.enum(['draft', 'published', 'archived']);
+const safeExternalUrl = z
+  .string()
+  .url()
+  .refine((value) => /^https?:\/\//i.test(value));
 export const participantContentSchema = z.object({
   event: z.object({
     id: uuid,
@@ -25,8 +29,8 @@ export const participantContentSchema = z.object({
       company: z.string().nullable(),
       jobTitle: z.string().nullable(),
       bioMarkdown: z.string().nullable(),
-      linkedinUrl: z.string().nullable(),
-      websiteUrl: z.string().nullable(),
+      linkedinUrl: safeExternalUrl.nullable(),
+      websiteUrl: safeExternalUrl.nullable(),
       photoAssetId: uuid.nullable(),
       status,
       sortOrder: z.number().int(),
@@ -39,7 +43,7 @@ export const participantContentSchema = z.object({
       slug: z.string(),
       name: z.string(),
       descriptionMarkdown: z.string().nullable(),
-      websiteUrl: z.string().nullable(),
+      websiteUrl: safeExternalUrl.nullable(),
       category: z.string().nullable(),
       tier: z.string().nullable(),
       logoAssetId: uuid.nullable(),

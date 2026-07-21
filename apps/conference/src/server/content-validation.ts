@@ -64,6 +64,9 @@ export const validateContentMutation = async (
         : existing?.startsAt;
     const endsAt =
       input.data.endsAt instanceof Date ? input.data.endsAt : existing?.endsAt;
+    const resultingStatus = String(
+      input.data.status ?? existing?.status ?? 'draft',
+    );
     const day = await db.query.eventDays.findFirst({
       where: and(
         eq(schema.eventDays.eventId, input.eventId),
@@ -77,9 +80,11 @@ export const validateContentMutation = async (
     if (
       day &&
       startsAt &&
+      endsAt &&
       (localDateIn(startsAt, event.timezone) !== day.localDate ||
+        localDateIn(endsAt, event.timezone) !== day.localDate ||
         startsAt < event.startsAt ||
-        startsAt > event.endsAt)
+        endsAt > event.endsAt)
     )
       issues.push('time:outside_event_day');
     if (roomId) {
@@ -92,7 +97,13 @@ export const validateContentMutation = async (
         columns: { id: true },
       });
       if (!room) issues.push('room:not_in_event');
-      if (room && startsAt && endsAt) {
+      if (
+        room &&
+        startsAt &&
+        endsAt &&
+        resultingStatus !== 'cancelled' &&
+        resultingStatus !== 'archived'
+      ) {
         const sessions = await db.query.programSessions.findMany({
           where: and(
             eq(schema.programSessions.eventId, input.eventId),
@@ -125,6 +136,17 @@ export const validateContentMutation = async (
             where: and(
               eq(schema.rooms.eventId, input.eventId),
               eq(schema.rooms.slug, slugValue),
+            ),
+            columns: { id: true },
+          })
+        )?.id;
+        break;
+      case 'venues':
+        conflictingId = (
+          await db.query.venues.findFirst({
+            where: and(
+              eq(schema.venues.eventId, input.eventId),
+              eq(schema.venues.slug, slugValue),
             ),
             columns: { id: true },
           })

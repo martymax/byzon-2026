@@ -427,6 +427,10 @@ h1 span {
   background: white;
   cursor: pointer;
 }
+.admin-list .admin-actions {
+  display: flex;
+  gap: 0.4rem;
+}
 @media (max-width: 36rem) {
   .shell-badge {
     display: none;

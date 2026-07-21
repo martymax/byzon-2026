@@ -25,9 +25,20 @@ const nullableText = z.string().trim().max(10_000).nullable().optional();
 const sortOrder = z.number().int().nonnegative();
 const version = z.number().int().positive();
 const status = z.enum(['draft', 'published', 'archived']).optional();
+const safeExternalUrl = z
+  .string()
+  .url()
+  .refine((value) => /^https?:\/\//i.test(value))
+  .nullable()
+  .optional();
+const instant = z
+  .string()
+  .datetime({ offset: true })
+  .transform((value) => new Date(value));
 
 export const adminContentResources = [
   'days',
+  'venues',
   'rooms',
   'sessions',
   'speakers',
@@ -43,6 +54,14 @@ const schemas = {
     title: text,
     description: nullableText,
     sortOrder,
+  }),
+  venues: z.object({
+    slug,
+    name: text,
+    mapQuery: nullableText,
+    navigationMarkdown: nullableText,
+    sortOrder,
+    status,
   }),
   rooms: z.object({
     venueId: uuid,
@@ -72,8 +91,8 @@ const schemas = {
       'gala',
       'other',
     ]),
-    startsAt: z.coerce.date(),
-    endsAt: z.coerce.date(),
+    startsAt: instant,
+    endsAt: instant,
     sortOrder,
     status: z.enum(['draft', 'published', 'cancelled', 'archived']).optional(),
   }),
@@ -84,8 +103,8 @@ const schemas = {
     company: nullableText,
     jobTitle: nullableText,
     bioMarkdown: nullableText,
-    linkedinUrl: z.string().url().nullable().optional(),
-    websiteUrl: z.string().url().nullable().optional(),
+    linkedinUrl: safeExternalUrl,
+    websiteUrl: safeExternalUrl,
     sortOrder,
     status,
   }),
@@ -93,7 +112,7 @@ const schemas = {
     slug,
     name: text,
     descriptionMarkdown: nullableText,
-    websiteUrl: z.string().url().nullable().optional(),
+    websiteUrl: safeExternalUrl,
     category: nullableText,
     tier: nullableText,
     sortOrder,
@@ -197,6 +216,11 @@ const listRows = async (
         where: eq(schema.rooms.eventId, eventId),
         orderBy: [asc(schema.rooms.sortOrder)],
       });
+    case 'venues':
+      return db.query.venues.findMany({
+        where: eq(schema.venues.eventId, eventId),
+        orderBy: [asc(schema.venues.sortOrder)],
+      });
     case 'sessions':
       return db.query.programSessions.findMany({
         where: eq(schema.programSessions.eventId, eventId),
@@ -242,6 +266,13 @@ const createRow = async (
       await db
         .insert(schema.rooms)
         .values({ id, eventId, ...(data as z.infer<typeof schemas.rooms>) });
+      break;
+    case 'venues':
+      await db.insert(schema.venues).values({
+        id,
+        eventId,
+        ...(data as z.infer<(typeof schemas)['venues']>),
+      });
       break;
     case 'sessions':
       await db
@@ -307,6 +338,19 @@ const updateRow = async (
           ),
         )
         .returning({ id: schema.rooms.id });
+      break;
+    case 'venues':
+      rows = await db
+        .update(schema.venues)
+        .set({ ...data, version: expectedVersion! + 1, updatedAt })
+        .where(
+          and(
+            eq(schema.venues.eventId, eventId),
+            eq(schema.venues.id, id),
+            eq(schema.venues.version, expectedVersion!),
+          ),
+        )
+        .returning({ id: schema.venues.id });
       break;
     case 'sessions':
       rows = await db
@@ -572,6 +616,24 @@ export const handleAdminContent = async (
           title: 'Content validation failed',
           detail: 'The content conflicts with the event program.',
           fieldErrors: { content: error.issues },
+        }),
+        requestId,
+      );
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'cause' in error &&
+      typeof error.cause === 'object' &&
+      error.cause !== null &&
+      'code' in error.cause &&
+      error.cause.code === '23503'
+    )
+      return problemResponse(
+        new ApiProblemError({
+          status: 409,
+          code: 'CONTENT_IN_USE',
+          title: 'Content is in use',
+          detail: 'The content cannot be removed while another item uses it.',
         }),
         requestId,
       );

@@ -20,6 +20,21 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Implementační rozsah `P3-01` až `P3-10` je dokončen. Povinný security review
+  a code review etapy našel a zapracoval: zákaz ne-HTTP(S) externích URL při
+  zápisu i čtení snapshotu, explicitní offset admin timestampů, kontrolu konce
+  session vůči event dni, možnost zrušit/archivovat session bez falešné kolize,
+  bezpečný `409` pro používaný obsah, potvrzení destruktivní akce, kompletní
+  venue/reference/update admin flow a Unicode-safe 75-byte ICS folding.
+- Finální review gate prošel: celý `pnpm run ci`, 66 database a 55 conference
+  testů, produkční Next/worker build, statický smoke 25 HTML/58 assetů a 3 mobile
+  Chromium E2E. Public API ověřuje byte-for-byte determinismus stejné
+  publication version. Review fix čeká na samostatný commit/push.
+- `pnpm audit --audit-level high` prošel bez high/critical nálezu. Zůstává jedna
+  moderate advisory `GHSA-67mh-4wv8-2f99` v transitive esbuild `0.18.20` přes
+  `drizzle-kit/@esbuild-kit`; jde o neexponovaný vývojový server, který se v
+  produkčním Next/worker runtime nespouští. Bez neověřeného dependency override
+  byl nález zdokumentován jako neprodukční upstream riziko.
 - `P3-10` je dokončený a před commitem: mobilní Playwright testy kontrolují
   participant landmarky/navigaci, keyboard skip link a focus hlavního obsahu,
   minimální 44px touch targety, absenci horizontálního overflow a reduced-motion

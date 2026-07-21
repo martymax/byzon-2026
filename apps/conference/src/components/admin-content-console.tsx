@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 const resources = [
   'days',
+  'venues',
   'rooms',
   'sessions',
   'speakers',
@@ -15,6 +16,7 @@ type Resource = (typeof resources)[number];
 type Item = Record<string, unknown> & { id: string; version?: number };
 const labels: Record<Resource, string> = {
   days: 'Dny',
+  venues: 'Místa',
   rooms: 'Místnosti',
   sessions: 'Program',
   speakers: 'Řečníci',
@@ -27,6 +29,11 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
   const [resource, setResource] = useState<Resource>('sessions');
   const [items, setItems] = useState<Item[]>([]);
   const [message, setMessage] = useState('');
+  const [references, setReferences] = useState<{
+    days: Item[];
+    venues: Item[];
+    rooms: Item[];
+  }>({ days: [], venues: [], rooms: [] });
   const load = useCallback(async () => {
     const response = await fetch(
       `/api/v1/admin/events/${eventId}/content/${resource}`,
@@ -55,6 +62,27 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
       });
     return () => controller.abort();
   }, [eventId, resource]);
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all(
+      (['days', 'venues', 'rooms'] as const).map(async (reference) => {
+        const response = await fetch(
+          `/api/v1/admin/events/${eventId}/content/${reference}`,
+          { cache: 'no-store', signal: controller.signal },
+        );
+        if (!response.ok) throw new Error('request failed');
+        return [
+          reference,
+          ((await response.json()) as { items: Item[] }).items,
+        ] as const;
+      }),
+    )
+      .then((entries) =>
+        setReferences(Object.fromEntries(entries) as typeof references),
+      )
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [eventId]);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -64,6 +92,13 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
     };
     if (resource === 'days')
       body = { ...body, localDate: value('localDate'), title: value('title') };
+    if (resource === 'venues')
+      body = {
+        ...body,
+        slug: value('slug'),
+        name: value('title'),
+        mapQuery: value('body') || null,
+      };
     if (resource === 'rooms')
       body = {
         ...body,
@@ -80,8 +115,8 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         slug: value('slug'),
         title: value('title'),
         type: value('type') || 'other',
-        startsAt: value('startsAt'),
-        endsAt: value('endsAt'),
+        startsAt: `${value('startsAt')}:00+02:00`,
+        endsAt: `${value('endsAt')}:00+02:00`,
       };
     if (resource === 'speakers') {
       const names = value('title').split(/\s+/);
@@ -131,6 +166,10 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
     }
   };
   const archive = async (item: Item) => {
+    if (
+      !window.confirm('Opravdu chcete tuto položku archivovat nebo odstranit?')
+    )
+      return;
     const response = await fetch(
       `/api/v1/admin/events/${eventId}/content/${resource}/${item.id}`,
       {
@@ -142,6 +181,43 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
       response.ok
         ? 'Položka byla archivována.'
         : 'Položku se nepodařilo archivovat.',
+    );
+    if (response.ok) await load();
+  };
+  const rename = async (item: Item) => {
+    const current = String(
+      item.title ?? item.name ?? item.question ?? item.localDate ?? '',
+    );
+    const next = window.prompt('Nový název', current)?.trim();
+    if (!next || next === current) return;
+    const data: Record<string, unknown> =
+      resource === 'speakers'
+        ? {
+            firstName: next.split(/\s+/).slice(0, -1).join(' '),
+            lastName: next.split(/\s+/).at(-1),
+          }
+        : resource === 'partners' ||
+            resource === 'rooms' ||
+            resource === 'venues'
+          ? { name: next }
+          : resource === 'faqs'
+            ? { question: next }
+            : resource === 'days' ||
+                resource === 'pages' ||
+                resource === 'sessions'
+              ? { title: next }
+              : {};
+    if (item.version) data.version = item.version;
+    const response = await fetch(
+      `/api/v1/admin/events/${eventId}/content/${resource}/${item.id}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+    );
+    setMessage(
+      response.ok ? 'Položka byla upravena.' : 'Položku se nepodařilo upravit.',
     );
     if (response.ok) await load();
   };
@@ -168,9 +244,14 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
             <input required name="localDate" type="date" />
           </label>
         )}
-        {['rooms', 'sessions', 'speakers', 'partners', 'pages'].includes(
-          resource,
-        ) && (
+        {[
+          'venues',
+          'rooms',
+          'sessions',
+          'speakers',
+          'partners',
+          'pages',
+        ].includes(resource) && (
           <label>
             Slug
             <input required name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" />
@@ -178,26 +259,47 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         )}
         {resource === 'rooms' && (
           <label>
-            ID místa
-            <input required name="venueId" />
+            Místo
+            <select required name="venueId">
+              <option value="">Vyberte místo</option>
+              {references.venues.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {String(item.name)}
+                </option>
+              ))}
+            </select>
           </label>
         )}
         {resource === 'sessions' && (
           <>
             <label>
-              ID dne
-              <input required name="dayId" />
+              Den
+              <select required name="dayId">
+                <option value="">Vyberte den</option>
+                {references.days.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {String(item.title)}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
-              ID místnosti
-              <input name="roomId" />
+              Místnost
+              <select name="roomId">
+                <option value="">Bez místnosti</option>
+                {references.rooms.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {String(item.name)}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
-              Začátek
+              Začátek (Europe/Prague)
               <input required name="startsAt" type="datetime-local" />
             </label>
             <label>
-              Konec
+              Konec (Europe/Prague)
               <input required name="endsAt" type="datetime-local" />
             </label>
             <label>
@@ -225,7 +327,9 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
               : 'Název'}
           <input required name="title" />
         </label>
-        {['speakers', 'partners', 'pages', 'faqs'].includes(resource) && (
+        {['venues', 'speakers', 'partners', 'pages', 'faqs'].includes(
+          resource,
+        ) && (
           <label>
             {resource === 'faqs' ? 'Odpověď' : 'Text'}
             <textarea
@@ -258,9 +362,14 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
               </strong>
               <small>{String(item.status ?? '')}</small>
             </span>
-            <button type="button" onClick={() => void archive(item)}>
-              Archivovat
-            </button>
+            <span className="admin-actions">
+              <button type="button" onClick={() => void rename(item)}>
+                Upravit
+              </button>
+              <button type="button" onClick={() => void archive(item)}>
+                Archivovat
+              </button>
+            </span>
           </li>
         ))}
       </ul>
