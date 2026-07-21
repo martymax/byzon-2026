@@ -3,6 +3,7 @@ import {
   acquireTransactionLock,
   generateUuidV7,
   schema,
+  writeAuditLog,
   withTransaction,
   type Database,
   type DatabaseTransaction,
@@ -314,23 +315,26 @@ export const completeOnboarding = async (
         ...decision,
       })),
     );
-    await transaction.insert(schema.auditLogs).values({
-      id: generateId(),
-      eventId: input.eventId,
-      actorId: input.userId,
-      actorType: 'user',
-      action: 'onboarding.completed',
-      targetType: 'event_membership',
-      targetId: input.userId,
-      requestId: input.requestId,
-      after: {
-        state: 'complete',
-        legalDocumentIds: decisions.map(
-          ({ legalDocumentId }) => legalDocumentId,
-        ),
-        networkingEnabled: input.networking.enabled,
+    await writeAuditLog(
+      transaction,
+      {
+        eventId: input.eventId,
+        actorId: input.userId,
+        actorType: 'user',
+        action: 'onboarding.completed',
+        targetType: 'event_membership',
+        targetId: input.userId,
+        requestId: input.requestId,
+        after: {
+          state: 'complete',
+          legalDocumentIds: decisions.map(
+            ({ legalDocumentId }) => legalDocumentId,
+          ),
+          networkingEnabled: input.networking.enabled,
+        },
       },
-    });
+      { generateId },
+    );
 
     return { status: 'complete' };
   });
