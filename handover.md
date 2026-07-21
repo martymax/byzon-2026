@@ -20,6 +20,19 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-02` je implementovaný a lokálně ověřený, ale čeká na uživatelské
+  schválení commitu/pushe. Přidává transakční CLI import `data/content.json`,
+  event-scoped provenance tabulku a JSON report nepřevedených polí. Import je
+  při stejném SHA-256 no-op, zapisuje pouze drafty, nepublikuje a nevytváří
+  rezervace; neplatnou položku `24:00 - ?` bezpečně přeskočí.
+- Import připraví 25 assetů, 17 řečníků, 7 partnerů, 1 místo, 1 praktickou
+  stránku, 2 dny a 65 validních sessions. Stage názvy se nehádají jako fyzické
+  místnosti a zůstávají v reportu; přesně spárovaní řečníci mají stabilní vazby.
+- Migrace `0003_curious_sunspot.sql` přidává pouze
+  `content_import_provenance`. PostgreSQL integrační sada po migraci a seedu
+  prošla se 66 testy včetně dvojího importu bez duplicit. Celý `pnpm run ci`
+  prošel včetně 32 conference testů, produkčních buildů a statického smoke testu
+  25 HTML/58 assetů; migrační drift je nulový.
 - `P3-01` je dokončený v commitu `ee854b5`, pushnutém na
   `origin/stage/03-content`; větev byla založena z
   `b22a4df`; před implementací byly znovu ověřeny §1, §9.5, §9.9, §10.4 a
@@ -32,9 +45,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   63 databázových testů, celý `pnpm run ci`, produkční buildy i statický smoke
   prošly nad dočasnou izolovanou PostgreSQL instancí. Self-review opravil
   PostgreSQL `NULL` mezeru v capacity/waitlist checku; migrační drift je nulový.
-- Etapa `02-database-auth` je dokončená; v etapě 3 následuje `P3-02`.
-- Pracovní větev: `agent/p2-review-followup`, založená z `main` na merge commitu
-  `acaa5cd`; sleduje stejnojmennou větev na `origin`.
+- Etapa `02-database-auth` je dokončená; v etapě 3 následuje `P3-03`.
+- Pracovní větev: `stage/03-content`, sleduje stejnojmennou větev na `origin`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
 - Nejnovější dokončený implementační úkol je `P2-10`; `P2-07` až `P2-10` jsou
@@ -110,8 +122,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Doporučený další krok
 
-Pokračovat `P3-02`: idempotentní draftový import `data/content.json` s reportem
-nepřevedených polí. Samostatně stále zbývá vytvořit PR z
+Po schválení commitnout a pushnout `P3-02`, poté pokračovat `P3-03` participant
+read API s ETag/version a filtry. Samostatně stále zbývá vytvořit PR z
 `agent/p2-review-followup` a sloučit jej; před budoucím PR etapy 3 musí být tento
 předek integrován.
 

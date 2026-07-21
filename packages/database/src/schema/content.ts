@@ -73,6 +73,45 @@ export const publicationSyncStatus = pgEnum('publication_sync_status', [
   'sync_failed',
 ]);
 
+export const contentImportProvenance = pgTable(
+  'content_import_provenance',
+  {
+    id: uuid('id').primaryKey(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    sourceName: varchar('source_name', { length: 255 }).notNull(),
+    sourcePath: text('source_path').notNull(),
+    sourceSha256: varchar('source_sha256', { length: 64 }).notNull(),
+    targetType: varchar('target_type', { length: 64 }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    importedAt: timestamp('imported_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('content_import_provenance_event_source_unique').on(
+      table.eventId,
+      table.sourceName,
+      table.sourcePath,
+      table.targetType,
+    ),
+    index('content_import_provenance_event_target_idx').on(
+      table.eventId,
+      table.targetType,
+      table.targetId,
+    ),
+    check(
+      'content_import_provenance_source_sha256_check',
+      sql`${table.sourceSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'content_import_provenance_target_type_check',
+      sql`${table.targetType} ~ '^[a-z][a-z0-9_]{0,63}$'`,
+    ),
+  ],
+);
+
 export const assets = pgTable(
   'assets',
   {
