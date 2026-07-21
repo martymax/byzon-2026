@@ -1393,7 +1393,10 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
   abstraction. Přidán bezpečný `application/problem+json` kontrakt, transakční
   PostgreSQL replay wrapper s hashovaným klíčem/requestem a provider-neutral
   atomický rate-limit kontrakt s fail-closed chováním a `429` hlavičkami.
-- [ ] `P2-10` Auth/session E2E včetně expirace a logout-all.
+- [x] `P2-10` Auth/session E2E včetně expirace a logout-all. Session politika je
+  explicitně připnutá, HTTP integrační test odmítá expirovanou relaci a
+  `POST /api/v1/auth/logout-all` revokuje všechny Better Auth relace, maže
+  lokální cookie a odmítá anonymní i cross-origin požadavky.
 
 **Akceptace:** neautorizovaný uživatel nečte event data; role jsou event-scoped; magic link je jednorázový; souhlasy jsou versionované a auditovatelné.
 
