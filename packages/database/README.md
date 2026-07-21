@@ -12,6 +12,17 @@ pnpm --filter @byzon/database db:generate
 
 Review both the SQL and `drizzle/meta/_journal.json` before committing them.
 
+Migration `0002_superb_roulette.sql` adds the event-scoped content skeleton:
+program days, venues, rooms, sessions, speakers, partners, practical pages,
+FAQs, private asset metadata and publication snapshots. Cross-table references
+include `event_id`, so a record cannot attach an asset, room, speaker or
+publisher from another event.
+
+Publication payload, checksum, version and publisher metadata are immutable in
+PostgreSQL. Only synchronization progress may be updated; publication rows
+cannot be deleted. Public delivery must use a publication snapshot rather than
+reading draft rows directly.
+
 ## Apply migrations and seed
 
 Both commands require an explicit `DATABASE_URL`. Never point local commands at

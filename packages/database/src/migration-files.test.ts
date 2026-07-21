@@ -11,6 +11,10 @@ const onboardingMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0001_strong_venus.sql'),
   'utf8',
 );
+const contentMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0002_superb_roulette.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -27,6 +31,9 @@ describe('versioned database artifacts', () => {
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0001_strong_venus',
     );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0002_superb_roulette',
+    );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
     expect(onboardingMigration).toContain(
@@ -35,11 +42,21 @@ describe('versioned database artifacts', () => {
     expect(onboardingMigration).toContain(
       'consent_records_request_document_unique',
     );
+    expect(contentMigration).toContain('CREATE TABLE "sessions"');
+    expect(contentMigration).toContain('sessions_day_event_fk');
+    expect(contentMigration).toContain('partners_logo_asset_event_fk');
+    expect(contentMigration).toContain(
+      'content_publications_immutable_trigger',
+    );
+    expect(contentMigration).toContain(
+      'BEFORE UPDATE OR DELETE ON "content_publications"',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
     expect(migration).not.toContain('gen_random_uuid()');
     expect(onboardingMigration).not.toContain('gen_random_uuid()');
+    expect(contentMigration).not.toContain('gen_random_uuid()');
   });
 
   it('seeds both event scopes idempotently and keeps the test event archived', () => {

@@ -15,6 +15,13 @@
       "when": 1784549953879,
       "tag": "0001_strong_venus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784639823196,
+      "tag": "0002_superb_roulette",
+      "breakpoints": true
     }
   ]
 }

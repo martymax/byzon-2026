@@ -20,7 +20,19 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
-- Etapa `02-database-auth` je dokončená; následuje `P3-01`.
+- `P3-01` je dokončený a čeká na schválení commitu/pushe na lokální větvi
+  `stage/03-content`, založené z
+  `b22a4df`; před implementací byly znovu ověřeny §1, §9.5, §9.9, §10.4 a
+  Etapa 3 plánu, `README.md`, ADR-003, ADR-007, ADR-008, ADR-012 a inventura
+  obsahu. Zatím nevznikl commit ani push této etapy.
+- `P3-01` obsahuje event-scoped tabulky programu, míst, řečníků,
+  partnerů, praktického obsahu, privátních asset metadat a publication snapshotů
+  včetně složených eventových FK, databázových invariantů programu a ochrany
+  immutable publication payloadu. Migrace `0002_superb_roulette.sql`, seed,
+  63 databázových testů, celý `pnpm run ci`, produkční buildy i statický smoke
+  prošly nad dočasnou izolovanou PostgreSQL instancí. Self-review opravil
+  PostgreSQL `NULL` mezeru v capacity/waitlist checku; migrační drift je nulový.
+- Etapa `02-database-auth` je dokončená; v etapě 3 následuje `P3-02`.
 - Pracovní větev: `agent/p2-review-followup`, založená z `main` na merge commitu
   `acaa5cd`; sleduje stejnojmennou větev na `origin`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
@@ -98,9 +110,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Doporučený další krok
 
-Po samostatném schválení vytvořit PR z `agent/p2-review-followup` a sloučit jej;
-následně pokračovat `P3-01`: schéma
-program/content/speakers/partners/assets/publications.
+Po schválení commitnout a pushnout pouze scope `P3-01`. Samostatně stále zbývá
+vytvořit PR z `agent/p2-review-followup` a sloučit jej; před budoucím PR etapy 3
+musí být tento předek integrován. Následně pokračovat `P3-02`: idempotentní
+draftový import `data/content.json` s reportem nepřevedených polí.
 
 ## Dokončená oprava review PR `#16`
 

@@ -1427,7 +1427,7 @@ závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 
 **Cíl:** DB se stane zdrojem pravdy pro aplikaci a administrátor spravuje/publikuje program bez vývojáře.
 
-- [ ] `P3-01` Schéma program/content/speakers/partners/assets/publications.
+- [x] `P3-01` Schéma program/content/speakers/partners/assets/publications.
 - [ ] `P3-02` Jednorázový idempotentní import `data/content.json` do draftu; report nepřevedených polí.
 - [ ] `P3-03` Participant read API s ETag/version a filtry.
 - [ ] `P3-04` Mobile program, detail, speaker/partner/practical pages.
@@ -1819,3 +1819,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.7 | 20. 7. 2026 | Dokončen `P2-08`: všechny audit zápisy používají sdílený helper s rekurzivní redakcí secrets/PII a databázovým negativním testem. |
 | 1.8 | 20. 7. 2026 | Dokončen `P2-09`: standardizovány problem responses, databázová idempotence mutací a víceinstanční rate-limit rozhraní. |
 | 1.9 | 21. 7. 2026 | Přidán povinný závěrečný gate každé etapy: security review, code review a okamžité zapracování potvrzených nálezů včetně regresních testů a opakovaného ověření. |
+| 2.0 | 21. 7. 2026 | Dokončen `P3-01`: přidáno event-scoped schéma programu, míst, řečníků, partnerů, praktického obsahu, privátních asset metadat a immutable publication snapshotů se složenými FK a PostgreSQL regresními testy. |
