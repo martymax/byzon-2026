@@ -14,7 +14,11 @@ import {
 export class ContentPublicationError extends Error {
   constructor(
     readonly code:
-      'EVENT_NOT_FOUND' | 'STALE_VERSION' | 'INVALID_DRAFT' | 'NO_CONTENT',
+      | 'EVENT_NOT_FOUND'
+      | 'STALE_VERSION'
+      | 'STALE_DRAFT'
+      | 'INVALID_DRAFT'
+      | 'NO_CONTENT',
     readonly issues: string[] = [],
   ) {
     super('Content publication failed');
@@ -37,6 +41,9 @@ const canonicalize = (value: unknown): unknown => {
 
 export const canonicalJson = (value: unknown): string =>
   JSON.stringify(canonicalize(value));
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const checksumSnapshot = (snapshot: unknown): string =>
   createHash('sha256').update(canonicalJson(snapshot)).digest('hex');
@@ -312,6 +319,7 @@ export const publishContent = async (
     actorId: string;
     requestId: string;
     expectedPreviousVersion: number;
+    expectedChecksumSha256: string;
   },
 ): Promise<PublicationPreview> =>
   withTransaction(db, async (transaction) => {
@@ -326,9 +334,12 @@ export const publishContent = async (
     if ((previous?.version ?? 0) !== input.expectedPreviousVersion)
       throw new ContentPublicationError('STALE_VERSION');
     const snapshot = await buildContentSnapshot(transaction, input.eventId);
+    const snapshotChecksum = checksumSnapshot(snapshot);
+    if (snapshotChecksum !== input.expectedChecksumSha256)
+      throw new ContentPublicationError('STALE_DRAFT');
     const result: PublicationPreview = {
       version: input.expectedPreviousVersion + 1,
-      checksumSha256: checksumSnapshot(snapshot),
+      checksumSha256: snapshotChecksum,
       snapshot,
       significantSessionIds: detectSignificantProgramChanges(
         previous?.snapshot ?? null,
@@ -378,8 +389,11 @@ export const publishContent = async (
       action: 'content.publish',
       targetType: 'content_publication',
       targetId: publicationId,
-      requestId: input.requestId,
+      requestId: UUID_PATTERN.test(input.requestId)
+        ? input.requestId
+        : crypto.randomUUID(),
       after: {
+        httpRequestId: input.requestId,
         version: result.version,
         checksumSha256: result.checksumSha256,
         significantChanges: result.significantSessionIds.length,

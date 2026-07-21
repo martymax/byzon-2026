@@ -1,5 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import {
+  acquireTransactionLock,
   generateUuidV7,
   schema,
   writeAuditLog,
@@ -95,6 +96,7 @@ const schemas = {
     endsAt: instant,
     sortOrder,
     status: z.enum(['draft', 'published', 'cancelled', 'archived']).optional(),
+    speakerIds: z.array(uuid).max(50).optional(),
   }),
   speakers: z.object({
     slug,
@@ -221,11 +223,22 @@ const listRows = async (
         where: eq(schema.venues.eventId, eventId),
         orderBy: [asc(schema.venues.sortOrder)],
       });
-    case 'sessions':
-      return db.query.programSessions.findMany({
+    case 'sessions': {
+      const sessions = await db.query.programSessions.findMany({
         where: eq(schema.programSessions.eventId, eventId),
         orderBy: [asc(schema.programSessions.startsAt)],
       });
+      const links = await db.query.sessionSpeakers.findMany({
+        where: eq(schema.sessionSpeakers.eventId, eventId),
+        orderBy: [asc(schema.sessionSpeakers.sortOrder)],
+      });
+      return sessions.map((session) => ({
+        ...session,
+        speakerIds: links
+          .filter((link) => link.sessionId === session.id)
+          .map((link) => link.speakerProfileId),
+      }));
+    }
     case 'speakers':
       return db.query.speakerProfiles.findMany({
         where: eq(schema.speakerProfiles.eventId, eventId),
@@ -256,6 +269,7 @@ const createRow = async (
   data: Record<string, unknown>,
 ) => {
   const id = generateUuidV7();
+  const { speakerIds, ...persistedData } = data;
   switch (resource) {
     case 'days':
       await db
@@ -275,9 +289,20 @@ const createRow = async (
       });
       break;
     case 'sessions':
-      await db
-        .insert(schema.programSessions)
-        .values({ id, eventId, ...(data as z.infer<typeof schemas.sessions>) });
+      await db.insert(schema.programSessions).values({
+        id,
+        eventId,
+        ...(persistedData as z.infer<typeof schemas.sessions>),
+      });
+      if (Array.isArray(speakerIds) && speakerIds.length)
+        await db.insert(schema.sessionSpeakers).values(
+          speakerIds.map((speakerProfileId, sortOrder) => ({
+            eventId,
+            sessionId: id,
+            speakerProfileId: String(speakerProfileId),
+            sortOrder,
+          })),
+        );
       break;
     case 'speakers':
       await db
@@ -312,6 +337,7 @@ const updateRow = async (
   expectedVersion?: number,
 ) => {
   const updatedAt = new Date();
+  const { speakerIds, ...persistedData } = data;
   let rows: Array<{ id: string }>;
   switch (resource) {
     case 'days':
@@ -329,7 +355,7 @@ const updateRow = async (
     case 'rooms':
       rows = await db
         .update(schema.rooms)
-        .set({ ...data, version: expectedVersion! + 1, updatedAt })
+        .set({ ...persistedData, version: expectedVersion! + 1, updatedAt })
         .where(
           and(
             eq(schema.rooms.eventId, eventId),
@@ -355,7 +381,7 @@ const updateRow = async (
     case 'sessions':
       rows = await db
         .update(schema.programSessions)
-        .set({ ...data, version: expectedVersion! + 1, updatedAt })
+        .set({ ...persistedData, version: expectedVersion! + 1, updatedAt })
         .where(
           and(
             eq(schema.programSessions.eventId, eventId),
@@ -425,6 +451,25 @@ const updateRow = async (
       title: 'Content changed',
       detail: 'The content no longer has the expected version.',
     });
+  if (resource === 'sessions' && Array.isArray(speakerIds)) {
+    await db
+      .delete(schema.sessionSpeakers)
+      .where(
+        and(
+          eq(schema.sessionSpeakers.eventId, eventId),
+          eq(schema.sessionSpeakers.sessionId, id),
+        ),
+      );
+    if (speakerIds.length)
+      await db.insert(schema.sessionSpeakers).values(
+        speakerIds.map((speakerProfileId, sortOrder) => ({
+          eventId,
+          sessionId: id,
+          speakerProfileId: String(speakerProfileId),
+          sortOrder,
+        })),
+      );
+  }
 };
 
 const archiveRow = async (
@@ -526,6 +571,7 @@ export const handleAdminContent = async (
     const result = await withTransaction(
       dependencies.db,
       async (transaction) => {
+        await acquireTransactionLock(transaction, `content-publish:${eventId}`);
         let targetId = id;
         if (request.method === 'POST' && !id) {
           const { data } = await parseBody(request, resource, false);
@@ -585,8 +631,10 @@ export const handleAdminContent = async (
           action: `content.${request.method.toLowerCase()}`,
           targetType: `content_${resource}`,
           targetId,
-          requestId: crypto.randomUUID(),
-          after: { resource, targetId },
+          requestId: uuid.safeParse(requestId).success
+            ? requestId
+            : crypto.randomUUID(),
+          after: { resource, targetId, httpRequestId: requestId },
         });
         return targetId!;
       },

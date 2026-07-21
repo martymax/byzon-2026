@@ -168,6 +168,29 @@ integration('public content integration', () => {
       client.db,
     );
     expect(second.status).toBe(304);
+
+    const original = await client.db.query.contentPublications.findFirst({
+      where: (publication, { eq }) => eq(publication.eventId, eventId),
+    });
+    await client.db.insert(schema.contentPublications).values({
+      id: generateUuidV7(),
+      eventId,
+      version: 2,
+      checksumSha256: original!.checksumSha256,
+      publishedBy: publisherId,
+      snapshot: original!.snapshot,
+    });
+    const republished = await readPublicContent(
+      new Request(
+        `https://app.byzon.test/api/v1/public/events/${slug}/content`,
+        { headers: { 'if-none-match': first.headers.get('etag')! } },
+      ),
+      slug,
+      'content',
+      client.db,
+    );
+    expect(republished.status).toBe(200);
+    await expect(republished.json()).resolves.toMatchObject({ version: 2 });
   });
   it('does not expose events without a publication', async () => {
     const response = await readPublicContent(

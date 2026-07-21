@@ -84,7 +84,10 @@ export const handleAdminPublication = async (
       });
     }
     const parsed = z
-      .object({ expectedPreviousVersion: z.number().int().nonnegative() })
+      .object({
+        expectedPreviousVersion: z.number().int().nonnegative(),
+        expectedChecksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      })
       .safeParse(body);
     if (!parsed.success)
       throw new ApiProblemError({
@@ -96,8 +99,9 @@ export const handleAdminPublication = async (
     const publication = await publishContent(dependencies.db, {
       eventId,
       actorId: session.user.id,
-      requestId: crypto.randomUUID(),
+      requestId,
       expectedPreviousVersion: parsed.data.expectedPreviousVersion,
+      expectedChecksumSha256: parsed.data.expectedChecksumSha256,
     });
     return Response.json(
       {
@@ -112,14 +116,21 @@ export const handleAdminPublication = async (
     );
   } catch (error) {
     if (error instanceof ContentPublicationError) {
-      const stale = error.code === 'STALE_VERSION';
+      const stale =
+        error.code === 'STALE_VERSION' || error.code === 'STALE_DRAFT';
       return problemResponse(
         new ApiProblemError({
           status: stale ? 409 : 422,
-          code: stale ? 'STALE_PUBLICATION_VERSION' : 'CONTENT_NOT_PUBLISHABLE',
+          code: stale
+            ? error.code === 'STALE_DRAFT'
+              ? 'STALE_PUBLICATION_PREVIEW'
+              : 'STALE_PUBLICATION_VERSION'
+            : 'CONTENT_NOT_PUBLISHABLE',
           title: stale ? 'Publication changed' : 'Content is not publishable',
           detail: stale
-            ? 'A newer publication already exists.'
+            ? error.code === 'STALE_DRAFT'
+              ? 'The draft changed after the preview was created.'
+              : 'A newer publication already exists.'
             : 'The draft does not satisfy publication requirements.',
           ...(error.issues.length
             ? { fieldErrors: { content: error.issues } }

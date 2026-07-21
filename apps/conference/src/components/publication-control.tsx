@@ -3,6 +3,7 @@ import { useState } from 'react';
 export const PublicationControl = ({ eventId }: { eventId: string }) => {
   const [status, setStatus] = useState('');
   const [version, setVersion] = useState<number | null>(null);
+  const [checksum, setChecksum] = useState<string | null>(null);
   const preview = async () => {
     const response = await fetch(
       `/api/v1/admin/events/${eventId}/publication`,
@@ -17,18 +18,22 @@ export const PublicationControl = ({ eventId }: { eventId: string }) => {
       checksumSha256: string;
     };
     setVersion(data.version);
+    setChecksum(data.checksumSha256);
     setStatus(
       `Náhled verze ${data.version}, kontrolní součet ${data.checksumSha256.slice(0, 12)}…`,
     );
   };
   const publish = async () => {
-    if (version === null) return;
+    if (version === null || checksum === null) return;
     const response = await fetch(
       `/api/v1/admin/events/${eventId}/publication`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ expectedPreviousVersion: version - 1 }),
+        body: JSON.stringify({
+          expectedPreviousVersion: version - 1,
+          expectedChecksumSha256: checksum,
+        }),
       },
     );
     setStatus(
@@ -36,7 +41,10 @@ export const PublicationControl = ({ eventId }: { eventId: string }) => {
         ? `Verze ${version} byla atomicky publikována.`
         : 'Publikace selhala; obnovte náhled.',
     );
-    if (response.ok) setVersion(null);
+    if (response.ok) {
+      setVersion(null);
+      setChecksum(null);
+    }
   };
   return (
     <section className="publication-control">

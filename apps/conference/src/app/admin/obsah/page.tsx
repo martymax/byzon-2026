@@ -1,17 +1,17 @@
 import { AdminContentConsole } from '@/components/admin-content-console';
 import { PublicationControl } from '@/components/publication-control';
-import { loadCurrentEventId } from '@/server/current-event';
+import { loadCurrentEvent } from '@/server/current-event';
 export const dynamic = 'force-dynamic';
 export default async function AdminContentPage() {
-  const eventId = await loadCurrentEventId();
+  const event = await loadCurrentEvent();
   return (
     <section className="app-page">
       <p className="eyebrow">Administrace</p>
       <h1>Obsah akce</h1>
-      {eventId ? (
+      {event ? (
         <>
-          <PublicationControl eventId={eventId} />
-          <AdminContentConsole eventId={eventId} />
+          <PublicationControl eventId={event.id} />
+          <AdminContentConsole eventId={event.id} timezone={event.timezone} />
         </>
       ) : (
         <p role="alert">Akce není dostupná.</p>

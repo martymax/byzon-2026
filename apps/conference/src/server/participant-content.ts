@@ -156,7 +156,7 @@ export const readParticipantContent = async (
         title: 'Content not found',
         detail: 'Published event content is not available.',
       });
-    const etag = `"${publication.checksumSha256}"`;
+    const etag = `"${publication.checksumSha256}-${publication.version}"`;
     if (request.headers.get('if-none-match') === etag)
       return new Response(null, {
         status: 304,

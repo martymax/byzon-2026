@@ -69,10 +69,15 @@ integration('admin content CRUD integration', () => {
   afterAll(async () => client.close());
 
   it('creates, lists, version-updates and archives an event-scoped partner with audit', async () => {
+    const createRequestId = crypto.randomUUID();
     const create = await handleAdminContent(
       new Request(`${origin}/api`, {
         method: 'POST',
-        headers: { origin, 'content-type': 'application/json' },
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'x-request-id': createRequestId,
+        },
         body: JSON.stringify({
           slug: 'partner-test',
           name: 'Partner Test',
@@ -143,6 +148,82 @@ integration('admin content CRUD integration', () => {
         ),
       );
     expect(auditCount!.value).toBe(3);
+    const audit = await client.db.query.auditLogs.findFirst({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'content.post'),
+      ),
+    });
+    expect(audit?.requestId).toBe(createRequestId);
+    expect(audit?.after).toMatchObject({ httpRequestId: createRequestId });
+  });
+
+  it('creates and updates event-scoped speaker assignments', async () => {
+    const dayId = generateUuidV7();
+    const speakerId = generateUuidV7();
+    await client.db.insert(schema.eventDays).values({
+      id: dayId,
+      eventId,
+      localDate: '2026-09-19',
+      title: 'Speaker day',
+      sortOrder: 98,
+    });
+    await client.db.insert(schema.speakerProfiles).values({
+      id: speakerId,
+      eventId,
+      slug: `speaker-${speakerId}`,
+      firstName: 'Test',
+      lastName: 'Speaker',
+      sortOrder: 0,
+    });
+    const create = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          dayId,
+          roomId: null,
+          slug: `speaker-session-${speakerId}`,
+          title: 'Speaker session',
+          type: 'talk',
+          startsAt: '2026-09-19T08:00:00.000Z',
+          endsAt: '2026-09-19T09:00:00.000Z',
+          sortOrder: 0,
+          speakerIds: [speakerId],
+        }),
+      }),
+      eventId,
+      'sessions',
+      null,
+      dependencies(organizerId),
+    );
+    expect(create.status).toBe(201);
+    const { id } = (await create.json()) as { id: string };
+    const links = await client.db.query.sessionSpeakers.findMany({
+      where: and(
+        eq(schema.sessionSpeakers.eventId, eventId),
+        eq(schema.sessionSpeakers.sessionId, id),
+      ),
+    });
+    expect(links.map((link) => link.speakerProfileId)).toEqual([speakerId]);
+
+    const update = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'PATCH',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({ speakerIds: [], version: 1 }),
+      }),
+      eventId,
+      'sessions',
+      id,
+      dependencies(organizerId),
+    );
+    expect(update.status).toBe(200);
+    expect(
+      await client.db.query.sessionSpeakers.findMany({
+        where: eq(schema.sessionSpeakers.sessionId, id),
+      }),
+    ).toEqual([]);
   });
 
   it('does not expose admin resources to a participant or accept cross-origin writes', async () => {

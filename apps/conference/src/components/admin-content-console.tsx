@@ -14,6 +14,40 @@ const resources = [
 ] as const;
 type Resource = (typeof resources)[number];
 type Item = Record<string, unknown> & { id: string; version?: number };
+export const localInputValue = (value: unknown, timezone: string) => {
+  if (!value) return '';
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(String(value)));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
+};
+export const zonedLocalToIso = (value: string, timezone: string) => {
+  const [date, time] = value.split('T');
+  const [year, month, day] = date!.split('-').map(Number);
+  const [hour, minute] = time!.split(':').map(Number);
+  const wallClockUtc = Date.UTC(year!, month! - 1, day!, hour!, minute!);
+  const offsetName = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(new Date(wallClockUtc))
+    .find(({ type }) => type === 'timeZoneName')?.value;
+  const match = offsetName?.match(/GMT([+-])(\d{2}):(\d{2})/);
+  if (!match && offsetName !== 'GMT')
+    throw new Error('Timezone offset is unavailable');
+  const offset = match
+    ? (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '+' ? 1 : -1)
+    : 0;
+  return new Date(wallClockUtc - offset * 60_000).toISOString();
+};
 const labels: Record<Resource, string> = {
   days: 'Dny',
   venues: 'Místa',
@@ -25,15 +59,23 @@ const labels: Record<Resource, string> = {
   faqs: 'FAQ',
 };
 
-export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
+export const AdminContentConsole = ({
+  eventId,
+  timezone,
+}: {
+  eventId: string;
+  timezone: string;
+}) => {
   const [resource, setResource] = useState<Resource>('sessions');
   const [items, setItems] = useState<Item[]>([]);
   const [message, setMessage] = useState('');
+  const [editing, setEditing] = useState<Item | null>(null);
   const [references, setReferences] = useState<{
     days: Item[];
     venues: Item[];
     rooms: Item[];
-  }>({ days: [], venues: [], rooms: [] });
+    speakers: Item[];
+  }>({ days: [], venues: [], rooms: [], speakers: [] });
   const load = useCallback(async () => {
     const response = await fetch(
       `/api/v1/admin/events/${eventId}/content/${resource}`,
@@ -65,17 +107,19 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
   useEffect(() => {
     const controller = new AbortController();
     Promise.all(
-      (['days', 'venues', 'rooms'] as const).map(async (reference) => {
-        const response = await fetch(
-          `/api/v1/admin/events/${eventId}/content/${reference}`,
-          { cache: 'no-store', signal: controller.signal },
-        );
-        if (!response.ok) throw new Error('request failed');
-        return [
-          reference,
-          ((await response.json()) as { items: Item[] }).items,
-        ] as const;
-      }),
+      (['days', 'venues', 'rooms', 'speakers'] as const).map(
+        async (reference) => {
+          const response = await fetch(
+            `/api/v1/admin/events/${eventId}/content/${reference}`,
+            { cache: 'no-store', signal: controller.signal },
+          );
+          if (!response.ok) throw new Error('request failed');
+          return [
+            reference,
+            ((await response.json()) as { items: Item[] }).items,
+          ] as const;
+        },
+      ),
     )
       .then((entries) =>
         setReferences(Object.fromEntries(entries) as typeof references),
@@ -98,6 +142,7 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         slug: value('slug'),
         name: value('title'),
         mapQuery: value('body') || null,
+        navigationMarkdown: value('navigationMarkdown') || null,
       };
     if (resource === 'rooms')
       body = {
@@ -115,8 +160,12 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         slug: value('slug'),
         title: value('title'),
         type: value('type') || 'other',
-        startsAt: `${value('startsAt')}:00+02:00`,
-        endsAt: `${value('endsAt')}:00+02:00`,
+        startsAt: zonedLocalToIso(value('startsAt'), timezone),
+        endsAt: zonedLocalToIso(value('endsAt'), timezone),
+        summary: value('body') || null,
+        description: value('description') || null,
+        status: value('status') || undefined,
+        speakerIds: form.getAll('speakerIds').map(String),
       };
     if (resource === 'speakers') {
       const names = value('title').split(/\s+/);
@@ -126,6 +175,10 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         firstName: names.slice(0, -1).join(' '),
         lastName: names.at(-1),
         jobTitle: value('body') || null,
+        company: value('company') || null,
+        bioMarkdown: value('bioMarkdown') || null,
+        linkedinUrl: value('linkedinUrl') || null,
+        websiteUrl: value('websiteUrl') || null,
       };
     }
     if (resource === 'partners')
@@ -134,34 +187,46 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         slug: value('slug'),
         name: value('title'),
         descriptionMarkdown: value('body') || null,
+        websiteUrl: value('websiteUrl') || null,
+        category: value('category') || null,
+        tier: value('tier') || null,
       };
     if (resource === 'pages')
       body = {
         ...body,
         slug: value('slug'),
-        kind: 'practical',
+        kind: value('kind') || 'practical',
         title: value('title'),
+        summary: value('summary') || null,
         bodyMarkdown: value('body'),
       };
     if (resource === 'faqs')
       body = {
         ...body,
         question: value('title'),
+        category: value('category') || null,
         answerMarkdown: value('body'),
       };
+    if (resource !== 'days' && value('status')) body.status = value('status');
+    if (editing?.version) body.version = editing.version;
     const response = await fetch(
-      `/api/v1/admin/events/${eventId}/content/${resource}`,
+      `/api/v1/admin/events/${eventId}/content/${resource}${editing ? `/${editing.id}` : ''}`,
       {
-        method: 'POST',
+        method: editing ? 'PATCH' : 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       },
     );
     setMessage(
-      response.ok ? 'Položka byla vytvořena.' : 'Položku se nepodařilo uložit.',
+      response.ok
+        ? editing
+          ? 'Položka byla upravena.'
+          : 'Položka byla vytvořena.'
+        : 'Položku se nepodařilo uložit.',
     );
     if (response.ok) {
       event.currentTarget.reset();
+      setEditing(null);
       await load();
     }
   };
@@ -184,43 +249,6 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
     );
     if (response.ok) await load();
   };
-  const rename = async (item: Item) => {
-    const current = String(
-      item.title ?? item.name ?? item.question ?? item.localDate ?? '',
-    );
-    const next = window.prompt('Nový název', current)?.trim();
-    if (!next || next === current) return;
-    const data: Record<string, unknown> =
-      resource === 'speakers'
-        ? {
-            firstName: next.split(/\s+/).slice(0, -1).join(' '),
-            lastName: next.split(/\s+/).at(-1),
-          }
-        : resource === 'partners' ||
-            resource === 'rooms' ||
-            resource === 'venues'
-          ? { name: next }
-          : resource === 'faqs'
-            ? { question: next }
-            : resource === 'days' ||
-                resource === 'pages' ||
-                resource === 'sessions'
-              ? { title: next }
-              : {};
-    if (item.version) data.version = item.version;
-    const response = await fetch(
-      `/api/v1/admin/events/${eventId}/content/${resource}/${item.id}`,
-      {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(data),
-      },
-    );
-    setMessage(
-      response.ok ? 'Položka byla upravena.' : 'Položku se nepodařilo upravit.',
-    );
-    if (response.ok) await load();
-  };
   return (
     <div className="admin-console">
       <label>
@@ -236,12 +264,21 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
           ))}
         </select>
       </label>
-      <form onSubmit={submit} className="admin-form">
-        <h2>Nová položka</h2>
+      <form
+        key={editing?.id ?? `new-${resource}`}
+        onSubmit={submit}
+        className="admin-form"
+      >
+        <h2>{editing ? 'Upravit položku' : 'Nová položka'}</h2>
         {resource === 'days' && (
           <label>
             Datum
-            <input required name="localDate" type="date" />
+            <input
+              required
+              name="localDate"
+              type="date"
+              defaultValue={String(editing?.localDate ?? '')}
+            />
           </label>
         )}
         {[
@@ -254,13 +291,22 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         ].includes(resource) && (
           <label>
             Slug
-            <input required name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" />
+            <input
+              required
+              name="slug"
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+              defaultValue={String(editing?.slug ?? '')}
+            />
           </label>
         )}
         {resource === 'rooms' && (
           <label>
             Místo
-            <select required name="venueId">
+            <select
+              required
+              name="venueId"
+              defaultValue={String(editing?.venueId ?? '')}
+            >
               <option value="">Vyberte místo</option>
               {references.venues.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -274,7 +320,11 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
           <>
             <label>
               Den
-              <select required name="dayId">
+              <select
+                required
+                name="dayId"
+                defaultValue={String(editing?.dayId ?? '')}
+              >
                 <option value="">Vyberte den</option>
                 {references.days.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -285,7 +335,10 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
             </label>
             <label>
               Místnost
-              <select name="roomId">
+              <select
+                name="roomId"
+                defaultValue={String(editing?.roomId ?? '')}
+              >
                 <option value="">Bez místnosti</option>
                 {references.rooms.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -296,19 +349,49 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
             </label>
             <label>
               Začátek (Europe/Prague)
-              <input required name="startsAt" type="datetime-local" />
+              <input
+                required
+                name="startsAt"
+                type="datetime-local"
+                defaultValue={localInputValue(editing?.startsAt, timezone)}
+              />
             </label>
             <label>
               Konec (Europe/Prague)
-              <input required name="endsAt" type="datetime-local" />
+              <input
+                required
+                name="endsAt"
+                type="datetime-local"
+                defaultValue={localInputValue(editing?.endsAt, timezone)}
+              />
             </label>
             <label>
               Typ
-              <select name="type">
+              <select
+                name="type"
+                defaultValue={String(editing?.type ?? 'talk')}
+              >
                 <option value="talk">Přednáška</option>
                 <option value="panel">Panel</option>
                 <option value="workshop">Workshop</option>
                 <option value="other">Jiné</option>
+              </select>
+            </label>
+            <label>
+              Řečníci
+              <select
+                name="speakerIds"
+                multiple
+                defaultValue={
+                  (editing?.speakerIds as string[] | undefined) ?? []
+                }
+              >
+                {references.speakers.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >{`${String(item.firstName)} ${String(item.lastName)}`}</option>
+                ))}
               </select>
             </label>
           </>
@@ -316,7 +399,14 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
         {resource === 'rooms' && (
           <label>
             Kapacita
-            <input min="1" name="capacity" type="number" />
+            <input
+              min="1"
+              name="capacity"
+              type="number"
+              defaultValue={
+                editing?.capacity == null ? '' : String(editing.capacity)
+              }
+            />
           </label>
         )}
         <label>
@@ -325,7 +415,18 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
             : resource === 'speakers'
               ? 'Celé jméno'
               : 'Název'}
-          <input required name="title" />
+          <input
+            required
+            name="title"
+            defaultValue={String(
+              editing?.title ??
+                editing?.name ??
+                editing?.question ??
+                (resource === 'speakers'
+                  ? `${String(editing?.firstName ?? '')} ${String(editing?.lastName ?? '')}`.trim()
+                  : ''),
+            )}
+          />
         </label>
         {['venues', 'speakers', 'partners', 'pages', 'faqs'].includes(
           resource,
@@ -335,16 +436,157 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
             <textarea
               name="body"
               required={resource === 'pages' || resource === 'faqs'}
+              defaultValue={String(
+                editing?.bodyMarkdown ??
+                  editing?.answerMarkdown ??
+                  editing?.descriptionMarkdown ??
+                  editing?.jobTitle ??
+                  editing?.mapQuery ??
+                  editing?.summary ??
+                  '',
+              )}
             />
+          </label>
+        )}
+        {resource === 'venues' && (
+          <label>
+            Navigační pokyny
+            <textarea
+              name="navigationMarkdown"
+              defaultValue={String(editing?.navigationMarkdown ?? '')}
+            />
+          </label>
+        )}
+        {resource === 'sessions' && (
+          <label>
+            Detail
+            <textarea
+              name="description"
+              defaultValue={String(editing?.description ?? '')}
+            />
+          </label>
+        )}
+        {resource === 'speakers' && (
+          <>
+            <label>
+              Firma
+              <input
+                name="company"
+                defaultValue={String(editing?.company ?? '')}
+              />
+            </label>
+            <label>
+              Bio
+              <textarea
+                name="bioMarkdown"
+                defaultValue={String(editing?.bioMarkdown ?? '')}
+              />
+            </label>
+            <label>
+              LinkedIn URL
+              <input
+                name="linkedinUrl"
+                type="url"
+                defaultValue={String(editing?.linkedinUrl ?? '')}
+              />
+            </label>
+            <label>
+              Web URL
+              <input
+                name="websiteUrl"
+                type="url"
+                defaultValue={String(editing?.websiteUrl ?? '')}
+              />
+            </label>
+          </>
+        )}
+        {resource === 'partners' && (
+          <>
+            <label>
+              Web URL
+              <input
+                name="websiteUrl"
+                type="url"
+                defaultValue={String(editing?.websiteUrl ?? '')}
+              />
+            </label>
+            <label>
+              Kategorie
+              <input
+                name="category"
+                defaultValue={String(editing?.category ?? '')}
+              />
+            </label>
+            <label>
+              Úroveň
+              <input name="tier" defaultValue={String(editing?.tier ?? '')} />
+            </label>
+          </>
+        )}
+        {resource === 'pages' && (
+          <>
+            <label>
+              Druh
+              <select
+                name="kind"
+                defaultValue={String(editing?.kind ?? 'practical')}
+              >
+                <option value="practical">Praktické</option>
+                <option value="marketing">Marketing</option>
+                <option value="other">Jiné</option>
+              </select>
+            </label>
+            <label>
+              Shrnutí
+              <input
+                name="summary"
+                defaultValue={String(editing?.summary ?? '')}
+              />
+            </label>
+          </>
+        )}
+        {resource === 'faqs' && (
+          <label>
+            Kategorie
+            <input
+              name="category"
+              defaultValue={String(editing?.category ?? '')}
+            />
+          </label>
+        )}
+        {resource !== 'days' && (
+          <label>
+            Stav
+            <select
+              name="status"
+              defaultValue={String(editing?.status ?? 'draft')}
+            >
+              <option value="draft">Draft</option>
+              <option value="published">Publikováno</option>
+              {resource === 'sessions' && (
+                <option value="cancelled">Zrušeno</option>
+              )}
+              <option value="archived">Archivováno</option>
+            </select>
           </label>
         )}
         <label>
           Pořadí
-          <input min="0" name="sortOrder" type="number" defaultValue="0" />
+          <input
+            min="0"
+            name="sortOrder"
+            type="number"
+            defaultValue={String(editing?.sortOrder ?? 0)}
+          />
         </label>
         <button className="button" type="submit">
-          Vytvořit
+          {editing ? 'Uložit změny' : 'Vytvořit'}
         </button>
+        {editing && (
+          <button type="button" onClick={() => setEditing(null)}>
+            Zrušit úpravy
+          </button>
+        )}
       </form>
       <p aria-live="polite">{message}</p>
       <ul className="admin-list">
@@ -363,7 +605,7 @@ export const AdminContentConsole = ({ eventId }: { eventId: string }) => {
               <small>{String(item.status ?? '')}</small>
             </span>
             <span className="admin-actions">
-              <button type="button" onClick={() => void rename(item)}>
+              <button type="button" onClick={() => setEditing(item)}>
                 Upravit
               </button>
               <button type="button" onClick={() => void archive(item)}>

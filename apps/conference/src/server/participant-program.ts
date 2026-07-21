@@ -127,9 +127,13 @@ const parseFilters = (url: URL) => {
   };
 };
 
-const etagFor = (checksum: string, filters: object): string => {
+const etagFor = (
+  checksum: string,
+  version: number,
+  filters: object,
+): string => {
   const representation = createHash('sha256')
-    .update(`${checksum}\n${JSON.stringify(filters)}`)
+    .update(`${checksum}\n${version}\n${JSON.stringify(filters)}`)
     .digest('hex');
   return `"${representation}"`;
 };
@@ -240,7 +244,11 @@ export const readParticipantProgram = async (
     const visibleRoomIds = new Set(
       sessions.flatMap(({ roomId }) => (roomId ? [roomId] : [])),
     );
-    const etag = etagFor(publication.checksumSha256, filters);
+    const etag = etagFor(
+      publication.checksumSha256,
+      publication.version,
+      filters,
+    );
     if (etagMatches(request.headers.get('if-none-match'), etag))
       return new Response(null, {
         status: 304,

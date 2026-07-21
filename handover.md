@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 21. července 2026
+> Poslední aktualizace: 22. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,6 +20,15 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Nezávislý follow-up review etapy 3 byl zapracován: publish nyní ověřuje
+  checksum schváleného preview a sdílí eventový advisory lock s CRUD, ETag
+  zahrnuje publication version, admin umí plnohodnotně upravovat obsah a vazby
+  session–řečník v event timezone a audit zachovává HTTP korelaci. Regresní
+  testy kryjí stale preview, stejný snapshot v nové verzi, speaker vazby,
+  request ID a zimní/letní timezone offset. Celý `pnpm run ci` prošel nad
+  izolovanou migrovanou PostgreSQL: 66 database a 57 conference testů,
+  produkční buildy a statický smoke. Po doplnění timezone unit testů prošlo 59
+  conference testů; dočasná databáze byla odstraněna.
 - Implementační rozsah `P3-01` až `P3-10` je dokončen. Povinný security review
   a code review etapy našel a zapracoval: zákaz ne-HTTP(S) externích URL při
   zápisu i čtení snapshotu, explicitní offset admin timestampů, kontrolu konce

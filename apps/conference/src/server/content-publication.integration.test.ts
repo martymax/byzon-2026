@@ -67,6 +67,7 @@ integration('content publication integration', () => {
       actorId: publisherId,
       requestId: crypto.randomUUID(),
       expectedPreviousVersion: 0,
+      expectedChecksumSha256: first.checksumSha256,
     });
     expect(published.checksumSha256).toBe(first.checksumSha256);
     expect(published.significantSessionIds).toEqual([]);
@@ -111,6 +112,7 @@ integration('content publication integration', () => {
         actorId: publisherId,
         requestId: crypto.randomUUID(),
         expectedPreviousVersion: 0,
+        expectedChecksumSha256: '0'.repeat(64),
       }),
     ).rejects.toMatchObject({ code: 'STALE_VERSION' });
     const [publications] = await client.db
@@ -118,6 +120,23 @@ integration('content publication integration', () => {
       .from(schema.contentPublications)
       .where(eq(schema.contentPublications.eventId, eventId));
     expect(publications!.value).toBe(1);
+  });
+
+  it('rejects draft changes made after the reviewed preview', async () => {
+    const reviewed = await previewContentPublication(client.db, eventId);
+    await client.db
+      .update(schema.programSessions)
+      .set({ title: 'Changed after preview' })
+      .where(eq(schema.programSessions.id, sessionId));
+    await expect(
+      publishContent(client.db, {
+        eventId,
+        actorId: publisherId,
+        requestId: crypto.randomUUID(),
+        expectedPreviousVersion: 1,
+        expectedChecksumSha256: reviewed.checksumSha256,
+      }),
+    ).rejects.toMatchObject({ code: 'STALE_DRAFT' });
   });
 
   it('targets significant program changes through a deduplicated outbox event', async () => {
@@ -133,6 +152,9 @@ integration('content publication integration', () => {
       actorId: publisherId,
       requestId: crypto.randomUUID(),
       expectedPreviousVersion: 1,
+      expectedChecksumSha256: (
+        await previewContentPublication(client.db, eventId)
+      ).checksumSha256,
     });
     expect(published.significantSessionIds).toEqual([sessionId]);
     const change = await client.db.query.outboxEvents.findFirst({

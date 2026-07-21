@@ -67,6 +67,23 @@ export const validateContentMutation = async (
     const resultingStatus = String(
       input.data.status ?? existing?.status ?? 'draft',
     );
+    if (Array.isArray(input.data.speakerIds)) {
+      const requestedSpeakerIds = [
+        ...new Set(input.data.speakerIds.map((value) => String(value))),
+      ];
+      if (requestedSpeakerIds.length !== input.data.speakerIds.length)
+        issues.push('speakers:duplicate');
+      const speakers = await db.query.speakerProfiles.findMany({
+        where: and(
+          eq(schema.speakerProfiles.eventId, input.eventId),
+          ne(schema.speakerProfiles.status, 'archived'),
+        ),
+        columns: { id: true },
+      });
+      const available = new Set(speakers.map(({ id }) => id));
+      if (requestedSpeakerIds.some((id) => !available.has(id)))
+        issues.push('speakers:not_in_event');
+    }
     const day = await db.query.eventDays.findFirst({
       where: and(
         eq(schema.eventDays.eventId, input.eventId),

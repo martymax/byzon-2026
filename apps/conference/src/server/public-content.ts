@@ -58,7 +58,7 @@ export const readPublicContent = async (
   try {
     const publication = await loadPublicPublication(db, eventSlug);
     if (!publication) throw notFound();
-    const etag = `"${publication.checksumSha256}-${kind}"`;
+    const etag = `"${publication.checksumSha256}-${publication.version}-${kind}"`;
     const contentType =
       kind === 'calendar' ? 'text/calendar; charset=utf-8' : 'application/json';
     if (matches(request.headers.get('if-none-match'), etag))

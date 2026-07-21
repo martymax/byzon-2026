@@ -12,3 +12,14 @@ export const loadCurrentEventId = async (): Promise<string | null> => {
   });
   return event?.id ?? null;
 };
+
+export const loadCurrentEvent = async (): Promise<{
+  id: string;
+  timezone: string;
+} | null> => {
+  const event = await database.db.query.events.findFirst({
+    where: eq(schema.events.slug, CURRENT_EVENT_SLUG),
+    columns: { id: true, timezone: true },
+  });
+  return event ?? null;
+};
