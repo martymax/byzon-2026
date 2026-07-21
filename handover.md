@@ -20,6 +20,20 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-03` je implementovaný a lokálně ověřený, ale čeká na uživatelské
+  schválení commitu/pushe. `GET /api/v1/events/:eventId/program` čte výhradně
+  immutable `content_publications`, vyžaduje aktivní event membership s
+  `program:published:read` a pro cizí event i chybějící publication vrací stejnou
+  bezpečnou `404`.
+- API podporuje bounded filtry `day`, `room`, `type`, volitelnou publication
+  `version` a representation-specific ETag. Privátní odpovědi mají revalidaci,
+  `Vary: Cookie, Authorization` a autorizovaný `If-None-Match` podporuje seznam
+  tagů, weak porovnání i `304`.
+- PostgreSQL integrační sada conference prošla 39 testy včetně latest/exact
+  publication, filtrů, anonymního přístupu, event IDOR a ETag. Celý `pnpm run
+  ci` prošel včetně 66 databázových testů, produkčních buildů a statického smoke
+  testu 25 HTML/58 assetů. Build zároveň opravil runtime export
+  `@byzon/domain`; nevznikla migrace ani nová env proměnná.
 - `P3-02` je implementovaný a lokálně ověřený, ale čeká na uživatelské
   schválení commitu/pushe. Přidává transakční CLI import `data/content.json`,
   event-scoped provenance tabulku a JSON report nepřevedených polí. Import je
@@ -122,8 +136,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Doporučený další krok
 
-Po schválení commitnout a pushnout `P3-02`, poté pokračovat `P3-03` participant
-read API s ETag/version a filtry. Samostatně stále zbývá vytvořit PR z
+Po schválení commitnout a pushnout `P3-03`, poté pokračovat `P3-04` mobilním
+programem, detailem a speaker/partner/practical stránkami. Samostatně stále zbývá vytvořit PR z
 `agent/p2-review-followup` a sloučit jej; před budoucím PR etapy 3 musí být tento
 předek integrován.
 

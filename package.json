@@ -8,7 +8,7 @@
   "packageManager": "pnpm@11.15.1",
   "scripts": {
     "build": "pnpm build:web && pnpm build:worker",
-    "build:web": "pnpm --filter @byzon/database build && pnpm --filter @byzon/conference build",
+    "build:web": "pnpm --filter @byzon/database build && pnpm --filter @byzon/domain build && pnpm --filter @byzon/conference build",
     "build:worker": "pnpm --filter @byzon/worker build",
     "dev": "pnpm --parallel --filter @byzon/conference --filter @byzon/worker dev",
     "format": "prettier --write .",
