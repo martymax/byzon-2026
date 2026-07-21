@@ -29,10 +29,12 @@ atomic shared provider before a protected endpoint is enabled.
 
 `POST /api/v1/auth/logout-all` requires a valid Better Auth session and an
 `Origin` header exactly matching the origin of `APP_BASE_URL`. It delegates
-session lifecycle to Better Auth: `revoke-sessions` removes every database
-session for the user and `sign-out` expires the caller's session cookies. A
-successful response is always `no-store` and returns the request ID. Auth
-failures use the same safe problem response contract as the other v1 routes.
+session lifecycle to Better Auth: first it prepares the exact cookie-expiration
+headers through `sign-out` without forwarding the caller cookie, then
+`revoke-sessions` removes every database session for the user. Cookie preparation
+must succeed before the irreversible revocation starts. A successful response is
+always `no-store` and returns the request ID. Auth failures use the same safe
+problem response contract as the other v1 routes.
 
 Session expiry, refresh age and freshness are explicitly configured in
 `server/auth.ts`. Keep these values aligned with the cookie lifetime and cover
