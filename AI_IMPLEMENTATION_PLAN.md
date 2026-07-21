@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v2.2
+> Stav: implementační plán v2.3
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1430,7 +1430,7 @@ závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 - [x] `P3-01` Schéma program/content/speakers/partners/assets/publications.
 - [x] `P3-02` Jednorázový idempotentní import `data/content.json` do draftu; report nepřevedených polí.
 - [x] `P3-03` Participant read API s ETag/version a filtry.
-- [ ] `P3-04` Mobile program, detail, speaker/partner/practical pages.
+- [x] `P3-04` Mobile program, detail, speaker/partner/practical pages.
 - [ ] `P3-05` Admin CRUD pro dny, místnosti, sessions, speaker/partner/FAQ/page.
 - [ ] `P3-06` Validace času, kolizí, slugu, draft/published/archived.
 - [ ] `P3-07` Preview a atomická publication snapshot.
@@ -1822,3 +1822,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 2.0 | 21. 7. 2026 | Dokončen `P3-01`: přidáno event-scoped schéma programu, míst, řečníků, partnerů, praktického obsahu, privátních asset metadat a immutable publication snapshotů se složenými FK a PostgreSQL regresními testy. |
 | 2.1 | 21. 7. 2026 | Dokončen `P3-02`: přidán transakční idempotentní import stávajícího obsahu do draftu s validací assetů, provenance a reportem bezpečně nepřevedených hodnot. |
 | 2.2 | 21. 7. 2026 | Dokončen `P3-03`: participant program API čte pouze immutable publication snapshot, vynucuje event-scoped oprávnění a podporuje bezpečné filtry, version a privátní ETag revalidaci. |
+| 2.3 | 21. 7. 2026 | Dokončen `P3-04`: přidáno mobilní participant UI programu a detailů, adresář řečníků, partneři a praktické informace nad whitelisted published snapshot API. |

@@ -20,6 +20,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-04` je dokončený a před commitem: mobilní `/app` navigace, program s
+  filtry a detailem, řečníci a profily, partneři a praktické informace. Nový
+  participant content endpoint vrací pouze explicitně whitelisted pole
+  publication snapshotu a vyžaduje stejnou event-scoped autorizaci jako program.
+- Conference sada prošla 41 PostgreSQL-backed testy; produkční Next build
+  obsahuje nové `/app/*` stránky a `/api/v1/events/:eventId/content`. Nevznikla
+  migrace ani env proměnná.
 - `P3-03` je implementovaný a lokálně ověřený, ale čeká na uživatelské
   schválení commitu/pushe. `GET /api/v1/events/:eventId/program` čte výhradně
   immutable `content_publications`, vyžaduje aktivní event membership s
