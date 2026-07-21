@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v2.4
+> Stav: implementační plán v2.5
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1432,7 +1432,7 @@ závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 - [x] `P3-03` Participant read API s ETag/version a filtry.
 - [x] `P3-04` Mobile program, detail, speaker/partner/practical pages.
 - [x] `P3-05` Admin CRUD pro dny, místnosti, sessions, speaker/partner/FAQ/page.
-- [ ] `P3-06` Validace času, kolizí, slugu, draft/published/archived.
+- [x] `P3-06` Validace času, kolizí, slugu, draft/published/archived.
 - [ ] `P3-07` Preview a atomická publication snapshot.
 - [ ] `P3-08` Program change detection a outbox bez odesílání e-mailu.
 - [ ] `P3-09` Veřejné content API a `.ics`.
@@ -1824,3 +1824,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 2.2 | 21. 7. 2026 | Dokončen `P3-03`: participant program API čte pouze immutable publication snapshot, vynucuje event-scoped oprávnění a podporuje bezpečné filtry, version a privátní ETag revalidaci. |
 | 2.3 | 21. 7. 2026 | Dokončen `P3-04`: přidáno mobilní participant UI programu a detailů, adresář řečníků, partneři a praktické informace nad whitelisted published snapshot API. |
 | 2.4 | 21. 7. 2026 | Dokončen `P3-05`: přidáno event-scoped admin CRUD API a mobilní konzole pro program a obsah s autorizací, same-origin ochranou, optimistic version a auditem. |
+| 2.5 | 21. 7. 2026 | Dokončen `P3-06`: admin mutace validují event scope vazeb, lokální den a čas, kolize místností, unikátní slugy a bezpečné stavové/archivační vstupy. |

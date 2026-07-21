@@ -20,6 +20,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-06` je dokončený a před commitem: admin mutace validují venue/day/room
+  event scope, časový rozsah, příslušnost k lokálnímu dni `Europe/Prague`,
+  kolize místnosti a duplicitní slug. Očekávané konflikty vracejí strukturované
+  `409 CONTENT_VALIDATION_FAILED`, ne generickou `500`.
+- Conference sada prošla 45 PostgreSQL-backed testy včetně cross-event room,
+  room collision, duplicate slug a timestampu mimo zvolený lokální den.
 - `P3-05` je dokončený a před commitem: admin CRUD API pro dny, místnosti,
   sessions, řečníky, partnery, stránky a FAQ plus `/admin/obsah`. Čtení i mutace
   vyžadují event-scoped `program:manage`; mutace navíc same-origin kontrolu,

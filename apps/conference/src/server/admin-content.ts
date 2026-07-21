@@ -10,6 +10,10 @@ import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
+import {
+  ContentValidationError,
+  validateContentMutation,
+} from './content-validation';
 
 const uuid = z.string().uuid();
 const slug = z
@@ -481,6 +485,11 @@ export const handleAdminContent = async (
         let targetId = id;
         if (request.method === 'POST' && !id) {
           const { data } = await parseBody(request, resource, false);
+          await validateContentMutation(transaction, {
+            eventId,
+            resource,
+            data,
+          });
           targetId = await createRow(transaction, eventId, resource, data);
         } else if (request.method === 'PATCH' && id) {
           const { data, expectedVersion } = await parseBody(
@@ -488,6 +497,12 @@ export const handleAdminContent = async (
             resource,
             true,
           );
+          await validateContentMutation(transaction, {
+            eventId,
+            resource,
+            id,
+            data,
+          });
           await updateRow(
             transaction,
             eventId,
@@ -549,6 +564,17 @@ export const handleAdminContent = async (
       },
     );
   } catch (error) {
+    if (error instanceof ContentValidationError)
+      return problemResponse(
+        new ApiProblemError({
+          status: 409,
+          code: 'CONTENT_VALIDATION_FAILED',
+          title: 'Content validation failed',
+          detail: 'The content conflicts with the event program.',
+          fieldErrors: { content: error.issues },
+        }),
+        requestId,
+      );
     return problemResponse(error, requestId);
   }
 };
