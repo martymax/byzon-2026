@@ -29,30 +29,31 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Finální review gate prošel: celý `pnpm run ci`, 66 database a 55 conference
   testů, produkční Next/worker build, statický smoke 25 HTML/58 assetů a 3 mobile
   Chromium E2E. Public API ověřuje byte-for-byte determinismus stejné
-  publication version. Review fix čeká na samostatný commit/push.
+  publication version. Review fix je commit `b50e299`, pushnutý na
+  `origin/stage/03-content`.
 - `pnpm audit --audit-level high` prošel bez high/critical nálezu. Zůstává jedna
   moderate advisory `GHSA-67mh-4wv8-2f99` v transitive esbuild `0.18.20` přes
   `drizzle-kit/@esbuild-kit`; jde o neexponovaný vývojový server, který se v
   produkčním Next/worker runtime nespouští. Bez neověřeného dependency override
   byl nález zdokumentován jako neprodukční upstream riziko.
-- `P3-10` je dokončený a před commitem: mobilní Playwright testy kontrolují
+- `P3-10` je dokončený v commitu `79ba63d`: mobilní Playwright testy kontrolují
   participant landmarky/navigaci, keyboard skip link a focus hlavního obsahu,
   minimální 44px touch targety, absenci horizontálního overflow a reduced-motion
   vypnutí dekorativních přechodů. Kontrast brand marku používá tmavší růžovou.
 - Všechny 3 mobile Chromium E2E testy prošly nad migrovanou lokální PostgreSQL.
-- `P3-09` je dokončený a před commitem: veřejné routes pro bootstrap, content a
+- `P3-09` je dokončený v commitu `14076c7`: veřejné routes pro bootstrap, content a
   `calendar.ics` nad event slugem. Vrací jen whitelisted publication data,
   veřejnou ETag cache/304 a žádný transient request ID v cacheovaném těle.
 - ICS používá CRLF, escaping/folding, UTC, stabilní UID, publication SEQUENCE,
   místnost a `STATUS:CANCELLED`. Conference sada prošla 53 testy včetně veřejné
   odpovědi bez auth, odstranění neznámého admin pole, ETag a chybějící publikace.
-- `P3-08` je dokončený a před commitem: snapshot diff detekuje změnu času,
+- `P3-08` je dokončený v commitu `21ea336`: snapshot diff detekuje změnu času,
   místnosti, stavu/zrušení, odebrání session i přejmenování/přesun místnosti.
   Publish ukládá jen při neprázdném cíli deduplikovanou `program.changed`
   outbox událost s publication version a přesnými session IDs; nic neodesílá.
 - Conference sada prošla 50 testy včetně canonical hash, removed/room rename
   projekce a PostgreSQL publish změněného času s cílitelným pending outboxem.
-- `P3-07` je dokončený a před commitem: admin preview a atomický publish pod
+- `P3-07` je dokončený v commitu `2c4a007`: admin preview a atomický publish pod
   transaction-scoped zámkem, canonical JSON/SHA-256, expected previous version,
   immutable publication, audit a `content.published` outbox pro následnou
   synchronizaci. Admin konzole nabízí náhled a potvrzené publikování.
@@ -60,28 +61,27 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   preview, atomického publish, snapshot stavu `published`, auditu/outboxu a
   odmítnutí stale souběžného publishera. Sekvenční snapshot dotazy respektují
   kontrakt jednoho transakčního pg klienta.
-- `P3-06` je dokončený a před commitem: admin mutace validují venue/day/room
+- `P3-06` je dokončený v commitu `ed1d77b`: admin mutace validují venue/day/room
   event scope, časový rozsah, příslušnost k lokálnímu dni `Europe/Prague`,
   kolize místnosti a duplicitní slug. Očekávané konflikty vracejí strukturované
   `409 CONTENT_VALIDATION_FAILED`, ne generickou `500`.
 - Conference sada prošla 45 PostgreSQL-backed testy včetně cross-event room,
   room collision, duplicate slug a timestampu mimo zvolený lokální den.
-- `P3-05` je dokončený a před commitem: admin CRUD API pro dny, místnosti,
+- `P3-05` je dokončený v commitu `9cec1c8`: admin CRUD API pro dny, místnosti,
   sessions, řečníky, partnery, stránky a FAQ plus `/admin/obsah`. Čtení i mutace
   vyžadují event-scoped `program:manage`; mutace navíc same-origin kontrolu,
   optimistic version a audit. Participant dostává nerozlišující `404`.
 - Conference sada prošla 43 PostgreSQL-backed testy včetně create/list/update,
   stale update, archive, auditu, IDOR a cross-origin odmítnutí. Produkční build
   obsahuje admin UI i obě dynamické CRUD routes; bez migrace a nové env.
-- `P3-04` je dokončený a před commitem: mobilní `/app` navigace, program s
+- `P3-04` je dokončený v commitu `f18a305`: mobilní `/app` navigace, program s
   filtry a detailem, řečníci a profily, partneři a praktické informace. Nový
   participant content endpoint vrací pouze explicitně whitelisted pole
   publication snapshotu a vyžaduje stejnou event-scoped autorizaci jako program.
 - Conference sada prošla 41 PostgreSQL-backed testy; produkční Next build
   obsahuje nové `/app/*` stránky a `/api/v1/events/:eventId/content`. Nevznikla
   migrace ani env proměnná.
-- `P3-03` je implementovaný a lokálně ověřený, ale čeká na uživatelské
-  schválení commitu/pushe. `GET /api/v1/events/:eventId/program` čte výhradně
+- `P3-03` je dokončený v commitu `f690037`. `GET /api/v1/events/:eventId/program` čte výhradně
   immutable `content_publications`, vyžaduje aktivní event membership s
   `program:published:read` a pro cizí event i chybějící publication vrací stejnou
   bezpečnou `404`.
@@ -94,8 +94,7 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   ci` prošel včetně 66 databázových testů, produkčních buildů a statického smoke
   testu 25 HTML/58 assetů. Build zároveň opravil runtime export
   `@byzon/domain`; nevznikla migrace ani nová env proměnná.
-- `P3-02` je implementovaný a lokálně ověřený, ale čeká na uživatelské
-  schválení commitu/pushe. Přidává transakční CLI import `data/content.json`,
+- `P3-02` je dokončený v commitu `8d4fe20`. Přidává transakční CLI import `data/content.json`,
   event-scoped provenance tabulku a JSON report nepřevedených polí. Import je
   při stejném SHA-256 no-op, zapisuje pouze drafty, nepublikuje a nevytváří
   rezervace; neplatnou položku `24:00 - ?` bezpečně přeskočí.
@@ -190,16 +189,11 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Rate-limit kontrakt nemá záměrně procesový produkční store. Chráněný endpoint
   se nesmí zapnout, dokud staging/production nepoužije atomický sdílený provider
   a environment-keyed HMAC subjecty; výpadek store je fail-closed.
-- Worktree obsahuje pouze devět nesledovaných duplicitních souborů s příponou
-  ` 2` v onboarding/domain/database části. Původ duplicit není potvrzený; bez
-  pokynu je necommitovat ani nemazat.
-
 ## Doporučený další krok
 
-Po schválení commitnout a pushnout `P3-03`, poté pokračovat `P3-04` mobilním
-programem, detailem a speaker/partner/practical stránkami. Samostatně stále zbývá vytvořit PR z
-`agent/p2-review-followup` a sloučit jej; před budoucím PR etapy 3 musí být tento
-předek integrován.
+Po potvrzení úspěšného CI na `origin/stage/03-content` samostatně schválit
+vytvoření PR etapy 3 do `staging`. PR ani merge nejsou součástí dosavadního
+schválení a nesmějí se provést automaticky.
 
 ## Dokončená oprava review PR `#16`
 
