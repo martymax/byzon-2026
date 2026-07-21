@@ -20,6 +20,14 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-07` je dokončený a před commitem: admin preview a atomický publish pod
+  transaction-scoped zámkem, canonical JSON/SHA-256, expected previous version,
+  immutable publication, audit a `content.published` outbox pro následnou
+  synchronizaci. Admin konzole nabízí náhled a potvrzené publikování.
+- Conference sada prošla 47 PostgreSQL-backed testy včetně deterministického
+  preview, atomického publish, snapshot stavu `published`, auditu/outboxu a
+  odmítnutí stale souběžného publishera. Sekvenční snapshot dotazy respektují
+  kontrakt jednoho transakčního pg klienta.
 - `P3-06` je dokončený a před commitem: admin mutace validují venue/day/room
   event scope, časový rozsah, příslušnost k lokálnímu dni `Europe/Prague`,
   kolize místnosti a duplicitní slug. Očekávané konflikty vracejí strukturované

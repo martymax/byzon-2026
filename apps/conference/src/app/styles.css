@@ -333,6 +333,28 @@ h1 span {
   gap: 1.5rem;
   max-width: 52rem;
 }
+.publication-control {
+  max-width: 52rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: white;
+}
+.publication-control button {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--pink);
+  border-radius: 0.7rem;
+  background: white;
+  color: var(--pink-dark);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.publication-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .admin-console > label,
 .admin-form label {
   display: grid;

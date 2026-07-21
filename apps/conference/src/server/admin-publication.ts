@@ -1,0 +1,133 @@
+import type { Database } from '@byzon/database';
+import { z } from 'zod';
+
+import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import {
+  ContentPublicationError,
+  previewContentPublication,
+  publishContent,
+} from './content-publication';
+import { EventAccessDeniedError, requireEventPermission } from './policy';
+
+export const handleAdminPublication = async (
+  request: Request,
+  eventId: string,
+  dependencies: {
+    db: Database;
+    allowedOrigin: string;
+    getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
+  },
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (!z.string().uuid().safeParse(eventId).success)
+      throw new ApiProblemError({
+        status: 400,
+        code: 'INVALID_EVENT_ID',
+        title: 'Invalid event identifier',
+        detail: 'The event identifier is invalid.',
+      });
+    const session = await dependencies.getSession(request.headers);
+    if (!session)
+      throw new ApiProblemError({
+        status: 401,
+        code: 'AUTHENTICATION_REQUIRED',
+        title: 'Authentication required',
+        detail: 'A valid session is required.',
+      });
+    try {
+      await requireEventPermission(
+        dependencies.db,
+        { userId: session.user.id },
+        eventId,
+        'program:manage',
+      );
+    } catch (error) {
+      if (!(error instanceof EventAccessDeniedError)) throw error;
+      throw new ApiProblemError({
+        status: 404,
+        code: 'CONTENT_NOT_FOUND',
+        title: 'Content not found',
+        detail: 'The content resource is not available.',
+      });
+    }
+    if (request.method === 'GET') {
+      const preview = await previewContentPublication(dependencies.db, eventId);
+      return Response.json(
+        { ...preview, requestId },
+        { headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },
+      );
+    }
+    if (request.method !== 'POST')
+      throw new ApiProblemError({
+        status: 405,
+        code: 'METHOD_NOT_ALLOWED',
+        title: 'Method not allowed',
+        detail: 'The method is not supported.',
+      });
+    if (request.headers.get('origin') !== dependencies.allowedOrigin)
+      throw new ApiProblemError({
+        status: 403,
+        code: 'ORIGIN_REJECTED',
+        title: 'Request rejected',
+        detail: 'The request origin is not allowed.',
+      });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new ApiProblemError({
+        status: 400,
+        code: 'INVALID_JSON',
+        title: 'Invalid JSON',
+        detail: 'The request body must contain valid JSON.',
+      });
+    }
+    const parsed = z
+      .object({ expectedPreviousVersion: z.number().int().nonnegative() })
+      .safeParse(body);
+    if (!parsed.success)
+      throw new ApiProblemError({
+        status: 400,
+        code: 'INVALID_PUBLISH_REQUEST',
+        title: 'Invalid publish request',
+        detail: 'The expected previous version is required.',
+      });
+    const publication = await publishContent(dependencies.db, {
+      eventId,
+      actorId: session.user.id,
+      requestId: crypto.randomUUID(),
+      expectedPreviousVersion: parsed.data.expectedPreviousVersion,
+    });
+    return Response.json(
+      {
+        version: publication.version,
+        checksumSha256: publication.checksumSha256,
+        requestId,
+      },
+      {
+        status: 201,
+        headers: { 'cache-control': 'no-store', 'x-request-id': requestId },
+      },
+    );
+  } catch (error) {
+    if (error instanceof ContentPublicationError) {
+      const stale = error.code === 'STALE_VERSION';
+      return problemResponse(
+        new ApiProblemError({
+          status: stale ? 409 : 422,
+          code: stale ? 'STALE_PUBLICATION_VERSION' : 'CONTENT_NOT_PUBLISHABLE',
+          title: stale ? 'Publication changed' : 'Content is not publishable',
+          detail: stale
+            ? 'A newer publication already exists.'
+            : 'The draft does not satisfy publication requirements.',
+          ...(error.issues.length
+            ? { fieldErrors: { content: error.issues } }
+            : {}),
+        }),
+        requestId,
+      );
+    }
+    return problemResponse(error, requestId);
+  }
+};
