@@ -21,8 +21,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 ## Aktuální stav
 
 - Etapa `02-database-auth` je dokončená; následuje `P3-01`.
-- Pracovní větev: `main`; lokální i vzdálený `main` ukazují na merge commit
-  `acaa5cd` z PR `#16`.
+- Pracovní větev: `agent/p2-review-followup`, založená z `main` na merge commitu
+  `acaa5cd`; sleduje stejnojmennou větev na `origin`.
 - Etapa 1 je sloučená do `main`; uživatel potvrdil úspěšný Railway deploy, proto
   je `P1-11` uzavřen.
 - Nejnovější dokončený implementační úkol je `P2-10`; `P2-07` až `P2-10` jsou
@@ -30,11 +30,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   sloučený přes PR `#14` na merge commitu `e286ef6`.
 - Post-merge CI běh `29808091210` pro `acaa5cd` prošel; joby `application` i
   `static-site` skončily úspěšně včetně PostgreSQL migrace/seed, E2E a auditu.
-- Lokálně je dokončený, ale necommitnutý follow-up ke dvěma funkčním CodeRabbit
-  připomínkám z PR `#16`; podrobnosti a ověření jsou níže.
-- Lokálně je také necommitnutá změna projektových pokynů, která zavádí povinný
-  závěrečný security review, code review a okamžité zapracování nálezů pro
-  každou etapu.
+- Follow-up ke dvěma funkčním CodeRabbit připomínkám z PR `#16` je commit
+  `d061d73`; změna projektových pokynů je commit `928dab5`. Oba jsou pushnuté na
+  `origin/agent/p2-review-followup`, ale zatím nemají PR ani merge.
 - Následná údržba GitHub Actions pro Node 24 je sloučená přes PR `#15` na merge
   commitu `48c11fc`; CI na `main` je zelené bez anotací.
 - Railway packaging hotfix je commit `02e3b43`; je pushnutý do
@@ -94,18 +92,17 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Rate-limit kontrakt nemá záměrně procesový produkční store. Chráněný endpoint
   se nesmí zapnout, dokud staging/production nepoužije atomický sdílený provider
   a environment-keyed HMAC subjecty; výpadek store je fail-closed.
-- Worktree není čistý: obsahuje schválenou necommitnutou opravu review, změnu
-  projektových pokynů, tento handover a devět nesledovaných duplicitních souborů
-  s příponou ` 2` v onboarding/domain/database části. Původ duplicit není
-  potvrzený; bez pokynu je necommitovat ani nemazat.
+- Worktree obsahuje pouze devět nesledovaných duplicitních souborů s příponou
+  ` 2` v onboarding/domain/database části. Původ duplicit není potvrzený; bez
+  pokynu je necommitovat ani nemazat.
 
 ## Doporučený další krok
 
-Po schválení commitnout a publikovat follow-up k PR `#16` a samostatnou změnu
-projektových pokynů, následně pokračovat `P3-01`: schéma
+Po samostatném schválení vytvořit PR z `agent/p2-review-followup` a sloučit jej;
+následně pokračovat `P3-01`: schéma
 program/content/speakers/partners/assets/publications.
 
-## Dokončená lokální oprava review PR `#16`
+## Dokončená oprava review PR `#16`
 
 - `RateLimit-Reset` nyní vrací relativní `retryAfterSeconds` místo Unix epoch
   timestampu; regresní test přesně ověřuje hodnotu hlavičky.
@@ -124,6 +121,9 @@ program/content/speakers/partners/assets/publications.
   HTML/58 assets.
 - Nízkohodnotový návrh na sdílení dvou regex konstant zůstal záměrně bez změny.
   Na GitHubu zatím nebyla odeslána odpověď ani resolve review vláken.
+- Implementace je commit `d061d73`, pushnutý na
+  `origin/agent/p2-review-followup`; projektový review gate je commit `928dab5`
+  na stejné větvi.
 
 ## Dokončená práce (`P2-10`)
 
