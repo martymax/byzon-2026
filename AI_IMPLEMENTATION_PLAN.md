@@ -1446,7 +1446,7 @@ závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 
 **Závislost:** `BLOCKER-TKT-01` až `TKT-04` musí být vyřešeny pro finální apply logiku.
 
-- [ ] `P4-01` Tickets/import schema, HMAC normalizace, test vectors a pepper rotation runbook.
+- [~] `P4-01` Tickets/import schema, HMAC infrastruktura, test vectors a pepper rotation runbook. Schéma a rotační mechanismus jsou implementované bez raw kódu; produkční normalizér a bezpečnostní akceptace claimu čekají na `BLOCKER-TKT-04`.
 - [ ] `P4-02` Admin upload/staging/validation/preview bez změny ticketů.
 - [ ] `P4-03` Transakční idempotentní apply a stavová historie.
 - [ ] `P4-04` Manual code claim endpoint s lockem, rate limitem a generickými chybami.

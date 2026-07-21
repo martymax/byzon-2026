@@ -20,6 +20,24 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Etapa 4 byla zahájena na lokální větvi `stage/04-tickets`. Bezpečně
+  oddělitelná část `P4-01` je rozpracovaná: event-scoped ticket/import/history a
+  claim-attempt schéma, HMAC-SHA-256 rozhraní s active/previous pepperem,
+  stabilní infrastrukturní test vector a rotační runbook. Databáze ani staging
+  neukládají raw ticket kód; normalizace je povinně injektovaná a do potvrzení
+  `BLOCKER-TKT-04` nic netrimuje ani nepřepisuje. Produkční normalizér, SimpleShop
+  mapping/apply a claim zůstávají blokované `BLOCKER-TKT-01` až `TKT-04`.
+- Security review a následný code review rozpracované části `P4-01` byly
+  provedeny před sloučením. Opravené nálezy: odstranění volného staging JSON,
+  který mohl nést raw kód, event-scoped membership FK aktéra historie, validace
+  všech claim hashů a kladné retence a použití skutečných unique constraints
+  pro cíle složených PostgreSQL FK. Regresní integrační testy ověřují neplatnou
+  aktivaci bez držitele, cross-event import row a cross-event aktéra historie.
+- Migrace `0004_famous_donald_blake.sql` a seed prošly nad izolovanou lokální
+  PostgreSQL. Celý `pnpm run ci` následně prošel se zapnutými integračními testy:
+  81 databázových a 59 conference testů, format, lint, typecheck, produkční
+  Next/worker build a statický smoke 25 HTML/58 assetů. Dočasná databáze byla po
+  ověření odstraněna.
 - Nezávislý follow-up review etapy 3 byl zapracován: publish nyní ověřuje
   checksum schváleného preview a sdílí eventový advisory lock s CRUD, ETag
   zahrnuje publication version, admin umí plnohodnotně upravovat obsah a vazby
