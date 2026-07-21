@@ -92,7 +92,7 @@ export const rateLimitHeaders = (
 ): Record<string, string> => ({
   'ratelimit-limit': String(decision.limit),
   'ratelimit-remaining': String(decision.remaining),
-  'ratelimit-reset': String(Math.ceil(decision.resetAt.getTime() / 1_000)),
+  'ratelimit-reset': String(decision.retryAfterSeconds),
   ...(decision.allowed
     ? {}
     : { 'retry-after': String(decision.retryAfterSeconds) }),

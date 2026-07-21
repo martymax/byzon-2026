@@ -31,11 +31,19 @@ const authProblem = (status: number): ApiProblemError => {
   });
 };
 
-const authRequest = (request: Request, path: string): Request =>
-  new Request(new URL(path, request.url), {
+const authRequest = (
+  request: Request,
+  path: string,
+  includeCookie = true,
+): Request => {
+  const headers = new Headers(request.headers);
+  if (!includeCookie) headers.delete('cookie');
+
+  return new Request(new URL(path, request.url), {
     method: 'POST',
-    headers: request.headers,
+    headers,
   });
+};
 
 export const logoutAllSessions = async (
   request: Request,
@@ -49,25 +57,28 @@ export const logoutAllSessions = async (
       return problemResponse(authProblem(403), requestId);
     }
 
+    // Ask Better Auth for its exact cookie-expiration headers before the
+    // irreversible revocation. Omitting the cookie keeps this request from
+    // deleting the caller's current session.
+    const cookieClearance = await auth.handler(
+      authRequest(request, '/api/auth/sign-out', false),
+    );
+    if (!cookieClearance.ok) {
+      return problemResponse(authProblem(cookieClearance.status), requestId);
+    }
+
     const revoked = await auth.handler(
       authRequest(request, '/api/auth/revoke-sessions'),
     );
     if (!revoked.ok)
       return problemResponse(authProblem(revoked.status), requestId);
 
-    const signedOut = await auth.handler(
-      authRequest(request, '/api/auth/sign-out'),
-    );
-    if (!signedOut.ok) {
-      return problemResponse(authProblem(signedOut.status), requestId);
-    }
-
     const headers = new Headers({
       'cache-control': 'no-store',
       'content-type': 'application/json',
       'x-request-id': requestId,
     });
-    for (const cookie of signedOut.headers.getSetCookie()) {
+    for (const cookie of cookieClearance.headers.getSetCookie()) {
       headers.append('set-cookie', cookie);
     }
 

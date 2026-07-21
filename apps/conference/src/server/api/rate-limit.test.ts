@@ -95,6 +95,7 @@ describe('rate limit abstraction', () => {
           'retry-after': '42',
           'ratelimit-limit': '5',
           'ratelimit-remaining': '0',
+          'ratelimit-reset': '42',
         },
       });
     }

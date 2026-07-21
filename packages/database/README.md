@@ -12,6 +12,17 @@ pnpm --filter @byzon/database db:generate
 
 Review both the SQL and `drizzle/meta/_journal.json` before committing them.
 
+Migration `0002_superb_roulette.sql` adds the event-scoped content skeleton:
+program days, venues, rooms, sessions, speakers, partners, practical pages,
+FAQs, private asset metadata and publication snapshots. Cross-table references
+include `event_id`, so a record cannot attach an asset, room, speaker or
+publisher from another event.
+
+Publication payload, checksum, version and publisher metadata are immutable in
+PostgreSQL. Only synchronization progress may be updated; publication rows
+cannot be deleted. Public delivery must use a publication snapshot rather than
+reading draft rows directly.
+
 ## Apply migrations and seed
 
 Both commands require an explicit `DATABASE_URL`. Never point local commands at
@@ -25,6 +36,32 @@ pnpm --filter @byzon/database db:seed
 The seed is idempotent. It creates the draft `byzon-2026` event and an archived
 second event used by event-isolation tests. Re-running it does not overwrite
 existing operational state or feature flags.
+
+## Import the legacy content draft
+
+Validate `static-site/data/content.json` and all referenced local assets without opening a
+database transaction:
+
+```bash
+pnpm --filter @byzon/database db:import-content \
+  --event-slug byzon-2026 --dry-run
+```
+
+Apply the validated import with an explicit database URL:
+
+```bash
+DATABASE_URL=postgresql://... \
+  pnpm --filter @byzon/database db:import-content \
+  --event-slug byzon-2026
+```
+
+The command emits a JSON report of skipped or unmapped source values. It writes
+only draft content, never creates reservations or publications, and refuses to
+overwrite non-draft speakers, partners, venues, pages or sessions. A
+transaction-scoped event lock serializes runs; repeating an unchanged source is
+a no-op. `content_import_provenance` records the source path and complete source
+SHA-256 for every imported target. Program section names remain reported rather
+than being guessed to be physical rooms, and invalid time ranges are skipped.
 
 ## Bootstrap the first organizer admin
 

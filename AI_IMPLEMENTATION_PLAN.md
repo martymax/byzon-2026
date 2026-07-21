@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v1.2
+> Stav: implementační plán v3.0
 >
 > Datum sestavení: 20. července 2026
 >
@@ -73,6 +73,27 @@ Tento soubor je hlavní prováděcí plán pro vývoj pomocí AI agentů. Produk
 - Po dokončení všech úkolů a akceptačních podmínek etapy se etapová větev sloučí přes PR do `staging`; vytvoření/aktualizace PR a merge vyžadují explicitní schválení uživatele.
 - Po staging CI a UAT se `staging` sloučí do `main` samostatným schváleným release krokem. Přímý push do `staging` nebo `main` se nepoužívá.
 - Schválení se nevztahuje automaticky na pozdější opravy nebo rozšíření. Každá dodatečná změna se znovu ověří a před commitem/pushem znovu schválí.
+
+### 1.6 Povinný závěrečný review gate každé etapy
+
+Po dokončení implementačních úkolů a před uzavřením nebo merge každé etapy
+proveď v tomto pořadí:
+
+1. **Security review:** zkontroluj celý rozsah etapy se zaměřením na threat
+   model, autentizaci a autorizaci, event scope/IDOR, ochranu secrets a PII,
+   validaci vstupů, dependency/configuration rizika, migrace a bezpečné chování
+   při chybách.
+2. **Code review:** zkontroluj úplný etapový diff/PR z hlediska funkční
+   správnosti, architektury, souběhu, idempotence, testovacího pokrytí,
+   provozních dopadů a udržovatelnosti. Rozliš actionable nálezy od
+   nízkohodnotových stylistických návrhů a false positives.
+3. **Okamžité zapracování nálezů:** všechny potvrzené actionable nálezy z obou
+   review oprav v rámci stejné etapy, doplň regresní testy a znovu spusť
+   relevantní kontroly a CI. Zamítnutý nález musí mít stručně zaznamenaný důvod.
+
+Etapu nelze označit za dokončenou ani sloučit, dokud nejsou potvrzené nálezy
+opravené a ověřené. Samotné provedení review bez následného zapracování nálezů
+nesplňuje tento gate. Commit, push a merge i zde podléhají schválením z §1.5.
 
 ---
 
@@ -1333,7 +1354,9 @@ No flaky retry jako trvalé řešení. Flaky test se opraví nebo dočasně izol
 
 ## 21. Implementační etapy
 
-Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
+Každá etapa končí nasaditelným a demonstrovatelným stavem a musí před uzavřením
+splnit security review, code review a zapracování nálezů podle §1.6. Pořadí je
+závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 
 ### Etapa 0 – rozhodnutí, inventura a bezpečný základ
 
@@ -1406,16 +1429,16 @@ Každá etapa končí nasaditelným a demonstrovatelným stavem. Pořadí je zá
 
 **Cíl:** DB se stane zdrojem pravdy pro aplikaci a administrátor spravuje/publikuje program bez vývojáře.
 
-- [ ] `P3-01` Schéma program/content/speakers/partners/assets/publications.
-- [ ] `P3-02` Jednorázový idempotentní import `static-site/data/content.json` do draftu; report nepřevedených polí.
-- [ ] `P3-03` Participant read API s ETag/version a filtry.
-- [ ] `P3-04` Mobile program, detail, speaker/partner/practical pages.
-- [ ] `P3-05` Admin CRUD pro dny, místnosti, sessions, speaker/partner/FAQ/page.
-- [ ] `P3-06` Validace času, kolizí, slugu, draft/published/archived.
-- [ ] `P3-07` Preview a atomická publication snapshot.
-- [ ] `P3-08` Program change detection a outbox bez odesílání e-mailu.
-- [ ] `P3-09` Veřejné content API a `.ics`.
-- [ ] `P3-10` Přístupnost a responzivní testy programu.
+- [x] `P3-01` Schéma program/content/speakers/partners/assets/publications.
+- [x] `P3-02` Jednorázový idempotentní import `static-site/data/content.json` do draftu; report nepřevedených polí.
+- [x] `P3-03` Participant read API s ETag/version a filtry.
+- [x] `P3-04` Mobile program, detail, speaker/partner/practical pages.
+- [x] `P3-05` Admin CRUD pro dny, místnosti, sessions, speaker/partner/FAQ/page.
+- [x] `P3-06` Validace času, kolizí, slugu, draft/published/archived.
+- [x] `P3-07` Preview a atomická publication snapshot.
+- [x] `P3-08` Program change detection a outbox bez odesílání e-mailu.
+- [x] `P3-09` Veřejné content API a `.ics`.
+- [x] `P3-10` Přístupnost a responzivní testy programu.
 
 **Akceptace:** participant nikdy nevidí draft; publish je atomický; stejná version vrací deterministický JSON; významná změna vytváří cílitelnou událost.
 
@@ -1797,3 +1820,15 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 1.6 | 20. 7. 2026 | Dokončen `P2-07`: přidán explicitní event-scoped organizer admin bootstrap přes auditované idempotentní CLI bez veřejného endpointu. |
 | 1.7 | 20. 7. 2026 | Dokončen `P2-08`: všechny audit zápisy používají sdílený helper s rekurzivní redakcí secrets/PII a databázovým negativním testem. |
 | 1.8 | 20. 7. 2026 | Dokončen `P2-09`: standardizovány problem responses, databázová idempotence mutací a víceinstanční rate-limit rozhraní. |
+| 1.9 | 21. 7. 2026 | Přidán povinný závěrečný gate každé etapy: security review, code review a okamžité zapracování potvrzených nálezů včetně regresních testů a opakovaného ověření. |
+| 2.0 | 21. 7. 2026 | Dokončen `P3-01`: přidáno event-scoped schéma programu, míst, řečníků, partnerů, praktického obsahu, privátních asset metadat a immutable publication snapshotů se složenými FK a PostgreSQL regresními testy. |
+| 2.1 | 21. 7. 2026 | Dokončen `P3-02`: přidán transakční idempotentní import stávajícího obsahu do draftu s validací assetů, provenance a reportem bezpečně nepřevedených hodnot. |
+| 2.2 | 21. 7. 2026 | Dokončen `P3-03`: participant program API čte pouze immutable publication snapshot, vynucuje event-scoped oprávnění a podporuje bezpečné filtry, version a privátní ETag revalidaci. |
+| 2.3 | 21. 7. 2026 | Dokončen `P3-04`: přidáno mobilní participant UI programu a detailů, adresář řečníků, partneři a praktické informace nad whitelisted published snapshot API. |
+| 2.4 | 21. 7. 2026 | Dokončen `P3-05`: přidáno event-scoped admin CRUD API a mobilní konzole pro program a obsah s autorizací, same-origin ochranou, optimistic version a auditem. |
+| 2.5 | 21. 7. 2026 | Dokončen `P3-06`: admin mutace validují event scope vazeb, lokální den a čas, kolize místností, unikátní slugy a bezpečné stavové/archivační vstupy. |
+| 2.6 | 21. 7. 2026 | Dokončen `P3-07`: kanonický preview a atomický publish vytváří immutable snapshot s optimistic publication version, auditem a synchronizační outbox událostí. |
+| 2.7 | 21. 7. 2026 | Dokončen `P3-08`: porovnání publication snapshotů detekuje významné změny času, stavu a místa a ukládá cílitelnou deduplikovanou outbox událost bez přímého odesílání. |
+| 2.8 | 21. 7. 2026 | Dokončen `P3-09`: veřejné bootstrap/content API a RFC 5545 kalendář čtou pouze whitelisted publication snapshot, podporují veřejnou ETag cache a stabilní UID/SEQUENCE. |
+| 2.9 | 21. 7. 2026 | Dokončen `P3-10`: mobilní Playwright ověřuje landmarky, skip link a focus, navigaci, touch targety, vodorovný overflow a reduced-motion chování participant shellu. |
+| 3.0 | 21. 7. 2026 | Dokončen závěrečný security/code review etapy 3: omezeny externí URL protokoly, zpřesněna timezone/FK validace, dokončen použitelný venue/reference/update admin flow a opraveno Unicode-safe ICS folding; nálezy mají regresní testy. |

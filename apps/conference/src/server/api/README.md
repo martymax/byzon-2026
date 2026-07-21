@@ -29,11 +29,27 @@ atomic shared provider before a protected endpoint is enabled.
 
 `POST /api/v1/auth/logout-all` requires a valid Better Auth session and an
 `Origin` header exactly matching the origin of `APP_BASE_URL`. It delegates
-session lifecycle to Better Auth: `revoke-sessions` removes every database
-session for the user and `sign-out` expires the caller's session cookies. A
-successful response is always `no-store` and returns the request ID. Auth
-failures use the same safe problem response contract as the other v1 routes.
+session lifecycle to Better Auth: first it prepares the exact cookie-expiration
+headers through `sign-out` without forwarding the caller cookie, then
+`revoke-sessions` removes every database session for the user. Cookie preparation
+must succeed before the irreversible revocation starts. A successful response is
+always `no-store` and returns the request ID. Auth failures use the same safe
+problem response contract as the other v1 routes.
 
 Session expiry, refresh age and freshness are explicitly configured in
 `server/auth.ts`. Keep these values aligned with the cookie lifetime and cover
 changes with the PostgreSQL-backed HTTP integration test.
+
+## Published participant program
+
+`GET /api/v1/events/:eventId/program` requires an active event membership with
+`program:published:read`. It reads only immutable `content_publications`
+snapshots, never draft entity tables. Missing access and missing publication use
+the same `404` response to avoid revealing event membership or content state.
+
+The optional `day`, `room`, `type` and positive integer `version` filters are
+bounded and reject unknown or repeated parameters. `day` accepts a published
+day ID or local ISO date; `room` accepts a published room ID or slug. Responses
+include the publication version and a representation-specific ETag. Authorized
+`If-None-Match` requests support lists, weak comparison and `304`; participant
+responses are private and vary by both Cookie and Authorization.
