@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v2.6
+> Stav: implementační plán v2.7
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1434,7 +1434,7 @@ závazné, pokud nové rozhodnutí výslovně nezmění závislosti.
 - [x] `P3-05` Admin CRUD pro dny, místnosti, sessions, speaker/partner/FAQ/page.
 - [x] `P3-06` Validace času, kolizí, slugu, draft/published/archived.
 - [x] `P3-07` Preview a atomická publication snapshot.
-- [ ] `P3-08` Program change detection a outbox bez odesílání e-mailu.
+- [x] `P3-08` Program change detection a outbox bez odesílání e-mailu.
 - [ ] `P3-09` Veřejné content API a `.ics`.
 - [ ] `P3-10` Přístupnost a responzivní testy programu.
 
@@ -1826,3 +1826,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 2.4 | 21. 7. 2026 | Dokončen `P3-05`: přidáno event-scoped admin CRUD API a mobilní konzole pro program a obsah s autorizací, same-origin ochranou, optimistic version a auditem. |
 | 2.5 | 21. 7. 2026 | Dokončen `P3-06`: admin mutace validují event scope vazeb, lokální den a čas, kolize místností, unikátní slugy a bezpečné stavové/archivační vstupy. |
 | 2.6 | 21. 7. 2026 | Dokončen `P3-07`: kanonický preview a atomický publish vytváří immutable snapshot s optimistic publication version, auditem a synchronizační outbox událostí. |
+| 2.7 | 21. 7. 2026 | Dokončen `P3-08`: porovnání publication snapshotů detekuje významné změny času, stavu a místa a ukládá cílitelnou deduplikovanou outbox událost bez přímého odesílání. |

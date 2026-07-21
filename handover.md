@@ -20,6 +20,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `P3-08` je dokončený a před commitem: snapshot diff detekuje změnu času,
+  místnosti, stavu/zrušení, odebrání session i přejmenování/přesun místnosti.
+  Publish ukládá jen při neprázdném cíli deduplikovanou `program.changed`
+  outbox událost s publication version a přesnými session IDs; nic neodesílá.
+- Conference sada prošla 50 testy včetně canonical hash, removed/room rename
+  projekce a PostgreSQL publish změněného času s cílitelným pending outboxem.
 - `P3-07` je dokončený a před commitem: admin preview a atomický publish pod
   transaction-scoped zámkem, canonical JSON/SHA-256, expected previous version,
   immutable publication, audit a `content.published` outbox pro následnou

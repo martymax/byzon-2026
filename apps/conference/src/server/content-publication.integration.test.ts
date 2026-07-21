@@ -69,6 +69,7 @@ integration('content publication integration', () => {
       expectedPreviousVersion: 0,
     });
     expect(published.checksumSha256).toBe(first.checksumSha256);
+    expect(published.significantSessionIds).toEqual([]);
     const publication = await client.db.query.contentPublications.findFirst({
       where: eq(schema.contentPublications.eventId, eventId),
     });
@@ -117,5 +118,33 @@ integration('content publication integration', () => {
       .from(schema.contentPublications)
       .where(eq(schema.contentPublications.eventId, eventId));
     expect(publications!.value).toBe(1);
+  });
+
+  it('targets significant program changes through a deduplicated outbox event', async () => {
+    await client.db
+      .update(schema.programSessions)
+      .set({
+        startsAt: new Date('2026-09-18T09:00:00Z'),
+        endsAt: new Date('2026-09-18T10:00:00Z'),
+      })
+      .where(eq(schema.programSessions.id, sessionId));
+    const published = await publishContent(client.db, {
+      eventId,
+      actorId: publisherId,
+      requestId: crypto.randomUUID(),
+      expectedPreviousVersion: 1,
+    });
+    expect(published.significantSessionIds).toEqual([sessionId]);
+    const change = await client.db.query.outboxEvents.findFirst({
+      where: and(
+        eq(schema.outboxEvents.eventId, eventId),
+        eq(schema.outboxEvents.type, 'program.changed'),
+      ),
+    });
+    expect(change).toMatchObject({
+      deduplicationKey: 'program.changed:2',
+      status: 'pending',
+      payload: { version: 2, sessionIds: [sessionId] },
+    });
   });
 });

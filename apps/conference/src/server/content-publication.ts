@@ -220,7 +220,67 @@ export interface PublicationPreview {
   version: number;
   checksumSha256: string;
   snapshot: Record<string, unknown>;
+  significantSessionIds: string[];
 }
+
+const snapshotCollection = (
+  snapshot: Record<string, unknown>,
+  key: 'sessions' | 'rooms',
+): Array<Record<string, unknown>> =>
+  ((snapshot.program as Record<string, unknown> | undefined)?.[key] as
+    Array<Record<string, unknown>> | undefined) ?? [];
+
+export const detectSignificantProgramChanges = (
+  previous: Record<string, unknown> | null,
+  current: Record<string, unknown>,
+): string[] => {
+  if (!previous) return [];
+  const previousSessions = new Map(
+    snapshotCollection(previous, 'sessions').map((item) => [
+      String(item.id),
+      item,
+    ]),
+  );
+  const currentSessions = new Map(
+    snapshotCollection(current, 'sessions').map((item) => [
+      String(item.id),
+      item,
+    ]),
+  );
+  const previousRooms = new Map(
+    snapshotCollection(previous, 'rooms').map((item) => [
+      String(item.id),
+      item,
+    ]),
+  );
+  const changedRooms = new Set(
+    snapshotCollection(current, 'rooms')
+      .filter((room) => {
+        const before = previousRooms.get(String(room.id));
+        return (
+          before &&
+          ['name', 'venueId'].some((field) => before[field] !== room[field])
+        );
+      })
+      .map((room) => String(room.id)),
+  );
+  const changed = new Set<string>();
+  for (const [id, before] of previousSessions) {
+    const after = currentSessions.get(id);
+    if (!after) {
+      changed.add(id);
+      continue;
+    }
+    if (
+      ['startsAt', 'endsAt', 'roomId', 'status'].some(
+        (field) => before[field] !== after[field],
+      ) ||
+      (typeof after.roomId === 'string' && changedRooms.has(after.roomId))
+    )
+      changed.add(id);
+  }
+  return [...changed].sort();
+};
 
 export const previewContentPublication = async (
   db: Database,
@@ -238,6 +298,10 @@ export const previewContentPublication = async (
     version: (previous?.version ?? 0) + 1,
     checksumSha256: checksumSnapshot(snapshot),
     snapshot,
+    significantSessionIds: detectSignificantProgramChanges(
+      previous?.snapshot ?? null,
+      snapshot,
+    ),
   };
 };
 
@@ -266,6 +330,10 @@ export const publishContent = async (
       version: input.expectedPreviousVersion + 1,
       checksumSha256: checksumSnapshot(snapshot),
       snapshot,
+      significantSessionIds: detectSignificantProgramChanges(
+        previous?.snapshot ?? null,
+        snapshot,
+      ),
     };
     const publicationId = generateUuidV7();
     await transaction.insert(schema.contentPublications).values({
@@ -289,6 +357,20 @@ export const publishContent = async (
       },
       deduplicationKey: `content.published:${result.version}`,
     });
+    if (result.significantSessionIds.length)
+      await transaction.insert(schema.outboxEvents).values({
+        id: generateUuidV7(),
+        eventId: input.eventId,
+        type: 'program.changed',
+        aggregateType: 'content_publication',
+        aggregateId: publicationId,
+        payload: {
+          publicationId,
+          version: result.version,
+          sessionIds: result.significantSessionIds,
+        },
+        deduplicationKey: `program.changed:${result.version}`,
+      });
     await writeAuditLog(transaction, {
       eventId: input.eventId,
       actorId: input.actorId,
@@ -300,6 +382,7 @@ export const publishContent = async (
       after: {
         version: result.version,
         checksumSha256: result.checksumSha256,
+        significantChanges: result.significantSessionIds.length,
       },
     });
     return result;
