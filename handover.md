@@ -20,11 +20,11 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
-- `P3-01` je dokončený a čeká na schválení commitu/pushe na lokální větvi
-  `stage/03-content`, založené z
+- `P3-01` je dokončený v commitu `ee854b5`, pushnutém na
+  `origin/stage/03-content`; větev byla založena z
   `b22a4df`; před implementací byly znovu ověřeny §1, §9.5, §9.9, §10.4 a
   Etapa 3 plánu, `README.md`, ADR-003, ADR-007, ADR-008, ADR-012 a inventura
-  obsahu. Zatím nevznikl commit ani push této etapy.
+  obsahu.
 - `P3-01` obsahuje event-scoped tabulky programu, míst, řečníků,
   partnerů, praktického obsahu, privátních asset metadat a publication snapshotů
   včetně složených eventových FK, databázových invariantů programu a ochrany
@@ -110,10 +110,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Doporučený další krok
 
-Po schválení commitnout a pushnout pouze scope `P3-01`. Samostatně stále zbývá
-vytvořit PR z `agent/p2-review-followup` a sloučit jej; před budoucím PR etapy 3
-musí být tento předek integrován. Následně pokračovat `P3-02`: idempotentní
-draftový import `data/content.json` s reportem nepřevedených polí.
+Pokračovat `P3-02`: idempotentní draftový import `data/content.json` s reportem
+nepřevedených polí. Samostatně stále zbývá vytvořit PR z
+`agent/p2-review-followup` a sloučit jej; před budoucím PR etapy 3 musí být tento
+předek integrován.
 
 ## Dokončená oprava review PR `#16`
 
