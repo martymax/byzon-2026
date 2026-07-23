@@ -59,6 +59,9 @@ importers:
       '@byzon/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@byzon/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       better-auth:
         specifier: 1.6.23
         version: 1.6.23(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@types/pg@8.20.0)(kysely@0.29.4)(pg@8.22.0))(next@16.2.10(@babel/core@7.29.7(supports-color@7.2.0))(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.22.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.10(@types/node@24.3.0)(vite@8.1.5(@types/node@24.3.0)(esbuild@0.28.1)(tsx@4.23.1)))
@@ -138,7 +141,14 @@ importers:
 
   packages/test-support: {}
 
-  packages/ui: {}
+  packages/ui:
+    devDependencies:
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
 
 packages:
 

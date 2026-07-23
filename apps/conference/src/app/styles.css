@@ -1,11 +1,5 @@
-:root {
-  --pink: #f5218e;
-  --pink-dark: #d3197a;
-  --ink: #140610;
-  --slate: #454f5e;
-  --soft: #faf7f9;
-  --line: #ececf0;
-}
+@import '@byzon/ui/styles.css';
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -17,13 +11,29 @@ body {
   min-height: 100vh;
   color: var(--slate);
   background:
-    radial-gradient(circle at 85% 10%, #fce1ef 0, transparent 32rem),
+    radial-gradient(
+      circle at 85% 10%,
+      var(--byzon-brand-glow) 0,
+      transparent 32rem
+    ),
     var(--soft);
-  font-family: var(--font-khand), system-ui, sans-serif;
-  font-size: 1.125rem;
+  font-family: var(--byzon-font-body);
+  font-size: 1rem;
+  line-height: 1.55;
 }
 a {
   color: inherit;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+.brand,
+.eyebrow,
+.button,
+.participant-nav {
+  font-family: var(--byzon-font-display);
 }
 .skip-link {
   position: absolute;
@@ -76,7 +86,7 @@ a {
   padding: 0.35rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--byzon-surface-translucent);
   font-size: 0.9rem;
 }
 .hero {
@@ -120,7 +130,7 @@ h1 span {
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: white;
-  box-shadow: 0 12px 40px rgba(20, 6, 16, 0.08);
+  box-shadow: var(--byzon-shadow-md);
 }
 .status-card strong,
 .status-card small {
@@ -136,8 +146,8 @@ h1 span {
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 50%;
-  background: #2aa56b;
-  box-shadow: 0 0 0 0.3rem #d9f3e7;
+  background: var(--byzon-success);
+  box-shadow: 0 0 0 0.3rem var(--byzon-success-soft);
 }
 .message-page {
   max-width: 42rem;
@@ -171,7 +181,7 @@ h1 span {
   overflow-x: auto;
   padding: 0.65rem max(1rem, calc((100vw - 72rem) / 2));
   border-block: 1px solid var(--line);
-  background: rgba(250, 247, 249, 0.94);
+  background: var(--byzon-surface-soft-translucent);
   backdrop-filter: blur(12px);
 }
 .participant-nav a {
@@ -215,7 +225,7 @@ h1 span {
 .filter-bar select {
   min-height: 2.8rem;
   padding: 0.45rem 0.7rem;
-  border: 1px solid #aeb4bd;
+  border: 1px solid var(--byzon-border-strong);
   border-radius: 0.7rem;
   background: white;
   color: var(--ink);
@@ -240,7 +250,7 @@ h1 span {
   border-radius: 1rem;
   background: white;
   text-decoration: none;
-  box-shadow: 0 5px 18px rgba(20, 6, 16, 0.04);
+  box-shadow: var(--byzon-shadow-sm);
 }
 .session-list time {
   color: var(--pink-dark);
@@ -370,7 +380,7 @@ h1 span {
   width: 100%;
   min-height: 2.8rem;
   padding: 0.5rem 0.7rem;
-  border: 1px solid #aeb4bd;
+  border: 1px solid var(--byzon-border-strong);
   border-radius: 0.65rem;
   background: white;
   color: var(--ink);

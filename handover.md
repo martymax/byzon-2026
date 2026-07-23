@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 22. července 2026
+> Poslední aktualizace: 23. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,6 +20,53 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Frontendový řez `F0-07` je implementovaný a lokálně sloučený do větve
+  `main`; push nebyl proveden.
+  `packages/ui` nyní obsahuje sémantické BYZON tokeny a přístupné primitives
+  pro akce, formuláře, feedback/stavy, karty, taby, dialog/sheet, live region,
+  potvrzení destruktivní akce, participant/admin navigaci, tabulku, seznam a
+  stránkování. Konferenční shell importuje jediný sdílený stylesheet a používá
+  Khand pro display a Inter pro aplikační text.
+- Unit sada `packages/ui` prošla 6 testy, samostatný UI typecheck a build jsou
+  zelené, `git diff --check` prošel a produkční Next build včetně vlastního
+  TypeScript kroku je úspěšný. Kontrast ověřených textových párů je nejméně
+  4,86:1 a primární akce 5,01:1. Vizuální localhost kontrola nemohla proběhnout,
+  protože v relaci nebyl dostupný in-app browser. Samostatný conference
+  typecheck se znovu zasekl bez výstupu jako v dřívějším známém lokálním
+  problému; TypeScript uvnitř produkčního Next buildu však dokončil úspěšně.
+  ESLint je lokálně blokovaný poškozeně načítanými transitive moduly
+  (`uri-js`/`optionator` vracejí neúplné exporty), nikoli nahlášeným nálezem v
+  aplikačním kódu.
+- Security a code review celého `F0-07` diffu proběhly před předáním. Nebyl
+  přidán žádný HTML injection sink, browser storage ani datový transport.
+  Zapracované review nálezy: dialog má programově svázaný název a bezpečný
+  cancel, formulář zachovává vlastní ARIA popisy a propaguje required stav,
+  taby mají klávesovou obsluhu, fixed navigace rezervuje prostor a toast
+  respektuje safe area, admin navigace má mobilní alternativu a všechny
+  interakce mají focus/pressed/reduced-motion stavy.
+- Revize plánu v3.1 proběhla v pracovním stromu větve `main`; změněny jsou
+  pouze plán a handover. Bez explicitního schválení nebyl vytvořen commit ani
+  push.
+- `AI_IMPLEMENTATION_PLAN.md` je přepracovaný na v3.1. Priority A má
+  dependency-driven frontendový track `F0`–`F6`, lifecycle
+  `not started → contract ready → UI ready (mocked) → integrated → UAT`,
+  capability matrix a explicitní kontrakt/fixture/mock/test gates. SimpleShop podklady blokují jen
+  produkční mapping, apply, claim a související UAT; frontendové kontrakty,
+  syntetické fixtures, navigace, formuláře a mockované cesty mohou pokračovat
+  paralelně. Nové rozhodovací body jsou `BLOCKER-AUTH-01` a
+  `BLOCKER-TKT-05`.
+- Odstraněno bylo 32 neversionovaných pracovních kopií se suffixem ` 2`/` 3`
+  a tři stejnojmenné ignorované `.next` artefakty. Audit před odstraněním
+  prokázal, že 15 kopií bylo byte-identických, 15 odpovídalo starším Git
+  verzím a dva Drizzle snapshoty byly neplatné mezistavy; žádná kopie
+  neobsahovala unikátní změnu. Kanonické soubory zůstaly zachované.
+- Ověření revize: Prettier, `git diff --check`, lokální Markdown odkazy,
+  unikátnost a úplnost 49 `F`, 162 `P`, 12 contract-slice a 19 blocker ID i
+  absence všech suffixových kopií prošly. Databázová sada v jednovláknovém
+  režimu prošla 66 testy, 15 integračních bylo bez lokální DB přeskočeno.
+  Conference Vitest a jeho `tsc` byly opakovaně blokované při importu
+  `kysely` v lokálním Node procesu bez assertion/type chyby a byly po dlouhém
+  nečinném čekání přerušeny; před commitem je zopakovat v běžném CI prostředí.
 - Etapa 4 byla zahájena na lokální větvi `stage/04-tickets`. Bezpečně
   oddělitelná část `P4-01` je rozpracovaná: event-scoped ticket/import/history a
   claim-attempt schéma, HMAC-SHA-256 rozhraní s active/previous pepperem,

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Khand } from 'next/font/google';
+import { Inter, Khand } from 'next/font/google';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
@@ -9,6 +9,11 @@ const khand = Khand({
   subsets: ['latin', 'latin-ext'],
   variable: '--font-khand',
   weight: ['400', '500', '600', '700'],
+});
+
+const inter = Inter({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-inter',
 });
 
 export const metadata: Metadata = {
@@ -28,7 +33,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="cs" className={khand.variable}>
+    <html lang="cs" className={`${khand.variable} ${inter.variable}`}>
       <body>
         <a className="skip-link" href="#main">
           Přejít na obsah
