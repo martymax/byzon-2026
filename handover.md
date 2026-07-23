@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 22. července 2026
+> Poslední aktualizace: 23. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,6 +20,29 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Revize plánu v3.1 proběhla v pracovním stromu větve `main`; změněny jsou
+  pouze plán a handover. Bez explicitního schválení nebyl vytvořen commit ani
+  push.
+- `AI_IMPLEMENTATION_PLAN.md` je přepracovaný na v3.1. Priority A má
+  dependency-driven frontendový track `F0`–`F6`, lifecycle
+  `not started → contract ready → UI ready (mocked) → integrated → UAT`,
+  capability matrix a explicitní kontrakt/fixture/mock/test gates. SimpleShop podklady blokují jen
+  produkční mapping, apply, claim a související UAT; frontendové kontrakty,
+  syntetické fixtures, navigace, formuláře a mockované cesty mohou pokračovat
+  paralelně. Nové rozhodovací body jsou `BLOCKER-AUTH-01` a
+  `BLOCKER-TKT-05`.
+- Odstraněno bylo 32 neversionovaných pracovních kopií se suffixem ` 2`/` 3`
+  a tři stejnojmenné ignorované `.next` artefakty. Audit před odstraněním
+  prokázal, že 15 kopií bylo byte-identických, 15 odpovídalo starším Git
+  verzím a dva Drizzle snapshoty byly neplatné mezistavy; žádná kopie
+  neobsahovala unikátní změnu. Kanonické soubory zůstaly zachované.
+- Ověření revize: Prettier, `git diff --check`, lokální Markdown odkazy,
+  unikátnost a úplnost 49 `F`, 162 `P`, 12 contract-slice a 19 blocker ID i
+  absence všech suffixových kopií prošly. Databázová sada v jednovláknovém
+  režimu prošla 66 testy, 15 integračních bylo bez lokální DB přeskočeno.
+  Conference Vitest a jeho `tsc` byly opakovaně blokované při importu
+  `kysely` v lokálním Node procesu bez assertion/type chyby a byly po dlouhém
+  nečinném čekání přerušeny; před commitem je zopakovat v běžném CI prostředí.
 - Etapa 4 byla zahájena na lokální větvi `stage/04-tickets`. Bezpečně
   oddělitelná část `P4-01` je rozpracovaná: event-scoped ticket/import/history a
   claim-attempt schéma, HMAC-SHA-256 rozhraní s active/previous pepperem,
