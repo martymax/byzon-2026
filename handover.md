@@ -20,8 +20,32 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Frontendový řez `F0-01` je implementovaný na větvi
+  `track/frontend-a/F0-01-route-map`.
+  [`docs/frontend-route-map.md`](docs/frontend-route-map.md) eviduje 39
+  Priority A routes: role/minimální permission, fázi a flag/gate, jediný
+  primární úkol/CTA, deep link/Back/state preservation, data/offline/PII a
+  povinné UX profily. Participant shell má závazných pět top-level cílů a
+  admin jednu adaptivní hierarchii. Devět chybějících jemnozrnných serverových
+  permission významů je explicitně zapsaných; UI je nesmí nahrazovat širším
+  role guardem.
+- Security a code review celého `F0-01` diffu proběhly. Dokumentace zakazuje
+  secret/PII v URL, historii, analytice a obecných cache, vyžaduje same-origin
+  allowlist pro `returnTo`, online-only zacházení s provozními PII a serverové
+  ověření event scope i oprávnění. Zapracovaný review nález sjednotil skip
+  link, focus management, jediný `h1`, viditelný focus, minimální touch target
+  a bezpečné zacházení s dynamickými identifikátory pro všechny shelly.
+- Ověření `F0-01` prošlo: Prettier, `git diff --check`, lokální Markdown
+  odkazy, úplnost 39 rout, tvar všech route řádků a shoda použitých
+  existujících permission názvů s doménovým registrem. Runtime testy se
+  nespouštěly, protože změna je pouze dokumentační.
+- Před `F0-01` se znovu objevilo 11 neversionovaných UI kopií se suffixem
+  ` 2`. Deset bylo byte-identických s kanonickými soubory a `index 2.ts`
+  odpovídal starému pre-`F0-07` exportu; žádná kopie neobsahovala unikátní
+  změnu. Kopie byly recoverably přesunuty mimo repozitář do
+  `/tmp/byzon-ui-duplicates.vyCfpv`; kanonické soubory zůstaly beze změny.
 - Frontendový řez `F0-07` je implementovaný a lokálně sloučený do větve
-  `main`; push nebyl proveden.
+  `main` a pushnutý na `origin/main` v merge commitu `d30c823`.
   `packages/ui` nyní obsahuje sémantické BYZON tokeny a přístupné primitives
   pro akce, formuláře, feedback/stavy, karty, taby, dialog/sheet, live region,
   potvrzení destruktivní akce, participant/admin navigaci, tabulku, seznam a
@@ -44,9 +68,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   taby mají klávesovou obsluhu, fixed navigace rezervuje prostor a toast
   respektuje safe area, admin navigace má mobilní alternativu a všechny
   interakce mají focus/pressed/reduced-motion stavy.
-- Revize plánu v3.1 proběhla v pracovním stromu větve `main`; změněny jsou
-  pouze plán a handover. Bez explicitního schválení nebyl vytvořen commit ani
-  push.
+- Revize plánu v3.1 je v commitu `cbefb74`; spolu s `F0-07` byla sloučena a
+  pushnuta do `origin/main` merge commitem `d30c823`.
 - `AI_IMPLEMENTATION_PLAN.md` je přepracovaný na v3.1. Priority A má
   dependency-driven frontendový track `F0`–`F6`, lifecycle
   `not started → contract ready → UI ready (mocked) → integrated → UAT`,

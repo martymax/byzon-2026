@@ -1741,9 +1741,10 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
 - `integration_gate`: každý capability kontrakt má vlastní schema review;
   produkční build prokazatelně neobsahuje mock transport ani fixtures.
 
-- [ ] `F0-01` Zapsat route mapu Priority A a pro každou route určit roli,
+- [x] `F0-01` Zapsat route mapu Priority A a pro každou route určit roli,
   fázi eventu, hlavní CTA, deep link, návratovou cestu a povinné UX stavy dle
-  §12.6.
+  §12.6. Implementováno v
+  [`docs/frontend-route-map.md`](docs/frontend-route-map.md).
 - [ ] `F0-02` Založit `CS-BASE-01`, error taxonomy, export conventions a
   registr slice v §7.10; feature DTO zůstávají vlastnictvím konkrétních
   `F`/`P` úkolů. Žádný kontrakt nesmí importovat DB nebo server-only modul.
