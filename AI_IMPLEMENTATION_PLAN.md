@@ -582,11 +582,13 @@ Do klientského bundle smí pouze výslovně bezpečné `NEXT_PUBLIC_*` hodnoty.
 nekonečným vlastníkem všech budoucích DTO. Konkrétní feature task spolu se svým
 serverovým partnerem vlastní pojmenovaný slice a jeho fixture. Stav se po review
 aktualizuje zde, takže downstream nezávisí na neurčitém „příslušném kontraktu“.
-Uvedené cesty jsou cílové, dokud soubor nevznikne:
+Uvedené cesty jsou cílové, dokud soubor nevznikne. Společné názvosloví,
+veřejné exporty a skládání endpointových problem unionů popisují verzované
+[`packages/domain/src/contracts/README.md`](packages/domain/src/contracts/README.md):
 
 | Slice ID | Scope | Cílové schema | Vlastník kontraktu/integrace | Konzumenti | Stav |
 | --- | --- | --- | --- | --- | --- |
-| `CS-BASE-01` | problem, session-expired, pagination a transport metadata | `packages/domain/src/contracts/base.ts` | `F0-02` | všechny `F*` | `not started` |
+| `CS-BASE-01` | problem, session-expired, pagination a transport metadata | `packages/domain/src/contracts/base.ts` | `F0-02` | všechny `F*` | `contract ready` |
 | `CS-ACT-01` | claim outcomes, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-04`, `P4-07` | `F1` | `not started` |
 | `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F2-07` | `F1`, `F2`, `F6` | `not started` |
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `not started`; současná schémata jsou server-local |
@@ -1745,9 +1747,11 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
   fázi eventu, hlavní CTA, deep link, návratovou cestu a povinné UX stavy dle
   §12.6. Implementováno v
   [`docs/frontend-route-map.md`](docs/frontend-route-map.md).
-- [ ] `F0-02` Založit `CS-BASE-01`, error taxonomy, export conventions a
+- [x] `F0-02` Založit `CS-BASE-01`, error taxonomy, export conventions a
   registr slice v §7.10; feature DTO zůstávají vlastnictvím konkrétních
   `F`/`P` úkolů. Žádný kontrakt nesmí importovat DB nebo server-only modul.
+  Implementováno v `@byzon/domain/contracts`; `CS-BASE-01` je
+  `contract ready`.
 - [ ] `F0-03` Založit fixture factory a validační harness v
   `packages/test-support`, včetně base problem, rolí a fází eventu; konkrétní
   feature fixtures dodává vlastník příslušného `CS-*` slice.

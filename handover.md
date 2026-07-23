@@ -20,8 +20,30 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Frontendový řez `F0-02` je implementovaný na větvi
+  `track/frontend-a/F0-02-contracts`. Nový veřejný subpath
+  `@byzon/domain/contracts` poskytuje striktní `CS-BASE-01`: bezpečně
+  omezenou `application/problem+json` obálku a factory pro endpointové kódy,
+  přesný `AUTH_SESSION_EXPIRED`, cursor pagination metadata, request ID/ETag
+  metadata a transport-neutral error taxonomy bez raw výjimek či payloadů.
+  Exportní a ownership konvence jsou v
+  `packages/domain/src/contracts/README.md`; feature DTO zůstávají mimo tento
+  řez.
+- Security a code review celého `F0-02` diffu proběhly. Zapracované nálezy:
+  cursor má transport-safe allowlist, ETag musí mít bezpečný quoted tvar,
+  `fieldErrors` odmítají prototype-pollution segmenty a import-boundary test
+  rekurzivně dovoluje jen Zod a relativní importy, které zůstávají uvnitř
+  `src/contracts`.
+- Ověření `F0-02` prošlo pro frozen offline lockfile, domain typecheck, 37
+  unit/architecture testů ve 4 souborech, domain build, veřejný
+  `@byzon/domain/contracts` subpath, Prettier a `git diff --check`. Běžný
+  `pnpm` shim postrádá spravovanou binárku, proto byl použit funkční
+  `corepack pnpm 11.15.1` a přímé lokální binárky. ESLint se znovu zasekl bez
+  výstupu déle než minutu ve známém lokálním problému a byl ukončen; žádný
+  lint nález nevypsal.
 - Frontendový řez `F0-01` je implementovaný na větvi
-  `track/frontend-a/F0-01-route-map`.
+  `track/frontend-a/F0-01-route-map` v commitu `ec6115f`, pushnutém na
+  `origin/track/frontend-a/F0-01-route-map`.
   [`docs/frontend-route-map.md`](docs/frontend-route-map.md) eviduje 39
   Priority A routes: role/minimální permission, fázi a flag/gate, jediný
   primární úkol/CTA, deep link/Back/state preservation, data/offline/PII a
