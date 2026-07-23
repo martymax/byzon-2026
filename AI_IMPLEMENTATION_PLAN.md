@@ -1752,9 +1752,11 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
   `F`/`P` úkolů. Žádný kontrakt nesmí importovat DB nebo server-only modul.
   Implementováno v `@byzon/domain/contracts`; `CS-BASE-01` je
   `contract ready`.
-- [ ] `F0-03` Založit fixture factory a validační harness v
+- [x] `F0-03` Založit fixture factory a validační harness v
   `packages/test-support`, včetně base problem, rolí a fází eventu; konkrétní
-  feature fixtures dodává vlastník příslušného `CS-*` slice.
+  feature fixtures dodává vlastník příslušného `CS-*` slice. Implementováno a
+  popsáno v
+  [`packages/test-support/README.md`](packages/test-support/README.md).
 - [ ] `F0-04` Zavést tenký typovaný API port a klienta nad nativním `fetch`,
   včetně abortu, problem responses, idempotency a bezpečného opakování čtení.
 - [ ] `F0-05` Zapojit MSW pouze pro dev/test přes stejný API port, přidat

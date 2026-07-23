@@ -20,8 +20,25 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Frontendový řez `F0-03` je implementovaný na větvi
+  `track/frontend-a/F0-03-fixtures`.
+  `@byzon/test-support` nyní poskytuje deterministickou fixture factory,
+  validační harness nad skutečným Zod schématem, validované a hluboce zmrazené
+  base/session-expired problem fixtures a úplnou matici 7 eventových rolí × 5
+  fází. Feature fixtures zůstávají vlastnictvím příslušného `CS-*` slice.
+- Security a code review celého `F0-03` diffu proběhly. Zapracované nálezy:
+  vstup i výstup fixture musí být JSON-safe, validační chyba neobsahuje raw
+  payload, issue metadata i výstupy jsou zmrazené, role/fáze procházejí
+  validací a dependency test zakazuje database/framework/server importy i
+  runtime závislost produkčních aplikací na `@byzon/test-support`.
+- Ověření `F0-03` prošlo pro frozen offline lockfile, test-support typecheck,
+  12 unit/architecture/export testů ve 4 souborech, build, veřejný
+  `@byzon/test-support/fixtures` subpath, Prettier a `git diff --check`. ESLint
+  se opět zasekl bez výstupu déle než minutu ve známém lokálním problému a byl
+  ukončen; žádný lint nález nevypsal.
 - Frontendový řez `F0-02` je implementovaný na větvi
-  `track/frontend-a/F0-02-contracts`. Nový veřejný subpath
+  `track/frontend-a/F0-02-contracts` v commitu `bd69221`, pushnutém na
+  `origin/track/frontend-a/F0-02-contracts`. Nový veřejný subpath
   `@byzon/domain/contracts` poskytuje striktní `CS-BASE-01`: bezpečně
   omezenou `application/problem+json` obálku a factory pro endpointové kódy,
   přesný `AUTH_SESSION_EXPIRED`, cursor pagination metadata, request ID/ETag
