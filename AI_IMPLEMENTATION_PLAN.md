@@ -1757,7 +1757,7 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
   produkčního grafu.
 - [ ] `F0-06` Přidat component/axe harness, helpers pro role/fáze a cílové
   viewporty `375 × 667`, `768 × 1024` a `1280 × 800`.
-- [ ] `F0-07` Zpevnit BYZON design tokeny a dodat přístupné primitives z
+- [x] `F0-07` Zpevnit BYZON design tokeny a dodat přístupné primitives z
   §12.7 v `packages/ui`, včetně focus, formulářových chyb, safe-area a
   reduced-motion variant; nevytvářet druhý paralelní UI kit.
 
