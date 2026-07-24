@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 23. července 2026
+> Poslední aktualizace: 24. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,8 +20,36 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Frontendový řez `F0-04` je implementovaný na stacked větvi
+  `track/frontend-a/F0-04-api-client` nad pushnutým `F0-03`. Nový
+  [`apps/conference/src/lib/api/README.md`](apps/conference/src/lib/api/README.md)
+  popisuje tenký typovaný `ApiPort` a klienta nad nativním `fetch`. Endpointy
+  deklarují přesná request/success/problem schémata, allowlist problem kódů,
+  response, retry a idempotency policy; klient používá pouze same-origin
+  `/api/v1`, validuje request i response, rozlišuje abort, timeout, offline,
+  transport, neplatnou odpověď, expirovanou session a doménový problem.
+- Security a code review celého `F0-04` diffu proběhly. Zapracované nálezy:
+  URL se normalizuje a odmítá traversal, externí i chybně kódované cesty;
+  explicitní base URL je povolená jen proti známému browser originu; request
+  a response mají byte limity a response se čte omezeným streamem; timeout a
+  caller abort fungují i při injektovaném fetchi ignorujícím signál; `304`
+  vyžaduje shodný ETag; problem status i request ID se musí shodovat s hlavičkou
+  a endpointem; runtime klient znovu ověřuje endpoint policy, takže ji nelze
+  obejít ručně sestaveným objektem. Raw výjimky, request payloady ani nevalidní
+  response bodies se nevracejí do UI.
+- Ověření `F0-04` prošlo pro domain i conference typecheck, domain build,
+  42 unit/architecture testů v 5 souborech, Prettier, `git diff --check` a
+  produkční Next build. Mutace se v regresních testech nikdy automaticky
+  neopakují, zatímco pouze explicitní safe reads mají nejvýše dva bounded
+  retry pokusy. ESLint se i nad přesně omezenými změněnými soubory zasekl bez
+  výstupu déle než minutu a byl ukončen; žádný lint nález nevypsal.
+- Při typechecku bylo nalezeno šest ignorovaných `.next/types` souborů se
+  suffixem ` 2`/` 3`. Všechny byly byte-identické s kanonickými protějšky a
+  byly recoverably přesunuty do `/tmp/byzon-next-types.UXYN5d`; žádná unikátní
+  změna se neztratila.
 - Frontendový řez `F0-03` je implementovaný na větvi
-  `track/frontend-a/F0-03-fixtures`.
+  `track/frontend-a/F0-03-fixtures` v commitu `ea78775`, pushnutém na
+  `origin/track/frontend-a/F0-03-fixtures`.
   `@byzon/test-support` nyní poskytuje deterministickou fixture factory,
   validační harness nad skutečným Zod schématem, validované a hluboce zmrazené
   base/session-expired problem fixtures a úplnou matici 7 eventových rolí × 5

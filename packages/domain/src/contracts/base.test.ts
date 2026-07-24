@@ -9,6 +9,8 @@ import {
   cursorPageInfoSchema,
   cursorPaginationRequestSchema,
   defineApiProblemSchema,
+  etagSchema,
+  idempotencyKeySchema,
   problemFieldErrorsSchema,
   problemTypeForCode,
   sessionExpiredProblemSchema,
@@ -172,6 +174,17 @@ describe('pagination and transport metadata', () => {
         responseBody: 'not metadata',
       }).success,
     ).toBe(false);
+  });
+
+  it('validates cache and idempotency header values', () => {
+    expect(etagSchema.parse('W/"publication-42"')).toBe('W/"publication-42"');
+    expect(etagSchema.safeParse('"safe"\r\nx-secret: exposed').success).toBe(
+      false,
+    );
+    expect(idempotencyKeySchema.parse('request-key-0001')).toBe(
+      'request-key-0001',
+    );
+    expect(idempotencyKeySchema.safeParse('short').success).toBe(false);
   });
 });
 

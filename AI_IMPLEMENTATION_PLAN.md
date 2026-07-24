@@ -1757,8 +1757,10 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
   feature fixtures dodává vlastník příslušného `CS-*` slice. Implementováno a
   popsáno v
   [`packages/test-support/README.md`](packages/test-support/README.md).
-- [ ] `F0-04` Zavést tenký typovaný API port a klienta nad nativním `fetch`,
+- [x] `F0-04` Zavést tenký typovaný API port a klienta nad nativním `fetch`,
   včetně abortu, problem responses, idempotency a bezpečného opakování čtení.
+  Implementováno a popsáno v
+  [`apps/conference/src/lib/api/README.md`](apps/conference/src/lib/api/README.md).
 - [ ] `F0-05` Zapojit MSW pouze pro dev/test přes stejný API port, přidat
   jednoznačný indikátor mock režimu a build check proti importu mocků do
   produkčního grafu.

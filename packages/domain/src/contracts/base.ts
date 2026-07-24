@@ -6,6 +6,7 @@ const PROBLEM_TYPE_PATTERN = /^urn:byzon:problem:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const FIELD_PATH_PATTERN = /^[A-Za-z0-9_.[\]-]{1,128}$/;
 const OPAQUE_CURSOR_PATTERN = /^[A-Za-z0-9._~:=-]{1,512}$/;
 const ETAG_PATTERN = /^(?:W\/)?"[\x21\x23-\x7E]{1,510}"$/;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 
 export const MAX_PAGE_SIZE = 100;
 export const MAX_PROBLEM_FIELDS = 50;
@@ -143,7 +144,13 @@ export const cursorPageInfoSchema = z.strictObject({
 
 export type CursorPageInfo = z.infer<typeof cursorPageInfoSchema>;
 
-const etagSchema = z.string().regex(ETAG_PATTERN, 'Invalid ETag');
+export const etagSchema = z.string().regex(ETAG_PATTERN, 'Invalid ETag');
+
+export const idempotencyKeySchema = z
+  .string()
+  .regex(IDEMPOTENCY_KEY_PATTERN, 'Invalid idempotency key');
+
+export type IdempotencyKey = z.infer<typeof idempotencyKeySchema>;
 
 export const transportMetadataSchema = z.strictObject({
   requestId: requestIdSchema,
