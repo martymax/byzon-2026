@@ -29,3 +29,9 @@ invented success DTO fields.
 `fixtureEventRoles`, `fixtureEventPhases` and `fixtureContextMatrix` provide
 explicit test axes. The phase list mirrors the approved plan but is not a
 replacement for a capability's server response contract.
+
+`selectFixtureContexts` creates a frozen deterministic subset for a component
+test matrix and `fixtureContextName` supplies a stable test label. Shared
+`targetViewports` from `@byzon/test-support/viewports` are the only approved
+visual/component/E2E smoke sizes: phone `375 × 667`, tablet `768 × 1024` and
+desktop `1280 × 800`.

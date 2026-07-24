@@ -44,3 +44,26 @@ export const fixtureContextMatrix = validateFixture({
     eventRoles.map((role) => ({ role, phase })),
   ),
 });
+
+export interface FixtureContextSelection {
+  readonly roles?: readonly FixtureEventRole[];
+  readonly phases?: readonly FixtureEventPhase[];
+}
+
+export const selectFixtureContexts = (
+  selection: FixtureContextSelection = {},
+): readonly FixtureContext[] => {
+  const roles = new Set(selection.roles ?? fixtureEventRoles);
+  const phases = new Set(selection.phases ?? fixtureEventPhases);
+  return Object.freeze(
+    fixtureContextMatrix.filter(
+      ({ role, phase }) => roles.has(role) && phases.has(phase),
+    ),
+  );
+};
+
+export const fixtureContextName = ({
+  role,
+  phase,
+}: FixtureContext): `${FixtureEventRole} @ ${FixtureEventPhase}` =>
+  `${role} @ ${phase}`;

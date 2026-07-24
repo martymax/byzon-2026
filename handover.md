@@ -20,8 +20,44 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
-- Frontendový řez `F0-05` je implementovaný, ale dosud necommitnutý na stacked
-  větvi `track/frontend-a/F0-05-msw-mocks` nad commitem `19cb6e2`. Přesně
+- Frontendový řez `F0-06` je implementovaný, ale dosud necommitnutý na stacked
+  větvi `track/frontend-a/F0-06-component-a11y` nad commitem `bce2a46`.
+  Samostatný Vitest Browser/Playwright component runner vykresluje React 19
+  komponenty ve skutečném headless Chromiu ve všech třech schválených
+  viewports `375 × 667`, `768 × 1024` a `1280 × 800`. Stabilní interní
+  `renderComponent` hranice používá accessible locators a skutečné keyboard/
+  pointer události; CI ji spouští po instalaci přesně připnutého Chromia.
+- `@byzon/test-support` poskytuje validované a hluboce zmrazené
+  `targetViewports`, deterministický `selectFixtureContexts` a stabilní
+  `fixtureContextName` pro role/phase matice. Page-level
+  `@axe-core/playwright` helper kontroluje WCAG A/AA a do CI chyby vypíše pouze
+  rule metadata a počet uzlů, nikdy raw DOM/HTML nebo text s možnou PII.
+  Playwright projekty i component instances čtou jediný sdílený viewport
+  registr.
+- Security a code review celého `F0-06` diffu proběhly. Zapracované nálezy:
+  component test runtime má architektonický zákaz DB/server importů;
+  produkční source/post-build skener nově odmítá Vitest Browser, axe Playwright
+  a `test/component` importy; testovací live-start override je explicitní a
+  výchozí full E2E dál čeká na DB-backed `/health/ready`; axe report rediguje
+  DOM obsah. Reálný browser smoke odhalil a opravil brand link menší než
+  minimální dotykový cíl přidáním sdíleného `44 px` tokenu.
+- Ověření `F0-06` prošlo pro frozen offline instalaci, celý workspace ESLint,
+  Prettier, typecheck, unit/integration testy a web/worker build. Bez lokální DB
+  prošlo 227 testů a 51 DB integračních scénářů bylo korektně přeskočeno.
+  Navíc prošly 3 Chromium component testy, 6 axe/keyboard/overflow smoke testů
+  a 3 reduced-motion smoke testy napříč třemi viewporty. Produkční build se
+  záměrně zapnutým mock flagem neobsahuje mock ani component/axe test runtime;
+  high dependency audit je čistý a zůstává jen známý moderate vývojový
+  `esbuild` přes `drizzle-kit`.
+- Úplný `pnpm test:e2e` lokálně nemohl doběhnout, protože výchozí
+  `/health/ready` správně hlásil chybějící PostgreSQL. Veřejná DB-independent
+  axe/responsive sada proto běžela přes explicitní live-start režim; GitHub CI
+  instaluje Chromium, migruje a seeduje PostgreSQL a poté spouští component i
+  úplnou E2E sadu. Další bezpečný frontendový krok je `F2-03`, protože hotový
+  `P3` může dodat `CS-CONTENT-01`; `F1-01` zatím čeká na společný kontrakt s
+  nedokončenými `P4-04`/`P4-07`.
+- Frontendový řez `F0-05` je implementovaný v commitu `bce2a46`, pushnutém na
+  `origin/track/frontend-a/F0-05-msw-mocks`. Přesně
   připnutý MSW `2.15.0` v dev/test používá stejný produkční `ApiPort` nad
   nativním `fetch`; Node harness i browser worker sdílejí kontraktem validované
   response helpers a feature handlers zůstávají u vlastníka příslušného
@@ -56,8 +92,7 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Dev server s mock přepínačem vrátil aplikaci i oficiální vygenerovaný worker;
   marker a indikátor byly přítomné pouze v dev chunku. Vizuální kontrola
   skutečné registrace a indikátoru nemohla proběhnout, protože v relaci nebyl
-  dostupný in-app browser. Příští krok je `F0-06`: component/axe harness,
-  role/fáze helpers a viewporty `375 × 667`, `768 × 1024`, `1280 × 800`.
+  dostupný in-app browser.
 - Frontendový řez `F0-04` je implementovaný na stacked větvi
   `track/frontend-a/F0-04-api-client` v commitu `19cb6e2`, pushnutém na
   `origin/track/frontend-a/F0-04-api-client` nad pushnutým `F0-03`. Nový

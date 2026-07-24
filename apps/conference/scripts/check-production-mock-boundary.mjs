@@ -6,6 +6,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDirectory, '..');
 const sourceRoot = resolve(appRoot, 'src');
 const mockRoot = resolve(sourceRoot, 'test/mocks');
+const componentTestRoot = resolve(sourceRoot, 'test/component');
 const instrumentationPath = resolve(sourceRoot, 'instrumentation-client.ts');
 const generatedWorkerPath = resolve(appRoot, 'public/mockServiceWorker.js');
 const buildRoot = resolve(appRoot, '.next');
@@ -29,6 +30,9 @@ const forbiddenRuntimePatterns = [
   ['mock environment switch', /NEXT_PUBLIC_BYZON_API_MOCKS/],
   ['mock worker asset', /mockServiceWorker\.js/],
   ['mock source path', /(?:\/|\\)test(?:\/|\\)mocks/],
+  ['Vitest browser runtime', /vitest-browser-react|vitest\/browser/],
+  ['axe Playwright runtime', /@axe-core\/playwright/],
+  ['component test source path', /(?:\/|\\)test(?:\/|\\)component/],
 ];
 
 const filesUnder = (directory) => {
@@ -77,6 +81,7 @@ const checkSourceBoundary = () => {
     if (
       file === instrumentationPath ||
       file.startsWith(`${mockRoot}/`) ||
+      file.startsWith(`${componentTestRoot}/`) ||
       /\.test\.[cm]?[jt]sx?$/.test(file)
     ) {
       continue;

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { targetViewports } from '@byzon/test-support/viewports';
 
 test('brand shell, manifest and health endpoints are available', async ({
   page,
@@ -20,7 +21,7 @@ test('brand shell, manifest and health endpoints are available', async ({
   expect(ready.ok()).toBeTruthy();
 });
 
-test('participant shell is keyboard accessible and responsive on mobile', async ({
+test('participant shell is keyboard accessible at every target viewport', async ({
   page,
 }) => {
   await page.goto('/app/program');
@@ -44,6 +45,12 @@ test('participant shell is keyboard accessible and responsive on mobile', async 
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth,
   }));
+  expect(targetViewports).toContainEqual(
+    expect.objectContaining({
+      width: page.viewportSize()?.width,
+      height: page.viewportSize()?.height,
+    }),
+  );
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
   for (const link of await navigation.getByRole('link').all()) {
     const box = await link.boundingBox();

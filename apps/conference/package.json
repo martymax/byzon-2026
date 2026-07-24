@@ -12,6 +12,7 @@
     "pretest": "pnpm --filter @byzon/database build && pnpm --filter @byzon/domain build",
     "start": "node .next/standalone/apps/conference/server.js",
     "test": "vitest run",
+    "test:components": "vitest run --config vitest.browser.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
