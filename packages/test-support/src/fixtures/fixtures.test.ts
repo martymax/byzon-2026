@@ -1,6 +1,8 @@
 import {
-  sessionExpiredProblemSchema,
   defineApiProblemSchema,
+  participantContentResponseSchema,
+  participantProgramResponseSchema,
+  sessionExpiredProblemSchema,
 } from '@byzon/domain/contracts';
 import { describe, expect, it } from 'vitest';
 
@@ -11,6 +13,10 @@ import {
   fixtureContextMatrix,
   fixtureEventPhases,
   fixtureEventRoles,
+  participantContentFixtures,
+  participantContentProblemFixtures,
+  participantProgramFixtures,
+  participantProgramProblemFixtures,
   selectFixtureContexts,
   sessionExpiredProblemFixture,
 } from './index.js';
@@ -31,6 +37,35 @@ describe('base problem fixtures', () => {
 
     expect(first).toEqual(second);
     expect(JSON.stringify(first)).not.toContain('@');
+  });
+});
+
+describe('content fixtures', () => {
+  it('uses the production response schemas for happy and empty states', () => {
+    expect(
+      participantProgramResponseSchema.parse(participantProgramFixtures.happy),
+    ).toEqual(participantProgramFixtures.happy);
+    expect(
+      participantProgramResponseSchema.parse(participantProgramFixtures.empty),
+    ).toEqual(participantProgramFixtures.empty);
+    expect(
+      participantContentResponseSchema.parse(participantContentFixtures.happy),
+    ).toEqual(participantContentFixtures.happy);
+    expect(
+      participantContentResponseSchema.parse(participantContentFixtures.empty),
+    ).toEqual(participantContentFixtures.empty);
+  });
+
+  it('exposes deterministic permission and domain-error problem states', () => {
+    expect(participantProgramProblemFixtures.permission!.code).toBe(
+      'PROGRAM_NOT_FOUND',
+    );
+    expect(participantProgramProblemFixtures.domain_error!.code).toBe(
+      'INVALID_PROGRAM_FILTERS',
+    );
+    expect(participantContentProblemFixtures.permission!.code).toBe(
+      'CONTENT_NOT_FOUND',
+    );
   });
 });
 

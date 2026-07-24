@@ -7,6 +7,10 @@ mock client. Enable browser mocks only for a local development compile:
 NEXT_PUBLIC_BYZON_API_MOCKS=enabled corepack pnpm --filter @byzon/conference dev
 ```
 
+The dev command builds `@byzon/domain` and `@byzon/test-support` first, so
+Turbopack consumes their emitted ESM runtime exports while TypeScript continues
+to use source declarations.
+
 The dev command generates an ignored `public/mockServiceWorker.js` from the
 exact pinned MSW package. Production build removes that generated file before
 compilation and scans both production source and `.next` deployment artifacts

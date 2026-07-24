@@ -43,3 +43,26 @@ slices may lower `MAX_PAGE_SIZE`, but may not accept an unbounded limit.
 `transportMetadataSchema` carries only validated correlation and cache
 metadata. Payloads, credentials, PII, raw headers and exception messages never
 belong in transport metadata.
+
+## Published content (`CS-CONTENT-01`)
+
+`content.ts` is the runtime boundary for the existing P3 published-program,
+participant-directory and anonymous public-content endpoints. The strict HTTP
+schemas reject unknown response fields; the separate publication-snapshot
+schemas may strip server-only keys before the result is validated again as an
+HTTP response.
+
+- Participant program and content require the server-side
+  `program:published:read` permission. A missing publication and denied event
+  access intentionally share the safe `*_NOT_FOUND` UI state.
+- Participant responses are private, revalidated by ETag and forbidden from
+  shared/service-worker offline caches.
+- Anonymous public content may use its existing short public cache. Offline
+  persistence remains gated by `CS-OFFLINE-01`; this slice does not cache it.
+- Speaker names and explicitly published profile copy are person-associated
+  public content. E-mail, user identity, ticket state, private notes and admin
+  metadata are absent from every response schema and synthetic fixture.
+- `publishedProgramSnapshotSchema` and
+  `publishedContentSnapshotSchema` exist only for server-side extraction.
+  Browser code consumes the strict `*ResponseSchema` exports through the typed
+  API port.

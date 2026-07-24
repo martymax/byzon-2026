@@ -4,14 +4,20 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./fixtures": "./src/fixtures/index.ts",
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./fixtures": {
+      "types": "./src/fixtures/index.ts",
+      "default": "./dist/fixtures/index.js"
+    },
     "./viewports": "./src/viewports.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
-    "pretest": "pnpm --filter @byzon/domain build",
+    "pretest": "pnpm --filter @byzon/domain build && pnpm run build",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

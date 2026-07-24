@@ -211,11 +211,17 @@ h1 span {
   font-size: clamp(3rem, 10vw, 6rem);
   line-height: 0.9;
 }
+[data-route-heading]:focus {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 0.35rem;
+}
 .filter-bar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 15rem));
   gap: 1rem;
   margin-block: 1.5rem;
+  padding: 0;
+  border: 0;
 }
 .filter-bar label {
   display: grid;
@@ -257,17 +263,36 @@ h1 span {
   color: var(--pink-dark);
   font-weight: 700;
 }
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  flex-wrap: wrap;
+}
+.session-meta > span:not(.status-label) {
+  color: var(--byzon-text-muted);
+}
+.status-label {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+  font-weight: 700;
+}
 .session-list strong,
 .card-grid strong {
   color: var(--ink);
   font-size: 1.25rem;
 }
 .session-list a:hover,
+.card-grid a:hover {
+  border-color: var(--pink);
+}
 .session-list a:focus-visible,
-.card-grid a:hover,
 .card-grid a:focus-visible {
   border-color: var(--pink);
-  outline: 2px solid transparent;
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
 }
 .card-grid {
   display: grid;
@@ -305,15 +330,27 @@ h1 span {
 .prose {
   display: grid;
   gap: 0.8rem;
+  max-width: 72ch;
   margin-block: 1.2rem;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 .text-link,
 .link-row a {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--byzon-touch-target);
   margin-top: 1rem;
   color: var(--pink-dark);
   font-weight: 700;
+}
+.text-link:focus-visible,
+.link-row a:focus-visible,
+.card-grid article a:focus-visible,
+.content-stack summary:focus-visible,
+.resource-action:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
 }
 .link-row {
   display: flex;
@@ -325,20 +362,78 @@ h1 span {
   gap: 1.2rem;
 }
 .content-stack details {
-  padding: 0.8rem 1rem;
+  padding-inline: 1rem;
   border-block: 1px solid var(--line);
   background: white;
 }
 .content-stack summary {
+  display: list-item;
+  min-height: var(--byzon-touch-target);
+  padding-block: 0.7rem;
   cursor: pointer;
   color: var(--ink);
   font-weight: 700;
 }
 .resource-status {
+  display: grid;
+  gap: 0.7rem;
+  max-width: 42rem;
   padding: 1.2rem;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: white;
+}
+.resource-status strong {
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: 1.25rem;
+}
+.resource-empty {
+  border-style: dashed;
+}
+.resource-action {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--pink);
+  border-radius: 999px;
+  color: white;
+  background: var(--pink-dark);
+  font: 700 1rem/1.2 var(--byzon-font-display);
+  cursor: pointer;
+}
+.resource-action:hover {
+  border-color: var(--byzon-brand-active);
+  background: var(--byzon-brand-active);
+}
+.request-reference {
+  color: var(--byzon-text-muted);
+  overflow-wrap: anywhere;
+}
+.resource-progress {
+  width: min(100%, 14rem);
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--byzon-brand-soft),
+    var(--pink),
+    var(--byzon-brand-soft)
+  );
+  background-size: 200% 100%;
+}
+.status-notice {
+  margin-block: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--byzon-danger);
+  border-radius: 0.8rem;
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+  font-weight: 700;
+}
+.faq-section {
+  display: grid;
+  gap: 0.5rem;
 }
 .admin-console {
   display: grid;
@@ -461,6 +556,22 @@ h1 span {
   }
 }
 @media (prefers-reduced-motion: no-preference) {
+  @keyframes content-progress {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+  .resource-progress {
+    animation: content-progress 1.2s var(--byzon-ease) infinite;
+  }
+  .resource-action {
+    transition:
+      background-color var(--byzon-motion-fast) var(--byzon-ease),
+      border-color var(--byzon-motion-fast) var(--byzon-ease);
+  }
   .brand-mark {
     transition: transform 0.2s;
   }

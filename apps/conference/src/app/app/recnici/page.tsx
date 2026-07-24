@@ -6,7 +6,9 @@ export default async function SpeakersPage() {
   return (
     <section className="app-page">
       <p className="eyebrow">Lidé na pódiu</p>
-      <h1>Řečníci</h1>
+      <h1 data-route-heading tabIndex={-1}>
+        Řečníci
+      </h1>
       {eventId ? (
         <SpeakerDirectory eventId={eventId} />
       ) : (

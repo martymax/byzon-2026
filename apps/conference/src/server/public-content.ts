@@ -1,16 +1,21 @@
-import { desc, eq } from 'drizzle-orm';
 import { schema, type Database } from '@byzon/database';
+import {
+  contentCachePolicy,
+  publicContentBootstrapResponseSchema,
+  publicContentResponseSchema,
+  publishedContentSnapshotSchema,
+  publishedProgramSnapshotSchema,
+} from '@byzon/domain/contracts';
+import { desc, eq } from 'drizzle-orm';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
-import { participantContentSchema } from './participant-content';
-import { programSnapshotSchema } from './participant-program';
 
 const publicHeaders = (
   requestId: string,
   etag: string,
   contentType = 'application/json',
 ): HeadersInit => ({
-  'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+  'cache-control': contentCachePolicy.public.cacheControl,
   'content-type': contentType,
   etag,
   'x-request-id': requestId,
@@ -66,26 +71,30 @@ export const readPublicContent = async (
         status: 304,
         headers: publicHeaders(requestId, etag, contentType),
       });
-    const content = participantContentSchema.safeParse(publication.snapshot);
-    const program = programSnapshotSchema.safeParse(publication.snapshot);
+    const content = publishedContentSnapshotSchema.safeParse(
+      publication.snapshot,
+    );
+    const program = publishedProgramSnapshotSchema.safeParse(
+      publication.snapshot,
+    );
     if (!content.success || !program.success) throw notFound();
     if (kind === 'bootstrap')
       return Response.json(
-        {
+        publicContentBootstrapResponseSchema.parse({
           version: publication.version,
           publishedAt: publication.publishedAt.toISOString(),
           event: content.data.event,
-        },
+        }),
         { headers: publicHeaders(requestId, etag) },
       );
     if (kind === 'content')
       return Response.json(
-        {
+        publicContentResponseSchema.parse({
           version: publication.version,
           publishedAt: publication.publishedAt.toISOString(),
           ...content.data,
           program: program.data.program,
-        },
+        }),
         { headers: publicHeaders(requestId, etag) },
       );
     return new Response(

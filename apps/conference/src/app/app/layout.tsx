@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { RouteFocus } from '@/components/route-focus';
 
 export default function ParticipantLayout({
   children,
@@ -8,6 +9,7 @@ export default function ParticipantLayout({
 }) {
   return (
     <>
+      <RouteFocus />
       <nav className="participant-nav" aria-label="Hlavní navigace">
         <Link href="/app/program">Program</Link>
         <Link href="/app/recnici">Řečníci</Link>

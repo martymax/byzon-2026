@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
 
-import { and, desc, eq } from 'drizzle-orm';
 import { schema, type Database } from '@byzon/database';
+import {
+  contentCachePolicy,
+  participantProgramResponseSchema,
+  participantSessionTypeSchema,
+  publishedProgramSnapshotSchema,
+} from '@byzon/domain/contracts';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -9,56 +15,6 @@ import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const uuid = z.string().uuid();
 const filterValue = z.string().trim().min(1).max(128);
-const sessionType = z.enum([
-  'talk',
-  'panel',
-  'workshop',
-  'mastermind',
-  'coaching',
-  'networking',
-  'break',
-  'meal',
-  'gala',
-  'other',
-]);
-export const programSnapshotSchema = z.object({
-  program: z.object({
-    days: z.array(
-      z.object({
-        id: uuid,
-        localDate: z.string().date(),
-        title: z.string(),
-        description: z.string().nullable().optional(),
-        sortOrder: z.number().int().nonnegative(),
-      }),
-    ),
-    rooms: z.array(
-      z.object({
-        id: uuid,
-        slug: z.string().min(1).max(128),
-        name: z.string(),
-        description: z.string().nullable().optional(),
-        sortOrder: z.number().int().nonnegative(),
-      }),
-    ),
-    sessions: z.array(
-      z.object({
-        id: uuid,
-        dayId: uuid,
-        roomId: uuid.nullable(),
-        slug: z.string().min(1).max(128),
-        title: z.string(),
-        summary: z.string().nullable().optional(),
-        description: z.string().nullable().optional(),
-        type: sessionType,
-        status: z.enum(['published', 'cancelled']).optional(),
-        startsAt: z.string().datetime({ offset: true }),
-        endsAt: z.string().datetime({ offset: true }),
-        sortOrder: z.number().int().nonnegative(),
-      }),
-    ),
-  }),
-});
 
 interface SessionIdentity {
   user: { id: string };
@@ -93,6 +49,9 @@ const parseFilters = (url: URL) => {
   const day = url.searchParams.get('day');
   const room = url.searchParams.get('room');
   const type = url.searchParams.get('type');
+  const parsedType = type
+    ? participantSessionTypeSchema.safeParse(type)
+    : undefined;
   const versionText = url.searchParams.get('version');
   const fieldErrors: Record<string, string[]> = {};
   if (unknown.length) fieldErrors.query = ['Unsupported query parameter.'];
@@ -101,7 +60,7 @@ const parseFilters = (url: URL) => {
     fieldErrors.day = ['Invalid day filter.'];
   if (room && !filterValue.safeParse(room).success)
     fieldErrors.room = ['Invalid room filter.'];
-  if (type && !sessionType.safeParse(type).success)
+  if (parsedType && !parsedType.success)
     fieldErrors.type = ['Invalid session type.'];
   const version = versionText ? Number(versionText) : undefined;
   if (
@@ -122,7 +81,7 @@ const parseFilters = (url: URL) => {
   return {
     day: day ?? undefined,
     room: room ?? undefined,
-    type: type ?? undefined,
+    type: parsedType?.success ? parsedType.data : undefined,
     version,
   };
 };
@@ -139,7 +98,7 @@ const etagFor = (
 };
 
 const responseHeaders = (requestId: string, etag: string): HeadersInit => ({
-  'cache-control': 'private, max-age=0, must-revalidate',
+  'cache-control': contentCachePolicy.participant.cacheControl,
   'content-type': 'application/json',
   etag,
   vary: 'Cookie, Authorization',
@@ -221,7 +180,9 @@ export const readParticipantProgram = async (
         'Program not found',
         'A published program is not available.',
       );
-    const parsed = programSnapshotSchema.safeParse(publication.snapshot);
+    const parsed = publishedProgramSnapshotSchema.safeParse(
+      publication.snapshot,
+    );
     if (!parsed.success) throw new Error('Invalid publication snapshot');
 
     const selectedDay = filters.day
@@ -255,28 +216,29 @@ export const readParticipantProgram = async (
         headers: responseHeaders(requestId, etag),
       });
 
-    return new Response(
-      JSON.stringify({
-        eventId,
-        version: publication.version,
-        publishedAt: publication.publishedAt.toISOString(),
-        program: {
-          days: parsed.data.program.days.filter((day) =>
-            visibleDayIds.has(day.id),
-          ),
-          rooms: parsed.data.program.rooms.filter((room) =>
-            visibleRoomIds.has(room.id),
-          ),
-          sessions,
-        },
-        filters: {
-          day: filters.day ?? null,
-          room: filters.room ?? null,
-          type: filters.type ?? null,
-        },
-      }),
-      { status: 200, headers: responseHeaders(requestId, etag) },
-    );
+    const body = participantProgramResponseSchema.parse({
+      eventId,
+      version: publication.version,
+      publishedAt: publication.publishedAt.toISOString(),
+      program: {
+        days: parsed.data.program.days.filter((day) =>
+          visibleDayIds.has(day.id),
+        ),
+        rooms: parsed.data.program.rooms.filter((room) =>
+          visibleRoomIds.has(room.id),
+        ),
+        sessions,
+      },
+      filters: {
+        day: filters.day ?? null,
+        room: filters.room ?? null,
+        type: filters.type ?? null,
+      },
+    });
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: responseHeaders(requestId, etag),
+    });
   } catch (error) {
     return problemResponse(error, requestId);
   }

@@ -6,7 +6,9 @@ export default async function InformationPage() {
   return (
     <section className="app-page">
       <p className="eyebrow">Na místě</p>
-      <h1>Praktické informace</h1>
+      <h1 data-route-heading tabIndex={-1}>
+        Praktické informace
+      </h1>
       {eventId ? (
         <PracticalContent eventId={eventId} />
       ) : (

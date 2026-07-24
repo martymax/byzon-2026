@@ -7,5 +7,6 @@ describe('test-support public exports', () => {
     expect(testSupport.defineFixtureFactory).toBeTypeOf('function');
     expect(fixtures.baseProblemFixture.code).toBe('INTERNAL_ERROR');
     expect(fixtures.fixtureContextMatrix).toHaveLength(35);
+    expect(fixtures.participantProgramFixtures.happy?.version).toBe(3);
   });
 });

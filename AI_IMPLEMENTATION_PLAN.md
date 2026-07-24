@@ -591,7 +591,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-BASE-01` | problem, session-expired, pagination a transport metadata | `packages/domain/src/contracts/base.ts` | `F0-02` | všechny `F*` | `contract ready` |
 | `CS-ACT-01` | claim outcomes, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-04`, `P4-07` | `F1` | `not started` |
 | `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F2-07` | `F1`, `F2`, `F6` | `not started` |
-| `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `not started`; současná schémata jsou server-local |
+| `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started` |
 | `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-05`, `F3` | `F3`, `F6` | `not started` |
 | `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `not started` |
@@ -1202,7 +1202,7 @@ Evidence:
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
 | Aktivace a identita | `not started` | `P2` identity/onboarding doména existuje; `P4`, `F1` plánované | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` |
-| Program a informace | `not started` | funkční legacy baseline `P3-03` až `P3-10`, ale bez nového shared-contract gate | extrakce `CS-CONTENT-01` a hardening `F2-03` |
+| Program a informace | `contract ready` | `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů | `F2-06` component/axe gate před `UI ready (mocked)`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `not started` | onboarding doména `P2-06`; UI `F2-07` a API `P4-13` plánované | `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
 | Vstupenka účastníka | `not started` | `F2-04`, `P4-12` plánované | `BLOCKER-TKT-05` |
@@ -1833,11 +1833,15 @@ skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 
 - [ ] `F2-02` Přidat domovský přehled podle fáze eventu: dnešní minimum,
   praktické informace, další uložený bod a jasný stav před/po akci bez
   vymyšlených live dat.
-- [ ] `F2-03` Extrahovat server-local `P3` schémata a fixtures do
+- [x] `F2-03` Extrahovat server-local `P3` schémata a fixtures do
   `CS-CONTENT-01`, přepojit existující API/UI na sdílený kontrakt a zpevnit
   program/detail/speaker/partner/practical UI: loading/empty/error/offline/
   permission, zachování filtru a scrollu, dlouhý český obsah, reduced motion a
-  focus po změně route.
+  focus po změně route. Implementováno v
+  [`packages/domain/src/contracts/content.ts`](packages/domain/src/contracts/content.ts),
+  `@byzon/test-support/fixtures` a typed participant UI; capability je
+  `contract ready`, zatímco širší axe/visual gate zůstává vlastnictvím
+  `F2-06`.
 - [ ] `F2-04` Přidat obrazovku vstupenky se stavem, držitelem v minimálním
   rozsahu a prezentační plochou. Skenovatelný credential smí být jen syntetický,
   dokud není rozhodnut `BLOCKER-TKT-05`.

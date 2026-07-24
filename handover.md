@@ -20,8 +20,54 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
-- Frontendový řez `F0-06` je implementovaný, ale dosud necommitnutý na stacked
-  větvi `track/frontend-a/F0-06-component-a11y` nad commitem `bce2a46`.
+- Frontendový řez `F2-03` je implementovaný, ale dosud necommitnutý na stacked
+  větvi `track/frontend-b/F2-03-content-contract` nad pushnutým commitem
+  `f14c6d5`. `CS-CONTENT-01` v
+  [`packages/domain/src/contracts/content.ts`](packages/domain/src/contracts/content.ts)
+  nyní definuje striktní publikovaný program, directory/practical DTO, query a
+  přesné problem uniony i cache/offline/PII hranici. Serverové P3 snapshot
+  extraktory, response validace, typed browser `ApiPort`, dev MSW handlery a
+  syntetické fixtures používají stejný runtime kontrakt.
+- Participant program, detail, řečníci, partneři a praktické informace mají
+  bezpečné loading/empty/offline/authentication/session-expired/permission/
+  invalid-response stavy s retry, pouze validovanou request referencí a bez
+  vykreslení serverového `detail`. Filtry programu se zachovávají v URL a
+  session-scoped continuity storage, návrat z detailu je nese dál a scroll se
+  obnovuje bez smooth motion. Route change přesouvá focus, dlouhý český obsah
+  se bezpečně zalamuje a interakce dodržují `44 px`, viditelný focus a
+  `prefers-reduced-motion`.
+- Security a code review `F2-03` proběhly. Zapracované nálezy: browser přestal
+  importovat serverový typ a všechny odpovědi odmítají unknown fields;
+  snapshot parser striktně allowlistuje publikovaná pole a odstraní private
+  metadata; klient nerozhoduje podle lokalizovaného textu; externí URL jsou
+  pouze HTTP(S), map query je encoded; storage/history selhání je fail-soft;
+  `304` bez lokálního ETag nesmí ponechat nekonečný loading; Zod textová
+  validace netrimuje a tudíž tiše nemění existující P3 wire hodnoty. A11y
+  smoke navíc odhalil, že první skutečné content handlery přivedly source-only
+  test-support exporty s `.js` specifiery do Turbopack dev grafu; package nyní
+  publikuje buildnuté ESM runtime exporty a conference dev/test/component
+  skripty je deterministicky sestaví před startem.
+- Ověření `F2-03` prošlo pro celý workspace ESLint, Prettier, typecheck a 237
+  unit/architecture/contract testů; 51 DB integračních testů se bez běžícího
+  PostgreSQL korektně přeskočilo. Prošlo také 18 Chromium component scénářů
+  a 6 axe/keyboard/overflow smoke scénářů napříč `375 × 667`, `768 × 1024` a
+  `1280 × 800`. Kompletní web/worker production build prošel i se záměrně
+  nastaveným `NEXT_PUBLIC_BYZON_API_MOCKS=enabled`; source/post-build boundary
+  v deployment grafu nenašla MSW ani fixtures. High dependency audit je čistý
+  a eviduje jediný známý moderate vývojový `esbuild` přes `drizzle-kit`.
+  Docker CLI je dostupné, ale lokální daemon neběží, proto skutečné P3 DB
+  integrační testy zůstávají na PostgreSQL-backed GitHub CI.
+- Capability Program a informace je po `F2-03` pouze `contract ready`.
+  `F2-06` zůstává explicitní component/axe/visual gate před označením
+  `UI ready (mocked)`; `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
+  contract-first práci. Následující samostatná fáze může být `F2-06`; `F6-02`
+  může paralelně začít nad public částí `CS-CONTENT-01`.
+- V pracovním stromu zůstává cizí nestagovaný soubor
+  `apps/conference/src/components/content-state 2.tsx`, stará kopie z
+  22. července. Při produkčním buildu byl pouze dočasně přesunut mimo `src` a
+  vrácen; není součástí `F2-03` a nesmí být commitnutý.
+- Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
+  `origin/track/frontend-a/F0-06-component-a11y`.
   Samostatný Vitest Browser/Playwright component runner vykresluje React 19
   komponenty ve skutečném headless Chromiu ve všech třech schválených
   viewports `375 × 667`, `768 × 1024` a `1280 × 800`. Stabilní interní
@@ -53,9 +99,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `/health/ready` správně hlásil chybějící PostgreSQL. Veřejná DB-independent
   axe/responsive sada proto běžela přes explicitní live-start režim; GitHub CI
   instaluje Chromium, migruje a seeduje PostgreSQL a poté spouští component i
-  úplnou E2E sadu. Další bezpečný frontendový krok je `F2-03`, protože hotový
-  `P3` může dodat `CS-CONTENT-01`; `F1-01` zatím čeká na společný kontrakt s
-  nedokončenými `P4-04`/`P4-07`.
+  úplnou E2E sadu. `F1-01` zatím čeká na společný kontrakt s nedokončenými
+  `P4-04`/`P4-07`.
 - Frontendový řez `F0-05` je implementovaný v commitu `bce2a46`, pushnutém na
   `origin/track/frontend-a/F0-05-msw-mocks`. Přesně
   připnutý MSW `2.15.0` v dev/test používá stejný produkční `ApiPort` nad

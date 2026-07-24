@@ -6,7 +6,9 @@ export default async function PartnersPage() {
   return (
     <section className="app-page">
       <p className="eyebrow">Děkujeme</p>
-      <h1>Partneři</h1>
+      <h1 data-route-heading tabIndex={-1}>
+        Partneři
+      </h1>
       {eventId ? (
         <PartnerDirectory eventId={eventId} />
       ) : (

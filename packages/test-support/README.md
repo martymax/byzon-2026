@@ -4,6 +4,11 @@
 fixtures. Production applications must never declare it as a runtime
 dependency.
 
+Fixture/harness runtime exports point to `dist` so Next development mocks
+consume valid ESM; the conference `dev`, unit and component scripts build this
+package first. TypeScript types and the standalone viewport registry continue
+to resolve from `src`, so Playwright can load its config on a clean checkout.
+
 ## Fixture workflow
 
 1. Import the completed runtime schema from `@byzon/domain/contracts`.
@@ -35,3 +40,10 @@ test matrix and `fixtureContextName` supplies a stable test label. Shared
 `targetViewports` from `@byzon/test-support/viewports` are the only approved
 visual/component/E2E smoke sizes: phone `375 × 667`, tablet `768 × 1024` and
 desktop `1280 × 800`.
+
+`fixtures/content.ts` contains the synthetic `CS-CONTENT-01` program,
+directory, long-Czech-content, empty and supported problem scenarios. Every
+HTTP fixture is parsed and deeply frozen by the same production response or
+problem schema before export. Loading and offline are transport/UI states and
+are exercised with the typed API port rather than represented as invented JSON
+payloads.
