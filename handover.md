@@ -20,8 +20,47 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Frontendový řez `F0-05` je implementovaný, ale dosud necommitnutý na stacked
+  větvi `track/frontend-a/F0-05-msw-mocks` nad commitem `19cb6e2`. Přesně
+  připnutý MSW `2.15.0` v dev/test používá stejný produkční `ApiPort` nad
+  nativním `fetch`; Node harness i browser worker sdílejí kontraktem validované
+  response helpers a feature handlers zůstávají u vlastníka příslušného
+  `CS-*` slice. Lokální browser mock se zapíná pouze build-time hodnotou
+  `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` v development compile a zobrazuje
+  trvalý textový indikátor „Mock data · pouze vývoj/test“.
+- Mock režim je fail-closed: neobsloužený request nesmí propadnout do skutečného
+  API a při selhání workeru se blokují same-origin `/api/v1` požadavky.
+  Vygenerovaný `public/mockServiceWorker.js` je ignorovaný a produkční build ho
+  před kompilací odstraní. Zdrojový i post-build skener odmítá MSW,
+  `@byzon/test-support`, fixture cestu, veřejný přepínač, worker asset a
+  runtime marker v produkčním grafu. Existující `/sw.js` se neregistruje přes
+  cizí root-scope worker a po vypnutí mocku se MSW klient okamžitě zastaví,
+  jeho registrace odstraní a aplikační worker může scope znovu převzít.
+- Security a code review celého `F0-05` diffu proběhly. Zapracované nálezy:
+  fallback `fetch` guard je HMR-safe, nevrství se a při obnově vrací původní
+  implementaci; vypnutí funguje i bez Service Worker API; aktivní MSW klient
+  se před odregistrováním explicitně zastaví; fixture validační chyba
+  neobsahuje raw tajnou hodnotu; aplikační worker nikdy nepřepíše neznámou
+  registraci stejného scope; indikátor bezpečně počká na dostupné DOM.
+  Dependency audit navíc odhalil nové high advisories v `next 16.2.10` a
+  `sharp 0.34.x`, proto byly minimálně aktualizovány Next i
+  `eslint-config-next` na `16.2.11` a transitive Sharp na `0.35.0`.
+- Ověření `F0-05` prošlo pro frozen offline instalaci na pnpm `11.15.1`,
+  conference typecheck, 60 unit/architecture/transport testů ve 12 souborech,
+  cílený ESLint, Prettier a `git diff --check`. Negativní boundary test správně
+  odmítl přítomný vygenerovaný worker. Produkční Next build prošel i se záměrně
+  nastaveným `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` a následná kontrola
+  deployment artefaktů nenašla mock runtime ani syntetická data. Audit
+  `--audit-level high` je čistý; zůstává pouze dříve evidovaný moderate
+  vývojový `esbuild 0.18.20` přes `drizzle-kit/@esbuild-kit`.
+- Dev server s mock přepínačem vrátil aplikaci i oficiální vygenerovaný worker;
+  marker a indikátor byly přítomné pouze v dev chunku. Vizuální kontrola
+  skutečné registrace a indikátoru nemohla proběhnout, protože v relaci nebyl
+  dostupný in-app browser. Příští krok je `F0-06`: component/axe harness,
+  role/fáze helpers a viewporty `375 × 667`, `768 × 1024`, `1280 × 800`.
 - Frontendový řez `F0-04` je implementovaný na stacked větvi
-  `track/frontend-a/F0-04-api-client` nad pushnutým `F0-03`. Nový
+  `track/frontend-a/F0-04-api-client` v commitu `19cb6e2`, pushnutém na
+  `origin/track/frontend-a/F0-04-api-client` nad pushnutým `F0-03`. Nový
   [`apps/conference/src/lib/api/README.md`](apps/conference/src/lib/api/README.md)
   popisuje tenký typovaný `ApiPort` a klienta nad nativním `fetch`. Endpointy
   deklarují přesná request/success/problem schémata, allowlist problem kódů,

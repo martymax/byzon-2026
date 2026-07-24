@@ -4,6 +4,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  msw: false
   sharp: true
   unrs-resolver: true
 
@@ -17,3 +18,4 @@ onlyBuiltDependencies:
 
 overrides:
   postcss: 8.5.19
+  sharp: 0.35.0

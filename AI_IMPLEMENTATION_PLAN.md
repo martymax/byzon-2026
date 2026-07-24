@@ -1761,9 +1761,10 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
   včetně abortu, problem responses, idempotency a bezpečného opakování čtení.
   Implementováno a popsáno v
   [`apps/conference/src/lib/api/README.md`](apps/conference/src/lib/api/README.md).
-- [ ] `F0-05` Zapojit MSW pouze pro dev/test přes stejný API port, přidat
+- [x] `F0-05` Zapojit MSW pouze pro dev/test přes stejný API port, přidat
   jednoznačný indikátor mock režimu a build check proti importu mocků do
-  produkčního grafu.
+  produkčního grafu. Implementováno a popsáno v
+  [`apps/conference/src/test/mocks/README.md`](apps/conference/src/test/mocks/README.md).
 - [ ] `F0-06` Přidat component/axe harness, helpers pro role/fáze a cílové
   viewporty `375 × 667`, `768 × 1024` a `1280 × 800`.
 - [x] `F0-07` Zpevnit BYZON design tokeny a dodat přístupné primitives z
