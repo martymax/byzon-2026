@@ -11,14 +11,18 @@ import {
   EMPTY_OFFLINE_AGENDA_QUEUE,
   queueApprovedOfflineAgendaMutation,
   readOfflineAgendaQueueSummary,
+  retryOfflineAgendaConflict,
   syncOfflineAgendaQueue,
 } from '../../lib/offline/offline-agenda';
 import {
+  ParticipantOfflineEpochChangedError,
   enqueueOfflineAgendaMutation,
   listOfflineAgendaQueue,
   openParticipantOfflineDatabase,
   readOfflineAgendaSnapshot,
+  readParticipantOfflineEpoch,
   subscribeToParticipantOfflineData,
+  updateOfflineAgendaQueueRecord,
   wipeAllParticipantOfflineData,
   wipeParticipantOfflineScope,
   writeOfflineAgendaSnapshot,
@@ -27,6 +31,11 @@ import {
   PARTICIPANT_OFFLINE_DATABASE_VERSION,
   participantOfflineStoreNames,
 } from '../../lib/offline/offline-policy';
+import {
+  PRIVATE_RESOURCE_BROADCAST_CHANNEL,
+  invalidateParticipantPrivateResources,
+  subscribeToPrivateResourceInvalidation,
+} from '../../lib/private-resource-events';
 
 const scope = {
   eventId: agendaFixtureIds.event,
@@ -66,6 +75,57 @@ const createMalformedVersionOne = (name: string): Promise<void> =>
     };
     request.onerror = () => reject(request.error);
   });
+
+const transactionDone = (transaction: IDBTransaction): Promise<void> =>
+  new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () => reject(transaction.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+
+const readRawQueueRecord = async (id: string): Promise<unknown> => {
+  const database = await openParticipantOfflineDatabase();
+  try {
+    const transaction = database.transaction(
+      participantOfflineStoreNames.syncQueue,
+      'readonly',
+    );
+    const request = transaction
+      .objectStore(participantOfflineStoreNames.syncQueue)
+      .get(id);
+    const value = await new Promise<unknown>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await transactionDone(transaction);
+    return value;
+  } finally {
+    database.close();
+  }
+};
+
+const addUnknownQueueField = async (id: string): Promise<void> => {
+  const database = await openParticipantOfflineDatabase();
+  try {
+    const transaction = database.transaction(
+      participantOfflineStoreNames.syncQueue,
+      'readwrite',
+    );
+    const store = transaction.objectStore(
+      participantOfflineStoreNames.syncQueue,
+    );
+    const request = store.get(id);
+    request.onsuccess = () => {
+      store.put({
+        ...(request.result as Record<string, unknown>),
+        participantEmail: 'must-not-be-replayed@example.test',
+      });
+    };
+    await transactionDone(transaction);
+  } finally {
+    database.close();
+  }
+};
 
 afterEach(async () => {
   await wipeAllParticipantOfflineData('user_request');
@@ -173,7 +233,13 @@ describe('participant offline IndexedDB', () => {
   });
 
   it('replays one approved mutation with its UUID and canonical server result', async () => {
-    await writeOfflineAgendaSnapshot(scope, participantAgendaFixtures.happy!);
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    await writeOfflineAgendaSnapshot(
+      scope,
+      participantAgendaFixtures.happy!,
+      new Date(),
+      { expectedEpoch: offlineEpoch },
+    );
     const idempotencyKey = '01930000-0000-7000-8000-0000000000c1';
     await queueApprovedOfflineAgendaMutation(
       scope,
@@ -183,11 +249,25 @@ describe('participant offline IndexedDB', () => {
         sessionId: agendaFixtureIds.savedSession,
       },
       idempotencyKey,
+      offlineEpoch,
     );
     const fetch = vi.fn(
       async (_input: RequestInfo | URL, init?: RequestInit) => {
-        expect(init?.method).toBe('POST');
-        expect(new Headers(init?.headers).get('idempotency-key')).toBe(
+        const method =
+          init?.method ?? (_input instanceof Request ? _input.method : 'GET');
+        if (method === 'GET') {
+          return Response.json(participantAgendaFixtures.happy!, {
+            headers: {
+              'content-type': 'application/json',
+              'x-request-id': 'offline-owner-preflight-0001',
+            },
+          });
+        }
+        expect(method).toBe('POST');
+        const headers =
+          init?.headers ??
+          (_input instanceof Request ? _input.headers : undefined);
+        expect(new Headers(headers).get('idempotency-key')).toBe(
           idempotencyKey,
         );
         return Response.json(participantAgendaMutationFixtures.removed!, {
@@ -202,6 +282,7 @@ describe('participant offline IndexedDB', () => {
     const result = await syncOfflineAgendaQueue(
       scope,
       createFetchApiClient({ fetch, maxRetries: 0 }),
+      offlineEpoch,
     );
 
     expect(result.processed).toBe(1);
@@ -215,5 +296,269 @@ describe('participant offline IndexedDB', () => {
     expect((await readOfflineAgendaSnapshot(scope))?.snapshot.items).toEqual(
       [],
     );
+  });
+
+  it('fences stale writes after a logout tombstone rotates the epoch', async () => {
+    const staleEpoch = await readParticipantOfflineEpoch();
+    await wipeAllParticipantOfflineData('logout');
+
+    await expect(
+      writeOfflineAgendaSnapshot(
+        scope,
+        participantAgendaFixtures.happy!,
+        new Date(),
+        { expectedEpoch: staleEpoch },
+      ),
+    ).rejects.toBeInstanceOf(ParticipantOfflineEpochChangedError);
+    expect(await readOfflineAgendaSnapshot(scope)).toBeNull();
+  });
+
+  it('quarantines a queue record with any unknown persisted field', async () => {
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    const id = '01930000-0000-7000-8000-0000000000d1';
+    await queueApprovedOfflineAgendaMutation(
+      scope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      id,
+      offlineEpoch,
+    );
+    await addUnknownQueueField(id);
+
+    expect(
+      await listOfflineAgendaQueue(scope, {
+        expectedEpoch: offlineEpoch,
+      }),
+    ).toHaveLength(0);
+    expect(await readRawQueueRecord(id)).toBeUndefined();
+  });
+
+  it('rebases a conflict onto a new UUID and supersedes the old attempt', async () => {
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    const oldId = '01930000-0000-7000-8000-0000000000d2';
+    const newId = '01930000-0000-7000-8000-0000000000d3';
+    const queued = await queueApprovedOfflineAgendaMutation(
+      scope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      oldId,
+      offlineEpoch,
+    );
+    await updateOfflineAgendaQueueRecord(
+      queued,
+      {
+        attempts: 1,
+        lastProblemCode: 'AGENDA_VERSION_CONFLICT',
+        status: 'conflict',
+      },
+      { expectedEpoch: offlineEpoch },
+    );
+
+    await retryOfflineAgendaConflict(
+      scope,
+      participantAgendaFixtures.happy!.version + 1,
+      offlineEpoch,
+      () => newId,
+    );
+
+    expect(
+      await listOfflineAgendaQueue(scope, { expectedEpoch: offlineEpoch }),
+    ).toMatchObject([
+      {
+        id: newId,
+        idempotencyKey: newId,
+        expectedVersion: participantAgendaFixtures.happy!.version + 1,
+        status: 'pending',
+        supersedesId: oldId,
+      },
+    ]);
+    expect(await readRawQueueRecord(oldId)).toMatchObject({
+      id: oldId,
+      status: 'superseded',
+    });
+  });
+
+  it('terminalizes the retry budget and never posts a failed record again', async () => {
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    const queued = await queueApprovedOfflineAgendaMutation(
+      scope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      '01930000-0000-7000-8000-0000000000d4',
+      offlineEpoch,
+    );
+    await updateOfflineAgendaQueueRecord(
+      queued,
+      {
+        attempts: 4,
+        lastProblemCode: 'TRANSPORT',
+        status: 'retry',
+      },
+      { expectedEpoch: offlineEpoch },
+    );
+    let postCount = 0;
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const method =
+          init?.method ?? (_input instanceof Request ? _input.method : 'GET');
+        if (method === 'GET') {
+          return Response.json(participantAgendaFixtures.happy!, {
+            headers: {
+              'content-type': 'application/json',
+              'x-request-id': 'offline-owner-preflight-0002',
+            },
+          });
+        }
+        postCount += 1;
+        throw new TypeError('Synthetic transport failure.');
+      },
+    );
+    const api = createFetchApiClient({ fetch, maxRetries: 0 });
+
+    const first = await syncOfflineAgendaQueue(scope, api, offlineEpoch);
+    expect(first.summary.conflict).toBe(1);
+    expect(
+      await listOfflineAgendaQueue(scope, { expectedEpoch: offlineEpoch }),
+    ).toMatchObject([{ attempts: 5, status: 'failed' }]);
+
+    await syncOfflineAgendaQueue(scope, api, offlineEpoch);
+    expect(postCount).toBe(1);
+  });
+
+  it('fails owner preflight closed and does not POST under another principal', async () => {
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    await queueApprovedOfflineAgendaMutation(
+      scope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      '01930000-0000-7000-8000-0000000000d5',
+      offlineEpoch,
+    );
+    let postCount = 0;
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const method =
+          init?.method ?? (_input instanceof Request ? _input.method : 'GET');
+        if (method === 'POST') postCount += 1;
+        return Response.json(otherSnapshot, {
+          headers: {
+            'content-type': 'application/json',
+            'x-request-id': 'offline-owner-preflight-0003',
+          },
+        });
+      },
+    );
+
+    const result = await syncOfflineAgendaQueue(
+      scope,
+      createFetchApiClient({ fetch, maxRetries: 0 }),
+      offlineEpoch,
+    );
+
+    expect(result).toMatchObject({
+      blocked: 'owner_unverified',
+      invalidation: 'permission',
+      processed: 0,
+    });
+    expect(postCount).toBe(0);
+    expect(await listOfflineAgendaQueue(scope)).toHaveLength(0);
+  });
+
+  it('aborts a delayed replay and prevents resurrection after cleanup', async () => {
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    await queueApprovedOfflineAgendaMutation(
+      scope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      '01930000-0000-7000-8000-0000000000d6',
+      offlineEpoch,
+    );
+    let resolvePost: ((response: Response) => void) | undefined;
+    let postStarted = false;
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const method =
+          init?.method ?? (_input instanceof Request ? _input.method : 'GET');
+        if (method === 'GET') {
+          return Response.json(participantAgendaFixtures.happy!, {
+            headers: {
+              'content-type': 'application/json',
+              'x-request-id': 'offline-owner-preflight-0004',
+            },
+          });
+        }
+        postStarted = true;
+        return new Promise<Response>((resolve) => {
+          resolvePost = resolve;
+        });
+      },
+    );
+    const synchronization = syncOfflineAgendaQueue(
+      scope,
+      createFetchApiClient({ fetch, maxRetries: 0 }),
+      offlineEpoch,
+    );
+    await vi.waitFor(() => expect(postStarted).toBe(true));
+
+    await invalidateParticipantPrivateResources('session_expired', 'logout');
+    resolvePost?.(
+      Response.json(participantAgendaMutationFixtures.removed!, {
+        headers: {
+          'content-type': 'application/json',
+          'x-request-id': 'offline-sync-component-0002',
+        },
+      }),
+    );
+
+    await expect(synchronization).rejects.toBeInstanceOf(
+      ParticipantOfflineEpochChangedError,
+    );
+    expect(await readOfflineAgendaSnapshot(scope)).toBeNull();
+    expect(await listOfflineAgendaQueue(scope)).toHaveLength(0);
+  });
+
+  it('masks and durably wipes private data after a cross-tab broadcast', async () => {
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    await writeOfflineAgendaSnapshot(
+      scope,
+      participantAgendaFixtures.happy!,
+      new Date(),
+      { expectedEpoch: offlineEpoch },
+    );
+    const listener = vi.fn();
+    const unsubscribe = subscribeToPrivateResourceInvalidation(listener);
+    const channel = new BroadcastChannel(PRIVATE_RESOURCE_BROADCAST_CHANNEL);
+    try {
+      channel.postMessage({
+        type: 'participant-private-invalidation',
+        id: crypto.randomUUID(),
+        reason: 'session_expired',
+        wipeReason: 'logout',
+      });
+      await vi.waitFor(() =>
+        expect(listener).toHaveBeenCalledWith('session_expired'),
+      );
+      await vi.waitFor(async () =>
+        expect(await readOfflineAgendaSnapshot(scope)).toBeNull(),
+      );
+    } finally {
+      channel.close();
+      unsubscribe();
+    }
   });
 });

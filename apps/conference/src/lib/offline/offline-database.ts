@@ -1,9 +1,18 @@
-import type { ParticipantAgendaResponse } from '@byzon/domain/contracts';
+import {
+  offlineAgendaConflictRebaseSchema,
+  offlineAgendaQueueRecordSchema,
+  offlineParticipantAgendaCacheSchema,
+  type OfflineAgendaQueueRecord as OfflineAgendaQueueContract,
+  type OfflineParticipantAgendaCache,
+} from '@byzon/domain/contracts';
 
 import {
   OFFLINE_QUEUE_MAX_ATTEMPTS,
+  OFFLINE_PRIVATE_RECORD_LEASE_MS,
+  PARTICIPANT_OFFLINE_CONTRACT_VERSION,
   PARTICIPANT_OFFLINE_DATABASE_NAME,
   PARTICIPANT_OFFLINE_DATABASE_VERSION,
+  PARTICIPANT_OFFLINE_EPOCH_KEY,
   isUuid,
   parseApprovedOfflineAgendaMutation,
   parseParticipantOfflineScope,
@@ -14,7 +23,8 @@ import {
   type ParticipantOfflineScope,
 } from './offline-policy';
 
-export type OfflineQueueStatus = 'conflict' | 'pending' | 'retry';
+export type OfflineQueueStatus =
+  'conflict' | 'failed' | 'pending' | 'retry' | 'superseded';
 export type OfflineWipeReason =
   | 'logout'
   | 'migration_failure'
@@ -24,36 +34,139 @@ export type OfflineWipeReason =
   | 'switch_account'
   | 'user_request';
 
-export interface OfflineAgendaRecord {
+export interface OfflineAgendaRecord extends OfflineParticipantAgendaCache {
   readonly schemaVersion: typeof PARTICIPANT_OFFLINE_DATABASE_VERSION;
   readonly scopeKey: string;
-  readonly eventId: string;
-  readonly userId: string;
   readonly lastSyncedAt: string;
-  readonly snapshot: ParticipantAgendaResponse;
 }
 
 export interface OfflineMetadataRecord {
+  readonly contractVersion: typeof PARTICIPANT_OFFLINE_CONTRACT_VERSION;
   readonly schemaVersion: typeof PARTICIPANT_OFFLINE_DATABASE_VERSION;
   readonly scopeKey: string;
   readonly eventId: string;
   readonly userId: string;
   readonly agendaVersion: number;
   readonly publicationVersion: number;
+  readonly ownerLeaseId: string;
+  readonly revocationEpoch: string;
+  readonly expiresAt: string;
   readonly lastSyncedAt: string;
 }
 
 export interface OfflineAgendaQueueRecord extends ApprovedOfflineAgendaMutation {
+  readonly contractVersion: typeof PARTICIPANT_OFFLINE_CONTRACT_VERSION;
+  readonly schemaVersion: typeof PARTICIPANT_OFFLINE_DATABASE_VERSION;
   readonly id: string;
   readonly idempotencyKey: string;
+  readonly ownerLeaseId: string;
+  readonly revocationEpoch: string;
   readonly scopeKey: string;
   readonly eventId: string;
   readonly userId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly expiresAt: string;
   readonly attempts: number;
   readonly status: OfflineQueueStatus;
   readonly lastProblemCode: string | null;
+  readonly supersedesId: string | null;
+}
+
+export const toOfflineAgendaQueueContract = (
+  record: OfflineAgendaQueueRecord,
+): OfflineAgendaQueueContract =>
+  offlineAgendaQueueRecordSchema.parse({
+    contractVersion: record.contractVersion,
+    id: record.id,
+    idempotencyKey: record.idempotencyKey,
+    eventId: record.eventId,
+    userId: record.userId,
+    ownerLeaseId: record.ownerLeaseId,
+    revocationEpoch: record.revocationEpoch,
+    action: record.action,
+    sessionId: record.sessionId,
+    expectedVersion: record.expectedVersion,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    expiresAt: record.expiresAt,
+    attempts: record.attempts,
+    status: record.status,
+    lastProblemCode: record.lastProblemCode,
+    supersedesId: record.supersedesId,
+  });
+
+const offlineAgendaRecordKeys = new Set([
+  'agendaVersion',
+  'contractVersion',
+  'eventId',
+  'expiresAt',
+  'kind',
+  'lastSyncedAt',
+  'lease',
+  'publicationVersion',
+  'revocationEpoch',
+  'schemaVersion',
+  'scopeKey',
+  'snapshot',
+  'storedAt',
+  'userId',
+]);
+
+const parseOfflineAgendaRecord = (
+  value: unknown,
+  scope: ParticipantOfflineScope,
+  expectedScopeKey: string,
+  expectedOwnerEpoch: string,
+): OfflineAgendaRecord => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Offline agenda record must be an object.');
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    Object.getPrototypeOf(candidate) !== Object.prototype ||
+    Object.keys(candidate).some((key) => !offlineAgendaRecordKeys.has(key)) ||
+    Object.keys(candidate).length !== offlineAgendaRecordKeys.size ||
+    candidate.schemaVersion !== PARTICIPANT_OFFLINE_DATABASE_VERSION ||
+    candidate.scopeKey !== expectedScopeKey ||
+    candidate.lastSyncedAt !== candidate.storedAt ||
+    candidate.revocationEpoch !== expectedOwnerEpoch
+  ) {
+    throw new TypeError('Offline agenda record metadata is invalid.');
+  }
+  const canonical = offlineParticipantAgendaCacheSchema.parse({
+    contractVersion: candidate.contractVersion,
+    kind: candidate.kind,
+    eventId: candidate.eventId,
+    userId: candidate.userId,
+    agendaVersion: candidate.agendaVersion,
+    publicationVersion: candidate.publicationVersion,
+    revocationEpoch: candidate.revocationEpoch,
+    storedAt: candidate.storedAt,
+    expiresAt: candidate.expiresAt,
+    lease: candidate.lease,
+    snapshot: candidate.snapshot,
+  });
+  if (
+    canonical.eventId !== scope.eventId ||
+    canonical.userId !== scope.userId ||
+    Date.parse(canonical.expiresAt) <= Date.now()
+  ) {
+    throw new TypeError('Offline agenda owner lease is invalid or expired.');
+  }
+  return {
+    ...canonical,
+    schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
+    scopeKey: expectedScopeKey,
+    lastSyncedAt: canonical.storedAt,
+  };
+};
+
+interface ParticipantOfflineControlRecord {
+  readonly key: typeof PARTICIPANT_OFFLINE_EPOCH_KEY;
+  readonly epoch: string;
+  readonly changedAt: string;
+  readonly reason: OfflineWipeReason | 'schema_created';
 }
 
 export interface ParticipantOfflineDataEvent {
@@ -74,6 +187,17 @@ export interface OpenParticipantOfflineDatabaseOptions {
   readonly name?: string;
 }
 
+export interface ParticipantOfflineOperationOptions extends OpenParticipantOfflineDatabaseOptions {
+  readonly expectedEpoch?: string;
+}
+
+export class ParticipantOfflineEpochChangedError extends Error {
+  constructor() {
+    super('Participant offline ownership epoch changed.');
+    this.name = 'ParticipantOfflineEpochChangedError';
+  }
+}
+
 const offlineDataListeners = new Set<
   (event: ParticipantOfflineDataEvent) => void
 >();
@@ -87,6 +211,17 @@ export const subscribeToParticipantOfflineData = (
 
 const notifyOfflineData = (event: ParticipantOfflineDataEvent): void => {
   for (const listener of offlineDataListeners) listener(event);
+};
+
+const createEpoch = (): string => {
+  const uuid = globalThis.crypto?.randomUUID();
+  if (uuid) return uuid;
+  const hexadecimal = (length: number): string =>
+    Array.from({ length }, () =>
+      Math.floor(Math.random() * 16).toString(16),
+    ).join('');
+  const variant = (8 + Math.floor(Math.random() * 4)).toString(16);
+  return `${hexadecimal(8)}-${hexadecimal(4)}-4${hexadecimal(3)}-${variant}${hexadecimal(3)}-${hexadecimal(12)}`;
 };
 
 const requestValue = <Value>(request: IDBRequest<Value>): Promise<Value> =>
@@ -147,7 +282,14 @@ const ensureIndex = (
 export const migrateParticipantOfflineDatabase: OfflineMigration = (
   database,
   transaction,
+  oldVersion,
 ) => {
+  const control = ensureStore(
+    database,
+    transaction,
+    participantOfflineStoreNames.control,
+    'key',
+  );
   const metadata = ensureStore(
     database,
     transaction,
@@ -175,6 +317,18 @@ export const migrateParticipantOfflineDatabase: OfflineMigration = (
   ensureIndex(queue, 'scopeKey', 'scopeKey');
   ensureIndex(queue, 'scopeStatus', ['scopeKey', 'status']);
   ensureIndex(queue, 'createdAt', 'createdAt');
+
+  if (oldVersion < PARTICIPANT_OFFLINE_DATABASE_VERSION) {
+    // Queue record v3 adds strict schema/owner metadata. Unknown older records
+    // are never replayed under the new authenticated principal.
+    queue.clear();
+    control.put({
+      key: PARTICIPANT_OFFLINE_EPOCH_KEY,
+      epoch: createEpoch(),
+      changedAt: new Date().toISOString(),
+      reason: 'schema_created',
+    } satisfies ParticipantOfflineControlRecord);
+  }
 };
 
 const openOnce = ({
@@ -265,83 +419,188 @@ const isoNow = (now: Date | string): string => {
   return parsed.toISOString();
 };
 
+const readControlRecord = async (
+  store: IDBObjectStore,
+): Promise<ParticipantOfflineControlRecord> => {
+  const existing = await requestValue<
+    ParticipantOfflineControlRecord | undefined
+  >(store.get(PARTICIPANT_OFFLINE_EPOCH_KEY));
+  if (
+    existing &&
+    existing.key === PARTICIPANT_OFFLINE_EPOCH_KEY &&
+    typeof existing.epoch === 'string' &&
+    isUuid(existing.epoch) &&
+    Number.isFinite(Date.parse(existing.changedAt))
+  ) {
+    return existing;
+  }
+  throw new ParticipantOfflineEpochChangedError();
+};
+
+const assertExpectedEpoch = async (
+  transaction: IDBTransaction,
+  expectedEpoch: string | undefined,
+): Promise<ParticipantOfflineControlRecord> => {
+  const control = await readControlRecord(
+    transaction.objectStore(participantOfflineStoreNames.control),
+  );
+  if (expectedEpoch !== undefined && control.epoch !== expectedEpoch) {
+    transaction.abort();
+    throw new ParticipantOfflineEpochChangedError();
+  }
+  return control;
+};
+
+export const readParticipantOfflineEpoch = async (
+  options?: OpenParticipantOfflineDatabaseOptions,
+): Promise<string> =>
+  withDatabase(async (database) => {
+    const transaction = database.transaction(
+      participantOfflineStoreNames.control,
+      'readonly',
+    );
+    const control = await readControlRecord(
+      transaction.objectStore(participantOfflineStoreNames.control),
+    );
+    await transactionDone(transaction);
+    return control.epoch;
+  }, options);
+
+export const assertParticipantOfflineEpoch = async (
+  expectedEpoch: string,
+  options?: OpenParticipantOfflineDatabaseOptions,
+): Promise<void> => {
+  if (!isUuid(expectedEpoch)) {
+    throw new ParticipantOfflineEpochChangedError();
+  }
+  await withDatabase(async (database) => {
+    const transaction = database.transaction(
+      participantOfflineStoreNames.control,
+      'readonly',
+    );
+    await assertExpectedEpoch(transaction, expectedEpoch);
+    await transactionDone(transaction);
+  }, options);
+};
+
 export const writeOfflineAgendaSnapshot = async (
   scope: ParticipantOfflineScope,
   snapshot: unknown,
   now: Date | string = new Date(),
-  options?: OpenParticipantOfflineDatabaseOptions,
+  options?: ParticipantOfflineOperationOptions,
 ): Promise<OfflineAgendaRecord> => {
   const parsedScope = parseParticipantOfflineScope(scope);
   const parsedSnapshot = parseScopedAgendaSnapshot(parsedScope, snapshot);
   const scopeKey = participantOfflineScopeKey(parsedScope);
   const lastSyncedAt = isoNow(now);
-  const record: OfflineAgendaRecord = {
-    schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
-    scopeKey,
-    eventId: parsedScope.eventId,
-    userId: parsedScope.userId,
-    lastSyncedAt,
-    snapshot: parsedSnapshot,
-  };
-  const metadata: OfflineMetadataRecord = {
-    schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
-    scopeKey,
-    eventId: parsedScope.eventId,
-    userId: parsedScope.userId,
-    agendaVersion: parsedSnapshot.version,
-    publicationVersion: parsedSnapshot.publicationVersion,
-    lastSyncedAt,
-  };
+  let record: OfflineAgendaRecord | undefined;
   await withDatabase(async (database) => {
     const transaction = database.transaction(
       [
         participantOfflineStoreNames.agenda,
+        participantOfflineStoreNames.control,
         participantOfflineStoreNames.metadata,
       ],
       'readwrite',
     );
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const expiresAt = new Date(
+      Date.parse(lastSyncedAt) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+    ).toISOString();
+    const canonical = offlineParticipantAgendaCacheSchema.parse({
+      contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
+      kind: 'participant-agenda',
+      eventId: parsedScope.eventId,
+      userId: parsedScope.userId,
+      agendaVersion: parsedSnapshot.version,
+      publicationVersion: parsedSnapshot.publicationVersion,
+      revocationEpoch: control.epoch,
+      storedAt: lastSyncedAt,
+      expiresAt,
+      lease: {
+        contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
+        leaseId: control.epoch,
+        eventId: parsedScope.eventId,
+        userId: parsedScope.userId,
+        revocationEpoch: control.epoch,
+        issuedAt: lastSyncedAt,
+        refreshAfter: new Date(
+          Date.parse(lastSyncedAt) +
+            Math.floor(OFFLINE_PRIVATE_RECORD_LEASE_MS / 2),
+        ).toISOString(),
+        expiresAt,
+      },
+      snapshot: parsedSnapshot,
+    });
+    record = {
+      ...canonical,
+      schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
+      scopeKey,
+      lastSyncedAt,
+    };
+    const metadata: OfflineMetadataRecord = {
+      contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
+      schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
+      scopeKey,
+      eventId: parsedScope.eventId,
+      userId: parsedScope.userId,
+      agendaVersion: parsedSnapshot.version,
+      publicationVersion: parsedSnapshot.publicationVersion,
+      ownerLeaseId: control.epoch,
+      revocationEpoch: control.epoch,
+      expiresAt,
+      lastSyncedAt,
+    };
     transaction.objectStore(participantOfflineStoreNames.agenda).put(record);
     transaction
       .objectStore(participantOfflineStoreNames.metadata)
       .put(metadata);
     await transactionDone(transaction);
   }, options);
+  if (!record) {
+    throw new TypeError('Offline agenda transaction did not persist a record.');
+  }
   notifyOfflineData({ kind: 'agenda', scopeKey, reason: null });
   return record;
 };
 
 export const readOfflineAgendaSnapshot = async (
   scope: ParticipantOfflineScope,
-  options?: OpenParticipantOfflineDatabaseOptions,
+  options?: ParticipantOfflineOperationOptions,
 ): Promise<OfflineAgendaRecord | null> => {
   const parsedScope = parseParticipantOfflineScope(scope);
   const scopeKey = participantOfflineScopeKey(parsedScope);
-  const record = await withDatabase(async (database) => {
+  const result = await withDatabase(async (database) => {
     const transaction = database.transaction(
-      participantOfflineStoreNames.agenda,
+      [
+        participantOfflineStoreNames.agenda,
+        participantOfflineStoreNames.control,
+      ],
       'readonly',
     );
-    const value = await requestValue<OfflineAgendaRecord | undefined>(
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const value = await requestValue<unknown>(
       transaction
         .objectStore(participantOfflineStoreNames.agenda)
         .get(scopeKey),
     );
     await transactionDone(transaction);
-    return value ?? null;
+    return { epoch: control.epoch, value };
   }, options);
-  if (!record) return null;
+  if (result.value === undefined) return null;
   try {
-    const snapshot = parseScopedAgendaSnapshot(parsedScope, record.snapshot);
-    if (
-      record.schemaVersion !== PARTICIPANT_OFFLINE_DATABASE_VERSION ||
-      record.scopeKey !== scopeKey ||
-      record.eventId !== parsedScope.eventId ||
-      record.userId !== parsedScope.userId ||
-      !Number.isFinite(Date.parse(record.lastSyncedAt))
-    ) {
-      throw new TypeError('Offline agenda record metadata is invalid.');
-    }
-    return { ...record, snapshot };
+    return parseOfflineAgendaRecord(
+      result.value,
+      parsedScope,
+      scopeKey,
+      result.epoch,
+    );
   } catch {
     await wipeParticipantOfflineScope(
       parsedScope,
@@ -357,7 +616,7 @@ export const enqueueOfflineAgendaMutation = async (
   mutation: unknown,
   idempotencyKey: string,
   now: Date | string = new Date(),
-  options?: OpenParticipantOfflineDatabaseOptions,
+  options?: ParticipantOfflineOperationOptions,
 ): Promise<OfflineAgendaQueueRecord> => {
   const parsedScope = parseParticipantOfflineScope(scope);
   const parsedMutation = parseApprovedOfflineAgendaMutation(mutation);
@@ -366,24 +625,40 @@ export const enqueueOfflineAgendaMutation = async (
   }
   const scopeKey = participantOfflineScopeKey(parsedScope);
   const timestamp = isoNow(now);
-  const record: OfflineAgendaQueueRecord = {
-    ...parsedMutation,
-    id: idempotencyKey,
-    idempotencyKey,
-    scopeKey,
-    eventId: parsedScope.eventId,
-    userId: parsedScope.userId,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    attempts: 0,
-    status: 'pending',
-    lastProblemCode: null,
-  };
   const stored = await withDatabase(async (database) => {
     const transaction = database.transaction(
-      participantOfflineStoreNames.syncQueue,
+      [
+        participantOfflineStoreNames.control,
+        participantOfflineStoreNames.syncQueue,
+      ],
       'readwrite',
     );
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const record: OfflineAgendaQueueRecord = {
+      ...parsedMutation,
+      contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
+      schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
+      id: idempotencyKey,
+      idempotencyKey,
+      ownerLeaseId: control.epoch,
+      revocationEpoch: control.epoch,
+      scopeKey,
+      eventId: parsedScope.eventId,
+      userId: parsedScope.userId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      expiresAt: new Date(
+        Date.parse(timestamp) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+      ).toISOString(),
+      attempts: 0,
+      status: 'pending',
+      lastProblemCode: null,
+      supersedesId: null,
+    };
+    parseOfflineAgendaQueueRecord(record, parsedScope, scopeKey, control.epoch);
     const store = transaction.objectStore(
       participantOfflineStoreNames.syncQueue,
     );
@@ -392,16 +667,28 @@ export const enqueueOfflineAgendaMutation = async (
     );
     if (existing) {
       if (
-        existing.scopeKey !== record.scopeKey ||
-        existing.action !== record.action ||
-        existing.sessionId !== record.sessionId ||
-        existing.expectedVersion !== record.expectedVersion
+        typeof existing === 'object' &&
+        existing.scopeKey !== record.scopeKey
+      ) {
+        transaction.abort();
+        throw new TypeError('Offline idempotency key was reused.');
+      }
+      const parsedExisting = parseOfflineAgendaQueueRecord(
+        existing,
+        parsedScope,
+        scopeKey,
+        control.epoch,
+      );
+      if (
+        parsedExisting.action !== record.action ||
+        parsedExisting.sessionId !== record.sessionId ||
+        parsedExisting.expectedVersion !== record.expectedVersion
       ) {
         transaction.abort();
         throw new TypeError('Offline idempotency key was reused.');
       }
       await transactionDone(transaction);
-      return existing;
+      return parsedExisting;
     }
     store.add(record);
     await transactionDone(transaction);
@@ -411,30 +698,186 @@ export const enqueueOfflineAgendaMutation = async (
   return stored;
 };
 
+const queueStatuses = new Set<OfflineQueueStatus>([
+  'conflict',
+  'failed',
+  'pending',
+  'retry',
+  'superseded',
+]);
+const queueRecordKeys = new Set([
+  'action',
+  'attempts',
+  'contractVersion',
+  'createdAt',
+  'eventId',
+  'expiresAt',
+  'expectedVersion',
+  'id',
+  'idempotencyKey',
+  'lastProblemCode',
+  'ownerLeaseId',
+  'revocationEpoch',
+  'schemaVersion',
+  'scopeKey',
+  'sessionId',
+  'status',
+  'supersedesId',
+  'updatedAt',
+  'userId',
+]);
+
+const parseOfflineAgendaQueueRecord = (
+  value: unknown,
+  scope: ParticipantOfflineScope,
+  expectedScopeKey: string,
+  expectedOwnerEpoch?: string,
+): OfflineAgendaQueueRecord => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Offline queue record must be an object.');
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    Object.getPrototypeOf(candidate) !== Object.prototype ||
+    Object.keys(candidate).some((key) => !queueRecordKeys.has(key)) ||
+    Object.keys(candidate).length !== queueRecordKeys.size
+  ) {
+    throw new TypeError('Offline queue record schema is invalid.');
+  }
+  const mutation = parseApprovedOfflineAgendaMutation({
+    action: candidate.action,
+    expectedVersion: candidate.expectedVersion,
+    sessionId: candidate.sessionId,
+  });
+  const id = candidate.id;
+  const idempotencyKey = candidate.idempotencyKey;
+  const createdAt = candidate.createdAt;
+  const updatedAt = candidate.updatedAt;
+  const expiresAt = candidate.expiresAt;
+  const attempts = candidate.attempts;
+  const status = candidate.status;
+  const lastProblemCode = candidate.lastProblemCode;
+  const supersedesId = candidate.supersedesId;
+  if (
+    candidate.contractVersion !== PARTICIPANT_OFFLINE_CONTRACT_VERSION ||
+    candidate.schemaVersion !== PARTICIPANT_OFFLINE_DATABASE_VERSION ||
+    typeof id !== 'string' ||
+    !isUuid(id) ||
+    idempotencyKey !== id ||
+    candidate.scopeKey !== expectedScopeKey ||
+    candidate.eventId !== scope.eventId ||
+    candidate.userId !== scope.userId ||
+    typeof candidate.ownerLeaseId !== 'string' ||
+    !isUuid(candidate.ownerLeaseId) ||
+    candidate.revocationEpoch !== candidate.ownerLeaseId ||
+    (expectedOwnerEpoch !== undefined &&
+      candidate.revocationEpoch !== expectedOwnerEpoch) ||
+    typeof createdAt !== 'string' ||
+    typeof updatedAt !== 'string' ||
+    !Number.isFinite(Date.parse(createdAt)) ||
+    !Number.isFinite(Date.parse(updatedAt)) ||
+    typeof expiresAt !== 'string' ||
+    !Number.isFinite(Date.parse(expiresAt)) ||
+    Date.parse(updatedAt) < Date.parse(createdAt) ||
+    Date.parse(expiresAt) <= Date.parse(updatedAt) ||
+    !Number.isSafeInteger(attempts) ||
+    (attempts as number) < 0 ||
+    (attempts as number) > OFFLINE_QUEUE_MAX_ATTEMPTS ||
+    typeof status !== 'string' ||
+    !queueStatuses.has(status as OfflineQueueStatus) ||
+    !(
+      lastProblemCode === null ||
+      (typeof lastProblemCode === 'string' &&
+        lastProblemCode.length > 0 &&
+        lastProblemCode.length <= 128 &&
+        /^[A-Z][A-Z0-9_]+$/.test(lastProblemCode))
+    ) ||
+    !(
+      supersedesId === null ||
+      (typeof supersedesId === 'string' && isUuid(supersedesId))
+    ) ||
+    supersedesId === id ||
+    (status === 'pending' && (attempts !== 0 || lastProblemCode !== null)) ||
+    (status === 'retry' &&
+      ((attempts as number) < 1 ||
+        (attempts as number) >= OFFLINE_QUEUE_MAX_ATTEMPTS ||
+        lastProblemCode === null)) ||
+    (status === 'conflict' &&
+      ((attempts as number) < 1 || lastProblemCode === null)) ||
+    (status === 'failed' &&
+      (attempts !== OFFLINE_QUEUE_MAX_ATTEMPTS || lastProblemCode === null)) ||
+    (status === 'superseded' && lastProblemCode === null)
+  ) {
+    throw new TypeError('Offline queue record metadata is invalid.');
+  }
+  const parsed: OfflineAgendaQueueRecord = {
+    ...mutation,
+    contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
+    schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
+    id,
+    idempotencyKey: id,
+    ownerLeaseId: candidate.ownerLeaseId,
+    revocationEpoch: candidate.revocationEpoch as string,
+    scopeKey: expectedScopeKey,
+    eventId: scope.eventId,
+    userId: scope.userId,
+    createdAt,
+    updatedAt,
+    expiresAt,
+    attempts: attempts as number,
+    status: status as OfflineQueueStatus,
+    lastProblemCode: lastProblemCode as string | null,
+    supersedesId: supersedesId as string | null,
+  };
+  toOfflineAgendaQueueContract(parsed);
+  return parsed;
+};
+
 export const listOfflineAgendaQueue = async (
   scope: ParticipantOfflineScope,
-  options?: OpenParticipantOfflineDatabaseOptions,
+  options?: ParticipantOfflineOperationOptions,
 ): Promise<readonly OfflineAgendaQueueRecord[]> => {
-  const scopeKey = participantOfflineScopeKey(scope);
+  const parsedScope = parseParticipantOfflineScope(scope);
+  const scopeKey = participantOfflineScopeKey(parsedScope);
   return withDatabase(async (database) => {
     const transaction = database.transaction(
+      [
+        participantOfflineStoreNames.control,
+        participantOfflineStoreNames.syncQueue,
+      ],
+      'readwrite',
+    );
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const store = transaction.objectStore(
       participantOfflineStoreNames.syncQueue,
-      'readonly',
     );
-    const records = await requestValue<OfflineAgendaQueueRecord[]>(
-      transaction
-        .objectStore(participantOfflineStoreNames.syncQueue)
-        .index('scopeKey')
-        .getAll(scopeKey),
-    );
+    const index = store.index('scopeKey');
+    const [keys, values] = await Promise.all([
+      requestValue<IDBValidKey[]>(index.getAllKeys(scopeKey)),
+      requestValue<unknown[]>(index.getAll(scopeKey)),
+    ]);
+    const records: OfflineAgendaQueueRecord[] = [];
+    values.forEach((value, indexPosition) => {
+      try {
+        const record = parseOfflineAgendaQueueRecord(
+          value,
+          parsedScope,
+          scopeKey,
+          control.epoch,
+        );
+        if (record.status !== 'superseded') records.push(record);
+      } catch {
+        const key = keys[indexPosition];
+        if (key !== undefined) store.delete(key);
+      }
+    });
     await transactionDone(transaction);
-    return records
-      .filter(
-        (record) =>
-          record.scopeKey === scopeKey &&
-          record.attempts <= OFFLINE_QUEUE_MAX_ATTEMPTS,
-      )
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    return records.sort((left, right) =>
+      left.createdAt.localeCompare(right.createdAt),
+    );
   }, options);
 };
 
@@ -447,10 +890,22 @@ export const updateOfflineAgendaQueueRecord = async (
     readonly status: OfflineQueueStatus;
     readonly updatedAt?: Date | string;
   },
-  options?: OpenParticipantOfflineDatabaseOptions,
+  options?: ParticipantOfflineOperationOptions,
 ): Promise<OfflineAgendaQueueRecord> => {
+  if (!queueStatuses.has(update.status)) {
+    throw new TypeError('Offline queue update status is invalid.');
+  }
+  const parsedScope = parseParticipantOfflineScope({
+    eventId: record.eventId,
+    userId: record.userId,
+  });
+  const parsedRecord = parseOfflineAgendaQueueRecord(
+    record,
+    parsedScope,
+    participantOfflineScopeKey(parsedScope),
+  );
   const next: OfflineAgendaQueueRecord = {
-    ...record,
+    ...parsedRecord,
     attempts: Math.min(
       OFFLINE_QUEUE_MAX_ATTEMPTS,
       Math.max(0, Math.trunc(update.attempts)),
@@ -463,12 +918,56 @@ export const updateOfflineAgendaQueueRecord = async (
     status: update.status,
     updatedAt: isoNow(update.updatedAt ?? new Date()),
   };
+  parseOfflineAgendaQueueRecord(
+    next,
+    parsedScope,
+    participantOfflineScopeKey(parsedScope),
+  );
   await withDatabase(async (database) => {
     const transaction = database.transaction(
-      participantOfflineStoreNames.syncQueue,
+      [
+        participantOfflineStoreNames.control,
+        participantOfflineStoreNames.syncQueue,
+      ],
       'readwrite',
     );
-    transaction.objectStore(participantOfflineStoreNames.syncQueue).put(next);
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const store = transaction.objectStore(
+      participantOfflineStoreNames.syncQueue,
+    );
+    const current = parseOfflineAgendaQueueRecord(
+      await requestValue<unknown>(store.get(parsedRecord.id)),
+      parsedScope,
+      parsedRecord.scopeKey,
+      control.epoch,
+    );
+    if (
+      current.updatedAt !== parsedRecord.updatedAt ||
+      current.status !== parsedRecord.status ||
+      current.attempts !== parsedRecord.attempts ||
+      current.expectedVersion !== parsedRecord.expectedVersion ||
+      current.ownerLeaseId !== parsedRecord.ownerLeaseId ||
+      current.revocationEpoch !== parsedRecord.revocationEpoch ||
+      current.action !== parsedRecord.action ||
+      current.sessionId !== parsedRecord.sessionId
+    ) {
+      transaction.abort();
+      throw new TypeError(
+        'Offline queue record changed before it was updated.',
+      );
+    }
+    if (
+      current.status === 'failed' ||
+      current.status === 'superseded' ||
+      update.status === 'superseded'
+    ) {
+      transaction.abort();
+      throw new TypeError('Offline queue terminal state cannot be updated.');
+    }
+    store.put(next);
     await transactionDone(transaction);
   }, options);
   notifyOfflineData({
@@ -479,18 +978,164 @@ export const updateOfflineAgendaQueueRecord = async (
   return next;
 };
 
-export const removeOfflineAgendaQueueRecord = async (
-  record: Pick<OfflineAgendaQueueRecord, 'id' | 'scopeKey'>,
-  options?: OpenParticipantOfflineDatabaseOptions,
-): Promise<void> => {
+export const rebaseOfflineAgendaConflict = async (
+  record: OfflineAgendaQueueRecord,
+  expectedVersion: number,
+  idempotencyKey: string,
+  now: Date | string = new Date(),
+  options?: ParticipantOfflineOperationOptions,
+): Promise<OfflineAgendaQueueRecord> => {
+  if (
+    !Number.isSafeInteger(expectedVersion) ||
+    expectedVersion < 1 ||
+    !isUuid(idempotencyKey) ||
+    idempotencyKey === record.idempotencyKey
+  ) {
+    throw new TypeError(
+      'Conflict rebase requires a new UUID and canonical agenda version.',
+    );
+  }
+  const scope = parseParticipantOfflineScope({
+    eventId: record.eventId,
+    userId: record.userId,
+  });
+  const expectedScopeKey = participantOfflineScopeKey(scope);
+  const parsedRecord = parseOfflineAgendaQueueRecord(
+    record,
+    scope,
+    expectedScopeKey,
+  );
+  const timestamp = isoNow(now);
+  const rebased: OfflineAgendaQueueRecord = {
+    ...parsedRecord,
+    contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
+    schemaVersion: PARTICIPANT_OFFLINE_DATABASE_VERSION,
+    id: idempotencyKey,
+    idempotencyKey,
+    expectedVersion,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    expiresAt: new Date(
+      Date.parse(timestamp) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+    ).toISOString(),
+    attempts: 0,
+    status: 'pending',
+    lastProblemCode: null,
+    supersedesId: parsedRecord.id,
+  };
   await withDatabase(async (database) => {
     const transaction = database.transaction(
-      participantOfflineStoreNames.syncQueue,
+      [
+        participantOfflineStoreNames.control,
+        participantOfflineStoreNames.syncQueue,
+      ],
       'readwrite',
     );
-    transaction
-      .objectStore(participantOfflineStoreNames.syncQueue)
-      .delete(record.id);
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const store = transaction.objectStore(
+      participantOfflineStoreNames.syncQueue,
+    );
+    const current = await requestValue<unknown>(store.get(parsedRecord.id));
+    const parsedCurrent = parseOfflineAgendaQueueRecord(
+      current,
+      scope,
+      expectedScopeKey,
+      control.epoch,
+    );
+    if (
+      parsedCurrent.status !== 'conflict' ||
+      parsedCurrent.updatedAt !== parsedRecord.updatedAt ||
+      parsedRecord.ownerLeaseId !== control.epoch ||
+      parsedRecord.revocationEpoch !== control.epoch ||
+      parsedCurrent.action !== parsedRecord.action ||
+      parsedCurrent.sessionId !== parsedRecord.sessionId
+    ) {
+      transaction.abort();
+      throw new TypeError('Offline conflict changed before it was rebased.');
+    }
+    const collision = await requestValue<unknown>(store.get(idempotencyKey));
+    if (collision !== undefined) {
+      transaction.abort();
+      throw new TypeError('Offline rebase UUID already exists.');
+    }
+    offlineAgendaConflictRebaseSchema.parse({
+      conflict: toOfflineAgendaQueueContract(parsedCurrent),
+      replacement: toOfflineAgendaQueueContract(rebased),
+    });
+    store.put({
+      ...parsedCurrent,
+      expiresAt: rebased.expiresAt,
+      status: 'superseded',
+      updatedAt: timestamp,
+    } satisfies OfflineAgendaQueueRecord);
+    store.add(rebased);
+    await transactionDone(transaction);
+  }, options);
+  notifyOfflineData({
+    kind: 'queue',
+    scopeKey: expectedScopeKey,
+    reason: null,
+  });
+  return rebased;
+};
+
+export const removeOfflineAgendaQueueRecord = async (
+  record: Pick<
+    OfflineAgendaQueueRecord,
+    'eventId' | 'id' | 'scopeKey' | 'userId'
+  >,
+  options?: ParticipantOfflineOperationOptions,
+): Promise<void> => {
+  const scope = parseParticipantOfflineScope({
+    eventId: record.eventId,
+    userId: record.userId,
+  });
+  const expectedScopeKey = participantOfflineScopeKey(scope);
+  if (record.scopeKey !== expectedScopeKey) {
+    throw new TypeError('Offline queue removal scope is invalid.');
+  }
+  await withDatabase(async (database) => {
+    const transaction = database.transaction(
+      [
+        participantOfflineStoreNames.control,
+        participantOfflineStoreNames.syncQueue,
+      ],
+      'readwrite',
+    );
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const store = transaction.objectStore(
+      participantOfflineStoreNames.syncQueue,
+    );
+    const current = await requestValue<unknown>(store.get(record.id));
+    try {
+      const parsedCurrent = parseOfflineAgendaQueueRecord(
+        current,
+        scope,
+        expectedScopeKey,
+        control.epoch,
+      );
+      if (parsedCurrent.supersedesId) {
+        const parent = parseOfflineAgendaQueueRecord(
+          await requestValue<unknown>(store.get(parsedCurrent.supersedesId)),
+          scope,
+          expectedScopeKey,
+          control.epoch,
+        );
+        if (parent.status === 'superseded') {
+          store.delete(parent.id);
+        }
+      }
+    } catch {
+      // Invalid or cross-owner links are quarantined by deleting only the
+      // explicitly addressed record.
+    }
+    store.delete(record.id);
     await transactionDone(transaction);
   }, options);
   notifyOfflineData({
@@ -543,20 +1188,41 @@ export const wipeParticipantOfflineScope = async (
 export const wipeAllParticipantOfflineData = async (
   reason: OfflineWipeReason,
   options?: OpenParticipantOfflineDatabaseOptions,
+  tombstoneEpoch = createEpoch(),
 ): Promise<void> => {
+  if (!isUuid(tombstoneEpoch)) {
+    throw new TypeError('Offline wipe tombstone is invalid.');
+  }
+  let changed = false;
   await withDatabase(async (database) => {
     const transaction = database.transaction(
       [
         participantOfflineStoreNames.agenda,
+        participantOfflineStoreNames.control,
         participantOfflineStoreNames.metadata,
         participantOfflineStoreNames.syncQueue,
       ],
       'readwrite',
     );
+    const control = transaction.objectStore(
+      participantOfflineStoreNames.control,
+    );
+    const current = await readControlRecord(control);
+    if (current.epoch === tombstoneEpoch) {
+      await transactionDone(transaction);
+      return;
+    }
+    changed = true;
     transaction.objectStore(participantOfflineStoreNames.agenda).clear();
     transaction.objectStore(participantOfflineStoreNames.metadata).clear();
     transaction.objectStore(participantOfflineStoreNames.syncQueue).clear();
+    control.put({
+      key: PARTICIPANT_OFFLINE_EPOCH_KEY,
+      epoch: tombstoneEpoch,
+      changedAt: new Date().toISOString(),
+      reason,
+    } satisfies ParticipantOfflineControlRecord);
     await transactionDone(transaction);
   }, options);
-  notifyOfflineData({ kind: 'wipe', scopeKey: null, reason });
+  if (changed) notifyOfflineData({ kind: 'wipe', scopeKey: null, reason });
 };

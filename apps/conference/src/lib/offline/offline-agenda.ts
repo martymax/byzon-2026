@@ -1,29 +1,44 @@
-import type {
-  ParticipantAgendaMutationProblem,
-  ParticipantAgendaMutationResponse,
-  ParticipantAgendaResponse,
+import {
+  OFFLINE_CONTRACT_VERSION,
+  offlineAgendaReplayEnvelopeSchema,
+  type ParticipantAgendaMutationProblem,
+  type ParticipantAgendaMutationResponse,
+  type ParticipantAgendaResponse,
 } from '@byzon/domain/contracts';
 
 import type { ApiPort } from '@/lib/api';
-import { mutateParticipantAgenda } from '@/lib/agenda-api';
+import {
+  mutateParticipantAgenda,
+  requestParticipantAgenda,
+} from '@/lib/agenda-api';
 
 import {
+  assertParticipantOfflineEpoch,
   enqueueOfflineAgendaMutation,
   listOfflineAgendaQueue,
   readOfflineAgendaSnapshot,
+  rebaseOfflineAgendaConflict,
   removeOfflineAgendaQueueRecord,
+  toOfflineAgendaQueueContract,
   updateOfflineAgendaQueueRecord,
-  wipeAllParticipantOfflineData,
   writeOfflineAgendaSnapshot,
   type OfflineAgendaQueueRecord,
   type OfflineAgendaRecord,
 } from './offline-database';
 import {
+  abortParticipantPrivateOperations,
+  trackParticipantPrivateOperation,
+} from './offline-operation-lifecycle';
+import {
   parseApprovedOfflineAgendaMutation,
   parseParticipantOfflineScope,
+  offlineAgendaReplayAvailable,
+  offlineParticipantAgendaCacheAvailable,
+  OFFLINE_QUEUE_MAX_ATTEMPTS,
   toAgendaMutationRequest,
   type ParticipantOfflineScope,
 } from './offline-policy';
+import { invalidateParticipantPrivateResources } from '../private-resource-events';
 
 export interface OfflineAgendaQueueSummary {
   readonly conflict: number;
@@ -33,6 +48,7 @@ export interface OfflineAgendaQueueSummary {
 }
 
 export interface OfflineAgendaSyncResult {
+  readonly blocked: 'owner_unverified' | 'replay_disabled' | null;
   readonly canonical: ParticipantAgendaResponse | null;
   readonly invalidation: 'permission' | 'session_expired' | null;
   readonly processed: number;
@@ -47,7 +63,17 @@ export const EMPTY_OFFLINE_AGENDA_QUEUE: OfflineAgendaQueueSummary =
     total: 0,
   });
 
-const activeSyncs = new Map<string, Promise<OfflineAgendaSyncResult>>();
+interface ActiveOfflineSync {
+  readonly controller: AbortController;
+  readonly promise: Promise<OfflineAgendaSyncResult>;
+}
+
+const activeSyncs = new Map<string, ActiveOfflineSync>();
+
+export const abortOfflineAgendaSyncs = (): void => {
+  abortParticipantPrivateOperations();
+  activeSyncs.clear();
+};
 
 const scopeKey = (scope: ParticipantOfflineScope) =>
   `${scope.eventId}:${scope.userId}`;
@@ -57,7 +83,9 @@ const queueSummary = (
 ): OfflineAgendaQueueSummary => {
   const pending = records.filter(({ status }) => status === 'pending').length;
   const retry = records.filter(({ status }) => status === 'retry').length;
-  const conflict = records.filter(({ status }) => status === 'conflict').length;
+  const conflict = records.filter(
+    ({ status }) => status === 'conflict' || status === 'failed',
+  ).length;
   return {
     pending,
     retry,
@@ -68,38 +96,65 @@ const queueSummary = (
 
 export const readOfflineAgendaQueueSummary = async (
   scope: ParticipantOfflineScope,
+  expectedEpoch?: string,
 ): Promise<OfflineAgendaQueueSummary> =>
-  queueSummary(await listOfflineAgendaQueue(scope));
+  queueSummary(
+    await listOfflineAgendaQueue(scope, {
+      ...(expectedEpoch ? { expectedEpoch } : {}),
+    }),
+  );
 
 export const retryOfflineAgendaConflict = async (
   scope: ParticipantOfflineScope,
   expectedVersion: number,
+  expectedEpoch: string,
+  createIdempotencyKey: () => string = () =>
+    globalThis.crypto?.randomUUID() ?? '',
 ): Promise<OfflineAgendaQueueSummary> => {
   const parsedScope = parseParticipantOfflineScope(scope);
   if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
     throw new TypeError('Conflict retry requires a canonical agenda version.');
   }
-  const records = await listOfflineAgendaQueue(parsedScope);
+  const records = await listOfflineAgendaQueue(parsedScope, { expectedEpoch });
   const conflict = records.find((record) => record.status === 'conflict');
   if (!conflict) return queueSummary(records);
-  await updateOfflineAgendaQueueRecord(conflict, {
-    attempts: 0,
+  const nextIdempotencyKey = createIdempotencyKey();
+  await rebaseOfflineAgendaConflict(
+    conflict,
     expectedVersion,
-    lastProblemCode: null,
-    status: 'pending',
-  });
-  return readOfflineAgendaQueueSummary(parsedScope);
+    nextIdempotencyKey,
+    new Date(),
+    { expectedEpoch },
+  );
+  return readOfflineAgendaQueueSummary(parsedScope, expectedEpoch);
 };
 
 export const readScopedOfflineAgenda = (
   scope: ParticipantOfflineScope,
-): Promise<OfflineAgendaRecord | null> => readOfflineAgendaSnapshot(scope);
+  expectedEpoch?: string,
+): Promise<OfflineAgendaRecord | null> =>
+  offlineParticipantAgendaCacheAvailable()
+    ? readOfflineAgendaSnapshot(scope, {
+        ...(expectedEpoch ? { expectedEpoch } : {}),
+      })
+    : Promise.resolve(null);
 
 export const persistCanonicalOfflineAgenda = (
   scope: ParticipantOfflineScope,
   snapshot: ParticipantAgendaResponse,
-): Promise<OfflineAgendaRecord> =>
-  writeOfflineAgendaSnapshot(scope, snapshot, new Date());
+  expectedEpoch?: string,
+): Promise<OfflineAgendaRecord> => {
+  if (!offlineParticipantAgendaCacheAvailable()) {
+    return Promise.reject(
+      new TypeError(
+        'Personal agenda persistence requires an owner lease feature gate.',
+      ),
+    );
+  }
+  return writeOfflineAgendaSnapshot(scope, snapshot, new Date(), {
+    ...(expectedEpoch ? { expectedEpoch } : {}),
+  });
+};
 
 const scheduleBackgroundSync = (): void => {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
@@ -121,7 +176,13 @@ export const queueApprovedOfflineAgendaMutation = async (
   scope: ParticipantOfflineScope,
   mutation: unknown,
   idempotencyKey = globalThis.crypto?.randomUUID(),
+  expectedEpoch?: string,
 ): Promise<OfflineAgendaQueueRecord> => {
+  if (!offlineAgendaReplayAvailable()) {
+    throw new TypeError(
+      'Offline agenda replay is disabled until owner-bound server support is available.',
+    );
+  }
   const parsedScope = parseParticipantOfflineScope(scope);
   const parsedMutation = parseApprovedOfflineAgendaMutation(mutation);
   if (!idempotencyKey) {
@@ -131,6 +192,10 @@ export const queueApprovedOfflineAgendaMutation = async (
     parsedScope,
     parsedMutation,
     idempotencyKey,
+    new Date(),
+    {
+      ...(expectedEpoch ? { expectedEpoch } : {}),
+    },
   );
   scheduleBackgroundSync();
   return queued;
@@ -172,30 +237,139 @@ const markQueueFailure = async (
   record: OfflineAgendaQueueRecord,
   status: 'conflict' | 'retry',
   problemCode: string,
+  expectedEpoch: string,
 ): Promise<void> => {
-  await updateOfflineAgendaQueueRecord(record, {
-    attempts: record.attempts + 1,
-    lastProblemCode: problemCode,
-    status,
-  });
+  const attempts = record.attempts + 1;
+  await updateOfflineAgendaQueueRecord(
+    record,
+    {
+      attempts,
+      lastProblemCode: problemCode,
+      status:
+        status === 'retry' && attempts >= OFFLINE_QUEUE_MAX_ATTEMPTS
+          ? 'failed'
+          : status,
+    },
+    { expectedEpoch },
+  );
 };
 
 const executeSync = async (
   scope: ParticipantOfflineScope,
   api: ApiPort,
+  expectedEpoch: string,
+  signal: AbortSignal,
 ): Promise<OfflineAgendaSyncResult> => {
   const parsedScope = parseParticipantOfflineScope(scope);
-  const records = await listOfflineAgendaQueue(parsedScope);
+  if (!offlineAgendaReplayAvailable()) {
+    return {
+      blocked: 'replay_disabled',
+      canonical: null,
+      invalidation: null,
+      processed: 0,
+      summary: EMPTY_OFFLINE_AGENDA_QUEUE,
+    };
+  }
+  await assertParticipantOfflineEpoch(expectedEpoch);
+  const owner = await requestParticipantAgenda(api, signal);
+  if (signal.aborted) {
+    return {
+      blocked: 'owner_unverified',
+      canonical: null,
+      invalidation: null,
+      processed: 0,
+      summary: EMPTY_OFFLINE_AGENDA_QUEUE,
+    };
+  }
+  if (
+    !owner.ok ||
+    owner.kind !== 'success' ||
+    owner.data.eventId !== parsedScope.eventId ||
+    owner.data.userId !== parsedScope.userId
+  ) {
+    const invalidation =
+      !owner.ok &&
+      (owner.failure.kind === 'session_expired' ||
+        (owner.failure.kind === 'problem' &&
+          (owner.failure.problem.code === 'AUTHENTICATION_REQUIRED' ||
+            owner.failure.problem.code === 'AUTH_SESSION_EXPIRED')))
+        ? 'session_expired'
+        : !owner.ok &&
+            owner.failure.kind === 'problem' &&
+            owner.failure.problem.code === 'EVENT_ACCESS_DENIED'
+          ? 'permission'
+          : owner.ok
+            ? 'permission'
+            : null;
+    if (invalidation) {
+      await invalidateParticipantPrivateResources(
+        invalidation,
+        invalidation === 'permission' ? 'switch_account' : invalidation,
+      );
+      return {
+        blocked: 'owner_unverified',
+        canonical: null,
+        invalidation,
+        processed: 0,
+        summary: EMPTY_OFFLINE_AGENDA_QUEUE,
+      };
+    }
+    return {
+      blocked: 'owner_unverified',
+      canonical: null,
+      invalidation: null,
+      processed: 0,
+      summary: await readOfflineAgendaQueueSummary(parsedScope, expectedEpoch),
+    };
+  }
+  await assertParticipantOfflineEpoch(expectedEpoch);
+  const records = await listOfflineAgendaQueue(parsedScope, { expectedEpoch });
   let canonical: ParticipantAgendaResponse | null = null;
   let processed = 0;
+  let ownerAgendaVersion = owner.data.version;
 
   for (const record of records) {
-    if (record.status === 'conflict') continue;
+    if (
+      signal.aborted ||
+      record.status === 'conflict' ||
+      record.status === 'failed' ||
+      record.status === 'superseded'
+    ) {
+      continue;
+    }
+    if (record.expectedVersion !== ownerAgendaVersion) {
+      await markQueueFailure(
+        record,
+        'conflict',
+        'AGENDA_VERSION_CONFLICT',
+        expectedEpoch,
+      );
+      continue;
+    }
+    const preflightIssuedAt = new Date();
+    offlineAgendaReplayEnvelopeSchema.parse({
+      preflight: {
+        contractVersion: OFFLINE_CONTRACT_VERSION,
+        eventId: parsedScope.eventId,
+        userId: parsedScope.userId,
+        ownerLeaseId: record.ownerLeaseId,
+        revocationEpoch: record.revocationEpoch,
+        agendaVersion: ownerAgendaVersion,
+        issuedAt: preflightIssuedAt.toISOString(),
+        validUntil: new Date(
+          preflightIssuedAt.getTime() + 60_000,
+        ).toISOString(),
+      },
+      record: toOfflineAgendaQueueContract(record),
+    });
     const result = await mutateParticipantAgenda(
       api,
       toAgendaMutationRequest(record),
       record.idempotencyKey,
+      signal,
     );
+    if (signal.aborted) break;
+    await assertParticipantOfflineEpoch(expectedEpoch);
     if (result.ok) {
       if (
         result.kind !== 'success' ||
@@ -203,12 +377,20 @@ const executeSync = async (
         result.data.mutation.action !== record.action ||
         result.data.mutation.sessionId !== record.sessionId
       ) {
-        await markQueueFailure(record, 'conflict', 'INVALID_RESPONSE');
+        await markQueueFailure(
+          record,
+          'conflict',
+          'INVALID_RESPONSE',
+          expectedEpoch,
+        );
         continue;
       }
       canonical = snapshotFromMutation(result.data);
-      await writeOfflineAgendaSnapshot(parsedScope, canonical);
-      await removeOfflineAgendaQueueRecord(record);
+      ownerAgendaVersion = canonical.version;
+      await writeOfflineAgendaSnapshot(parsedScope, canonical, new Date(), {
+        expectedEpoch,
+      });
+      await removeOfflineAgendaQueueRecord(record, { expectedEpoch });
       processed += 1;
       continue;
     }
@@ -216,8 +398,9 @@ const executeSync = async (
     if (result.failure.kind === 'problem') {
       const invalidation = problemInvalidation(result.failure.problem);
       if (invalidation) {
-        await wipeAllParticipantOfflineData(invalidation);
+        await invalidateParticipantPrivateResources(invalidation);
         return {
+          blocked: null,
           canonical: null,
           invalidation,
           processed,
@@ -230,7 +413,12 @@ const executeSync = async (
         canonicalMatchesScope(problemCanonical, parsedScope)
       ) {
         canonical = problemCanonical;
-        await writeOfflineAgendaSnapshot(parsedScope, problemCanonical);
+        await writeOfflineAgendaSnapshot(
+          parsedScope,
+          problemCanonical,
+          new Date(),
+          { expectedEpoch },
+        );
       }
       const retryable =
         result.failure.problem.code === 'IDEMPOTENCY_IN_PROGRESS' ||
@@ -239,14 +427,16 @@ const executeSync = async (
         record,
         retryable ? 'retry' : 'conflict',
         result.failure.problem.code,
+        expectedEpoch,
       );
       if (retryable) break;
       continue;
     }
 
     if (result.failure.kind === 'session_expired') {
-      await wipeAllParticipantOfflineData('session_expired');
+      await invalidateParticipantPrivateResources('session_expired');
       return {
+        blocked: null,
         canonical: null,
         invalidation: 'session_expired',
         processed,
@@ -254,28 +444,45 @@ const executeSync = async (
       };
     }
     if (result.failure.kind === 'aborted') break;
-    await markQueueFailure(record, 'retry', result.failure.kind.toUpperCase());
+    await markQueueFailure(
+      record,
+      'retry',
+      result.failure.kind.toUpperCase(),
+      expectedEpoch,
+    );
     break;
   }
 
   return {
+    blocked: null,
     canonical,
     invalidation: null,
     processed,
-    summary: queueSummary(await listOfflineAgendaQueue(parsedScope)),
+    summary: queueSummary(
+      await listOfflineAgendaQueue(parsedScope, { expectedEpoch }),
+    ),
   };
 };
 
 export const syncOfflineAgendaQueue = (
   scope: ParticipantOfflineScope,
   api: ApiPort,
+  expectedEpoch: string,
 ): Promise<OfflineAgendaSyncResult> => {
   const key = scopeKey(parseParticipantOfflineScope(scope));
   const active = activeSyncs.get(key);
-  if (active) return active;
-  const sync = executeSync(scope, api).finally(() => {
-    if (activeSyncs.get(key) === sync) activeSyncs.delete(key);
+  if (active) return active.promise;
+  const controller = new AbortController();
+  const stopTracking = trackParticipantPrivateOperation(controller);
+  const promise = executeSync(
+    scope,
+    api,
+    expectedEpoch,
+    controller.signal,
+  ).finally(() => {
+    stopTracking();
+    if (activeSyncs.get(key)?.promise === promise) activeSyncs.delete(key);
   });
-  activeSyncs.set(key, sync);
-  return sync;
+  activeSyncs.set(key, { controller, promise });
+  return promise;
 };

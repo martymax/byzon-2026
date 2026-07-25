@@ -8,14 +8,12 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { wipeAllParticipantOfflineData } from '../lib/offline/offline-database';
 import { OFFLINE_AGENDA_SYNC_EVENT } from '../lib/offline/offline-policy';
-import { subscribeToPrivateResourceInvalidation } from '../lib/private-resource-events';
 
 import styles from './service-worker-registration.module.css';
 
 const APP_SERVICE_WORKER_PATH = '/sw.js';
-export const APP_SERVICE_WORKER_VERSION = '2026.07.25.2';
+export const APP_SERVICE_WORKER_VERSION = '2026.07.25.3';
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1_000;
 
@@ -37,6 +35,51 @@ interface DeferredInstallPromptEvent extends Event {
 }
 
 type WorkerNotice = 'error' | 'install' | 'none' | 'offline' | 'update';
+
+interface WaitingWorker {
+  readonly version: string;
+  readonly worker: ServiceWorker;
+}
+
+export const requestServiceWorkerVersion = (
+  worker: Pick<ServiceWorker, 'postMessage'>,
+  timeoutMs = 2_000,
+): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const channel = new MessageChannel();
+    const timeout = globalThis.setTimeout(() => {
+      channel.port1.close();
+      reject(
+        new TypeError('Waiting service worker did not report its version.'),
+      );
+    }, timeoutMs);
+    channel.port1.onmessage = (event: MessageEvent<unknown>) => {
+      const data = event.data as {
+        readonly type?: unknown;
+        readonly version?: unknown;
+      } | null;
+      if (
+        !data ||
+        data.type !== 'BYZON_WORKER_VERSION' ||
+        typeof data.version !== 'string' ||
+        data.version.length < 1 ||
+        data.version.length > 128 ||
+        !/^[0-9A-Za-z._-]+$/.test(data.version)
+      ) {
+        return;
+      }
+      globalThis.clearTimeout(timeout);
+      channel.port1.close();
+      resolve(data.version);
+    };
+    try {
+      worker.postMessage({ type: 'BYZON_GET_VERSION' }, [channel.port2]);
+    } catch (error) {
+      globalThis.clearTimeout(timeout);
+      channel.port1.close();
+      reject(error);
+    }
+  });
 
 export const shouldRegisterAppServiceWorker = (
   scriptUrls: readonly string[],
@@ -93,17 +136,8 @@ export function ServiceWorkerRegistration() {
   );
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
-  const waitingWorker = useRef<ServiceWorker | null>(null);
+  const waitingWorker = useRef<WaitingWorker | null>(null);
   const applyingUpdate = useRef(false);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToPrivateResourceInvalidation((reason) => {
-      void wipeAllParticipantOfflineData(
-        reason === 'session_expired' ? 'session_expired' : 'permission',
-      ).catch(() => undefined);
-    });
-    return unsubscribe;
-  }, []);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -125,6 +159,7 @@ export function ServiceWorkerRegistration() {
     if (!('serviceWorker' in navigator)) return;
 
     let disposed = false;
+    let waitingProbe = 0;
     let registration: ServiceWorkerRegistration | undefined;
     const workerStateListeners = new Map<
       ServiceWorker,
@@ -133,9 +168,17 @@ export function ServiceWorkerRegistration() {
 
     const exposeWaitingWorker = (worker: ServiceWorker | null) => {
       if (disposed || !worker) return;
-      waitingWorker.current = worker;
-      setUpdateDismissed(false);
-      setUpdateAvailable(true);
+      const probe = ++waitingProbe;
+      void requestServiceWorkerVersion(worker)
+        .then((version) => {
+          if (disposed || probe !== waitingProbe) return;
+          waitingWorker.current = { version, worker };
+          setUpdateDismissed(false);
+          setUpdateAvailable(true);
+        })
+        .catch(() => {
+          if (!disposed && probe === waitingProbe) setFailed(true);
+        });
     };
 
     const observeWorker = (worker: ServiceWorker | null) => {
@@ -187,6 +230,10 @@ export function ServiceWorkerRegistration() {
       window.location.reload();
     };
     const onWorkerMessage = (event: MessageEvent<unknown>) => {
+      const controller = navigator.serviceWorker.controller;
+      if (!controller || event.source !== controller) {
+        return;
+      }
       if (!event.data || typeof event.data !== 'object') return;
       const data = event.data as { readonly type?: unknown };
       if (data.type === 'BYZON_SYNC_REQUESTED') {
@@ -229,12 +276,12 @@ export function ServiceWorkerRegistration() {
   }, []);
 
   const applyUpdate = useCallback(() => {
-    const worker = waitingWorker.current;
-    if (!worker) return;
+    const waiting = waitingWorker.current;
+    if (!waiting) return;
     applyingUpdate.current = true;
-    worker.postMessage({
+    waiting.worker.postMessage({
       type: 'BYZON_SKIP_WAITING',
-      version: APP_SERVICE_WORKER_VERSION,
+      version: waiting.version,
     });
   }, []);
 

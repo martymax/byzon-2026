@@ -137,8 +137,8 @@ describe('CS-AGENDA-01 participant contracts', () => {
       cacheControl: 'private, no-store',
       vary: ['authorization', 'cookie'],
       scope: 'event-user',
-      offlineRead: 'requires-cs-offline-01',
-      browserPersistence: 'forbidden-before-cs-offline-01',
+      offlineRead: 'requires-offline-contract-v1-owner-lease',
+      browserPersistence: 'offline-contract-v1-feature-gated',
       mutation: 'online-only',
       idempotency: 'required',
     });

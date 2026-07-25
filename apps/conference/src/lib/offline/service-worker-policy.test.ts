@@ -16,59 +16,73 @@ const section = (start: string, end: string): string => {
 };
 
 describe('application service-worker source policy', () => {
-  it('pins a versioned shell/public cache and retains one rollback shell', () => {
-    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.2';");
+  it('uses a unique build shell cache and retains one verified rollback', () => {
+    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.3';");
     expect(workerSource).toContain(
-      'const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-v2`;',
+      'const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${WORKER_VERSION}`;',
     );
     expect(workerSource).toContain(
-      'const PUBLIC_CACHE = `${CACHE_NAMESPACE}-public-v2`;',
+      'const PUBLIC_CACHE = `${CACHE_NAMESPACE}-public-v3`;',
     );
     expect(workerSource).toContain(
       "const LEGACY_SHELL_CACHE = 'byzon-shell-v1';",
     );
-    expect(workerSource).toContain('[SHELL_CACHE, PUBLIC_CACHE, olderShell]');
+    expect(workerSource).toContain('[SHELL_CACHE, PUBLIC_CACHE, rollback]');
+    expect(workerSource).toContain('const SHELL_METADATA_URL');
   });
 
-  it('keeps activation explicit and leaves a failed install on the previous worker', () => {
+  it('stages a complete verified shell and deletes a partial failed build', () => {
     const install = section(
       "self.addEventListener('install'",
       "self.addEventListener('activate'",
     );
     const messages = section(
       "self.addEventListener('message'",
-      'const isPublicContentRequest',
+      'const publicRequestDescriptor',
     );
 
     expect(install).toContain('event.waitUntil(precacheShell())');
     expect(install).not.toContain('skipWaiting');
-    expect(workerSource).toContain('if (!response.ok)');
+    expect(workerSource).toContain('const verified = await Promise.all(');
+    expect(workerSource).toContain('await caches.delete(SHELL_CACHE)');
+    expect(workerSource).toContain('complete: true');
+    expect(workerSource).toContain('response.redirected');
     expect(messages).toContain("event.data?.type === 'BYZON_SKIP_WAITING'");
     expect(messages).toContain('event.data.version === WORKER_VERSION');
     expect(messages).toContain('self.skipWaiting()');
+    expect(messages).toContain("event.data?.type === 'BYZON_GET_VERSION'");
+    expect(messages).toContain("type: 'BYZON_WORKER_VERSION'");
   });
 
-  it('allows only anonymous versioned public GET data into the data cache', () => {
+  it('allows only anonymous, correlated and sanitized public GET data', () => {
     const eligibility = section(
-      'const isPublicContentRequest',
-      'const responseMetadata',
+      'const publicRequestDescriptor',
+      'const field =',
     );
     const validation = section(
-      'const responseMetadata',
-      'const withCacheMetadata',
+      'const sanitizePublicResponse',
+      'const publicResponse',
     );
 
     expect(workerSource).toContain(
-      String.raw`^\/api\/v1\/public\/events\/[a-z0-9]+(?:-[a-z0-9]+)*\/(?:bootstrap|content)$`,
+      String.raw`^\/api\/v1\/public\/events\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(bootstrap|content)$`,
     );
     expect(eligibility).toContain("request.method !== 'GET'");
-    expect(eligibility).toContain('url.origin === self.location.origin');
-    expect(eligibility).toContain("url.search === ''");
-    expect(eligibility).toContain("!request.headers.has('authorization')");
-    expect(validation).toContain('cache-control');
-    expect(validation).toContain('private|no-store');
-    expect(validation).toContain('Number.isSafeInteger(body.version)');
-    expect(validation).toContain('Date.parse(body.publishedAt)');
+    expect(eligibility).toContain('url.origin !== self.location.origin');
+    expect(eligibility).toContain("url.search !== ''");
+    expect(eligibility).toContain("request.headers.has('authorization')");
+    expect(eligibility).toContain("credentials: 'omit'");
+    expect(eligibility).toContain("redirect: 'error'");
+    expect(validation).toContain('responseIsPublic(response)');
+    expect(workerSource).toContain('private|no-store');
+    expect(workerSource).toContain("'set-cookie'");
+    expect(workerSource).toContain('MAX_PUBLIC_RESPONSE_BYTES');
+    expect(validation).toContain('body.event.slug !== descriptor.slug');
+    expect(workerSource).toContain('bootstrapValue(JSON.parse(text))');
+    expect(workerSource).toContain('contentValue(JSON.parse(text))');
+    expect(workerSource).toContain(
+      'cached.metadata.publicationVersion > metadata.publicationVersion',
+    );
   });
 
   it('never installs a cache route for private, mutation or check-in APIs', () => {
@@ -76,7 +90,7 @@ describe('application service-worker source policy', () => {
       "self.addEventListener('fetch'",
       "self.addEventListener('sync'",
     );
-    expect(fetchHandler).toContain('isPublicContentRequest(event.request)');
+    expect(fetchHandler).toContain('publicRequestDescriptor(event.request)');
     expect(fetchHandler).not.toContain('caches.match(event.request)');
     expect(workerSource).not.toContain('/api/v1/me');
     expect(workerSource).not.toContain('/api/v1/events');
@@ -86,7 +100,7 @@ describe('application service-worker source policy', () => {
 
   it('stays below the dedicated worker transfer budget', () => {
     expect(new TextEncoder().encode(workerSource).byteLength).toBeLessThan(
-      16_384,
+      24_576,
     );
   });
 });

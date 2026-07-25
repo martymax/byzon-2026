@@ -57,7 +57,9 @@ export interface ParticipantAccountResourceValue {
   readonly discardPrivateData: (
     status: 'session_expired' | 'permission',
   ) => void;
-  readonly clearPrivateData: () => Promise<'cleared' | 'none_present'>;
+  readonly clearPrivateData: (
+    reason?: 'logout' | 'switch_account',
+  ) => Promise<'cleared' | 'none_present'>;
   readonly commitProfile: (
     response: IdentityProfileUpdateResponse,
     expectedVersion: number,
@@ -210,7 +212,7 @@ export const ParticipantAccountResourceProvider = ({
     if (!active) return;
     if (scopeKind === 'unavailable' || !archivedScopeIsValid) {
       requestEpoch.current += 1;
-      invalidateParticipantPrivateResources('permission');
+      void invalidateParticipantPrivateResources('permission');
       return;
     }
     const epoch = ++requestEpoch.current;
@@ -236,7 +238,7 @@ export const ParticipantAccountResourceProvider = ({
             archivedScopeMatched,
           );
           if (next.status !== 'ready') {
-            invalidateParticipantPrivateResources('permission');
+            void invalidateParticipantPrivateResources('permission');
           }
           storeState(next);
           setRevision((value) => value + 1);
@@ -248,7 +250,7 @@ export const ParticipantAccountResourceProvider = ({
             result.status,
           );
           if (invalidation) {
-            invalidateParticipantPrivateResources(invalidation);
+            void invalidateParticipantPrivateResources(invalidation);
             requestEpoch.current += 1;
             setActive(false);
             storeState({ status: invalidation });
@@ -278,7 +280,7 @@ export const ParticipantAccountResourceProvider = ({
 
   const activate = useCallback(() => {
     if (scopeKind === 'unavailable' || !archivedScopeIsValid) {
-      invalidateParticipantPrivateResources('permission');
+      void invalidateParticipantPrivateResources('permission');
       requestEpoch.current += 1;
       setActive(false);
       storeState({ status: 'permission' });
@@ -296,7 +298,7 @@ export const ParticipantAccountResourceProvider = ({
   }, [archivedScopeIsValid, scopeKind, storeState]);
   const retry = useCallback(() => {
     if (scopeKind === 'unavailable' || !archivedScopeIsValid) {
-      invalidateParticipantPrivateResources('permission');
+      void invalidateParticipantPrivateResources('permission');
       requestEpoch.current += 1;
       setActive(false);
       storeState({ status: 'permission' });
@@ -321,20 +323,23 @@ export const ParticipantAccountResourceProvider = ({
   );
   const discardPrivateData = useCallback(
     (status: 'session_expired' | 'permission') => {
-      invalidateParticipantPrivateResources(status);
+      void invalidateParticipantPrivateResources(status);
       applyDiscardPrivateData(status);
     },
     [applyDiscardPrivateData],
   );
-  const clearPrivateData = useCallback(async () => {
-    const disposition =
-      stateRef.current.status === 'ready' ? 'cleared' : 'none_present';
-    invalidateParticipantPrivateResources('session_expired');
-    requestEpoch.current += 1;
-    setActive(false);
-    storeState({ status: 'cleared' });
-    return disposition;
-  }, [storeState]);
+  const clearPrivateData = useCallback(
+    async (reason: 'logout' | 'switch_account' = 'logout') => {
+      const disposition =
+        stateRef.current.status === 'ready' ? 'cleared' : 'none_present';
+      await invalidateParticipantPrivateResources('session_expired', reason);
+      requestEpoch.current += 1;
+      setActive(false);
+      storeState({ status: 'cleared' });
+      return disposition;
+    },
+    [storeState],
+  );
 
   useEffect(
     () => subscribeToPrivateResourceInvalidation(applyDiscardPrivateData),

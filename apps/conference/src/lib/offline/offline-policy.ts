@@ -1,18 +1,25 @@
 import {
+  OFFLINE_CONTRACT_VERSION,
+  OFFLINE_OWNER_LEASE_MAX_MS,
+  OFFLINE_QUEUE_MAX_ATTEMPTS as CONTRACT_OFFLINE_QUEUE_MAX_ATTEMPTS,
   participantAgendaMutationRequestSchema,
   participantAgendaResponseSchema,
   type ParticipantAgendaMutationRequest,
   type ParticipantAgendaResponse,
 } from '@byzon/domain/contracts';
 
-export const PARTICIPANT_OFFLINE_DATABASE_VERSION = 2;
+export const PARTICIPANT_OFFLINE_DATABASE_VERSION = 3;
+export const PARTICIPANT_OFFLINE_CONTRACT_VERSION = OFFLINE_CONTRACT_VERSION;
 export const PARTICIPANT_OFFLINE_DATABASE_NAME = 'byzon-participant-offline-v2';
 export const PUBLIC_CONTENT_STALE_AFTER_MS = 5 * 60 * 1_000;
-export const OFFLINE_QUEUE_MAX_ATTEMPTS = 5;
+export const OFFLINE_QUEUE_MAX_ATTEMPTS = CONTRACT_OFFLINE_QUEUE_MAX_ATTEMPTS;
+export const OFFLINE_PRIVATE_RECORD_LEASE_MS = OFFLINE_OWNER_LEASE_MAX_MS;
 export const OFFLINE_AGENDA_SYNC_EVENT = 'byzon:offline-sync-requested';
+export const PARTICIPANT_OFFLINE_EPOCH_KEY = 'participant-private-epoch';
 
 export const participantOfflineStoreNames = Object.freeze({
   agenda: 'agenda',
+  control: 'control',
   metadata: 'metadata',
   syncQueue: 'syncQueue',
 } as const);
@@ -35,6 +42,21 @@ export interface ApprovedOfflineAgendaMutation {
 }
 
 export type PublicCacheFreshness = 'fresh' | 'stale';
+
+/**
+ * Personal replay stays fail-closed in production until the server exposes an
+ * owner-bound CS-OFFLINE-01 replay endpoint. Development mocks and tests still
+ * exercise the complete queue UX, but a production bundle cannot POST a stale
+ * local principal's intent to the current cookie principal.
+ */
+export const offlineParticipantAgendaCacheAvailable = (): boolean =>
+  process.env.NODE_ENV === 'test' ||
+  (process.env.NODE_ENV === 'development' &&
+    typeof document !== 'undefined' &&
+    document.documentElement.dataset.byzonMockMode === 'active');
+
+export const offlineAgendaReplayAvailable = (): boolean =>
+  offlineParticipantAgendaCacheAvailable();
 
 export const isUuid = (value: string): boolean => uuidPattern.test(value);
 

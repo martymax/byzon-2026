@@ -74,17 +74,17 @@ const localDateInTimezone = (
 };
 
 /**
- * CS-AGENDA-01 carries event/user-scoped P2 data. Reads may become available
- * offline only after CS-OFFLINE-01 defines encrypted owner/version binding and
- * revocation. Reservation, waitlist and estimate mutations are authoritative,
- * idempotent and online-only.
+ * CS-AGENDA-01 carries event/user-scoped P2 data. Browser persistence is valid
+ * only through the owner lease, revocation epoch and fail-closed feature gate
+ * defined by CS-OFFLINE-01. Reservation, waitlist and estimate mutations stay
+ * authoritative, idempotent and online-only.
  */
 export const participantAgendaCachePolicy = Object.freeze({
   cacheControl: 'private, no-store',
   vary: Object.freeze(['authorization', 'cookie'] as const),
   scope: 'event-user',
-  offlineRead: 'requires-cs-offline-01',
-  browserPersistence: 'forbidden-before-cs-offline-01',
+  offlineRead: 'requires-offline-contract-v1-owner-lease',
+  browserPersistence: 'offline-contract-v1-feature-gated',
   mutation: 'online-only',
   idempotency: 'required',
 } as const);

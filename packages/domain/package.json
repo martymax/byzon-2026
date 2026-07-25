@@ -16,6 +16,10 @@
       "types": "./src/contracts/check-in.ts",
       "default": "./dist/contracts/check-in.js"
     },
+    "./contracts/offline": {
+      "types": "./src/contracts/offline.ts",
+      "default": "./dist/contracts/offline.js"
+    },
     "./contracts/admin": {
       "types": "./src/contracts/admin.ts",
       "default": "./dist/contracts/admin.js"

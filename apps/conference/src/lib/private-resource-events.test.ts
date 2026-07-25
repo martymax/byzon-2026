@@ -22,13 +22,15 @@ describe('participant private-resource invalidation', () => {
     ).toBeNull();
   });
 
-  it('broadcasts a wipe synchronously and stops after unsubscribe', () => {
+  it('broadcasts a wipe synchronously and exposes awaitable cleanup', async () => {
     const listener = vi.fn();
     const unsubscribe = subscribeToPrivateResourceInvalidation(listener);
 
-    invalidateParticipantPrivateResources('session_expired');
+    const cleanup = invalidateParticipantPrivateResources('session_expired');
+    expect(listener).toHaveBeenCalledOnce();
+    await cleanup;
     unsubscribe();
-    invalidateParticipantPrivateResources('permission');
+    await invalidateParticipantPrivateResources('permission');
 
     expect(listener).toHaveBeenCalledOnce();
     expect(listener).toHaveBeenCalledWith('session_expired');

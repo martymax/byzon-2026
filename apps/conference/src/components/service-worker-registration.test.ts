@@ -1,13 +1,70 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  APP_SERVICE_WORKER_VERSION,
+  requestServiceWorkerVersion,
   serviceWorkerNotice,
   shouldRegisterAppServiceWorker,
 } from './service-worker-registration';
 
 const ORIGIN = 'https://app.byzon.test';
 
+const transferredPorts = (
+  transfer: readonly Transferable[] | StructuredSerializeOptions,
+): readonly Transferable[] | undefined =>
+  Array.isArray(transfer)
+    ? transfer
+    : (transfer as StructuredSerializeOptions).transfer;
+
 describe('application service worker ownership', () => {
+  it('reads the waiting worker version through a dedicated message port', async () => {
+    const postMessage = vi.fn(
+      (
+        message: unknown,
+        transfer: readonly Transferable[] | StructuredSerializeOptions,
+      ) => {
+        expect(message).toEqual({ type: 'BYZON_GET_VERSION' });
+        const ports = transferredPorts(transfer);
+        const port = ports?.[0];
+        expect(port).toBeInstanceOf(MessagePort);
+        (port as MessagePort).postMessage({
+          type: 'BYZON_WORKER_VERSION',
+          version: APP_SERVICE_WORKER_VERSION,
+        });
+      },
+    );
+
+    await expect(
+      requestServiceWorkerVersion({ postMessage } as Pick<
+        ServiceWorker,
+        'postMessage'
+      >),
+    ).resolves.toBe(APP_SERVICE_WORKER_VERSION);
+    expect(postMessage).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an unverified waiting worker version', async () => {
+    const postMessage = vi.fn(
+      (
+        _message: unknown,
+        transfer: readonly Transferable[] | StructuredSerializeOptions,
+      ) => {
+        const ports = transferredPorts(transfer);
+        (ports?.[0] as MessagePort | undefined)?.postMessage({
+          type: 'BYZON_WORKER_VERSION',
+          version: 'invalid version with spaces',
+        });
+      },
+    );
+
+    await expect(
+      requestServiceWorkerVersion(
+        { postMessage } as Pick<ServiceWorker, 'postMessage'>,
+        10,
+      ),
+    ).rejects.toThrow('did not report its version');
+  });
+
   it('registers when the scope is empty or already owned by the app worker', () => {
     expect(shouldRegisterAppServiceWorker([], ORIGIN)).toBe(true);
     expect(shouldRegisterAppServiceWorker([`${ORIGIN}/sw.js`], ORIGIN)).toBe(

@@ -13,10 +13,10 @@ const MAX_PRACTICAL_ITEMS = 512;
  * and public profile copy are person-associated published data; email, user
  * identity, ticket state, private notes and admin metadata are excluded.
  *
- * Only the anonymous public representation may later become offline-readable,
- * and only after CS-OFFLINE-01 defines version ownership and revocation.
- * Authenticated participant responses remain private and are never eligible
- * for a shared or service-worker cache.
+ * Only the anonymous public representation may be offline-readable through
+ * the strict version/expiry snapshot in CS-OFFLINE-01. Authenticated
+ * participant responses remain private and are never eligible for a shared
+ * or service-worker cache.
  */
 export const contentCachePolicy = Object.freeze({
   participant: Object.freeze({
@@ -25,7 +25,7 @@ export const contentCachePolicy = Object.freeze({
   }),
   public: Object.freeze({
     cacheControl: 'public, max-age=60, stale-while-revalidate=300',
-    offline: 'requires-cs-offline-01',
+    offline: 'requires-offline-contract-v1-public-snapshot',
   }),
 } as const);
 

@@ -22,7 +22,10 @@ import {
   submitIdentitySessionAction,
 } from '@/lib/identity-api';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
-import { privateResourceInvalidationReason } from '@/lib/private-resource-events';
+import {
+  invalidateParticipantPrivateResources,
+  privateResourceInvalidationReason,
+} from '@/lib/private-resource-events';
 import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type SessionActionFailure =
@@ -110,14 +113,30 @@ const createRuntimeKey = (): string => {
   return `session-action:${suffix}`;
 };
 
+type SessionCleanupReason = 'logout' | 'switch_account';
+
+const cleanupReasonForAction = (
+  action: IdentitySessionAction,
+): SessionCleanupReason =>
+  action === 'switch_account' ? 'switch_account' : 'logout';
+
+const clearPersistedPrivateData = async (
+  reason: SessionCleanupReason,
+): Promise<'none_present'> => {
+  await invalidateParticipantPrivateResources('session_expired', reason);
+  return 'none_present';
+};
+
 export const SessionExitControls = ({
   api = browserIdentityApi,
-  clearPrivateData = async () => 'none_present',
+  clearPrivateData = clearPersistedPrivateData,
   createIdempotencyKey = createRuntimeKey,
   loginReturnTo = '/app',
 }: {
   readonly api?: ApiPort;
-  readonly clearPrivateData?: () => Promise<'cleared' | 'none_present'>;
+  readonly clearPrivateData?: (
+    reason: SessionCleanupReason,
+  ) => Promise<'cleared' | 'none_present'>;
   readonly createIdempotencyKey?: () => string;
   readonly loginReturnTo?: '/app' | '/app/nastaveni';
 }) => {
@@ -168,8 +187,9 @@ export const SessionExitControls = ({
         attempt.current.idempotencyKey,
       );
       if (result.ok && result.kind === 'success') {
+        const cleanupReason = cleanupReasonForAction(action);
         if (result.data.action !== action) {
-          await clearPrivateData();
+          await clearPrivateData(cleanupReason);
           if (mounted.current) {
             setPendingAction(undefined);
             setFailure({
@@ -180,7 +200,7 @@ export const SessionExitControls = ({
           }
           return;
         }
-        const localDisposition = await clearPrivateData();
+        const localDisposition = await clearPrivateData(cleanupReason);
         if (!mounted.current) return;
         attempt.current = undefined;
         setPendingAction(undefined);
@@ -196,7 +216,7 @@ export const SessionExitControls = ({
           result.status,
         );
         if (invalidation) {
-          await clearPrivateData();
+          await clearPrivateData(cleanupReasonForAction(action));
         }
         const mapped =
           invalidation === 'session_expired'
@@ -204,7 +224,7 @@ export const SessionExitControls = ({
             : mapFailure(result.failure);
         if (mapped) {
           if (mapped.kind === 'session_expired' && invalidation === null) {
-            await clearPrivateData();
+            await clearPrivateData(cleanupReasonForAction(action));
           }
           if (!mounted.current) return;
           setFailure(mapped);
