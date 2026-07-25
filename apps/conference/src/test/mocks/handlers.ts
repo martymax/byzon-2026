@@ -1,10 +1,12 @@
 import {
   participantContentResponseSchema,
   participantProgramResponseSchema,
+  participantTicketResponseSchema,
 } from '@byzon/domain/contracts';
 import {
   participantContentFixtures,
   participantProgramFixtures,
+  participantTicketFixtures,
 } from '@byzon/test-support/fixtures';
 import { http, type RequestHandler } from 'msw';
 
@@ -46,6 +48,15 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       {
         fixtureName: 'content.mock.directory',
         etag: '"content-directory-v3"',
+      },
+    ),
+  ),
+  http.get('/api/v1/me/ticket', () =>
+    mockJsonResponse(
+      participantTicketResponseSchema,
+      participantTicketFixtures.valid,
+      {
+        fixtureName: 'ticket.mock.participant',
       },
     ),
   ),

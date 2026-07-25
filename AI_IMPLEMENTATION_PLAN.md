@@ -1202,10 +1202,10 @@ Evidence:
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
 | Aktivace a identita | `not started` | `P2` identity/onboarding doména existuje; `P4`, `F1` plánované | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` |
-| Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro vstupenku, inbox a účet po `F2-04`/`F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
+| Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program a ticket component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `not started` | onboarding doména `P2-06`; UI `F2-07` a API `P4-13` plánované | `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
-| Vstupenka účastníka | `not started` | `F2-04`, `P4-12` plánované | `BLOCKER-TKT-05` |
+| Vstupenka účastníka | `not started` | `F2-04`: dokončený status-only mocked UI řez nad striktním privátním/no-store kontraktem, validovanými fixtures a typed API portem; prezentační union přijímá pouze bezpečný unavailable stav | úplný `CS-TICKET-01`, skutečný `/me/ticket`, `P4-12` a available credential blokuje `BLOCKER-TKT-05`; home shortcut/Více čeká na nav/bootstrap integraci |
 | Offline čtení | `not started` | pouze shell `P1-07`; `P7`, `F6` plánované | public cache není blokovaná SimpleShopem |
 | Import a support | `not started` | schema foundation `P4-01`; `F4` plánované | `TKT-01`/`TKT-02` prod apply; `TKT-03` jen prod sync |
 | Check-in | `not started` | `P6`, `F5` plánované | `TKT-04` source kód; `TKT-05` jen app credential; `OPS-*` UAT |
@@ -1835,8 +1835,8 @@ skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 
   `aria-current`, `viewport-fit=cover`, prostor pod obsahem a existující skip
   link. Detailové routy aktivují rodičovský cíl, používají kanonický fallback a
   bounded focus čeká i na asynchronní nadpis bez odebrání focusu aktivnímu
-  uživateli. Rozšíření cílové informační architektury na Přehled/Agendu/
-  První rozšíření o funkční `Přehled` proběhlo dílčím `F2-02`; Agenda,
+  uživateli. První rozšíření cílové informační architektury o funkční
+  `Přehled` proběhlo dílčím `F2-02`; Agenda,
   Oznámení a Více přibudou až s funkčními routami v `F2-05`, `F3` a
   souvisejících řezech, takže shell mezitím neslibuje neexistující funkce.
 - [ ] `F2-02` Přidat domovský přehled podle fáze eventu: dnešní minimum,
@@ -1859,9 +1859,19 @@ skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 
   `@byzon/test-support/fixtures` a typed participant UI; capability je
   `contract ready`, zatímco širší axe/visual gate zůstává vlastnictvím
   `F2-06`.
-- [ ] `F2-04` Přidat obrazovku vstupenky se stavem, držitelem v minimálním
+- [x] `F2-04` Přidat obrazovku vstupenky se stavem, držitelem v minimálním
   rozsahu a prezentační plochou. Skenovatelný credential smí být jen syntetický,
-  dokud není rozhodnut `BLOCKER-TKT-05`.
+  dokud není rozhodnut `BLOCKER-TKT-05`. Implementováno jako bezpečný
+  status-only mock řez v
+  [`apps/conference/src/components/participant-ticket.tsx`](apps/conference/src/components/participant-ticket.tsx):
+  valid/cancelled/refunded/blocked, minimální držitel, čtyřznakový maskovaný
+  suffix, loading/offline/auth/session/permission/error stavy a prezentační
+  plocha, která záměrně přijímá jen `unavailable`. Striktní
+  [`packages/domain/src/contracts/ticket.ts`](packages/domain/src/contracts/ticket.ts)
+  odmítne unknown pole i jakoukoli presentation value; typed read používá
+  `cache: no-store` a deterministický dev mock. Úplný `CS-TICKET-01`,
+  produkční `/me/ticket`, dostupný credential a home/Více discoverability
+  zůstávají integrační prací za `BLOCKER-TKT-05` a bootstrap/nav gate.
 - [ ] `F2-05` Přidat minimální Priority A in-app inbox: seznam, detail,
   unread/read a bezpečné prázdné/offline stavy; pokročilé cílení a e-mail
   zůstávají v Priority B.
@@ -1871,8 +1881,11 @@ skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 
   [`apps/conference/src/test/component/participant-quality.component.tsx`](apps/conference/src/test/component/participant-quality.component.tsx):
   redigovaný axe helper, focus/touch/overflow/responsive geometrie,
   reduced-motion a jeden deterministický visual baseline na každý schválený
-  viewport. Úkol zůstává otevřený pro UI, které vznikne v `F2-04`, `F2-05` a
-  `F2-07`.
+  viewport. Ticketová část je doplněná v
+  [`apps/conference/src/test/component/participant-ticket.component.tsx`](apps/conference/src/test/component/participant-ticket.component.tsx)
+  pro všechny čtyři stavy, privátní failure taxonomy, `axe`, overflow, touch
+  target a tři visual baseline. Úkol zůstává otevřený pro UI, které vznikne v
+  `F2-05` a `F2-07`.
 - [ ] `F2-07` Implementovat Priority A účet/profil/soukromí/nastavení:
   profilové minimum, právní dokumenty a acknowledgement, privacy žádost,
   kontaktní podporu, správu relace, logout/logout-all a switch-account.
@@ -2603,3 +2616,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 3.1 | 23. 7. 2026 | Plán přepracován na dependency-driven paralelní realizaci: přidán frontendový track `F0`–`F6`, capability lifecycle a matrix, sdílené kontrakty/fixtures/mock hranice, UI/UX a testovací gates; SimpleShop blokuje jen produkční ticket integraci. Doplněny `BLOCKER-AUTH-01` a `BLOCKER-TKT-05` a odstraněny redundantní pracovní kopie souborů bez unikátních změn. |
 | 3.2 | 25. 7. 2026 | Dokončen `F2-01`: participant shell používá sdílenou navigaci s ikonami, aktivním stavem pro detailové routy, mobilním safe-area/content clearance, zachovaným skip linkem a bounded focus managementem pro asynchronní obsah. Závislostmi připravené `F2-03` a dílčí `F2-06` vznikly dříve; další frontendové kroky pokračují číselně, pokud je nezastaví explicitní dependency gate. |
 | 3.3 | 25. 7. 2026 | Přidán první dílčí řez `F2-02`: funkční `/app` přehled řízený serverovým event statusem, pátý navigační cíl, phase-aware publikovaný program a praktické informace, poctivý unavailable stav osobní agendy a responsive/axe/visual regresní pokrytí. `F2-02` zůstává otevřený do dokončení `CS-BOOT-01`, `CS-AGENDA-01` a archivního navigačního gate. |
+| 3.4 | 25. 7. 2026 | Dokončen status-only mocked řez `F2-04`: `/app/vstupenka` má striktní privátní/no-store DTO, validované syntetické fixtures, typed klienta, bezpečné stavové a failure UI a component/axe/visual gate. Kontrakt záměrně neobsahuje credential; úplný `CS-TICKET-01`, produkční `/me/ticket` a available presentation zůstávají za `BLOCKER-TKT-05`/`P4-12`. |

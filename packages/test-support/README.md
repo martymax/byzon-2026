@@ -47,3 +47,8 @@ HTTP fixture is parsed and deeply frozen by the same production response or
 problem schema before export. Loading and offline are transport/UI states and
 are exercised with the typed API port rather than represented as invented JSON
 payloads.
+
+`fixtures/ticket.ts` contains only synthetic participant status, a synthetic
+holder name and a four-character masked-reference suffix. Its presentation is
+always unavailable; fixtures contain no QR payload, barcode, source ticket
+code or presentation value before `BLOCKER-TKT-05`.

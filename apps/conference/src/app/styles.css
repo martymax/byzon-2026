@@ -331,6 +331,150 @@ main > .ui-participant-nav-spacer {
   outline: 3px solid var(--byzon-focus);
   outline-offset: 2px;
 }
+.ticket-page {
+  display: grid;
+  gap: clamp(1.25rem, 4vw, 2rem);
+  max-width: 54rem;
+}
+.ticket-heading h1 {
+  margin-block: 0.35rem 0.85rem;
+  font-size: clamp(3.5rem, 11vw, 7rem);
+  line-height: 0.85;
+}
+.ticket-heading .lead {
+  max-width: 44rem;
+}
+.ticket-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: var(--byzon-space-6);
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  border-width: 2px;
+  border-color: var(--byzon-border-strong);
+  border-radius: var(--byzon-radius-lg);
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      var(--byzon-brand-glow),
+      transparent 17rem
+    ),
+    var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.ticket-card--valid {
+  border-color: var(--byzon-success);
+}
+.ticket-card--cancelled,
+.ticket-card--blocked {
+  border-color: var(--byzon-danger);
+}
+.ticket-card--refunded {
+  border-color: var(--byzon-warning);
+}
+.ticket-card-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--byzon-space-4);
+}
+.ticket-mark,
+.ticket-presentation-mark {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-success);
+  background: var(--byzon-success-soft);
+}
+.ticket-card:not(.ticket-card--valid) .ticket-mark {
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.ticket-mark svg,
+.ticket-presentation-mark svg {
+  width: 2rem;
+  height: 2rem;
+}
+.ticket-card-kicker {
+  color: var(--pink-dark);
+  font-family: var(--byzon-font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ticket-card h2,
+.ticket-presentation h2 {
+  margin-block: 0.2rem 0.45rem;
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  line-height: 1;
+}
+.ticket-status-label {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-success);
+  background: var(--byzon-success-soft);
+  font-family: var(--byzon-font-display);
+  font-weight: 700;
+}
+.ticket-card:not(.ticket-card--valid) .ticket-status-label {
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.ticket-card--refunded .ticket-status-label {
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+}
+.ticket-details {
+  display: grid;
+  gap: var(--byzon-space-4);
+  padding-top: var(--byzon-space-5);
+  border-top: 1px solid var(--byzon-border);
+}
+.ticket-details div {
+  min-width: 0;
+}
+.ticket-details dt {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.ticket-details dd {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+.ticket-reference {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+.ticket-presentation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--byzon-space-4);
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border-style: dashed;
+  border-color: var(--byzon-border-strong);
+}
+.ticket-presentation-mark {
+  color: var(--byzon-info);
+  background: var(--byzon-info-soft);
+}
+.ticket-privacy-note {
+  margin-top: var(--byzon-space-4);
+  padding-top: var(--byzon-space-4);
+  border-top: 1px solid var(--byzon-border);
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+}
 .app-page {
   width: min(100% - 2rem, 72rem);
   margin: auto;
@@ -698,6 +842,15 @@ main > .ui-participant-nav-spacer {
   }
   .home-card-grid,
   .home-practical-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ticket-card-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .ticket-status-label {
+    grid-column: auto;
+  }
+  .ticket-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

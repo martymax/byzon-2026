@@ -66,3 +66,17 @@ HTTP response.
   `publishedContentSnapshotSchema` exist only for server-side extraction.
   Browser code consumes the strict `*ResponseSchema` exports through the typed
   API port.
+
+## Participant ticket (`CS-TICKET-01`, status-only slice)
+
+`ticket.ts` defines the private, no-store participant status DTO used by the
+first `F2-04` UI slice. It allowlists only `valid`, `cancelled`, `refunded` and
+`blocked`, a single bounded holder display name, and at most four
+alphanumeric characters of an already-safe reference suffix.
+
+The presentation union intentionally accepts only `state: unavailable`.
+`BLOCKER-TKT-05` and `P4-12` must define the format, expiry, rotation and
+verifier before any available/value branch can be added. Unknown fields,
+presentation values, unsafe control/bidi characters and inconsistent
+status/reason combinations are rejected. The full `CS-TICKET-01` lifecycle
+therefore remains `not started` until that server/client contract is complete.

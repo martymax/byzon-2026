@@ -8,5 +8,8 @@ describe('test-support public exports', () => {
     expect(fixtures.baseProblemFixture.code).toBe('INTERNAL_ERROR');
     expect(fixtures.fixtureContextMatrix).toHaveLength(35);
     expect(fixtures.participantProgramFixtures.happy?.version).toBe(3);
+    expect(fixtures.participantTicketFixtures.valid?.ticket.status).toBe(
+      'valid',
+    );
   });
 });

@@ -17,6 +17,8 @@ import {
   participantContentProblemFixtures,
   participantProgramFixtures,
   participantProgramProblemFixtures,
+  participantTicketFixtures,
+  participantTicketProblemFixtures,
   selectFixtureContexts,
   sessionExpiredProblemFixture,
 } from './index.js';
@@ -66,6 +68,23 @@ describe('content fixtures', () => {
     expect(participantContentProblemFixtures.permission!.code).toBe(
       'CONTENT_NOT_FOUND',
     );
+  });
+});
+
+describe('ticket fixtures', () => {
+  it('contains only validated synthetic status data without a credential', () => {
+    expect(participantTicketFixtures.valid?.ticket.status).toBe('valid');
+    expect(participantTicketFixtures.cancelled?.ticket.status).toBe(
+      'cancelled',
+    );
+    expect(participantTicketProblemFixtures.permission?.code).toBe(
+      'TICKET_NOT_FOUND',
+    );
+    expect(JSON.stringify(participantTicketFixtures)).not.toContain(
+      'presentationValue',
+    );
+    expect(JSON.stringify(participantTicketFixtures)).not.toContain('qr');
+    expect(JSON.stringify(participantTicketFixtures)).not.toContain('barcode');
   });
 });
 

@@ -25,8 +25,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   redigovaný browser-side `axe-core` WCAG A/AA helper, skutečný participant
   layout nad validovanou syntetickou fixture, focus/touch/overflow/responsive
   geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
-  pro každý schválený viewport. Celý `F2-06` zůstává otevřený pro vstupenku,
-  inbox a účet po `F2-04`/`F2-05`/`F2-07`.
+  pro každý schválený viewport. Ticketová část je nově pokrytá v `F2-04`;
+  celý `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`.
 - `F2-01` je commitnutý jako `8c4d1cc` a pushnutý na
   `origin/track/frontend-b/F2-01-participant-shell`. Participant layout používá sdílený
   `ParticipantNavigation` pro čtyři existující funkční cíle, každý s
@@ -35,9 +35,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   safe-area/content clearance, tablet a desktop sticky variantu. Root viewport
   má `viewport-fit=cover`; stávající skip link zůstává prvním focusovatelným
   prvkem.
-- Na navazující nepushnuté větvi
-  `track/frontend-b/F2-02-home-overview` je implementovaný a ověřený první
-  řez `F2-02`. `/app` už nepřesměrovává na program: používá serverový stav
+- `F2-02` je commitnutý jako `ad6b5cf` a pushnutý na
+  `origin/track/frontend-b/F2-02-home-overview`. `/app` už nepřesměrovává na
+  program: používá serverový stav
   eventu, z publikovaného `CS-CONTENT-01` skládá phase-aware dnešní minimum,
   praktické informace a bezpečný před/po/archivní stav. Navigace má pátý
   funkční cíl `Přehled`; mobilní hierarchie drží jedinou dominantní CTA a
@@ -49,6 +49,33 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   vysvětluje, že uložené body v přehledu nejsou dostupné. `F2-02` proto
   zůstává otevřený také pro `CS-BOOT-01`, skutečnou agendu a phase-aware
   omezení navigace v archivním stavu.
+- Na navazující nepushnuté větvi `track/frontend-b/F2-04-ticket-screen` je
+  dokončený mocked UI řez `F2-04`. `/app/vstupenka` zobrazuje validovaný stav
+  `valid/cancelled/refunded/blocked`, minimálního držitele a nejvýše
+  čtyřznakový maskovaný suffix. Prezentační plocha má jediný povolený stav
+  `unavailable`; žádná fixture, response schema ani DOM neobsahují QR,
+  barcode, source ticket kód nebo presentation value.
+- Nový status-only [`CS-TICKET-01`](packages/domain/src/contracts/ticket.ts)
+  je privátní a `no-store`, odmítá unknown pole, nebezpečné control/bidi
+  znaky, nekonzistentní status/reason i pokus dodat credential před
+  `BLOCKER-TKT-05`. Typed klient `/api/v1/me/ticket` má bezpečné loading,
+  offline, authentication, session-expired, not-found a invalid-response
+  stavy; skutečný server endpoint zatím neexistuje a produkční integrace
+  zůstává vlastnictvím `P4-12`.
+- Security a code review `F2-04` zapracovaly limit suffixu na čtyři znaky,
+  single-line holder allowlist, stavové invarianty a formulaci, která
+  neslibuje budoucí credential. UI používá text i ikonu, nikoli samotnou
+  barvu, a drží BYZON tokeny, focus, `44 px`, safe-area clearance a
+  mobile-first hierarchii. Nezůstává otevřený actionable nález mocked řezu.
+- Ověření `F2-04` prošlo cíleným ESLintem/Prettierem, domain, test-support a
+  conference typecheckem, 74 domain testy, 17 test-support testy a 78
+  conference unit/architecture testy; 36 DB scénářů se bez PostgreSQL
+  korektně přeskočilo. Chromium component suite prošla 72/72 scénářů v 15
+  souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`, včetně všech
+  čtyř ticket stavů, privátní failure taxonomy, loading/offline, axe,
+  overflow, `44 px` retry a tří visual baseline. Produkční Next build i
+  source/post-build mock boundary prošly a obsahují `/app/vstupenka`, nikoli
+  MSW ani test fixtures.
 - Dílčí `F2-02` ověření prošlo cíleným ESLintem a Prettierem, conference
   typecheckem, 76 unit/architecture testy a 42 browser component testy ve 12
   souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`. Nový home řez
@@ -135,17 +162,16 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   pro současné funkční participant routy, první řez `F2-02` přidal
   nepersonalizovaný phase-aware přehled a shell/program část `F2-06` je
   pokrytá, ale `F2-02` čeká na `CS-BOOT-01`/`CS-AGENDA-01` a celý `F2-06`
-  zůstává otevřený pro vstupenku, inbox a správu účtu/soukromí, které dosud
-  neexistují a vzniknou v
-  `F2-04`/`F2-05`/`F2-07`; teprve potom lze capability označit jako
+  zůstává otevřený pro inbox a správu účtu/soukromí, které dosud neexistují a
+  vzniknou v `F2-05`/`F2-07`; teprve potom lze capability označit jako
   `UI ready (mocked)`. `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
   contract-first práci. `F6-02` může paralelně začít nad public částí
   `CS-CONTENT-01`.
 - V pracovním stromu zůstává cizí nestagovaný soubor
   `apps/conference/src/components/content-state 2.tsx`, stará kopie z
   22. července. Při produkčních kontrolách byl pouze dočasně přesunut mimo
-  `src` a vrácen; není součástí `F2-01`, `F2-02`, `F2-03` ani `F2-06` a nesmí být
-  commitnutý.
+  `src` a vrácen; není součástí `F2-01`, `F2-02`, `F2-03`, `F2-04` ani
+  `F2-06` a nesmí být commitnutý.
 - Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
   `origin/track/frontend-a/F0-06-component-a11y`.
   Samostatný Vitest Browser/Playwright component runner vykresluje React 19
