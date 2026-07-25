@@ -14,6 +14,10 @@ test('brand shell, manifest and health endpoints are available', async ({
     'href',
     '/manifest.webmanifest',
   );
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    'content',
+    /viewport-fit=cover/,
+  );
   const live = await request.get('/health/live');
   expect(live.ok()).toBeTruthy();
   expect(live.headers()['x-request-id']).toBeTruthy();
@@ -33,6 +37,9 @@ test('participant shell is keyboard accessible at every target viewport', async 
   });
   await expect(navigation).toBeVisible();
   await expect(navigation.getByRole('link')).toHaveCount(4);
+  await expect(
+    navigation.getByRole('link', { name: 'Program', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
 
   await page.keyboard.press('Tab');
   const skipLink = page.getByRole('link', { name: 'Přejít na obsah' });
@@ -53,8 +60,23 @@ test('participant shell is keyboard accessible at every target viewport', async 
   );
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
   for (const link of await navigation.getByRole('link').all()) {
+    await expect(link.locator('svg')).toHaveCount(1);
     const box = await link.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+  }
+
+  const shellContent = page.locator('.participant-shell-content');
+  const navigationBox = await navigation.boundingBox();
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    await expect(navigation).toHaveCSS('position', 'fixed');
+    const paddingBottom = await shellContent.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingBottom),
+    );
+    expect(paddingBottom).toBeGreaterThanOrEqual(navigationBox?.height ?? 0);
+  } else {
+    await expect(navigation).toHaveCSS('position', 'sticky');
+    await expect(shellContent).toHaveCSS('padding-bottom', '0px');
   }
 });
 

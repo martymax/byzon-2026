@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { ParticipantShellNavigation } from '@/components/participant-shell-navigation';
 import { RouteFocus } from '@/components/route-focus';
 
 export default function ParticipantLayout({
@@ -10,13 +10,8 @@ export default function ParticipantLayout({
   return (
     <>
       <RouteFocus />
-      <nav className="participant-nav" aria-label="Hlavní navigace">
-        <Link href="/app/program">Program</Link>
-        <Link href="/app/recnici">Řečníci</Link>
-        <Link href="/app/partneri">Partneři</Link>
-        <Link href="/app/informace">Informace</Link>
-      </nav>
-      {children}
+      <ParticipantShellNavigation />
+      <div className="participant-shell-content">{children}</div>
     </>
   );
 }

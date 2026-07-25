@@ -32,7 +32,7 @@ h5,
 .brand,
 .eyebrow,
 .button,
-.participant-nav {
+.ui-participant-nav {
   font-family: var(--byzon-font-display);
 }
 .skip-link {
@@ -173,32 +173,12 @@ h1 span {
   font-weight: 600;
   text-decoration: none;
 }
-.participant-nav {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  gap: 0.3rem;
-  overflow-x: auto;
-  padding: 0.65rem max(1rem, calc((100vw - 72rem) / 2));
-  border-block: 1px solid var(--line);
-  background: var(--byzon-surface-soft-translucent);
-  backdrop-filter: blur(12px);
+.participant-shell-content {
+  min-width: 0;
+  padding-bottom: calc(4.5rem + var(--byzon-safe-bottom));
 }
-.participant-nav a {
-  flex: none;
-  min-height: 2.75rem;
-  padding: 0.55rem 0.8rem;
-  border-radius: 999px;
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: none;
-}
-.participant-nav a:hover,
-.participant-nav a:focus-visible {
-  background: white;
-  outline: 2px solid var(--pink);
-  outline-offset: 1px;
+main > .ui-participant-nav-spacer {
+  display: none;
 }
 .app-page {
   width: min(100% - 2rem, 72rem);
@@ -553,6 +533,11 @@ h1 span {
   }
   .admin-form {
     grid-template-columns: 1fr;
+  }
+}
+@media (min-width: 48rem) {
+  .participant-shell-content {
+    padding-bottom: 0;
   }
 }
 @media (prefers-reduced-motion: no-preference) {

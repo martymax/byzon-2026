@@ -20,6 +20,47 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Dílčí řez `F2-06` je commitnutý jako `e387c3b` a pushnutý na
+  `origin/track/frontend-b/F2-06-content-a11y`. Shell/program gate přidává
+  redigovaný browser-side `axe-core` WCAG A/AA helper, skutečný participant
+  layout nad validovanou syntetickou fixture, focus/touch/overflow/responsive
+  geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
+  pro každý schválený viewport. Celý `F2-06` zůstává otevřený pro vstupenku,
+  inbox a účet po `F2-04`/`F2-05`/`F2-07`.
+- Na navazující nepushnuté větvi
+  `track/frontend-b/F2-01-participant-shell` je dokončený a ověřený, ale dosud
+  necommitnutý řez `F2-01`. Participant layout používá sdílený
+  `ParticipantNavigation` pro čtyři existující funkční cíle, každý s
+  konzistentní ikonou a labelem. Segmentově bezpečné mapování udržuje
+  `aria-current` i na detailu; telefon má fixed spodní navigaci se
+  safe-area/content clearance, tablet a desktop sticky variantu. Root viewport
+  má `viewport-fit=cover`; stávající skip link zůstává prvním focusovatelným
+  prvkem.
+- Focus management nyní omezeně sleduje asynchronně vykreslený route heading a
+  zvládne i výměnu starého nadpisu za nový při klientské navigaci. Observer se
+  odpojí po pěti sekundách a nikdy nevezme focus uživateli, který mezitím
+  začal stránku ovládat. Detail řečníka aktivuje rodičovské `Řečníci` a
+  zachovává kanonický návrat `/app/recnici`; programový detail dál zachovává
+  query filtry a scroll.
+- `F2-01` ověření prošlo jako 71 conference unit/architecture testů a 30
+  browser component testů v 9 souborech napříč `375 × 667`, `768 × 1024` a
+  `1280 × 800`; prošel cílený ESLint, Prettier, conference typecheck,
+  `git diff --check`, produkční Next build a source/post-build mock boundary.
+  Visual baselines byly zkontrolované, včetně čtyř plně čitelných mobilních
+  cílů bez překryvu obsahu.
+- E2E `conference-shell.spec.ts` byl rozšířen o ikony, aktivní stav, 44px
+  geometrii, mobilní content clearance a `viewport-fit=cover`. Deep-link
+  návrat zůstává v browser component testu nad validovanou fixture, protože
+  základní CI DB seed záměrně neobsahuje syntetický profil řečníka. Lokálně
+  proběhly pouze tři DB-independent reduced-motion scénáře; dev server pak
+  správně vracel `/health/ready` 503 a participant server routy skončily před
+  renderem na `ECONNREFUSED`, protože neběží PostgreSQL. Úplný scénář zůstává
+  pro DB-backed GitHub CI.
+- Security a code review úplného `F2-01` diffu proběhly. Zapracované nálezy
+  doplnily chybějící iOS `viewport-fit=cover` a zpevněný focus při výměně
+  asynchronního nadpisu. Navigační konfigurace je statická, nevykresluje data
+  uživatele, observer je bounded a safe-area rezervuje prostor i pro obsah.
+  Nezůstává otevřený actionable security ani code-review nález.
 - Frontendový řez `F2-03` je commitnutý jako `ece9c10` a pushnutý na
   `origin/track/frontend-b/F2-03-content-contract`. `CS-CONTENT-01` v
   [`packages/domain/src/contracts/content.ts`](packages/domain/src/contracts/content.ts)
@@ -27,24 +68,6 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   přesné problem uniony i cache/offline/PII hranici. Serverové P3 snapshot
   extraktory, response validace, typed browser `ApiPort`, dev MSW handlery a
   syntetické fixtures používají stejný runtime kontrakt.
-- Na navazující nepushnuté větvi
-  `track/frontend-b/F2-06-content-a11y` je rozpracovaný dokončitelný řez
-  `F2-06` pro existující participant shell a program. Přidává browser-side
-  `axe-core` WCAG A/AA helper s redigovaným výstupem, skutečný participant
-  layout nad validovanou syntetickou fixture, focus/touch/overflow/responsive
-  geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
-  pro každý schválený viewport. Baseline cesta obsahuje viewport ID a
-  záměrně toleruje pouze malý rozdíl rasterizace mezi vývojovým macOS a
-  linuxovým CI.
-- Nový `F2-06` řez přidal 9 scénářů; celý component suite nyní prochází jako
-  27 testů v 9 souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`.
-  Prošlo také 65 conference unit/architecture testů; 36 DB-dependent scénářů
-  se bez lokálního PostgreSQL korektně přeskočilo. Prošel celý workspace
-  Prettier a ESLint, conference typecheck po opravení povinného test callbacku,
-  kompletní web/worker production build se záměrně nastaveným
-  `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` i source/post-build boundary. High
-  audit gate prošel a eviduje jediný známý moderate vývojový `esbuild` přes
-  `drizzle-kit`.
 - Security a code review dílčího `F2-06` diffu proběhly. Zapracovaný nález
   přesunul `axe-core` k conference jako explicitní dev dependency a rozšířil
   architecture i production source/build guard, aby se browserový audit
@@ -81,9 +104,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   a eviduje jediný známý moderate vývojový `esbuild` přes `drizzle-kit`.
   Docker CLI je dostupné, ale lokální daemon neběží, proto skutečné P3 DB
   integrační testy zůstávají na PostgreSQL-backed GitHub CI.
-- Capability Program a informace zůstává `contract ready`. Shell/program část
-  `F2-06` je pokrytá, ale celý úkol zůstává otevřený pro vstupenku, inbox a
-  správu účtu/soukromí, které dosud neexistují a vzniknou v
+- Capability Program a informace zůstává `contract ready`. `F2-01` je hotový
+  pro současné funkční participant routy a shell/program část `F2-06` je
+  pokrytá, ale celý `F2-06` zůstává otevřený pro vstupenku, inbox a správu
+  účtu/soukromí, které dosud neexistují a vzniknou v
   `F2-04`/`F2-05`/`F2-07`; teprve potom lze capability označit jako
   `UI ready (mocked)`. `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
   contract-first práci. `F6-02` může paralelně začít nad public částí
@@ -91,7 +115,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - V pracovním stromu zůstává cizí nestagovaný soubor
   `apps/conference/src/components/content-state 2.tsx`, stará kopie z
   22. července. Při produkčních kontrolách byl pouze dočasně přesunut mimo
-  `src` a vrácen; není součástí `F2-03` ani `F2-06` a nesmí být commitnutý.
+  `src` a vrácen; není součástí `F2-01`, `F2-03` ani `F2-06` a nesmí být
+  commitnutý.
 - Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
   `origin/track/frontend-a/F0-06-component-a11y`.
   Samostatný Vitest Browser/Playwright component runner vykresluje React 19
