@@ -589,7 +589,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | Slice ID | Scope | Cílové schema | Vlastník kontraktu/integrace | Konzumenti | Stav |
 | --- | --- | --- | --- | --- | --- |
 | `CS-BASE-01` | problem, session-expired, pagination a transport metadata | `packages/domain/src/contracts/base.ts` | `F0-02` | všechny `F*` | `contract ready` |
-| `CS-ACT-01` | claim outcomes, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-04`, `P4-07` | `F1` | `not started` |
+| `CS-ACT-01` | claim outcomes, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-04`, `P4-07` | `F1` | `contract ready`; striktní landing/claim/identity/link/recovery kontrakt a validované syntetické fixtures |
 | `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F2-07` | `F1`, `F2`, `F6` | `not started` |
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started` |
@@ -1201,7 +1201,7 @@ Evidence:
 
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
-| Aktivace a identita | `not started` | `P2` identity/onboarding doména existuje; `P4`, `F1` plánované | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` |
+| Aktivace a identita | `contract ready` | `F1-01`: striktní `CS-ACT-01`, validované landing/claim/identity/link/recovery fixtures, typed API port a development-only aktivační landing se všemi bezpečnými resource stavy | `F1-02` až `F1-06` pro úplné mocked UI; `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci |
 | Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program a ticket component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `not started` | onboarding doména `P2-06`; UI `F2-07` a API `P4-13` plánované | `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
@@ -1789,10 +1789,15 @@ dark mode ani plošný redesign nejsou podmínkou.
 - `integration_gate`: claim/identity handshake je rozhodnutý, endpointy
   implementované a server odmítá neaktivní ticket i neověřenou identitu.
 
-- [ ] `F1-01` Nejprve s `P4-04`/`P4-07` uzavřít `CS-ACT-01`, potom
+- [x] `F1-01` Nejprve s `P4-04`/`P4-07` uzavřít `CS-ACT-01`, potom
   implementovat veřejnou aktivační route s podporou deep linku, návratu po
   přihlášení a stavů anonymní/rozpracovaná/aktivovaná/pozastavená/session
-  expired.
+  expired. `CS-ACT-01` nyní striktně pokrývá landing, claim, identity,
+  one-time link a recovery včetně no-store/secrets/returnTo hranic.
+  Development-only `/aktivace` má anonymní, phase-closed, rozpracovaný,
+  aktivovaný, suspended, loading/offline/error/session-expired stav,
+  deterministický handler a component/axe/responsive regresi; skutečný
+  membership/session handoff zůstává za `BLOCKER-AUTH-01`/`P4`.
 - [ ] `F1-02` Implementovat ruční zadání opaque ticket kódu s viditelným
   labelem, správnými input atributy, bez neodsouhlasené normalizace a s
   neenumerujícími chybami.
@@ -2618,3 +2623,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 3.3 | 25. 7. 2026 | Přidán první dílčí řez `F2-02`: funkční `/app` přehled řízený serverovým event statusem, pátý navigační cíl, phase-aware publikovaný program a praktické informace, poctivý unavailable stav osobní agendy a responsive/axe/visual regresní pokrytí. `F2-02` zůstává otevřený do dokončení `CS-BOOT-01`, `CS-AGENDA-01` a archivního navigačního gate. |
 | 3.4 | 25. 7. 2026 | Dokončen status-only mocked řez `F2-04`: `/app/vstupenka` má striktní privátní/no-store DTO, validované syntetické fixtures, typed klienta, bezpečné stavové a failure UI a component/axe/visual gate. Kontrakt záměrně neobsahuje credential; úplný `CS-TICKET-01`, produkční `/me/ticket` a available presentation zůstávají za `BLOCKER-TKT-05`/`P4-12`. |
 | 3.5 | 25. 7. 2026 | Frontend foundation review před kompletačním trackem zpevnil event-scope invariant `CS-CONTENT-01`, kanonický syntetický event, privátní cache hlavičky a mock fail-closed hranici pro celé `/api/**` bez blokování Next navigace. Neintegrovaná ticket route je nově dostupná pouze v explicitním development mock preview. |
+| 3.6 | 25. 7. 2026 | Dokončen `F1-01`: `CS-ACT-01` pokrývá striktní landing/claim/identity/link/recovery kontrakty, validované syntetické fixtures a typed API port. Development-only `/aktivace` nabízí phase-aware anonymní i recovery stavy, bezpečný návrat a přístupnou/responzivní mockovanou vstupní obrazovku bez vytvoření session nebo membership. |

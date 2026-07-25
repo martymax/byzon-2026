@@ -67,6 +67,20 @@ HTTP response.
   Browser code consumes the strict `*ResponseSchema` exports through the typed
   API port.
 
+## Activation (`CS-ACT-01`)
+
+`activation.ts` je privátní/no-store kontrakt veřejného aktivačního průchodu:
+landing podle fáze eventu, přesné opaque ticket kódy, claim, identity handoff,
+one-time link a neenumerující recovery. Všechny requesty, success DTO i problem
+uniony jsou striktní a odmítají unknown pole.
+
+Claim a identity response před autoritativním serverovým handoffem výslovně
+nesou `membershipCreated: false` a `sessionCreated: false`. `returnTo` je
+allowlist pouze `/app` a `/onboarding`; kód, token, e-mail ani flow ID se nesmí
+ukládat do URL historie, cache nebo logu. Produkční handshake zůstává za
+`BLOCKER-AUTH-01`/`BLOCKER-TKT-04`, zatímco frontend používá stejný kontrakt v
+jasně označeném development preview.
+
 ## Participant ticket (`CS-TICKET-01`, status-only slice)
 
 `ticket.ts` defines the private, no-store participant status DTO used by the

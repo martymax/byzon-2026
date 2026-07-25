@@ -20,6 +20,18 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F1-01` je implementovaný na `track/frontend-complete`. Nový
+  `CS-ACT-01` striktně popisuje landing, opaque claim, identity handoff,
+  one-time link a neenumerující recovery včetně no-store, secrets a
+  same-origin `returnTo` hranic. Validované fixtures vždy uvádějí
+  `membershipCreated: false` a `sessionCreated: false`, dokud skutečný
+  handshake neodemkne `BLOCKER-AUTH-01`.
+- Development-only `/aktivace` pokrývá anonymní, rozpracovaný, aktivovaný,
+  suspended, před/po/archivně uzavřený, loading, offline, error a
+  session-expired stav. Root v developmentu odkazuje do mock průchodu;
+  `pnpm dev:mock` jej spustí s viditelným syntetickým režimem. Cíleně prošlo
+  21 unit/contract/fixture testů, 18 browser komponentových scénářů ve třech
+  viewports, axe, overflow, `44 px`, ESLint, Prettier a typecheck.
 - Kompletační práce pokračuje lineárně na
   `track/frontend-complete`. Foundation security/code audit před `F1`
   zpevnil mock runtime: neobsloužené same-origin `/api/**` požadavky včetně
@@ -30,9 +42,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `participantContentResponseSchema` navíc odmítne rozdíl top-level event
   scope a `content.event.id`. Mock odpovědi nesou explicitní `no-store`,
   privátní varianty také `Vary: authorization, cookie`.
-- Neintegrovaná `/app/vstupenka` je od foundation review v produkci a bez
-  explicitního `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` tvrdě skrytá přes `404`.
-  Test mock indikátor už na telefonu nepřekrývá spodní participant navigaci.
+- Neintegrovaná `/app/vstupenka` je od foundation review v produkci tvrdě
+  skrytá přes `404`; funkční data v development preview vyžadují explicitní
+  `NEXT_PUBLIC_BYZON_API_MOCKS=enabled`. Test mock indikátor už na telefonu
+  nepřekrývá spodní participant navigaci.
   Regresní výběr prošel 18/18 testů, cíleným ESLintem, Prettierem a
   domain/conference typecheckem.
 - Dílčí řez `F2-06` je commitnutý jako `e387c3b` a pushnutý na

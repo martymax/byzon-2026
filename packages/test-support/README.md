@@ -52,3 +52,9 @@ payloads.
 holder name and a four-character masked-reference suffix. Its presentation is
 always unavailable; fixtures contain no QR payload, barcode, source ticket
 code or presentation value before `BLOCKER-TKT-05`.
+
+`fixtures/activation.ts` obsahuje anonymní, rozpracovaný, aktivovaný,
+pozastavený a phase-closed landing, plus claim/identity/link/recovery výsledky
+a přesné problem varianty `CS-ACT-01`. Kód, token, flow ID i e-mail používají
+výhradně zjevně syntetické `.test`/`TST` hodnoty; pending fixture vždy potvrzuje,
+že nevznikla skutečná membership ani session.

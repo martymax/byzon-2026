@@ -1,4 +1,8 @@
+import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
+
 export default function HomePage() {
+  const previewAvailable = isFrontendPreviewAvailable();
+
   return (
     <section className="hero">
       <div className="hero-card">
@@ -15,10 +19,23 @@ export default function HomePage() {
         <div className="status-card" aria-label="Stav aplikace">
           <span className="status-dot" aria-hidden="true" />
           <div>
-            <strong>Aplikaci právě připravujeme</strong>
-            <small>Základ je připravený pro další etapu.</small>
+            <strong>
+              {previewAvailable
+                ? 'Vývojová ukázka je připravená'
+                : 'Aplikaci právě připravujeme'}
+            </strong>
+            <small>
+              {previewAvailable
+                ? 'Projděte si bezpečnou aktivaci nad mock daty.'
+                : 'Základ je připravený pro další etapu.'}
+            </small>
           </div>
         </div>
+        {previewAvailable ? (
+          <a className="button" href="/aktivace">
+            Otevřít mock průchod
+          </a>
+        ) : null}
       </div>
     </section>
   );

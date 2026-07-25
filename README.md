@@ -97,3 +97,13 @@ pnpm dev
 
 Kontroly aplikace spustíte přes `pnpm run ci`, browser smoke přes `pnpm test:e2e`.
 Railway staging postup je v `docs/runbooks/railway-staging.md`.
+
+Kompletní vývojový frontend nad výhradně syntetickými daty spustíte odděleně:
+
+```bash
+pnpm dev:mock
+```
+
+Poté otevřete `http://localhost:3000/`. Režim je viditelně označený, všechny
+neobsloužené lokální API požadavky selžou zavřeně a v produkčním buildu nejsou
+mock handlery ani fixtures.

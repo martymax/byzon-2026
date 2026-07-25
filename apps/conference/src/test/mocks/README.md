@@ -16,9 +16,11 @@ exact pinned MSW package. Production build removes that generated file before
 compilation and scans both production source and `.next` deployment artifacts
 for MSW, test-support, the environment switch and the mock runtime marker.
 
-Mock mode is fail-closed: an unhandled request is aborted instead of falling
-through to a real `/api/v1` endpoint. If worker startup fails, browser API
-requests are blocked and a persistent accessible failure indicator is shown.
+Mock mode is fail-closed: an unhandled same-origin `/api/**` request, including
+Better Auth, is aborted instead of falling through to a real endpoint. Next
+RSC/document navigation and assets are not blocked. If worker startup fails,
+browser API requests are blocked and a persistent accessible failure indicator
+is shown.
 When active, a text indicator reading “Mock data · pouze vývoj/test” is fixed
 above the bottom safe area; state is never conveyed by color alone.
 
@@ -27,6 +29,11 @@ problem response must use `mockJsonResponse` or `mockProblemResponse`, pass an
 explicit synthetic fixture name, and validate the fixture against the same Zod
 schema used by the production client. Do not copy production data or invent a
 feature DTO in this foundation.
+
+The first stateful journey starts at `/aktivace`: its landing handler uses the
+validated anonymous `CS-ACT-01` fixture. Mutating claim, identity and recovery
+handlers are added by their owning F1 steps; an unimplemented step therefore
+fails closed instead of calling a real auth or ticket endpoint.
 
 The application already has an offline service worker. Browser mock bootstrap
 runs before hydration and temporarily owns the root scope. The normal

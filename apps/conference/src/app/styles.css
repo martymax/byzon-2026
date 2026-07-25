@@ -164,14 +164,19 @@ h1 span {
   max-width: 34rem;
 }
 .button {
-  display: inline-block;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
   margin-top: 1.75rem;
   padding: 0.7rem 1.4rem;
   border-radius: 999px;
-  background: var(--pink);
+  background: var(--pink-dark);
   color: white;
   font-weight: 600;
   text-decoration: none;
+}
+.button:hover {
+  background: var(--byzon-brand-active);
 }
 .participant-shell-content {
   min-width: 0;
@@ -882,5 +887,123 @@ main > .ui-participant-nav-spacer {
   }
   .brand:hover .brand-mark {
     transform: rotate(2deg) scale(1.05);
+  }
+}
+
+.activation-page {
+  width: min(100% - 1.5rem, 68rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.activation-hero {
+  max-width: 52rem;
+}
+.activation-hero h1 {
+  max-width: 12ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 7rem);
+  line-height: 0.86;
+}
+.activation-loading,
+.activation-panel,
+.activation-page > .ui-state-panel {
+  margin-top: clamp(1.5rem, 5vw, 3rem);
+}
+.activation-panel {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-event-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--byzon-text-muted);
+}
+.activation-event-summary div {
+  display: grid;
+  gap: 0.1rem;
+}
+.activation-event-summary strong {
+  color: var(--ink);
+  font: 700 1.35rem/1.1 var(--byzon-font-display);
+}
+.activation-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+.activation-section-heading h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  line-height: 1;
+}
+.activation-kicker {
+  color: var(--pink-dark);
+  font: 700 0.875rem/1.3 var(--byzon-font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.activation-method-grid {
+  display: grid;
+  gap: 1rem;
+}
+.activation-method-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.activation-method-card h3 {
+  color: var(--ink);
+  font-size: 1.65rem;
+  line-height: 1.05;
+}
+.activation-method-icon {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--byzon-radius-sm);
+  color: var(--pink-dark);
+  background: var(--byzon-brand-soft);
+}
+.activation-method-icon svg {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+.activation-recovery {
+  color: var(--byzon-text-muted);
+}
+.activation-recovery a {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.preview-disclaimer {
+  padding: 1rem;
+  border: 1px dashed var(--byzon-warning);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+  font-size: 0.925rem;
+  font-weight: 600;
+}
+
+@media (min-width: 48rem) {
+  .activation-method-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

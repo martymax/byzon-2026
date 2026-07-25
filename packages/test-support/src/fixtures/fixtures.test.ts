@@ -1,4 +1,6 @@
 import {
+  activationClaimResponseSchema,
+  activationLandingResponseSchema,
   defineApiProblemSchema,
   participantContentResponseSchema,
   participantProgramResponseSchema,
@@ -7,6 +9,9 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  activationClaimFixtures,
+  activationFixtureCode,
+  activationLandingFixtures,
   baseProblemFixture,
   baseProblemFixtureFactory,
   fixtureContextName,
@@ -39,6 +44,26 @@ describe('base problem fixtures', () => {
 
     expect(first).toEqual(second);
     expect(JSON.stringify(first)).not.toContain('@');
+  });
+});
+
+describe('activation fixtures', () => {
+  it('validates anonymous and pending flows without a real session', () => {
+    expect(
+      activationLandingResponseSchema.parse(
+        activationLandingFixtures.anonymous,
+      ),
+    ).toEqual(activationLandingFixtures.anonymous);
+    expect(
+      activationClaimResponseSchema.parse(
+        activationClaimFixtures.identity_required,
+      ),
+    ).toEqual(activationClaimFixtures.identity_required);
+    expect(activationClaimFixtures.identity_required).toMatchObject({
+      membershipCreated: false,
+      sessionCreated: false,
+    });
+    expect(activationFixtureCode).toBe('TST-OPAQUE-2026');
   });
 });
 

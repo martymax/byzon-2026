@@ -1,4 +1,5 @@
 import {
+  activationLandingResponseSchema,
   participantContentProblemSchema,
   participantContentResponseSchema,
   participantProgramProblemSchema,
@@ -6,6 +7,7 @@ import {
   participantTicketResponseSchema,
 } from '@byzon/domain/contracts';
 import {
+  activationLandingFixtures,
   contentFixtureIds,
   participantContentFixtures,
   participantContentProblemFixtures,
@@ -23,6 +25,16 @@ import { mockJsonResponse, mockProblemResponse } from './response';
  * of adding production-looking query switches to the API.
  */
 export const mockHandlers: readonly RequestHandler[] = Object.freeze([
+  http.get('*/api/v1/activation', () =>
+    mockJsonResponse(
+      activationLandingResponseSchema,
+      activationLandingFixtures.anonymous,
+      {
+        fixtureName: 'activation.mock.landing',
+        cacheControl: 'private, no-store',
+      },
+    ),
+  ),
   http.get('*/api/v1/events/:eventId/program', ({ params }) => {
     if (String(params.eventId) !== contentFixtureIds.event) {
       return mockProblemResponse(

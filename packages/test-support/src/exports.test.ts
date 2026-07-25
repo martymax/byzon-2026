@@ -6,6 +6,9 @@ describe('test-support public exports', () => {
   it('exposes the harness and fixtures through declared package subpaths', () => {
     expect(testSupport.defineFixtureFactory).toBeTypeOf('function');
     expect(fixtures.baseProblemFixture.code).toBe('INTERNAL_ERROR');
+    expect(fixtures.activationLandingFixtures.anonymous?.flow.state).toBe(
+      'anonymous',
+    );
     expect(fixtures.fixtureContextMatrix).toHaveLength(35);
     expect(fixtures.participantProgramFixtures.happy?.version).toBe(3);
     expect(fixtures.participantTicketFixtures.valid?.ticket.status).toBe(
