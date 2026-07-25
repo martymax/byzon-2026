@@ -339,12 +339,22 @@ describe('F5-01..F5-06 check-in operator', () => {
         failure: { kind: 'offline' },
       }),
     };
-    const screen = await renderOperator({ api });
+    const screen = await renderComponent(
+      <main id="main">
+        <CheckinOperator
+          api={api}
+          camera={unsupportedCamera}
+          debounceMs={10}
+          scenarioCodes={checkinPreviewScenarioCodes}
+        />
+      </main>,
+    );
 
     await expect
       .element(screen.getByText('Kontext check-inu nelze načíst offline'))
       .toBeVisible();
     expect(screen.container.querySelector('input')).toBeNull();
+    expect(screen.container.querySelectorAll('main')).toHaveLength(1);
     expect(document.body.textContent).toContain(
       'Bez ověřeného kontextu nelze provádět lookup ani check-in',
     );
@@ -432,11 +442,81 @@ describe('F5-01..F5-06 check-in operator', () => {
     );
   });
 
-  it('disables confirmation after the authoritative lookup expiry', async () => {
+  it('keeps server-valid confirm and undo available when the device clock is ahead', async () => {
+    let monotonicTime = 1_000;
     const screen = await renderOperator({
-      wallClockNow: () => Date.parse('2026-09-11T07:48:00.000+02:00'),
+      monotonicNow: () => monotonicTime,
+      wallClockNow: () => Date.parse('2030-01-01T00:00:00.000Z'),
     });
 
+    await submitCode(screen, 'DEMO-VALID');
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: 'Potvrdit check-in této osoby',
+        }),
+      )
+      .toBeEnabled();
+    await screen
+      .getByRole('button', { name: 'Potvrdit check-in této osoby' })
+      .click();
+    await expect
+      .element(screen.getByText('Vstup je zaznamenaný'))
+      .toBeVisible();
+
+    await screen.getByRole('button', { name: 'Nový scan' }).click();
+    monotonicTime += 1_000;
+    await submitCode(screen, 'DEMO-DUPLICATE');
+    await expect
+      .element(screen.getByRole('button', { name: 'Vrátit původní check-in' }))
+      .toBeEnabled();
+  });
+
+  it('expires confirm and undo by server elapsed time when the device clock is behind', async () => {
+    let monotonicTime = 10_000;
+    const screen = await renderOperator({
+      monotonicNow: () => monotonicTime,
+      wallClockNow: () => Date.parse('2020-01-01T00:00:00.000Z'),
+    });
+
+    await expect
+      .element(screen.getByLabelText('Opaque kód vstupenky'))
+      .toBeVisible();
+    monotonicTime += 20 * 60 * 1_000;
+    await submitCode(screen, 'DEMO-VALID');
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: 'Potvrdit check-in této osoby',
+        }),
+      )
+      .toBeDisabled();
+    expect(document.body.textContent).toContain(
+      'Platnost tohoto lookupu vypršela',
+    );
+
+    await screen.getByRole('button', { name: 'Nový scan' }).click();
+    await submitCode(screen, 'DEMO-DUPLICATE');
+    await expect
+      .element(screen.getByRole('button', { name: 'Vrátit původní check-in' }))
+      .toBeDisabled();
+    expect(document.body.textContent).toContain(
+      'Časové okno pro vrácení tohoto check-inu právě skončilo',
+    );
+  });
+
+  it('uses relative wall time when the monotonic clock stalls during sleep', async () => {
+    const monotonicTime = 10_000;
+    let wallClockTime = Date.parse('2020-01-01T00:00:00.000Z');
+    const screen = await renderOperator({
+      monotonicNow: () => monotonicTime,
+      wallClockNow: () => wallClockTime,
+    });
+
+    await expect
+      .element(screen.getByLabelText('Opaque kód vstupenky'))
+      .toBeVisible();
+    wallClockTime += 8 * 60 * 1_000;
     await submitCode(screen, 'DEMO-VALID');
     await expect
       .element(
@@ -473,9 +553,14 @@ describe('F5-01..F5-06 check-in operator', () => {
     );
     await noPermission.unmount();
 
+    let monotonicTime = 1_000;
     const expired = await renderOperator({
-      wallClockNow: () => Date.parse('2026-09-11T08:00:00.000+02:00'),
+      monotonicNow: () => monotonicTime,
     });
+    await expect
+      .element(expired.getByLabelText('Opaque kód vstupenky'))
+      .toBeVisible();
+    monotonicTime += 20 * 60 * 1_000;
     await submitCode(expired, 'DEMO-DUPLICATE');
     await expect
       .element(expired.getByRole('button', { name: 'Vrátit původní check-in' }))

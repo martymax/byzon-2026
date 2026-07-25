@@ -14,7 +14,7 @@ import {
   type CheckinUndoRequest,
 } from '@byzon/domain/contracts/check-in';
 import { Button, StatePanel } from '@byzon/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ApiPort } from '@/lib/api';
 import {
@@ -250,6 +250,7 @@ export const CheckinOperator = ({
   camera,
   createKey = createMutationKey,
   debounceMs,
+  monotonicNow = defaultNow,
   now = defaultNow,
   scenarioCodes,
   wallClockNow = Date.now,
@@ -258,6 +259,7 @@ export const CheckinOperator = ({
   readonly camera?: CheckinCameraPort;
   readonly createKey?: (prefix: 'confirm' | 'undo') => string;
   readonly debounceMs?: number;
+  readonly monotonicNow?: () => number;
   readonly now?: () => number;
   readonly scenarioCodes?: readonly CheckinScenarioCode[];
   readonly wallClockNow?: () => number;
@@ -276,12 +278,35 @@ export const CheckinOperator = ({
   const undoLocked = useRef(false);
   const confirmAttempt = useRef<ConfirmAttempt | undefined>(undefined);
   const undoAttempt = useRef<UndoAttempt | undefined>(undefined);
+  const serverClock = useRef<
+    | {
+        readonly epochAtReceipt: number;
+        readonly monotonicAtReceipt: number;
+        readonly wallClockAtReceipt: number;
+      }
+    | undefined
+  >(undefined);
+  const authoritativeNow = useCallback(() => {
+    const anchor = serverClock.current;
+    if (!anchor) return wallClockNow();
+    const elapsed = Math.max(
+      0,
+      monotonicNow() - anchor.monotonicAtReceipt,
+      wallClockNow() - anchor.wallClockAtReceipt,
+    );
+    return anchor.epochAtReceipt + elapsed;
+  }, [monotonicNow, wallClockNow]);
 
   useEffect(() => {
     const controller = new AbortController();
     void requestCheckinBootstrap(resolvedApi, controller.signal).then(
       (result) => {
         if (result.ok && result.kind === 'success') {
+          serverClock.current = {
+            epochAtReceipt: Date.parse(result.data.serverNow),
+            monotonicAtReceipt: monotonicNow(),
+            wallClockAtReceipt: wallClockNow(),
+          };
           setBootstrap({ status: 'ready', data: result.data });
           return;
         }
@@ -298,7 +323,7 @@ export const CheckinOperator = ({
       },
     );
     return () => controller.abort();
-  }, [bootstrapAttempt, resolvedApi]);
+  }, [bootstrapAttempt, monotonicNow, resolvedApi, wallClockNow]);
 
   useEffect(
     () => () => {
@@ -432,7 +457,7 @@ export const CheckinOperator = ({
       connectivity === 'offline' ||
       bootstrap.data.device.state === 'revoked' ||
       !bootstrap.data.actor.permissions.confirm ||
-      Date.parse(stage.lookup.expiresAt) <= wallClockNow()
+      Date.parse(stage.lookup.expiresAt) <= authoritativeNow()
     ) {
       return;
     }
@@ -518,7 +543,7 @@ export const CheckinOperator = ({
       record.id !== checkinId ||
       !record.undo.allowed ||
       !record.undo.expiresAt ||
-      Date.parse(record.undo.expiresAt) <= wallClockNow()
+      Date.parse(record.undo.expiresAt) <= authoritativeNow()
     ) {
       return;
     }
@@ -539,7 +564,7 @@ export const CheckinOperator = ({
 
   if (bootstrap.status !== 'ready') {
     return (
-      <main className={styles.bootstrapPage}>
+      <div className={styles.bootstrapPage}>
         <section className={styles.bootstrapCard}>
           <p className={styles.overline}>BYZON · CHECK-IN</p>
           <h1 data-route-heading tabIndex={-1}>
@@ -572,7 +597,7 @@ export const CheckinOperator = ({
             </StatePanel>
           )}
         </section>
-      </main>
+      </div>
     );
   }
 
@@ -642,7 +667,7 @@ export const CheckinOperator = ({
           stage={stage}
           timezone={bootstrap.data.event.timezone}
           {...(undoUnavailableReason ? { undoUnavailableReason } : {})}
-          wallClockNow={wallClockNow}
+          wallClockNow={authoritativeNow}
         />
       )}
     </CheckinShell>
