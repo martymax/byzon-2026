@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldBlockUnhandledMockRequest } from './request-policy';
+import {
+  blockUnhandledMockApiRequest,
+  shouldBlockUnhandledMockRequest,
+} from './request-policy';
 
 describe('development mock request policy', () => {
   const origin = 'http://127.0.0.1:3000';
@@ -22,5 +25,24 @@ describe('development mock request policy', () => {
     expect(
       shouldBlockUnhandledMockRequest('/api/v1/test', 'not-an-origin'),
     ).toBe(true);
+  });
+
+  it('blocks without exposing query secrets or request payloads', () => {
+    expect(() =>
+      blockUnhandledMockApiRequest(
+        'POST',
+        'http://127.0.0.1:3000/api/v1/private?token=do-not-log',
+      ),
+    ).toThrowError('Mock API request blocked: POST /api/**');
+
+    try {
+      blockUnhandledMockApiRequest(
+        'POST',
+        'http://127.0.0.1:3000/api/v1/private/path-secret?token=do-not-log',
+      );
+    } catch (error) {
+      expect(String(error)).not.toContain('do-not-log');
+      expect(String(error)).not.toContain('path-secret');
+    }
   });
 });

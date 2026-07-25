@@ -73,7 +73,9 @@ describe('F1-01 activation landing', () => {
       .toBeVisible();
     await expect
       .element(
-        screen.getByText('Nevytvoří účet, členství ani skutečnou relaci.'),
+        screen.getByText(
+          'Nevytvoří účet, účast na akci ani skutečné přihlášení.',
+        ),
       )
       .toBeVisible();
 

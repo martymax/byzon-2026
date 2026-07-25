@@ -129,6 +129,8 @@ describe('activation API port', () => {
     );
     expect(activationRecoveryEndpoint.problemCodes).toEqual([
       'CLAIM_RATE_LIMITED',
+      'IDEMPOTENCY_KEY_REUSED',
+      'IDEMPOTENCY_IN_PROGRESS',
       'INTERNAL_ERROR',
     ]);
   });

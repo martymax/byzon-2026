@@ -59,6 +59,18 @@ export const activationLandingFixtures = defineFixtureSet({
         sessionCreated: false,
       },
     },
+    in_progress_onboarding: {
+      event,
+      availability: openAvailability,
+      flow: {
+        state: 'claim_in_progress',
+        flowId: activationFixtureFlowId,
+        expiresAt: '2026-07-25T13:00:00.000Z',
+        nextStep: 'onboarding',
+        membershipCreated: false,
+        sessionCreated: false,
+      },
+    },
     activated: {
       event,
       availability: openAvailability,
@@ -171,6 +183,8 @@ interface ActivationProblemStatus {
   readonly AUTH_SESSION_EXPIRED: 401;
   readonly CLAIM_RATE_LIMITED: 429;
   readonly CLAIM_REJECTED: 400;
+  readonly IDEMPOTENCY_IN_PROGRESS: 409;
+  readonly IDEMPOTENCY_KEY_REUSED: 409;
   readonly INTERNAL_ERROR: 500;
 }
 
@@ -203,6 +217,8 @@ export const activationClaimProblemFixtures = defineFixtureSet({
     rejected: problem('CLAIM_REJECTED', 400),
     closed: problem('ACTIVATION_CLOSED', 409),
     rate_limited: problem('CLAIM_RATE_LIMITED', 429),
+    idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
     internal_error: problem('INTERNAL_ERROR', 500),
   },
 });
@@ -213,6 +229,8 @@ export const activationIdentityProblemFixtures = defineFixtureSet({
   fixtures: {
     expired: problem('ACTIVATION_FLOW_EXPIRED', 410),
     rate_limited: problem('CLAIM_RATE_LIMITED', 429),
+    idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
     internal_error: problem('INTERNAL_ERROR', 500),
   },
 });
@@ -223,6 +241,8 @@ export const activationLinkProblemFixtures = defineFixtureSet({
   fixtures: {
     rejected: problem('ACTIVATION_LINK_REJECTED', 400),
     expired: problem('ACTIVATION_FLOW_EXPIRED', 410),
+    idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
     internal_error: problem('INTERNAL_ERROR', 500),
   },
 });
@@ -232,6 +252,8 @@ export const activationRecoveryProblemFixtures = defineFixtureSet({
   schema: activationRecoveryProblemSchema,
   fixtures: {
     rate_limited: problem('CLAIM_RATE_LIMITED', 429),
+    idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
     internal_error: problem('INTERNAL_ERROR', 500),
   },
 });

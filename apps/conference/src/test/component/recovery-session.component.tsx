@@ -1,11 +1,14 @@
 import {
+  activationLandingFixtures,
   activationRecoveryFixtures,
   identitySessionActionFixtures,
 } from '@byzon/test-support/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
+import LoginLayout from '../../app/prihlaseni/layout';
 import { AccessProblem } from '../../components/access-problem';
+import { LoginFlow } from '../../components/login-flow';
 import { RecoveryForm } from '../../components/recovery-form';
 import { SessionExitControls } from '../../components/session-exit-controls';
 import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
@@ -31,15 +34,27 @@ const successApi = (
   },
 });
 
-const RecoveryProbe = ({ api }: { readonly api: ApiPort }) => (
+const RecoveryProbe = ({
+  api,
+  createMockLinkToken = () =>
+    'recovery-app:00000000-0000-4000-8000-000000000001',
+  returnTo = '/app',
+}: {
+  readonly api: ApiPort;
+  readonly createMockLinkToken?: (
+    destination: '/app' | '/onboarding',
+  ) => string;
+  readonly returnTo?: '/app' | '/onboarding';
+}) => (
   <main id="main" tabIndex={-1}>
-    <RecoveryForm
-      api={api}
-      createIdempotencyKey={() => 'recovery-component-0001'}
-      createMockLinkToken={() =>
-        'recovery:00000000-0000-4000-8000-000000000001'
-      }
-    />
+    <LoginLayout>
+      <RecoveryForm
+        api={api}
+        createIdempotencyKey={() => 'recovery-component-0001'}
+        createMockLinkToken={createMockLinkToken}
+        returnTo={returnTo}
+      />
+    </LoginLayout>
   </main>
 );
 
@@ -82,12 +97,96 @@ describe('F1-06 recovery and safe session exit', () => {
     expect(window.sessionStorage.length).toBe(0);
     expect(
       screen
-        .getByRole('link', { name: 'Otevřít syntetický recovery odkaz' })
+        .getByRole('link', { name: 'Otevřít syntetický odkaz pro obnovu' })
         .element()
         .getAttribute('href'),
     ).toBe(
-      '/aktivace/odkaz?token=recovery%3A00000000-0000-4000-8000-000000000001',
+      '/aktivace/odkaz#token=recovery-app%3A00000000-0000-4000-8000-000000000001',
     );
+  });
+
+  it('preserves a safe onboarding return through the synthetic recovery link', async () => {
+    let destination: '/app' | '/onboarding' | undefined;
+    const screen = await renderComponent(
+      <RecoveryProbe
+        api={successApi(activationRecoveryFixtures.accepted)}
+        createMockLinkToken={(returnTo) => {
+          destination = returnTo;
+          return 'recovery-onboarding:00000000-0000-4000-8000-000000000001';
+        }}
+        returnTo="/onboarding"
+      />,
+    );
+
+    await screen.getByLabelText('E-mail').fill('unknown@example.test');
+    await screen
+      .getByRole('button', { name: 'Poslat jednorázový odkaz' })
+      .click();
+
+    expect(destination).toBe('/onboarding');
+    expect(
+      screen
+        .getByRole('link', { name: 'Otevřít syntetický odkaz pro obnovu' })
+        .element()
+        .getAttribute('href'),
+    ).toBe(
+      '/aktivace/odkaz#token=recovery-onboarding%3A00000000-0000-4000-8000-000000000001',
+    );
+  });
+
+  it('does not let a recovery query bypass a server-confirmed claim', async () => {
+    const api: ApiPort = {
+      request: async (endpoint, options) => ({
+        ok: true,
+        kind: 'success',
+        status: 200,
+        data: endpoint.successSchema.parse(
+          options.path === '/api/v1/activation'
+            ? activationLandingFixtures.in_progress
+            : activationRecoveryFixtures.accepted,
+        ),
+        metadata,
+      }),
+    };
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <LoginLayout>
+          <LoginFlow api={api} mode="recovery" returnTo="/onboarding" />
+        </LoginLayout>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Ověřte svůj e-mail' }))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Obnova přihlášení');
+  });
+
+  it('routes a server-confirmed onboarding step without recovery or identity input', async () => {
+    const api: ApiPort = {
+      request: async (endpoint) => ({
+        ok: true,
+        kind: 'success',
+        status: 200,
+        data: endpoint.successSchema.parse(
+          activationLandingFixtures.in_progress_onboarding,
+        ),
+        metadata,
+      }),
+    };
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <LoginLayout>
+          <LoginFlow api={api} mode="recovery" returnTo="/onboarding" />
+        </LoginLayout>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByRole('link', { name: 'Otevřít onboarding' }))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Zadejte svůj e-mail');
+    expect(document.body.textContent).not.toContain('Obnovte bezpečný přístup');
   });
 
   it('reuses the recovery key after an ambiguous offline result', async () => {
@@ -133,11 +232,19 @@ describe('F1-06 recovery and safe session exit', () => {
       .getByRole('button', { name: 'Poslat jednorázový odkaz' })
       .click();
     await expect.element(screen.getByText('Jste offline')).toBeVisible();
+    expect(document.querySelector('[data-form-failure]')).toHaveFocus();
+    expect(screen.getByLabelText('E-mail').element()).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
     await screen
       .getByRole('button', { name: 'Poslat jednorázový odkaz' })
       .click();
 
     await expect.element(screen.getByText('Zkontrolujte e-mail')).toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toHaveFocus();
     expect(keyCreations).toBe(1);
     expect(keys).toEqual(['recovery-retry-1', 'recovery-retry-1']);
   });
@@ -175,6 +282,9 @@ describe('F1-06 recovery and safe session exit', () => {
     await expect
       .element(screen.getByText('Náhled je připravený pro jiný účet'))
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Správa přihlášení' }))
+      .toHaveFocus();
     expect(clearPrivateData).toHaveBeenCalledOnce();
     expect(order).toEqual(['request:session-component-0001', 'wipe']);
     await expect
@@ -197,7 +307,7 @@ describe('F1-06 recovery and safe session exit', () => {
     await screen.getByRole('button', { name: 'Odhlásit', exact: true }).click();
 
     await expect
-      .element(screen.getByText('Změna relace se nepodařila'))
+      .element(screen.getByText('Změna přihlášení se nepodařila'))
       .toBeVisible();
     expect(clearPrivateData).not.toHaveBeenCalled();
     expect(document.querySelector('dialog[open]')).toBeNull();
@@ -230,4 +340,34 @@ describe('F1-06 recovery and safe session exit', () => {
     );
     await expectComponentToPassAxe(main);
   });
+
+  it.each([
+    ['revoked', 'Přístup byl zrušený'],
+    ['forbidden', 'Tudy nelze pokračovat'],
+    ['session_expired', 'Přihlášení vypršelo'],
+  ] as const)(
+    'exposes the %s access variant without PII',
+    async (kind, heading) => {
+      const screen = await renderComponent(
+        <main id="main" tabIndex={-1}>
+          <AccessProblem
+            kind={kind}
+            sessionApi={successApi(
+              identitySessionActionFixtures.logout_current,
+            )}
+          />
+        </main>,
+      );
+
+      await expect
+        .element(screen.getByRole('heading', { name: heading }))
+        .toBeVisible();
+      expect(document.body.textContent).not.toContain('@');
+      expect(document.body.textContent).not.toContain('example.test');
+      if (kind === 'revoked') {
+        expect(document.body.textContent).toContain('MOCK-REVOKED-2026');
+        expect(document.body.textContent).not.toContain('MOCK-SUSPENDED-2026');
+      }
+    },
+  );
 });

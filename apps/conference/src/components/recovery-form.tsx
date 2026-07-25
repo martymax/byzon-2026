@@ -23,6 +23,8 @@ import {
   submitActivationRecovery,
 } from '@/lib/activation-api';
 import type { LoginMode } from '@/lib/login-mode';
+import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type RecoveryFailure =
   | { readonly kind: 'rate_limited' }
@@ -67,13 +69,18 @@ export const RecoveryForm = ({
   mode = 'recovery',
   returnTo = '/app',
   createIdempotencyKey = () => runtimeSecret('recovery-request'),
-  createMockLinkToken = () => runtimeSecret('recovery'),
+  createMockLinkToken = (destination) =>
+    runtimeSecret(
+      destination === '/onboarding' ? 'recovery-onboarding' : 'recovery-app',
+    ),
 }: {
   readonly api?: ApiPort;
   readonly mode?: Extract<LoginMode, 'recovery' | 'switch'>;
   readonly returnTo?: '/app' | '/onboarding';
   readonly createIdempotencyKey?: () => string;
-  readonly createMockLinkToken?: () => string;
+  readonly createMockLinkToken?: (
+    destination: '/app' | '/onboarding',
+  ) => string;
 }) => {
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string>();
@@ -93,6 +100,7 @@ export const RecoveryForm = ({
       }
     | undefined
   >(undefined);
+  const sentHeading = useTransitionFocus(sent !== undefined);
 
   useEffect(() => {
     mounted.current = true;
@@ -104,7 +112,7 @@ export const RecoveryForm = ({
   const focusErrors = () => {
     requestAnimationFrame(() => {
       errorContainer.current
-        ?.querySelector<HTMLElement>('.ui-error-summary')
+        ?.querySelector<HTMLElement>('.ui-error-summary, [data-form-failure]')
         ?.focus();
     });
   };
@@ -145,18 +153,15 @@ export const RecoveryForm = ({
         requestAttempt.current = undefined;
         setEmail('');
         setSent({
-          mockLink: `/aktivace/odkaz?token=${encodeURIComponent(
-            createMockLinkToken(),
+          mockLink: `/aktivace/odkaz#token=${encodeURIComponent(
+            createMockLinkToken(returnTo),
           )}`,
           resendAfterSeconds: result.data.resendAfterSeconds,
         });
         return;
       }
       if (!result.ok) {
-        if (
-          result.failure.kind === 'problem' ||
-          result.failure.kind === 'session_expired'
-        ) {
+        if (!shouldRetainMutationKey(result.failure)) {
           requestAttempt.current = undefined;
         }
         const mapped = mapRecoveryFailure(result.failure);
@@ -180,13 +185,13 @@ export const RecoveryForm = ({
     return (
       <section className="activation-form-page">
         <p className="eyebrow">Obnova přístupu</p>
-        <h1 data-route-heading tabIndex={-1}>
+        <h1 data-route-heading ref={sentHeading} tabIndex={-1}>
           Zkontrolujte e-mail
         </h1>
         <StatePanel
           action={
             <ActionLink href={sent.mockLink}>
-              Otevřít syntetický recovery odkaz
+              Otevřít syntetický odkaz pro obnovu
             </ActionLink>
           }
           kind="empty"
@@ -194,8 +199,8 @@ export const RecoveryForm = ({
         >
           <p>
             Odpověď je stejná pro existující i neexistující účet. V mock režimu
-            můžete použít syntetický odkaz; nevznikla skutečná session ani
-            membership.
+            můžete použít syntetický odkaz; nevzniklo skutečné přihlášení ani
+            účast na akci.
           </p>
           <p>
             Další odeslání je dostupné nejdříve za {sent.resendAfterSeconds}{' '}
@@ -225,8 +230,8 @@ export const RecoveryForm = ({
 
       {mode === 'switch' ? (
         <Alert title="Přepnutí účtu je v náhledu syntetické" tone="warning">
-          Původní produkční relace se nemění. Osobní mock cache není přítomná a
-          nelze ji zaměnit za dokončené odhlášení.
+          Skutečné přihlášení se v náhledu nemění. Osobní data uložená v
+          zařízení nejsou přítomná, proto nejde o produkční odhlášení.
         </Alert>
       ) : null}
 
@@ -235,45 +240,34 @@ export const RecoveryForm = ({
           errors={
             fieldError
               ? [{ fieldId: 'recovery-email', message: fieldError }]
-              : failure
-                ? [
-                    {
-                      fieldId: 'recovery-email',
-                      message:
-                        failure.kind === 'rate_limited'
-                          ? 'Příliš mnoho pokusů. Chvíli počkejte.'
-                          : failure.kind === 'offline'
-                            ? 'Obnova přístupu vyžaduje připojení.'
-                            : 'Odkaz se nepodařilo odeslat.',
-                    },
-                  ]
-                : []
+              : []
           }
         />
+        {failure ? (
+          <div data-form-failure tabIndex={-1}>
+            <Alert
+              title={
+                failure.kind === 'rate_limited'
+                  ? 'Příliš mnoho pokusů'
+                  : failure.kind === 'offline'
+                    ? 'Jste offline'
+                    : 'Odkaz se nepodařilo odeslat'
+              }
+              tone={failure.kind === 'error' ? 'danger' : 'warning'}
+            >
+              <p>
+                {failure.kind === 'rate_limited'
+                  ? 'Počkejte a pak proveďte nový vědomý pokus.'
+                  : failure.kind === 'offline'
+                    ? 'E-mail ani požadavek neukládáme do offline fronty.'
+                    : failure.requestId
+                      ? `Zopakujte stejný požadavek. Podpoře předejte pouze referenci ${failure.requestId}.`
+                      : 'Zopakujte stejný požadavek; existenci účtu z chyby nelze odvodit.'}
+              </p>
+            </Alert>
+          </div>
+        ) : null}
       </div>
-
-      {failure ? (
-        <Alert
-          title={
-            failure.kind === 'rate_limited'
-              ? 'Příliš mnoho pokusů'
-              : failure.kind === 'offline'
-                ? 'Jste offline'
-                : 'Odkaz se nepodařilo odeslat'
-          }
-          tone={failure.kind === 'error' ? 'danger' : 'warning'}
-        >
-          <p>
-            {failure.kind === 'rate_limited'
-              ? 'Počkejte a pak proveďte nový vědomý pokus.'
-              : failure.kind === 'offline'
-                ? 'E-mail ani požadavek neukládáme do offline fronty.'
-                : failure.requestId
-                  ? `Podpoře předejte pouze referenci ${failure.requestId}.`
-                  : 'Zkuste to znovu; existenci účtu z chyby nelze odvodit.'}
-          </p>
-        </Alert>
-      ) : null}
 
       <form className="activation-code-card" noValidate onSubmit={submit}>
         <FormField

@@ -125,6 +125,22 @@ export const sessionExpiredProblemSchema = defineApiProblemSchema(
 
 export type SessionExpiredProblem = z.infer<typeof sessionExpiredProblemSchema>;
 
+export const idempotencyKeyReusedProblemSchema = defineApiProblemSchema(
+  'IDEMPOTENCY_KEY_REUSED',
+  409,
+);
+export const idempotencyInProgressProblemSchema = defineApiProblemSchema(
+  'IDEMPOTENCY_IN_PROGRESS',
+  409,
+);
+
+export type IdempotencyKeyReusedProblem = z.infer<
+  typeof idempotencyKeyReusedProblemSchema
+>;
+export type IdempotencyInProgressProblem = z.infer<
+  typeof idempotencyInProgressProblemSchema
+>;
+
 export const opaqueCursorSchema = z
   .string()
   .regex(OPAQUE_CURSOR_PATTERN, 'Invalid opaque cursor');

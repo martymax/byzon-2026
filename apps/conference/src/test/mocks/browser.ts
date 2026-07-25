@@ -1,7 +1,10 @@
 import { setupWorker } from 'msw/browser';
 
 import { mockHandlers } from './handlers';
-import { shouldBlockUnhandledMockRequest } from './request-policy';
+import {
+  blockUnhandledMockApiRequest,
+  shouldBlockUnhandledMockRequest,
+} from './request-policy';
 
 const PRODUCTION_BOUNDARY_MARKER = 'BYZON_MOCK_RUNTIME_F0_05';
 const MOCK_WORKER_PATH = '/mockServiceWorker.js';
@@ -166,11 +169,11 @@ export const startBrowserMocking = async (): Promise<void> => {
   stopActiveMocking();
   try {
     await worker.start({
-      onUnhandledRequest(request, print) {
+      onUnhandledRequest(request) {
         if (
           shouldBlockUnhandledMockRequest(request.url, window.location.origin)
         ) {
-          print.error();
+          blockUnhandledMockApiRequest(request.method, request.url);
         }
       },
       serviceWorker: {

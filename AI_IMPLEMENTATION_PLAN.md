@@ -1201,7 +1201,7 @@ Evidence:
 
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
-| Aktivace a identita | `contract ready` | `F1-01`: striktní `CS-ACT-01`, validované landing/claim/identity/link/recovery fixtures, typed API port a development-only aktivační landing se všemi bezpečnými resource stavy; `F1-02`: exact opaque ruční claim bez enumerace; `F1-03`: server-gated progresivní kamera, syntetický QR, lifecycle cleanup a vždy dostupný ruční fallback; `F1-04`: server-resumed identity, neenumerující link-sent a URL-scrubbed one-time link handoff bez skutečné session; `F1-05`: tříkrokový onboarding nad `CS-BOOT-01`, exact legal versions a oddělený networking opt-in; `F1-06`: already-active recovery, active-link branch, bezpečné access stavy a potvrzené session actions s lokálním wipe seamem | etapové F1 security/code review před `UI ready (mocked)`; `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci |
+| Aktivace a identita | `UI ready (mocked)` | `F1-01` až `F1-06`: striktní `CS-ACT-01`/`CS-BOOT-01`, validované fixtures, veřejná aktivace, exact opaque claim, progresivní kamera, server-resumed identita, fragmentový one-time link, verzovaný onboarding, neenumerující recovery, bezpečné access stavy a potvrzené session actions. Závěrečný F1 security/code review doplnil race, idempotency, draft/focus a secret-redaction regrese; 133 conference unit testů, 87 domain, 18 fixtures a 252 browser component scénářů jsou zelené. | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci; `BLOCKER-LEGAL-01` pro právní UAT |
 | Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program a ticket component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `contract ready` | onboarding doména `P2-06`; `F1-05` dodal striktní `CS-BOOT-01`, validované fixtures, typed mock port a přístupný onboarding; úplná správa účtu/profilu/soukromí zůstává ve `F2-07` | `P4-13` pro autorizované API, `F2-07` pro úplné UI, `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
@@ -1856,6 +1856,13 @@ třech viewports, focus a error summary míří na první chybu, targety mají
 nejméně `44 × 44 px`, claim chyba neprozradí držitele a mock nikdy nevytvoří
 skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 z
 §20.2.
+
+Etapový security a code review F1 byl dokončen 25. 7. 2026. Zapracované nálezy
+kryjí token pouze ve fragmentu a jeho okamžité odstranění, stabilní
+idempotency při neurčitém výsledku, race-safe scanner/cancel, neenumerující
+recovery, autoritativní ochranu rozpracovaného claimu, ochranu rozepsaného
+onboardingu, redigované mock diagnostiky a focus po stavové změně. Capability
+je `UI ready (mocked)`; produkční integrace zůstává za pojmenovanými blockery.
 
 #### F2 – participant shell, program a vstupenka
 
@@ -2666,3 +2673,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 3.9 | 25. 7. 2026 | Dokončen `F1-04`: mock claim pokračuje klientskou navigací do server-resumed identity flow, bezpečně allowlistuje návrat, koreluje flow ID, blokuje dvojitý submit a drží idempotency při neurčitém retry. Jednorázový token `/aktivace/odkaz` se před akcí odstraní z URL/hash, nikdy se nepersistuje, route má no-referrer/no-store a úspěch pouze simuluje handoff na onboarding bez Better Auth session nebo membership. |
 | 4.0 | 25. 7. 2026 | Dokončen `F1-05`: `CS-BOOT-01` definuje private/no-store identity bootstrap a idempotentní onboarding nad přesnými právními verzemi. Development-only tříkrokový flow drží P2 data jen v paměti, odděluje nepředvolený networking opt-in, failne zavřeně při chybějící/stale právní konfiguraci a zřetelně označuje syntetické drafty i absenci skutečné session, membership a consent zápisu. |
 | 4.1 | 25. 7. 2026 | Dokončen `F1-06`: already-active kód, neenumerující recovery a jednorázový active link tvoří úplný syntetický návrat do aplikace. Přidány bezpečné suspended/revoked/session-expired stavy, potvrzené logout/switch session actions, token-bound replay, lokální wipe seam a dostupná nastavení účtu; mock nikdy nepotvrzuje existenci cizího účtu ani změnu skutečné Better Auth session. |
+| 4.2 | 25. 7. 2026 | Uzavřen etapový security/code review F1 a capability posunuta na `UI ready (mocked)`. Tokeny se přijímají pouze z URL fragmentu a ihned se odstraňují; mutace drží nebo rotují idempotency key podle autoritativního výsledku, scanner je race-safe, recovery zachová bezpečný návrat, login query neobejde rozpracovaný claim, onboarding chrání draft a úspěšné stavové přechody řídí focus. Mock replay ukládá jen opaque fingerprinty a diagnostiky neodhalují secrets ani PII. |

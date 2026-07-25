@@ -226,6 +226,8 @@ interface IdentityProblemStatus {
   readonly AUTHENTICATION_REQUIRED: 401;
   readonly AUTH_SESSION_EXPIRED: 401;
   readonly EVENT_ACCESS_DENIED: 403;
+  readonly IDEMPOTENCY_IN_PROGRESS: 409;
+  readonly IDEMPOTENCY_KEY_REUSED: 409;
   readonly INTERNAL_ERROR: 500;
   readonly LEGAL_CONFIGURATION_MISSING: 503;
   readonly NETWORKING_DISABLED: 409;
@@ -269,6 +271,8 @@ export const identityOnboardingProblemFixtures = defineFixtureSet({
     stale_legal: problem('STALE_LEGAL_DOCUMENT', 409),
     networking_disabled: problem('NETWORKING_DISABLED', 409),
     request_id_reused: problem('REQUEST_ID_REUSED', 409),
+    idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
     validation: problem('VALIDATION_FAILED', 422),
     internal_error: problem('INTERNAL_ERROR', 500),
   },
@@ -281,6 +285,8 @@ export const identitySessionActionProblemFixtures = defineFixtureSet({
     authentication: problem('AUTHENTICATION_REQUIRED', 401),
     session_expired: problem('AUTH_SESSION_EXPIRED', 401),
     request_id_reused: problem('REQUEST_ID_REUSED', 409),
+    idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
     rejected: problem('SESSION_ACTION_REJECTED', 409),
     internal_error: problem('INTERNAL_ERROR', 500),
   },

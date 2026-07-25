@@ -7,11 +7,13 @@ import {
   activationIdentityFixtures,
   activationLandingFixtures,
   activationLinkFixtures,
+  activationLinkProblemFixtures,
 } from '@byzon/test-support/fixtures';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import '../../app/styles.css';
 import ActivationLayout from '../../app/aktivace/layout';
+import LoginLayout from '../../app/prihlaseni/layout';
 import { ActivationIdentity } from '../../components/activation-identity';
 import { ActivationLinkConsumer } from '../../components/activation-link-consumer';
 import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
@@ -71,14 +73,14 @@ const IdentityProbe = ({
   readonly now?: (() => number) | undefined;
 }) => (
   <main id="main" tabIndex={-1}>
-    <ActivationLayout>
+    <LoginLayout>
       <ActivationIdentity
         api={api}
         createIdempotencyKey={createKey}
         createMockLinkToken={() => 'link:00000000-0000-4000-8000-000000000001'}
         now={now}
       />
-    </ActivationLayout>
+    </LoginLayout>
   </main>
 );
 
@@ -130,6 +132,28 @@ describe('F1-04 identity and one-time-link handoff', () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
+  it('follows a server-owned onboarding next step without asking for email again', async () => {
+    const screen = await renderComponent(
+      <IdentityProbe
+        api={apiForIdentity({
+          landing: activationLandingFixtures.in_progress_onboarding!,
+        })}
+      />,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Pokračujte k nastavení účasti',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Otevřít onboarding' }))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Zadejte svůj e-mail');
+  });
+
   it('submits identity exactly once and keeps flow metadata out of URL/storage', async () => {
     const calls: RecordedRequest[] = [];
     const screen = await renderComponent(
@@ -155,6 +179,9 @@ describe('F1-04 identity and one-time-link handoff', () => {
         screen.getByText('Pokud lze průchod dokončit, odkaz byl odeslán'),
       )
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toHaveFocus();
     expect(calls).toHaveLength(1);
     expect(calls[0]?.body).toEqual({
       flowId: 'flow.synthetic.2026',
@@ -172,7 +199,7 @@ describe('F1-04 identity and one-time-link handoff', () => {
         })
         .element()
         .getAttribute('href'),
-    ).toBe('/aktivace/odkaz?token=link%3A00000000-0000-4000-8000-000000000001');
+    ).toBe('/aktivace/odkaz#token=link%3A00000000-0000-4000-8000-000000000001');
   });
 
   it('rejects a response flow mismatch without minting a mock link', async () => {
@@ -252,6 +279,11 @@ describe('F1-04 identity and one-time-link handoff', () => {
       .getByRole('button', { name: 'Poslat jednorázový odkaz' })
       .click();
     await expect.element(screen.getByText('Jste offline')).toBeVisible();
+    expect(document.querySelector('[data-form-failure]')).toHaveFocus();
+    expect(screen.getByLabelText('E-mail').element()).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
     await screen
       .getByRole('button', { name: 'Poslat jednorázový odkaz' })
       .click();
@@ -293,7 +325,7 @@ describe('F1-04 identity and one-time-link handoff', () => {
     window.history.replaceState(
       { safe: true },
       '',
-      '/aktivace/odkaz?token=link%3A00000000-0000-4000-8000-000000000001#secret',
+      '/aktivace/odkaz#token=link%3A00000000-0000-4000-8000-000000000001',
     );
     const screen = await renderComponent(
       <LinkProbe
@@ -334,11 +366,20 @@ describe('F1-04 identity and one-time-link handoff', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Pokračovat na onboarding' }))
       .toBeVisible();
+    expect(window.location.href).not.toContain(
+      'link%3A00000000-0000-4000-8000-000000000001',
+    );
+    expect(window.location.href).not.toContain(
+      'link:00000000-0000-4000-8000-000000000001',
+    );
+    expect(JSON.stringify(window.history.state)).not.toContain(
+      'link:00000000-0000-4000-8000-000000000001',
+    );
   });
 
   it('rejects a missing or duplicated URL token without a request', async () => {
     let requests = 0;
-    window.history.replaceState({}, '', '/aktivace/odkaz?token=one&token=two');
+    window.history.replaceState({}, '', '/aktivace/odkaz#token=one&token=two');
     const screen = await renderComponent(
       <LinkProbe
         api={apiForLink(activationLinkFixtures.onboarding_required, () => {
@@ -352,6 +393,29 @@ describe('F1-04 identity and one-time-link handoff', () => {
       .toBeVisible();
     expect(requests).toBe(0);
     expect(window.location.search).toBe('');
+  });
+
+  it('ignores and scrubs a legacy query token without consuming it', async () => {
+    let requests = 0;
+    window.history.replaceState(
+      {},
+      '',
+      '/aktivace/odkaz?token=link%3A00000000-0000-4000-8000-000000000001',
+    );
+    const screen = await renderComponent(
+      <LinkProbe
+        api={apiForLink(activationLinkFixtures.onboarding_required, () => {
+          requests += 1;
+        })}
+      />,
+    );
+
+    await expect
+      .element(screen.getByText('Odkaz chybí nebo už není platný'))
+      .toBeVisible();
+    expect(requests).toBe(0);
+    expect(window.location.search).toBe('');
+    expect(window.location.hash).toBe('');
   });
 
   it('retries an ambiguous link failure with the same idempotency key', async () => {
@@ -383,7 +447,7 @@ describe('F1-04 identity and one-time-link handoff', () => {
     window.history.replaceState(
       {},
       '',
-      '/aktivace/odkaz?token=link%3A00000000-0000-4000-8000-000000000001',
+      '/aktivace/odkaz#token=link%3A00000000-0000-4000-8000-000000000001',
     );
     const screen = await renderComponent(
       <LinkProbe
@@ -404,9 +468,72 @@ describe('F1-04 identity and one-time-link handoff', () => {
     await expect
       .element(screen.getByText('Syntetický odkaz byl bezpečně spotřebován'))
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Dokončete profil' }))
+      .toHaveFocus();
     expect(requests).toBe(2);
     expect(keyCreations).toBe(1);
     expect(keys).toEqual(['link-retry-1', 'link-retry-1']);
+  });
+
+  it('mints a new key after the server rejects a reused link key', async () => {
+    let requests = 0;
+    let keyCreations = 0;
+    const keys: string[] = [];
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        requests += 1;
+        if (options.idempotencyKey) keys.push(options.idempotencyKey);
+        if (requests === 1) {
+          const problem = activationLinkProblemFixtures.idempotency_key_reused!;
+          return {
+            ok: false,
+            kind: 'failure',
+            status: problem.status,
+            failure: {
+              kind: 'problem',
+              problem: endpoint.problemSchema.parse(problem),
+            },
+            metadata,
+          };
+        }
+        return {
+          ok: true,
+          kind: 'success',
+          status: 200,
+          data: endpoint.successSchema.parse(
+            activationLinkFixtures.onboarding_required,
+          ),
+          metadata,
+        };
+      },
+    };
+    window.history.replaceState(
+      {},
+      '',
+      '/aktivace/odkaz#token=link%3A00000000-0000-4000-8000-000000000001',
+    );
+    const screen = await renderComponent(
+      <LinkProbe
+        api={api}
+        createKey={() => {
+          keyCreations += 1;
+          return `link-collision-${keyCreations}`;
+        }}
+      />,
+    );
+
+    await screen.getByRole('button', { name: 'Pokračovat' }).click();
+    await expect
+      .element(screen.getByText('Odkaz se nepodařilo dokončit'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Zkusit znovu' }).click();
+
+    await expect
+      .element(screen.getByText('Syntetický odkaz byl bezpečně spotřebován'))
+      .toBeVisible();
+    expect(keys).toEqual(['link-collision-1', 'link-collision-2']);
+    expect(keyCreations).toBe(2);
   });
 
   it('keeps the identity form accessible and responsive', async () => {

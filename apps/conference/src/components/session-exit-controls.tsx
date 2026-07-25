@@ -21,10 +21,13 @@ import {
   browserIdentityApi,
   submitIdentitySessionAction,
 } from '@/lib/identity-api';
+import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type SessionActionFailure =
   | { readonly kind: 'offline' }
   | { readonly kind: 'session_expired' }
+  | { readonly kind: 'in_progress' }
   | { readonly kind: 'rejected' }
   | { readonly kind: 'error'; readonly requestId?: RequestId };
 
@@ -42,13 +45,13 @@ const actionCopy: Record<
     title: 'Odhlásit tento účet?',
     confirm: 'Odhlásit',
     description:
-      'V produkci by skončila pouze aktuální relace na tomto zařízení.',
+      'V produkci by skončilo pouze aktuální přihlášení na tomto zařízení.',
   },
   logout_all: {
     button: 'Odhlásit všechna zařízení',
     title: 'Odhlásit všechna zařízení?',
     confirm: 'Odhlásit všechna',
-    description: 'V produkci by byly zneplatněné všechny relace tohoto účtu.',
+    description: 'V produkci by byla ukončena všechna přihlášení tohoto účtu.',
   },
   switch_account: {
     button: 'Použít jiný účet',
@@ -78,9 +81,13 @@ const mapFailure = (
       }
       if (
         failure.problem.code === 'SESSION_ACTION_REJECTED' ||
-        failure.problem.code === 'REQUEST_ID_REUSED'
+        failure.problem.code === 'REQUEST_ID_REUSED' ||
+        failure.problem.code === 'IDEMPOTENCY_KEY_REUSED'
       ) {
         return { kind: 'rejected' };
+      }
+      if (failure.problem.code === 'IDEMPOTENCY_IN_PROGRESS') {
+        return { kind: 'in_progress' };
       }
       return { kind: 'error', requestId: failure.problem.requestId };
     case 'invalid_response':
@@ -121,6 +128,7 @@ export const SessionExitControls = ({
   const locked = useRef(false);
   const mounted = useRef(true);
   const failureAlert = useRef<HTMLDivElement>(null);
+  const outcomeHeading = useTransitionFocus(outcome !== undefined);
   const attempt = useRef<
     | {
         readonly action: IdentitySessionAction;
@@ -159,7 +167,6 @@ export const SessionExitControls = ({
       if (!mounted.current) return;
       if (result.ok && result.kind === 'success') {
         if (result.data.action !== action) {
-          attempt.current = undefined;
           setPendingAction(undefined);
           setFailure({
             kind: 'error',
@@ -176,10 +183,7 @@ export const SessionExitControls = ({
         return;
       }
       if (!result.ok) {
-        if (
-          result.failure.kind === 'problem' ||
-          result.failure.kind === 'session_expired'
-        ) {
+        if (!shouldRetainMutationKey(result.failure)) {
           attempt.current = undefined;
         }
         const mapped = mapFailure(result.failure);
@@ -204,7 +208,10 @@ export const SessionExitControls = ({
   if (outcome) {
     const { response } = outcome;
     return (
-      <section className="session-controls" aria-label="Správa relace">
+      <section className="session-controls" aria-label="Správa přihlášení">
+        <h2 ref={outcomeHeading} tabIndex={-1}>
+          Správa přihlášení
+        </h2>
         <StatePanel
           action={
             <ActionLink href={response.continueTo}>
@@ -216,20 +223,19 @@ export const SessionExitControls = ({
           kind="empty"
           title={
             response.action === 'logout_all'
-              ? 'Všechny relace byly v náhledu odpojené'
+              ? 'Všechna přihlášení byla v náhledu ukončena'
               : response.action === 'switch_account'
                 ? 'Náhled je připravený pro jiný účet'
-                : 'Aktuální relace byla v náhledu odpojená'
+                : 'Aktuální přihlášení bylo v náhledu ukončeno'
           }
         >
           <p>
             {response.effect === 'synthetic_preview'
-              ? 'Jde pouze o syntetický výsledek: skutečná session se nezměnila.'
-              : 'Server potvrdil změnu relace.'}{' '}
+              ? 'Jde pouze o syntetický výsledek: skutečné přihlášení se nezměnilo.'
+              : 'Server potvrdil změnu přihlášení.'}{' '}
             {outcome.localDisposition === 'none_present'
-              ? 'Lokální wipe seam potvrdil, že owner-scoped cache nebyla přítomná.'
-              : 'Lokální wipe seam odstranil owner-scoped data z tohoto zařízení.'}{' '}
-            Server hlásí stav {response.personalData.disposition}.
+              ? 'V zařízení nebyla nalezena žádná osobní data tohoto účtu.'
+              : 'Osobní data tohoto účtu byla ze zařízení odstraněna.'}
           </p>
         </StatePanel>
       </section>
@@ -242,7 +248,7 @@ export const SessionExitControls = ({
       aria-labelledby="session-controls-title"
     >
       <header>
-        <p className="activation-kicker">Relace a účet</p>
+        <p className="activation-kicker">Přihlášení a účet</p>
         <h2 id="session-controls-title">Bezpečně změnit účet</h2>
         <p>
           Žádná akce nehledá ani nepotvrzuje cizí účet. V mock režimu pouze
@@ -255,19 +261,23 @@ export const SessionExitControls = ({
           <Alert
             title={
               failure.kind === 'offline'
-                ? 'Změna relace vyžaduje připojení'
+                ? 'Změna přihlášení vyžaduje připojení'
                 : failure.kind === 'session_expired'
                   ? 'Přihlášení už vypršelo'
-                  : failure.kind === 'rejected'
-                    ? 'Akci nelze bezpečně dokončit'
-                    : 'Změna relace se nepodařila'
+                  : failure.kind === 'in_progress'
+                    ? 'Akce se ještě zpracovává'
+                    : failure.kind === 'rejected'
+                      ? 'Akci nelze bezpečně dokončit'
+                      : 'Změna přihlášení se nepodařila'
             }
             tone={failure.kind === 'error' ? 'danger' : 'warning'}
           >
             <p>
-              {failure.kind === 'error' && failure.requestId
-                ? `Podpoře předejte pouze referenci ${failure.requestId}.`
-                : 'Žádný cizí účet ani jeho stav nebyl zobrazen.'}
+              {failure.kind === 'in_progress'
+                ? 'Chvíli počkejte a potom bezpečně zopakujte stejnou akci.'
+                : failure.kind === 'error' && failure.requestId
+                  ? `Podpoře předejte pouze referenci ${failure.requestId}.`
+                  : 'Žádný cizí účet ani jeho stav nebyl zobrazen.'}
             </p>
           </Alert>
         </div>
@@ -299,7 +309,7 @@ export const SessionExitControls = ({
         onConfirm={() => void runAction()}
         open={pendingAction !== undefined}
         title={
-          pendingAction ? actionCopy[pendingAction].title : 'Změnit relaci?'
+          pendingAction ? actionCopy[pendingAction].title : 'Změnit přihlášení?'
         }
         working={working}
       >
@@ -309,8 +319,8 @@ export const SessionExitControls = ({
             : 'Nejdřív vyberte konkrétní akci.'}
         </p>
         <p className="preview-disclaimer">
-          V této ukázce nevznikla skutečná session, takže se pouze simuluje
-          bezpečný canonical výsledek.
+          V této ukázce nevzniklo skutečné přihlášení, proto pouze ověřujeme
+          bezpečný uživatelský průchod.
         </p>
       </DestructiveConfirmation>
     </section>

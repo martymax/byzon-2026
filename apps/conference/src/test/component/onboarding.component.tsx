@@ -11,7 +11,7 @@ import {
   identityOnboardingFixtures,
   identityOnboardingProblemFixtures,
 } from '@byzon/test-support/fixtures';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
 import OnboardingLayout from '../../app/onboarding/layout';
@@ -118,13 +118,19 @@ const apiForBootstrapProblem = (
 const OnboardingProbe = ({
   api = apiForOnboarding(),
   createKey = () => 'onboarding-component-0001',
+  navigate,
 }: {
   readonly api?: ApiPort;
   readonly createKey?: () => string;
+  readonly navigate?: (href: string) => void;
 }) => (
   <main id="main" tabIndex={-1}>
     <OnboardingLayout>
-      <OnboardingFlow api={api} createIdempotencyKey={createKey} />
+      <OnboardingFlow
+        api={api}
+        createIdempotencyKey={createKey}
+        {...(navigate ? { navigate } : {})}
+      />
     </OnboardingLayout>
   </main>
 );
@@ -196,6 +202,14 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     await expect
       .element(screen.getByText('Nastavení je dokončené'))
       .toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          level: 1,
+          name: 'Připravte si aplikaci',
+        }),
+      )
+      .toHaveFocus();
     expect(calls).toHaveLength(1);
     expect(calls[0]?.body).toEqual({
       profile: {
@@ -214,7 +228,10 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
     expect(window.location.search).toBe('');
-  });
+    await vi.waitFor(() => {
+      expect(window.history.state.__byzonOnboardingDraftGuard).not.toBe(true);
+    });
+  }, 30_000);
 
   it('keeps opt-in separate and submits its exact consent version', async () => {
     const calls: RecordedRequest[] = [];
@@ -272,6 +289,50 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
+  it('guards a dirty draft when navigation starts outside the form', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <OnboardingLayout>
+          <a href="/app">Opustit onboarding</a>
+          <OnboardingFlow api={apiForOnboarding()} />
+        </OnboardingLayout>
+      </main>,
+    );
+
+    await screen.getByLabelText('Jméno').fill('Alex');
+    await screen.getByRole('link', { name: 'Opustit onboarding' }).click();
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe('/onboarding');
+    await expect.element(screen.getByLabelText('Jméno')).toHaveValue('Alex');
+    confirm.mockRestore();
+  });
+
+  it('consumes the draft guard before confirmed navigation', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const navigate = vi.fn();
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <OnboardingLayout>
+          <a href="/app">Opustit onboarding</a>
+          <OnboardingFlow
+            api={apiForOnboarding()}
+            createIdempotencyKey={() => 'onboarding-navigation-0001'}
+            navigate={navigate}
+          />
+        </OnboardingLayout>
+      </main>,
+    );
+
+    await screen.getByLabelText('Jméno').fill('Alex');
+    await screen.getByRole('link', { name: 'Opustit onboarding' }).click();
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/app'));
+    expect(window.history.state.__byzonOnboardingDraftGuard).not.toBe(true);
+    confirm.mockRestore();
+  });
+
   it('reuses one idempotency key after an ambiguous offline result', async () => {
     const keys: string[] = [];
     let keyCreations = 0;
@@ -298,11 +359,13 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
     await expect
       .element(
-        screen.getByText(
-          'Jste offline. Připojte se a odešlete stejný požadavek znovu.',
-        ),
+        screen.getByText('Připojte se a odešlete stejný požadavek znovu.'),
       )
       .toBeVisible();
+    expect(document.querySelector('[data-form-failure]')).toHaveFocus();
+    expect(
+      screen.getByLabelText('Ne, pokračovat bez networkingu').element(),
+    ).not.toHaveAttribute('aria-invalid', 'true');
     await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
 
     await expect
@@ -339,11 +402,88 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     await expect
       .element(
         screen.getByText(
-          'Server vrátil nekonzistentní výsledek. Nic nepředstíráme.',
+          /Server vrátil nekonzistentní výsledek\. Nic nepředstíráme\./,
         ),
       )
       .toBeVisible();
     expect(document.body.textContent).not.toContain('Nastavení je dokončené');
+  });
+
+  it('keeps the profile draft while refreshing stale legal documents', async () => {
+    const initialBootstrap = identityBootstrapFixtures.profile_required!;
+    const refreshedBootstrap: IdentityBootstrapResponse = {
+      ...initialBootstrap,
+      legalDocuments: initialBootstrap.legalDocuments.map((document) => ({
+        ...document,
+        version: 'synthetic-v2',
+      })),
+    };
+    const staleProblem = identityOnboardingProblemFixtures.stale_legal!;
+    let staleSubmitted = false;
+    let refreshCalls = 0;
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        if (options.path === '/api/v1/me/bootstrap') {
+          if (staleSubmitted) refreshCalls += 1;
+          return {
+            ok: true,
+            kind: 'success',
+            status: 200,
+            data: endpoint.successSchema.parse(
+              staleSubmitted ? refreshedBootstrap : initialBootstrap,
+            ),
+            metadata,
+          };
+        }
+        staleSubmitted = true;
+        return {
+          ok: false,
+          kind: 'failure',
+          status: staleProblem.status,
+          failure: {
+            kind: 'problem',
+            problem: endpoint.problemSchema.parse(staleProblem),
+          },
+          metadata: { requestId: staleProblem.requestId },
+        };
+      },
+    };
+    const screen = await renderComponent(<OnboardingProbe api={api} />);
+
+    await screen.getByLabelText('Jméno').fill('Mila');
+    await screen.getByLabelText('Příjmení').fill('Testová');
+    await screen.getByLabelText('Kontaktní e-mail').fill('mila@example.test');
+    await screen.getByRole('button', { name: 'Pokračovat' }).click();
+    await completeLegalStep(screen);
+    await screen.getByLabelText('Ne, pokračovat bez networkingu').click();
+    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+
+    await expect
+      .element(screen.getByText('Právní verze se změnila'))
+      .toBeVisible();
+    expect(document.querySelector('[data-form-failure]')).toHaveFocus();
+    expect(
+      screen
+        .getByLabelText('Souhlasím s podmínkami, verze synthetic-v2')
+        .element(),
+    ).not.toBeChecked();
+    expect(
+      screen
+        .getByLabelText(
+          'Potvrzuji seznámení s informacemi o soukromí, verze synthetic-v2',
+        )
+        .element(),
+    ).not.toBeChecked();
+
+    await screen.getByRole('button', { name: 'Zpět' }).click();
+    await expect.element(screen.getByLabelText('Jméno')).toHaveValue('Mila');
+    await expect
+      .element(screen.getByLabelText('Příjmení'))
+      .toHaveValue('Testová');
+    await expect
+      .element(screen.getByLabelText('Kontaktní e-mail'))
+      .toHaveValue('mila@example.test');
+    expect(refreshCalls).toBeGreaterThanOrEqual(1);
   });
 
   it('fails closed for missing legal configuration and suspended access', async () => {

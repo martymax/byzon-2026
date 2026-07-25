@@ -26,22 +26,26 @@ import {
   type RequestId,
 } from '@byzon/domain/contracts';
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
   type FormEvent,
   type ReactNode,
+  type Ref,
 } from 'react';
 
 import {
   useIdentityBootstrap,
   type IdentityBootstrapState,
 } from '@/components/identity-bootstrap';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 import type { ApiPort } from '@/lib/api';
 import {
   browserIdentityApi,
   submitIdentityOnboarding,
 } from '@/lib/identity-api';
+import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 
 type Step = 'profile' | 'legal' | 'networking';
 type NetworkingChoice = 'enabled' | 'disabled' | undefined;
@@ -193,6 +197,8 @@ const mapSubmitFailure = (
         case 'VALIDATION_FAILED':
           return { kind: 'validation' };
         case 'REQUEST_ID_REUSED':
+        case 'IDEMPOTENCY_KEY_REUSED':
+        case 'IDEMPOTENCY_IN_PROGRESS':
         case 'INTERNAL_ERROR':
           return { kind: 'error', requestId: failure.problem.requestId };
       }
@@ -207,19 +213,23 @@ const mapSubmitFailure = (
   }
 };
 
+const defaultNavigate = (href: string) => window.location.assign(href);
+
 const BootstrapFrame = ({
   bootstrap,
   children,
+  headingRef,
   step,
 }: {
   readonly bootstrap: IdentityBootstrapResponse;
   readonly children: ReactNode;
+  readonly headingRef?: Ref<HTMLHeadingElement>;
   readonly step: Step;
 }) => (
   <section className="onboarding-page">
     <header className="onboarding-heading">
       <p className="eyebrow">Nastavení účasti</p>
-      <h1 data-route-heading tabIndex={-1}>
+      <h1 data-route-heading ref={headingRef} tabIndex={-1}>
         Připravte si aplikaci
       </h1>
       <p className="lead">
@@ -235,7 +245,7 @@ const BootstrapFrame = ({
       <Alert title="Syntetický náhled – bez skutečného zápisu" tone="warning">
         <p>
           Právní texty, profil i volby jsou pouze testovací. Tento průchod
-          nevytvoří produkční souhlas, session ani event membership.
+          nevytvoří skutečný souhlas, přihlášení ani účast na akci.
         </p>
       </Alert>
     ) : null}
@@ -366,9 +376,11 @@ const LegalDocumentCard = ({
 export const OnboardingFlow = ({
   api = browserIdentityApi,
   createIdempotencyKey = runtimeKey,
+  navigate,
 }: {
   readonly api?: ApiPort;
   readonly createIdempotencyKey?: () => string;
+  readonly navigate?: (href: string) => void;
 }) => {
   const bootstrap = useIdentityBootstrap(api);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -381,8 +393,12 @@ export const OnboardingFlow = ({
   const initializedRevision = useRef(0);
   const submitLocked = useRef(false);
   const mounted = useRef(true);
+  const allowNavigation = useRef(false);
+  const sentinelPushed = useRef(false);
   const errorContainer = useRef<HTMLDivElement>(null);
+  const failureAlert = useRef<HTMLDivElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
+  const preserveDraftAfterLegalRefresh = useRef(false);
   const requestAttempt = useRef<
     | {
         readonly fingerprint: string;
@@ -390,6 +406,28 @@ export const OnboardingFlow = ({
       }
     | undefined
   >(undefined);
+  const navigateTo = navigate ?? defaultNavigate;
+  const completionHeading = useTransitionFocus(
+    completed ||
+      (bootstrap.state.status === 'ready' &&
+        bootstrap.state.data.onboarding.status === 'complete'),
+  );
+
+  const discardDraftAndNavigate = useCallback(
+    (href: string) => {
+      allowNavigation.current = true;
+      if (!sentinelPushed.current) {
+        navigateTo(href);
+        return;
+      }
+      sentinelPushed.current = false;
+      window.addEventListener('popstate', () => navigateTo(href), {
+        once: true,
+      });
+      window.history.back();
+    },
+    [navigateTo],
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -399,14 +437,114 @@ export const OnboardingFlow = ({
   }, []);
 
   useEffect(() => {
-    if (!dirty) return;
+    const guardStateKey = '__byzonOnboardingDraftGuard';
+    const currentState =
+      window.history.state &&
+      typeof window.history.state === 'object' &&
+      !Array.isArray(window.history.state)
+        ? (window.history.state as Record<string, unknown>)
+        : {};
+    if (!dirty) {
+      if (currentState[guardStateKey] === true) {
+        if (sentinelPushed.current) {
+          sentinelPushed.current = false;
+          window.history.back();
+        } else {
+          const cleanState = { ...currentState };
+          delete cleanState[guardStateKey];
+          window.history.replaceState(cleanState, '', window.location.href);
+        }
+      }
+      return;
+    }
+    allowNavigation.current = false;
+
+    const confirmLeave = () =>
+      window.confirm(
+        'Opravdu chcete onboarding opustit? Neuložené údaje se zahodí.',
+      );
     const guard = (event: BeforeUnloadEvent) => {
+      if (allowNavigation.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
+    if (currentState[guardStateKey] !== true) {
+      window.history.pushState(
+        { ...currentState, [guardStateKey]: true },
+        '',
+        window.location.href,
+      );
+      sentinelPushed.current = true;
+    }
+    const guardLink = (event: MouseEvent) => {
+      if (
+        allowNavigation.current ||
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      const target =
+        event.target instanceof Element
+          ? event.target.closest<HTMLAnchorElement>('a[href]')
+          : null;
+      if (
+        !target ||
+        target.target === '_blank' ||
+        target.hasAttribute('download')
+      ) {
+        return;
+      }
+      const destination = new URL(target.href, window.location.href);
+      const current = new URL(window.location.href);
+      if (
+        destination.origin === current.origin &&
+        destination.pathname === current.pathname &&
+        destination.search === current.search &&
+        destination.hash !== current.hash
+      ) {
+        return;
+      }
+      if (confirmLeave()) {
+        event.preventDefault();
+        event.stopPropagation();
+        const href =
+          destination.origin === current.origin
+            ? `${destination.pathname}${destination.search}${destination.hash}`
+            : destination.href;
+        discardDraftAndNavigate(href);
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const guardBack = () => {
+      if (allowNavigation.current) return;
+      if (confirmLeave()) {
+        allowNavigation.current = true;
+        sentinelPushed.current = false;
+        window.history.back();
+        return;
+      }
+      window.history.pushState(
+        { ...currentState, [guardStateKey]: true },
+        '',
+        window.location.href,
+      );
+    };
     window.addEventListener('beforeunload', guard);
-    return () => window.removeEventListener('beforeunload', guard);
-  }, [dirty]);
+    window.addEventListener('popstate', guardBack);
+    document.addEventListener('click', guardLink, true);
+    return () => {
+      window.removeEventListener('beforeunload', guard);
+      window.removeEventListener('popstate', guardBack);
+      document.removeEventListener('click', guardLink, true);
+    };
+  }, [dirty, discardDraftAndNavigate]);
 
   useEffect(() => {
     if (
@@ -417,6 +555,21 @@ export const OnboardingFlow = ({
     }
     initializedRevision.current = bootstrap.revision;
     const data = bootstrap.state.data;
+    if (preserveDraftAfterLegalRefresh.current) {
+      preserveDraftAfterLegalRefresh.current = false;
+      setDraft((current) => ({
+        ...current,
+        termsAccepted: false,
+        privacyAcknowledged: false,
+        networkingConsentAccepted: false,
+      }));
+      setStep('legal');
+      setErrors({});
+      setDirty(true);
+      requestAttempt.current = undefined;
+      requestAnimationFrame(() => failureAlert.current?.focus());
+      return;
+    }
     const alreadyAcknowledged =
       data.onboarding.status === 'networking_choice_required' ||
       data.onboarding.status === 'complete';
@@ -452,6 +605,10 @@ export const OnboardingFlow = ({
         ?.querySelector<HTMLElement>('.ui-error-summary')
         ?.focus();
     });
+  };
+
+  const focusFailure = () => {
+    requestAnimationFrame(() => failureAlert.current?.focus());
   };
 
   const updateDraft = <Key extends keyof Draft>(
@@ -532,15 +689,19 @@ export const OnboardingFlow = ({
 
   if (completed || data.onboarding.status === 'complete') {
     return (
-      <BootstrapFrame bootstrap={data} step="networking">
+      <BootstrapFrame
+        bootstrap={data}
+        headingRef={completionHeading}
+        step="networking"
+      >
         <StatePanel
           action={<ActionLink href="/app">Otevřít aplikaci</ActionLink>}
           kind="empty"
           title="Nastavení je dokončené"
         >
           <p>
-            V syntetickém režimu byl pouze nasimulován výsledek. Nevznikla
-            skutečná session, membership ani právní záznam.
+            V syntetickém režimu byl pouze nasimulován výsledek. Nevzniklo
+            skutečné přihlášení, účast na akci ani právní záznam.
           </p>
         </StatePanel>
       </BootstrapFrame>
@@ -708,15 +869,12 @@ export const OnboardingFlow = ({
           result.data.networkingEnabled !== request.networking.enabled ||
           !acknowledgementsMatch
         ) {
-          requestAttempt.current = undefined;
           setFailure({
             kind: 'error',
             requestId: result.metadata.requestId,
           });
-          setErrors({
-            submit: 'Server vrátil nekonzistentní výsledek. Nic nepředstíráme.',
-          });
-          focusErrors();
+          setErrors({});
+          focusFailure();
           return;
         }
         requestAttempt.current = undefined;
@@ -726,15 +884,13 @@ export const OnboardingFlow = ({
       }
       if (!result.ok) {
         const mapped = mapSubmitFailure(result.failure);
-        if (
-          result.failure.kind === 'problem' ||
-          result.failure.kind === 'session_expired'
-        ) {
+        if (!shouldRetainMutationKey(result.failure)) {
           requestAttempt.current = undefined;
         }
         if (mapped) {
           setFailure(mapped);
           if (mapped.kind === 'stale_legal') {
+            preserveDraftAfterLegalRefresh.current = true;
             setDraft((current) => ({
               ...current,
               termsAccepted: false,
@@ -744,31 +900,16 @@ export const OnboardingFlow = ({
             setStep('legal');
             bootstrap.retry();
           } else {
-            setErrors({
-              submit:
-                mapped.kind === 'offline'
-                  ? 'Jste offline. Připojte se a odešlete stejný požadavek znovu.'
-                  : mapped.kind === 'networking_disabled'
-                    ? 'Networking už pro tuto událost není dostupný.'
-                    : mapped.kind === 'session_expired'
-                      ? 'Přihlášení vypršelo. Obnovte jej bezpečným odkazem.'
-                      : mapped.kind === 'permission'
-                        ? 'K této události už nemáte oprávnění.'
-                        : mapped.kind === 'validation'
-                          ? 'Server odmítl zadané údaje. Zkontrolujte formulář.'
-                          : 'Dokončení se nepodařilo. Zkuste to znovu.',
-            });
-            focusErrors();
+            setErrors({});
+            focusFailure();
           }
         }
       }
     } catch {
       if (mounted.current) {
         setFailure({ kind: 'error' });
-        setErrors({
-          submit: 'Dokončení se nepodařilo. Zkuste to znovu.',
-        });
-        focusErrors();
+        setErrors({});
+        focusFailure();
       }
     } finally {
       submitLocked.current = false;
@@ -783,7 +924,7 @@ export const OnboardingFlow = ({
         'Opravdu chcete onboarding opustit? Neuložené údaje se zahodí.',
       )
     ) {
-      window.location.assign('/aktivace');
+      discardDraftAndNavigate('/aktivace');
     }
   };
 
@@ -799,12 +940,55 @@ export const OnboardingFlow = ({
         Krok {stepNumber[step]} ze 3: {stepLabel[step]}
       </LiveRegion>
       {failure?.kind === 'stale_legal' ? (
-        <Alert title="Právní verze se změnila" tone="warning">
-          <p>
-            Načítáme aktuální dokumenty. Staré volby byly zrušené a je potřeba
-            je zkontrolovat znovu.
-          </p>
-        </Alert>
+        <div data-form-failure ref={failureAlert} tabIndex={-1}>
+          <Alert title="Právní verze se změnila" tone="warning">
+            <p>
+              Načetli jsme aktuální dokumenty. Staré volby byly zrušené a je
+              potřeba je zkontrolovat znovu.
+            </p>
+          </Alert>
+        </div>
+      ) : null}
+      {failure && failure.kind !== 'stale_legal' ? (
+        <div data-form-failure ref={failureAlert} tabIndex={-1}>
+          <Alert
+            title={
+              failure.kind === 'offline'
+                ? 'Jste offline'
+                : failure.kind === 'session_expired'
+                  ? 'Přihlášení vypršelo'
+                  : failure.kind === 'networking_disabled'
+                    ? 'Networking není dostupný'
+                    : failure.kind === 'permission'
+                      ? 'Přístup už není dostupný'
+                      : failure.kind === 'validation'
+                        ? 'Server údaje odmítl'
+                        : 'Dokončení se nepodařilo'
+            }
+            tone={failure.kind === 'error' ? 'danger' : 'warning'}
+          >
+            <p>
+              {failure.kind === 'offline'
+                ? 'Připojte se a odešlete stejný požadavek znovu.'
+                : failure.kind === 'session_expired'
+                  ? 'Obnovte přihlášení bezpečným odkazem a potom pokračujte.'
+                  : failure.kind === 'networking_disabled'
+                    ? 'Networking už pro tuto událost není dostupný.'
+                    : failure.kind === 'permission'
+                      ? 'K této události už nemáte oprávnění.'
+                      : failure.kind === 'validation'
+                        ? 'Zkontrolujte formulář a zkuste jej odeslat znovu.'
+                        : failure.requestId
+                          ? `Server vrátil nekonzistentní výsledek. Nic nepředstíráme. Podpoře předejte pouze referenci ${failure.requestId}.`
+                          : 'Zopakujte bezpečně stejný požadavek.'}
+            </p>
+            {failure.kind === 'session_expired' ? (
+              <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fonboarding">
+                Obnovit přihlášení
+              </ActionLink>
+            ) : null}
+          </Alert>
+        </div>
       ) : null}
 
       {step === 'profile' ? (

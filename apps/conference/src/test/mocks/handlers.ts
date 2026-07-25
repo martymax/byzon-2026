@@ -13,6 +13,7 @@ import {
   activationRecoveryRequestSchema,
   activationRecoveryResponseSchema,
   idempotencyKeySchema,
+  identityBootstrapProblemSchema,
   identityBootstrapResponseSchema,
   identityOnboardingProblemSchema,
   identityOnboardingRequestSchema,
@@ -41,6 +42,7 @@ import {
   activationRecoveryProblemFixtures,
   contentFixtureIds,
   identityBootstrapFixtures,
+  identityBootstrapProblemFixtures,
   identityFixtureIds,
   identityOnboardingFixtures,
   identityOnboardingProblemFixtures,
@@ -59,18 +61,52 @@ import { mockJsonResponse, mockProblemResponse } from './response';
 interface MockActivationState {
   claimed: boolean;
   signedOut: boolean;
-  linkConsumption?: {
-    idempotencyKey: string;
-    outcome: 'active' | 'onboarding_required';
-    token: string;
-  };
-  sessionAction?: {
-    action: 'logout_current' | 'logout_all' | 'switch_account';
-    idempotencyKey: string;
-  };
+  claims: Map<
+    string,
+    {
+      fingerprint: string;
+      outcome: 'identity_required' | 'recovery_required';
+    }
+  >;
+  identities: Map<
+    string,
+    {
+      fingerprint: string;
+    }
+  >;
+  recoveries: Map<
+    string,
+    {
+      fingerprint: string;
+    }
+  >;
+  linkConsumptions: Map<
+    string,
+    {
+      outcome: 'active' | 'onboarding_required';
+      tokenFingerprint: string;
+    }
+  >;
+  consumedLinkFingerprints: Set<string>;
+  sessionActions: Map<
+    string,
+    {
+      action: 'logout_current' | 'logout_all' | 'switch_account';
+    }
+  >;
+  onboardingRequests: Map<
+    string,
+    {
+      fingerprint: string;
+      networkingEnabled: boolean;
+      profile: {
+        firstName: string;
+        lastName: string;
+        contactEmail: string;
+      };
+    }
+  >;
   onboarding?: {
-    fingerprint: string;
-    idempotencyKey: string;
     networkingEnabled: boolean;
     profile: {
       firstName: string;
@@ -83,14 +119,36 @@ interface MockActivationState {
 const mockActivationState: MockActivationState = {
   claimed: false,
   signedOut: false,
+  claims: new Map(),
+  identities: new Map(),
+  recoveries: new Map(),
+  linkConsumptions: new Map(),
+  consumedLinkFingerprints: new Set(),
+  sessionActions: new Map(),
+  onboardingRequests: new Map(),
 };
 
 export const resetMockActivationState = (): void => {
   mockActivationState.claimed = false;
   mockActivationState.signedOut = false;
-  delete mockActivationState.linkConsumption;
+  mockActivationState.claims.clear();
+  mockActivationState.identities.clear();
+  mockActivationState.recoveries.clear();
+  mockActivationState.linkConsumptions.clear();
+  mockActivationState.consumedLinkFingerprints.clear();
+  mockActivationState.sessionActions.clear();
+  mockActivationState.onboardingRequests.clear();
   delete mockActivationState.onboarding;
-  delete mockActivationState.sessionAction;
+};
+
+const opaqueFingerprint = async (value: string): Promise<string> => {
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 };
 
 /**
@@ -117,25 +175,44 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     const idempotencyKey = idempotencyKeySchema.safeParse(
       request.headers.get('idempotency-key'),
     );
+    if (!parsed.success || !idempotencyKey.success) {
+      return mockProblemResponse(
+        activationClaimProblemSchema,
+        activationClaimProblemFixtures.rejected,
+        { fixtureName: 'activation.mock.claim-rejected' },
+      );
+    }
+    const fingerprint = await opaqueFingerprint(JSON.stringify(parsed.data));
+    const previous = mockActivationState.claims.get(idempotencyKey.data);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        return mockProblemResponse(
+          activationClaimProblemSchema,
+          activationClaimProblemFixtures.idempotency_key_reused,
+          { fixtureName: 'activation.mock.claim-key-reused' },
+        );
+      }
+      return mockJsonResponse(
+        activationClaimResponseSchema,
+        activationClaimFixtures[previous.outcome],
+        {
+          fixtureName: 'activation.mock.claim-replay',
+          cacheControl: 'private, no-store',
+        },
+      );
+    }
     const acceptedCameraCode =
-      parsed.success &&
       parsed.data.method === 'camera_scan' &&
       /^camera:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         parsed.data.code,
       );
     const acceptedManualCode =
-      parsed.success &&
       parsed.data.method === 'manual_code' &&
       parsed.data.code === activationFixtureCode;
     const acceptedRecoveryCode =
-      parsed.success &&
       parsed.data.method === 'manual_code' &&
       parsed.data.code === activationFixtureRecoveryCode;
-    if (
-      !parsed.success ||
-      !idempotencyKey.success ||
-      (!acceptedManualCode && !acceptedRecoveryCode && !acceptedCameraCode)
-    ) {
+    if (!acceptedManualCode && !acceptedRecoveryCode && !acceptedCameraCode) {
       return mockProblemResponse(
         activationClaimProblemSchema,
         activationClaimProblemFixtures.rejected,
@@ -143,14 +220,18 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       );
     }
 
-    mockActivationState.claimed = true;
-    mockActivationState.signedOut = false;
-    delete mockActivationState.linkConsumption;
+    const outcome =
+      acceptedRecoveryCode || mockActivationState.onboarding
+        ? 'recovery_required'
+        : 'identity_required';
+    mockActivationState.claimed = outcome === 'identity_required';
+    mockActivationState.claims.set(idempotencyKey.data, {
+      fingerprint,
+      outcome,
+    });
     return mockJsonResponse(
       activationClaimResponseSchema,
-      acceptedRecoveryCode || mockActivationState.onboarding
-        ? activationClaimFixtures.recovery_required
-        : activationClaimFixtures.identity_required,
+      activationClaimFixtures[outcome],
       {
         fixtureName: 'activation.mock.claim',
         cacheControl: 'private, no-store',
@@ -163,9 +244,33 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     const idempotencyKey = idempotencyKeySchema.safeParse(
       request.headers.get('idempotency-key'),
     );
+    if (!parsed.success || !idempotencyKey.success) {
+      return mockProblemResponse(
+        activationIdentityProblemSchema,
+        activationIdentityProblemFixtures.expired,
+        { fixtureName: 'activation.mock.identity-expired' },
+      );
+    }
+    const fingerprint = await opaqueFingerprint(JSON.stringify(parsed.data));
+    const previous = mockActivationState.identities.get(idempotencyKey.data);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        return mockProblemResponse(
+          activationIdentityProblemSchema,
+          activationIdentityProblemFixtures.idempotency_key_reused,
+          { fixtureName: 'activation.mock.identity-key-reused' },
+        );
+      }
+      return mockJsonResponse(
+        activationIdentityResponseSchema,
+        activationIdentityFixtures.link_sent,
+        {
+          fixtureName: 'activation.mock.identity-replay',
+          cacheControl: 'private, no-store',
+        },
+      );
+    }
     if (
-      !parsed.success ||
-      !idempotencyKey.success ||
       !mockActivationState.claimed ||
       parsed.data.flowId !== activationFixtureFlowId
     ) {
@@ -175,6 +280,9 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'activation.mock.identity-expired' },
       );
     }
+    mockActivationState.identities.set(idempotencyKey.data, {
+      fingerprint,
+    });
     return mockJsonResponse(
       activationIdentityResponseSchema,
       activationIdentityFixtures.link_sent,
@@ -197,6 +305,20 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'activation.mock.recovery-invalid' },
       );
     }
+    const fingerprint = await opaqueFingerprint(JSON.stringify(parsed.data));
+    const previous = mockActivationState.recoveries.get(idempotencyKey.data);
+    if (previous && previous.fingerprint !== fingerprint) {
+      return mockProblemResponse(
+        activationRecoveryProblemSchema,
+        activationRecoveryProblemFixtures.idempotency_key_reused,
+        { fixtureName: 'activation.mock.recovery-key-reused' },
+      );
+    }
+    if (!previous) {
+      mockActivationState.recoveries.set(idempotencyKey.data, {
+        fingerprint,
+      });
+    }
 
     return mockJsonResponse(
       activationRecoveryResponseSchema,
@@ -215,36 +337,64 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     );
     const accepted =
       parsed.success &&
-      /^(?:link|recovery):[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      /^(?:link|recovery-app|recovery-onboarding):[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         parsed.data.token,
       );
-    const replay =
-      parsed.success &&
-      idempotencyKey.success &&
-      mockActivationState.linkConsumption?.idempotencyKey ===
-        idempotencyKey.data &&
-      mockActivationState.linkConsumption.token === parsed.data.token;
-    const alreadyConsumed = mockActivationState.linkConsumption !== undefined;
-    if (!accepted || !idempotencyKey.success || (alreadyConsumed && !replay)) {
+    const tokenFingerprint = parsed.success
+      ? await opaqueFingerprint(parsed.data.token)
+      : undefined;
+    if (
+      !accepted ||
+      !parsed.success ||
+      !idempotencyKey.success ||
+      !tokenFingerprint
+    ) {
       return mockProblemResponse(
         activationLinkProblemSchema,
         activationLinkProblemFixtures.rejected,
         { fixtureName: 'activation.mock.link-rejected' },
       );
     }
+    const previous = mockActivationState.linkConsumptions.get(
+      idempotencyKey.data,
+    );
+    if (previous) {
+      if (previous.tokenFingerprint !== tokenFingerprint) {
+        return mockProblemResponse(
+          activationLinkProblemSchema,
+          activationLinkProblemFixtures.idempotency_key_reused,
+          { fixtureName: 'activation.mock.link-key-reused' },
+        );
+      }
+      return mockJsonResponse(
+        activationLinkResponseSchema,
+        activationLinkFixtures[previous.outcome],
+        {
+          fixtureName: 'activation.mock.link-replay',
+          cacheControl: 'private, no-store',
+        },
+      );
+    }
+    if (mockActivationState.consumedLinkFingerprints.has(tokenFingerprint)) {
+      return mockProblemResponse(
+        activationLinkProblemSchema,
+        activationLinkProblemFixtures.rejected,
+        { fixtureName: 'activation.mock.link-already-consumed' },
+      );
+    }
     mockActivationState.claimed = false;
     mockActivationState.signedOut = false;
-    const outcome = parsed.data.token.startsWith('recovery:')
+    const outcome = parsed.data.token.startsWith('recovery-app:')
       ? 'active'
       : 'onboarding_required';
-    mockActivationState.linkConsumption ??= {
-      idempotencyKey: idempotencyKey.data,
+    mockActivationState.linkConsumptions.set(idempotencyKey.data, {
       outcome,
-      token: parsed.data.token,
-    };
+      tokenFingerprint,
+    });
+    mockActivationState.consumedLinkFingerprints.add(tokenFingerprint);
     return mockJsonResponse(
       activationLinkResponseSchema,
-      activationLinkFixtures[mockActivationState.linkConsumption.outcome],
+      activationLinkFixtures[outcome],
       {
         fixtureName: 'activation.mock.link',
         cacheControl: 'private, no-store',
@@ -254,8 +404,8 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
   http.get('*/api/v1/me/bootstrap', () => {
     if (mockActivationState.signedOut) {
       return mockProblemResponse(
-        identitySessionActionProblemSchema,
-        identitySessionActionProblemFixtures.authentication,
+        identityBootstrapProblemSchema,
+        identityBootstrapProblemFixtures.authentication,
         { fixtureName: 'identity.mock.bootstrap-signed-out' },
       );
     }
@@ -289,6 +439,13 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'identity.mock.onboarding-validation' },
       );
     }
+    if (mockActivationState.signedOut) {
+      return mockProblemResponse(
+        identityOnboardingProblemSchema,
+        identityOnboardingProblemFixtures.authentication,
+        { fixtureName: 'identity.mock.onboarding-signed-out' },
+      );
+    }
     const exactDocuments =
       parsed.data.legal.termsDocumentId === identityFixtureIds.terms &&
       parsed.data.legal.privacyNoticeDocumentId ===
@@ -304,35 +461,37 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       );
     }
 
-    const fingerprint = JSON.stringify(parsed.data);
-    const previous = mockActivationState.onboarding;
-    if (
-      previous?.idempotencyKey === idempotencyKey.data &&
-      previous.fingerprint !== fingerprint
-    ) {
+    const fingerprint = await opaqueFingerprint(JSON.stringify(parsed.data));
+    const previous = mockActivationState.onboardingRequests.get(
+      idempotencyKey.data,
+    );
+    if (previous && previous.fingerprint !== fingerprint) {
       return mockProblemResponse(
         identityOnboardingProblemSchema,
-        identityOnboardingProblemFixtures.request_id_reused,
+        identityOnboardingProblemFixtures.idempotency_key_reused,
         { fixtureName: 'identity.mock.onboarding-key-reused' },
       );
     }
-    const networkingEnabled = parsed.data.networking.enabled;
-    if (!previous || previous.idempotencyKey !== idempotencyKey.data) {
+    const record = previous ?? {
+      fingerprint,
+      networkingEnabled: parsed.data.networking.enabled,
+      profile: parsed.data.profile,
+    };
+    if (!previous) {
+      mockActivationState.onboardingRequests.set(idempotencyKey.data, record);
       mockActivationState.onboarding = {
-        fingerprint,
-        idempotencyKey: idempotencyKey.data,
-        networkingEnabled,
-        profile: parsed.data.profile,
+        networkingEnabled: record.networkingEnabled,
+        profile: record.profile,
       };
     }
-    const completion = networkingEnabled
+    const completion = record.networkingEnabled
       ? identityOnboardingFixtures.opted_in
       : identityOnboardingFixtures.opted_out;
     return mockJsonResponse(
       identityOnboardingResponseSchema,
       {
         ...completion,
-        profile: parsed.data.profile,
+        profile: record.profile,
       },
       {
         fixtureName: 'identity.mock.onboarding',
@@ -354,26 +513,36 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'identity.mock.session-action-invalid' },
       );
     }
-    const previous = mockActivationState.sessionAction;
-    if (
-      previous?.idempotencyKey === idempotencyKey.data &&
-      previous.action !== parsed.data.action
-    ) {
+    const previous = mockActivationState.sessionActions.get(
+      idempotencyKey.data,
+    );
+    if (previous && previous.action !== parsed.data.action) {
       return mockProblemResponse(
         identitySessionActionProblemSchema,
-        identitySessionActionProblemFixtures.request_id_reused,
+        identitySessionActionProblemFixtures.idempotency_key_reused,
         { fixtureName: 'identity.mock.session-action-key-reused' },
       );
     }
-    if (!previous || previous.idempotencyKey !== idempotencyKey.data) {
-      mockActivationState.sessionAction = {
+    if (!previous && mockActivationState.signedOut) {
+      return mockProblemResponse(
+        identitySessionActionProblemSchema,
+        identitySessionActionProblemFixtures.authentication,
+        { fixtureName: 'identity.mock.session-action-signed-out' },
+      );
+    }
+    if (!previous) {
+      mockActivationState.sessionActions.set(idempotencyKey.data, {
         action: parsed.data.action,
-        idempotencyKey: idempotencyKey.data,
-      };
+      });
       mockActivationState.claimed = false;
       mockActivationState.signedOut = true;
+      mockActivationState.claims.clear();
+      mockActivationState.identities.clear();
+      mockActivationState.recoveries.clear();
       delete mockActivationState.onboarding;
-      delete mockActivationState.linkConsumption;
+      mockActivationState.onboardingRequests.clear();
+      mockActivationState.linkConsumptions.clear();
+      mockActivationState.consumedLinkFingerprints.clear();
     }
     return mockJsonResponse(
       identitySessionActionResponseSchema,

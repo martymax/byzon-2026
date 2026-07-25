@@ -16,6 +16,7 @@ import {
   consumeActivationLink,
 } from '@/lib/activation-api';
 import { SessionExitControls } from '@/components/session-exit-controls';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type LinkFailure =
   | { readonly kind: 'rejected' }
@@ -83,6 +84,7 @@ export const ActivationLinkConsumer = ({
   const idempotencyKey = useRef<string | undefined>(undefined);
   const submitting = useRef(false);
   const mounted = useRef(true);
+  const successHeading = useTransitionFocus(state.status === 'success');
 
   useEffect(() => {
     mounted.current = true;
@@ -90,8 +92,15 @@ export const ActivationLinkConsumer = ({
     if (captured === undefined) {
       try {
         const url = new URL(window.location.href);
-        const values = url.searchParams.getAll('token');
+        const fragment = url.hash.startsWith('#')
+          ? new URLSearchParams(url.hash.slice(1))
+          : new URLSearchParams();
+        const values = fragment.getAll('token');
         captured = values.length === 1 ? values[0] : '';
+      } catch {
+        captured = '';
+      }
+      try {
         window.history.replaceState(
           window.history.state,
           '',
@@ -99,10 +108,14 @@ export const ActivationLinkConsumer = ({
         );
       } catch {
         captured = '';
+        window.location.replace('/aktivace/odkaz');
       }
       token.current = captured;
+      captured = '';
     }
-    const parsed = activationLinkRequestSchema.safeParse({ token: captured });
+    const parsed = activationLinkRequestSchema.safeParse({
+      token: token.current,
+    });
     setState(parsed.success ? { status: 'ready' } : { status: 'missing' });
     return () => {
       mounted.current = false;
@@ -128,6 +141,12 @@ export const ActivationLinkConsumer = ({
         return;
       }
       if (!result.ok) {
+        if (
+          result.failure.kind === 'problem' &&
+          result.failure.problem.code === 'IDEMPOTENCY_KEY_REUSED'
+        ) {
+          idempotencyKey.current = undefined;
+        }
         const failure = mapLinkFailure(result.failure);
         if (failure) {
           if (
@@ -168,7 +187,7 @@ export const ActivationLinkConsumer = ({
     return (
       <section className="activation-form-page">
         <p className="eyebrow">Jednorázový odkaz</p>
-        <h1 data-route-heading tabIndex={-1}>
+        <h1 data-route-heading ref={successHeading} tabIndex={-1}>
           {onboarding ? 'Dokončete profil' : 'Přístup je připravený'}
         </h1>
         <StatePanel
@@ -182,7 +201,7 @@ export const ActivationLinkConsumer = ({
         >
           <p>
             Token už není v adrese ani v paměti komponenty. Mock nevytvořil
-            skutečnou Better Auth session ani membership.
+            skutečné přihlášení ani účast na akci.
           </p>
         </StatePanel>
         {!onboarding ? <SessionExitControls /> : null}
@@ -259,10 +278,12 @@ export const ActivationLinkConsumer = ({
         >
           <p>
             {failure.kind === 'offline'
-              ? 'Odkaz neukládáme do offline fronty.'
+              ? 'Odkaz neukládáme do offline fronty. Po připojení bezpečně zopakujeme stejný pokus.'
               : failure.kind === 'error' && failure.requestId
-                ? `Zkuste nový odkaz. Podpoře předejte referenci ${failure.requestId}.`
-                : 'Vyžádejte si nový odkaz; původní token se znovu nepoužije.'}
+                ? `Výsledek předchozího pokusu není jistý. Zopakujte jej se stejným odkazem; podpoře předejte referenci ${failure.requestId}.`
+                : failure.kind === 'error'
+                  ? 'Výsledek předchozího pokusu není jistý. Bezpečně zopakujte stejný odkaz.'
+                  : 'Vyžádejte si nový odkaz; původní token už nelze použít.'}
           </p>
         </StatePanel>
       </section>
@@ -289,8 +310,8 @@ export const ActivationLinkConsumer = ({
         title="Token byl odstraněn z adresy"
       >
         <p>
-          Pokračováním jej jednou odešlete přes validovaný no-store API port.
-          Dvojité odeslání je zamčené.
+          Pokračováním odkaz jednou bezpečně ověříte bez ukládání. Opakované
+          rychlé kliknutí nevytvoří druhý požadavek.
         </p>
       </StatePanel>
     </section>

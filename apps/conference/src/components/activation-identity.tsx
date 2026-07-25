@@ -17,7 +17,7 @@ import {
   type ApiFailure,
   type RequestId,
 } from '@byzon/domain/contracts';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 
 import { useActivationEntry } from '@/components/activation-entry';
 import type { ApiPort } from '@/lib/api';
@@ -25,6 +25,8 @@ import {
   browserActivationApi,
   submitActivationIdentity,
 } from '@/lib/activation-api';
+import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type PendingActivationFlow = Extract<
   ActivationLandingResponse['flow'],
@@ -82,14 +84,16 @@ const runtimeSecret = (prefix: string): string => {
 
 const IdentityGate = ({
   children,
+  headingRef,
   title,
 }: {
   readonly children: ReactNode;
+  readonly headingRef?: Ref<HTMLHeadingElement>;
   readonly title: string;
 }) => (
   <section className="activation-form-page">
     <p className="eyebrow">Bezpečné ověření</p>
-    <h1 data-route-heading tabIndex={-1}>
+    <h1 data-route-heading ref={headingRef} tabIndex={-1}>
       {title}
     </h1>
     {children}
@@ -125,6 +129,7 @@ export const ActivationIdentity = ({
   >(undefined);
   const mounted = useRef(true);
   const errorContainer = useRef<HTMLDivElement>(null);
+  const sentHeading = useTransitionFocus(sent !== undefined);
 
   useEffect(() => {
     mounted.current = true;
@@ -136,7 +141,7 @@ export const ActivationIdentity = ({
   const focusErrors = () => {
     requestAnimationFrame(() => {
       errorContainer.current
-        ?.querySelector<HTMLElement>('.ui-error-summary')
+        ?.querySelector<HTMLElement>('.ui-error-summary, [data-form-failure]')
         ?.focus();
     });
   };
@@ -179,7 +184,6 @@ export const ActivationIdentity = ({
       if (!mounted.current) return;
       if (result.ok && result.kind === 'success') {
         if (result.data.flowId !== flow.flowId) {
-          requestAttempt.current = undefined;
           setFailure({
             kind: 'error',
             requestId: result.metadata.requestId,
@@ -190,7 +194,7 @@ export const ActivationIdentity = ({
         setEmail('');
         requestAttempt.current = undefined;
         setSent({
-          mockLink: `/aktivace/odkaz?token=${encodeURIComponent(
+          mockLink: `/aktivace/odkaz#token=${encodeURIComponent(
             createMockLinkToken(),
           )}`,
           resendAfterSeconds: result.data.resendAfterSeconds,
@@ -198,10 +202,7 @@ export const ActivationIdentity = ({
         return;
       }
       if (!result.ok) {
-        if (
-          result.failure.kind === 'problem' ||
-          result.failure.kind === 'session_expired'
-        ) {
+        if (!shouldRetainMutationKey(result.failure)) {
           requestAttempt.current = undefined;
         }
         const mapped = mapIdentityFailure(result.failure);
@@ -223,7 +224,7 @@ export const ActivationIdentity = ({
 
   if (sent) {
     return (
-      <IdentityGate title="Zkontrolujte e-mail">
+      <IdentityGate headingRef={sentHeading} title="Zkontrolujte e-mail">
         <StatePanel
           action={
             <ActionLink href={sent.mockLink}>
@@ -235,8 +236,8 @@ export const ActivationIdentity = ({
         >
           <p>
             Stejnou zprávu ukazujeme bez ohledu na existenci účtu. V mock režimu
-            můžete použít syntetický odkaz výše; nevznikla skutečná session ani
-            membership.
+            můžete použít syntetický odkaz výše; nevzniklo skutečné přihlášení
+            ani účast na akci.
           </p>
           <p>
             Další odeslání je dostupné nejdříve za {sent.resendAfterSeconds}{' '}
@@ -286,7 +287,8 @@ export const ActivationIdentity = ({
           }
         >
           <p>
-            Flow ID, e-mail ani ticket kód neobnovujeme z browser storage.
+            Identifikátor průchodu, e-mail ani ticket kód neobnovujeme z dat
+            uložených v prohlížeči.
             {landing.status === 'error' && landing.requestId ? (
               <>
                 {' '}
@@ -302,9 +304,30 @@ export const ActivationIdentity = ({
   const flow =
     landing.status === 'ready' &&
     landing.data.availability.state === 'open' &&
-    landing.data.flow.state === 'claim_in_progress'
+    landing.data.flow.state === 'claim_in_progress' &&
+    landing.data.flow.nextStep === 'identity'
       ? landing.data.flow
       : null;
+  const onboardingReady =
+    landing.status === 'ready' &&
+    landing.data.availability.state === 'open' &&
+    landing.data.flow.state === 'claim_in_progress' &&
+    landing.data.flow.nextStep === 'onboarding';
+  if (onboardingReady) {
+    return (
+      <IdentityGate title="Pokračujte k nastavení účasti">
+        <StatePanel
+          action={
+            <ActionLink href="/onboarding">Otevřít onboarding</ActionLink>
+          }
+          kind="empty"
+          title="Ověření identity už je dokončené"
+        >
+          <p>Další krok určil server. E-mail proto znovu nevyžadujeme.</p>
+        </StatePanel>
+      </IdentityGate>
+    );
+  }
   const clientExpired =
     flow && now ? Date.parse(flow.expiresAt) <= now() : false;
   if (!flow || clientExpired || failure?.kind === 'expired') {
@@ -330,8 +353,9 @@ export const ActivationIdentity = ({
           }
         >
           <p>
-            Aktuální flow musí znovu potvrdit server. Ticket kód, flow ID ani
-            e-mail se nečtou z URL, historie nebo browser storage.
+            Aktuální průchod musí znovu potvrdit server. Ticket kód,
+            identifikátor průchodu ani e-mail se nečtou z adresy, historie nebo
+            dat uložených v prohlížeči.
           </p>
         </StatePanel>
       </IdentityGate>
@@ -356,51 +380,38 @@ export const ActivationIdentity = ({
           errors={
             fieldError
               ? [{ fieldId: 'activation-email', message: fieldError }]
-              : failure
-                ? [
-                    {
-                      fieldId: 'activation-email',
-                      message:
-                        failure.kind === 'rate_limited'
-                          ? 'Příliš mnoho pokusů. Chvíli počkejte.'
-                          : failure.kind === 'offline'
-                            ? 'Ověření identity vyžaduje připojení.'
-                            : failure.kind === 'session_expired'
-                              ? 'Přihlášení vypršelo.'
-                              : 'Odkaz se nepodařilo odeslat.',
-                    },
-                  ]
-                : []
+              : []
           }
         />
+        {failure ? (
+          <div data-form-failure tabIndex={-1}>
+            <Alert
+              title={
+                failure.kind === 'rate_limited'
+                  ? 'Příliš mnoho pokusů'
+                  : failure.kind === 'offline'
+                    ? 'Jste offline'
+                    : failure.kind === 'session_expired'
+                      ? 'Přihlášení vypršelo'
+                      : 'Odkaz se nepodařilo odeslat'
+              }
+              tone={failure.kind === 'error' ? 'danger' : 'warning'}
+            >
+              {failure.kind === 'rate_limited'
+                ? 'Chvíli počkejte a potom odešlete nový vědomý pokus.'
+                : failure.kind === 'offline'
+                  ? 'E-mail ani rozpracovanou aktivaci bez spojení neodesíláme.'
+                  : failure.kind === 'session_expired'
+                    ? 'Začněte znovu bez přenosu ticket kódu.'
+                    : `Zkuste bezpečně zopakovat stejný požadavek.${
+                        failure.requestId
+                          ? ` Podpoře předejte referenci ${failure.requestId}.`
+                          : ''
+                      }`}
+            </Alert>
+          </div>
+        ) : null}
       </div>
-
-      {failure ? (
-        <Alert
-          title={
-            failure.kind === 'rate_limited'
-              ? 'Příliš mnoho pokusů'
-              : failure.kind === 'offline'
-                ? 'Jste offline'
-                : failure.kind === 'session_expired'
-                  ? 'Přihlášení vypršelo'
-                  : 'Odkaz se nepodařilo odeslat'
-          }
-          tone={failure.kind === 'error' ? 'danger' : 'warning'}
-        >
-          {failure.kind === 'rate_limited'
-            ? 'Chvíli počkejte a potom odešlete nový vědomý pokus.'
-            : failure.kind === 'offline'
-              ? 'E-mail ani rozpracovanou aktivaci bez spojení neodesíláme.'
-              : failure.kind === 'session_expired'
-                ? 'Začněte znovu bez přenosu ticket kódu.'
-                : `Zkuste to znovu.${
-                    failure.requestId
-                      ? ` Podpoře předejte referenci ${failure.requestId}.`
-                      : ''
-                  }`}
-        </Alert>
-      ) : null}
 
       <form
         className="activation-code-card"
@@ -444,7 +455,7 @@ export const ActivationIdentity = ({
 
       <aside className="preview-disclaimer" aria-label="Omezení mock identity">
         Mock ověřuje pouze průchod komponentami a kontrakty. Nevytváří účet,
-        membership ani Better Auth session.
+        účast na akci ani skutečné přihlášení.
       </aside>
     </section>
   );

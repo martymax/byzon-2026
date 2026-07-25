@@ -270,7 +270,7 @@ const ActivationFlow = ({
       </p>
       <aside className="preview-disclaimer" aria-label="Omezení ukázky">
         Tato vývojová ukázka používá výhradně syntetická data. Nevytvoří účet,
-        členství ani skutečnou relaci.
+        účast na akci ani skutečné přihlášení.
       </aside>
     </>
   );

@@ -51,17 +51,15 @@ const apiForLanding = (fixture: unknown) =>
 const ScannerProbe = ({
   camera,
   api = apiForOutcome(activationClaimFixtures.identity_required),
+  createKey = () => 'camera-claim-component-0001',
 }: {
   readonly camera: ActivationCameraPort;
   readonly api?: ApiPort;
+  readonly createKey?: () => string;
 }) => (
   <main id="main" tabIndex={-1}>
     <ActivationLayout>
-      <ActivationScanner
-        api={api}
-        camera={camera}
-        createClaimKey={() => 'camera-claim-component-0001'}
-      />
+      <ActivationScanner api={api} camera={camera} createClaimKey={createKey} />
     </ActivationLayout>
   </main>
 );
@@ -194,7 +192,7 @@ describe('F1-03 progressive activation scanner', () => {
       'camera:00000000-0000-4000-8000-000000000001',
     );
     expect(document.body.textContent).toContain(
-      'nevytvořila skutečný účet, membership ani přihlášenou relaci',
+      'nevytvořila skutečný účet, účast na akci ani přihlášení',
     );
   });
 
@@ -233,6 +231,96 @@ describe('F1-03 progressive activation scanner', () => {
     expect(stopped).toBe(1);
   });
 
+  it('locks two same-tick permission clicks to one browser request', async () => {
+    let requested = 0;
+    let resolveRequest:
+      ((result: { readonly kind: 'denied' }) => void) | undefined;
+    const camera: ActivationCameraPort = {
+      isSupported: () => true,
+      request: () => {
+        requested += 1;
+        return new Promise((resolve) => {
+          resolveRequest = resolve;
+        });
+      },
+      readSyntheticCode: async () => {
+        throw new Error('Permission request has not granted a camera.');
+      },
+    };
+    const screen = await renderComponent(<ScannerProbe camera={camera} />);
+    const button = screen
+      .getByRole('button', { name: 'Povolit kameru' })
+      .element();
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new TypeError('Camera permission action must be a button.');
+    }
+
+    button.click();
+    button.click();
+    expect(requested).toBe(1);
+    resolveRequest?.({ kind: 'denied' });
+    await expect
+      .element(screen.getByText('Přístup ke kameře byl odmítnut'))
+      .toBeVisible();
+  });
+
+  it('keeps a cancelled permission request explicit until its late result is stopped', async () => {
+    let requested = 0;
+    let stopped = 0;
+    let resolveRequest:
+      | ((result: {
+          readonly kind: 'granted';
+          readonly session: ActivationCameraSession;
+        }) => void)
+      | undefined;
+    const session: ActivationCameraSession = {
+      attach: () => undefined,
+      stop: () => {
+        stopped += 1;
+      },
+    };
+    const camera: ActivationCameraPort = {
+      isSupported: () => true,
+      request: () => {
+        requested += 1;
+        return new Promise((resolve) => {
+          resolveRequest = resolve;
+        });
+      },
+      readSyntheticCode: async () => {
+        throw new Error('A cancelled permission request must not scan.');
+      },
+    };
+    const screen = await renderComponent(<ScannerProbe camera={camera} />);
+
+    await screen.getByRole('button', { name: 'Povolit kameru' }).click();
+    await expect.element(screen.getByText('Čekám na oprávnění…')).toBeVisible();
+    await screen.getByRole('button', { name: 'Zrušit skenování' }).click();
+
+    await expect
+      .element(
+        screen.getByText(
+          /Žádost prohlížeče o oprávnění ještě dobíhá.*pozdní přístup ke kameře okamžitě zastavíme/,
+        ),
+      )
+      .toBeVisible();
+    const settling = screen
+      .getByRole('button', { name: 'Dokončuji žádost prohlížeče…' })
+      .element();
+    if (!(settling instanceof HTMLButtonElement)) {
+      throw new TypeError('Settling camera action must be a button.');
+    }
+    expect(settling).toBeDisabled();
+    settling.click();
+    expect(requested).toBe(1);
+
+    resolveRequest?.({ kind: 'granted', session });
+    await expect
+      .element(screen.getByRole('button', { name: 'Zkusit kameru znovu' }))
+      .toBeEnabled();
+    expect(stopped).toBe(1);
+  });
+
   it('stops a granted camera when the user cancels', async () => {
     let stopped = 0;
     const screen = await renderComponent(
@@ -255,6 +343,122 @@ describe('F1-03 progressive activation scanner', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Zadat kód ručně' }))
       .toBeVisible();
+  });
+
+  it('ignores a late claim response after cancellation', async () => {
+    let finishClaim: (() => void) | undefined;
+    let requestSignal: AbortSignal | undefined;
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        requestSignal = options.signal;
+        await new Promise<void>((resolve) => {
+          finishClaim = resolve;
+        });
+        return {
+          ok: true,
+          kind: 'success',
+          status: 200,
+          data: endpoint.successSchema.parse(
+            activationClaimFixtures.identity_required,
+          ),
+          metadata,
+        };
+      },
+    };
+    const screen = await renderComponent(
+      <ScannerProbe api={api} camera={grantedCamera()} />,
+    );
+
+    await screen.getByRole('button', { name: 'Povolit kameru' }).click();
+    await screen.getByRole('button', { name: 'Načíst syntetický QR' }).click();
+    await expect
+      .element(screen.getByText('Ověřuji syntetický QR…'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Zrušit skenování' }).click();
+    expect(requestSignal?.aborted).toBe(true);
+    finishClaim?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect
+      .element(screen.getByText('Skenování bylo bezpečně ukončeno'))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Syntetický QR byl přijat');
+  });
+
+  it('does not overwrite a completed claim on a later pagehide', async () => {
+    const screen = await renderComponent(
+      <ScannerProbe camera={grantedCamera()} />,
+    );
+
+    await screen.getByRole('button', { name: 'Povolit kameru' }).click();
+    await screen.getByRole('button', { name: 'Načíst syntetický QR' }).click();
+    await expect
+      .element(screen.getByText('Syntetický QR byl přijat'))
+      .toBeVisible();
+    window.dispatchEvent(new Event('pagehide'));
+
+    await expect
+      .element(screen.getByText('Syntetický QR byl přijat'))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain(
+      'Skenování bylo bezpečně ukončeno',
+    );
+  });
+
+  it('reuses the same claim key after an ambiguous scanner retry', async () => {
+    let requests = 0;
+    let keyCreations = 0;
+    const keys: string[] = [];
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        requests += 1;
+        if (options.idempotencyKey) keys.push(options.idempotencyKey);
+        if (requests === 1) {
+          return {
+            ok: false,
+            kind: 'failure',
+            failure: { kind: 'offline' },
+          };
+        }
+        return {
+          ok: true,
+          kind: 'success',
+          status: 200,
+          data: endpoint.successSchema.parse(
+            activationClaimFixtures.identity_required,
+          ),
+          metadata,
+        };
+      },
+    };
+    const screen = await renderComponent(
+      <ScannerProbe
+        api={api}
+        camera={grantedCamera()}
+        createKey={() => {
+          keyCreations += 1;
+          return `scanner-retry-${keyCreations}`;
+        }}
+      />,
+    );
+
+    await screen.getByRole('button', { name: 'Povolit kameru' }).click();
+    await screen.getByRole('button', { name: 'Načíst syntetický QR' }).click();
+    await expect
+      .element(screen.getByText('Aktivace vyžaduje připojení'))
+      .toBeVisible();
+    await screen
+      .getByRole('button', { name: 'Zopakovat předchozí odeslání' })
+      .click();
+
+    await expect
+      .element(screen.getByText('Syntetický QR byl přijat'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Ověřte svou identitu' }))
+      .toHaveFocus();
+    expect(keys).toEqual(['scanner-retry-1', 'scanner-retry-1']);
+    expect(keyCreations).toBe(1);
   });
 
   it('maps denied permission without hiding the manual fallback', async () => {

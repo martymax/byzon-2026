@@ -23,7 +23,7 @@ const copy: Record<
   },
   revoked: {
     heading: 'Přístup byl zrušený',
-    title: 'Eventová oprávnění už nejsou dostupná',
+    title: 'Oprávnění k akci už nejsou dostupná',
     kind: 'permission',
   },
   forbidden: {
@@ -41,13 +41,16 @@ const copy: Record<
 export const AccessProblem = ({
   kind = 'suspended',
   sessionApi,
-  supportReference = 'MOCK-SUSPENDED-2026',
+  supportReference,
 }: {
   readonly kind?: AccessProblemKind;
   readonly sessionApi?: ApiPort;
   readonly supportReference?: string;
 }) => {
   const state = copy[kind];
+  const reference =
+    supportReference ??
+    (kind === 'revoked' ? 'MOCK-REVOKED-2026' : 'MOCK-SUSPENDED-2026');
   return (
     <section className="access-problem-page">
       <header>
@@ -83,15 +86,35 @@ export const AccessProblem = ({
         </p>
         {kind === 'suspended' || kind === 'revoked' ? (
           <p>
-            Bezpečná reference: <code>{supportReference}</code>
+            Bezpečná reference: <code>{reference}</code>
           </p>
         ) : null}
       </StatePanel>
       <aside className="preview-disclaimer" aria-label="Omezení ukázky">
-        Jde o syntetický access-error stav. Produkční membership ani osobní data
+        Jde o syntetický stav přístupu. Produkční oprávnění ani osobní data
         nejsou načtené.
       </aside>
-      <SessionExitControls {...(sessionApi ? { api: sessionApi } : {})} />
+      <nav aria-label="Náhled dalších stavů přístupu">
+        <p className="activation-kicker">Vyzkoušet bezpečné varianty</p>
+        <div className="session-controls-actions">
+          <ActionLink href="/chyba-pristupu">Pozastavený přístup</ActionLink>
+          <ActionLink href="/chyba-pristupu/zrusen" variant="secondary">
+            Zrušený přístup
+          </ActionLink>
+          <ActionLink href="/chyba-pristupu/zakazano" variant="secondary">
+            Chybějící oprávnění
+          </ActionLink>
+          <ActionLink
+            href="/chyba-pristupu/vyprsele-prihlaseni"
+            variant="secondary"
+          >
+            Vypršelé přihlášení
+          </ActionLink>
+        </div>
+      </nav>
+      {kind === 'session_expired' ? null : (
+        <SessionExitControls {...(sessionApi ? { api: sessionApi } : {})} />
+      )}
     </section>
   );
 };

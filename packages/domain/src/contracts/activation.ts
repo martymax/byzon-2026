@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { defineApiProblemSchema, sessionExpiredProblemSchema } from './base.js';
+import {
+  defineApiProblemSchema,
+  idempotencyInProgressProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  sessionExpiredProblemSchema,
+} from './base.js';
 
 const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime({ offset: true });
@@ -269,23 +274,31 @@ export const activationClaimProblemSchema = z.discriminatedUnion('code', [
   activationClaimRejectedProblemSchema,
   activationClosedProblemSchema,
   activationClaimRateLimitedProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
   activationInternalErrorProblemSchema,
 ]);
 
 export const activationIdentityProblemSchema = z.discriminatedUnion('code', [
   activationFlowExpiredProblemSchema,
   activationClaimRateLimitedProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
   activationInternalErrorProblemSchema,
 ]);
 
 export const activationLinkProblemSchema = z.discriminatedUnion('code', [
   activationLinkRejectedProblemSchema,
   activationFlowExpiredProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
   activationInternalErrorProblemSchema,
 ]);
 
 export const activationRecoveryProblemSchema = z.discriminatedUnion('code', [
   activationClaimRateLimitedProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
   activationInternalErrorProblemSchema,
 ]);
 

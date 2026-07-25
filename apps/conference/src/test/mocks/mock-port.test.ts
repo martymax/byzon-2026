@@ -186,6 +186,26 @@ describe('MSW through the production API port', () => {
         sessionCreated: false,
       },
     });
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: activationFixtureCode, method: 'manual_code' },
+        'claim-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: activationFixtureRecoveryCode, method: 'manual_code' },
+        'claim-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
 
     await expect(
       submitActivationClaim(
@@ -216,6 +236,34 @@ describe('MSW through the production API port', () => {
         state: 'identity_required',
         membershipCreated: false,
         sessionCreated: false,
+      },
+    });
+    await expect(
+      submitActivationIdentity(
+        client,
+        {
+          flowId: 'flow.synthetic.2026',
+          email: 'alex@example.test',
+          returnTo: '/onboarding',
+        },
+        'identity-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitActivationIdentity(
+        client,
+        {
+          flowId: 'flow.synthetic.2026',
+          email: 'other@example.test',
+          returnTo: '/onboarding',
+        },
+        'identity-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
       },
     });
   });
@@ -318,8 +366,28 @@ describe('MSW through the production API port', () => {
       ok: true,
       data: { accepted: true, resendAfterSeconds: 60 },
     });
+    await expect(
+      submitActivationRecovery(
+        client,
+        { email: 'unknown@example.test', returnTo: '/app' },
+        'recovery-port-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitActivationRecovery(
+        client,
+        { email: 'other@example.test', returnTo: '/app' },
+        'recovery-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
 
-    const token = 'recovery:00000000-0000-4000-8000-000000000001';
+    const token = 'recovery-app:00000000-0000-4000-8000-000000000001';
     await expect(
       consumeActivationLink(client, token, 'recovery-link-port-0001'),
     ).resolves.toMatchObject({
@@ -335,15 +403,33 @@ describe('MSW through the production API port', () => {
     await expect(
       consumeActivationLink(
         client,
-        'recovery:00000000-0000-4000-8000-000000000002',
+        'recovery-app:00000000-0000-4000-8000-000000000002',
         'recovery-link-port-0001',
       ),
     ).resolves.toMatchObject({
       ok: false,
       failure: {
         kind: 'problem',
-        problem: { code: 'ACTIVATION_LINK_REJECTED' },
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
       },
+    });
+
+    await expect(
+      submitActivationRecovery(
+        client,
+        { email: 'unknown@example.test', returnTo: '/onboarding' },
+        'recovery-port-0002',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery-onboarding:00000000-0000-4000-8000-000000000003',
+        'recovery-link-port-0002',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'onboarding_required', continueTo: '/onboarding' },
     });
   });
 
@@ -392,6 +478,25 @@ describe('MSW through the production API port', () => {
         client,
         {
           ...request,
+          profile: { ...request.profile, firstName: 'Druhý' },
+        },
+        'onboarding-mock-port-0002',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { profile: { firstName: 'Druhý' } },
+    });
+    await expect(
+      submitIdentityOnboarding(client, request, 'onboarding-mock-port-0001'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { profile: { firstName: 'Alex' } },
+    });
+    await expect(
+      submitIdentityOnboarding(
+        client,
+        {
+          ...request,
           profile: { ...request.profile, firstName: 'Jiný' },
         },
         'onboarding-mock-port-0001',
@@ -400,7 +505,7 @@ describe('MSW through the production API port', () => {
       ok: false,
       failure: {
         kind: 'problem',
-        problem: { code: 'REQUEST_ID_REUSED' },
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
       },
     });
   });
@@ -437,7 +542,7 @@ describe('MSW through the production API port', () => {
       ok: false,
       failure: {
         kind: 'problem',
-        problem: { code: 'REQUEST_ID_REUSED' },
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
       },
     });
     await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
@@ -446,6 +551,66 @@ describe('MSW through the production API port', () => {
         kind: 'problem',
         problem: { code: 'AUTHENTICATION_REQUIRED' },
       },
+    });
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'logout_current',
+        'session-action-port-0002',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+  });
+
+  it('keeps the mock owner signed out until a one-time link is consumed', async () => {
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'logout_current',
+        'session-action-auth-boundary-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: activationFixtureCode, method: 'manual_code' },
+        'claim-auth-boundary-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'identity_required',
+        membershipCreated: false,
+        sessionCreated: false,
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+
+    await expect(
+      consumeActivationLink(
+        client,
+        'link:00000000-0000-4000-8000-000000000099',
+        'link-auth-boundary-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'onboarding_required', continueTo: '/onboarding' },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: { onboarding: { status: 'profile_required' } },
     });
   });
 });

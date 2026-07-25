@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { defineApiProblemSchema, sessionExpiredProblemSchema } from './base.js';
+import {
+  defineApiProblemSchema,
+  idempotencyInProgressProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  sessionExpiredProblemSchema,
+} from './base.js';
 
 const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime({ offset: true });
@@ -564,6 +569,8 @@ export const identityOnboardingProblemSchema = z.discriminatedUnion('code', [
   identityStaleLegalDocumentProblemSchema,
   identityNetworkingDisabledProblemSchema,
   identityRequestIdReusedProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
   identityValidationProblemSchema,
   identityInternalErrorProblemSchema,
 ]);
@@ -572,6 +579,8 @@ export const identitySessionActionProblemSchema = z.discriminatedUnion('code', [
   identityAuthenticationRequiredProblemSchema,
   sessionExpiredProblemSchema,
   identityRequestIdReusedProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
   identitySessionActionRejectedProblemSchema,
   identityInternalErrorProblemSchema,
 ]);

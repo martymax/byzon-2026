@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { ActivationIdentity } from '@/components/activation-identity';
-import { RecoveryForm } from '@/components/recovery-form';
+import { LoginFlow } from '@/components/login-flow';
 import { resolveActivationReturnTo } from '@/lib/activation-return';
 import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import { resolveLoginMode } from '@/lib/login-mode';
@@ -28,7 +28,7 @@ export default async function LoginPage({
     mode === 'identity' ? '/onboarding' : '/app',
   );
   if (mode === 'recovery' || mode === 'switch') {
-    return <RecoveryForm mode={mode} returnTo={returnTo} />;
+    return <LoginFlow mode={mode} returnTo={returnTo} />;
   }
   return <ActivationIdentity returnTo={returnTo} />;
 }

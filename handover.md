@@ -20,6 +20,19 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Celá etapa `F1` je po závěrečném security a code review ve stavu
+  `UI ready (mocked)`. Review opravil race při camera permission/claim/cancel,
+  stabilní idempotency pro neurčité výsledky a přesné serverové
+  `IDEMPOTENCY_*` kódy, autoritativní login gate, ochranu rozepsaného
+  onboardingu, focus po stavovém přechodu a redigované mock diagnostiky.
+- Jednorázové aktivační a recovery tokeny jsou jen v URL fragmentu, který se
+  před explicitním consume okamžitě odstraní. Query token je odmítnutý a
+  scrubbed; mock replay ukládá pouze SHA-256 fingerprint, rozlišuje stejný
+  key/payload, key collision i dříve spotřebovaný token.
+- Závěrečný gate prošel: 133 conference unit/contract testů a 36 korektně
+  přeskočených DB scénářů, 87 domain testů, 18 fixture testů a 252 Chromium
+  component/axe/responsive scénářů na třech viewports. Prošel ESLint,
+  Prettier, typecheck, produkční Next build i source/post-build mock boundary.
 - `F1-06` je dokončený na `track/frontend-complete`. Přesný syntetický
   already-active kód `TST-RECOVERY-2026` vrátí `recovery_required` a vede na
   samostatný neenumerující recovery formulář. E-mail se netrimuje ani
@@ -36,10 +49,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   syntetický owner/bootstrap kontext, ale výslovně přiznává, že skutečná Better
   Auth session nebyla změněná. `CS-BOOT-01` nově odmítá role u pending,
   suspended i revoked membership.
-- Cíleně prošlo 38 conference contract/API/mock testů, 6 domain a 9 fixture
-  testů, 15 recovery/session komponentových scénářů a 48 activation/onboarding
-  regresí na třech viewports. Etapový F1 security/code review je další
-  samostatný krok před posunem capability na `UI ready (mocked)`.
+- Cílené výsledky jednotlivých F1 kroků zůstávají níže jako historická
+  evidence; autoritativní závěrečné počty jsou uvedené v úvodu tohoto stavu.
 - `F1-05` je dokončený na `track/frontend-complete`. Nový `CS-BOOT-01`
   striktně popisuje private/no-store `/me/bootstrap` a idempotentní
   `/me/onboarding`: event, minimální identitu, pending/active access bez
@@ -73,9 +84,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   same-tick submit lock a pro neurčitý offline/transport retry znovu použije
   stejnou idempotency key. `link_sent` zůstává neenumerující a výslovně
   potvrzuje, že mock nevytvořil session ani membership.
-- `/aktivace/odkaz` nečte token v RSC. Client effect vezme právě jednu query
-  hodnotu pouze do ref a před akcí nahradí URL čistou route se zachováním
-  `history.state`; odstraní také hash. Route má `noindex`, route-specific
+- `/aktivace/odkaz` nečte token v RSC. Client effect vezme právě jednu hodnotu
+  z URL fragmentu pouze do ref a před akcí nahradí URL čistou route se
+  zachováním `history.state`; query token odmítne. Route má `noindex`,
+  route-specific
   `Referrer-Policy: no-referrer` a `Cache-Control: private, no-store`.
   Explicitní consume je zamčený, při neurčitém retry drží stejný token/key jen
   v paměti a terminální stav pokračuje pouze na kontraktem povolený

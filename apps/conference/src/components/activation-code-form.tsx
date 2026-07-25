@@ -24,6 +24,8 @@ import {
   browserActivationApi,
   submitActivationClaim,
 } from '@/lib/activation-api';
+import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type ClaimFailure =
   | { readonly kind: 'rejected' }
@@ -88,6 +90,14 @@ export const ActivationCodeForm = ({
   const submitLocked = useRef(false);
   const mounted = useRef(true);
   const errorContainer = useRef<HTMLDivElement>(null);
+  const requestAttempt = useRef<
+    | {
+        readonly fingerprint: string;
+        readonly idempotencyKey: string;
+      }
+    | undefined
+  >(undefined);
+  const outcomeHeading = useTransitionFocus(outcome !== undefined);
 
   useEffect(() => {
     mounted.current = true;
@@ -99,7 +109,7 @@ export const ActivationCodeForm = ({
   const focusErrorSummary = () => {
     requestAnimationFrame(() => {
       errorContainer.current
-        ?.querySelector<HTMLElement>('.ui-error-summary')
+        ?.querySelector<HTMLElement>('.ui-error-summary, [data-form-failure]')
         ?.focus();
     });
   };
@@ -124,19 +134,30 @@ export const ActivationCodeForm = ({
 
     setFieldError(undefined);
     setSubmitting(true);
+    const fingerprint = JSON.stringify(parsed.data);
+    if (requestAttempt.current?.fingerprint !== fingerprint) {
+      requestAttempt.current = {
+        fingerprint,
+        idempotencyKey: createIdempotencyKey(),
+      };
+    }
     try {
       const result = await submitActivationClaim(
         api,
         parsed.data,
-        createIdempotencyKey(),
+        requestAttempt.current.idempotencyKey,
       );
       if (!mounted.current) return;
       if (result.ok && result.kind === 'success') {
+        requestAttempt.current = undefined;
         setCode('');
         setOutcome(result.data);
         return;
       }
       if (!result.ok) {
+        if (!shouldRetainMutationKey(result.failure)) {
+          requestAttempt.current = undefined;
+        }
         const mapped = mapClaimFailure(result.failure);
         if (mapped) {
           setFailure(mapped);
@@ -165,7 +186,7 @@ export const ActivationCodeForm = ({
       <section className="activation-form-page">
         <header>
           <p className="eyebrow">Aktivace · další krok</p>
-          <h1 data-route-heading tabIndex={-1}>
+          <h1 data-route-heading ref={outcomeHeading} tabIndex={-1}>
             {recovery ? 'Obnovte svůj přístup' : 'Ověřte svou identitu'}
           </h1>
         </header>
@@ -187,8 +208,10 @@ export const ActivationCodeForm = ({
           title="Kód byl přijat v mock režimu"
         >
           <p>
-            Ukázka nyní přejde k bezpečnému ověření identity. Nevznikl skutečný
-            účet, membership ani přihlášená relace.
+            {recovery
+              ? 'Ukázka nyní přejde k bezpečné obnově dřívějšího přístupu.'
+              : 'Ukázka nyní přejde k bezpečnému ověření identity.'}{' '}
+            Nevznikl skutečný účet, účast na akci ani přihlášení.
           </p>
         </StatePanel>
       </section>
@@ -237,48 +260,32 @@ export const ActivationCodeForm = ({
           errors={
             fieldError
               ? [{ fieldId: 'activation-code', message: fieldError }]
-              : failure
-                ? [
-                    {
-                      fieldId: 'activation-code',
-                      message:
-                        failure.kind === 'rate_limited'
-                          ? 'Příliš mnoho pokusů. Chvíli počkejte.'
-                          : failure.kind === 'offline'
-                            ? 'Aktivace vyžaduje připojení.'
-                            : 'Aktivaci se nepodařilo dokončit.',
-                    },
-                  ]
-                : []
+              : []
           }
         />
+        {failure && failure.kind !== 'rejected' ? (
+          <div data-form-failure tabIndex={-1}>
+            <Alert
+              title={
+                failure.kind === 'rate_limited'
+                  ? 'Příliš mnoho pokusů'
+                  : failure.kind === 'offline'
+                    ? 'Jste offline'
+                    : 'Aktivaci se nepodařilo dokončit'
+              }
+              tone={failure.kind === 'error' ? 'danger' : 'warning'}
+            >
+              {failure.kind === 'rate_limited'
+                ? 'Chvíli počkejte a potom proveďte nový vědomý pokus.'
+                : failure.kind === 'offline'
+                  ? 'Kód se bez spojení neověřuje ani neukládá.'
+                  : failure.kind === 'error' && failure.requestId
+                    ? `Podpoře předejte pouze referenci ${failure.requestId}, nikdy ne ticket kód.`
+                    : 'Zkuste to znovu bez změny kódu.'}
+            </Alert>
+          </div>
+        ) : null}
       </div>
-
-      {failure?.kind === 'rate_limited' ? (
-        <Alert title="Příliš mnoho pokusů" tone="warning">
-          Chvíli počkejte. Další odeslání teď nepomůže a tlačítko zůstává
-          dostupné až pro nový vědomý pokus.
-        </Alert>
-      ) : null}
-      {failure?.kind === 'offline' ? (
-        <Alert title="Jste offline" tone="warning">
-          Kód se nesmí ověřovat ani ukládat bez spojení se serverem.
-        </Alert>
-      ) : null}
-      {failure?.kind === 'error' ? (
-        <Alert title="Aktivaci se nepodařilo dokončit" tone="danger">
-          Zkuste to znovu. Pokud potíže trvají, podpoře předejte pouze
-          {failure.requestId ? (
-            <>
-              {' '}
-              referenci <code>{failure.requestId}</code>
-            </>
-          ) : (
-            ' obecný popis potíží'
-          )}
-          , nikdy ne ticket kód.
-        </Alert>
-      ) : null}
 
       <form className="activation-code-card" noValidate onSubmit={submit}>
         <FormField

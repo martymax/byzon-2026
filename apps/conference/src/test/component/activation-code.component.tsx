@@ -46,13 +46,16 @@ const apiForProblem = (problem: ActivationClaimProblem): ApiPort => ({
   }),
 });
 
-const CodeProbe = ({ api }: { readonly api: ApiPort }) => (
+const CodeProbe = ({
+  api,
+  createKey = () => 'claim-component-0001',
+}: {
+  readonly api: ApiPort;
+  readonly createKey?: () => string;
+}) => (
   <main id="main" tabIndex={-1}>
     <ActivationLayout>
-      <ActivationCodeForm
-        api={api}
-        createIdempotencyKey={() => 'claim-component-0001'}
-      />
+      <ActivationCodeForm api={api} createIdempotencyKey={createKey} />
     </ActivationLayout>
   </main>
 );
@@ -83,7 +86,7 @@ describe('F1-02 manual opaque activation code', () => {
     });
     expect(document.body.textContent).not.toContain('TST-OPAQUE-2026');
     expect(document.body.textContent).toContain(
-      'Nevznikl skutečný účet, membership ani přihlášená relace.',
+      'Nevznikl skutečný účet, účast na akci ani přihlášení.',
     );
   });
 
@@ -129,6 +132,61 @@ describe('F1-02 manual opaque activation code', () => {
       )
       .toBeVisible();
     expect(document.body.textContent).not.toContain(problem.detail);
+  });
+
+  it('keeps one key for an ambiguous retry and focuses a non-field error', async () => {
+    let requests = 0;
+    let keyCreations = 0;
+    const keys: string[] = [];
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        requests += 1;
+        if (options.idempotencyKey) keys.push(options.idempotencyKey);
+        if (requests === 1) {
+          return {
+            ok: false,
+            kind: 'failure',
+            failure: { kind: 'offline' },
+          };
+        }
+        return {
+          ok: true,
+          kind: 'success',
+          status: 200,
+          data: endpoint.successSchema.parse(
+            activationClaimFixtures.identity_required,
+          ),
+          metadata,
+        };
+      },
+    };
+    const screen = await renderComponent(
+      <CodeProbe
+        api={api}
+        createKey={() => {
+          keyCreations += 1;
+          return `claim-retry-${keyCreations}`;
+        }}
+      />,
+    );
+
+    const input = screen.getByLabelText('Ticket kód');
+    await input.fill('TST-OPAQUE-2026');
+    await screen.getByRole('button', { name: 'Pokračovat' }).click();
+
+    await expect.element(screen.getByText('Jste offline')).toBeVisible();
+    expect(document.querySelector('[data-form-failure]')).toHaveFocus();
+    expect(input.element()).not.toHaveAttribute('aria-invalid', 'true');
+
+    await screen.getByRole('button', { name: 'Pokračovat' }).click();
+    await expect
+      .element(screen.getByText('Kód byl přijat v mock režimu'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Ověřte svou identitu' }))
+      .toHaveFocus();
+    expect(keys).toEqual(['claim-retry-1', 'claim-retry-1']);
+    expect(keyCreations).toBe(1);
   });
 
   it('keeps the form keyboard-accessible without overflow', async () => {

@@ -17,3 +17,18 @@ export const shouldBlockUnhandledMockRequest = (
     request.origin === origin.origin && API_PATH_PATTERN.test(request.pathname)
   );
 };
+
+export const blockUnhandledMockApiRequest = (
+  requestMethod: string,
+  requestUrl: string,
+): never => {
+  try {
+    new URL(requestUrl, 'http://mock.invalid');
+  } catch {
+    // Keep the diagnostic deliberately generic for malformed URLs.
+  }
+  const method = /^[A-Z]{1,12}$/.test(requestMethod)
+    ? requestMethod
+    : 'REQUEST';
+  throw new TypeError(`Mock API request blocked: ${method} /api/**`);
+};

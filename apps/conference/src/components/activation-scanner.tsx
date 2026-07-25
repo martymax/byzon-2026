@@ -10,6 +10,7 @@ import {
 } from '@byzon/ui';
 import {
   activationClaimRequestSchema,
+  type ActivationClaimRequest,
   type ActivationClaimProblem,
   type ActivationClaimResponse,
   type ApiFailure,
@@ -23,7 +24,9 @@ import {
   browserActivationApi,
   submitActivationClaim,
 } from '@/lib/activation-api';
+import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 import { useActivationEntry } from '@/components/activation-entry';
+import { useTransitionFocus } from '@/components/use-transition-focus';
 
 export interface ActivationCameraSession {
   readonly attach: (video: HTMLVideoElement) => void;
@@ -191,10 +194,25 @@ export const ActivationScanner = ({
 }) => {
   const router = useRouter();
   const [state, setState] = useState<ScannerState>({ status: 'intro' });
+  const [hasPreparedRetry, setHasPreparedRetry] = useState(false);
+  const [permissionRequestPending, setPermissionRequestPending] =
+    useState(false);
+  const successHeading = useTransitionFocus(state.status === 'success');
   const mounted = useRef(true);
   const session = useRef<ActivationCameraSession | undefined>(undefined);
   const requestGeneration = useRef(0);
+  const requestLocked = useRef(false);
   const claimLocked = useRef(false);
+  const activeOperation = useRef(false);
+  const claimController = useRef<AbortController | undefined>(undefined);
+  const claimAttempt = useRef<
+    | {
+        readonly fingerprint: string;
+        readonly idempotencyKey: string;
+        readonly request: ActivationClaimRequest;
+      }
+    | undefined
+  >(undefined);
 
   const stopCamera = () => {
     session.current?.stop();
@@ -204,7 +222,12 @@ export const ActivationScanner = ({
   useEffect(() => {
     mounted.current = true;
     const suspendCamera = () => {
+      if (!activeOperation.current) return;
       requestGeneration.current += 1;
+      claimController.current?.abort();
+      claimController.current = undefined;
+      claimLocked.current = false;
+      activeOperation.current = false;
       session.current?.stop();
       session.current = undefined;
       if (mounted.current) setState({ status: 'cancelled' });
@@ -217,6 +240,9 @@ export const ActivationScanner = ({
     return () => {
       mounted.current = false;
       requestGeneration.current += 1;
+      claimController.current?.abort();
+      claimController.current = undefined;
+      activeOperation.current = false;
       session.current?.stop();
       session.current = undefined;
       window.removeEventListener('pagehide', suspendCamera);
@@ -225,14 +251,18 @@ export const ActivationScanner = ({
   }, []);
 
   const requestCamera = async () => {
-    if (state.status === 'requesting' || state.status === 'claiming') return;
+    if (requestLocked.current || claimLocked.current) return;
+    requestLocked.current = true;
     stopCamera();
-    claimLocked.current = false;
     if (!camera.isSupported()) {
+      requestLocked.current = false;
+      activeOperation.current = false;
       setState({ status: 'unsupported' });
       return;
     }
 
+    activeOperation.current = true;
+    setPermissionRequestPending(true);
     setState({ status: 'requesting' });
     const generation = requestGeneration.current + 1;
     requestGeneration.current = generation;
@@ -247,60 +277,151 @@ export const ActivationScanner = ({
         setState({ status: 'scanning' });
         return;
       }
+      activeOperation.current = false;
       setState({ status: result.kind });
     } catch {
-      if (mounted.current) setState({ status: 'unavailable' });
+      if (mounted.current && requestGeneration.current === generation) {
+        activeOperation.current = false;
+        setState({ status: 'unavailable' });
+      }
+    } finally {
+      requestLocked.current = false;
+      if (mounted.current) setPermissionRequestPending(false);
     }
   };
 
   const cancel = () => {
     requestGeneration.current += 1;
+    claimController.current?.abort();
+    claimController.current = undefined;
     claimLocked.current = false;
+    activeOperation.current = false;
     stopCamera();
+    setHasPreparedRetry(claimAttempt.current !== undefined);
     setState({ status: 'cancelled' });
   };
 
-  const submitSyntheticScan = async () => {
-    if (state.status !== 'scanning' || claimLocked.current) return;
-    claimLocked.current = true;
-    setState({ status: 'claiming' });
+  const performClaim = async (
+    request: ActivationClaimRequest,
+    idempotencyKey: string,
+    generation: number,
+    controller: AbortController,
+  ) => {
     try {
-      const code = await camera.readSyntheticCode();
-      stopCamera();
-      const parsed = activationClaimRequestSchema.safeParse({
-        code,
-        method: 'camera_scan',
-      });
-      if (!parsed.success) {
-        claimLocked.current = false;
-        setState({ status: 'failure', failure: { kind: 'error' } });
-        return;
-      }
       const result = await submitActivationClaim(
         api,
-        parsed.data,
-        createClaimKey(),
+        request,
+        idempotencyKey,
+        controller.signal,
       );
-      if (!mounted.current) return;
+      if (!mounted.current || requestGeneration.current !== generation) return;
       if (result.ok && result.kind === 'success') {
+        activeOperation.current = false;
+        claimAttempt.current = undefined;
+        setHasPreparedRetry(false);
         setState({ status: 'success', outcome: result.data });
         return;
       }
       if (!result.ok) {
+        activeOperation.current = false;
+        if (!shouldRetainMutationKey(result.failure)) {
+          claimAttempt.current = undefined;
+          setHasPreparedRetry(false);
+        }
         const failure = mapClaimFailure(result.failure);
         if (failure) {
           claimLocked.current = false;
           setState({ status: 'failure', failure });
         }
       } else {
+        activeOperation.current = false;
         claimLocked.current = false;
         setState({ status: 'failure', failure: { kind: 'error' } });
       }
     } catch {
       stopCamera();
-      if (mounted.current) {
+      if (mounted.current && requestGeneration.current === generation) {
+        activeOperation.current = false;
         claimLocked.current = false;
         setState({ status: 'failure', failure: { kind: 'error' } });
+      }
+    } finally {
+      if (claimController.current === controller) {
+        claimController.current = undefined;
+      }
+    }
+  };
+
+  const beginPreparedClaim = async () => {
+    const attempt = claimAttempt.current;
+    if (!attempt) return;
+    if (claimLocked.current) return;
+    claimLocked.current = true;
+    activeOperation.current = true;
+    const generation = requestGeneration.current + 1;
+    requestGeneration.current = generation;
+    const controller = new AbortController();
+    claimController.current = controller;
+    setState({ status: 'claiming' });
+    await performClaim(
+      attempt.request,
+      attempt.idempotencyKey,
+      generation,
+      controller,
+    );
+  };
+
+  const submitSyntheticScan = async () => {
+    if (state.status !== 'scanning' || claimLocked.current) return;
+    claimLocked.current = true;
+    const generation = requestGeneration.current + 1;
+    requestGeneration.current = generation;
+    const controller = new AbortController();
+    claimController.current = controller;
+    setState({ status: 'claiming' });
+    try {
+      const code = await camera.readSyntheticCode();
+      if (!mounted.current || requestGeneration.current !== generation) return;
+      stopCamera();
+      const parsed = activationClaimRequestSchema.safeParse({
+        code,
+        method: 'camera_scan',
+      });
+      if (!parsed.success) {
+        activeOperation.current = false;
+        claimAttempt.current = undefined;
+        setHasPreparedRetry(false);
+        claimLocked.current = false;
+        setState({ status: 'failure', failure: { kind: 'error' } });
+        return;
+      }
+      const fingerprint = JSON.stringify(parsed.data);
+      let attempt = claimAttempt.current;
+      if (attempt?.fingerprint !== fingerprint) {
+        attempt = {
+          fingerprint,
+          idempotencyKey: createClaimKey(),
+          request: parsed.data,
+        };
+        claimAttempt.current = attempt;
+        setHasPreparedRetry(true);
+      }
+      await performClaim(
+        parsed.data,
+        attempt.idempotencyKey,
+        generation,
+        controller,
+      );
+    } catch {
+      stopCamera();
+      if (mounted.current && requestGeneration.current === generation) {
+        activeOperation.current = false;
+        claimLocked.current = false;
+        setState({ status: 'failure', failure: { kind: 'error' } });
+      }
+    } finally {
+      if (claimController.current === controller) {
+        claimController.current = undefined;
       }
     }
   };
@@ -310,7 +431,7 @@ export const ActivationScanner = ({
     return (
       <section className="activation-form-page">
         <p className="eyebrow">Aktivace · další krok</p>
-        <h1 data-route-heading tabIndex={-1}>
+        <h1 data-route-heading ref={successHeading} tabIndex={-1}>
           {recovery ? 'Obnovte svůj přístup' : 'Ověřte svou identitu'}
         </h1>
         <StatePanel
@@ -331,8 +452,8 @@ export const ActivationScanner = ({
           title="Syntetický QR byl přijat"
         >
           <p>
-            Kamera ani QR se neuložily. Ukázka nevytvořila skutečný účet,
-            membership ani přihlášenou relaci.
+            Kamera ani QR se neuložily. Ukázka nevytvořila skutečný účet, účast
+            na akci ani přihlášení.
           </p>
         </StatePanel>
       </section>
@@ -340,6 +461,9 @@ export const ActivationScanner = ({
   }
 
   const busy = state.status === 'requesting' || state.status === 'claiming';
+  const preparedRetry =
+    hasPreparedRetry &&
+    (state.status === 'failure' || state.status === 'cancelled');
 
   return (
     <section className="activation-form-page activation-scanner">
@@ -401,7 +525,11 @@ export const ActivationScanner = ({
           kind="empty"
           title="Skenování bylo bezpečně ukončeno"
         >
-          <p>Kamera je vypnutá a můžete zvolit jinou cestu.</p>
+          <p>
+            {permissionRequestPending
+              ? 'Žádost prohlížeče o oprávnění ještě dobíhá. Případný pozdní přístup ke kameře okamžitě zastavíme; mezitím můžete zadat kód ručně.'
+              : 'Kamera je vypnutá a můžete zvolit jinou cestu.'}
+          </p>
         </StatePanel>
       ) : null}
 
@@ -485,11 +613,21 @@ export const ActivationScanner = ({
         state.status === 'cancelled' ||
         state.status === 'denied' ||
         state.status === 'unavailable' ||
-        state.status === 'failure' ? (
-          <Button disabled={busy} onClick={() => void requestCamera()}>
+        (state.status === 'failure' && !preparedRetry) ? (
+          <Button
+            disabled={busy || permissionRequestPending}
+            loading={state.status === 'cancelled' && permissionRequestPending}
+            loadingLabel="Dokončuji žádost prohlížeče…"
+            onClick={() => void requestCamera()}
+          >
             {state.status === 'intro'
               ? 'Povolit kameru'
               : 'Zkusit kameru znovu'}
+          </Button>
+        ) : null}
+        {preparedRetry ? (
+          <Button disabled={busy} onClick={() => void beginPreparedClaim()}>
+            Zopakovat předchozí odeslání
           </Button>
         ) : null}
         {state.status === 'requesting' ? (
