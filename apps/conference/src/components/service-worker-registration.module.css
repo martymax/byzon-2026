@@ -1,0 +1,117 @@
+.notice {
+  position: fixed;
+  z-index: 55;
+  inset-inline: max(0.75rem, env(safe-area-inset-left, 0px))
+    max(0.75rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  width: min(48rem, calc(100% - 1.5rem));
+  min-height: 4.5rem;
+  margin-inline: auto;
+  padding: 0.85rem;
+  color: var(--byzon-ink);
+  overflow-wrap: anywhere;
+  background: var(--byzon-surface);
+  border: 1px solid var(--byzon-border);
+  border-inline-start: 0.35rem solid var(--byzon-brand);
+  border-radius: var(--byzon-radius-lg);
+  box-shadow: var(--byzon-shadow-md);
+}
+
+.notice[data-kind='offline'],
+.notice[data-kind='error'] {
+  border-inline-start-color: var(--byzon-warning);
+}
+
+.copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.copy strong,
+.copy span {
+  display: block;
+}
+
+.copy span {
+  color: var(--byzon-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.action,
+.quietAction {
+  display: inline-flex;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--byzon-surface);
+  font: inherit;
+  font-weight: 750;
+  text-decoration: none;
+  background: var(--byzon-brand-hover);
+  border: 2px solid transparent;
+  border-radius: var(--byzon-radius-pill);
+  cursor: pointer;
+  transition:
+    transform var(--byzon-motion-fast) var(--byzon-ease),
+    background-color var(--byzon-motion-fast) var(--byzon-ease);
+}
+
+.quietAction {
+  color: var(--byzon-ink);
+  background: transparent;
+  border-color: var(--byzon-border-strong);
+}
+
+.action:hover,
+.quietAction:hover {
+  transform: translateY(-1px);
+}
+
+.action:focus-visible,
+.quietAction:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 35rem) {
+  .notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions,
+  .action,
+  .quietAction {
+    width: 100%;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action,
+  .quietAction {
+    transition: none;
+  }
+
+  .action:hover,
+  .quietAction:hover {
+    transform: none;
+  }
+}
