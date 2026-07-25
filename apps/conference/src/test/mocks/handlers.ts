@@ -48,10 +48,20 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     const idempotencyKey = idempotencyKeySchema.safeParse(
       request.headers.get('idempotency-key'),
     );
+    const acceptedCameraCode =
+      parsed.success &&
+      parsed.data.method === 'camera_scan' &&
+      /^camera:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        parsed.data.code,
+      );
+    const acceptedManualCode =
+      parsed.success &&
+      parsed.data.method === 'manual_code' &&
+      parsed.data.code === activationFixtureCode;
     if (
       !parsed.success ||
       !idempotencyKey.success ||
-      parsed.data.code !== activationFixtureCode
+      (!acceptedManualCode && !acceptedCameraCode)
     ) {
       return mockProblemResponse(
         activationClaimProblemSchema,

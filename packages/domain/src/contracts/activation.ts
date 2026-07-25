@@ -131,6 +131,17 @@ export const activationLandingResponseSchema = z
         message: 'A claim can continue only while activation is open',
       });
     }
+    if (
+      response.availability.state === 'open' &&
+      response.availability.methods.includes('camera_scan') &&
+      !response.availability.methods.includes('manual_code')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['availability', 'methods'],
+        message: 'Camera activation must keep the manual fallback available',
+      });
+    }
   });
 
 export type ActivationLandingResponse = z.infer<

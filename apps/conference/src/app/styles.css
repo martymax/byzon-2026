@@ -1051,6 +1051,69 @@ main > .ui-participant-nav-spacer {
 .activation-form-actions > * {
   flex: 1 1 9rem;
 }
+.activation-camera-explainer {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-camera-explainer h2 {
+  color: var(--ink);
+  font-size: 1.75rem;
+  line-height: 1.05;
+}
+.activation-camera-explainer ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  color: var(--byzon-text-muted);
+}
+.activation-camera-stage {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+}
+.activation-camera-stage video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 2px solid var(--ink);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--ink);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-camera-stage p {
+  min-height: 1.5rem;
+  margin: 0;
+  color: var(--byzon-text-muted);
+  font-weight: 650;
+}
+.activation-camera-reticle {
+  position: absolute;
+  top: clamp(1rem, 8vw, 3rem);
+  left: 50%;
+  width: min(58%, 16rem);
+  aspect-ratio: 1;
+  translate: -50% 0;
+  border: 3px solid var(--byzon-surface);
+  border-radius: var(--byzon-radius-md);
+  box-shadow:
+    0 0 0 999px rgb(14 24 34 / 28%),
+    0 0 0 2px rgb(14 24 34 / 75%);
+  pointer-events: none;
+}
+.activation-scanner-actions {
+  margin-top: 1.25rem;
+}
+.activation-scanner > .preview-disclaimer {
+  margin-top: 1.25rem;
+}
 
 @media (min-width: 36rem) {
   .activation-form-actions > * {

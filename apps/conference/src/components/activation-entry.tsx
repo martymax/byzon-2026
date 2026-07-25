@@ -204,6 +204,13 @@ const ActivationFlow = ({
     );
   }
 
+  const manualAvailable =
+    response.availability.state === 'open' &&
+    response.availability.methods.includes('manual_code');
+  const cameraAvailable =
+    response.availability.state === 'open' &&
+    response.availability.methods.includes('camera_scan');
+
   return (
     <>
       <div className="activation-section-heading">
@@ -214,37 +221,41 @@ const ActivationFlow = ({
         <StatusBadge tone="warning">Mock data</StatusBadge>
       </div>
       <div className="activation-method-grid">
-        <Card className="activation-method-card">
-          <span className="activation-method-icon" aria-hidden="true">
-            <ActivationIcon>
-              <rect height="14" rx="2" width="18" x="3" y="5" />
-              <path d="M7 9h10M7 13h6M7 17h3" />
-            </ActivationIcon>
-          </span>
-          <h3>Zadat kód ručně</h3>
-          <p>
-            Nejspolehlivější cesta. Kód zůstane pouze v tomto bezpečném kroku.
-          </p>
-          <ActionLink block href="/aktivace/kod">
-            Zadat kód
-          </ActionLink>
-        </Card>
-        <Card className="activation-method-card">
-          <span className="activation-method-icon" aria-hidden="true">
-            <ActivationIcon>
-              <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
-              <path d="M8 9h8v6H8z" />
-            </ActivationIcon>
-          </span>
-          <h3>Načíst kamerou</h3>
-          <p>
-            Oprávnění ke kameře si vyžádáme až po vysvětlení a vždy ponecháme
-            ruční možnost.
-          </p>
-          <ActionLink block href="/aktivace/skenovat" variant="secondary">
-            Použít kameru
-          </ActionLink>
-        </Card>
+        {manualAvailable ? (
+          <Card className="activation-method-card">
+            <span className="activation-method-icon" aria-hidden="true">
+              <ActivationIcon>
+                <rect height="14" rx="2" width="18" x="3" y="5" />
+                <path d="M7 9h10M7 13h6M7 17h3" />
+              </ActivationIcon>
+            </span>
+            <h3>Zadat kód ručně</h3>
+            <p>
+              Nejspolehlivější cesta. Kód zůstane pouze v tomto bezpečném kroku.
+            </p>
+            <ActionLink block href="/aktivace/kod">
+              Zadat kód
+            </ActionLink>
+          </Card>
+        ) : null}
+        {cameraAvailable ? (
+          <Card className="activation-method-card">
+            <span className="activation-method-icon" aria-hidden="true">
+              <ActivationIcon>
+                <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+                <path d="M8 9h8v6H8z" />
+              </ActivationIcon>
+            </span>
+            <h3>Načíst kamerou</h3>
+            <p>
+              Oprávnění ke kameře si vyžádáme až po vysvětlení a vždy ponecháme
+              ruční možnost.
+            </p>
+            <ActionLink block href="/aktivace/skenovat" variant="secondary">
+              Použít kameru
+            </ActionLink>
+          </Card>
+        ) : null}
       </div>
       <p className="activation-recovery">
         Už jste přístup aktivovali? <a href="/prihlaseni">Obnovit přihlášení</a>

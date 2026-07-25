@@ -93,6 +93,25 @@ describe('F1-01 activation landing', () => {
     await expectComponentToPassAxe(main);
   });
 
+  it('only exposes activation methods allowed by the server contract', async () => {
+    const screen = await renderComponent(
+      <ActivationProbe
+        fixture={{
+          ...activationLandingFixtures.anonymous,
+          availability: {
+            state: 'open',
+            methods: ['manual_code'],
+          },
+        }}
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole('link', { name: 'Zadat kód' }))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Použít kameru');
+  });
+
   it.each([
     [activationLandingFixtures.closed_before, 'Aktivace ještě není otevřená'],
     [activationLandingFixtures.closed_ended, 'Aktivace už skončila'],

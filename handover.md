@@ -20,6 +20,26 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F1-03` je dokončený na `track/frontend-complete`. Development-only
+  `/aktivace/skenovat` nejprve přes landing kontrakt ověří otevřenou fázi,
+  anonymní flow a serverem povolené `camera_scan`; teprve potom po explicitním
+  kliknutí žádá o browser camera permission. Global response header omezuje
+  kameru na `Permissions-Policy: camera=(self)`.
+- Scanner drží stream pouze v paměti, neukládá obraz ani QR a odpojí video i
+  zastaví všechny tracks při cancel, unmountu, Back/pagehide, skrytí tabu a
+  pozdním doběhnutí permission promise. Claim lock propustí nejvýše jeden
+  idempotentní `camera_scan`; default mock generuje jednorázovou validní
+  hodnotu za běhu, takže v produkčním bundle není fixture secret.
+- `CS-ACT-01` nově odmítá nabídku kamery bez `manual_code` fallbacku a
+  aktivační landing vykresluje pouze serverem povolené metody. Scanner má
+  explicitní requesting/scanning/cancelled/denied/unsupported/unavailable/
+  offline/rate-limit/rejected/session-expired/error/success stavy a v každém
+  nedokončeném průchodu bezpečný návrat nebo ruční zadání.
+- Ověření `F1-03` prošlo jako 81 domain a 92 conference unit/contract testů
+  (36 DB scénářů korektně přeskočeno), 42 cílených browser scénářů na třech
+  viewports, axe/overflow/`44 px`, lint, Prettier, typecheck a produkční Next
+  build včetně source/post-build mock boundary. Build obsahuje
+  `/aktivace/skenovat`, ale žádný test-support/MSW runtime.
 - `F1-02` je dokončený na `track/frontend-complete`. Development-only
   `/aktivace/kod` zachovává opaque kód přesně bez trim/case transformace,
   neukládá jej do URL ani draftu, používá no-store typed request s

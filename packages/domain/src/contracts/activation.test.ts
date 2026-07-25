@@ -62,6 +62,29 @@ describe('CS-ACT-01 activation contract', () => {
     ).toBe(false);
   });
 
+  it('requires a manual fallback whenever camera activation is offered', () => {
+    expect(
+      activationLandingResponseSchema.safeParse({
+        event,
+        availability: {
+          state: 'open',
+          methods: ['camera_scan'],
+        },
+        flow: { state: 'anonymous' },
+      }).success,
+    ).toBe(false);
+    expect(
+      activationLandingResponseSchema.safeParse({
+        event,
+        availability: {
+          state: 'open',
+          methods: ['manual_code'],
+        },
+        flow: { state: 'anonymous' },
+      }).success,
+    ).toBe(true);
+  });
+
   it('keeps ticket codes opaque and exact', () => {
     const request = {
       code: 'TST-OPAQUE-2026',

@@ -182,5 +182,23 @@ describe('MSW through the production API port', () => {
         problem: { code: 'CLAIM_REJECTED' },
       },
     });
+
+    await expect(
+      submitActivationClaim(
+        client,
+        {
+          code: 'camera:00000000-0000-4000-8000-000000000001',
+          method: 'camera_scan',
+        },
+        'claim-mock-port-0003',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'identity_required',
+        membershipCreated: false,
+        sessionCreated: false,
+      },
+    });
   });
 });
