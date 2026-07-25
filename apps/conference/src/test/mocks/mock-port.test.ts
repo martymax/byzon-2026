@@ -6,10 +6,12 @@ import { FixtureValidationError } from '@byzon/test-support';
 import {
   activationFixtureCode,
   activationFixtureRecoveryCode,
+  agendaFixtureIds,
   announcementFixtureIds,
   contentFixtureIds,
   identityFixtureIds,
   identityFixtureProfile,
+  participantAgendaMutationFixtures,
   sessionExpiredProblemFixture,
 } from '@byzon/test-support/fixtures';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -22,6 +24,10 @@ import {
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
 import { requestParticipantProgram } from '../../lib/content-api.js';
+import {
+  mutateParticipantAgenda,
+  requestParticipantAgenda,
+} from '../../lib/agenda-api.js';
 import { requestParticipantTicket } from '../../lib/ticket-api.js';
 import {
   markAnnouncementRead,
@@ -51,11 +57,15 @@ import {
 } from './response.js';
 import {
   configureMockAnnouncementAccess,
+  configureMockAgendaAccess,
   configureMockIdentityAccess,
   configureMockParticipantPrincipal,
+  pauseNextMockAgendaAction,
   resetMockActivationState,
+  resetMockAgendaState,
   resetMockAnnouncementState,
   resetMockIdentityState,
+  selectMockAgendaConflictingSessions,
 } from './handlers.js';
 
 const ORIGIN = 'http://mock.byzon.test';
@@ -93,6 +103,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => {
   server.resetHandlers();
   resetMockActivationState();
+  resetMockAgendaState();
   resetMockAnnouncementState();
   resetMockIdentityState();
 });
@@ -202,6 +213,13 @@ describe('MSW through the production API port', () => {
         problem: { code: 'AUTHENTICATION_REQUIRED' },
       },
     });
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
     await expect(
       submitIdentityPrivacyRequest(
         client,
@@ -226,6 +244,661 @@ describe('MSW through the production API port', () => {
 
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toBe('authorization, cookie');
+  });
+
+  it('serves a canonical private agenda and a safe RFC 5545 download', async () => {
+    configureMockParticipantPrincipal({ active: true });
+
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        eventId: agendaFixtureIds.event,
+        userId: identityFixtureIds.user,
+        eventTimezone: 'Europe/Prague',
+        version: 7,
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            session: expect.objectContaining({
+              id: agendaFixtureIds.offeredSession,
+            }),
+            capacity: expect.objectContaining({
+              held: 1,
+              remaining: 0,
+              actorAvailability: expect.objectContaining({
+                state: 'held_for_participant',
+                offerId: agendaFixtureIds.offer,
+              }),
+            }),
+          }),
+        ]),
+      },
+    });
+
+    const readResponse = await fetchWithOrigin('/api/v1/me/agenda');
+    expect(readResponse.headers.get('cache-control')).toBe('private, no-store');
+    expect(readResponse.headers.get('vary')).toBe('authorization, cookie');
+
+    const calendarResponse = await fetchWithOrigin('/api/v1/me/agenda.ics');
+    expect(calendarResponse.headers.get('cache-control')).toBe(
+      'private, no-store',
+    );
+    expect(calendarResponse.headers.get('vary')).toBe('authorization, cookie');
+    expect(calendarResponse.headers.get('content-type')).toBe(
+      'text/calendar; charset=utf-8',
+    );
+    expect(calendarResponse.headers.get('content-disposition')).toBe(
+      'attachment; filename="byzon-2026-moje-agenda.ics"',
+    );
+    const calendar = await calendarResponse.text();
+    expect(calendar).toContain(
+      `UID:${agendaFixtureIds.savedSession}@byzon-2026.byzon.cz\r\nSEQUENCE:3`,
+    );
+    expect(calendar).toContain('DTSTART:20260918T070000Z');
+    expect(calendar).toContain('STATUS:CANCELLED');
+    expect(calendar).not.toContain(identityFixtureIds.user);
+    expect(calendar).not.toContain('alex@example.test');
+    expect(
+      calendar
+        .split('\r\n')
+        .every((line) => new TextEncoder().encode(line).byteLength <= 75),
+    ).toBe(true);
+  });
+
+  it('mutates one agenda snapshot with exact replay and stale-version recovery', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const request = {
+      sessionId: agendaFixtureIds.savedSession,
+      action: 'remove',
+      expectedVersion: 7,
+    } as const;
+    const first = await mutateParticipantAgenda(
+      client,
+      request,
+      'agenda-remove-port-0001',
+    );
+    expect(first).toMatchObject({
+      ok: true,
+      data: {
+        version: 8,
+        mutation: {
+          sessionId: agendaFixtureIds.savedSession,
+          action: 'remove',
+          outcome: 'applied',
+        },
+      },
+    });
+    expect(JSON.stringify(first)).not.toContain(
+      `"id":"${agendaFixtureIds.savedSession}"`,
+    );
+    await expect(
+      mutateParticipantAgenda(client, request, 'agenda-remove-port-0001'),
+    ).resolves.toEqual(first);
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        { ...request, action: 'add' },
+        'agenda-remove-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        { ...request, action: 'add' },
+        'agenda-stale-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: {
+          code: 'STALE_VERSION',
+          currentVersion: 8,
+          agenda: { version: 8 },
+        },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.savedSession,
+          action: 'add',
+          expectedVersion: 8,
+        },
+        'agenda-add-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { version: 9, mutation: { action: 'add', outcome: 'applied' } },
+    });
+    await expect(
+      mutateParticipantAgenda(client, request, 'agenda-remove-port-0001'),
+    ).resolves.toEqual(first);
+  });
+
+  it('serializes concurrent use of one agenda idempotency key', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const request = {
+      sessionId: agendaFixtureIds.savedSession,
+      action: 'remove',
+      expectedVersion: 7,
+    } as const;
+
+    const [first, replay] = await Promise.all([
+      mutateParticipantAgenda(client, request, 'agenda-race-port-0001'),
+      mutateParticipantAgenda(client, request, 'agenda-race-port-0001'),
+    ]);
+
+    expect(first).toMatchObject({ ok: true, data: { version: 8 } });
+    expect(replay).toEqual(first);
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: { version: 8 },
+    });
+  });
+
+  it('replays an exact terminal agenda problem after canonical state changes', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const request = {
+      sessionId: agendaFixtureIds.fullSession,
+      action: 'reserve',
+      expectedVersion: 7,
+    } as const;
+    const first = await mutateParticipantAgenda(
+      client,
+      request,
+      'agenda-terminal-replay-0001',
+    );
+    expect(first).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: {
+          code: 'CAPACITY_FULL',
+          agenda: { version: 7 },
+        },
+      },
+    });
+
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.savedSession,
+          action: 'remove',
+          expectedVersion: 7,
+        },
+        'agenda-terminal-state-change-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { version: 8 } });
+
+    await expect(
+      mutateParticipantAgenda(client, request, 'agenda-terminal-replay-0001'),
+    ).resolves.toEqual(first);
+  });
+
+  it('replays the exact successful conflict warning after later canonical changes', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const request = {
+      sessionId: agendaFixtureIds.conflictTargetSession,
+      action: 'reserve',
+      expectedVersion: 7,
+    } as const;
+    const first = await mutateParticipantAgenda(
+      client,
+      request,
+      'agenda-conflict-replay-0001',
+    );
+
+    expect(first).toMatchObject({
+      ok: true,
+      data: {
+        version: 8,
+        mutation: { action: 'reserve', outcome: 'applied' },
+        timeConflict: {
+          sessionId: agendaFixtureIds.conflictTargetSession,
+          conflictingSessions: [{ id: agendaFixtureIds.savedSession }],
+        },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.savedSession,
+          action: 'remove',
+          expectedVersion: 8,
+        },
+        'agenda-conflict-replay-state-change-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { version: 9, timeConflict: null },
+    });
+    await expect(
+      mutateParticipantAgenda(client, request, 'agenda-conflict-replay-0001'),
+    ).resolves.toEqual(first);
+  });
+
+  it('lets only one distinct key consume the final unheld seat', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const request = {
+      sessionId: agendaFixtureIds.waitlistCancelledSession,
+      action: 'reserve',
+      expectedVersion: 7,
+    } as const;
+
+    const results = await Promise.all([
+      mutateParticipantAgenda(client, request, 'agenda-last-seat-a-0001'),
+      mutateParticipantAgenda(client, request, 'agenda-last-seat-b-0001'),
+    ]);
+
+    expect(results.filter(({ ok }) => ok)).toHaveLength(1);
+    expect(
+      results.filter(
+        (result) =>
+          !result.ok &&
+          result.failure.kind === 'problem' &&
+          result.failure.problem.code === 'STALE_VERSION',
+      ),
+    ).toHaveLength(1);
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        version: 8,
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            state: 'reserved',
+            session: expect.objectContaining({
+              id: agendaFixtureIds.waitlistCancelledSession,
+            }),
+            capacity: expect.objectContaining({
+              confirmed: 10,
+              held: 0,
+              remaining: 0,
+            }),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('rejects state-skipping agenda actions without mutating canonical data', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const invalidRequests = [
+      {
+        sessionId: agendaFixtureIds.reservedSession,
+        action: 'remove',
+        expectedVersion: 7,
+      },
+      {
+        sessionId: agendaFixtureIds.reservedSession,
+        action: 'join_waitlist',
+        expectedVersion: 7,
+      },
+      {
+        sessionId: agendaFixtureIds.offeredSession,
+        action: 'reserve',
+        expectedVersion: 7,
+      },
+      {
+        sessionId: agendaFixtureIds.waitlistCancelledSession,
+        action: 'join_waitlist',
+        expectedVersion: 7,
+      },
+      {
+        sessionId: agendaFixtureIds.waitingSession,
+        action: 'cancel',
+        expectedVersion: 7,
+      },
+      {
+        sessionId: agendaFixtureIds.reservedSession,
+        action: 'leave_waitlist',
+        expectedVersion: 7,
+      },
+    ] as const;
+
+    for (const [index, request] of invalidRequests.entries()) {
+      await expect(
+        mutateParticipantAgenda(
+          client,
+          request,
+          `agenda-invalid-transition-${String(index + 1).padStart(4, '0')}`,
+        ),
+      ).resolves.toMatchObject({
+        ok: false,
+        failure: {
+          kind: 'problem',
+          problem: { code: 'VALIDATION_FAILED' },
+        },
+      });
+    }
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        version: 7,
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            state: 'reserved',
+            session: expect.objectContaining({
+              id: agendaFixtureIds.reservedSession,
+            }),
+          }),
+          expect.objectContaining({
+            state: 'waitlisted',
+            session: expect.objectContaining({
+              id: agendaFixtureIds.offeredSession,
+            }),
+            waitlist: expect.objectContaining({ state: 'offered' }),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('returns correlated capacity, non-blocking conflict and expired-offer snapshots', async () => {
+    configureMockParticipantPrincipal({ active: true });
+
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.fullSession,
+          action: 'reserve',
+          expectedVersion: 7,
+        },
+        'agenda-capacity-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: {
+          code: 'CAPACITY_FULL',
+          sessionId: agendaFixtureIds.fullSession,
+          agenda: {
+            version: 7,
+            items: expect.arrayContaining([
+              expect.objectContaining({
+                session: expect.objectContaining({
+                  id: agendaFixtureIds.fullSession,
+                }),
+                capacity: expect.objectContaining({
+                  held: 0,
+                  remaining: 0,
+                  actorAvailability: { state: 'unavailable' },
+                }),
+              }),
+            ]),
+          },
+        },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.closedSession,
+          action: 'reserve',
+          expectedVersion: 7,
+        },
+        'agenda-capacity-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.closedSession,
+          action: 'reserve',
+          expectedVersion: 7,
+        },
+        'agenda-closed-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: {
+          code: 'RESERVATION_CLOSED',
+          sessionId: agendaFixtureIds.closedSession,
+          agenda: { version: 7 },
+        },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.conflictTargetSession,
+          action: 'reserve',
+          expectedVersion: 7,
+        },
+        'agenda-conflict-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        version: 8,
+        mutation: {
+          action: 'reserve',
+          outcome: 'applied',
+          sessionId: agendaFixtureIds.conflictTargetSession,
+        },
+        timeConflict: {
+          eventId: agendaFixtureIds.event,
+          sessionId: agendaFixtureIds.conflictTargetSession,
+          targetSession: { id: agendaFixtureIds.conflictTargetSession },
+          conflictingSessions: [{ id: agendaFixtureIds.savedSession }],
+        },
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            state: 'reserved',
+            session: expect.objectContaining({
+              id: agendaFixtureIds.conflictTargetSession,
+            }),
+          }),
+        ]),
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.expiredSession,
+          action: 'accept_offer',
+          offerId: agendaFixtureIds.offer,
+          expectedVersion: 8,
+        },
+        'agenda-expired-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: {
+          code: 'OFFER_EXPIRED',
+          sessionId: agendaFixtureIds.expiredSession,
+          offerId: agendaFixtureIds.offer,
+          agenda: { version: 8 },
+        },
+      },
+    });
+
+    configureMockAgendaAccess({ ticketActive: false });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.reservedSession,
+          action: 'cancel',
+          expectedVersion: 8,
+        },
+        'agenda-ticket-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: {
+          code: 'TICKET_INACTIVE',
+          sessionId: agendaFixtureIds.reservedSession,
+          agenda: { version: 8 },
+        },
+      },
+    });
+  });
+
+  it('excludes the target and cancelled sessions from mock conflict detection', () => {
+    const fixture = participantAgendaMutationFixtures.reserved_with_conflict!;
+    const warning = fixture.timeConflict;
+    if (!warning) throw new TypeError('Conflict fixture must carry a warning');
+    const canonicalConflict = warning.conflictingSessions[0]!;
+    const cancelledConflict = {
+      ...canonicalConflict,
+      id: agendaFixtureIds.cancelledSession,
+      status: 'cancelled' as const,
+      calendar: {
+        ...canonicalConflict.calendar,
+        uid: `${agendaFixtureIds.cancelledSession}@byzon-2026.byzon.cz`,
+      },
+    };
+
+    expect(
+      selectMockAgendaConflictingSessions(
+        [warning.targetSession, cancelledConflict, canonicalConflict],
+        warning.targetSession,
+      ),
+    ).toEqual([canonicalConflict]);
+  });
+
+  it('fails agenda reads, actions and downloads closed outside event scope', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    configureMockAgendaAccess({ eventAccess: false });
+
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: false,
+      status: 403,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
+      },
+    });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.savedSession,
+          action: 'remove',
+          expectedVersion: 7,
+        },
+        'agenda-scope-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 403,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
+      },
+    });
+    const calendar = await fetchWithOrigin('/api/v1/me/agenda.ics');
+    expect(calendar.status).toBe(403);
+    await expect(calendar.json()).resolves.toMatchObject({
+      code: 'EVENT_ACCESS_DENIED',
+    });
+  });
+
+  it('cannot apply a paused agenda mutation after the authenticated principal switches', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const pause = pauseNextMockAgendaAction();
+    const pendingMutation = mutateParticipantAgenda(
+      client,
+      {
+        sessionId: agendaFixtureIds.savedSession,
+        action: 'remove',
+        expectedVersion: 7,
+      },
+      'agenda-principal-race-0001',
+    );
+    await pause.entered;
+
+    try {
+      await expect(
+        submitIdentitySessionAction(
+          client,
+          'switch_account',
+          'agenda-principal-race-switch-0001',
+        ),
+      ).resolves.toMatchObject({ ok: true });
+      await expect(
+        consumeActivationLink(
+          client,
+          'recovery-app:00000000-0000-4000-8000-000000000021',
+          'agenda-principal-race-link-0001',
+        ),
+      ).resolves.toMatchObject({ ok: true, data: { state: 'active' } });
+    } finally {
+      pause.release();
+    }
+
+    await expect(pendingMutation).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        userId: '01910000-0000-7000-8000-000000000302',
+        version: 1,
+        items: [],
+      },
+    });
+
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'logout_current',
+        'agenda-principal-race-logout-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery-app:primary:00000000-0000-4000-8000-000000000022',
+        'agenda-principal-race-primary-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { state: 'active' } });
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        userId: identityFixtureIds.user,
+        version: 7,
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            state: 'saved',
+            session: expect.objectContaining({
+              id: agendaFixtureIds.savedSession,
+            }),
+          }),
+        ]),
+      },
+    });
   });
 
   it('serves a private announcement inbox and updates canonical read state', async () => {
@@ -1446,6 +2119,17 @@ describe('MSW through the production API port', () => {
         'announcement-primary-principal-0001',
       ),
     ).resolves.toMatchObject({ ok: true });
+    await expect(
+      mutateParticipantAgenda(
+        client,
+        {
+          sessionId: agendaFixtureIds.savedSession,
+          action: 'remove',
+          expectedVersion: 7,
+        },
+        'agenda-primary-principal-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { version: 8 } });
 
     await expect(
       submitIdentitySessionAction(
@@ -1500,6 +2184,14 @@ describe('MSW through the production API port', () => {
         items: [{ id: announcementFixtureIds.critical }],
       },
     });
+    await expect(requestParticipantAgenda(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        userId: '01910000-0000-7000-8000-000000000302',
+        version: 1,
+        items: [],
+      },
+    });
     await expect(
       submitIdentitySessionAction(
         client,
@@ -1545,6 +2237,17 @@ describe('MSW through the production API port', () => {
         },
       },
     });
+    const restoredAgenda = await requestParticipantAgenda(client);
+    expect(restoredAgenda).toMatchObject({
+      ok: true,
+      data: {
+        userId: identityFixtureIds.user,
+        version: 8,
+      },
+    });
+    expect(JSON.stringify(restoredAgenda)).not.toContain(
+      `"id":"${agendaFixtureIds.savedSession}"`,
+    );
     await expect(
       requestAnnouncementDetail(client, announcementFixtureIds.important),
     ).resolves.toMatchObject({

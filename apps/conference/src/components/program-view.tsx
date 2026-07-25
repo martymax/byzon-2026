@@ -14,6 +14,7 @@ import {
   ResourceStatus,
   useParticipantProgram,
 } from './content-state';
+import { ParticipantSessionAgendaAction } from './participant-session-agenda-action';
 
 const time = (value: string) =>
   new Intl.DateTimeFormat('cs-CZ', {
@@ -277,21 +278,30 @@ export const ProgramView = ({
 };
 
 export const SessionView = ({
+  agendaApi,
   eventId,
   sessionId,
+  showAgendaAction = false,
   returnQuery = '',
+  returnOrigin = 'program',
   api,
 }: {
+  agendaApi?: ApiPort;
   eventId: string;
   sessionId: string;
+  showAgendaAction?: boolean;
   returnQuery?: string;
+  returnOrigin?: 'agenda' | 'program';
   api?: ApiPort;
 }) => {
   const state = useParticipantProgram(eventId, api);
   if (state.status !== 'ready') {
+    const loginReturnTo = `/app/program/${encodeURIComponent(sessionId)}${
+      returnOrigin === 'agenda' ? '?from=agenda' : ''
+    }`;
     return (
       <ResourceStatus
-        loginReturnTo={`/app/program/${encodeURIComponent(sessionId)}`}
+        loginReturnTo={loginReturnTo}
         state={state}
         onRetry={state.retry}
       />
@@ -309,7 +319,10 @@ export const SessionView = ({
     );
   }
   const room = state.data.program.rooms.find(({ id }) => id === session.roomId);
-  const backHref = `/app/program${returnQuery ? `?${returnQuery}` : ''}`;
+  const backHref =
+    returnOrigin === 'agenda'
+      ? '/app/agenda'
+      : `/app/program${returnQuery ? `?${returnQuery}` : ''}`;
   return (
     <article className="detail-card">
       <p className="eyebrow">{session.type}</p>
@@ -335,8 +348,18 @@ export const SessionView = ({
           ))}
         </div>
       ) : null}
+      {showAgendaAction && session.status !== 'cancelled' ? (
+        <ParticipantSessionAgendaAction
+          eventId={eventId}
+          sessionId={session.id}
+          {...(agendaApi ? { agendaApi } : {})}
+        />
+      ) : null}
       <Link className="text-link" href={backHref}>
-        ← Zpět na program
+        ←{' '}
+        {returnOrigin === 'agenda'
+          ? 'Zpět do osobní agendy'
+          : 'Zpět na program'}
       </Link>
     </article>
   );

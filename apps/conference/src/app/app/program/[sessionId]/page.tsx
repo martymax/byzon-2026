@@ -30,7 +30,9 @@ export default async function SessionPage({
         <SessionView
           eventId={eventId}
           sessionId={sessionId}
+          showAgendaAction
           returnQuery={returnParams.toString()}
+          returnOrigin={query.from === 'agenda' ? 'agenda' : 'program'}
         />
       ) : (
         <p role="alert">Akce není dostupná.</p>

@@ -35,6 +35,11 @@ import {
   participantAnnouncementParamsSchema,
   participantAnnouncementReadProblemSchema,
   participantAnnouncementReadResponseSchema,
+  participantAgendaMutationProblemSchema,
+  participantAgendaMutationRequestSchema,
+  participantAgendaMutationResponseSchema,
+  participantAgendaProblemSchema,
+  participantAgendaResponseSchema,
   participantContentProblemSchema,
   participantContentResponseSchema,
   participantActivationReturnToSchema,
@@ -43,6 +48,10 @@ import {
   participantTicketProblemSchema,
   participantTicketResponseSchema,
   type ActivationLinkResponse,
+  type AgendaSessionSnapshot,
+  type ParticipantAgendaItem,
+  type ParticipantAgendaMutationProblem,
+  type ParticipantAgendaMutationResponse,
 } from '@byzon/domain/contracts';
 import {
   activationClaimFixtures,
@@ -57,6 +66,7 @@ import {
   activationRecoveryFixtures,
   activationRecoveryProblemFixtures,
   announcementFixtureIds,
+  agendaFixtureIds,
   contentFixtureIds,
   identityBootstrapFixtures,
   identityBootstrapProblemFixtures,
@@ -78,13 +88,17 @@ import {
   participantAnnouncementInboxProblemFixtures,
   participantAnnouncementReadFixtures,
   participantAnnouncementReadProblemFixtures,
+  participantAgendaFixtures,
+  participantAgendaMutationProblemFixtures,
+  participantAgendaProblemFixtures,
   participantProgramFixtures,
   participantProgramProblemFixtures,
   participantTicketFixtures,
   participantTicketProblemFixtures,
 } from '@byzon/test-support/fixtures';
-import { http, type RequestHandler } from 'msw';
+import { http, HttpResponse, type RequestHandler } from 'msw';
 
+import { participantAgendaCalendar } from './calendar';
 import { mockJsonResponse, mockProblemResponse } from './response';
 
 interface MockActivationState {
@@ -198,6 +212,38 @@ interface MockIdentityState {
   >;
 }
 
+type MockAgendaStoredResult =
+  | {
+      readonly kind: 'success';
+      readonly response: ParticipantAgendaMutationResponse;
+    }
+  | {
+      readonly kind: 'problem';
+      readonly problem: ParticipantAgendaMutationProblem;
+    };
+
+interface MockAgendaState {
+  featureEnabled: boolean;
+  ticketActive: boolean;
+  version: number;
+  items: ParticipantAgendaItem[];
+  readonly actionRequests: Map<
+    string,
+    {
+      fingerprint: string;
+      result: MockAgendaStoredResult;
+    }
+  >;
+  readonly actionFingerprints: Map<string, string>;
+  readonly inFlightActionRequests: Map<
+    string,
+    {
+      fingerprint: string;
+      result: Promise<MockAgendaStoredResult | null>;
+    }
+  >;
+}
+
 const defaultRecipientAnnouncementIds = Object.freeze([
   announcementFixtureIds.critical,
   announcementFixtureIds.important,
@@ -242,6 +288,63 @@ const mockIdentityState: MockIdentityState = {
   privacyRequestByKind: new Map(),
 };
 
+const initialAgendaItems = (): ParticipantAgendaItem[] => {
+  const fixtures = [
+    participantAgendaFixtures.saved,
+    participantAgendaFixtures.reserved,
+    participantAgendaFixtures.waiting,
+    participantAgendaFixtures.offered,
+    participantAgendaFixtures.expired,
+    participantAgendaFixtures.waitlist_cancelled,
+    participantAgendaFixtures.full,
+    participantAgendaFixtures.closed,
+    participantAgendaFixtures.registration_estimate,
+    participantAgendaFixtures.cancelled,
+  ];
+  return fixtures.flatMap((fixture) =>
+    fixture ? structuredClone(fixture.items) : [],
+  );
+};
+
+const mockAgendaState: MockAgendaState = {
+  featureEnabled: true,
+  ticketActive: true,
+  version: participantAgendaFixtures.happy!.version,
+  items: initialAgendaItems(),
+  actionRequests: new Map(),
+  actionFingerprints: new Map(),
+  inFlightActionRequests: new Map(),
+};
+
+interface MockAgendaActionPause {
+  readonly entered: () => void;
+  readonly release: () => void;
+  readonly wait: Promise<void>;
+}
+
+let nextMockAgendaActionPause: MockAgendaActionPause | null = null;
+
+export const pauseNextMockAgendaAction = (): {
+  readonly entered: Promise<void>;
+  readonly release: () => void;
+} => {
+  let markEntered: () => void = () => undefined;
+  let release: () => void = () => undefined;
+  const entered = new Promise<void>((resolve) => {
+    markEntered = resolve;
+  });
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  nextMockAgendaActionPause?.release();
+  nextMockAgendaActionPause = {
+    entered: markEntered,
+    release,
+    wait,
+  };
+  return { entered, release };
+};
+
 const primaryMockUser = Object.freeze({
   id: identityBootstrapFixtures.complete!.user.id,
   email: identityBootstrapFixtures.complete!.user.email,
@@ -266,6 +369,15 @@ interface MockPrincipalSnapshot {
     readonly readRequests: MockAnnouncementState['readRequests'];
     readonly recipientAnnouncementIds: MockAnnouncementState['recipientAnnouncementIds'];
   };
+  readonly agenda: {
+    readonly actionRequests: MockAgendaState['actionRequests'];
+    readonly actionFingerprints: MockAgendaState['actionFingerprints'];
+    readonly inFlightActionRequests: MockAgendaState['inFlightActionRequests'];
+    readonly featureEnabled: boolean;
+    readonly items: readonly ParticipantAgendaItem[];
+    readonly ticketActive: boolean;
+    readonly version: number;
+  };
   readonly onboarding?: NonNullable<MockActivationState['onboarding']>;
 }
 
@@ -285,6 +397,34 @@ export const resetMockIdentityState = (): void => {
   mockIdentityState.privacyRequestByKind.clear();
   mockCurrentUser = { ...primaryMockUser };
   mockPrincipalSnapshots.clear();
+};
+
+export const resetMockAgendaState = (): void => {
+  nextMockAgendaActionPause?.release();
+  nextMockAgendaActionPause = null;
+  mockAgendaState.featureEnabled = true;
+  mockAgendaState.ticketActive = true;
+  mockAgendaState.version = participantAgendaFixtures.happy!.version;
+  mockAgendaState.items = initialAgendaItems();
+  mockAgendaState.actionRequests.clear();
+  mockAgendaState.actionFingerprints.clear();
+  mockAgendaState.inFlightActionRequests.clear();
+};
+
+export const configureMockAgendaAccess = (options: {
+  readonly eventAccess?: boolean;
+  readonly featureEnabled?: boolean;
+  readonly ticketActive?: boolean;
+}): void => {
+  if (options.eventAccess !== undefined) {
+    mockIdentityState.eventAccess = options.eventAccess;
+  }
+  if (options.featureEnabled !== undefined) {
+    mockAgendaState.featureEnabled = options.featureEnabled;
+  }
+  if (options.ticketActive !== undefined) {
+    mockAgendaState.ticketActive = options.ticketActive;
+  }
 };
 
 export const configureMockIdentityAccess = (options: {
@@ -338,6 +478,67 @@ export const configureMockParticipantPrincipal = (options: {
 const hasActiveParticipantAccess = (): boolean =>
   mockActivationState.principalActive && !mockActivationState.signedOut;
 
+interface MockAgendaRequestContext {
+  readonly principal: MockActivationState['currentPrincipal'];
+  readonly sessionGeneration: number;
+  readonly userId: string;
+}
+
+const captureMockAgendaRequestContext = (): MockAgendaRequestContext => ({
+  principal: mockActivationState.currentPrincipal,
+  sessionGeneration: mockActivationState.sessionGeneration,
+  userId: mockCurrentUser.id,
+});
+
+const matchesMockAgendaRequestContext = (
+  context: MockAgendaRequestContext,
+): boolean =>
+  hasActiveParticipantAccess() &&
+  mockActivationState.currentPrincipal === context.principal &&
+  mockActivationState.sessionGeneration === context.sessionGeneration &&
+  mockCurrentUser.id === context.userId;
+
+const clearMockAgendaInFlightRequest = (
+  context: MockAgendaRequestContext,
+  idempotencyKey: string,
+): void => {
+  if (mockActivationState.currentPrincipal === context.principal) {
+    mockAgendaState.inFlightActionRequests.delete(idempotencyKey);
+    return;
+  }
+  mockPrincipalSnapshots
+    .get(context.principal)
+    ?.agenda.inFlightActionRequests.delete(idempotencyKey);
+};
+
+const mockAgendaRequestContextFailure = (
+  context: MockAgendaRequestContext,
+  fixtureName: string,
+) => {
+  if (!matchesMockAgendaRequestContext(context)) {
+    return mockProblemResponse(
+      participantAgendaMutationProblemSchema,
+      participantAgendaMutationProblemFixtures.authentication,
+      { fixtureName: `${fixtureName}-authentication` },
+    );
+  }
+  if (!mockIdentityState.eventAccess) {
+    return mockProblemResponse(
+      participantAgendaMutationProblemSchema,
+      participantAgendaMutationProblemFixtures.permission,
+      { fixtureName: `${fixtureName}-permission` },
+    );
+  }
+  if (!mockAgendaState.featureEnabled) {
+    return mockProblemResponse(
+      participantAgendaMutationProblemSchema,
+      participantAgendaMutationProblemFixtures.disabled,
+      { fixtureName: `${fixtureName}-disabled` },
+    );
+  }
+  return null;
+};
+
 export const resetMockAnnouncementState = (): void => {
   mockAnnouncementState.featureEnabled = true;
   mockAnnouncementState.recipientAnnouncementIds.clear();
@@ -390,6 +591,15 @@ const captureMockPrincipal = (): MockPrincipalSnapshot => ({
       mockAnnouncementState.recipientAnnouncementIds,
     ),
   },
+  agenda: {
+    actionRequests: new Map(mockAgendaState.actionRequests),
+    actionFingerprints: new Map(mockAgendaState.actionFingerprints),
+    inFlightActionRequests: new Map(mockAgendaState.inFlightActionRequests),
+    featureEnabled: mockAgendaState.featureEnabled,
+    items: structuredClone(mockAgendaState.items),
+    ticketActive: mockAgendaState.ticketActive,
+    version: mockAgendaState.version,
+  },
   ...(mockActivationState.onboarding
     ? {
         onboarding: {
@@ -438,6 +648,17 @@ const createFreshMockPrincipal = (
         ? new Set([announcementFixtureIds.critical])
         : new Set(defaultRecipientAnnouncementIds),
   },
+  agenda: {
+    actionRequests: new Map(),
+    actionFingerprints: new Map(),
+    inFlightActionRequests: new Map(),
+    featureEnabled: true,
+    items:
+      principal === 'alternate' ? [] : structuredClone(initialAgendaItems()),
+    ticketActive: true,
+    version:
+      principal === 'alternate' ? 1 : participantAgendaFixtures.happy!.version,
+  },
 });
 
 const activateMockPrincipal = (
@@ -479,6 +700,22 @@ const activateMockPrincipal = (
   for (const announcementId of next.announcement.recipientAnnouncementIds) {
     mockAnnouncementState.recipientAnnouncementIds.add(announcementId);
   }
+  mockAgendaState.actionRequests.clear();
+  for (const [key, value] of next.agenda.actionRequests) {
+    mockAgendaState.actionRequests.set(key, value);
+  }
+  mockAgendaState.actionFingerprints.clear();
+  for (const [key, value] of next.agenda.actionFingerprints) {
+    mockAgendaState.actionFingerprints.set(key, value);
+  }
+  mockAgendaState.inFlightActionRequests.clear();
+  for (const [key, value] of next.agenda.inFlightActionRequests) {
+    mockAgendaState.inFlightActionRequests.set(key, value);
+  }
+  mockAgendaState.featureEnabled = next.agenda.featureEnabled;
+  mockAgendaState.items = structuredClone([...next.agenda.items]);
+  mockAgendaState.ticketActive = next.agenda.ticketActive;
+  mockAgendaState.version = next.agenda.version;
   if (next.onboarding) {
     mockActivationState.onboarding = {
       networkingEnabled: next.onboarding.networkingEnabled,
@@ -517,6 +754,394 @@ const canonicalTicketForCurrentPrincipal = () => {
     },
   };
 };
+
+const canonicalAgendaForCurrentPrincipal = () =>
+  participantAgendaResponseSchema.parse({
+    eventId: agendaFixtureIds.event,
+    userId: mockCurrentUser.id,
+    eventTimezone: participantAgendaFixtures.happy!.eventTimezone,
+    serverNow: participantAgendaFixtures.happy!.serverNow,
+    version: mockAgendaState.version,
+    publicationVersion: participantAgendaFixtures.happy!.publicationVersion,
+    items: structuredClone(mockAgendaState.items).sort((left, right) => {
+      const byStart =
+        Date.parse(left.session.startsAt) - Date.parse(right.session.startsAt);
+      return byStart || left.session.id.localeCompare(right.session.id);
+    }),
+    calendarExport:
+      mockAgendaState.items.length === 0
+        ? { state: 'unavailable', reason: 'empty' }
+        : {
+            state: 'available',
+            href: '/api/v1/me/agenda.ics',
+          },
+  });
+
+const agendaItemTemplate = (
+  sessionId: string,
+): ParticipantAgendaItem | undefined => {
+  for (const fixture of Object.values(participantAgendaFixtures)) {
+    const item = fixture?.items.find(({ session }) => session.id === sessionId);
+    if (item) return structuredClone(item);
+  }
+  return undefined;
+};
+
+const agendaItemIndex = (sessionId: string): number =>
+  mockAgendaState.items.findIndex(({ session }) => session.id === sessionId);
+
+export const selectMockAgendaConflictingSessions = (
+  sessions: readonly AgendaSessionSnapshot[],
+  target: AgendaSessionSnapshot,
+): AgendaSessionSnapshot[] =>
+  sessions
+    .filter(
+      (session) =>
+        session.status === 'published' &&
+        session.id !== target.id &&
+        Date.parse(session.startsAt) < Date.parse(target.endsAt) &&
+        Date.parse(session.endsAt) > Date.parse(target.startsAt),
+    )
+    .sort((left, right) => {
+      const byStart = Date.parse(left.startsAt) - Date.parse(right.startsAt);
+      return byStart || left.id.localeCompare(right.id);
+    });
+
+const savedAgendaItem = (
+  item: ParticipantAgendaItem,
+  capacity = item.capacity,
+  action = item.action,
+): ParticipantAgendaItem => ({
+  day: item.day,
+  session: item.session,
+  capacity,
+  action,
+  state: 'saved',
+  source: 'manual',
+  savedAt: participantAgendaFixtures.happy!.serverNow,
+});
+
+type MockAgendaApplication =
+  | {
+      readonly kind: 'success';
+      readonly outcome: 'applied' | 'already_applied';
+    }
+  | {
+      readonly kind: 'failure';
+      readonly failure:
+        | 'capacity_full'
+        | 'offer_expired'
+        | 'reservation_closed'
+        | 'session_not_found'
+        | 'ticket_inactive'
+        | 'validation';
+    };
+
+const applyMockAgendaAction = (
+  request: ReturnType<typeof participantAgendaMutationRequestSchema.parse>,
+): MockAgendaApplication => {
+  const index = agendaItemIndex(request.sessionId);
+  const current = index >= 0 ? mockAgendaState.items[index] : undefined;
+  const template = current ?? agendaItemTemplate(request.sessionId);
+  const reservationAction = new Set([
+    'reserve',
+    'cancel',
+    'join_waitlist',
+    'leave_waitlist',
+    'accept_offer',
+    'decline_offer',
+  ]).has(request.action);
+
+  if (!template) {
+    return { kind: 'failure', failure: 'session_not_found' };
+  }
+  if (reservationAction && !mockAgendaState.ticketActive) {
+    return { kind: 'failure', failure: 'ticket_inactive' };
+  }
+  if (
+    request.action === 'reserve' &&
+    template.action.state === 'capacity_full'
+  ) {
+    return { kind: 'failure', failure: 'capacity_full' };
+  }
+  if (request.action === 'reserve' && template.action.state === 'closed') {
+    return { kind: 'failure', failure: 'reservation_closed' };
+  }
+
+  let next: ParticipantAgendaItem | undefined;
+  let outcome: 'applied' | 'already_applied' = 'applied';
+  switch (request.action) {
+    case 'add':
+      if (current) {
+        outcome = 'already_applied';
+      } else {
+        next = savedAgendaItem(template);
+      }
+      break;
+    case 'remove':
+      if (!current) {
+        outcome = 'already_applied';
+      } else if (current.state !== 'saved') {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      break;
+    case 'reserve':
+      if (current?.state === 'reserved') {
+        outcome = 'already_applied';
+        break;
+      }
+      if (
+        current?.state === 'waitlisted' &&
+        (current.waitlist.state === 'waiting' ||
+          current.waitlist.state === 'offered')
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      if (
+        template.capacity.mode !== 'reservation' ||
+        template.capacity.actorAvailability.state !== 'available' ||
+        template.capacity.remaining === 0
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      next = {
+        day: template.day,
+        session: template.session,
+        capacity: {
+          ...template.capacity,
+          confirmed: template.capacity.confirmed + 1,
+          remaining: template.capacity.remaining - 1,
+          actorAvailability:
+            template.capacity.remaining === 1
+              ? { state: 'unavailable' }
+              : template.capacity.actorAvailability,
+        },
+        action:
+          template.capacity.remaining === 1
+            ? { state: 'capacity_full' }
+            : { state: 'available' },
+        state: 'reserved',
+        reservation: {
+          id: agendaFixtureIds.reservation,
+          version: 1,
+          confirmedAt: participantAgendaFixtures.happy!.serverNow,
+        },
+      };
+      break;
+    case 'cancel':
+      if (!current || current.state === 'saved') {
+        outcome = 'already_applied';
+        break;
+      }
+      if (
+        current.state !== 'reserved' ||
+        current.capacity.mode !== 'reservation'
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      next = savedAgendaItem(
+        current,
+        {
+          ...current.capacity,
+          confirmed: Math.max(0, current.capacity.confirmed - 1),
+          remaining: current.capacity.remaining + 1,
+          actorAvailability: { state: 'available' },
+        },
+        { state: 'available' },
+      );
+      break;
+    case 'join_waitlist':
+      if (
+        current?.state === 'waitlisted' &&
+        current.waitlist.state === 'waiting'
+      ) {
+        outcome = 'already_applied';
+        break;
+      }
+      if (
+        current?.state === 'reserved' ||
+        (current?.state === 'waitlisted' &&
+          current.waitlist.state === 'offered')
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      if (
+        template.capacity.mode !== 'reservation' ||
+        template.capacity.remaining !== 0 ||
+        template.action.state !== 'capacity_full'
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      if (!template.capacity.waitlistAvailable) {
+        return { kind: 'failure', failure: 'capacity_full' };
+      }
+      next = {
+        day: template.day,
+        session: template.session,
+        capacity: {
+          ...template.capacity,
+          actorAvailability: { state: 'unavailable' },
+        },
+        action: { state: 'capacity_full' },
+        state: 'waitlisted',
+        waitlist: {
+          id: agendaFixtureIds.waitlist,
+          state: 'waiting',
+          joinedAt: participantAgendaFixtures.happy!.serverNow,
+          position: 3,
+        },
+      };
+      break;
+    case 'leave_waitlist':
+      if (
+        !current ||
+        current.state === 'saved' ||
+        (current.state === 'waitlisted' &&
+          (current.waitlist.state === 'expired' ||
+            current.waitlist.state === 'cancelled'))
+      ) {
+        outcome = 'already_applied';
+        break;
+      }
+      if (
+        current.state !== 'waitlisted' ||
+        (current.waitlist.state !== 'waiting' &&
+          current.waitlist.state !== 'offered')
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      if (
+        current.waitlist.state === 'offered' &&
+        current.capacity.mode === 'reservation'
+      ) {
+        next = savedAgendaItem(
+          current,
+          {
+            ...current.capacity,
+            held: Math.max(0, current.capacity.held - 1),
+            remaining: current.capacity.remaining + 1,
+            actorAvailability: { state: 'available' },
+          },
+          { state: 'available' },
+        );
+      } else {
+        next = savedAgendaItem(current);
+      }
+      break;
+    case 'accept_offer':
+    case 'decline_offer': {
+      if (
+        current?.state === 'waitlisted' &&
+        current.waitlist.state === 'expired' &&
+        current.waitlist.offerId === request.offerId
+      ) {
+        return { kind: 'failure', failure: 'offer_expired' };
+      }
+      if (
+        current?.state !== 'waitlisted' ||
+        current.waitlist.state !== 'offered' ||
+        current.waitlist.offerId !== request.offerId ||
+        current.capacity.mode !== 'reservation' ||
+        current.capacity.actorAvailability.state !== 'held_for_participant' ||
+        current.capacity.actorAvailability.offerId !== request.offerId
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      const releasedCapacity = {
+        ...current.capacity,
+        held: Math.max(0, current.capacity.held - 1),
+        actorAvailability: { state: 'unavailable' as const },
+      };
+      if (request.action === 'accept_offer') {
+        next = {
+          day: current.day,
+          session: current.session,
+          capacity: {
+            ...releasedCapacity,
+            confirmed: current.capacity.confirmed + 1,
+          },
+          action: { state: 'capacity_full' },
+          state: 'reserved',
+          reservation: {
+            id: agendaFixtureIds.reservation,
+            version: 1,
+            confirmedAt: participantAgendaFixtures.happy!.serverNow,
+          },
+        };
+      } else {
+        next = savedAgendaItem(
+          current,
+          {
+            ...releasedCapacity,
+            remaining: current.capacity.remaining + 1,
+            actorAvailability: { state: 'available' },
+          },
+          { state: 'available' },
+        );
+      }
+      break;
+    }
+    case 'registration_estimate':
+      if (
+        current?.capacity.mode !== 'registration_estimate' ||
+        current.action.state !== 'registration_estimate'
+      ) {
+        return { kind: 'failure', failure: 'validation' };
+      }
+      if (current.action.registered === request.registered) {
+        outcome = 'already_applied';
+        break;
+      }
+      next = savedAgendaItem(
+        current,
+        {
+          ...current.capacity,
+          registrations: Math.max(
+            0,
+            current.capacity.registrations + (request.registered ? 1 : -1),
+          ),
+        },
+        {
+          state: 'registration_estimate',
+          registered: request.registered,
+        },
+      );
+      break;
+  }
+
+  if (outcome === 'already_applied') {
+    return { kind: 'success', outcome };
+  }
+  if (request.action === 'remove') {
+    mockAgendaState.items.splice(index, 1);
+  } else if (next && index >= 0) {
+    mockAgendaState.items[index] = next;
+  } else if (next) {
+    mockAgendaState.items.push(next);
+  }
+  mockAgendaState.version += 1;
+  return { kind: 'success', outcome };
+};
+
+const mockStoredAgendaResultResponse = (
+  result: MockAgendaStoredResult,
+  fixtureName: string,
+) =>
+  result.kind === 'success'
+    ? mockJsonResponse(
+        participantAgendaMutationResponseSchema,
+        result.response,
+        {
+          fixtureName,
+          cacheControl: 'private, no-store',
+          vary: ['authorization', 'cookie'],
+        },
+      )
+    : mockProblemResponse(
+        participantAgendaMutationProblemSchema,
+        result.problem,
+        { fixtureName },
+      );
 
 const announcementCursorForOffset = (offset: number): string =>
   `fixture-announcements-offset-${String(offset)}`;
@@ -1316,6 +1941,378 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         vary: ['authorization', 'cookie'],
       },
     );
+  }),
+  http.get('*/api/v1/me/agenda', ({ request }) => {
+    if (!hasActiveParticipantAccess()) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.authentication,
+        { fixtureName: 'agenda.mock.read-authentication' },
+      );
+    }
+    if (!mockIdentityState.eventAccess) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.permission,
+        { fixtureName: 'agenda.mock.read-permission' },
+      );
+    }
+    if (!mockAgendaState.featureEnabled) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.disabled,
+        { fixtureName: 'agenda.mock.read-disabled' },
+      );
+    }
+    if (new URL(request.url).search.length > 0) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.validation,
+        { fixtureName: 'agenda.mock.read-validation' },
+      );
+    }
+
+    return mockJsonResponse(
+      participantAgendaResponseSchema,
+      canonicalAgendaForCurrentPrincipal(),
+      {
+        fixtureName: 'agenda.mock.read',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
+      },
+    );
+  }),
+  http.get('*/api/v1/me/agenda.ics', ({ request }) => {
+    if (!hasActiveParticipantAccess()) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.authentication,
+        { fixtureName: 'agenda.mock.calendar-authentication' },
+      );
+    }
+    if (!mockIdentityState.eventAccess) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.permission,
+        { fixtureName: 'agenda.mock.calendar-permission' },
+      );
+    }
+    if (!mockAgendaState.featureEnabled) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.disabled,
+        { fixtureName: 'agenda.mock.calendar-disabled' },
+      );
+    }
+    if (new URL(request.url).search.length > 0) {
+      return mockProblemResponse(
+        participantAgendaProblemSchema,
+        participantAgendaProblemFixtures.validation,
+        { fixtureName: 'agenda.mock.calendar-validation' },
+      );
+    }
+
+    return new HttpResponse(
+      participantAgendaCalendar(canonicalAgendaForCurrentPrincipal()),
+      {
+        headers: {
+          'cache-control': 'private, no-store',
+          'content-disposition':
+            'attachment; filename="byzon-2026-moje-agenda.ics"',
+          'content-type': 'text/calendar; charset=utf-8',
+          vary: 'authorization, cookie',
+          'x-request-id': 'mock-request-0001',
+        },
+      },
+    );
+  }),
+  http.post('*/api/v1/me/agenda/actions', async ({ request }) => {
+    if (!hasActiveParticipantAccess()) {
+      return mockProblemResponse(
+        participantAgendaMutationProblemSchema,
+        participantAgendaMutationProblemFixtures.authentication,
+        { fixtureName: 'agenda.mock.action-authentication' },
+      );
+    }
+    if (!mockIdentityState.eventAccess) {
+      return mockProblemResponse(
+        participantAgendaMutationProblemSchema,
+        participantAgendaMutationProblemFixtures.permission,
+        { fixtureName: 'agenda.mock.action-permission' },
+      );
+    }
+    if (!mockAgendaState.featureEnabled) {
+      return mockProblemResponse(
+        participantAgendaMutationProblemSchema,
+        participantAgendaMutationProblemFixtures.disabled,
+        { fixtureName: 'agenda.mock.action-disabled' },
+      );
+    }
+    const requestContext = captureMockAgendaRequestContext();
+
+    const body = await request.json().catch(() => undefined);
+    const bodyContextFailure = mockAgendaRequestContextFailure(
+      requestContext,
+      'agenda.mock.action-after-body',
+    );
+    if (bodyContextFailure) return bodyContextFailure;
+    const parsed = participantAgendaMutationRequestSchema.safeParse(body);
+    const idempotencyKey = idempotencyKeySchema.safeParse(
+      request.headers.get('idempotency-key'),
+    );
+    const url = new URL(request.url);
+    if (
+      !parsed.success ||
+      !idempotencyKey.success ||
+      url.search.length > 0 ||
+      request.headers.has('if-match')
+    ) {
+      return mockProblemResponse(
+        participantAgendaMutationProblemSchema,
+        participantAgendaMutationProblemFixtures.validation,
+        { fixtureName: 'agenda.mock.action-validation' },
+      );
+    }
+
+    const fingerprint = await opaqueFingerprint(JSON.stringify(parsed.data));
+    const fingerprintContextFailure = mockAgendaRequestContextFailure(
+      requestContext,
+      'agenda.mock.action-after-fingerprint',
+    );
+    if (fingerprintContextFailure) return fingerprintContextFailure;
+    const claimedFingerprint = mockAgendaState.actionFingerprints.get(
+      idempotencyKey.data,
+    );
+    if (claimedFingerprint && claimedFingerprint !== fingerprint) {
+      return mockProblemResponse(
+        participantAgendaMutationProblemSchema,
+        participantAgendaMutationProblemFixtures.key_reused,
+        { fixtureName: 'agenda.mock.action-key-reused' },
+      );
+    }
+    if (!claimedFingerprint) {
+      mockAgendaState.actionFingerprints.set(idempotencyKey.data, fingerprint);
+    }
+    const previous = mockAgendaState.actionRequests.get(idempotencyKey.data);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        return mockProblemResponse(
+          participantAgendaMutationProblemSchema,
+          participantAgendaMutationProblemFixtures.key_reused,
+          { fixtureName: 'agenda.mock.action-key-reused' },
+        );
+      }
+      return mockStoredAgendaResultResponse(
+        previous.result,
+        'agenda.mock.action-replay',
+      );
+    }
+    const inFlight = mockAgendaState.inFlightActionRequests.get(
+      idempotencyKey.data,
+    );
+    if (inFlight) {
+      if (inFlight.fingerprint !== fingerprint) {
+        return mockProblemResponse(
+          participantAgendaMutationProblemSchema,
+          participantAgendaMutationProblemFixtures.key_reused,
+          { fixtureName: 'agenda.mock.action-in-flight-key-reused' },
+        );
+      }
+      const result = await inFlight.result;
+      const replayContextFailure = mockAgendaRequestContextFailure(
+        requestContext,
+        'agenda.mock.action-after-in-flight',
+      );
+      if (replayContextFailure) return replayContextFailure;
+      if (result === null) {
+        return mockProblemResponse(
+          participantAgendaMutationProblemSchema,
+          participantAgendaMutationProblemFixtures.in_progress,
+          { fixtureName: 'agenda.mock.action-in-flight-failed' },
+        );
+      }
+      return mockStoredAgendaResultResponse(
+        result,
+        'agenda.mock.action-in-flight-replay',
+      );
+    }
+
+    let resolveInFlight:
+      ((result: MockAgendaStoredResult | null) => void) | undefined;
+    let inFlightResolved = false;
+    const inFlightResult = new Promise<MockAgendaStoredResult | null>(
+      (resolve) => {
+        resolveInFlight = resolve;
+      },
+    );
+    mockAgendaState.inFlightActionRequests.set(idempotencyKey.data, {
+      fingerprint,
+      result: inFlightResult,
+    });
+    const actionPause = nextMockAgendaActionPause;
+    nextMockAgendaActionPause = null;
+
+    try {
+      if (actionPause) {
+        actionPause.entered();
+        await actionPause.wait;
+      }
+      await Promise.resolve();
+      const executionContextFailure = mockAgendaRequestContextFailure(
+        requestContext,
+        'agenda.mock.action-before-apply',
+      );
+      if (executionContextFailure) return executionContextFailure;
+
+      const completeResult = (
+        result: MockAgendaStoredResult,
+        fixtureName: string,
+      ) => {
+        mockAgendaState.actionRequests.set(idempotencyKey.data, {
+          fingerprint,
+          result,
+        });
+        inFlightResolved = true;
+        resolveInFlight?.(result);
+        return mockStoredAgendaResultResponse(result, fixtureName);
+      };
+      const completeProblem = (candidate: unknown, fixtureName: string) =>
+        completeResult(
+          {
+            kind: 'problem',
+            problem: participantAgendaMutationProblemSchema.parse(candidate),
+          },
+          fixtureName,
+        );
+
+      const canonicalAgenda = canonicalAgendaForCurrentPrincipal();
+      if (parsed.data.expectedVersion !== mockAgendaState.version) {
+        return completeProblem(
+          {
+            ...participantAgendaMutationProblemFixtures.stale_version,
+            currentVersion: canonicalAgenda.version,
+            agenda: canonicalAgenda,
+          },
+          'agenda.mock.action-stale',
+        );
+      }
+
+      const application = applyMockAgendaAction(parsed.data);
+      if (application.kind === 'failure') {
+        if (application.failure === 'capacity_full') {
+          return completeProblem(
+            {
+              ...participantAgendaMutationProblemFixtures.capacity_full,
+              sessionId: parsed.data.sessionId,
+              agenda: canonicalAgenda,
+            },
+            'agenda.mock.action-capacity-full',
+          );
+        }
+        if (application.failure === 'reservation_closed') {
+          return completeProblem(
+            {
+              ...participantAgendaMutationProblemFixtures.reservation_closed,
+              sessionId: parsed.data.sessionId,
+              agenda: canonicalAgenda,
+            },
+            'agenda.mock.action-reservation-closed',
+          );
+        }
+        if (application.failure === 'offer_expired') {
+          const offerId =
+            parsed.data.action === 'accept_offer' ||
+            parsed.data.action === 'decline_offer'
+              ? parsed.data.offerId
+              : agendaFixtureIds.offer;
+          return completeProblem(
+            {
+              ...participantAgendaMutationProblemFixtures.offer_expired,
+              sessionId: parsed.data.sessionId,
+              offerId,
+              serverNow: canonicalAgenda.serverNow,
+              agenda: canonicalAgenda,
+            },
+            'agenda.mock.action-offer-expired',
+          );
+        }
+        if (application.failure === 'ticket_inactive') {
+          return completeProblem(
+            {
+              ...participantAgendaMutationProblemFixtures.ticket_inactive,
+              sessionId: parsed.data.sessionId,
+              agenda: canonicalAgenda,
+            },
+            'agenda.mock.action-ticket-inactive',
+          );
+        }
+        return completeProblem(
+          application.failure === 'session_not_found'
+            ? participantAgendaMutationProblemFixtures.session_not_found
+            : participantAgendaMutationProblemFixtures.validation,
+          `agenda.mock.action-${application.failure}`,
+        );
+      }
+
+      const mutation =
+        parsed.data.action === 'accept_offer' ||
+        parsed.data.action === 'decline_offer'
+          ? {
+              sessionId: parsed.data.sessionId,
+              action: parsed.data.action,
+              offerId: parsed.data.offerId,
+            }
+          : parsed.data.action === 'registration_estimate'
+            ? {
+                sessionId: parsed.data.sessionId,
+                action: parsed.data.action,
+                registered: parsed.data.registered,
+              }
+            : {
+                sessionId: parsed.data.sessionId,
+                action: parsed.data.action,
+              };
+      const successAgenda = canonicalAgendaForCurrentPrincipal();
+      const targetSession = successAgenda.items.find(
+        ({ session }) => session.id === parsed.data.sessionId,
+      )?.session;
+      const conflicts =
+        targetSession &&
+        (parsed.data.action === 'add' ||
+          parsed.data.action === 'reserve' ||
+          parsed.data.action === 'accept_offer')
+          ? selectMockAgendaConflictingSessions(
+              successAgenda.items.map(({ session }) => session),
+              targetSession,
+            )
+          : [];
+      const response = participantAgendaMutationResponseSchema.parse({
+        ...successAgenda,
+        mutation: {
+          ...mutation,
+          outcome: application.outcome,
+        },
+        timeConflict:
+          targetSession && conflicts.length > 0
+            ? {
+                eventId: successAgenda.eventId,
+                sessionId: targetSession.id,
+                targetSession,
+                conflictingSessions: conflicts,
+              }
+            : null,
+      });
+      return completeResult(
+        {
+          kind: 'success',
+          response,
+        },
+        'agenda.mock.action',
+      );
+    } finally {
+      if (!inFlightResolved) resolveInFlight?.(null);
+      clearMockAgendaInFlightRequest(requestContext, idempotencyKey.data);
+    }
   }),
   http.get('*/api/v1/me/announcements', ({ request }) => {
     if (!hasActiveParticipantAccess()) {
