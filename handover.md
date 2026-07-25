@@ -20,6 +20,18 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F1-02` je dokončený na `track/frontend-complete`. Development-only
+  `/aktivace/kod` zachovává opaque kód přesně bez trim/case transformace,
+  neukládá jej do URL ani draftu, používá no-store typed request s
+  idempotency key a odmítnutí mapuje na jedinou neenumerující zprávu.
+  Kanonický dev/test kód je `TST-OPAQUE-2026`; po jeho přijetí UI výslovně
+  sděluje, že nevznikl skutečný účet, membership ani session.
+- Mock handler validuje body i idempotency key a přijme jen kanonický
+  syntetický kód. Regrese odhalená React Strict Mode testem opravila mounted
+  guard asynchronního submitu. Cílené contract/MSW testy a 12 browser
+  komponentových scénářů na třech viewports procházejí; route má lokální
+  validaci, focus na error summary, obecný rejected stav, axe, `44 px` input
+  a kontrolu overflow.
 - `F1-01` je implementovaný na `track/frontend-complete`. Nový
   `CS-ACT-01` striktně popisuje landing, opaque claim, identity handoff,
   one-time link a neenumerující recovery včetně no-store, secrets a

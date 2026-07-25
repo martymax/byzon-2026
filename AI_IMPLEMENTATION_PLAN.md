@@ -1798,9 +1798,15 @@ dark mode ani plošný redesign nejsou podmínkou.
   aktivovaný, suspended, loading/offline/error/session-expired stav,
   deterministický handler a component/axe/responsive regresi; skutečný
   membership/session handoff zůstává za `BLOCKER-AUTH-01`/`P4`.
-- [ ] `F1-02` Implementovat ruční zadání opaque ticket kódu s viditelným
+- [x] `F1-02` Implementovat ruční zadání opaque ticket kódu s viditelným
   labelem, správnými input atributy, bez neodsouhlasené normalizace a s
-  neenumerujícími chybami.
+  neenumerujícími chybami. Development-only `/aktivace/kod` odesílá přes
+  `CS-ACT-01` přesnou opaque hodnotu bez trim/case transformace, používá
+  idempotency key a no-store typed API port, mapuje neplatný kód na jedinou
+  obecnou chybu a po syntetickém úspěchu výslovně potvrzuje, že nevznikl účet,
+  membership ani session. Mock handler přijme pouze kanonický syntetický kód;
+  component/axe/responsive testy kryjí úspěch, lokální validaci i bezpečné
+  odmítnutí.
 - [ ] `F1-03` Přidat progresivní scanner s vysvětlením oprávnění kamery,
   bezpečným zrušením, stavem nepodporovaného zařízení a vždy dostupným ručním
   fallbackem; v dev/test jen syntetické QR.
@@ -2624,3 +2630,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 3.4 | 25. 7. 2026 | Dokončen status-only mocked řez `F2-04`: `/app/vstupenka` má striktní privátní/no-store DTO, validované syntetické fixtures, typed klienta, bezpečné stavové a failure UI a component/axe/visual gate. Kontrakt záměrně neobsahuje credential; úplný `CS-TICKET-01`, produkční `/me/ticket` a available presentation zůstávají za `BLOCKER-TKT-05`/`P4-12`. |
 | 3.5 | 25. 7. 2026 | Frontend foundation review před kompletačním trackem zpevnil event-scope invariant `CS-CONTENT-01`, kanonický syntetický event, privátní cache hlavičky a mock fail-closed hranici pro celé `/api/**` bez blokování Next navigace. Neintegrovaná ticket route je nově dostupná pouze v explicitním development mock preview. |
 | 3.6 | 25. 7. 2026 | Dokončen `F1-01`: `CS-ACT-01` pokrývá striktní landing/claim/identity/link/recovery kontrakty, validované syntetické fixtures a typed API port. Development-only `/aktivace` nabízí phase-aware anonymní i recovery stavy, bezpečný návrat a přístupnou/responzivní mockovanou vstupní obrazovku bez vytvoření session nebo membership. |
+| 3.7 | 25. 7. 2026 | Dokončen `F1-02`: development-only `/aktivace/kod` bezpečně odesílá přesný opaque ticket kód bez tiché normalizace, zakazuje dvojitý submit, používá no-store/idempotentní typed request a pro všechny neplatné kódy vrací jedinou neenumerující chybu. Syntetický úspěch nepředstírá účet, membership ani session; Strict Mode regresní test chrání dokončení asynchronního submitu. |

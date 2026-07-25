@@ -4,6 +4,7 @@ import {
 } from '@byzon/domain/contracts';
 import { FixtureValidationError } from '@byzon/test-support';
 import {
+  activationFixtureCode,
   contentFixtureIds,
   sessionExpiredProblemFixture,
 } from '@byzon/test-support/fixtures';
@@ -17,6 +18,7 @@ import {
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
 import { requestParticipantProgram } from '../../lib/content-api.js';
+import { submitActivationClaim } from '../../lib/activation-api.js';
 import { createMockServer } from './node.js';
 import {
   MOCK_REQUEST_ID,
@@ -149,5 +151,36 @@ describe('MSW through the production API port', () => {
 
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toBe('authorization, cookie');
+  });
+
+  it('accepts only the canonical synthetic claim code without enumeration', async () => {
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: activationFixtureCode, method: 'manual_code' },
+        'claim-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'identity_required',
+        membershipCreated: false,
+        sessionCreated: false,
+      },
+    });
+
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: 'UNKNOWN-CODE-2026', method: 'manual_code' },
+        'claim-mock-port-0002',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'CLAIM_REJECTED' },
+      },
+    });
   });
 });

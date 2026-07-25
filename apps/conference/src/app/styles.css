@@ -1007,3 +1007,53 @@ main > .ui-participant-nav-spacer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.activation-form-page {
+  width: min(100% - 1.5rem, 46rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.activation-form-page > header h1,
+.activation-form-page > h1 {
+  max-width: 11ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 6rem);
+  line-height: 0.86;
+}
+.activation-form-page > .ui-state-panel,
+.activation-form-page > .ui-alert,
+.activation-form-page > div + .ui-alert {
+  margin-top: 1.25rem;
+}
+.activation-code-card {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-code-card .ui-control {
+  min-height: 3.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+.activation-form-actions {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.activation-form-actions > * {
+  flex: 1 1 9rem;
+}
+
+@media (min-width: 36rem) {
+  .activation-form-actions > * {
+    flex: 0 0 auto;
+  }
+}

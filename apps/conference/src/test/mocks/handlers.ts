@@ -1,5 +1,9 @@
 import {
+  activationClaimProblemSchema,
+  activationClaimRequestSchema,
+  activationClaimResponseSchema,
   activationLandingResponseSchema,
+  idempotencyKeySchema,
   participantContentProblemSchema,
   participantContentResponseSchema,
   participantProgramProblemSchema,
@@ -7,6 +11,9 @@ import {
   participantTicketResponseSchema,
 } from '@byzon/domain/contracts';
 import {
+  activationClaimFixtures,
+  activationClaimProblemFixtures,
+  activationFixtureCode,
   activationLandingFixtures,
   contentFixtureIds,
   participantContentFixtures,
@@ -35,6 +42,33 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       },
     ),
   ),
+  http.post('*/api/v1/activation/claims', async ({ request }) => {
+    const body = await request.json().catch(() => undefined);
+    const parsed = activationClaimRequestSchema.safeParse(body);
+    const idempotencyKey = idempotencyKeySchema.safeParse(
+      request.headers.get('idempotency-key'),
+    );
+    if (
+      !parsed.success ||
+      !idempotencyKey.success ||
+      parsed.data.code !== activationFixtureCode
+    ) {
+      return mockProblemResponse(
+        activationClaimProblemSchema,
+        activationClaimProblemFixtures.rejected,
+        { fixtureName: 'activation.mock.claim-rejected' },
+      );
+    }
+
+    return mockJsonResponse(
+      activationClaimResponseSchema,
+      activationClaimFixtures.identity_required,
+      {
+        fixtureName: 'activation.mock.claim',
+        cacheControl: 'private, no-store',
+      },
+    );
+  }),
   http.get('*/api/v1/events/:eventId/program', ({ params }) => {
     if (String(params.eventId) !== contentFixtureIds.event) {
       return mockProblemResponse(
