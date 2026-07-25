@@ -11,6 +11,7 @@ describe('participant shell navigation', () => {
     ['/app', 'overview'],
     ['/app/program', 'program'],
     ['/app/program/session-1', 'program'],
+    ['/app/agenda', 'agenda'],
     ['/app/oznameni', 'announcements'],
     ['/app/oznameni/announcement-1', 'announcements'],
     ['/app/vice', 'more'],
@@ -40,6 +41,18 @@ describe('participant shell navigation', () => {
     ).toEqual(['Přehled', 'Soukromí', 'Nastavení']);
   });
 
+  it('exposes agenda as the fifth active participant destination', () => {
+    expect(
+      participantNavigationItemsForMode('active').map(({ href }) => href),
+    ).toEqual([
+      '/app',
+      '/app/program',
+      '/app/agenda',
+      '/app/oznameni',
+      '/app/vice',
+    ]);
+  });
+
   it('does not expose participant destinations while the event is unavailable', () => {
     expect(participantNavigationItemsForMode('unavailable')).toEqual([]);
   });
@@ -51,6 +64,7 @@ describe('participant shell navigation', () => {
     ['/app/nastaveni', 'settings'],
     ['/app/nastaveni/relace', 'settings'],
     ['/app/program', ''],
+    ['/app/agenda', ''],
     ['/app/oznameni', ''],
     ['/app/vice', ''],
     ['/app/profil', ''],

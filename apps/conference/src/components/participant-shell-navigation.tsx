@@ -48,6 +48,18 @@ const participantNavigationItems: NavigationItem[] = [
     ),
   },
   {
+    id: 'agenda',
+    href: '/app/agenda',
+    label: 'Agenda',
+    icon: (
+      <NavigationIcon>
+        <rect height="16" rx="2" width="16" x="4" y="5" />
+        <path d="M8 3v4M16 3v4M4 10h16M8 14h3M8 18h6" />
+        <path d="m14.5 14.5 1.3 1.3 2.7-3" />
+      </NavigationIcon>
+    ),
+  },
+  {
     id: 'announcements',
     href: '/app/oznameni',
     label: 'Oznámení',
@@ -115,6 +127,7 @@ const isDestination = (pathname: string, href: string): boolean =>
 export const participantNavigationActiveId = (pathname: string): string => {
   if (pathname === '/app') return 'overview';
   if (isDestination(pathname, '/app/program')) return 'program';
+  if (isDestination(pathname, '/app/agenda')) return 'agenda';
   if (isDestination(pathname, '/app/oznameni')) return 'announcements';
   return moreDestinations.some((href) => isDestination(pathname, href))
     ? 'more'
