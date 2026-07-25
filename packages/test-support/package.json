@@ -12,6 +12,10 @@
       "types": "./src/fixtures/index.ts",
       "default": "./dist/fixtures/index.js"
     },
+    "./fixtures/check-in": {
+      "types": "./src/fixtures/check-in.ts",
+      "default": "./dist/fixtures/check-in.js"
+    },
     "./viewports": "./src/viewports.ts"
   },
   "scripts": {

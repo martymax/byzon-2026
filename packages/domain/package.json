@@ -11,6 +11,10 @@
     "./contracts": {
       "types": "./src/contracts/index.ts",
       "default": "./dist/contracts/index.js"
+    },
+    "./contracts/check-in": {
+      "types": "./src/contracts/check-in.ts",
+      "default": "./dist/contracts/check-in.js"
     }
   },
   "scripts": {
