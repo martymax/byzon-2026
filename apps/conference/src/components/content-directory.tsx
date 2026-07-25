@@ -18,7 +18,13 @@ interface ContentProps {
 export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
   const state = useParticipantContent(eventId, api);
   if (state.status !== 'ready') {
-    return <ResourceStatus state={state} onRetry={state.retry} />;
+    return (
+      <ResourceStatus
+        loginReturnTo="/app/recnici"
+        state={state}
+        onRetry={state.retry}
+      />
+    );
   }
   if (state.data.content.speakers.length === 0) {
     return (
@@ -52,7 +58,13 @@ export const SpeakerDetail = ({
 }: ContentProps & { slug: string }) => {
   const state = useParticipantContent(eventId, api);
   if (state.status !== 'ready') {
-    return <ResourceStatus state={state} onRetry={state.retry} />;
+    return (
+      <ResourceStatus
+        loginReturnTo={`/app/recnici/${encodeURIComponent(slug)}`}
+        state={state}
+        onRetry={state.retry}
+      />
+    );
   }
   const speaker = state.data.content.speakers.find(
     (item) => item.slug === slug,
@@ -104,7 +116,13 @@ export const SpeakerDetail = ({
 export const PartnerDirectory = ({ eventId, api }: ContentProps) => {
   const state = useParticipantContent(eventId, api);
   if (state.status !== 'ready') {
-    return <ResourceStatus state={state} onRetry={state.retry} />;
+    return (
+      <ResourceStatus
+        loginReturnTo="/app/partneri"
+        state={state}
+        onRetry={state.retry}
+      />
+    );
   }
   if (state.data.content.partners.length === 0) {
     return (
@@ -139,7 +157,13 @@ export const PartnerDirectory = ({ eventId, api }: ContentProps) => {
 export const PracticalContent = ({ eventId, api }: ContentProps) => {
   const state = useParticipantContent(eventId, api);
   if (state.status !== 'ready') {
-    return <ResourceStatus state={state} onRetry={state.retry} />;
+    return (
+      <ResourceStatus
+        loginReturnTo="/app/informace"
+        state={state}
+        onRetry={state.retry}
+      />
+    );
   }
   const { practical, venues } = state.data.content;
   if (

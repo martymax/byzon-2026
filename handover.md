@@ -20,6 +20,40 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Celá etapa `F2` je na `track/frontend-complete` po závěrečném security a code
+  review ve stavu `UI ready (mocked)`; oba review skončily `PASS` bez
+  nevyřešeného actionable nálezu. Rozšířený `CS-BOOT-01` nese event/user
+  scope, verzovanou správu profilového minima, úplný právní obsah nebo HTTPS
+  odkaz, přesnou evidenci acknowledgement, privacy stavy a support e-mail.
+- `/app/vice` je nový funkční hub pro profil, soukromí, nastavení, vstupenku,
+  praktické informace, řečníky a partnery. Primární navigace má nyní čtyři
+  cíle `Přehled / Program / Oznámení / Více`; pátou `Agendu` doplní `F3`.
+  `/app/profil` podporuje canonical save, stale-version reload, lokální
+  validaci a ochranu rozepsaných změn. `/app/soukromi` zobrazuje aktuální
+  právní verze/evidenci pouze pro čtení a export/smazání odesílá až po
+  explicitním potvrzení.
+- Account resource načítá private/no-store bootstrap až na účetních routách,
+  PII drží jen v paměti a failne zavřeně při pending, suspended, revoked,
+  neparticipant roli nebo neshodě canonical event/user/version. Logout,
+  switch-account a autoritativní revokace provádějí wipe. Stateful mock přejde
+  do `synthetic_preview` active participant stavu až po úspěšném onboardingu,
+  nic nepersistuje přes reload a nevytváří skutečnou Better Auth session ani
+  membership.
+- Finální `F2` gate je zelený: 113 domain testů, 27 fixture testů, 229
+  conference unit testů, 36 korektně přeskočených DB scénářů a 510 Chromium
+  component/axe/responsive scénářů ve třech viewports. Prošly Prettier,
+  ESLint, všechny workspace typechecky, produkční Next build a source i
+  post-build mock boundary.
+- Etapové hardening regrese vážou všechny privátní resource na event,
+  uživatele a session; 401/403, revokace i switch-account synchronně mažou
+  PII. Archiv používá pouze domain-separated SHA-256 scope fingerprint,
+  nikoli serializované event ID. Profil, privacy a session mutace odmítají
+  stale nebo nekorelovaný canonical výsledek.
+- Recovery odkazy nyní zachovají přesnou bezpečnou participant úlohu přes
+  uzavřený allowlist statických tras, UUID detailů a bounded slugů. Mock token
+  používá canonical base64url, fatal UTF-8 decode, opakovanou schema validaci
+  a fingerprint-bound replay; jde výhradně o development transport, nikoli
+  produkční autentizační důkaz.
 - `F2-05` je na `track/frontend-complete` dokončený ve stavu
   `UI ready (mocked)`. Nový participant subset `CS-ANN-01` pokrývá privátní
   inbox, detail a online-only read včetně přesných problem kódů,

@@ -24,6 +24,46 @@ const safeVersionSchema = z
   .min(1)
   .max(64)
   .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Invalid document version');
+export const identityProfileVersionSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(Number.MAX_SAFE_INTEGER);
+export type IdentityProfileVersion = z.infer<
+  typeof identityProfileVersionSchema
+>;
+const safeLegalTextSchema = z
+  .string()
+  .min(1)
+  .max(32_768)
+  .refine((value) => value.trim().length > 0, 'Legal text must not be blank')
+  .refine(
+    (value) =>
+      !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u202A-\u202E\u2066-\u2069]/.test(
+        value,
+      ),
+    'Legal text contains unsafe control characters',
+  )
+  .refine(
+    (value) => !/[<>]/.test(value),
+    'Legal text must not contain HTML markup',
+  );
+const safeLegalHttpsUrlSchema = z
+  .url()
+  .max(2_048)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        url.protocol === 'https:' &&
+        url.username === '' &&
+        url.password === '' &&
+        url.hostname !== ''
+      );
+    } catch {
+      return false;
+    }
+  }, 'Legal document URL must be credential-free HTTPS');
 
 export const identityCachePolicy = Object.freeze({
   cacheControl: 'private, no-store',
@@ -61,6 +101,10 @@ export const identityEmailSchema = z
     'Email contains unsafe control characters',
   );
 
+const canonicalEmailSchema = identityEmailSchema
+  .refine((value) => value === value.trim(), 'Email must be canonical')
+  .refine((value) => value === value.toLowerCase(), 'Email must be lowercase');
+
 const canonicalNameSchema = safeDisplayTextSchema(128).refine(
   (value) => value === value.trim(),
   'Name must be canonical',
@@ -69,12 +113,7 @@ const canonicalNameSchema = safeDisplayTextSchema(128).refine(
 export const identityProfileSchema = z.strictObject({
   firstName: canonicalNameSchema,
   lastName: canonicalNameSchema,
-  contactEmail: identityEmailSchema
-    .refine((value) => value === value.trim(), 'Email must be canonical')
-    .refine(
-      (value) => value === value.toLowerCase(),
-      'Email must be lowercase',
-    ),
+  contactEmail: canonicalEmailSchema,
 });
 
 export type IdentityProfile = z.infer<typeof identityProfileSchema>;
@@ -97,9 +136,66 @@ export const identityLegalDocumentSchema = z.strictObject({
   publication: z.enum(['published', 'synthetic_preview']),
   publishedAt: dateTimeSchema.nullable(),
   previewText: safeDisplayTextSchema(2_048),
+  content: z.discriminatedUnion('kind', [
+    z.strictObject({
+      kind: z.literal('inline'),
+      text: safeLegalTextSchema,
+    }),
+    z.strictObject({
+      kind: z.literal('external'),
+      url: safeLegalHttpsUrlSchema,
+    }),
+  ]),
 });
 
 export type IdentityLegalDocument = z.infer<typeof identityLegalDocumentSchema>;
+
+export const identityLegalAcknowledgementDecisionSchema = z.enum([
+  'accepted',
+  'acknowledged',
+]);
+
+export type IdentityLegalAcknowledgementDecision = z.infer<
+  typeof identityLegalAcknowledgementDecisionSchema
+>;
+
+export const identityLegalAcknowledgementSchema = z.strictObject({
+  documentId: uuidSchema,
+  type: identityLegalDocumentTypeSchema,
+  decision: identityLegalAcknowledgementDecisionSchema,
+  version: safeVersionSchema,
+  acknowledgedAt: dateTimeSchema,
+});
+
+export type IdentityLegalAcknowledgement = z.infer<
+  typeof identityLegalAcknowledgementSchema
+>;
+
+export const identityProfileManagementSchema = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.literal('missing') }),
+  z.strictObject({
+    state: z.literal('editable'),
+    version: identityProfileVersionSchema,
+  }),
+  z.strictObject({ state: z.literal('read_only') }),
+  z.strictObject({ state: z.literal('removed') }),
+]);
+
+export type IdentityProfileManagement = z.infer<
+  typeof identityProfileManagementSchema
+>;
+
+export const identityPrivacyRequestStatusSchema = z.enum([
+  'available',
+  'pending',
+  'completed',
+  'rejected',
+  'unavailable',
+]);
+
+export type IdentityPrivacyRequestStatus = z.infer<
+  typeof identityPrivacyRequestStatusSchema
+>;
 
 export const identityOnboardingStateSchema = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('profile_required') }),
@@ -162,6 +258,8 @@ export const identityBootstrapResponseSchema = z
       name: safeDisplayTextSchema(160),
       phase: identityEventPhaseSchema,
       timezone: safeDisplayTextSchema(128),
+      startsAt: dateTimeSchema,
+      endsAt: dateTimeSchema,
     }),
     user: z.strictObject({
       id: uuidSchema,
@@ -178,8 +276,10 @@ export const identityBootstrapResponseSchema = z
         ),
     }),
     profile: identityProfileSchema.nullable(),
+    profileManagement: identityProfileManagementSchema,
     onboarding: identityOnboardingStateSchema,
     legalDocuments: z.array(identityLegalDocumentSchema).max(3),
+    legalAcknowledgements: z.array(identityLegalAcknowledgementSchema).max(3),
     features: z.strictObject({
       networking: z.boolean(),
       reservations: z.boolean(),
@@ -193,9 +293,10 @@ export const identityBootstrapResponseSchema = z
       announcements: z.number().int().min(0).max(999),
     }),
     privacy: z.strictObject({
-      exportRequest: z.enum(['available', 'pending', 'unavailable']),
-      deletionRequest: z.enum(['available', 'pending', 'unavailable']),
+      exportRequest: identityPrivacyRequestStatusSchema,
+      deletionRequest: identityPrivacyRequestStatusSchema,
     }),
+    supportEmail: canonicalEmailSchema,
   })
   .superRefine((response, context) => {
     const ids = response.legalDocuments.map(({ id }) => id);
@@ -212,6 +313,15 @@ export const identityBootstrapResponseSchema = z
         code: 'custom',
         path: ['legalDocuments'],
         message: 'Legal document types must be unique',
+      });
+    }
+    if (
+      Date.parse(response.event.startsAt) >= Date.parse(response.event.endsAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['event', 'endsAt'],
+        message: 'Event end must follow its start',
       });
     }
     if (
@@ -240,6 +350,73 @@ export const identityBootstrapResponseSchema = z
     }
 
     const documentTypes = new Set(types);
+    const documentById = new Map(
+      response.legalDocuments.map((document) => [document.id, document]),
+    );
+    const acknowledgementIds = response.legalAcknowledgements.map(
+      ({ documentId }) => documentId,
+    );
+    const acknowledgementTypes = response.legalAcknowledgements.map(
+      ({ type }) => type,
+    );
+    if (new Set(acknowledgementIds).size !== acknowledgementIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['legalAcknowledgements'],
+        message: 'Legal acknowledgement document IDs must be unique',
+      });
+    }
+    if (new Set(acknowledgementTypes).size !== acknowledgementTypes.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['legalAcknowledgements'],
+        message: 'Legal acknowledgement types must be unique',
+      });
+    }
+    response.legalAcknowledgements.forEach((acknowledgement, index) => {
+      const document = documentById.get(acknowledgement.documentId);
+      if (!document) {
+        context.addIssue({
+          code: 'custom',
+          path: ['legalAcknowledgements', index, 'documentId'],
+          message:
+            'Legal acknowledgement must reference a current legal document',
+        });
+        return;
+      }
+      if (
+        document.type !== acknowledgement.type ||
+        document.version !== acknowledgement.version
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['legalAcknowledgements', index],
+          message:
+            'Legal acknowledgement must match the referenced document version',
+        });
+      }
+      if (
+        document?.publishedAt &&
+        Date.parse(acknowledgement.acknowledgedAt) <
+          Date.parse(document.publishedAt)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['legalAcknowledgements', index, 'acknowledgedAt'],
+          message: 'Legal acknowledgement cannot precede document publication',
+        });
+      }
+      const expectedDecision =
+        acknowledgement.type === 'privacy_notice' ? 'acknowledged' : 'accepted';
+      if (acknowledgement.decision !== expectedDecision) {
+        context.addIssue({
+          code: 'custom',
+          path: ['legalAcknowledgements', index, 'decision'],
+          message: `Legal acknowledgement for ${acknowledgement.type} must be ${expectedDecision}`,
+        });
+      }
+    });
+
     const onboarding = response.onboarding;
     if (
       response.membership.access.state === 'active' &&
@@ -261,12 +438,31 @@ export const identityBootstrapResponseSchema = z
         message: 'Inactive membership cannot grant event roles',
       });
     }
+    if (
+      response.event.phase === 'archived' &&
+      response.profileManagement.state !== 'read_only' &&
+      response.profileManagement.state !== 'removed'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['profileManagement'],
+        message:
+          'Archived events can expose only a read-only or removed profile',
+      });
+    }
     if (onboarding.status === 'profile_required') {
       if (response.profile !== null) {
         context.addIssue({
           code: 'custom',
           path: ['profile'],
           message: 'Profile-required onboarding cannot already have a profile',
+        });
+      }
+      if (response.profileManagement.state !== 'missing') {
+        context.addIssue({
+          code: 'custom',
+          path: ['profileManagement'],
+          message: 'Profile-required onboarding must expose a missing profile',
         });
       }
       if (response.networking.enabled !== null) {
@@ -277,11 +473,45 @@ export const identityBootstrapResponseSchema = z
             'Profile-required onboarding cannot have a networking choice',
         });
       }
-    } else if (response.profile === null) {
+    } else if (
+      response.profile === null &&
+      response.profileManagement.state !== 'removed'
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['profile'],
         message: 'Onboarding state requires a profile',
+      });
+    }
+    if (
+      response.profile === null &&
+      !['missing', 'removed'].includes(response.profileManagement.state)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['profileManagement'],
+        message: 'Profile management state requires an existing profile',
+      });
+    }
+    if (
+      response.profile !== null &&
+      !['editable', 'read_only'].includes(response.profileManagement.state)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['profileManagement'],
+        message: 'Existing profile must be editable or read-only',
+      });
+    }
+    if (
+      (response.profileManagement.state === 'removed') !==
+      (response.privacy.deletionRequest === 'completed')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['privacy', 'deletionRequest'],
+        message:
+          'Completed deletion status must match a removed profile management state',
       });
     }
 
@@ -332,6 +562,36 @@ export const identityBootstrapResponseSchema = z
     }
 
     if (
+      onboarding.status === 'networking_choice_required' ||
+      onboarding.status === 'complete'
+    ) {
+      const acknowledgementByType = new Map(
+        response.legalAcknowledgements.map((record) => [record.type, record]),
+      );
+      for (const [type, decision] of [
+        ['terms', 'accepted'],
+        ['privacy_notice', 'acknowledged'],
+      ] as const) {
+        const currentDocument = response.legalDocuments.find(
+          (document) => document.type === type,
+        );
+        const acknowledgement = acknowledgementByType.get(type);
+        if (
+          !currentDocument ||
+          acknowledgement?.documentId !== currentDocument.id ||
+          acknowledgement.version !== currentDocument.version ||
+          acknowledgement.decision !== decision
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['legalAcknowledgements'],
+            message: `Onboarding state requires the current ${type} acknowledgement`,
+          });
+        }
+      }
+    }
+
+    if (
       (onboarding.status === 'networking_choice_required' ||
         onboarding.status === 'complete') &&
       response.networking.enabled === null
@@ -361,10 +621,119 @@ export const identityBootstrapResponseSchema = z
         message: 'Networking cannot be enabled when the feature is disabled',
       });
     }
+    const networkingAcknowledgement = response.legalAcknowledgements.find(
+      ({ type }) => type === 'networking_consent',
+    );
+    if (
+      onboarding.status === 'complete' &&
+      Boolean(networkingAcknowledgement) !==
+        (response.networking.enabled === true)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['legalAcknowledgements'],
+        message:
+          'Networking acknowledgement must match the explicit networking choice',
+      });
+    }
   });
 
 export type IdentityBootstrapResponse = z.infer<
   typeof identityBootstrapResponseSchema
+>;
+
+export const identityProfileUpdateRequestSchema = z.strictObject({
+  expectedVersion: identityProfileVersionSchema,
+  profile: identityProfileSchema,
+});
+
+export type IdentityProfileUpdateRequest = z.infer<
+  typeof identityProfileUpdateRequestSchema
+>;
+
+export const identityProfileUpdateResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  userId: uuidSchema,
+  profile: identityProfileSchema,
+  profileManagement: z.strictObject({
+    state: z.literal('editable'),
+    version: identityProfileVersionSchema,
+  }),
+  updatedAt: dateTimeSchema,
+});
+
+export type IdentityProfileUpdateResponse = z.infer<
+  typeof identityProfileUpdateResponseSchema
+>;
+
+export const identityPrivacyRequestKindSchema = z.enum([
+  'data_export',
+  'data_deletion',
+]);
+
+export type IdentityPrivacyRequestKind = z.infer<
+  typeof identityPrivacyRequestKindSchema
+>;
+
+export const identityPrivacyRequestRequestSchema = z.strictObject({
+  kind: identityPrivacyRequestKindSchema,
+});
+
+export type IdentityPrivacyRequestRequest = z.infer<
+  typeof identityPrivacyRequestRequestSchema
+>;
+
+const identityPrivacyRequestBaseShape = {
+  id: uuidSchema,
+  kind: identityPrivacyRequestKindSchema,
+  requestedAt: dateTimeSchema,
+} as const;
+
+export const identityPrivacyRequestPendingRecordSchema = z.strictObject({
+  ...identityPrivacyRequestBaseShape,
+  state: z.literal('pending'),
+});
+
+export const identityPrivacyRequestRecordSchema = z
+  .discriminatedUnion('state', [
+    identityPrivacyRequestPendingRecordSchema,
+    z.strictObject({
+      ...identityPrivacyRequestBaseShape,
+      state: z.literal('completed'),
+      resolvedAt: dateTimeSchema,
+    }),
+    z.strictObject({
+      ...identityPrivacyRequestBaseShape,
+      state: z.literal('rejected'),
+      resolvedAt: dateTimeSchema,
+      supportReference: safeDisplayTextSchema(64),
+    }),
+  ])
+  .superRefine((request, context) => {
+    if (
+      request.state !== 'pending' &&
+      Date.parse(request.resolvedAt) < Date.parse(request.requestedAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['resolvedAt'],
+        message: 'Privacy request resolution cannot precede its creation',
+      });
+    }
+  });
+
+export type IdentityPrivacyRequestRecord = z.infer<
+  typeof identityPrivacyRequestRecordSchema
+>;
+
+export const identityPrivacyRequestResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  userId: uuidSchema,
+  request: identityPrivacyRequestPendingRecordSchema,
+});
+
+export type IdentityPrivacyRequestResponse = z.infer<
+  typeof identityPrivacyRequestResponseSchema
 >;
 
 const networkingChoiceSchema = z.discriminatedUnion('enabled', [
@@ -549,6 +918,22 @@ export const identityRequestIdReusedProblemSchema = defineApiProblemSchema(
 );
 export const identitySessionActionRejectedProblemSchema =
   defineApiProblemSchema('SESSION_ACTION_REJECTED', 409);
+export const identityProfileNotFoundProblemSchema = defineApiProblemSchema(
+  'PROFILE_NOT_FOUND',
+  404,
+);
+export const identityProfileNotEditableProblemSchema = defineApiProblemSchema(
+  'PROFILE_NOT_EDITABLE',
+  409,
+);
+export const identityStaleProfileVersionProblemSchema = defineApiProblemSchema(
+  'STALE_VERSION',
+  409,
+).extend({
+  currentVersion: identityProfileVersionSchema,
+});
+export const identityPrivacyRequestUnavailableProblemSchema =
+  defineApiProblemSchema('PRIVACY_REQUEST_UNAVAILABLE', 409);
 export const identityInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
@@ -585,6 +970,31 @@ export const identitySessionActionProblemSchema = z.discriminatedUnion('code', [
   identityInternalErrorProblemSchema,
 ]);
 
+export const identityProfileUpdateProblemSchema = z.discriminatedUnion('code', [
+  identityAuthenticationRequiredProblemSchema,
+  sessionExpiredProblemSchema,
+  identityEventAccessDeniedProblemSchema,
+  identityProfileNotFoundProblemSchema,
+  identityProfileNotEditableProblemSchema,
+  identityStaleProfileVersionProblemSchema,
+  identityValidationProblemSchema,
+  identityInternalErrorProblemSchema,
+]);
+
+export const identityPrivacyRequestProblemSchema = z.discriminatedUnion(
+  'code',
+  [
+    identityAuthenticationRequiredProblemSchema,
+    sessionExpiredProblemSchema,
+    identityEventAccessDeniedProblemSchema,
+    identityPrivacyRequestUnavailableProblemSchema,
+    idempotencyKeyReusedProblemSchema,
+    idempotencyInProgressProblemSchema,
+    identityValidationProblemSchema,
+    identityInternalErrorProblemSchema,
+  ],
+);
+
 export type IdentityBootstrapProblem = z.infer<
   typeof identityBootstrapProblemSchema
 >;
@@ -593,4 +1003,10 @@ export type IdentityOnboardingProblem = z.infer<
 >;
 export type IdentitySessionActionProblem = z.infer<
   typeof identitySessionActionProblemSchema
+>;
+export type IdentityProfileUpdateProblem = z.infer<
+  typeof identityProfileUpdateProblemSchema
+>;
+export type IdentityPrivacyRequestProblem = z.infer<
+  typeof identityPrivacyRequestProblemSchema
 >;

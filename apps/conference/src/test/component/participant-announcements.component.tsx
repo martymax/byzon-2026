@@ -11,7 +11,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
-import ParticipantLayout from '../../app/app/layout';
+import { ParticipantLayoutShell as ParticipantLayout } from '../../components/participant-layout-shell';
 import { ParticipantAnnouncement } from '../../components/participant-announcement';
 import { ParticipantInbox } from '../../components/participant-inbox';
 import type { ApiPort } from '../../lib/api';
@@ -62,7 +62,14 @@ const AnnouncementProbe = ({ children }: { readonly children: ReactNode }) => (
     style={visualTestStyle}
     tabIndex={-1}
   >
-    <ParticipantLayout>{children}</ParticipantLayout>
+    <ParticipantLayout
+      accountScope={{
+        kind: 'active',
+        eventId: announcementFixtureIds.event,
+      }}
+    >
+      {children}
+    </ParticipantLayout>
   </main>
 );
 
@@ -387,6 +394,15 @@ describe('F2-05 participant announcement inbox', () => {
 
   it('aborts an older cursor request when browser navigation changes the filter', async () => {
     let staleSignal: AbortSignal | undefined;
+    let releaseStale: (() => void) | undefined;
+    const staleResponse = new Promise<Response>((resolve) => {
+      releaseStale = () =>
+        resolve(
+          problemResponse(
+            participantAnnouncementInboxProblemFixtures.authentication!,
+          ),
+        );
+    });
     const fetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = requestUrl(input);
@@ -394,13 +410,7 @@ describe('F2-05 participant announcement inbox', () => {
         const cursor = url.searchParams.get('cursor');
         if (filter === 'all' && cursor) {
           staleSignal = init?.signal ?? undefined;
-          return new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener(
-              'abort',
-              () => reject(new DOMException('Aborted', 'AbortError')),
-              { once: true },
-            );
-          });
+          return staleResponse;
         }
         if (filter === 'unread' && cursor) {
           return jsonResponse(
@@ -430,6 +440,12 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByRole('button', { name: 'Nepřečtená (2)' }))
       .toHaveAttribute('aria-pressed', 'true');
     await vi.waitFor(() => expect(staleSignal?.aborted).toBe(true));
+    releaseStale?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect
+      .element(screen.getByRole('button', { name: 'Nepřečtená (2)' }))
+      .toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Přihlášení vypršelo').elements()).toHaveLength(0);
     await screen.getByRole('button', { name: 'Načíst další oznámení' }).click();
     await vi.waitFor(() =>
       expect(
@@ -561,6 +577,68 @@ describe('F2-05 participant announcement inbox', () => {
     expect(document.body.textContent).not.toContain('Změna sálu workshopu');
     expect(document.body.textContent).not.toContain('Registrace je otevřená');
     expect(document.body.textContent).not.toContain('Nepřečtená (2)');
+  });
+
+  it('purges loaded cursor pages after a malformed 401 and cannot revive them through route context', async () => {
+    const appendedPage = {
+      ...participantAnnouncementInboxFixtures.second_page!,
+      pageInfo: {
+        hasMore: true,
+        nextCursor: 'fixture-announcements-page-3',
+      },
+    };
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      const cursor = url.searchParams.get('cursor');
+      if (cursor === 'fixture-announcements-page-3') {
+        return new Response('malformed unauthorized response', {
+          status: 401,
+          headers: { 'content-type': 'text/plain' },
+        });
+      }
+      if (cursor) {
+        return jsonResponse(
+          appendedPage,
+          'component-announcement-malformed-page-0001',
+        );
+      }
+      return jsonResponse(
+        url.searchParams.get('filter') === 'unread'
+          ? participantAnnouncementInboxFixtures.empty_unread
+          : participantAnnouncementInboxFixtures.first_page,
+        'component-announcement-malformed-base-0001',
+      );
+    });
+    const api = createFetchApiClient({ fetch, maxRetries: 0 });
+    const screen = await renderComponent(
+      <ParticipantInbox api={api} eventId={announcementFixtureIds.event} />,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst další oznámení' }).click();
+    await expect
+      .element(screen.getByText('Praktické informace k příjezdu'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst další oznámení' }).click();
+
+    await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
+    expect(document.body.textContent).not.toContain(
+      'Praktické informace k příjezdu',
+    );
+
+    window.history.pushState({}, '', '/app/oznameni?view=unread');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await expect
+      .element(screen.getByText('Všechna oznámení máte přečtená'))
+      .toBeVisible();
+
+    window.history.pushState({}, '', '/app/oznameni');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await expect
+      .element(screen.getByText('2 zobrazená oznámení'))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain(
+      'Praktické informace k příjezdu',
+    );
   });
 
   it('cleans validated return context after an authoritative base failure', async () => {
@@ -987,6 +1065,71 @@ describe('F2-05 participant announcement detail and read receipt', () => {
       ).toBeNull();
     },
   );
+
+  it('ignores an aborted read revocation from the previous detail route', async () => {
+    let staleReadSignal: AbortSignal | undefined;
+    let releaseStaleRead: (() => void) | undefined;
+    const staleReadResponse = new Promise<Response>((resolve) => {
+      releaseStaleRead = () =>
+        resolve(
+          problemResponse(
+            participantAnnouncementReadProblemFixtures.session_expired!,
+          ),
+        );
+    });
+    const fetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (requestMethod(input, init) === 'POST') {
+          staleReadSignal = init?.signal ?? undefined;
+          return staleReadResponse;
+        }
+        const url = requestUrl(input);
+        return jsonResponse(
+          url.pathname.endsWith(`/${announcementFixtureIds.information}`)
+            ? participantAnnouncementDetailFixtures.read
+            : participantAnnouncementDetailFixtures.unread,
+          'component-announcement-stale-read-0001',
+        );
+      },
+    );
+    const api = createFetchApiClient({ fetch, maxRetries: 0 });
+    const screen = await renderComponent(
+      <ParticipantAnnouncement
+        announcementId={announcementFixtureIds.important}
+        api={api}
+        eventId={announcementFixtureIds.event}
+      />,
+    );
+    await expect.element(screen.getByText('Ukládám přečtení…')).toBeVisible();
+
+    await screen.rerender(
+      <ParticipantAnnouncement
+        announcementId={announcementFixtureIds.information}
+        api={api}
+        eventId={announcementFixtureIds.event}
+      />,
+    );
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Praktické informace k příjezdu',
+        }),
+      )
+      .toBeVisible();
+    await vi.waitFor(() => expect(staleReadSignal?.aborted).toBe(true));
+
+    releaseStaleRead?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Praktické informace k příjezdu',
+        }),
+      )
+      .toBeVisible();
+    expect(screen.getByText('Přihlášení vypršelo').elements()).toHaveLength(0);
+  });
 
   it.each([
     [

@@ -1,17 +1,24 @@
 import {
+  identityBootstrapFixtures,
   participantContentFixtures,
+  participantContentProblemFixtures,
   participantProgramFixtures,
+  participantProgramProblemFixtures,
 } from '@byzon/test-support/fixtures';
 import type { CSSProperties } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
-import ParticipantLayout from '../../app/app/layout';
+import { ParticipantLayoutShell as ParticipantLayout } from '../../components/participant-layout-shell';
 import {
   ParticipantHome,
   type ParticipantEventPhase,
   type ParticipantHomeEvent,
 } from '../../components/participant-home';
+import {
+  ParticipantAccountResourceProvider,
+  useParticipantAccountResource,
+} from '../../components/participant-account-resource';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
@@ -58,7 +65,7 @@ const HomeProbe = ({
     style={visualTestStyle}
     tabIndex={-1}
   >
-    <ParticipantLayout>
+    <ParticipantLayout accountScope={{ kind: 'active', eventId: event.id }}>
       <ParticipantHome
         contentApi={apiFor(content, 'component-home-content-0001')}
         event={{ ...event, phase }}
@@ -69,6 +76,20 @@ const HomeProbe = ({
     </ParticipantLayout>
   </main>
 );
+
+const CanonicalPrivateClear = () => {
+  const resource = useParticipantAccountResource();
+  return (
+    <button onClick={() => void resource.clearPrivateData()} type="button">
+      Potvrdit globální vymazání
+    </button>
+  );
+};
+
+const AccountResourceActivationProbe = () => {
+  const resource = useParticipantAccountResource();
+  return <span data-testid="account-probe-state">{resource.state.status}</span>;
+};
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/app');
@@ -93,7 +114,7 @@ describe('F2-02 participant home overview', () => {
     const navigation = screen.getByRole('navigation', {
       name: 'Hlavní navigace',
     });
-    expect(navigation.element().querySelectorAll('a')).toHaveLength(5);
+    expect(navigation.element().querySelectorAll('a')).toHaveLength(4);
     await expect
       .element(navigation.getByRole('link', { name: 'Přehled', exact: true }))
       .toHaveAttribute('aria-current', 'page');
@@ -178,5 +199,194 @@ describe('F2-02 participant home overview', () => {
       )
       .toBeVisible();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(['content', 'program'] as const)(
+    'wipes a ready sibling resource when delayed %s auth expires',
+    async (delayedResource) => {
+      let releaseFailure: (() => void) | undefined;
+      const failureGate = new Promise<void>((resolve) => {
+        releaseFailure = resolve;
+      });
+      const delayedApi = createFetchApiClient({
+        maxRetries: 0,
+        fetch: async () => {
+          await failureGate;
+          const fixture =
+            delayedResource === 'content'
+              ? participantContentProblemFixtures.authentication!
+              : participantProgramProblemFixtures.authentication!;
+          return Response.json(fixture, {
+            status: fixture.status,
+            headers: {
+              'content-type': 'application/problem+json',
+              'x-request-id': fixture.requestId,
+            },
+          });
+        },
+      });
+      const screen = await renderComponent(
+        <ParticipantHome
+          contentApi={
+            delayedResource === 'content'
+              ? delayedApi
+              : apiFor(content, 'component-home-content-ready-0001')
+          }
+          event={event}
+          now="2026-09-18T07:30:00.000Z"
+          programApi={
+            delayedResource === 'program'
+              ? delayedApi
+              : apiFor(program, 'component-home-program-ready-0001')
+          }
+        />,
+      );
+      const privateCopy =
+        delayedResource === 'content' ? 'Otevření konference' : 'Výstaviště';
+      await expect.element(screen.getByText(privateCopy)).toBeVisible();
+
+      releaseFailure?.();
+
+      await vi.waitFor(() => {
+        expect(
+          screen.getByText('Přihlášení vypršelo').elements().length,
+        ).toBeGreaterThan(0);
+        expect(screen.getByText(privateCopy).elements()).toHaveLength(0);
+      });
+      await screen.unmount();
+    },
+  );
+
+  it('wipes a ready sibling even when a 401 problem response is malformed', async () => {
+    let releaseFailure: (() => void) | undefined;
+    const failureGate = new Promise<void>((resolve) => {
+      releaseFailure = resolve;
+    });
+    const malformedUnauthorizedApi = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async () => {
+        await failureGate;
+        return new Response('malformed unauthorized response', {
+          status: 401,
+          headers: { 'content-type': 'text/plain' },
+        });
+      },
+    });
+    const screen = await renderComponent(
+      <ParticipantHome
+        contentApi={malformedUnauthorizedApi}
+        event={event}
+        now="2026-09-18T07:30:00.000Z"
+        programApi={apiFor(program, 'component-home-program-malformed-0001')}
+      />,
+    );
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+
+    releaseFailure?.();
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Otevření konference').elements()).toHaveLength(
+        0,
+      );
+      expect(
+        screen.getByText('Přihlášení vypršelo').elements().length,
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getByText('Obsah se nepodařilo načíst').elements(),
+      ).toHaveLength(0);
+      expect(
+        screen.getByRole('link', { name: 'Přihlásit se znovu' }).elements()
+          .length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  it('wipes all ready home resources after a canonical account clear', async () => {
+    const screen = await renderComponent(
+      <ParticipantAccountResourceProvider
+        api={apiFor(
+          {
+            ...identityBootstrapFixtures.complete!,
+            membership: {
+              access: { state: 'active' },
+              roles: ['participant'],
+            },
+          },
+          'component-home-account-0001',
+        )}
+        scope={{ kind: 'active', eventId: event.id }}
+      >
+        <CanonicalPrivateClear />
+        <ParticipantHome
+          contentApi={apiFor(content, 'component-home-content-clear-0001')}
+          event={event}
+          now="2026-09-18T07:30:00.000Z"
+          programApi={apiFor(program, 'component-home-program-clear-0001')}
+        />
+      </ParticipantAccountResourceProvider>,
+    );
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await expect.element(screen.getByText('Výstaviště')).toBeVisible();
+
+    await screen
+      .getByRole('button', { name: 'Potvrdit globální vymazání' })
+      .click();
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Otevření konference').elements()).toHaveLength(
+        0,
+      );
+      expect(screen.getByText('Výstaviště').elements()).toHaveLength(0);
+      expect(
+        screen.getByText('Přihlášení vypršelo').elements().length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  it('wipes ready resources when a canonical 200 bootstrap revokes membership', async () => {
+    let releaseBootstrap: (() => void) | undefined;
+    const bootstrapGate = new Promise<void>((resolve) => {
+      releaseBootstrap = resolve;
+    });
+    const delayedSuspendedAccountApi = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async () => {
+        await bootstrapGate;
+        return Response.json(identityBootstrapFixtures.suspended!, {
+          headers: {
+            'content-type': 'application/json',
+            'x-request-id': 'component-home-suspended-0001',
+          },
+        });
+      },
+    });
+    const screen = await renderComponent(
+      <ParticipantAccountResourceProvider
+        api={delayedSuspendedAccountApi}
+        scope={{ kind: 'active', eventId: event.id }}
+      >
+        <AccountResourceActivationProbe />
+        <ParticipantHome
+          contentApi={apiFor(content, 'component-home-content-revoked-0001')}
+          event={event}
+          now="2026-09-18T07:30:00.000Z"
+          programApi={apiFor(program, 'component-home-program-revoked-0001')}
+        />
+      </ParticipantAccountResourceProvider>,
+    );
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await expect.element(screen.getByText('Výstaviště')).toBeVisible();
+
+    releaseBootstrap?.();
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Otevření konference').elements()).toHaveLength(
+        0,
+      );
+      expect(screen.getByText('Výstaviště').elements()).toHaveLength(0);
+      expect(
+        screen.getByTestId('account-probe-state').element().textContent,
+      ).toContain('suspended');
+    });
   });
 });

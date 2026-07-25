@@ -76,7 +76,9 @@ uniony jsou striktní a odmítají unknown pole.
 
 Claim a identity response před autoritativním serverovým handoffem výslovně
 nesou `membershipCreated: false` a `sessionCreated: false`. `returnTo` je
-allowlist pouze `/app` a `/onboarding`; kód, token, e-mail ani flow ID se nesmí
+striktní allowlist `/onboarding`, přesných participant rout a pouze
+kontraktovaných UUID/slug detailů; nejde o obecný same-origin redirect.
+Aktivní link nikdy nevrací onboarding. Kód, token, e-mail ani flow ID se nesmí
 ukládat do URL historie, cache nebo logu. Produkční handshake zůstává za
 `BLOCKER-AUTH-01`/`BLOCKER-TKT-04`, zatímco frontend používá stejný kontrakt v
 jasně označeném development preview.
@@ -84,9 +86,12 @@ jasně označeném development preview.
 ## Identity bootstrap and onboarding (`CS-BOOT-01`)
 
 `identity.ts` je privátní/no-store runtime hranice pro `/me/bootstrap` a
-idempotentní `/me/onboarding`. Bootstrap striktně skládá event, minimální
+idempotentní `/me/onboarding`, optimistický `PATCH /me/profile` a idempotentní
+`POST /me/privacy-requests`. Bootstrap striktně skládá event včetně časového
+rozsahu, minimální
 identitu, eventový vztah bez klientem dodané role, profil, feature flags,
-onboarding stav, privacy minimum a právě aktuální právní dokumenty. Pending
+onboarding stav, správu profilu s resource verzí, privacy stav, kontakt na
+podporu, právní acknowledgements a právě aktuální právní dokumenty. Pending
 aktivace nesmí nést eventové role; live odpověď nesmí obsahovat syntetické
 právní preview.
 
@@ -94,8 +99,18 @@ Povinné podmínky (`accepted`) a informace o soukromí (`acknowledged`) použí
 přesná ID a verze. Dobrovolný networking je samostatná nepředvolená
 discriminated volba; při opt-out se networking document ID vůbec neposílá.
 Chybějící nebo zastaralá právní verze failne zavřeně a staré volby se nesmí
-znovu použít. Profil i volby jsou P2 data: žádná URL, browser persistence,
-offline mutace ani sdílená cache.
+znovu použít. Každý právní dokument nese buď úplný bezpečný plain text, nebo
+credential-free HTTPS URL; HTML, řídicí/bidi znaky a nebezpečná URL schémata
+kontrakt odmítá.
+
+Správa profilu rozlišuje `missing`, verzované `editable`, `read_only` a
+`removed`; PATCH vyžaduje `expectedVersion` a stale zápis vrací striktní
+`STALE_VERSION` s aktuální verzí. Privacy žádost dovoluje jen
+`data_export`/`data_deletion`, její kanonická odpověď je korelovaná s eventem a
+uživatelem a idempotency collision/in-progress mají samostatné problem kódy.
+Bootstrap stavy `available`, `pending`, `completed`, `rejected` a `unavailable`
+jsou explicitní pro export i výmaz. Profil i volby jsou P2 data: žádná P2 data
+v URL, browser persistence, offline mutace ani sdílená cache.
 
 Development fixtures nesou explicitní `dataMode: synthetic_preview` a právní
 texty jsou označené jako neschválený syntetický draft. Produkční texty,

@@ -12,6 +12,8 @@ import { LoginFlow } from '../../components/login-flow';
 import { RecoveryForm } from '../../components/recovery-form';
 import { SessionExitControls } from '../../components/session-exit-controls';
 import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
+import type { ActivationReturnTo } from '../../lib/activation-return';
+import { createMockRecoveryLinkToken } from '../../lib/mock-recovery-link';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
@@ -41,10 +43,8 @@ const RecoveryProbe = ({
   returnTo = '/app',
 }: {
   readonly api: ApiPort;
-  readonly createMockLinkToken?: (
-    destination: '/app' | '/onboarding',
-  ) => string;
-  readonly returnTo?: '/app' | '/onboarding';
+  readonly createMockLinkToken?: (destination: ActivationReturnTo) => string;
+  readonly returnTo?: ActivationReturnTo;
 }) => (
   <main id="main" tabIndex={-1}>
     <LoginLayout>
@@ -106,7 +106,7 @@ describe('F1-06 recovery and safe session exit', () => {
   });
 
   it('preserves a safe onboarding return through the synthetic recovery link', async () => {
-    let destination: '/app' | '/onboarding' | undefined;
+    let destination: ActivationReturnTo | undefined;
     const screen = await renderComponent(
       <RecoveryProbe
         api={successApi(activationRecoveryFixtures.accepted)}
@@ -132,6 +132,45 @@ describe('F1-06 recovery and safe session exit', () => {
     ).toBe(
       '/aktivace/odkaz#token=recovery-onboarding%3A00000000-0000-4000-8000-000000000001',
     );
+  });
+
+  it('preserves an exact participant detail route in the recovery request and mock token handoff', async () => {
+    const returnTo =
+      '/app/program/550e8400-e29b-41d4-a716-446655440000' as const;
+    const calls: RecordedRequest[] = [];
+    let tokenDestination: ActivationReturnTo | undefined;
+    const screen = await renderComponent(
+      <RecoveryProbe
+        api={successApi(activationRecoveryFixtures.accepted, (request) =>
+          calls.push(request),
+        )}
+        createMockLinkToken={(destination) => {
+          tokenDestination = destination;
+          return createMockRecoveryLinkToken(
+            destination,
+            '00000000-0000-4000-8000-000000000001',
+          );
+        }}
+        returnTo={returnTo}
+      />,
+    );
+
+    await screen.getByLabelText('E-mail').fill('alex@example.test');
+    await screen
+      .getByRole('button', { name: 'Poslat jednorázový odkaz' })
+      .click();
+
+    expect(calls[0]?.body).toEqual({
+      email: 'alex@example.test',
+      returnTo,
+    });
+    expect(tokenDestination).toBe(returnTo);
+    expect(
+      screen
+        .getByRole('link', { name: 'Otevřít syntetický odkaz pro obnovu' })
+        .element()
+        .getAttribute('href'),
+    ).toContain('recovery-route%3A');
   });
 
   it('does not let a recovery query bypass a server-confirmed claim', async () => {
@@ -292,7 +331,7 @@ describe('F1-06 recovery and safe session exit', () => {
       .toBeVisible();
   });
 
-  it('rejects a mismatched session response without running the wipe seam', async () => {
+  it('rejects a mismatched session response after wiping private data', async () => {
     const clearPrivateData = vi.fn(async () => 'none_present' as const);
     const screen = await renderComponent(
       <main id="main" tabIndex={-1}>
@@ -309,7 +348,7 @@ describe('F1-06 recovery and safe session exit', () => {
     await expect
       .element(screen.getByText('Změna přihlášení se nepodařila'))
       .toBeVisible();
-    expect(clearPrivateData).not.toHaveBeenCalled();
+    expect(clearPrivateData).toHaveBeenCalledOnce();
     expect(document.querySelector('dialog[open]')).toBeNull();
   });
 

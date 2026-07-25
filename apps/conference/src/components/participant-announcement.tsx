@@ -18,6 +18,10 @@ import {
 import { clearAnnouncementReturnContext } from '@/lib/announcement-return-context';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 import {
+  invalidateParticipantPrivateResources,
+  privateResourceInvalidationReason,
+} from '@/lib/private-resource-events';
+import {
   AnnouncementReadLabel,
   AnnouncementResourceStatus,
   AnnouncementSeverity,
@@ -160,6 +164,12 @@ const ReadReceipt = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (state.status !== 'failure') return;
+    const frame = requestAnimationFrame(() => failureAlert.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [state.status]);
+
   const saveReadState = useCallback(
     async (signal?: AbortSignal) => {
       if (activeRequest.current) return;
@@ -181,7 +191,20 @@ const ReadReceipt = ({
           attempt.current.idempotencyKey,
           signal,
         );
-        if (!mounted.current || signal?.aborted) return;
+        if (
+          !mounted.current ||
+          signal?.aborted ||
+          activeRequest.current !== requestToken
+        ) {
+          return;
+        }
+        if (!result.ok) {
+          const reason = privateResourceInvalidationReason(
+            result.failure,
+            result.status,
+          );
+          if (reason) invalidateParticipantPrivateResources(reason);
+        }
         if (result.ok && result.kind === 'success') {
           if (
             result.data.eventId !== eventId ||
@@ -195,7 +218,6 @@ const ReadReceipt = ({
                 requestId: result.metadata.requestId,
               },
             });
-            requestAnimationFrame(() => failureAlert.current?.focus());
             return;
           }
           attempt.current = undefined;
@@ -223,16 +245,13 @@ const ReadReceipt = ({
               return;
             }
             setState({ status: 'failure', failure });
-            requestAnimationFrame(() => failureAlert.current?.focus());
           }
           return;
         }
         setState({ status: 'failure', failure: { kind: 'error' } });
-        requestAnimationFrame(() => failureAlert.current?.focus());
       } catch {
         if (mounted.current && !signal?.aborted) {
           setState({ status: 'failure', failure: { kind: 'error' } });
-          requestAnimationFrame(() => failureAlert.current?.focus());
         }
       } finally {
         if (activeRequest.current === requestToken) {
@@ -445,6 +464,7 @@ export const ParticipantAnnouncement = ({
   readonly eventId: string;
 }) => {
   const state = useParticipantAnnouncementDetail(announcementId, eventId, api);
+  const discardAnnouncementData = state.discard;
   const [revocation, setRevocation] = useState<{
     readonly announcementId: string;
     readonly api: ApiPort;
@@ -460,9 +480,10 @@ export const ParticipantAnnouncement = ({
   const handleRevocation = useCallback(
     (status: AnnouncementRevocationStatus) => {
       clearAnnouncementReturnContext();
+      discardAnnouncementData(status);
       setRevocation({ announcementId, api, eventId, status });
     },
-    [announcementId, api, eventId],
+    [announcementId, api, discardAnnouncementData, eventId],
   );
   const failureState =
     activeRevocation !== null

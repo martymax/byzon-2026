@@ -179,7 +179,13 @@ export const ProgramView = ({
   );
 
   if (state.status !== 'ready') {
-    return <ResourceStatus state={state} onRetry={state.retry} />;
+    return (
+      <ResourceStatus
+        loginReturnTo="/app/program"
+        state={state}
+        onRetry={state.retry}
+      />
+    );
   }
 
   if (state.data.program.sessions.length === 0) {
@@ -283,7 +289,13 @@ export const SessionView = ({
 }) => {
   const state = useParticipantProgram(eventId, api);
   if (state.status !== 'ready') {
-    return <ResourceStatus state={state} onRetry={state.retry} />;
+    return (
+      <ResourceStatus
+        loginReturnTo={`/app/program/${encodeURIComponent(sessionId)}`}
+        state={state}
+        onRetry={state.retry}
+      />
+    );
   }
   const session = state.data.program.sessions.find(
     ({ id }) => id === sessionId,

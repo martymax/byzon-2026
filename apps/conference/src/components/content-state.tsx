@@ -7,6 +7,7 @@ import type {
   ParticipantProgramResponse,
   RequestId,
 } from '@byzon/domain/contracts';
+import { ActionLink } from '@byzon/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -15,6 +16,12 @@ import {
   requestParticipantProgram,
 } from '@/lib/content-api';
 import type { ApiPort, ApiResult } from '@/lib/api';
+import { resolveActivationReturnTo } from '@/lib/activation-return';
+import {
+  invalidateParticipantPrivateResources,
+  privateResourceInvalidationReason,
+  subscribeToPrivateResourceInvalidation,
+} from '@/lib/private-resource-events';
 
 export type ContentResourceState<Data> =
   | { readonly status: 'loading' }
@@ -62,45 +69,105 @@ const mapFailure = <Problem extends ApiProblem>(
   }
 };
 
-const useContentResource = <Data, Problem extends ApiProblem>(
+const useContentResource = <
+  Data extends { readonly eventId: string },
+  Problem extends ApiProblem,
+>(
   load: (signal: AbortSignal) => Promise<ApiResult<Data, Problem>>,
+  expectedEventId: string,
 ): ContentResourceState<Data> & { readonly retry: () => void } => {
   const [attempt, setAttempt] = useState(0);
   const [resultState, setResultState] = useState<
-    ContentResourceState<Data> & { readonly attempt: number }
-  >({ status: 'loading', attempt: 0 });
+    ContentResourceState<Data> & {
+      readonly attempt: number;
+      readonly eventId: string;
+    }
+  >({ status: 'loading', attempt: 0, eventId: expectedEventId });
 
   useEffect(() => {
     const controller = new AbortController();
+    const unsubscribe = subscribeToPrivateResourceInvalidation((reason) => {
+      controller.abort();
+      setResultState({
+        status: reason,
+        attempt,
+        eventId: expectedEventId,
+      });
+    });
     void load(controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
         if (result.ok) {
           if (result.kind === 'success') {
+            if (result.data.eventId !== expectedEventId) {
+              setResultState({
+                status: 'error',
+                attempt,
+                eventId: expectedEventId,
+              });
+              return;
+            }
             setResultState({
               status: 'ready',
               data: result.data,
               attempt,
+              eventId: expectedEventId,
             });
           } else {
-            setResultState({ status: 'error', attempt });
+            setResultState({
+              status: 'error',
+              attempt,
+              eventId: expectedEventId,
+            });
           }
           return;
         }
         const failure = mapFailure(result.failure);
-        if (failure) setResultState({ ...failure, attempt });
+        if (failure) {
+          const invalidation = privateResourceInvalidationReason(
+            result.failure,
+            result.status,
+          );
+          if (invalidation) {
+            invalidateParticipantPrivateResources(invalidation);
+            setResultState({
+              ...(failure.status === 'authentication' ||
+              failure.status === 'permission' ||
+              failure.status === 'session_expired'
+                ? failure
+                : { status: invalidation }),
+              attempt,
+              eventId: expectedEventId,
+            });
+            return;
+          }
+          setResultState({
+            ...failure,
+            attempt,
+            eventId: expectedEventId,
+          });
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted) {
-          setResultState({ status: 'error', attempt });
+          setResultState({
+            status: 'error',
+            attempt,
+            eventId: expectedEventId,
+          });
         }
       });
-    return () => controller.abort();
-  }, [attempt, load]);
+    return () => {
+      unsubscribe();
+      controller.abort();
+    };
+  }, [attempt, expectedEventId, load]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   const state: ContentResourceState<Data> =
-    resultState.attempt === attempt ? resultState : { status: 'loading' };
+    resultState.attempt === attempt && resultState.eventId === expectedEventId
+      ? resultState
+      : { status: 'loading' };
   return { ...state, retry };
 };
 
@@ -112,7 +179,10 @@ export const useParticipantProgram = (
     (signal: AbortSignal) => requestParticipantProgram(api, eventId, signal),
     [api, eventId],
   );
-  return useContentResource<ParticipantProgramResponse, ApiProblem>(load);
+  return useContentResource<ParticipantProgramResponse, ApiProblem>(
+    load,
+    eventId,
+  );
 };
 
 export const useParticipantContent = (
@@ -123,7 +193,10 @@ export const useParticipantContent = (
     (signal: AbortSignal) => requestParticipantContent(api, eventId, signal),
     [api, eventId],
   );
-  return useContentResource<ParticipantContentResponse, ApiProblem>(load);
+  return useContentResource<ParticipantContentResponse, ApiProblem>(
+    load,
+    eventId,
+  );
 };
 
 const statusCopy: Record<
@@ -151,12 +224,15 @@ const statusCopy: Record<
 };
 
 export const ResourceStatus = ({
+  loginReturnTo = '/app',
   state,
   onRetry,
 }: {
+  loginReturnTo?: string;
   state: ContentFailureState;
   onRetry: () => void;
 }) => {
+  const safeLoginReturnTo = resolveActivationReturnTo(loginReturnTo, '/app');
   if (state.status === 'loading') {
     return (
       <div className="resource-status" role="status" aria-live="polite">
@@ -184,9 +260,24 @@ export const ResourceStatus = ({
           Reference požadavku: <code>{state.requestId}</code>
         </p>
       ) : null}
-      <button className="resource-action" type="button" onClick={onRetry}>
-        Zkusit znovu
-      </button>
+      {state.status === 'authentication' ||
+      state.status === 'session_expired' ? (
+        <ActionLink
+          href={`/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
+            safeLoginReturnTo,
+          )}`}
+        >
+          Přihlásit se znovu
+        </ActionLink>
+      ) : state.status === 'permission' ? (
+        <ActionLink href="/app" variant="secondary">
+          Zpět na přehled
+        </ActionLink>
+      ) : (
+        <button className="resource-action" type="button" onClick={onRetry}>
+          Zkusit znovu
+        </button>
+      )}
     </section>
   );
 };

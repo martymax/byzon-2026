@@ -22,6 +22,7 @@ import {
   submitIdentitySessionAction,
 } from '@/lib/identity-api';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import { privateResourceInvalidationReason } from '@/lib/private-resource-events';
 import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type SessionActionFailure =
@@ -113,10 +114,12 @@ export const SessionExitControls = ({
   api = browserIdentityApi,
   clearPrivateData = async () => 'none_present',
   createIdempotencyKey = createRuntimeKey,
+  loginReturnTo = '/app',
 }: {
   readonly api?: ApiPort;
   readonly clearPrivateData?: () => Promise<'cleared' | 'none_present'>;
   readonly createIdempotencyKey?: () => string;
+  readonly loginReturnTo?: '/app' | '/app/nastaveni';
 }) => {
   const [pendingAction, setPendingAction] = useState<IdentitySessionAction>();
   const [outcome, setOutcome] = useState<{
@@ -164,15 +167,17 @@ export const SessionExitControls = ({
         action,
         attempt.current.idempotencyKey,
       );
-      if (!mounted.current) return;
       if (result.ok && result.kind === 'success') {
         if (result.data.action !== action) {
-          setPendingAction(undefined);
-          setFailure({
-            kind: 'error',
-            requestId: result.metadata.requestId,
-          });
-          focusFailure();
+          await clearPrivateData();
+          if (mounted.current) {
+            setPendingAction(undefined);
+            setFailure({
+              kind: 'error',
+              requestId: result.metadata.requestId,
+            });
+            focusFailure();
+          }
           return;
         }
         const localDisposition = await clearPrivateData();
@@ -186,8 +191,22 @@ export const SessionExitControls = ({
         if (!shouldRetainMutationKey(result.failure)) {
           attempt.current = undefined;
         }
-        const mapped = mapFailure(result.failure);
+        const invalidation = privateResourceInvalidationReason(
+          result.failure,
+          result.status,
+        );
+        if (invalidation) {
+          await clearPrivateData();
+        }
+        const mapped =
+          invalidation === 'session_expired'
+            ? ({ kind: 'session_expired' } as const)
+            : mapFailure(result.failure);
         if (mapped) {
+          if (mapped.kind === 'session_expired' && invalidation === null) {
+            await clearPrivateData();
+          }
+          if (!mounted.current) return;
           setFailure(mapped);
           setPendingAction(undefined);
           focusFailure();
@@ -259,6 +278,17 @@ export const SessionExitControls = ({
       {failure ? (
         <div ref={failureAlert} tabIndex={-1}>
           <Alert
+            action={
+              failure.kind === 'session_expired' ? (
+                <ActionLink
+                  href={`/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
+                    loginReturnTo,
+                  )}`}
+                >
+                  Přihlásit se znovu
+                </ActionLink>
+              ) : undefined
+            }
             title={
               failure.kind === 'offline'
                 ? 'Změna přihlášení vyžaduje připojení'

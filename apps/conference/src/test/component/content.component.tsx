@@ -1,4 +1,5 @@
 import {
+  participantContentProblemFixtures,
   participantContentFixtures,
   participantProgramFixtures,
   participantProgramProblemFixtures,
@@ -6,9 +7,12 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
-import { PracticalContent } from '../../components/content-directory';
+import {
+  PracticalContent,
+  SpeakerDetail,
+} from '../../components/content-directory';
 import { EmptyContent, ResourceStatus } from '../../components/content-state';
-import { ProgramView } from '../../components/program-view';
+import { ProgramView, SessionView } from '../../components/program-view';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
 import { renderComponent } from './render';
 
@@ -96,7 +100,106 @@ describe('CS-CONTENT-01 participant UI', () => {
 
     await expect.element(screen.getByText('Obsah není dostupný')).toBeVisible();
     await expect.element(screen.getByText(/nemáte přístup/)).toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Zpět na přehled' }))
+      .toHaveAttribute('href', '/app');
     expect(document.body.textContent).not.toContain(problem.detail);
+  });
+
+  it('returns an expired content session to the original safe task', async () => {
+    const screen = await renderComponent(
+      <ResourceStatus
+        loginReturnTo="/app/program"
+        onRetry={vi.fn()}
+        state={{ status: 'session_expired' }}
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole('link', { name: 'Přihlásit se znovu' }))
+      .toHaveAttribute(
+        'href',
+        '/prihlaseni?mode=recovery&returnTo=%2Fapp%2Fprogram',
+      );
+    expect(
+      screen.getByRole('button', { name: 'Zkusit znovu' }).elements(),
+    ).toHaveLength(0);
+  });
+
+  it('keeps list and detail recovery links on their original production routes', async () => {
+    const programProblem = participantProgramProblemFixtures.authentication!;
+    const programApi = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async () =>
+        Response.json(programProblem, {
+          status: programProblem.status,
+          headers: {
+            'content-type': 'application/problem+json',
+            'x-request-id': programProblem.requestId,
+          },
+        }),
+    });
+    const programScreen = await renderComponent(
+      <ProgramView
+        eventId={participantProgramFixtures.happy!.eventId}
+        api={programApi}
+      />,
+    );
+    await expect
+      .element(programScreen.getByRole('link', { name: 'Přihlásit se znovu' }))
+      .toHaveAttribute(
+        'href',
+        '/prihlaseni?mode=recovery&returnTo=%2Fapp%2Fprogram',
+      );
+    await programScreen.unmount();
+
+    const sessionId = participantProgramFixtures.happy!.program.sessions[0]!.id;
+    const sessionScreen = await renderComponent(
+      <SessionView
+        eventId={participantProgramFixtures.happy!.eventId}
+        sessionId={sessionId}
+        api={programApi}
+      />,
+    );
+    await expect
+      .element(sessionScreen.getByRole('link', { name: 'Přihlásit se znovu' }))
+      .toHaveAttribute(
+        'href',
+        `/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
+          `/app/program/${sessionId}`,
+        )}`,
+      );
+    await sessionScreen.unmount();
+
+    const contentProblem = participantContentProblemFixtures.authentication!;
+    const contentApi = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async () =>
+        Response.json(contentProblem, {
+          status: contentProblem.status,
+          headers: {
+            'content-type': 'application/problem+json',
+            'x-request-id': contentProblem.requestId,
+          },
+        }),
+    });
+    const speakerSlug =
+      participantContentFixtures.happy!.content.speakers[0]!.slug;
+    const speakerScreen = await renderComponent(
+      <SpeakerDetail
+        eventId={participantContentFixtures.happy!.eventId}
+        slug={speakerSlug}
+        api={contentApi}
+      />,
+    );
+    await expect
+      .element(speakerScreen.getByRole('link', { name: 'Přihlásit se znovu' }))
+      .toHaveAttribute(
+        'href',
+        `/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
+          `/app/recnici/${speakerSlug}`,
+        )}`,
+      );
   });
 
   it('wraps long Czech practical content without horizontal overflow', async () => {

@@ -25,6 +25,7 @@ import {
   browserActivationApi,
   submitActivationIdentity,
 } from '@/lib/activation-api';
+import type { ActivationReturnTo } from '@/lib/activation-return';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 import { useTransitionFocus } from '@/components/use-transition-focus';
 
@@ -108,7 +109,7 @@ export const ActivationIdentity = ({
   createMockLinkToken = () => runtimeSecret('link'),
 }: {
   readonly api?: ApiPort;
-  readonly returnTo?: '/app' | '/onboarding';
+  readonly returnTo?: ActivationReturnTo;
   readonly now?: (() => number) | undefined;
   readonly createIdempotencyKey?: () => string;
   readonly createMockLinkToken?: () => string;

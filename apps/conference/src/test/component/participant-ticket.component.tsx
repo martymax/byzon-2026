@@ -2,12 +2,13 @@ import type { ParticipantTicketProblem } from '@byzon/domain/contracts';
 import {
   participantTicketFixtures,
   participantTicketProblemFixtures,
+  ticketFixtureEventId,
 } from '@byzon/test-support/fixtures';
 import type { CSSProperties } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
-import ParticipantLayout from '../../app/app/layout';
+import { ParticipantLayoutShell as ParticipantLayout } from '../../components/participant-layout-shell';
 import { ParticipantTicket } from '../../components/participant-ticket';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
 import { expectComponentToPassAxe } from './accessibility';
@@ -55,8 +56,13 @@ const TicketProbe = ({
     style={visualTestStyle}
     tabIndex={-1}
   >
-    <ParticipantLayout>
-      <ParticipantTicket api={apiFor(fixture, 'component-ticket-0001')} />
+    <ParticipantLayout
+      accountScope={{ kind: 'active', eventId: ticketFixtureEventId }}
+    >
+      <ParticipantTicket
+        api={apiFor(fixture, 'component-ticket-0001')}
+        eventId={ticketFixtureEventId}
+      />
     </ParticipantLayout>
   </main>
 );
@@ -129,7 +135,9 @@ describe('F2-04 participant ticket status slice', () => {
       isOnline: () => false,
       maxRetries: 0,
     });
-    const screen = await renderComponent(<ParticipantTicket api={api} />);
+    const screen = await renderComponent(
+      <ParticipantTicket api={api} eventId={ticketFixtureEventId} />,
+    );
 
     await expect.element(screen.getByText('Jste offline')).toBeVisible();
     const retry = screen.getByRole('button', { name: 'Zkusit znovu' });
@@ -155,11 +163,33 @@ describe('F2-04 participant ticket status slice', () => {
     'maps a private endpoint failure without raw detail %#',
     async (fixture, title) => {
       const screen = await renderComponent(
-        <ParticipantTicket api={apiForProblem(fixture)} />,
+        <ParticipantTicket
+          api={apiForProblem(fixture)}
+          eventId={ticketFixtureEventId}
+        />,
       );
 
       await expect.element(screen.getByText(title)).toBeVisible();
       expect(document.body.textContent).not.toContain(fixture.detail);
+      if (
+        fixture.code === 'AUTHENTICATION_REQUIRED' ||
+        fixture.code === 'AUTH_SESSION_EXPIRED'
+      ) {
+        await expect
+          .element(screen.getByRole('link', { name: 'Přihlásit se znovu' }))
+          .toHaveAttribute(
+            'href',
+            '/prihlaseni?mode=recovery&returnTo=%2Fapp%2Fvstupenka',
+          );
+      } else if (fixture.code === 'TICKET_NOT_FOUND') {
+        await expect
+          .element(screen.getByRole('link', { name: 'Zpět na přehled' }))
+          .toHaveAttribute('href', '/app');
+      } else {
+        await expect
+          .element(screen.getByRole('button', { name: 'Zkusit znovu' }))
+          .toBeVisible();
+      }
     },
   );
 
@@ -168,7 +198,9 @@ describe('F2-04 participant ticket status slice', () => {
       fetch: () => new Promise<Response>(() => undefined),
       maxRetries: 0,
     });
-    const screen = await renderComponent(<ParticipantTicket api={api} />);
+    const screen = await renderComponent(
+      <ParticipantTicket api={api} eventId={ticketFixtureEventId} />,
+    );
 
     await expect
       .element(screen.getByText('Načítám stav vstupenky…'))

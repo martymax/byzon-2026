@@ -6,10 +6,16 @@ import type {
   ParticipantTicketResponse,
   RequestId,
 } from '@byzon/domain/contracts';
+import { ActionLink } from '@byzon/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ApiPort, ApiResult } from '@/lib/api';
 import { browserTicketApi, requestParticipantTicket } from '@/lib/ticket-api';
+import {
+  invalidateParticipantPrivateResources,
+  privateResourceInvalidationReason,
+  subscribeToPrivateResourceInvalidation,
+} from '@/lib/private-resource-events';
 
 export type TicketResourceState =
   | { readonly status: 'loading' }
@@ -58,12 +64,16 @@ const mapTicketFailure = (
 };
 
 export const useParticipantTicket = (
+  expectedEventId: string,
   api: ApiPort = browserTicketApi,
 ): TicketResourceState & { readonly retry: () => void } => {
   const [attempt, setAttempt] = useState(0);
   const [resultState, setResultState] = useState<
-    TicketResourceState & { readonly attempt: number }
-  >({ status: 'loading', attempt: 0 });
+    TicketResourceState & {
+      readonly attempt: number;
+      readonly eventId: string;
+    }
+  >({ status: 'loading', attempt: 0, eventId: expectedEventId });
   const load = useCallback(
     (signal: AbortSignal) => requestParticipantTicket(api, signal),
     [api],
@@ -71,6 +81,14 @@ export const useParticipantTicket = (
 
   useEffect(() => {
     const controller = new AbortController();
+    const unsubscribe = subscribeToPrivateResourceInvalidation((reason) => {
+      controller.abort();
+      setResultState({
+        status: reason,
+        attempt,
+        eventId: expectedEventId,
+      });
+    });
     void load(controller.signal)
       .then(
         (
@@ -81,32 +99,76 @@ export const useParticipantTicket = (
         ) => {
           if (controller.signal.aborted) return;
           if (result.ok) {
+            if (
+              result.kind === 'success' &&
+              result.data.eventId !== expectedEventId
+            ) {
+              setResultState({
+                status: 'error',
+                attempt,
+                eventId: expectedEventId,
+              });
+              return;
+            }
             setResultState(
               result.kind === 'success'
                 ? {
                     status: 'ready',
                     data: result.data,
                     attempt,
+                    eventId: expectedEventId,
                   }
-                : { status: 'error', attempt },
+                : { status: 'error', attempt, eventId: expectedEventId },
             );
             return;
           }
           const failure = mapTicketFailure(result.failure);
-          if (failure) setResultState({ ...failure, attempt });
+          if (failure) {
+            const invalidation = privateResourceInvalidationReason(
+              result.failure,
+              result.status,
+            );
+            if (invalidation) {
+              invalidateParticipantPrivateResources(invalidation);
+              setResultState({
+                ...(failure.status === 'authentication' ||
+                failure.status === 'permission' ||
+                failure.status === 'session_expired'
+                  ? failure
+                  : { status: invalidation }),
+                attempt,
+                eventId: expectedEventId,
+              });
+              return;
+            }
+            setResultState({
+              ...failure,
+              attempt,
+              eventId: expectedEventId,
+            });
+          }
         },
       )
       .catch(() => {
         if (!controller.signal.aborted) {
-          setResultState({ status: 'error', attempt });
+          setResultState({
+            status: 'error',
+            attempt,
+            eventId: expectedEventId,
+          });
         }
       });
-    return () => controller.abort();
-  }, [attempt, load]);
+    return () => {
+      unsubscribe();
+      controller.abort();
+    };
+  }, [attempt, expectedEventId, load]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   const state: TicketResourceState =
-    resultState.attempt === attempt ? resultState : { status: 'loading' };
+    resultState.attempt === attempt && resultState.eventId === expectedEventId
+      ? resultState
+      : { status: 'loading' };
   return { ...state, retry };
 };
 
@@ -168,9 +230,20 @@ export const TicketResourceStatus = ({
           Reference požadavku: <code>{state.requestId}</code>
         </p>
       ) : null}
-      <button className="resource-action" type="button" onClick={onRetry}>
-        Zkusit znovu
-      </button>
+      {state.status === 'authentication' ||
+      state.status === 'session_expired' ? (
+        <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fapp%2Fvstupenka">
+          Přihlásit se znovu
+        </ActionLink>
+      ) : state.status === 'permission' ? (
+        <ActionLink href="/app" variant="secondary">
+          Zpět na přehled
+        </ActionLink>
+      ) : (
+        <button className="resource-action" type="button" onClick={onRetry}>
+          Zkusit znovu
+        </button>
+      )}
     </section>
   );
 };

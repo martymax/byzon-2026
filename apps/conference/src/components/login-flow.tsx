@@ -9,6 +9,7 @@ import { useActivationEntry } from '@/components/activation-entry';
 import { RecoveryForm } from '@/components/recovery-form';
 import type { ApiPort } from '@/lib/api';
 import { browserActivationApi } from '@/lib/activation-api';
+import type { ActivationReturnTo } from '@/lib/activation-return';
 import type { LoginMode } from '@/lib/login-mode';
 
 const LoginGate = ({
@@ -34,7 +35,7 @@ export const LoginFlow = ({
 }: {
   readonly api?: ApiPort;
   readonly mode: Extract<LoginMode, 'recovery' | 'switch'>;
-  readonly returnTo: '/app' | '/onboarding';
+  readonly returnTo: ActivationReturnTo;
 }) => {
   const entry = useActivationEntry(api);
 

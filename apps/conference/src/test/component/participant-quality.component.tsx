@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { cdp } from 'vitest/browser';
 
 import '../../app/styles.css';
-import ParticipantLayout from '../../app/app/layout';
+import { ParticipantLayoutShell as ParticipantLayout } from '../../components/participant-layout-shell';
 import { SpeakerDetail } from '../../components/content-directory';
 import { ResourceStatus } from '../../components/content-state';
 import { ProgramView } from '../../components/program-view';
@@ -43,7 +43,11 @@ const ParticipantProbe = ({ children }: { readonly children: ReactNode }) => (
     style={visualTestStyle}
     tabIndex={-1}
   >
-    <ParticipantLayout>{children}</ParticipantLayout>
+    <ParticipantLayout
+      accountScope={{ kind: 'active', eventId: program.eventId }}
+    >
+      {children}
+    </ParticipantLayout>
   </main>
 );
 
@@ -77,6 +81,30 @@ const ParticipantSpeakerProbe = () => (
   </ParticipantProbe>
 );
 
+const ArchivedParticipantProbe = () => (
+  <main
+    id="main"
+    data-testid="archived-participant-shell"
+    style={visualTestStyle}
+    tabIndex={-1}
+  >
+    <ParticipantLayout
+      accountScope={{
+        kind: 'archived',
+        eventFingerprint:
+          '9caa2f149fcc7d8e862b204f15035cc4a72782f6d49ef14698672e50dd3ee86a',
+      }}
+      navigationMode="archived"
+    >
+      <section className="app-page">
+        <h1 data-route-heading tabIndex={-1}>
+          Soukromí
+        </h1>
+      </section>
+    </ParticipantLayout>
+  </main>
+);
+
 beforeEach(() => {
   window.sessionStorage.clear();
   window.history.replaceState({}, '', '/app/program');
@@ -108,7 +136,7 @@ describe('F2-06 participant shell and program quality gate', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
-    expect(navigationElement.querySelectorAll('a')).toHaveLength(5);
+    expect(navigationElement.querySelectorAll('a')).toHaveLength(4);
     for (const link of navigationElement.querySelectorAll('a')) {
       const bounds = link.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);
@@ -179,11 +207,58 @@ describe('F2-06 participant shell and program quality gate', () => {
       .element(screen.getByRole('heading', { level: 1, name: 'Jana Nováková' }))
       .toHaveFocus();
     await expect
-      .element(screen.getByRole('link', { name: 'Řečníci', exact: true }))
+      .element(screen.getByRole('link', { name: 'Více', exact: true }))
       .toHaveAttribute('aria-current', 'page');
     await expect
       .element(screen.getByRole('link', { name: 'Zpět na řečníky' }))
       .toHaveAttribute('href', '/app/recnici');
+  });
+
+  it('offers only account-safe destinations in the archived shell', async () => {
+    window.history.replaceState({}, '', '/app/soukromi');
+    const screen = await renderComponent(<ArchivedParticipantProbe />);
+    const navigation = screen.getByRole('navigation', {
+      name: 'Navigace archivovaného účtu',
+    });
+    const links = Array.from(
+      navigation.element().querySelectorAll<HTMLAnchorElement>('a'),
+    );
+
+    expect(links.map(({ pathname }) => pathname)).toEqual([
+      '/app',
+      '/app/soukromi',
+      '/app/nastaveni',
+    ]);
+    expect(links.map(({ textContent }) => textContent?.trim())).toEqual([
+      'Přehled',
+      'Soukromí',
+      'Nastavení',
+    ]);
+    expect(
+      navigation.element().querySelector('a[href="/app/program"]'),
+    ).toBeNull();
+    expect(
+      navigation.element().querySelector('a[href="/app/oznameni"]'),
+    ).toBeNull();
+    expect(
+      navigation.element().querySelector('a[href="/app/vice"]'),
+    ).toBeNull();
+    await expect
+      .element(screen.getByRole('link', { name: 'Soukromí', exact: true }))
+      .toHaveAttribute('aria-current', 'page');
+    for (const link of links) {
+      expect(link.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+      expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
+    const archivedShell = screen
+      .getByTestId('archived-participant-shell')
+      .element();
+    if (!(archivedShell instanceof HTMLElement)) {
+      throw new TypeError(
+        'Archived participant shell must be an HTML element.',
+      );
+    }
+    await expectComponentToPassAxe(archivedShell);
   });
 
   it('removes content progress animation for reduced-motion users', async () => {

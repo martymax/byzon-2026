@@ -22,7 +22,9 @@ import {
   browserActivationApi,
   submitActivationRecovery,
 } from '@/lib/activation-api';
+import type { ActivationReturnTo } from '@/lib/activation-return';
 import type { LoginMode } from '@/lib/login-mode';
+import { createMockRecoveryLinkToken } from '@/lib/mock-recovery-link';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 import { useTransitionFocus } from '@/components/use-transition-focus';
 
@@ -70,17 +72,13 @@ export const RecoveryForm = ({
   returnTo = '/app',
   createIdempotencyKey = () => runtimeSecret('recovery-request'),
   createMockLinkToken = (destination) =>
-    runtimeSecret(
-      destination === '/onboarding' ? 'recovery-onboarding' : 'recovery-app',
-    ),
+    createMockRecoveryLinkToken(destination),
 }: {
   readonly api?: ApiPort;
   readonly mode?: Extract<LoginMode, 'recovery' | 'switch'>;
-  readonly returnTo?: '/app' | '/onboarding';
+  readonly returnTo?: ActivationReturnTo;
   readonly createIdempotencyKey?: () => string;
-  readonly createMockLinkToken?: (
-    destination: '/app' | '/onboarding',
-  ) => string;
+  readonly createMockLinkToken?: (destination: ActivationReturnTo) => string;
 }) => {
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string>();

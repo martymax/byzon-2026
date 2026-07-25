@@ -22,6 +22,7 @@ import {
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
 import { requestParticipantProgram } from '../../lib/content-api.js';
+import { requestParticipantTicket } from '../../lib/ticket-api.js';
 import {
   markAnnouncementRead,
   requestAnnouncementDetail,
@@ -34,10 +35,13 @@ import {
   submitActivationIdentity,
   submitActivationRecovery,
 } from '../../lib/activation-api.js';
+import { createMockRecoveryLinkToken } from '../../lib/mock-recovery-link.js';
 import {
   requestIdentityBootstrap,
+  submitIdentityPrivacyRequest,
   submitIdentityOnboarding,
   submitIdentitySessionAction,
+  updateIdentityProfile,
 } from '../../lib/identity-api.js';
 import { createMockServer } from './node.js';
 import {
@@ -47,8 +51,11 @@ import {
 } from './response.js';
 import {
   configureMockAnnouncementAccess,
+  configureMockIdentityAccess,
+  configureMockParticipantPrincipal,
   resetMockActivationState,
   resetMockAnnouncementState,
+  resetMockIdentityState,
 } from './handlers.js';
 
 const ORIGIN = 'http://mock.byzon.test';
@@ -87,6 +94,7 @@ afterEach(() => {
   server.resetHandlers();
   resetMockActivationState();
   resetMockAnnouncementState();
+  resetMockIdentityState();
 });
 afterAll(() => server.close());
 
@@ -154,6 +162,8 @@ describe('MSW through the production API port', () => {
   });
 
   it('serves content only for the canonical synthetic event scope', async () => {
+    configureMockParticipantPrincipal({ active: true });
+
     await expect(
       requestParticipantProgram(client, contentFixtureIds.event),
     ).resolves.toMatchObject({
@@ -173,7 +183,43 @@ describe('MSW through the production API port', () => {
     });
   });
 
+  it('keeps all participant-private resources closed before onboarding completes', async () => {
+    await expect(
+      requestParticipantProgram(client, contentFixtureIds.event),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all' }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_export' },
+        'privacy-pending-principal-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+  });
+
   it('marks private mock data as no-store and varies by session context', async () => {
+    configureMockParticipantPrincipal({ active: true });
+
     const response = await fetchWithOrigin(
       `/api/v1/events/${contentFixtureIds.event}/program`,
     );
@@ -183,6 +229,8 @@ describe('MSW through the production API port', () => {
   });
 
   it('serves a private announcement inbox and updates canonical read state', async () => {
+    configureMockParticipantPrincipal({ active: true });
+
     await expect(
       requestAnnouncementInbox(client, { filter: 'all' }),
     ).resolves.toMatchObject({
@@ -250,6 +298,7 @@ describe('MSW through the production API port', () => {
   });
 
   it('scopes the announcement inbox and unread count to the current recipient', async () => {
+    configureMockParticipantPrincipal({ active: true });
     configureMockAnnouncementAccess({
       recipientAnnouncementIds: [
         announcementFixtureIds.critical,
@@ -289,6 +338,7 @@ describe('MSW through the production API port', () => {
   });
 
   it('does not distinguish a cross-recipient announcement from a missing ID', async () => {
+    configureMockParticipantPrincipal({ active: true });
     configureMockAnnouncementAccess({
       recipientAnnouncementIds: [
         announcementFixtureIds.critical,
@@ -327,6 +377,7 @@ describe('MSW through the production API port', () => {
   });
 
   it('replays an exact announcement read and rejects key reuse for another item', async () => {
+    configureMockParticipantPrincipal({ active: true });
     const key = 'announcement-read-replay-0001';
     const first = await markAnnouncementRead(
       client,
@@ -352,6 +403,8 @@ describe('MSW through the production API port', () => {
   });
 
   it('advances bounded announcement cursors without repeating a page', async () => {
+    configureMockParticipantPrincipal({ active: true });
+
     await expect(
       requestAnnouncementInbox(client, { filter: 'all', limit: 1 }),
     ).resolves.toMatchObject({
@@ -396,6 +449,7 @@ describe('MSW through the production API port', () => {
   });
 
   it('fails announcement access closed for auth, feature, scope and missing IDs', async () => {
+    configureMockParticipantPrincipal({ active: true });
     configureMockAnnouncementAccess({ featureEnabled: false });
     await expect(
       requestAnnouncementInbox(client, { filter: 'all' }),
@@ -420,6 +474,7 @@ describe('MSW through the production API port', () => {
     });
 
     resetMockAnnouncementState();
+    configureMockIdentityAccess({ eventAccess: true });
     const missingId = '01920000-0000-7000-8000-000000000099';
     await expect(
       requestAnnouncementDetail(client, missingId),
@@ -462,6 +517,7 @@ describe('MSW through the production API port', () => {
   });
 
   it('rejects announcement query failure switches as validation errors', async () => {
+    configureMockParticipantPrincipal({ active: true });
     const response = await fetchWithOrigin(
       '/api/v1/me/announcements?filter=all&failure=offline',
     );
@@ -694,6 +750,16 @@ describe('MSW through the production API port', () => {
       ok: true,
       data: { state: 'active', continueTo: '/app' },
     });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        membership: {
+          access: { state: 'active' },
+          roles: ['participant'],
+        },
+        onboarding: { status: 'complete' },
+      },
+    });
     await expect(
       consumeActivationLink(client, token, 'recovery-link-port-0001'),
     ).resolves.toMatchObject({
@@ -733,6 +799,98 @@ describe('MSW through the production API port', () => {
     });
   });
 
+  it('round-trips exact static and detail recovery destinations and replays the stored destination', async () => {
+    const unreadRoute = '/app/oznameni?view=unread' as const;
+    await expect(
+      submitActivationRecovery(
+        client,
+        { email: 'unknown@example.test', returnTo: unreadRoute },
+        'recovery-route-request-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    const unreadToken = createMockRecoveryLinkToken(
+      unreadRoute,
+      '00000000-0000-4000-8000-000000000021',
+    );
+    await expect(
+      consumeActivationLink(client, unreadToken, 'recovery-route-link-0001'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'active', continueTo: unreadRoute },
+    });
+
+    const detailRoute =
+      '/app/program/550e8400-e29b-41d4-a716-446655440000' as const;
+    await expect(
+      submitActivationRecovery(
+        client,
+        { email: 'unknown@example.test', returnTo: detailRoute },
+        'recovery-route-request-0002',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    const detailToken = createMockRecoveryLinkToken(
+      detailRoute,
+      '00000000-0000-4000-8000-000000000022',
+    );
+    await expect(
+      consumeActivationLink(client, detailToken, 'recovery-route-link-0002'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'active', continueTo: detailRoute },
+    });
+    await expect(
+      consumeActivationLink(client, detailToken, 'recovery-route-link-0002'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'active', continueTo: detailRoute },
+    });
+    await expect(
+      consumeActivationLink(client, unreadToken, 'recovery-route-link-0002'),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+  });
+
+  it.each([
+    'https://evil.example/app',
+    '//evil.example/app',
+    '\\\\evil.example\\app',
+    '/app/program#fragment',
+    '/%2e%2e/app',
+    '/app/program/../profil',
+    '/app/program/%2Fprofil',
+    '/app/program/%252Fprofil',
+    '/app/oznameni?view=unread&next=%2Fapp',
+  ])(
+    'rejects a synthetic recovery token carrying unsafe route %#',
+    async (route) => {
+      const payload = globalThis
+        .btoa(route)
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
+        .replace(/=+$/u, '');
+      const token = `recovery-route:${payload}:00000000-0000-4000-8000-000000000023`;
+
+      await expect(
+        consumeActivationLink(
+          client,
+          token,
+          `recovery-route-rejected-${payload.slice(0, 16)}`,
+        ),
+      ).resolves.toMatchObject({
+        ok: false,
+        failure: {
+          kind: 'problem',
+          problem: { code: 'ACTIVATION_LINK_REJECTED' },
+        },
+      });
+    },
+  );
+
   it('completes synthetic onboarding with exact legal versions and replay safety', async () => {
     await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
       ok: true,
@@ -768,6 +926,11 @@ describe('MSW through the production API port', () => {
     await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
       ok: true,
       data: {
+        dataMode: 'synthetic_preview',
+        membership: {
+          access: { state: 'active' },
+          roles: ['participant'],
+        },
         onboarding: { status: 'complete' },
         networking: { enabled: false },
       },
@@ -783,8 +946,11 @@ describe('MSW through the production API port', () => {
         'onboarding-mock-port-0002',
       ),
     ).resolves.toMatchObject({
-      ok: true,
-      data: { profile: { firstName: 'Druhý' } },
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'VALIDATION_FAILED' },
+      },
     });
     await expect(
       submitIdentityOnboarding(client, request, 'onboarding-mock-port-0001'),
@@ -807,6 +973,372 @@ describe('MSW through the production API port', () => {
         kind: 'problem',
         problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
       },
+    });
+  });
+
+  it('rejects non-canonical or suffix-smuggled synthetic recovery tokens', async () => {
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery-route:L2FwcB:00000000-0000-4000-8000-000000000024',
+        'recovery-route-noncanonical-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ACTIVATION_LINK_REJECTED' },
+      },
+    });
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery-route:L2FwcA:00000000-0000-4000-8000-000000000025:extra',
+        'recovery-route-suffix-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ACTIVATION_LINK_REJECTED' },
+      },
+    });
+    await expect(
+      consumeActivationLink(
+        client,
+        'RECOVERY-APP:00000000-0000-4000-8000-000000000026',
+        'recovery-route-uppercase-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ACTIVATION_LINK_REJECTED' },
+      },
+    });
+
+    for (const [index, token] of [
+      'recovery-route:L2FwcA==:00000000-0000-4000-8000-000000000027',
+      'recovery-route:L2FwcA:00000000-0000-4000-8000-000000000028?next=/app',
+    ].entries()) {
+      const response = await fetchWithOrigin('/api/v1/activation/link', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': `recovery-route-raw-rejected-${String(index)}`,
+        },
+        body: JSON.stringify({ token }),
+      });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        code: 'ACTIVATION_LINK_REJECTED',
+      });
+    }
+  });
+
+  it('publishes the synthetic networking acknowledgement after opt-in onboarding', async () => {
+    await expect(
+      submitIdentityOnboarding(
+        client,
+        {
+          profile: identityFixtureProfile,
+          legal: {
+            termsDocumentId: identityFixtureIds.terms,
+            termsAccepted: true,
+            privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
+            privacyAcknowledged: true,
+          },
+          networking: {
+            enabled: true,
+            consentDocumentId: identityFixtureIds.networkingConsent,
+            consentAccepted: true,
+          },
+        },
+        'onboarding-opt-in-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { networkingEnabled: true },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        dataMode: 'synthetic_preview',
+        membership: {
+          access: { state: 'active' },
+          roles: ['participant'],
+        },
+        networking: { enabled: true },
+        legalAcknowledgements: expect.arrayContaining([
+          expect.objectContaining({
+            documentId: identityFixtureIds.networkingConsent,
+            type: 'networking_consent',
+            decision: 'accepted',
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('updates only the current profile version and returns canonical state', async () => {
+    const onboarding = {
+      profile: identityFixtureProfile,
+      legal: {
+        termsDocumentId: identityFixtureIds.terms,
+        termsAccepted: true,
+        privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
+        privacyAcknowledged: true,
+      },
+      networking: { enabled: false },
+    } as const;
+    await expect(
+      submitIdentityOnboarding(client, onboarding, 'profile-onboarding-0001'),
+    ).resolves.toMatchObject({ ok: true });
+
+    const updatedProfile = {
+      ...identityFixtureProfile,
+      firstName: 'Alexandra',
+    };
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 1,
+        profile: updatedProfile,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        profile: updatedProfile,
+        profileManagement: { state: 'editable', version: 2 },
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        profile: updatedProfile,
+        profileManagement: { state: 'editable', version: 2 },
+      },
+    });
+
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 1,
+        profile: { ...updatedProfile, lastName: 'Stará verze' },
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'STALE_VERSION', currentVersion: 2 },
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        profile: updatedProfile,
+        profileManagement: { state: 'editable', version: 2 },
+      },
+    });
+
+    configureMockIdentityAccess({ profileManagementState: 'read_only' });
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 2,
+        profile: updatedProfile,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'PROFILE_NOT_EDITABLE' },
+      },
+    });
+  });
+
+  it('keeps privacy request replay exact and rejects collisions or duplicates', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const exportRequest = { kind: 'data_export' } as const;
+    const first = await submitIdentityPrivacyRequest(
+      client,
+      exportRequest,
+      'privacy-mock-port-0001',
+    );
+    expect(first).toMatchObject({
+      ok: true,
+      status: 202,
+      data: {
+        request: { kind: 'data_export', state: 'pending' },
+      },
+    });
+    const replay = await submitIdentityPrivacyRequest(
+      client,
+      exportRequest,
+      'privacy-mock-port-0001',
+    );
+    expect(replay).toEqual(first);
+
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_deletion' },
+        'privacy-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        exportRequest,
+        'privacy-mock-port-0002',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'PRIVACY_REQUEST_UNAVAILABLE' },
+      },
+    });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_deletion' },
+        'privacy-mock-port-0003',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        request: { kind: 'data_deletion', state: 'pending' },
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        privacy: {
+          exportRequest: 'pending',
+          deletionRequest: 'pending',
+        },
+      },
+    });
+  });
+
+  it('validates account mutations and preserves canonical server state across access revocation', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    const malformedProfileResponse = await fetchWithOrigin(
+      '/api/v1/me/profile',
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 0,
+          profile: identityFixtureProfile,
+        }),
+      },
+    );
+    await expect(malformedProfileResponse.json()).resolves.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    expect(malformedProfileResponse.status).toBe(422);
+    const malformedPrivacyResponse = await fetchWithOrigin(
+      '/api/v1/me/privacy-requests',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'data_export' }),
+      },
+    );
+    await expect(malformedPrivacyResponse.json()).resolves.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    expect(malformedPrivacyResponse.status).toBe(422);
+
+    resetMockActivationState();
+    await expect(
+      submitIdentityOnboarding(
+        client,
+        {
+          profile: identityFixtureProfile,
+          legal: {
+            termsDocumentId: identityFixtureIds.terms,
+            termsAccepted: true,
+            privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
+            privacyAcknowledged: true,
+          },
+          networking: { enabled: false },
+        },
+        'onboarding-before-revocation-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 1,
+        profile: { ...identityFixtureProfile, firstName: 'Soukromá změna' },
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_export' },
+        'privacy-before-revocation-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    configureMockIdentityAccess({ eventAccess: false });
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 2,
+        profile: identityFixtureProfile,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
+      },
+    });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_export' },
+        'privacy-before-revocation-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
+      },
+    });
+
+    configureMockIdentityAccess({ eventAccess: true });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        profile: {
+          firstName: 'Soukromá změna',
+        },
+        profileManagement: { state: 'editable', version: 2 },
+        privacy: { exportRequest: 'pending' },
+      },
+    });
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 2,
+        profile: identityFixtureProfile,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_export' },
+        'privacy-before-revocation-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { request: { state: 'pending' } },
     });
   });
 
@@ -853,6 +1385,31 @@ describe('MSW through the production API port', () => {
       },
     });
     await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 1,
+        profile: identityFixtureProfile,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_export' },
+        'privacy-signed-out-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+    await expect(
       submitIdentitySessionAction(
         client,
         'logout_current',
@@ -863,6 +1420,140 @@ describe('MSW through the production API port', () => {
       failure: {
         kind: 'problem',
         problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+  });
+
+  it('isolates switched principals and restores only the requested canonical account', async () => {
+    configureMockParticipantPrincipal({ active: true });
+    await expect(
+      updateIdentityProfile(client, {
+        expectedVersion: 1,
+        profile: { ...identityFixtureProfile, firstName: 'Soukromá A' },
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitIdentityPrivacyRequest(
+        client,
+        { kind: 'data_export' },
+        'privacy-primary-principal-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      markAnnouncementRead(
+        client,
+        announcementFixtureIds.important,
+        'announcement-primary-principal-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'switch_account',
+        'session-switch-principal-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery-app:00000000-0000-4000-8000-000000000011',
+        'link-alternate-principal-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'active' },
+    });
+
+    const alternateBootstrap = await requestIdentityBootstrap(client);
+    expect(alternateBootstrap).toMatchObject({
+      ok: true,
+      data: {
+        user: {
+          id: '01910000-0000-7000-8000-000000000302',
+          email: 'beata@example.test',
+        },
+        profile: {
+          firstName: 'Beáta',
+          contactEmail: 'beata@example.test',
+        },
+        privacy: { exportRequest: 'available' },
+      },
+    });
+    expect(JSON.stringify(alternateBootstrap)).not.toContain('Soukromá A');
+    const alternateTicket = await requestParticipantTicket(client);
+    expect(alternateTicket).toMatchObject({
+      ok: true,
+      data: {
+        ticket: {
+          holder: { displayName: 'Beáta Svobodová' },
+          referenceSuffix: 'BTA6',
+        },
+      },
+    });
+    expect(JSON.stringify(alternateTicket)).not.toContain('Alex Novák');
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        items: [{ id: announcementFixtureIds.critical }],
+      },
+    });
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'switch_account',
+        'session-switch-principal-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'logout_current',
+        'session-logout-alternate-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery-app:primary:00000000-0000-4000-8000-000000000012',
+        'link-primary-principal-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { state: 'active' } });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        user: { email: identityFixtureProfile.contactEmail },
+        profile: { firstName: 'Soukromá A' },
+        privacy: { exportRequest: 'pending' },
+      },
+    });
+    await expect(requestParticipantTicket(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ticket: {
+          holder: { displayName: 'Alex Novák' },
+          referenceSuffix: 'TST6',
+        },
+      },
+    });
+    await expect(
+      requestAnnouncementDetail(client, announcementFixtureIds.important),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        announcement: {
+          id: announcementFixtureIds.important,
+          readAt: '2026-09-18T06:35:00.000Z',
+        },
       },
     });
   });

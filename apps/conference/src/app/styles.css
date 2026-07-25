@@ -1552,3 +1552,209 @@ main > .ui-participant-nav-spacer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.participant-account-page {
+  display: grid;
+  gap: clamp(1.5rem, 5vw, 2.75rem);
+  max-width: 62rem;
+}
+.participant-account-heading {
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.participant-account-heading h1 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: clamp(3.5rem, 11vw, 7rem);
+  line-height: 0.85;
+}
+.participant-account-heading .lead {
+  max-width: 48rem;
+}
+.participant-account-stack,
+.participant-account-section,
+.participant-legal-list,
+.participant-account-form {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-5);
+}
+.participant-account-section > header {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.participant-account-section > header h2,
+.participant-account-card h2,
+.participant-account-summary h2,
+.participant-support-card h2,
+.participant-privacy-request-card h3 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.65rem, 5vw, 2.5rem);
+  line-height: 1.05;
+}
+.participant-account-card,
+.participant-account-summary,
+.participant-support-card,
+.participant-privacy-request-card,
+.participant-legal-card {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-4);
+  overflow-wrap: anywhere;
+}
+.participant-account-summary {
+  border-inline-start: 0.35rem solid var(--byzon-brand);
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      var(--byzon-brand-glow),
+      transparent 16rem
+    ),
+    var(--byzon-surface);
+}
+.participant-account-secondary {
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+}
+.participant-more-grid {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.participant-more-grid .ui-action {
+  min-width: 0;
+  min-height: 3.5rem;
+  justify-content: space-between;
+  text-align: start;
+}
+.participant-more-grid .ui-action::after {
+  content: '→';
+  flex: none;
+  margin-inline-start: var(--byzon-space-3);
+}
+.participant-support-card {
+  border-style: dashed;
+  background: var(--byzon-surface-soft);
+}
+.participant-account-details {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-4);
+  margin: 0;
+}
+.participant-account-details div {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-1);
+  padding-block-end: var(--byzon-space-3);
+  border-block-end: 1px solid var(--byzon-border);
+}
+.participant-account-details dt {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.participant-account-details dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--byzon-ink);
+  font-size: 1.0625rem;
+  font-weight: 750;
+}
+.participant-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--byzon-space-3);
+}
+.participant-account-actions .ui-action {
+  flex: 1 1 12rem;
+}
+.participant-account-loading,
+.participant-account-page > .ui-state-panel {
+  max-width: 46rem;
+}
+.participant-legal-heading {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--byzon-space-3);
+}
+.participant-legal-heading > div {
+  min-width: 0;
+}
+.participant-legal-heading h3 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.4rem, 4vw, 1.85rem);
+  line-height: 1.1;
+}
+.participant-legal-card details {
+  border-block-start: 1px solid var(--byzon-border);
+}
+.participant-legal-card summary {
+  min-height: var(--byzon-touch-target);
+  display: flex;
+  align-items: center;
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+  cursor: pointer;
+}
+.participant-legal-card summary:focus-visible,
+.participant-account-page .text-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.participant-legal-content {
+  display: grid;
+  gap: var(--byzon-space-3);
+  max-height: 28rem;
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-sm);
+  background: var(--byzon-surface-soft);
+  overflow: auto;
+}
+.participant-legal-acknowledgement {
+  padding-block-start: var(--byzon-space-3);
+  border-block-start: 1px solid var(--byzon-border);
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+}
+.participant-privacy-request-grid {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-4);
+}
+.participant-privacy-request-card {
+  align-content: start;
+}
+.participant-privacy-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-2);
+  padding-block: var(--byzon-space-3);
+  border-block: 1px solid var(--byzon-border);
+}
+.participant-privacy-confirmation {
+  display: grid;
+  gap: var(--byzon-space-5);
+}
+.participant-privacy-confirmation .ui-choice {
+  margin-block-start: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  background: var(--byzon-surface-soft);
+}
+
+@media (min-width: 40rem) {
+  .participant-account-actions .ui-action {
+    flex: 0 0 auto;
+  }
+  .participant-account-details,
+  .participant-more-grid,
+  .participant-privacy-request-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

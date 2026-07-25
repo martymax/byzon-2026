@@ -62,7 +62,76 @@ export const activationEmailSchema = z
     'Email contains unsafe control characters',
   );
 
-export const activationReturnToSchema = z.enum(['/app', '/onboarding']);
+const participantActivationStaticReturnToValues = [
+  '/app',
+  '/app/informace',
+  '/app/nastaveni',
+  '/app/oznameni',
+  '/app/oznameni?view=unread',
+  '/app/partneri',
+  '/app/profil',
+  '/app/program',
+  '/app/recnici',
+  '/app/soukromi',
+  '/app/vice',
+  '/app/vstupenka',
+] as const;
+
+export type ParticipantActivationReturnTo =
+  | (typeof participantActivationStaticReturnToValues)[number]
+  | `/app/program/${string}`
+  | `/app/oznameni/${string}`
+  | `/app/recnici/${string}`;
+
+export type ActivationReturnTo = '/onboarding' | ParticipantActivationReturnTo;
+
+const participantActivationStaticReturnToSet = new Set<string>(
+  participantActivationStaticReturnToValues,
+);
+const participantActivationDetailReturnToPattern =
+  /^\/app\/(program|oznameni)\/([^/]+)$/;
+const participantSpeakerReturnToPattern =
+  /^\/app\/recnici\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
+
+const isParticipantActivationReturnTo = (
+  value: string,
+): value is ParticipantActivationReturnTo => {
+  if (participantActivationStaticReturnToSet.has(value)) return true;
+
+  const detailMatch = participantActivationDetailReturnToPattern.exec(value);
+  if (detailMatch) {
+    const id = detailMatch[2];
+    return (
+      id !== undefined &&
+      id === id.toLowerCase() &&
+      uuidSchema.safeParse(id).success
+    );
+  }
+
+  const speakerMatch = participantSpeakerReturnToPattern.exec(value);
+  return (
+    speakerMatch !== null &&
+    speakerMatch[1] !== undefined &&
+    speakerMatch[1].length <= 128
+  );
+};
+
+/**
+ * Post-authentication navigation is an exact contract, not a general-purpose
+ * same-origin redirect. Only published participant routes are accepted.
+ */
+export const participantActivationReturnToSchema = z
+  .string()
+  .max(160)
+  .refine(isParticipantActivationReturnTo, {
+    message: 'Invalid participant activation return destination',
+  })
+  .transform((value): ParticipantActivationReturnTo => value);
+
+export const activationReturnToSchema = z.union([
+  z.literal('/onboarding'),
+  participantActivationReturnToSchema,
+]);
 
 export const activationLandingFlowSchema = z.discriminatedUnion('state', [
   z.strictObject({ state: z.literal('anonymous') }),
@@ -217,7 +286,7 @@ export const activationLinkResponseSchema = z.discriminatedUnion('state', [
   }),
   z.strictObject({
     state: z.literal('active'),
-    continueTo: z.literal('/app'),
+    continueTo: participantActivationReturnToSchema,
   }),
 ]);
 

@@ -77,8 +77,14 @@ const TicketMark = ({ valid }: { readonly valid: boolean }) => (
   </svg>
 );
 
-export const ParticipantTicket = ({ api }: { readonly api?: ApiPort }) => {
-  const state = useParticipantTicket(api);
+export const ParticipantTicket = ({
+  api,
+  eventId,
+}: {
+  readonly api?: ApiPort;
+  readonly eventId: string;
+}) => {
+  const state = useParticipantTicket(eventId, api);
   if (state.status !== 'ready') {
     return (
       <section className="app-page ticket-page">

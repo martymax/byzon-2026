@@ -1,6 +1,9 @@
-import { activationReturnToSchema } from '@byzon/domain/contracts';
+import {
+  activationReturnToSchema,
+  type ActivationReturnTo,
+} from '@byzon/domain/contracts';
 
-export type ActivationReturnTo = '/app' | '/onboarding';
+export type { ActivationReturnTo } from '@byzon/domain/contracts';
 
 export const resolveActivationReturnTo = (
   value: string | readonly string[] | undefined,

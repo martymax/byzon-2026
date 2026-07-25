@@ -19,6 +19,10 @@ import {
   rememberAnnouncementReturnContext,
 } from '@/lib/announcement-return-context';
 import {
+  invalidateParticipantPrivateResources,
+  privateResourceInvalidationReason,
+} from '@/lib/private-resource-events';
+import {
   AnnouncementReadLabel,
   AnnouncementResourceStatus,
   AnnouncementSeverity,
@@ -88,6 +92,7 @@ export const ParticipantInbox = ({
     readonly scrollY: number;
   } | null>(null);
   const state = useParticipantAnnouncementInbox(filter, eventId, api);
+  const discardAnnouncementData = state.discard;
   const [pagination, setPagination] = useState<{
     readonly appendedItems: readonly ParticipantAnnouncementSummary[];
     readonly baseData: ParticipantAnnouncementInboxResponse;
@@ -266,10 +271,26 @@ export const ParticipantInbox = ({
           return;
         }
         if (!result.ok) {
-          const revocationStatus = announcementAuthoritativeFailureStatus(
+          const reason = privateResourceInvalidationReason(
             result.failure,
+            result.status,
           );
-          if (!revocationStatus && !restoring) {
+          const revocationStatus =
+            announcementAuthoritativeFailureStatus(result.failure) ?? reason;
+          if (reason) {
+            invalidateParticipantPrivateResources(reason);
+          }
+          if (revocationStatus) {
+            discardAnnouncementData(revocationStatus);
+            setPagination(null);
+            requestAnimationFrame(() =>
+              routeHeading.current?.focus({ preventScroll: true }),
+            );
+            return;
+          }
+        }
+        if (!result.ok) {
+          if (!restoring) {
             pendingFocus.current = { kind: 'error' };
           }
           setPagination({
@@ -279,7 +300,7 @@ export const ParticipantInbox = ({
             loading: false,
             nextCursor,
             pageCount: currentPagination?.pageCount ?? 1,
-            revocationStatus,
+            revocationStatus: null,
             unreadCount:
               currentPagination?.unreadCount ?? context.data.unreadCount,
             failed: true,
@@ -375,7 +396,7 @@ export const ParticipantInbox = ({
         }
       }
     },
-    [api, pagination],
+    [api, discardAnnouncementData, pagination],
   );
 
   useEffect(() => {

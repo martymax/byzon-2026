@@ -8,13 +8,13 @@ import {
 
 import { defineFixtureSet } from '../fixture-harness.js';
 
-const eventId = '01910000-0000-7000-8000-000000000101';
+export const ticketFixtureEventId = '019f7e6f-62ed-7c87-bce7-b742be58ce0b';
 
 const ticket = (
   status: ParticipantTicketStatus,
   reason: TicketPresentationUnavailableReason,
 ) => ({
-  eventId,
+  eventId: ticketFixtureEventId,
   ticket: {
     status,
     holder: { displayName: 'Alex Novák' },

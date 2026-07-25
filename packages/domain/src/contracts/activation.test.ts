@@ -8,6 +8,9 @@ import {
   activationLandingProblemSchema,
   activationLandingResponseSchema,
   activationLinkRequestSchema,
+  activationLinkResponseSchema,
+  activationReturnToSchema,
+  participantActivationReturnToSchema,
   problemTypeForCode,
 } from './index.js';
 
@@ -138,6 +141,78 @@ describe('CS-ACT-01 activation contract', () => {
     expect(
       activationLinkRequestSchema.safeParse({
         token: 'token with spaces',
+      }).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    '/app',
+    '/app/informace',
+    '/app/nastaveni',
+    '/app/oznameni',
+    '/app/oznameni?view=unread',
+    '/app/partneri',
+    '/app/profil',
+    '/app/program',
+    '/app/recnici',
+    '/app/soukromi',
+    '/app/vice',
+    '/app/vstupenka',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000',
+    '/app/oznameni/01910000-0000-7000-8000-000000000011',
+    '/app/recnici/jana-novakova',
+  ] as const)(
+    'accepts the exact participant return destination %s',
+    (value) => {
+      expect(participantActivationReturnToSchema.parse(value)).toBe(value);
+      expect(activationReturnToSchema.parse(value)).toBe(value);
+    },
+  );
+
+  it.each([
+    'https://evil.example/app',
+    '//evil.example/app',
+    '\\\\evil.example\\app',
+    '/app?next=https://evil.example',
+    '/app/oznameni?view=unread&next=%2Fapp',
+    '/app/oznameni?view=all',
+    '/app/program#secret',
+    '/app/program/../profil',
+    '/app/program/%2Fprofil',
+    '/app/program/%252Fprofil',
+    '/app/program/550E8400-E29B-41D4-A716-446655440000',
+    '/app/program/not-a-uuid',
+    '/app/oznameni/01910000-0000-7000-8000-000000000011/extra',
+    '/app/recnici/Jana-Novakova',
+    `/app/recnici/${'a'.repeat(129)}`,
+    '/app/recnici/jana%2Fnovakova',
+  ])('rejects the non-canonical participant destination %#', (value) => {
+    expect(participantActivationReturnToSchema.safeParse(value).success).toBe(
+      false,
+    );
+    expect(activationReturnToSchema.safeParse(value).success).toBe(false);
+  });
+
+  it('keeps onboarding separate from active participant navigation', () => {
+    expect(
+      activationLinkResponseSchema.parse({
+        state: 'active',
+        continueTo: '/app/program/550e8400-e29b-41d4-a716-446655440000',
+      }),
+    ).toEqual({
+      state: 'active',
+      continueTo: '/app/program/550e8400-e29b-41d4-a716-446655440000',
+    });
+    expect(
+      activationLinkResponseSchema.safeParse({
+        state: 'active',
+        continueTo: '/onboarding',
+      }).success,
+    ).toBe(false);
+    expect(
+      activationLinkResponseSchema.safeParse({
+        state: 'onboarding_required',
+        continueTo: '/app',
       }).success,
     ).toBe(false);
   });

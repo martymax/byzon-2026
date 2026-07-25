@@ -166,6 +166,76 @@ describe('CS-CONTENT-01 contracts', () => {
     expect(parsed.speakers[0]).not.toHaveProperty('privateNote');
   });
 
+  it('accepts only credential-free HTTPS links in published directories', () => {
+    const speaker = {
+      id: '01910000-0000-7000-8000-000000000005',
+      slug: 'jana-novakova',
+      firstName: 'Jana',
+      lastName: 'Nováková',
+      company: null,
+      jobTitle: null,
+      bioMarkdown: null,
+      linkedinUrl: 'https://www.linkedin.com/in/jana-novakova',
+      websiteUrl: 'https://jana.example.test',
+      photoAssetId: null,
+      status: 'published',
+      sortOrder: 0,
+      version: 1,
+    } as const;
+    const partner = {
+      id: '01910000-0000-7000-8000-000000000006',
+      slug: 'bezpecny-partner',
+      name: 'Bezpečný partner',
+      descriptionMarkdown: null,
+      websiteUrl: 'https://partner.example.test',
+      category: null,
+      tier: null,
+      logoAssetId: null,
+      status: 'published',
+      sortOrder: 0,
+      version: 1,
+    } as const;
+    const response = {
+      eventId: ids.event,
+      version: 1,
+      content: {
+        ...content,
+        speakers: [speaker],
+        partners: [partner],
+      },
+    };
+
+    expect(participantContentResponseSchema.parse(response)).toEqual(response);
+    for (const linkedinUrl of [
+      'not-url',
+      'http://www.linkedin.com/in/jana-novakova',
+    ]) {
+      expect(
+        participantContentResponseSchema.safeParse({
+          ...response,
+          content: {
+            ...response.content,
+            speakers: [{ ...speaker, linkedinUrl }],
+          },
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      participantContentResponseSchema.safeParse({
+        ...response,
+        content: {
+          ...response.content,
+          partners: [
+            {
+              ...partner,
+              websiteUrl: 'https://user:secret@partner.example.test/private',
+            },
+          ],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it('bounds and validates participant program filters', () => {
     expect(
       participantProgramFiltersSchema.parse({

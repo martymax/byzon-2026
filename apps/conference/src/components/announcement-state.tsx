@@ -16,11 +16,17 @@ import type {
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ApiPort, ApiResult } from '@/lib/api';
+import { resolveActivationReturnTo } from '@/lib/activation-return';
 import {
   browserAnnouncementApi,
   requestAnnouncementDetail,
   requestAnnouncementInbox,
 } from '@/lib/announcement-api';
+import {
+  invalidateParticipantPrivateResources,
+  privateResourceInvalidationReason,
+  subscribeToPrivateResourceInvalidation,
+} from '@/lib/private-resource-events';
 
 export type AnnouncementResourceState<Data> =
   | { readonly status: 'loading' }
@@ -97,7 +103,10 @@ const useAnnouncementResource = <Data, Problem extends ApiProblem>(
     AnnouncementFailureState['status'],
     'loading' | 'error'
   >,
-): AnnouncementResourceState<Data> & { readonly retry: () => void } => {
+): AnnouncementResourceState<Data> & {
+  readonly discard: (status: AnnouncementAuthoritativeFailureStatus) => void;
+  readonly retry: () => void;
+} => {
   const [attempt, setAttempt] = useState(0);
   const [resultState, setResultState] = useState<
     AnnouncementResourceState<Data> & {
@@ -109,6 +118,10 @@ const useAnnouncementResource = <Data, Problem extends ApiProblem>(
   useEffect(() => {
     if (localFailureStatus) return;
     const controller = new AbortController();
+    const unsubscribe = subscribeToPrivateResourceInvalidation((reason) => {
+      controller.abort();
+      setResultState({ status: reason, attempt, load });
+    });
     void Promise.resolve()
       .then(() => load(controller.signal))
       .then((result) => {
@@ -122,24 +135,52 @@ const useAnnouncementResource = <Data, Problem extends ApiProblem>(
           return;
         }
         const mapped = mapAnnouncementFailure(result.failure);
-        if (mapped) setResultState({ ...mapped, attempt, load });
+        if (mapped) {
+          const invalidation = privateResourceInvalidationReason(
+            result.failure,
+            result.status,
+          );
+          if (invalidation) {
+            invalidateParticipantPrivateResources(invalidation);
+            setResultState({
+              ...(mapped.status === 'authentication' ||
+              mapped.status === 'permission' ||
+              mapped.status === 'session_expired'
+                ? mapped
+                : { status: invalidation }),
+              attempt,
+              load,
+            });
+            return;
+          }
+          setResultState({ ...mapped, attempt, load });
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted) {
           setResultState({ status: 'error', attempt, load });
         }
       });
-    return () => controller.abort();
+    return () => {
+      unsubscribe();
+      controller.abort();
+    };
   }, [attempt, load, localFailureStatus]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  const discard = useCallback(
+    (status: AnnouncementAuthoritativeFailureStatus) => {
+      setResultState({ status, attempt, load });
+    },
+    [attempt, load],
+  );
   const state: AnnouncementResourceState<Data> =
     localFailureStatus !== undefined
       ? { status: localFailureStatus }
       : resultState.attempt === attempt && resultState.load === load
         ? resultState
         : { status: 'loading' };
-  return { ...state, retry };
+  return { ...state, discard, retry };
 };
 
 const rejectMismatchedAnnouncementScope = <Data, Problem extends ApiProblem>(
@@ -277,6 +318,7 @@ export const AnnouncementResourceStatus = ({
   readonly scope: 'detail' | 'inbox';
   readonly state: AnnouncementFailureState;
 }) => {
+  const safeLoginReturnTo = resolveActivationReturnTo(loginReturnTo, '/app');
   if (state.status === 'loading') {
     return (
       <Skeleton
@@ -313,7 +355,7 @@ export const AnnouncementResourceStatus = ({
         ) : needsLogin ? (
           <ActionLink
             href={`/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
-              loginReturnTo,
+              safeLoginReturnTo,
             )}`}
           >
             Přihlásit se znovu

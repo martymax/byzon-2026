@@ -53,9 +53,23 @@ const safeExternalUrlSchema = z
   .string()
   .url()
   .max(2_048)
-  .refine((value) => /^https?:\/\//i.test(value), {
-    message: 'Only HTTP(S) URLs are supported',
-  });
+  .refine(
+    (value) => {
+      try {
+        const parsed = new URL(value);
+        return (
+          parsed.protocol === 'https:' &&
+          parsed.username.length === 0 &&
+          parsed.password.length === 0
+        );
+      } catch {
+        return false;
+      }
+    },
+    {
+      message: 'Only credential-free HTTPS URLs are supported',
+    },
+  );
 
 export const participantSessionTypeSchema = z.enum([
   'talk',
