@@ -180,6 +180,157 @@ h1 span {
 main > .ui-participant-nav-spacer {
   display: none;
 }
+.home-page {
+  display: grid;
+  gap: clamp(2rem, 5vw, 3.5rem);
+}
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1.4rem, 5vw, 2.75rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background:
+    radial-gradient(
+      circle at 90% 10%,
+      var(--byzon-brand-glow),
+      transparent 18rem
+    ),
+    var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.home-hero h1 {
+  max-width: 13ch;
+  margin: 0.3rem 0 1rem;
+  font-size: clamp(3rem, 10vw, 6.5rem);
+  line-height: 0.88;
+}
+.home-hero .lead {
+  max-width: 42rem;
+}
+.home-event-window {
+  margin-top: 0.9rem;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.home-primary-action {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1.5rem;
+  padding: 0.65rem 1.2rem;
+  border: 1px solid var(--pink-dark);
+  border-radius: var(--byzon-radius-pill);
+  color: white;
+  background: var(--pink-dark);
+  font: 700 1rem/1.2 var(--byzon-font-display);
+  text-decoration: none;
+}
+.home-primary-action:hover {
+  background: var(--byzon-brand-active);
+}
+.home-section {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.home-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+.home-section-heading h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+}
+.home-section-kicker,
+.home-card-kicker {
+  color: var(--pink-dark);
+  font-family: var(--byzon-font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.home-section-link,
+.home-card-link {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.home-card-grid {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.home-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.home-card h3 {
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+.home-card address {
+  font-style: normal;
+}
+.home-card-empty {
+  display: grid;
+  gap: 0.5rem;
+}
+.home-session-list {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  list-style: none;
+}
+.home-session-list a {
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-sm);
+  color: var(--slate);
+  background: var(--byzon-surface-soft);
+  text-decoration: none;
+}
+.home-session-list strong {
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+.home-session-time {
+  color: var(--pink-dark);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.home-timing-label {
+  width: fit-content;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.home-practical-card {
+  overflow-wrap: anywhere;
+}
+.home-primary-action:focus-visible,
+.home-section-link:focus-visible,
+.home-card-link:focus-visible,
+.home-session-list a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
+}
 .app-page {
   width: min(100% - 2rem, 72rem);
   margin: auto;
@@ -531,6 +682,12 @@ main > .ui-participant-nav-spacer {
     width: min(100% - 1.25rem, 72rem);
     padding-top: 1.5rem;
   }
+  .home-section-heading h2 {
+    font-size: 1.85rem;
+  }
+  .home-program-link {
+    display: none;
+  }
   .admin-form {
     grid-template-columns: 1fr;
   }
@@ -538,6 +695,10 @@ main > .ui-participant-nav-spacer {
 @media (min-width: 48rem) {
   .participant-shell-content {
     padding-bottom: 0;
+  }
+  .home-card-grid,
+  .home-practical-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -553,6 +714,12 @@ main > .ui-participant-nav-spacer {
     animation: content-progress 1.2s var(--byzon-ease) infinite;
   }
   .resource-action {
+    transition:
+      background-color var(--byzon-motion-fast) var(--byzon-ease),
+      border-color var(--byzon-motion-fast) var(--byzon-ease);
+  }
+  .home-primary-action,
+  .home-session-list a {
     transition:
       background-color var(--byzon-motion-fast) var(--byzon-ease),
       border-color var(--byzon-motion-fast) var(--byzon-ease);

@@ -1202,7 +1202,7 @@ Evidence:
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
 | Aktivace a identita | `not started` | `P2` identity/onboarding doména existuje; `P4`, `F1` plánované | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` |
-| Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program component axe, responsive/reduced-motion a targeted visual řez | `F2-06` zůstává otevřený pro vstupenku, inbox a účet po `F2-04`/`F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
+| Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro vstupenku, inbox a účet po `F2-04`/`F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `not started` | onboarding doména `P2-06`; UI `F2-07` a API `P4-13` plánované | `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
 | Vstupenka účastníka | `not started` | `F2-04`, `P4-12` plánované | `BLOCKER-TKT-05` |
@@ -1836,11 +1836,20 @@ skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 
   link. Detailové routy aktivují rodičovský cíl, používají kanonický fallback a
   bounded focus čeká i na asynchronní nadpis bez odebrání focusu aktivnímu
   uživateli. Rozšíření cílové informační architektury na Přehled/Agendu/
-  Oznámení/Více proběhne až s funkčními routami v `F2-02`, `F2-05` a `F3`;
-  shell mezitím neslibuje neexistující funkce.
+  První rozšíření o funkční `Přehled` proběhlo dílčím `F2-02`; Agenda,
+  Oznámení a Více přibudou až s funkčními routami v `F2-05`, `F3` a
+  souvisejících řezech, takže shell mezitím neslibuje neexistující funkce.
 - [ ] `F2-02` Přidat domovský přehled podle fáze eventu: dnešní minimum,
   praktické informace, další uložený bod a jasný stav před/po akci bez
-  vymyšlených live dat.
+  vymyšlených live dat. Dílčí řez je implementovaný v
+  [`apps/conference/src/components/participant-home.tsx`](apps/conference/src/components/participant-home.tsx):
+  `/app` používá serverový event status a publikovaný program/obsah, vybírá
+  nejvýše dva relevantní body podle event timezone, rozlišuje pre/live/post/
+  archivní copy a nepouští content request v draftu ani archivu. Připravený
+  vstup pro další uložený bod přijme jen neukončenou, nezrušenou session z
+  publikovaného programu; produkce do dokončení `CS-AGENDA-01` zobrazuje
+  poctivý unavailable stav. Úkol zůstává otevřený pro `CS-BOOT-01`,
+  `CS-AGENDA-01` a archivní omezení navigace.
 - [x] `F2-03` Extrahovat server-local `P3` schémata a fixtures do
   `CS-CONTENT-01`, přepojit existující API/UI na sdílený kontrakt a zpevnit
   program/detail/speaker/partner/practical UI: loading/empty/error/offline/
@@ -2593,3 +2602,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 3.0 | 21. 7. 2026 | Dokončen závěrečný security/code review etapy 3: omezeny externí URL protokoly, zpřesněna timezone/FK validace, dokončen použitelný venue/reference/update admin flow a opraveno Unicode-safe ICS folding; nálezy mají regresní testy. |
 | 3.1 | 23. 7. 2026 | Plán přepracován na dependency-driven paralelní realizaci: přidán frontendový track `F0`–`F6`, capability lifecycle a matrix, sdílené kontrakty/fixtures/mock hranice, UI/UX a testovací gates; SimpleShop blokuje jen produkční ticket integraci. Doplněny `BLOCKER-AUTH-01` a `BLOCKER-TKT-05` a odstraněny redundantní pracovní kopie souborů bez unikátních změn. |
 | 3.2 | 25. 7. 2026 | Dokončen `F2-01`: participant shell používá sdílenou navigaci s ikonami, aktivním stavem pro detailové routy, mobilním safe-area/content clearance, zachovaným skip linkem a bounded focus managementem pro asynchronní obsah. Závislostmi připravené `F2-03` a dílčí `F2-06` vznikly dříve; další frontendové kroky pokračují číselně, pokud je nezastaví explicitní dependency gate. |
+| 3.3 | 25. 7. 2026 | Přidán první dílčí řez `F2-02`: funkční `/app` přehled řízený serverovým event statusem, pátý navigační cíl, phase-aware publikovaný program a praktické informace, poctivý unavailable stav osobní agendy a responsive/axe/visual regresní pokrytí. `F2-02` zůstává otevřený do dokončení `CS-BOOT-01`, `CS-AGENDA-01` a archivního navigačního gate. |

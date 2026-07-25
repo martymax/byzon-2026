@@ -27,15 +27,35 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
   pro každý schválený viewport. Celý `F2-06` zůstává otevřený pro vstupenku,
   inbox a účet po `F2-04`/`F2-05`/`F2-07`.
-- Na navazující nepushnuté větvi
-  `track/frontend-b/F2-01-participant-shell` je dokončený a ověřený, ale dosud
-  necommitnutý řez `F2-01`. Participant layout používá sdílený
+- `F2-01` je commitnutý jako `8c4d1cc` a pushnutý na
+  `origin/track/frontend-b/F2-01-participant-shell`. Participant layout používá sdílený
   `ParticipantNavigation` pro čtyři existující funkční cíle, každý s
   konzistentní ikonou a labelem. Segmentově bezpečné mapování udržuje
   `aria-current` i na detailu; telefon má fixed spodní navigaci se
   safe-area/content clearance, tablet a desktop sticky variantu. Root viewport
   má `viewport-fit=cover`; stávající skip link zůstává prvním focusovatelným
   prvkem.
+- Na navazující nepushnuté větvi
+  `track/frontend-b/F2-02-home-overview` je implementovaný a ověřený první
+  řez `F2-02`. `/app` už nepřesměrovává na program: používá serverový stav
+  eventu, z publikovaného `CS-CONTENT-01` skládá phase-aware dnešní minimum,
+  praktické informace a bezpečný před/po/archivní stav. Navigace má pátý
+  funkční cíl `Přehled`; mobilní hierarchie drží jedinou dominantní CTA a
+  konkrétní program nad spodní navigací.
+- Produkce zatím nepředstírá osobní agendu. `ParticipantHome` umí přijmout
+  budoucí `nextSavedSessionId`, ale zobrazí jej jen jako neukončený,
+  nezrušený bod nalezený v publikovaném programu. Dokud není hotový
+  `CS-AGENDA-01`, stránka místo syntetického personalizovaného stavu otevřeně
+  vysvětluje, že uložené body v přehledu nejsou dostupné. `F2-02` proto
+  zůstává otevřený také pro `CS-BOOT-01`, skutečnou agendu a phase-aware
+  omezení navigace v archivním stavu.
+- Dílčí `F2-02` ověření prošlo cíleným ESLintem a Prettierem, conference
+  typecheckem, 76 unit/architecture testy a 42 browser component testy ve 12
+  souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`. Nový home řez
+  kontroluje focus, nejméně `44 px` viditelné targety, overflow, axe,
+  poctivý unavailable agenda stav, uzavřenou fázi bez content requestu a tři
+  deterministické visual baseline. Produkční Next build i source/post-build
+  mock boundary prošly.
 - Focus management nyní omezeně sleduje asynchronně vykreslený route heading a
   zvládne i výměnu starého nadpisu za nový při klientské navigaci. Observer se
   odpojí po pěti sekundách a nikdy nevezme focus uživateli, který mezitím
@@ -61,6 +81,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   asynchronního nadpisu. Navigační konfigurace je statická, nevykresluje data
   uživatele, observer je bounded a safe-area rezervuje prostor i pro obsah.
   Nezůstává otevřený actionable security ani code-review nález.
+- Security a code review dílčího `F2-02` diffu proběhly. Zapracované nálezy
+  odmítají skončenou session jako „další uložený bod“, odlišují po-akční copy
+  od pokynů před cestou a správně označují oba konce vícedenního rozsahu
+  samostatnými `<time>` prvky. Fázi dodává serverový event status, živý stav se
+  neodhaduje, dynamické ID se přijme jen proti publikovanému allowlistu a
+  draft/archiv nevyvolává content request. Nezůstává otevřený actionable nález
+  tohoto dílčího řezu.
 - Frontendový řez `F2-03` je commitnutý jako `ece9c10` a pushnutý na
   `origin/track/frontend-b/F2-03-content-contract`. `CS-CONTENT-01` v
   [`packages/domain/src/contracts/content.ts`](packages/domain/src/contracts/content.ts)
@@ -105,9 +132,11 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   Docker CLI je dostupné, ale lokální daemon neběží, proto skutečné P3 DB
   integrační testy zůstávají na PostgreSQL-backed GitHub CI.
 - Capability Program a informace zůstává `contract ready`. `F2-01` je hotový
-  pro současné funkční participant routy a shell/program část `F2-06` je
-  pokrytá, ale celý `F2-06` zůstává otevřený pro vstupenku, inbox a správu
-  účtu/soukromí, které dosud neexistují a vzniknou v
+  pro současné funkční participant routy, první řez `F2-02` přidal
+  nepersonalizovaný phase-aware přehled a shell/program část `F2-06` je
+  pokrytá, ale `F2-02` čeká na `CS-BOOT-01`/`CS-AGENDA-01` a celý `F2-06`
+  zůstává otevřený pro vstupenku, inbox a správu účtu/soukromí, které dosud
+  neexistují a vzniknou v
   `F2-04`/`F2-05`/`F2-07`; teprve potom lze capability označit jako
   `UI ready (mocked)`. `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
   contract-first práci. `F6-02` může paralelně začít nad public částí
@@ -115,7 +144,7 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - V pracovním stromu zůstává cizí nestagovaný soubor
   `apps/conference/src/components/content-state 2.tsx`, stará kopie z
   22. července. Při produkčních kontrolách byl pouze dočasně přesunut mimo
-  `src` a vrácen; není součástí `F2-01`, `F2-03` ani `F2-06` a nesmí být
+  `src` a vrácen; není součástí `F2-01`, `F2-02`, `F2-03` ani `F2-06` a nesmí být
   commitnutý.
 - Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
   `origin/track/frontend-a/F0-06-component-a11y`.

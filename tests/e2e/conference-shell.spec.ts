@@ -36,7 +36,7 @@ test('participant shell is keyboard accessible at every target viewport', async 
     name: 'Hlavní navigace',
   });
   await expect(navigation).toBeVisible();
-  await expect(navigation.getByRole('link')).toHaveCount(4);
+  await expect(navigation.getByRole('link')).toHaveCount(5);
   await expect(
     navigation.getByRole('link', { name: 'Program', exact: true }),
   ).toHaveAttribute('aria-current', 'page');

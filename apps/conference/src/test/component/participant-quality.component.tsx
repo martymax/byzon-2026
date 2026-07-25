@@ -108,7 +108,7 @@ describe('F2-06 participant shell and program quality gate', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
-    expect(navigationElement.querySelectorAll('a')).toHaveLength(4);
+    expect(navigationElement.querySelectorAll('a')).toHaveLength(5);
     for (const link of navigationElement.querySelectorAll('a')) {
       const bounds = link.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);

@@ -4,6 +4,7 @@ import { participantNavigationActiveId } from './participant-shell-navigation';
 
 describe('participant shell navigation', () => {
   it.each([
+    ['/app', 'overview'],
     ['/app/program', 'program'],
     ['/app/program/session-1', 'program'],
     ['/app/recnici/jana-novakova', 'speakers'],
@@ -15,6 +16,6 @@ describe('participant shell navigation', () => {
 
   it('does not mark similarly prefixed or unknown routes as active', () => {
     expect(participantNavigationActiveId('/app/program-extra')).toBe('');
-    expect(participantNavigationActiveId('/app')).toBe('');
+    expect(participantNavigationActiveId('/application')).toBe('');
   });
 });
