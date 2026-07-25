@@ -1,6 +1,7 @@
 import { setupWorker } from 'msw/browser';
 
 import { mockHandlers } from './handlers';
+import { shouldBlockUnhandledMockRequest } from './request-policy';
 
 const PRODUCTION_BOUNDARY_MARKER = 'BYZON_MOCK_RUNTIME_F0_05';
 const MOCK_WORKER_PATH = '/mockServiceWorker.js';
@@ -53,9 +54,9 @@ const renderIndicator = (state: IndicatorState): void => {
   style.textContent = `
     #${INDICATOR_ID} {
       position: fixed;
-      z-index: 1000;
+      z-index: 60;
       inset-inline-start: 50%;
-      bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+      bottom: max(5.25rem, calc(env(safe-area-inset-bottom, 0px) + 5.25rem));
       translate: -50% 0;
       max-width: calc(100vw - 1.5rem);
       padding: 0.55rem 0.85rem;
@@ -70,6 +71,11 @@ const renderIndicator = (state: IndicatorState): void => {
       text-transform: uppercase;
       white-space: nowrap;
       pointer-events: none;
+    }
+    @media (min-width: 48rem) {
+      #${INDICATOR_ID} {
+        bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+      }
     }
     #${INDICATOR_ID}[data-state='failed'] {
       color: var(--byzon-danger, #b42318);
@@ -128,10 +134,7 @@ const installApiFailureGuard = (): void => {
           ? input.href
           : input;
     const url = new URL(rawUrl, location.href);
-    if (
-      url.origin === location.origin &&
-      /^\/api\/v1(?:\/|$)/.test(url.pathname)
-    ) {
+    if (url.origin === location.origin && /^\/api(?:\/|$)/.test(url.pathname)) {
       throw new TypeError('Mock API unavailable');
     }
     return nativeFetch(input, init);
@@ -163,7 +166,13 @@ export const startBrowserMocking = async (): Promise<void> => {
   stopActiveMocking();
   try {
     await worker.start({
-      onUnhandledRequest: 'error',
+      onUnhandledRequest(request, print) {
+        if (
+          shouldBlockUnhandledMockRequest(request.url, window.location.origin)
+        ) {
+          print.error();
+        }
+      },
       serviceWorker: {
         url: MOCK_WORKER_PATH,
         options: { scope: '/' },

@@ -1,16 +1,21 @@
 import {
+  participantContentProblemSchema,
   participantContentResponseSchema,
+  participantProgramProblemSchema,
   participantProgramResponseSchema,
   participantTicketResponseSchema,
 } from '@byzon/domain/contracts';
 import {
+  contentFixtureIds,
   participantContentFixtures,
+  participantContentProblemFixtures,
   participantProgramFixtures,
+  participantProgramProblemFixtures,
   participantTicketFixtures,
 } from '@byzon/test-support/fixtures';
 import { http, type RequestHandler } from 'msw';
 
-import { mockJsonResponse } from './response';
+import { mockJsonResponse, mockProblemResponse } from './response';
 
 /**
  * Development preview uses the same success contracts and synthetic fixtures
@@ -18,45 +23,54 @@ import { mockJsonResponse } from './response';
  * of adding production-looking query switches to the API.
  */
 export const mockHandlers: readonly RequestHandler[] = Object.freeze([
-  http.get('/api/v1/events/:eventId/program', ({ params }) =>
-    mockJsonResponse(
+  http.get('*/api/v1/events/:eventId/program', ({ params }) => {
+    if (String(params.eventId) !== contentFixtureIds.event) {
+      return mockProblemResponse(
+        participantProgramProblemSchema,
+        participantProgramProblemFixtures.permission,
+        { fixtureName: 'content.mock.program-event-scope' },
+      );
+    }
+
+    return mockJsonResponse(
       participantProgramResponseSchema,
-      {
-        ...participantProgramFixtures.happy,
-        eventId: String(params.eventId),
-      },
+      participantProgramFixtures.happy,
       {
         fixtureName: 'content.mock.program',
         etag: '"content-program-v3"',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
       },
-    ),
-  ),
-  http.get('/api/v1/events/:eventId/content', ({ params }) =>
-    mockJsonResponse(
+    );
+  }),
+  http.get('*/api/v1/events/:eventId/content', ({ params }) => {
+    if (String(params.eventId) !== contentFixtureIds.event) {
+      return mockProblemResponse(
+        participantContentProblemSchema,
+        participantContentProblemFixtures.permission,
+        { fixtureName: 'content.mock.directory-event-scope' },
+      );
+    }
+
+    return mockJsonResponse(
       participantContentResponseSchema,
-      {
-        ...participantContentFixtures.happy,
-        eventId: String(params.eventId),
-        content: {
-          ...participantContentFixtures.happy!.content,
-          event: {
-            ...participantContentFixtures.happy!.content.event,
-            id: String(params.eventId),
-          },
-        },
-      },
+      participantContentFixtures.happy,
       {
         fixtureName: 'content.mock.directory',
         etag: '"content-directory-v3"',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
       },
-    ),
-  ),
-  http.get('/api/v1/me/ticket', () =>
+    );
+  }),
+  http.get('*/api/v1/me/ticket', () =>
     mockJsonResponse(
       participantTicketResponseSchema,
       participantTicketFixtures.valid,
       {
         fixtureName: 'ticket.mock.participant',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
       },
     ),
   ),

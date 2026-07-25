@@ -20,6 +20,21 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Kompletační práce pokračuje lineárně na
+  `track/frontend-complete`. Foundation security/code audit před `F1`
+  zpevnil mock runtime: neobsloužené same-origin `/api/**` požadavky včetně
+  Better Auth selžou zavřeně, zatímco Next RSC, dokumenty a assety mohou
+  normálně projít. Při selhání workeru platí stejná `/api/**` hranice.
+- Syntetický participant program a obsah jsou dostupné pouze pro jediný
+  kanonický event fixture; cizí event ID vrací bezpečné `404`.
+  `participantContentResponseSchema` navíc odmítne rozdíl top-level event
+  scope a `content.event.id`. Mock odpovědi nesou explicitní `no-store`,
+  privátní varianty také `Vary: authorization, cookie`.
+- Neintegrovaná `/app/vstupenka` je od foundation review v produkci a bez
+  explicitního `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` tvrdě skrytá přes `404`.
+  Test mock indikátor už na telefonu nepřekrývá spodní participant navigaci.
+  Regresní výběr prošel 18/18 testů, cíleným ESLintem, Prettierem a
+  domain/conference typecheckem.
 - Dílčí řez `F2-06` je commitnutý jako `e387c3b` a pushnutý na
   `origin/track/frontend-b/F2-06-content-a11y`. Shell/program gate přidává
   redigovaný browser-side `axe-core` WCAG A/AA helper, skutečný participant
@@ -49,8 +64,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   vysvětluje, že uložené body v přehledu nejsou dostupné. `F2-02` proto
   zůstává otevřený také pro `CS-BOOT-01`, skutečnou agendu a phase-aware
   omezení navigace v archivním stavu.
-- Na navazující nepushnuté větvi `track/frontend-b/F2-04-ticket-screen` je
-  dokončený mocked UI řez `F2-04`. `/app/vstupenka` zobrazuje validovaný stav
+- `F2-04` je commitnutý jako `73ef595` a pushnutý na
+  `origin/track/frontend-b/F2-04-ticket-screen`. `/app/vstupenka` zobrazuje validovaný stav
   `valid/cancelled/refunded/blocked`, minimálního držitele a nejvýše
   čtyřznakový maskovaný suffix. Prezentační plocha má jediný povolený stav
   `unavailable`; žádná fixture, response schema ani DOM neobsahují QR,

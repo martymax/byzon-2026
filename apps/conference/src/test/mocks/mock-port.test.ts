@@ -3,7 +3,10 @@ import {
   sessionExpiredProblemSchema,
 } from '@byzon/domain/contracts';
 import { FixtureValidationError } from '@byzon/test-support';
-import { sessionExpiredProblemFixture } from '@byzon/test-support/fixtures';
+import {
+  contentFixtureIds,
+  sessionExpiredProblemFixture,
+} from '@byzon/test-support/fixtures';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { http } from 'msw';
 import { z } from 'zod';
@@ -13,6 +16,7 @@ import {
   createFetchApiClient,
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
+import { requestParticipantProgram } from '../../lib/content-api.js';
 import { createMockServer } from './node.js';
 import {
   MOCK_REQUEST_ID,
@@ -116,5 +120,34 @@ describe('MSW through the production API port', () => {
     expect(thrown).toBeInstanceOf(FixtureValidationError);
     expect(String(thrown)).not.toContain('must-not-leak');
     expect(JSON.stringify(thrown)).not.toContain('must-not-leak');
+  });
+
+  it('serves content only for the canonical synthetic event scope', async () => {
+    await expect(
+      requestParticipantProgram(client, contentFixtureIds.event),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { eventId: contentFixtureIds.event },
+    });
+
+    await expect(
+      requestParticipantProgram(client, '01910000-0000-7000-8000-000000000099'),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 404,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'PROGRAM_NOT_FOUND' },
+      },
+    });
+  });
+
+  it('marks private mock data as no-store and varies by session context', async () => {
+    const response = await fetchWithOrigin(
+      `/api/v1/events/${contentFixtureIds.event}/program`,
+    );
+
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('authorization, cookie');
   });
 });

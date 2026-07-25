@@ -122,6 +122,20 @@ describe('CS-CONTENT-01 contracts', () => {
         filters: { day: null, room: null, type: null },
       }).success,
     ).toBe(false);
+
+    expect(
+      participantContentResponseSchema.safeParse({
+        eventId: ids.event,
+        version: 1,
+        content: {
+          ...content,
+          event: {
+            ...event,
+            id: '01910000-0000-7000-8000-000000000099',
+          },
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it('strips server-only snapshot keys before strict response validation', () => {

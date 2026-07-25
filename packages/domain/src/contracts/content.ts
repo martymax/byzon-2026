@@ -365,11 +365,21 @@ export type ParticipantProgramResponse = z.infer<
   typeof participantProgramResponseSchema
 >;
 
-export const participantContentResponseSchema = z.strictObject({
-  eventId: uuidSchema,
-  version: publicationVersionSchema,
-  content: publishedContentSchema,
-});
+export const participantContentResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    version: publicationVersionSchema,
+    content: publishedContentSchema,
+  })
+  .superRefine((response, context) => {
+    if (response.eventId !== response.content.event.id) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content', 'event', 'id'],
+        message: 'Content event must match the response event scope',
+      });
+    }
+  });
 
 export type ParticipantContentResponse = z.infer<
   typeof participantContentResponseSchema
