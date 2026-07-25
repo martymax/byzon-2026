@@ -29,6 +29,11 @@ import { SessionView } from '../../components/program-view';
 import { RouteFocus } from '../../components/route-focus';
 import type { ApiPort } from '../../lib/api';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
+import {
+  listOfflineAgendaQueue,
+  wipeAllParticipantOfflineData,
+  writeOfflineAgendaSnapshot,
+} from '../../lib/offline/offline-database';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
@@ -1549,6 +1554,68 @@ describe('F3-01..F3-05 participant agenda', () => {
         .toBeVisible();
     } finally {
       await browser.send('Emulation.setEmulatedMedia', { features: [] });
+    }
+  });
+
+  it('uses the owner-scoped offline copy and queues only agenda remove', async () => {
+    const onlineDescriptor = Object.getOwnPropertyDescriptor(
+      Navigator.prototype,
+      'onLine',
+    );
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    });
+    const scope = {
+      eventId: agendaFixtureIds.event,
+      userId: agendaFixtureIds.user,
+    } as const;
+    await writeOfflineAgendaSnapshot(
+      scope,
+      participantAgendaFixtures.happy!,
+      '2026-09-18T06:00:00.000Z',
+    );
+    const { api, fetch } = agendaApiFor({
+      onRead: () => {
+        throw new TypeError('Synthetic offline read');
+      },
+    });
+
+    try {
+      const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+      await expect
+        .element(screen.getByText('Zobrazuje se offline kopie agendy'))
+        .toBeVisible();
+      expect(
+        screen
+          .getByText('Tato změna potřebuje aktuální potvrzení serveru.', {
+            exact: true,
+          })
+          .elements(),
+      ).toHaveLength(2);
+
+      await screen.getByRole('button', { name: 'Odebrat z agendy' }).click();
+      await expect
+        .element(screen.getByText('Změna čeká na připojení'))
+        .toBeVisible();
+      const queue = await listOfflineAgendaQueue(scope);
+      expect(queue).toHaveLength(1);
+      expect(queue[0]).toMatchObject({
+        action: 'remove',
+        sessionId: agendaFixtureIds.savedSession,
+        status: 'pending',
+      });
+      expect(
+        fetch.mock.calls.filter(
+          ([input, init]) => requestMethod(input, init) === 'POST',
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await wipeAllParticipantOfflineData('user_request');
+      if (onlineDescriptor) {
+        Object.defineProperty(Navigator.prototype, 'onLine', onlineDescriptor);
+      }
+      delete (navigator as Navigator & { onLine?: boolean }).onLine;
     }
   });
 });
