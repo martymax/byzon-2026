@@ -1,27 +1,31 @@
 'use client';
 
+import {
+  canApplyTicketImportPreview,
+  ticketImportApplyRequestSchema,
+  type TicketImportApplyRequest,
+  type TicketImportApplyResponse,
+  type TicketImportPreviewResponse,
+  type TicketImportRowStatus,
+} from '@byzon/domain/contracts/ticket-import';
 import { useMemo, useState, type ChangeEvent } from 'react';
+
+import { requestAdminTicketImportApply } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
-  adminReasonSchema,
-  adminUploadFileNameSchema,
-  applyTicketImportPreview,
-  canApplyTicketImport,
-  ticketImportApplyRequestSchema,
-  type ImportRowStatus,
-  type TicketImportPreview,
-  type TicketImportReport,
-} from './admin-workspace-contracts';
+  adminFailureMessage,
+  createAdminIdempotencyKey,
+  isAmbiguousAdminMutationFailure,
+  isStaleAdminFailure,
+} from './admin-workspace-runtime';
 import {
-  demoImportPreview,
-  demoImportPreviewWithConflict,
-  demoImportPreviewWithUnknown,
-} from './admin-workspace-demo-data';
-import { useAdminWorkspaceScope } from './admin-workspace-shell';
+  isAdminSecurityFailure,
+  useAdminWorkspace,
+} from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-const statusLabels: Record<ImportRowStatus, string> = {
+const statusLabels: Record<TicketImportRowStatus, string> = {
   new: 'Nová',
   unchanged: 'Beze změny',
   status_changed: 'Změna stavu',
@@ -29,7 +33,7 @@ const statusLabels: Record<ImportRowStatus, string> = {
   unknown: 'Neznámý stav',
 };
 
-const statusClass: Record<ImportRowStatus, string> = {
+const statusClass: Record<TicketImportRowStatus, string> = {
   new: styles.statusNew!,
   unchanged: styles.statusUnchanged!,
   status_changed: styles.statusChanged!,
@@ -47,49 +51,39 @@ const filterOptions = [
 ] as const;
 
 type ImportFilter = (typeof filterOptions)[number][0];
-
-const formatState = (state: string | null) => {
-  if (state === 'active') return 'Aktivní';
-  if (state === 'blocked') return 'Blokovaná';
-  if (state === 'cancelled') return 'Zrušená';
-  return '—';
-};
+type PendingApply = Readonly<{
+  body: TicketImportApplyRequest;
+  idempotencyKey: string;
+}>;
 
 const safeFileNameForDisplay = (fileName: string) =>
   fileName
     .replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '�')
     .slice(0, 180);
 
-export const AdminImportWorkspace = ({
-  initialMode = 'empty',
-}: {
-  readonly initialMode?: 'empty' | 'known' | 'conflict' | 'unknown';
-}) => {
-  const scope = useAdminWorkspaceScope();
-  const [preview, setPreview] = useState<TicketImportPreview | null>(() =>
-    initialMode === 'known'
-      ? demoImportPreview
-      : initialMode === 'conflict'
-        ? demoImportPreviewWithConflict
-        : initialMode === 'unknown'
-          ? demoImportPreviewWithUnknown
-          : null,
-  );
-  const [fileState, setFileState] = useState<
-    | { readonly kind: 'empty' }
-    | {
-        readonly kind: 'selected';
-        readonly fileName: string;
-        readonly kindLabel: 'CSV' | 'XLSX';
-      }
-    | { readonly kind: 'error'; readonly message: string }
-  >({ kind: 'empty' });
-  const [progress, setProgress] = useState(preview ? 100 : 0);
+const formatTicketState = (state: string | null): string =>
+  state === null
+    ? '—'
+    : state === 'active'
+      ? 'Aktivní'
+      : state === 'blocked'
+        ? 'Blokovaná'
+        : 'Zrušená';
+
+export const AdminImportWorkspace = () => {
+  const { api, eventId, invalidateSensitive, uploadPort } = useAdminWorkspace();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] =
+    useState<TicketImportPreviewResponse | null>(null);
+  const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
   const [filter, setFilter] = useState<ImportFilter>('all');
   const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState<'upload' | 'apply' | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [report, setReport] = useState<TicketImportReport | null>(null);
+  const [pending, setPending] = useState<PendingApply | null>(null);
+  const [ambiguous, setAmbiguous] = useState(false);
 
   const visibleRows = useMemo(
     () =>
@@ -98,107 +92,127 @@ export const AdminImportWorkspace = ({
       ) ?? [],
     [filter, preview],
   );
-  const applyAllowed = preview ? canApplyTicketImport(preview) : false;
-  const reasonInvalid =
-    attempted && !adminReasonSchema.safeParse(reason).success;
+
+  const requestCandidate = preview
+    ? ticketImportApplyRequestSchema.safeParse({
+        eventId,
+        previewId: preview.previewId,
+        previewVersion: preview.previewVersion,
+        expectedImpact: preview.summary,
+        reason,
+      })
+    : null;
+  const canApply =
+    preview !== null &&
+    canApplyTicketImportPreview(preview) &&
+    requestCandidate?.success === true;
 
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    setFile(event.target.files?.[0] ?? null);
     setPreview(null);
     setReport(null);
-    setProgress(0);
-    if (!file) {
-      setFileState({ kind: 'empty' });
-      return;
-    }
-    if (!adminUploadFileNameSchema.safeParse(file.name).success) {
-      setFileState({
-        kind: 'error',
-        message:
-          'Název souboru obsahuje nepovolené nebo matoucí znaky. Soubor přejmenujte.',
-      });
-      return;
-    }
-    const extension = file.name.toLowerCase().split('.').at(-1);
-    if (extension !== 'csv' && extension !== 'xlsx') {
-      setFileState({
-        kind: 'error',
-        message: 'Podporované jsou pouze soubory CSV a XLSX do 10 MB.',
-      });
-      return;
-    }
-    if (file.size < 1) {
-      setFileState({
-        kind: 'error',
-        message: 'Prázdný soubor nelze validovat.',
-      });
-      return;
-    }
-    if (file.size > 10_000_000) {
-      setFileState({
-        kind: 'error',
-        message: 'Soubor překračuje bezpečný limit 10 MB.',
-      });
-      return;
-    }
-    const expectedMediaTypes =
-      extension === 'csv'
-        ? ['text/csv', 'application/vnd.ms-excel']
-        : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    if (file.type && !expectedMediaTypes.includes(file.type.toLowerCase())) {
-      setFileState({
-        kind: 'error',
-        message:
-          'Přípona a typ souboru si neodpovídají. Vyberte původní CSV nebo XLSX.',
-      });
-      return;
-    }
-    setFileState({
-      kind: 'selected',
-      fileName: safeFileNameForDisplay(file.name),
-      kindLabel: extension === 'csv' ? 'CSV' : 'XLSX',
-    });
-    setProgress(35);
-  };
-
-  const createPreview = (nextPreview: TicketImportPreview) => {
-    setFileState({
-      kind: 'selected',
-      fileName: nextPreview.source.fileName,
-      kindLabel: nextPreview.source.mediaType === 'text/csv' ? 'CSV' : 'XLSX',
-    });
-    setProgress(100);
-    setPreview(nextPreview);
-    setFilter('all');
-    setReason('');
+    setPending(null);
+    setAmbiguous(false);
+    setError(null);
     setAttempted(false);
-    setConfirming(false);
+    setFilter('all');
+  };
+
+  const upload = async (staleMessage?: string) => {
+    if (!file) return;
+    setBusy('upload');
+    setError(null);
+    setPreview(null);
     setReport(null);
+    setPending(null);
+    setAmbiguous(false);
+    try {
+      const result = await uploadPort.preview(eventId, file);
+      if (!result.ok) {
+        if (isAdminSecurityFailure(result.failure)) {
+          invalidateSensitive(
+            adminFailureMessage(result.failure, result.metadata?.requestId),
+          );
+          return;
+        }
+        setError(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (result.kind === 'success') {
+        setPreview(result.data);
+        setFilter('all');
+        setReason('');
+        setAttempted(false);
+        if (staleMessage) setError(staleMessage);
+      }
+    } catch {
+      setError(
+        'Soubor musí být neprázdný CSV nebo XLSX, mít odpovídající MIME typ a velikost nejvýše 10 MB.',
+      );
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const requestConfirmation = () => {
+  const prepareApply = () => {
     setAttempted(true);
-    if (
-      !preview ||
-      !applyAllowed ||
-      !adminReasonSchema.safeParse(reason).success
-    )
+    if (!requestCandidate?.success || !canApplyTicketImportPreview(preview!)) {
       return;
+    }
+    setPending({
+      body: requestCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('ticket-import'),
+    });
     setConfirming(true);
+    setAmbiguous(false);
   };
 
-  const confirmApply = () => {
-    if (!preview) return;
-    const request = ticketImportApplyRequestSchema.parse({
-      eventId: scope.eventId,
-      previewId: preview.previewId,
-      previewVersion: preview.previewVersion,
-      expectedImpact: preview.summary,
-      reason,
-      idempotencyKey: `mock-import-${preview.previewId}`,
-    });
-    setReport(applyTicketImportPreview(preview, request));
+  const submitPending = async (attempt: PendingApply) => {
+    setBusy('apply');
     setConfirming(false);
+    setError(null);
+    const result = await requestAdminTicketImportApply(
+      api,
+      eventId,
+      attempt.body,
+      attempt.idempotencyKey,
+    );
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result.failure)) {
+        setPending(null);
+        setPreview(null);
+        setFile(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (isStaleAdminFailure(result.failure)) {
+        setPending(null);
+        setAmbiguous(false);
+        await upload(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      setAmbiguous(retryable);
+      if (!retryable) setPending(null);
+      setError(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      return;
+    }
+    if (result.kind === 'success') {
+      setReport(result.data);
+      setPending(null);
+      setAmbiguous(false);
+      setReason('');
+      setAttempted(false);
+    }
   };
 
   return (
@@ -207,18 +221,17 @@ export const AdminImportWorkspace = ({
         <p className={styles.eyebrow}>F4 · bezpečný import</p>
         <h1>Import vstupenek</h1>
         <p>
-          Nahrajte CSV nebo XLSX, ověřte staging diff a teprve nad neměnnou
-          verzí potvrďte dopad. Demo adaptér nezná žádné vendorové názvy
-          sloupců.
+          Nahrajte CSV nebo XLSX, ověřte immutable staging diff a až poté
+          potvrďte dopad. Typ i obsah autoritativně ověřuje server.
         </p>
       </header>
 
       <section className={styles.panel} aria-labelledby="import-upload-title">
         <div className={styles.panelHeader}>
           <div>
-            <h2 id="import-upload-title">1. Soubor a validace</h2>
+            <h2 id="import-upload-title">1. Soubor a serverová validace</h2>
             <p className={styles.muted}>
-              Obsah souboru se v tomto režimu neposílá mimo prohlížeč.
+              Soubor jde jako multipart; klient jej nepřevádí do base64.
             </p>
           </div>
           <span className={styles.badge}>CSV / XLSX · max. 10 MB</span>
@@ -231,85 +244,42 @@ export const AdminImportWorkspace = ({
             type="file"
           />
           <span className={styles.helper}>
-            Prohlížeč předběžně porovná příponu a dostupný MIME typ. Skutečný
-            typ, obsah i checksum musí autoritativně ověřit server v karanténě.
+            V mocked režimu lze scénář měnit názvem souboru: běžný,
+            „conflict“, „unknown“, „stale“ nebo „collision“.
           </span>
         </label>
-        {fileState.kind === 'error' ? (
-          <p className={styles.warning} role="alert">
-            {fileState.message}
-          </p>
-        ) : null}
-        {fileState.kind === 'selected' ? (
+        {file ? (
           <p>
-            Vybráno: <strong>{fileState.fileName}</strong> · rozpoznáno jako{' '}
-            {fileState.kindLabel}
+            Vybráno: <strong>{safeFileNameForDisplay(file.name)}</strong> ·{' '}
+            {file.size.toLocaleString('cs-CZ')} B
           </p>
         ) : null}
-        <div className={styles.progress}>
-          <label htmlFor="admin-import-progress">Průběh staging validace</label>
-          <progress id="admin-import-progress" max={100} value={progress} />
-          <span aria-live="polite">
-            {progress === 0
-              ? 'Čeká na soubor.'
-              : progress < 100
-                ? 'Předběžná kontrola prošla; čeká serverová validace typu a obsahu.'
-                : 'Validace dokončena, immutable preview je připravené.'}
-          </span>
-        </div>
         <div className={styles.actionRow}>
           <button
             className={styles.button}
-            disabled={fileState.kind !== 'selected' || progress === 100}
-            onClick={() =>
-              createPreview(
-                fileState.kind === 'selected' &&
-                  fileState.fileName.toLowerCase().includes('unknown')
-                  ? demoImportPreviewWithUnknown
-                  : fileState.kind === 'selected' &&
-                      fileState.fileName.toLowerCase().includes('conflict')
-                    ? demoImportPreviewWithConflict
-                    : demoImportPreview,
-              )
-            }
+            disabled={!file || busy !== null}
+            onClick={() => void upload()}
             type="button"
           >
-            Vytvořit validované preview
-          </button>
-          <button
-            className={styles.secondaryButton}
-            onClick={() => createPreview(demoImportPreview)}
-            type="button"
-          >
-            Načíst syntetický CSV scénář
-          </button>
-          <button
-            className={styles.secondaryButton}
-            onClick={() => createPreview(demoImportPreviewWithConflict)}
-            type="button"
-          >
-            Simulovat konflikt
-          </button>
-          <button
-            className={styles.secondaryButton}
-            onClick={() => createPreview(demoImportPreviewWithUnknown)}
-            type="button"
-          >
-            Simulovat neznámý stav
+            {busy === 'upload'
+              ? 'Server validuje…'
+              : 'Vytvořit validované preview'}
           </button>
         </div>
+        {error ? (
+          <p className={styles.warning} role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>
 
       {preview ? (
-        <section
-          className={styles.panel}
-          aria-labelledby="import-preview-title"
-        >
+        <section className={styles.panel} aria-labelledby="import-preview-title">
           <div className={styles.summaryHeader}>
             <div>
               <h2 id="import-preview-title">2. Staging diff preview</h2>
               <p className={styles.muted}>
-                Neměnná verze: <code>{preview.previewVersion}</code>
+                Preview {preview.previewId} · verze {preview.previewVersion}
               </p>
             </div>
             <span className={styles.badge}>{preview.summary.total} řádků</span>
@@ -324,58 +294,51 @@ export const AdminImportWorkspace = ({
               <strong>{preview.summary.unchanged}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Změny stavu</small>
+              <small>Změna stavu</small>
               <strong>{preview.summary.statusChanged}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Konflikty</small>
-              <strong>{preview.summary.conflict}</strong>
-            </div>
-            <div className={styles.metric}>
-              <small>Neznámé</small>
-              <strong>{preview.summary.unknown}</strong>
+              <small>Konflikt / neznámé</small>
+              <strong>
+                {preview.summary.conflict} / {preview.summary.unknown}
+              </strong>
             </div>
           </div>
-          <div
-            aria-label="Filtr staging diffu"
-            className={styles.filters}
-            role="group"
-          >
-            {filterOptions.map(([value, label]) => (
-              <button
-                aria-pressed={filter === value}
-                className={styles.filterButton}
-                key={value}
-                onClick={() => setFilter(value)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <label className={styles.field}>
+            <span>Filtrovat řádky</span>
+            <select
+              onChange={(event) => setFilter(event.target.value as ImportFilter)}
+              value={filter}
+            >
+              {filterOptions.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
-              <caption>
-                Validované změny; kontakty jsou maskované a konflikt zablokuje
-                celý apply.
-              </caption>
+              <caption>Maskovaný immutable rozdíl importu.</caption>
               <thead>
                 <tr>
-                  <th scope="col">Reference</th>
+                  <th scope="col">Řádek</th>
                   <th scope="col">Účastník</th>
-                  <th scope="col">Výsledek diffu</th>
-                  <th scope="col">Původní → nový stav</th>
+                  <th scope="col">Stav</th>
+                  <th scope="col">Původní → nový</th>
                   <th scope="col">Poznámka</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((row) => (
                   <tr key={row.rowId}>
-                    <td>{row.sourceReference}</td>
+                    <td>{row.sourceRowNumber}</td>
                     <td>
                       {row.displayName}
                       <br />
-                      <span className={styles.muted}>{row.maskedContact}</span>
+                      <small>
+                        {row.maskedContact} · •{row.referenceSuffix}
+                      </small>
                     </td>
                     <td>
                       <span
@@ -385,21 +348,26 @@ export const AdminImportWorkspace = ({
                       </span>
                     </td>
                     <td>
-                      {formatState(row.currentState)} →{' '}
-                      {formatState(row.incomingState)}
+                      {formatTicketState(row.currentState)} →{' '}
+                      {formatTicketState(row.incomingState)}
                     </td>
-                    <td>{row.issues.join(' ') || 'Bez upozornění.'}</td>
+                    <td>
+                      {row.issues.map(({ message }) => message).join('; ') ||
+                        'Bez problému'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <div className={styles.cards}>
-            <ul className={styles.cardList} aria-label="Změny importu">
+            <ul className={styles.cardList} aria-label="Řádky importu">
               {visibleRows.map((row) => (
                 <li className={styles.dataCard} key={row.rowId}>
                   <div className={styles.panelHeader}>
-                    <strong>{row.sourceReference}</strong>
+                    <strong>
+                      Řádek {row.sourceRowNumber} · {row.displayName}
+                    </strong>
                     <span
                       className={`${styles.statusBadge} ${statusClass[row.status]}`}
                     >
@@ -407,112 +375,96 @@ export const AdminImportWorkspace = ({
                     </span>
                   </div>
                   <dl>
-                    <dt>Účastník</dt>
+                    <dt>Kontakt</dt>
                     <dd>
-                      {row.displayName} · {row.maskedContact}
+                      {row.maskedContact} · •{row.referenceSuffix}
                     </dd>
-                    <dt>Změna</dt>
+                    <dt>Stav</dt>
                     <dd>
-                      {formatState(row.currentState)} →{' '}
-                      {formatState(row.incomingState)}
+                      {formatTicketState(row.currentState)} →{' '}
+                      {formatTicketState(row.incomingState)}
                     </dd>
                     <dt>Poznámka</dt>
-                    <dd>{row.issues.join(' ') || 'Bez upozornění.'}</dd>
+                    <dd>
+                      {row.issues.map(({ message }) => message).join('; ') ||
+                        'Bez problému'}
+                    </dd>
                   </dl>
                 </li>
               ))}
             </ul>
           </div>
-          {visibleRows.length === 0 ? (
-            <p className={styles.empty}>Filtru neodpovídá žádný řádek.</p>
-          ) : null}
-        </section>
-      ) : null}
-
-      {preview ? (
-        <section className={styles.panel} aria-labelledby="import-apply-title">
-          <h2 id="import-apply-title">3. Potvrzení a report</h2>
-          <p className={styles.warning}>
-            Toto je neprodukční mock apply. Konflikt i neznámý status zablokují
-            celý apply a nic se nezmění.
-          </p>
-          {!applyAllowed ? (
-            <p className={styles.errorSummary} role="alert">
-              Apply je zakázán: preview obsahuje konflikt nebo neznámý stav.
-              Opravte zdroj a vytvořte novou immutable verzi.
+          {!canApplyTicketImportPreview(preview) ? (
+            <p className={styles.warning} role="alert">
+              Preview obsahuje konflikt nebo neznámý stav. Opravte zdroj a
+              nahrajte nový soubor; apply je fail-closed.
             </p>
           ) : null}
-          {reasonInvalid ? (
-            <section
-              aria-labelledby="import-errors-title"
-              className={styles.errorSummary}
-              role="alert"
-            >
-              <h2 id="import-errors-title">Doplňte povinné údaje</h2>
-              <a href="#import-reason">Uveďte důvod mock apply.</a>
-            </section>
-          ) : null}
           <label className={styles.field}>
-            <span>Důvod změny</span>
+            <span>Auditní důvod</span>
             <textarea
-              aria-describedby="import-reason-help"
-              aria-invalid={reasonInvalid}
-              id="import-reason"
+              aria-invalid={attempted && requestCandidate?.success === false}
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
-            <span className={styles.helper} id="import-reason-help">
-              Důvod je součástí výsledného auditu; nevkládejte osobní údaje.
+            <span className={styles.helper}>
+              Nejméně 8 viditelných znaků; důvod bude součástí auditu.
             </span>
           </label>
           <button
-            className={styles.button}
-            disabled={!applyAllowed || report !== null}
-            onClick={requestConfirmation}
+            className={styles.dangerButton}
+            disabled={!canApply || busy !== null}
+            onClick={prepareApply}
             type="button"
           >
-            Zkontrolovat dopad mock apply
+            Zkontrolovat a potvrdit apply
           </button>
-          {report ? (
-            <section
-              aria-live="polite"
-              className={`${styles.success} ${styles.result}`}
+          {ambiguous && pending ? (
+            <button
+              className={styles.secondaryButton}
+              disabled={busy !== null}
+              onClick={() => void submitPending(pending)}
+              type="button"
             >
-              <h3>Mock report je hotový</h3>
-              <p>
-                Aplikováno {report.applied}, beze změny {report.unchanged},
-                přeskočené konflikty {report.skippedConflicts}. Audit:{' '}
-                <code>{report.auditId}</code>.
-              </p>
-              <p>
-                Preview <code>{report.previewVersion}</code> nebylo po potvrzení
-                změněno.
-              </p>
-            </section>
+              Zopakovat přesně stejný pokus
+            </button>
           ) : null}
         </section>
       ) : null}
 
-      {confirming && preview ? (
+      {report ? (
+        <section className={styles.success} role="status">
+          <h2>
+            {report.outcome === 'already_applied'
+              ? 'Server potvrdil dříve dokončený import'
+              : 'Import byl aplikován'}
+          </h2>
+          <p>
+            Vytvořeno {report.result.created}, změněno{' '}
+            {report.result.statusChanged}, beze změny {report.result.unchanged}.
+            Audit: <code>{report.audit.auditId}</code>
+          </p>
+        </section>
+      ) : null}
+
+      {confirming && pending ? (
         <AdminConfirmDialog
-          acknowledgement={`Potvrzuji neprodukční mock apply verze ${preview.previewVersion}.`}
-          confirmLabel="Použít pouze v mock režimu"
-          description="Potvrzujete přesný dopad neměnného staging preview. Tato ukázka nemění produkční vstupenky."
+          acknowledgement="Ověřil/a jsem immutable preview, jeho verzi a uvedený dopad."
+          confirmLabel="Aplikovat import"
+          danger
+          description="Server aplikuje přesně tuto verzi preview. Opakování stejného pokusu používá stejný idempotency klíč."
           impact={
-            <dl className={styles.detailList}>
-              <dt>Nové</dt>
-              <dd>{preview.summary.new}</dd>
-              <dt>Změny stavu</dt>
-              <dd>{preview.summary.statusChanged}</dd>
-              <dt>Přeskočené konflikty</dt>
-              <dd>{preview.summary.conflict}</dd>
-              <dt>Verze</dt>
-              <dd>{preview.previewVersion}</dd>
-            </dl>
+            <p>
+              {pending.body.expectedImpact.new} nových ·{' '}
+              {pending.body.expectedImpact.statusChanged} změn stavu
+            </p>
           }
-          onConfirm={confirmApply}
-          onDismiss={() => setConfirming(false)}
-          title="Potvrdit neměnný dopad importu?"
+          onConfirm={() => void submitPending(pending)}
+          onDismiss={() => {
+            setConfirming(false);
+            setPending(null);
+          }}
+          title="Aplikovat import vstupenek?"
         />
       ) : null}
     </div>

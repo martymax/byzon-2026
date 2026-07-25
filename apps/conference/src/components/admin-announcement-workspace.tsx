@@ -1,374 +1,398 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import {
+  adminAnnouncementPreviewRequestSchema,
+  adminAnnouncementSendRequestSchema,
+  type AdminAnnouncementDraft,
+  type AdminAnnouncementPreviewRequest,
+  type AdminAnnouncementPreviewResponse,
+  type AdminAnnouncementSendRequest,
+  type AdminAnnouncementSendResponse,
+  type AnnouncementSeverity,
+} from '@byzon/domain/contracts';
+import { useState } from 'react';
+
+import {
+  requestAdminAnnouncementPreview,
+  requestAdminAnnouncementSend,
+} from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
-  adminReasonSchema,
-  announcementDraftSchema,
-  announcementSendRequestSchema,
-  createAnnouncementPreview,
-  sendAnnouncementPreview,
-  type AnnouncementDraft,
-  type AnnouncementPreview,
-  type AnnouncementSendResponse,
-} from './admin-workspace-contracts';
-import { useAdminWorkspaceScope } from './admin-workspace-shell';
+  adminFailureMessage,
+  createAdminIdempotencyKey,
+  isAmbiguousAdminMutationFailure,
+  isStaleAdminFailure,
+} from './admin-workspace-runtime';
+import {
+  isAdminSecurityFailure,
+  useAdminWorkspace,
+} from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-type DraftFields = {
-  readonly title: string;
-  readonly bodyText: string;
-  readonly severity: AnnouncementDraft['severity'];
-  readonly audienceKind: AnnouncementDraft['audience']['kind'];
-  readonly sessionId: string;
-};
+type PendingSend = Readonly<{
+  body: AdminAnnouncementSendRequest;
+  idempotencyKey: string;
+}>;
 
-const initialDraft: DraftFields = {
-  title: '',
-  bodyText: '',
-  severity: 'important',
-  audienceKind: 'event',
-  sessionId: 'session-growth-2026',
+const severityLabels: Record<AnnouncementSeverity, string> = {
+  info: 'Informace',
+  important: 'Důležité',
+  critical: 'Kritické',
 };
 
 export const AdminAnnouncementWorkspace = () => {
-  const scope = useAdminWorkspaceScope();
-  const [fields, setFields] = useState<DraftFields>(initialDraft);
-  const [preview, setPreview] = useState<AnnouncementPreview | null>(null);
-  const [previewWorking, setPreviewWorking] = useState(false);
-  const [previewAttempted, setPreviewAttempted] = useState(false);
+  const { api, eventId, invalidateSensitive } = useAdminWorkspace();
+  const [title, setTitle] = useState('');
+  const [bodyText, setBodyText] = useState('');
+  const [severity, setSeverity] = useState<AnnouncementSeverity>('info');
+  const [audienceKind, setAudienceKind] = useState<'event' | 'session'>(
+    'event',
+  );
+  const [sessionId, setSessionId] = useState('');
+  const [preview, setPreview] =
+    useState<AdminAnnouncementPreviewResponse | null>(null);
   const [reason, setReason] = useState('');
-  const [sendAttempted, setSendAttempted] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [pending, setPending] = useState<PendingSend | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [result, setResult] = useState<AnnouncementSendResponse | null>(null);
-  const previewEpoch = useRef(0);
-  const previewLock = useRef(false);
+  const [ambiguous, setAmbiguous] = useState(false);
+  const [busy, setBusy] = useState<'preview' | 'send' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] =
+    useState<AdminAnnouncementSendResponse | null>(null);
 
-  const draftCandidate = {
-    title: fields.title,
-    bodyText: fields.bodyText,
-    severity: fields.severity,
-    audience:
-      fields.audienceKind === 'event'
-        ? { kind: 'event' as const }
-        : {
-            kind: 'session' as const,
-            sessionId: fields.sessionId,
-          },
-  };
-  const draftResult = announcementDraftSchema.safeParse(draftCandidate);
-  const titleInvalid = previewAttempted && fields.title.trim().length < 1;
-  const bodyInvalid = previewAttempted && fields.bodyText.trim().length < 1;
-  const reasonInvalid =
-    sendAttempted && !adminReasonSchema.safeParse(reason).success;
+  const draftCandidate = adminAnnouncementPreviewRequestSchema.safeParse({
+    draft: {
+      title,
+      bodyText,
+      severity,
+      audience:
+        audienceKind === 'event'
+          ? { kind: 'event' }
+          : { kind: 'session', sessionId },
+    },
+  });
 
-  const updateField = <Key extends keyof DraftFields>(
-    key: Key,
-    value: DraftFields[Key],
-  ) => {
-    previewEpoch.current += 1;
-    previewLock.current = false;
-    setPreviewWorking(false);
-    setFields((current) => ({ ...current, [key]: value }));
+  const resetImmutablePreview = () => {
     setPreview(null);
-    setResult(null);
+    setPending(null);
     setConfirming(false);
+    setAmbiguous(false);
+    setSent(null);
   };
 
-  const buildPreview = async () => {
-    setPreviewAttempted(true);
-    if (!draftResult.success || previewLock.current) return;
-    const epoch = ++previewEpoch.current;
-    previewLock.current = true;
-    setPreviewWorking(true);
-    try {
-      const nextPreview = await createAnnouncementPreview(
-        scope.eventId,
-        draftResult.data,
-      );
-      if (previewEpoch.current !== epoch) return;
-      setPreview(nextPreview);
-      setResult(null);
-      setReason('');
-      setSendAttempted(false);
-    } finally {
-      if (previewEpoch.current === epoch) {
-        previewLock.current = false;
-        setPreviewWorking(false);
+  const createPreview = async (
+    body: AdminAnnouncementPreviewRequest,
+    staleMessage?: string,
+  ) => {
+    setBusy('preview');
+    setError(null);
+    setPending(null);
+    setConfirming(false);
+    setAmbiguous(false);
+    const result = await requestAdminAnnouncementPreview(api, eventId, body);
+    setBusy(null);
+    if (!result.ok) {
+      setPreview(null);
+      if (isAdminSecurityFailure(result.failure)) {
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
       }
+      setError(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      return;
+    }
+    if (result.kind === 'success') {
+      setPreview(result.data);
+      setReason('');
+      setAttempted(false);
+      if (staleMessage) setError(staleMessage);
     }
   };
 
-  const requestSend = () => {
-    setSendAttempted(true);
-    if (!preview || !adminReasonSchema.safeParse(reason).success) return;
-    setConfirming(true);
+  const previewDraft = () => {
+    setAttempted(true);
+    if (!draftCandidate.success) {
+      setError(
+        'Doplňte bezpečný název, text a platné publikum bez HTML značek.',
+      );
+      return;
+    }
+    void createPreview(draftCandidate.data);
   };
 
-  const confirmSend = () => {
-    if (!preview) return;
-    const request = announcementSendRequestSchema.parse({
-      eventId: scope.eventId,
-      previewId: preview.previewId,
-      previewVersion: preview.previewVersion,
-      reason,
-      idempotencyKey: `mock-ann-send-${preview.previewId}`,
+  const sendCandidate = preview
+    ? adminAnnouncementSendRequestSchema.safeParse({
+        previewId: preview.previewId,
+        previewVersion: preview.previewVersion,
+        reason,
+      })
+    : null;
+
+  const prepareSend = () => {
+    setAttempted(true);
+    if (!sendCandidate?.success || preview?.audience.recipientCount === 0) {
+      return;
+    }
+    setPending({
+      body: sendCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('announcement'),
     });
-    setResult(sendAnnouncementPreview(preview, request));
+    setConfirming(true);
+    setAmbiguous(false);
+  };
+
+  const send = async (attempt: PendingSend) => {
+    setBusy('send');
     setConfirming(false);
+    setError(null);
+    const result = await requestAdminAnnouncementSend(
+      api,
+      eventId,
+      attempt.body,
+      attempt.idempotencyKey,
+    );
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result.failure)) {
+        setPreview(null);
+        setPending(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (isStaleAdminFailure(result.failure)) {
+        const currentDraft: AdminAnnouncementDraft | undefined = preview?.draft;
+        setPreview(null);
+        setPending(null);
+        setAmbiguous(false);
+        if (currentDraft) {
+          await createPreview(
+            { draft: currentDraft },
+            adminFailureMessage(result.failure, result.metadata?.requestId),
+          );
+        }
+        return;
+      }
+      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      setAmbiguous(retryable);
+      if (!retryable) setPending(null);
+      setError(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      return;
+    }
+    if (result.kind === 'success') {
+      setSent(result.data);
+      setPending(null);
+      setAmbiguous(false);
+      setReason('');
+      setAttempted(false);
+    }
   };
 
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · Priority A</p>
-        <h1>In-app oznámení</h1>
+        <p className={styles.eyebrow}>F4 · oznámení v aplikaci</p>
+        <h1>Oznámení účastníkům</h1>
         <p>
-          Vytvořte textovou zprávu, zkontrolujte agregovaný rozsah publika a
-          potvrďte přesnou immutable verzi. E-mail a pokročilé cílení nejsou
-          součástí tohoto mock řezu.
+          Náhled uzamkne text, publikum i verzi. Odeslání používá pouze in-app
+          kanál, vyžaduje důvod a je bezpečně idempotentní.
         </p>
       </header>
 
       <section className={styles.panel} aria-labelledby="announcement-draft">
-        <div className={styles.panelHeader}>
-          <h2 id="announcement-draft">1. Návrh zprávy</h2>
-          <span className={styles.badge}>Pouze in-app · mock</span>
-        </div>
-        {previewAttempted && !draftResult.success ? (
-          <section
-            aria-labelledby="announcement-errors"
-            className={styles.errorSummary}
-            role="alert"
-          >
-            <h2 id="announcement-errors">Návrh není připravený</h2>
-            <ul>
-              {titleInvalid ? (
-                <li>
-                  <a href="#announcement-title">Doplňte název zprávy.</a>
-                </li>
-              ) : null}
-              {bodyInvalid ? (
-                <li>
-                  <a href="#announcement-body">Doplňte text zprávy.</a>
-                </li>
-              ) : null}
-              {!titleInvalid && !bodyInvalid ? (
-                <li>
-                  Text obsahuje nepodporovaný znak nebo překročil bezpečný
-                  limit.
-                </li>
-              ) : null}
-            </ul>
-          </section>
-        ) : null}
+        <h2 id="announcement-draft">1. Návrh</h2>
         <div className={styles.twoColumn}>
           <label className={styles.field}>
             <span>Název</span>
             <input
-              aria-invalid={titleInvalid}
-              id="announcement-title"
               maxLength={160}
-              onChange={(event) => updateField('title', event.target.value)}
-              value={fields.title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                resetImmutablePreview();
+              }}
+              value={title}
             />
           </label>
           <label className={styles.field}>
             <span>Závažnost</span>
             <select
-              onChange={(event) =>
-                updateField(
-                  'severity',
-                  event.target.value as AnnouncementDraft['severity'],
-                )
-              }
-              value={fields.severity}
+              onChange={(event) => {
+                setSeverity(event.target.value as AnnouncementSeverity);
+                resetImmutablePreview();
+              }}
+              value={severity}
             >
-              <option value="info">Informace</option>
-              <option value="important">Důležité</option>
-              <option value="critical">Kritické</option>
+              {Object.entries(severityLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
         </div>
         <label className={styles.field}>
-          <span>Text zprávy</span>
+          <span>Text oznámení</span>
           <textarea
-            aria-describedby="announcement-body-help"
-            aria-invalid={bodyInvalid}
-            id="announcement-body"
-            maxLength={4_000}
-            onChange={(event) => updateField('bodyText', event.target.value)}
-            value={fields.bodyText}
+            maxLength={4000}
+            onChange={(event) => {
+              setBodyText(event.target.value);
+              resetImmutablePreview();
+            }}
+            value={bodyText}
           />
-          <span className={styles.helper} id="announcement-body-help">
-            Prostý text bez HTML; nevkládejte seznam adresátů ani osobní údaje.
+          <span className={styles.helper}>
+            Prostý text; HTML značky ani nebezpečné řídicí znaky nejsou
+            povolené.
           </span>
         </label>
-        <fieldset className={styles.fieldGroup}>
-          <legend className={styles.legend}>Publikum</legend>
-          <label className={styles.checkRow}>
-            <input
-              checked={fields.audienceKind === 'event'}
-              name="audience"
-              onChange={() => updateField('audienceKind', 'event')}
-              type="radio"
-            />
-            <span>Všichni oprávnění účastníci akce</span>
+        <div className={styles.twoColumn}>
+          <label className={styles.field}>
+            <span>Publikum</span>
+            <select
+              onChange={(event) => {
+                setAudienceKind(event.target.value as 'event' | 'session');
+                resetImmutablePreview();
+              }}
+              value={audienceKind}
+            >
+              <option value="event">Celá akce</option>
+              <option value="session">Konkrétní session</option>
+            </select>
           </label>
-          <label className={styles.checkRow}>
-            <input
-              checked={fields.audienceKind === 'session'}
-              name="audience"
-              onChange={() => updateField('audienceKind', 'session')}
-              type="radio"
-            />
-            <span>Účastníci přímo dotčené session</span>
-          </label>
-          {fields.audienceKind === 'session' ? (
+          {audienceKind === 'session' ? (
             <label className={styles.field}>
-              <span>Session</span>
-              <select
-                onChange={(event) =>
-                  updateField('sessionId', event.target.value)
-                }
-                value={fields.sessionId}
-              >
-                <option value="session-growth-2026">Růst bez zkratek</option>
-                <option value="session-panel-2026">
-                  Panel: firmy v pohybu
-                </option>
-              </select>
+              <span>ID session</span>
+              <input
+                onChange={(event) => {
+                  setSessionId(event.target.value);
+                  resetImmutablePreview();
+                }}
+                value={sessionId}
+              />
             </label>
           ) : null}
-        </fieldset>
+        </div>
         <button
           className={styles.button}
-          disabled={previewWorking}
-          onClick={() => void buildPreview()}
+          disabled={busy !== null}
+          onClick={previewDraft}
           type="button"
         >
-          {previewWorking
-            ? 'Vytvářím bezpečné preview…'
-            : 'Vytvořit audience preview'}
+          {busy === 'preview' ? 'Počítám publikum…' : 'Vytvořit preview'}
         </button>
+        {error ? (
+          <p className={styles.warning} role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>
 
       {preview ? (
-        <section
-          className={styles.panel}
-          aria-labelledby="announcement-preview"
-        >
+        <section className={styles.panel} aria-labelledby="announcement-preview">
           <div className={styles.panelHeader}>
             <div>
-              <h2 id="announcement-preview">2. Immutable audience preview</h2>
+              <h2 id="announcement-preview">2. Immutable preview</h2>
               <p className={styles.muted}>
-                Verze: <code>{preview.previewVersion}</code>
+                {preview.previewId} · verze {preview.previewVersion}
               </p>
             </div>
             <span className={styles.badge}>
-              {preview.draft.severity === 'critical'
-                ? 'Kritické'
-                : preview.draft.severity === 'important'
-                  ? 'Důležité'
-                  : 'Informace'}
+              {preview.audience.recipientCount} příjemců
             </span>
           </div>
-          <div className={styles.twoColumn}>
-            <div className={styles.metric}>
-              <small>Zahrnutí příjemci</small>
-              <strong>{preview.recipientCount}</strong>
-              <span>Agregovaný počet, bez seznamu identit.</span>
-            </div>
-            <div className={styles.metric}>
-              <small>Vyloučení</small>
-              <strong>{preview.excludedCount}</strong>
-              <span>Bez aktivního oprávnění nebo mimo rozsah.</span>
-            </div>
-          </div>
-          <article className={styles.callout}>
+          <article className={styles.dataCard}>
+            <span className={styles.statusBadge}>
+              {severityLabels[preview.draft.severity]}
+            </span>
             <h3>{preview.draft.title}</h3>
             <p>{preview.draft.bodyText}</p>
           </article>
-          <p className={styles.warning}>
-            Jakákoli úprava návrhu toto preview okamžitě zneplatní a vyžádá nové
-            potvrzení.
+          <p>
+            Vyloučeno: {preview.audience.excludedCount}. Maskovaný vzorek:{' '}
+            {preview.audience.sample
+              .map(({ participantReference }) => participantReference)
+              .join(', ') || 'bez vzorku'}
           </p>
-          {reasonInvalid ? (
-            <section
-              aria-labelledby="announcement-send-errors"
-              className={styles.errorSummary}
-              role="alert"
-            >
-              <h2 id="announcement-send-errors">Doplňte důvod odeslání</h2>
-              <a href="#announcement-reason">Uveďte stručný provozní důvod.</a>
-            </section>
+          {preview.audience.recipientCount === 0 ? (
+            <p className={styles.warning} role="alert">
+              Prázdné publikum nelze odeslat.
+            </p>
           ) : null}
           <label className={styles.field}>
-            <span>Provozní důvod</span>
+            <span>Auditní důvod odeslání</span>
             <textarea
-              aria-invalid={reasonInvalid}
-              id="announcement-reason"
+              aria-invalid={attempted && sendCandidate?.success === false}
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
+            <span className={styles.helper}>
+              Pro mocked scénáře lze přidat „stale“, „expired“, „timeout“ nebo
+              „collision“.
+            </span>
           </label>
-          <button
-            className={styles.button}
-            disabled={result !== null}
-            onClick={requestSend}
-            type="button"
-          >
-            Zkontrolovat odeslání
-          </button>
-          {result ? (
-            <section
-              aria-live="polite"
-              className={`${styles.success} ${styles.result}`}
+          <div className={styles.actionRow}>
+            <button
+              className={styles.dangerButton}
+              disabled={busy !== null || preview.audience.recipientCount === 0}
+              onClick={prepareSend}
+              type="button"
             >
-              <h3>Odesláno pouze v in-app mocku</h3>
-              <p>
-                Příjemců: {result.recipientCount}. Audit:{' '}
-                <code>{result.audit.auditId}</code>. Žádný e-mail ani produkční
-                job nebyl vytvořen.
-              </p>
-            </section>
-          ) : null}
+              Zkontrolovat odeslání
+            </button>
+            {ambiguous && pending ? (
+              <button
+                className={styles.secondaryButton}
+                disabled={busy !== null}
+                onClick={() => void send(pending)}
+                type="button"
+              >
+                Zopakovat přesně stejný pokus
+              </button>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
-      <section className={styles.panel} aria-labelledby="announcement-later">
-        <h2 id="announcement-later">Mimo Priority A</h2>
-        <p className={styles.muted}>
-          Pokročilé segmenty, e-mailové kanály a reporting zůstanou neaktivní,
-          dokud nebudou mít vlastní kontrakt, provider a bezpečnostní review.
-        </p>
-        <button className={styles.secondaryButton} disabled type="button">
-          E-mailový kanál není dostupný
-        </button>
-      </section>
+      {sent ? (
+        <section className={styles.success} role="status">
+          <h2>
+            {sent.outcome === 'already_sent'
+              ? 'Server potvrdil dřívější odeslání'
+              : 'Oznámení bylo odesláno'}
+          </h2>
+          <p>
+            {sent.recipientCount} příjemců · audit{' '}
+            <code>{sent.audit.auditId}</code>
+          </p>
+        </section>
+      ) : null}
 
-      {confirming && preview ? (
+      {confirming && pending && preview ? (
         <AdminConfirmDialog
-          acknowledgement={`Potvrzuji odeslání přesné mock verze ${preview.previewVersion} pouze do in-app ukázky.`}
-          confirmLabel="Odeslat v in-app mocku"
+          acknowledgement="Ověřil/a jsem text, závažnost, immutable verzi a počet příjemců."
+          confirmLabel="Odeslat oznámení"
           danger={preview.draft.severity === 'critical'}
-          description="Publikum je agregované, neměnné a svázané s aktuální akcí. Odeslání nevytvoří produkční zprávy."
+          description="Po odeslání nelze oznámení upravit. Server znovu ověří preview i oprávnění."
           impact={
-            <dl className={styles.detailList}>
-              <dt>Název</dt>
-              <dd>{preview.draft.title}</dd>
-              <dt>Příjemců</dt>
-              <dd>{preview.recipientCount}</dd>
-              <dt>Vyloučeno</dt>
-              <dd>{preview.excludedCount}</dd>
-              <dt>Verze</dt>
-              <dd>{preview.previewVersion}</dd>
-            </dl>
+            <p>
+              {preview.audience.recipientCount} příjemců ·{' '}
+              {severityLabels[preview.draft.severity]}
+            </p>
           }
-          onConfirm={confirmSend}
-          onDismiss={() => setConfirming(false)}
-          title="Potvrdit in-app oznámení?"
+          onConfirm={() => void send(pending)}
+          onDismiss={() => {
+            setConfirming(false);
+            setPending(null);
+          }}
+          title="Odeslat oznámení do aplikace?"
         />
       ) : null}
     </div>

@@ -1,4 +1,28 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  adminAnnouncementPreviewResponseSchema,
+  adminAnnouncementSendResponseSchema,
+} from '@byzon/domain/contracts';
+import {
+  adminOperationsOverviewResponseSchema,
+  adminReservationListResponseSchema,
+  adminReservationMutationResponseSchema,
+} from '@byzon/domain/contracts/admin';
+import {
+  ticketImportApplyResponseSchema,
+  ticketImportPreviewResponseSchema,
+} from '@byzon/domain/contracts/ticket-import';
+import {
+  adminAnnouncementPreviewFixtures,
+  adminAnnouncementSendFixtures,
+  adminContextFixtures,
+  adminFixtureIds,
+  adminOperationsOverviewFixtures,
+  adminReservationFixtures,
+  adminReservationMutationFixtures,
+  ticketImportApplyFixtures,
+  ticketImportPreviewFixtures,
+} from '@byzon/test-support/fixtures';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminAnnouncementWorkspace } from '../../components/admin-announcement-workspace';
 import { AdminImportWorkspace } from '../../components/admin-import-workspace';
@@ -6,9 +30,52 @@ import { AdminOperationsWorkspace } from '../../components/admin-operations-work
 import { AdminReservationWorkspace } from '../../components/admin-reservation-workspace';
 import { AdminSupportWorkspace } from '../../components/admin-support-workspace';
 import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
-import { demoReservations } from '../../components/admin-workspace-demo-data';
+import {
+  adminAnnouncementPreviewEndpoint,
+  adminAnnouncementSendEndpoint,
+  adminContextEndpoint,
+  adminExportEndpoint,
+  adminOperationsOverviewEndpoint,
+  adminReservationMutationEndpoint,
+  adminReservationsEndpoint,
+  adminSupportSearchEndpoint,
+  adminTicketImportApplyEndpoint,
+  type AdminTicketImportUploadPort,
+} from '../../lib/admin-api';
+import type { ApiPort } from '../../lib/api/endpoint';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent, userEvent } from './render';
+
+const metadata = { requestId: 'component-admin-0001' } as const;
+
+const success = <Value,>(data: Value) =>
+  ({
+    ok: true,
+    kind: 'success',
+    status: 200,
+    data,
+    metadata,
+  }) as const;
+
+const failure = (
+  kind: 'offline' | 'timeout' | 'transport' | 'invalid_response',
+) =>
+  ({
+    ok: false,
+    kind: 'failure',
+    failure: { kind },
+  }) as const;
+
+type RequestHandler = (
+  endpoint: unknown,
+  options: unknown,
+) => Promise<unknown> | unknown;
+
+const createApi = (handler: RequestHandler): ApiPort => ({
+  request: vi.fn(
+    async (endpoint: unknown, options: unknown) => handler(endpoint, options),
+  ) as unknown as ApiPort['request'],
+});
 
 const adminRoot = (): HTMLElement => {
   const element = document.querySelector<HTMLElement>(
@@ -21,26 +88,35 @@ const adminRoot = (): HTMLElement => {
 const acknowledgeDialog = async (
   screen: Awaited<ReturnType<typeof renderComponent>>,
 ) => {
-  await screen.getByRole('checkbox', { name: /potvrzuji/i }).click();
+  await screen.getByRole('checkbox').click();
 };
+
+const organizerApi = (handler: RequestHandler): ApiPort =>
+  createApi((endpoint, options) =>
+    endpoint === adminContextEndpoint
+      ? success(adminContextFixtures.organizer!)
+      : handler(endpoint, options),
+  );
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/admin');
 });
 
-describe('F4 admin workspace critical mocked journeys', () => {
-  it('provides a keyboard-first adaptive shell and fails closed for a forbidden role', async () => {
-    window.history.replaceState({}, '', '/admin/import');
+describe('F4 contract-first admin journeys', () => {
+  it('loads canonical context and fails closed before a forbidden resource is mounted', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return success(adminContextFixtures.room_operator!);
+      }
+      throw new Error('A forbidden child attempted an API request.');
+    });
     const screen = await renderComponent(
-      <AdminWorkspaceShell initialRole="participant">
-        <AdminImportWorkspace initialMode="known" />
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminImportWorkspace />
       </AdminWorkspaceShell>,
     );
 
-    await userEvent.keyboard('{Tab}');
-    await expect
-      .element(screen.getByRole('link', { name: 'Přeskočit na hlavní obsah' }))
-      .toHaveFocus();
     await expect
       .element(
         screen.getByRole('heading', {
@@ -48,269 +124,158 @@ describe('F4 admin workspace critical mocked journeys', () => {
         }),
       )
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('SYN-10001');
+    await userEvent.keyboard('{Tab}');
+    await expect
+      .element(screen.getByRole('link', { name: 'Přeskočit na hlavní obsah' }))
+      .toHaveFocus();
+    expect(api.request).toHaveBeenCalled();
     await expectComponentToPassAxe(adminRoot());
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
   });
 
-  it('preserves the selected role across client navigation and clears scoped drafts', async () => {
-    window.history.replaceState({}, '', '/admin/ucastnici');
-    const screen = await renderComponent(
-      <AdminWorkspaceShell initialRole="support_operator">
-        <AdminSupportWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await screen
-      .getByRole('searchbox', {
-        name: 'Reference vstupenky nebo zkrácené jméno',
-      })
-      .fill('SYN-10001');
-    await screen
-      .getByRole('button', { name: 'Vyhledat v mock datech' })
-      .click();
-    await screen
-      .getByRole('button', { name: 'Otevřít auditovanou akci' })
-      .click();
-    await screen
-      .getByRole('textbox', { name: 'Důvod' })
-      .fill('Citlivý rozpracovaný důvod se nesmí přenést.');
-
-    await screen
-      .getByRole('combobox', { name: 'Demo role a oprávnění' })
-      .selectOptions('organizer_admin');
-    await expect.element(screen.getByRole('searchbox')).toHaveValue('');
-
-    await screen
-      .getByRole('combobox', { name: 'Demo role a oprávnění' })
-      .selectOptions('support_operator');
-    window.history.pushState({}, '', '/admin/vstupenky');
-    window.dispatchEvent(new PopStateEvent('popstate'));
-
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'K této části nemáte oprávnění',
-        }),
-      )
-      .toBeVisible();
-    await expect
-      .element(screen.getByRole('combobox', { name: 'Demo role a oprávnění' }))
-      .toHaveValue('support_operator');
-    await expect.element(screen.getByRole('main')).toHaveFocus();
-  });
-
-  it('validates, confirms and reports an exact immutable import preview', async () => {
-    window.history.replaceState({}, '', '/admin/import');
-    const screen = await renderComponent(
-      <AdminWorkspaceShell>
-        <AdminImportWorkspace initialMode="known" />
-      </AdminWorkspaceShell>,
-    );
-
-    await expect
-      .element(
-        screen.getByRole('heading', { level: 1, name: 'Import vstupenek' }),
-      )
-      .toBeVisible();
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat dopad mock apply' })
-      .click();
-    await expect
-      .element(screen.getByText('Doplňte povinné údaje'))
-      .toBeVisible();
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny' })
-      .fill('Bezpečný syntetický nácvik importu.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat dopad mock apply' })
-      .click();
-
-    const dialogTitle = screen.getByRole('heading', {
-      name: 'Potvrdit neměnný dopad importu?',
-    });
-    await expect.element(dialogTitle).toHaveFocus();
-    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    await expect
-      .element(screen.getByRole('button', { name: 'Zrušit' }))
-      .toHaveFocus();
-    await userEvent.keyboard('{Tab}');
-    await expect
-      .element(screen.getByRole('checkbox', { name: /potvrzuji/i }))
-      .toHaveFocus();
-    await userEvent.keyboard('{Escape}');
-    await expect.element(dialogTitle).not.toBeInTheDocument();
-
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat dopad mock apply' })
-      .click();
-    await acknowledgeDialog(screen);
-    await screen
-      .getByRole('button', { name: 'Použít pouze v mock režimu' })
-      .click();
-    await expect
-      .element(screen.getByRole('heading', { name: 'Mock report je hotový' }))
-      .toBeVisible();
-    await expect
-      .element(screen.getByText(/Aplikováno 2, beze změny 1/))
-      .toBeVisible();
-    await expectComponentToPassAxe(adminRoot());
-  });
-
-  it('validates the actual upload name, type and size before staging', async () => {
+  it('uploads multipart metadata and retries an ambiguous import with the exact body and key', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
+    const applyCalls: unknown[] = [];
+    let applyCount = 0;
+    const file = new File(['reference,state\nT001,active'], 'tickets.csv', {
+      type: 'text/csv',
+    });
+    const preview = ticketImportPreviewResponseSchema.parse({
+      ...ticketImportPreviewFixtures.clean!,
+      eventId: adminFixtureIds.event,
+      source: {
+        fileName: file.name,
+        mediaType: file.type,
+        byteSize: file.size,
+      },
+    });
+    const applied = ticketImportApplyResponseSchema.parse({
+      ...ticketImportApplyFixtures.applied!,
+      eventId: adminFixtureIds.event,
+      previewId: preview.previewId,
+      previewVersion: preview.previewVersion,
+    });
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminTicketImportApplyEndpoint) {
+        applyCalls.push(structuredClone(options));
+        applyCount += 1;
+        return applyCount === 1 ? failure('timeout') : success(applied);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const uploadPort: AdminTicketImportUploadPort = {
+      preview: async () => success(preview),
+    };
     const screen = await renderComponent(
-      <AdminWorkspaceShell>
+      <AdminWorkspaceShell
+        api={api}
+        environment="mocked"
+        uploadPort={uploadPort}
+      >
         <AdminImportWorkspace />
       </AdminWorkspaceShell>,
     );
-    const input = screen.getByLabelText('Zdrojový soubor');
 
-    await input.upload(
-      new File(['not-a-sheet'], 'tickets.exe', {
-        type: 'application/octet-stream',
-      }),
-    );
+    await screen.getByLabelText('Zdrojový soubor').upload(file);
+    await screen
+      .getByRole('button', { name: 'Vytvořit validované preview' })
+      .click();
     await expect
-      .element(
-        screen.getByText('Podporované jsou pouze soubory CSV a XLSX do 10 MB.'),
-      )
+      .element(screen.getByRole('heading', { name: '2. Staging diff preview' }))
       .toBeVisible();
-
-    await input.upload(
-      new File([new Uint8Array(10_000_001)], 'tickets.csv', {
-        type: 'text/csv',
-      }),
-    );
-    await expect
-      .element(screen.getByText('Soubor překračuje bezpečný limit 10 MB.'))
-      .toBeVisible();
-
-    await input.upload(
-      new File(['reference,state'], 'tickets.csv', { type: 'text/csv' }),
-    );
-    await expect
-      .element(screen.getByText('Vybráno: tickets.csv', { exact: false }))
-      .toBeVisible();
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod' })
+      .fill('Bezpečné ověření syntetického importu.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat a potvrdit apply' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Aplikovat import' }).click();
     await expect
       .element(
         screen.getByRole('button', {
-          name: 'Vytvořit validované preview',
+          name: 'Zopakovat přesně stejný pokus',
         }),
-      )
-      .toBeEnabled();
-  });
-
-  it('never enables apply for an unresolved import conflict', async () => {
-    window.history.replaceState({}, '', '/admin/vstupenky');
-    const screen = await renderComponent(
-      <AdminWorkspaceShell>
-        <AdminImportWorkspace initialMode="conflict" />
-      </AdminWorkspaceShell>,
-    );
-
-    await expect
-      .element(
-        screen.getByText(
-          'Apply je zakázán: preview obsahuje konflikt nebo neznámý stav.',
-          { exact: false },
-        ),
       )
       .toBeVisible();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
     await expect
-      .element(
-        screen.getByRole('button', {
-          name: 'Zkontrolovat dopad mock apply',
-        }),
-      )
-      .toBeDisabled();
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it('never enables apply for an unknown imported status', async () => {
-    window.history.replaceState({}, '', '/admin/import');
-    const screen = await renderComponent(
-      <AdminWorkspaceShell>
-        <AdminImportWorkspace initialMode="unknown" />
-      </AdminWorkspaceShell>,
-    );
-
-    await expect
-      .element(
-        screen.getByText(
-          'Apply je zakázán: preview obsahuje konflikt nebo neznámý stav.',
-          { exact: false },
-        ),
-      )
+      .element(screen.getByRole('heading', { name: 'Import byl aplikován' }))
       .toBeVisible();
-    await expect
-      .element(
-        screen.getByRole('button', {
-          name: 'Zkontrolovat dopad mock apply',
-        }),
-      )
-      .toBeDisabled();
-    expect(
-      document.querySelector('[role="dialog"]'),
-      'Unknown status must never open an apply confirmation.',
-    ).toBeNull();
+    expect(applyCalls).toHaveLength(2);
+    expect(applyCalls[1]).toEqual(applyCalls[0]);
+    await expectComponentToPassAxe(adminRoot());
   });
 
-  it('searches with minimal PII and returns a canonical support audit', async () => {
-    window.history.replaceState({}, '', '/admin/support');
+  it('wipes support P3 state and closes the workspace when an online-only read reports offline', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminSupportSearchEndpoint) return failure('offline');
+      throw new Error('Unexpected admin endpoint.');
+    });
     const screen = await renderComponent(
-      <AdminWorkspaceShell initialRole="support_operator">
+      <AdminWorkspaceShell api={api} environment="mocked">
         <AdminSupportWorkspace />
       </AdminWorkspaceShell>,
     );
 
-    await screen
-      .getByRole('searchbox', {
-        name: 'Reference vstupenky nebo zkrácené jméno',
-      })
-      .fill('SYN-10001');
-    await screen
-      .getByRole('button', { name: 'Vyhledat v mock datech' })
-      .click();
-    await expect.element(screen.getByText('a•••@example.test')).toBeVisible();
-    await screen
-      .getByRole('button', { name: 'Otevřít auditovanou akci' })
-      .click();
-    await screen.getByRole('combobox', { name: 'Akce' }).selectOptions('block');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat a potvrdit' })
-      .click();
-    await expect.element(screen.getByText('Akci nelze potvrdit')).toBeVisible();
-    await screen
-      .getByRole('textbox', { name: 'Důvod' })
-      .fill('Syntetické ověření blokace na žádost podpory.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat a potvrdit' })
-      .click();
-    await acknowledgeDialog(screen);
-    await screen
-      .getByRole('button', { name: 'Potvrdit: Zablokovat vstupenku' })
-      .click();
-
+    const search = screen.getByRole('searchbox', {
+      name: 'Reference nebo jméno',
+    });
+    await search.fill('single');
+    await screen.getByRole('button', { name: 'Vyhledat' }).click();
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Canonical stav byl v mocku aktualizován',
+          name: 'Administraci nelze bezpečně zobrazit',
         }),
       )
       .toBeVisible();
-    expect(document.body.textContent).not.toMatch(
-      /[A-Za-z0-9._%+-]+@(?!example\.test)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
-    );
-    await expectComponentToPassAxe(adminRoot());
+    await expect.element(search).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('single');
   });
 
-  it('invalidates an edited announcement preview and sends only a reconfirmed in-app snapshot', async () => {
+  it('invalidates edited announcement preview and sends only a reconfirmed canonical version', async () => {
     window.history.replaceState({}, '', '/admin/oznameni');
+    let previewVersion = 1;
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as { readonly body: unknown };
+      if (endpoint === adminAnnouncementPreviewEndpoint) {
+        previewVersion += 1;
+        const body = options.body as {
+          readonly draft: Record<string, unknown>;
+        };
+        return success(
+          adminAnnouncementPreviewResponseSchema.parse({
+            ...adminAnnouncementPreviewFixtures.session_audience!,
+            eventId: adminFixtureIds.event,
+            previewVersion,
+            draft: body.draft,
+          }),
+        );
+      }
+      if (endpoint === adminAnnouncementSendEndpoint) {
+        const body = options.body as {
+          readonly previewId: string;
+          readonly previewVersion: number;
+        };
+        return success(
+          adminAnnouncementSendResponseSchema.parse({
+            ...adminAnnouncementSendFixtures.sent!,
+            eventId: adminFixtureIds.event,
+            previewId: body.previewId,
+            previewVersion: body.previewVersion,
+          }),
+        );
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
     const screen = await renderComponent(
-      <AdminWorkspaceShell>
+      <AdminWorkspaceShell api={api} environment="mocked">
         <AdminAnnouncementWorkspace />
       </AdminWorkspaceShell>,
     );
@@ -318,93 +283,53 @@ describe('F4 admin workspace critical mocked journeys', () => {
     const title = screen.getByRole('textbox', { name: 'Název' });
     await title.fill('Změna sálu workshopu');
     await screen
-      .getByRole('textbox', { name: 'Text zprávy' })
+      .getByRole('textbox', { name: 'Text oznámení' })
       .fill('Workshop se přesouvá do sálu Vltava.');
-    await screen
-      .getByRole('button', { name: 'Vytvořit audience preview' })
-      .click();
+    await screen.getByRole('button', { name: 'Vytvořit preview' }).click();
     await expect
-      .element(
-        screen.getByRole('heading', { name: 'Immutable audience preview' }),
-      )
+      .element(screen.getByRole('heading', { name: '2. Immutable preview' }))
       .toBeVisible();
-
     await title.fill('Změna sálu workshopu – aktualizace');
     await expect
-      .element(
-        screen.getByRole('heading', { name: 'Immutable audience preview' }),
-      )
+      .element(screen.getByRole('heading', { name: '2. Immutable preview' }))
       .not.toBeInTheDocument();
+    await screen.getByRole('button', { name: 'Vytvořit preview' }).click();
     await screen
-      .getByRole('button', { name: 'Vytvořit audience preview' })
-      .click();
-    await screen
-      .getByRole('textbox', { name: 'Provozní důvod' })
+      .getByRole('textbox', { name: 'Auditní důvod odeslání' })
       .fill('Informování přímo dotčené skupiny.');
     await screen.getByRole('button', { name: 'Zkontrolovat odeslání' }).click();
     await acknowledgeDialog(screen);
     await screen
-      .getByRole('button', { name: 'Odeslat v in-app mocku' })
+      .getByRole('button', { name: 'Odeslat oznámení' })
       .click();
     await expect
-      .element(
-        screen.getByRole('heading', { name: 'Odesláno pouze v in-app mocku' }),
-      )
+      .element(screen.getByRole('heading', { name: 'Oznámení bylo odesláno' }))
       .toBeVisible();
-    await expect
-      .element(
-        screen.getByRole('button', {
-          name: 'E-mailový kanál není dostupný',
-        }),
-      )
-      .toBeDisabled();
     await expectComponentToPassAxe(adminRoot());
   });
 
-  it('queues an aggregate export without exposing a DLQ payload', async () => {
-    window.history.replaceState({}, '', '/admin/provoz');
-    const screen = await renderComponent(
-      <AdminWorkspaceShell>
-        <AdminOperationsWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await screen
-      .getByRole('button', {
-        name: 'Spustit bezpečný asynchronní export',
-      })
-      .click();
-    await expect
-      .element(screen.getByText('Doplňte auditní důvod.'))
-      .toBeVisible();
-    await screen
-      .getByRole('textbox', {
-        name: 'Společný auditní důvod pro další akci',
-      })
-      .fill('Agregovaný report pro syntetický provozní nácvik.');
-    await screen
-      .getByRole('button', {
-        name: 'Spustit bezpečný asynchronní export',
-      })
-      .click();
-    await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Zařadit mock export' }).click();
-    await expect
-      .element(
-        screen.getByRole('heading', { name: 'Export zařazen do fronty' }),
-      )
-      .toBeVisible();
-    await expect
-      .element(screen.getByText('Bez payloadu, adresátů, tokenů a raw chyb.'))
-      .toBeVisible();
-    expect(document.body.textContent).not.toContain('recipient@example.test');
-    await expectComponentToPassAxe(adminRoot());
-  });
-
-  it('limits room attendance to assigned sessions and records a versioned audit', async () => {
+  it('uses assigned-session server scope for room attendance and confirms the exact record version', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
+    const scopedList = adminReservationListResponseSchema.parse({
+      ...adminReservationFixtures.assigned_session_only!,
+      eventId: adminFixtureIds.event,
+    });
+    const attended = adminReservationMutationResponseSchema.parse({
+      ...adminReservationMutationFixtures.attended!,
+      eventId: adminFixtureIds.event,
+    });
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return success(adminContextFixtures.room_operator!);
+      }
+      if (endpoint === adminReservationsEndpoint) return success(scopedList);
+      if (endpoint === adminReservationMutationEndpoint) {
+        return success(attended);
+      }
+      throw new Error('Room operator requested an unauthorized endpoint.');
+    });
     const screen = await renderComponent(
-      <AdminWorkspaceShell initialRole="room_operator">
+      <AdminWorkspaceShell api={api} environment="mocked">
         <AdminReservationWorkspace />
       </AdminWorkspaceShell>,
     );
@@ -413,89 +338,53 @@ describe('F4 admin workspace critical mocked journeys', () => {
       .element(screen.getByText('Růst bez zkratek', { exact: true }).last())
       .toBeVisible();
     expect(document.body.textContent).not.toContain('Panel: firmy v pohybu');
-    expect(document.body.textContent).not.toContain('update_support_message');
-    await screen.getByRole('button', { name: 'Otevřít řízenou změnu' }).click();
+    expect(
+      screen.getByRole('heading', { name: 'Nastavení akce' }),
+    ).not.toBeInTheDocument();
     await screen
-      .getByRole('textbox', { name: 'Důvod změny' })
+      .getByRole('button', { name: 'Připravit změnu' })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod' })
       .fill('Potvrzení fyzické účasti v přidělené místnosti.');
     await screen
-      .getByRole('button', {
-        name: 'Zkontrolovat označit účast v místnosti',
-      })
+      .getByRole('button', { name: 'Zkontrolovat změnu rezervace' })
       .click();
     await acknowledgeDialog(screen);
-    await screen
-      .getByRole('button', {
-        name: 'Označit účast v místnosti',
-        exact: true,
-      })
-      .click();
+    await screen.getByRole('button', { name: 'Označit účast' }).click();
     await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Canonical mock stav aktualizován',
-        }),
-      )
-      .toBeVisible();
-    await expect
-      .element(
-        screen.getByText(
-          'Nastavení akce je pro roli operátora sálu pouze nedostupné',
-          { exact: false },
-        ),
-      )
+      .element(screen.getByText(/Rezervace byla změněna/))
       .toBeVisible();
     await expectComponentToPassAxe(adminRoot());
   });
 
-  it('fails closed for a cross-event reservation with the same assigned session', async () => {
-    window.history.replaceState({}, '', '/admin/rezervace');
-    const foreign = {
-      ...demoReservations[0]!,
-      eventId: 'event-foreign-2026',
-      participantReference: 'Cizí účastník •999',
-    };
+  it('renders the aggregate operations snapshot without exposing queue payloads', async () => {
+    window.history.replaceState({}, '', '/admin/reporty');
+    const overview = adminOperationsOverviewResponseSchema.parse({
+      ...adminOperationsOverviewFixtures.degraded!,
+      eventId: adminFixtureIds.event,
+    });
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminOperationsOverviewEndpoint) {
+        return success(overview);
+      }
+      if (endpoint === adminExportEndpoint) {
+        throw new Error('Export must not run without confirmation.');
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
     const screen = await renderComponent(
-      <AdminWorkspaceShell initialRole="room_operator">
-        <AdminReservationWorkspace initialRecords={[foreign]} />
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminOperationsWorkspace />
       </AdminWorkspaceShell>,
     );
 
     await expect
-      .element(
-        screen.getByRole('heading', { name: 'Provozní data nelze zobrazit' }),
-      )
+      .element(screen.getByRole('heading', { name: 'Bezpečný queue a DLQ souhrn' }))
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('Cizí účastník');
-    expect(document.body.textContent).not.toContain(foreign.reservationId);
-  });
-
-  it('confirms optimistic event settings against their exact version', async () => {
-    window.history.replaceState({}, '', '/admin/rezervace');
-    const screen = await renderComponent(
-      <AdminWorkspaceShell>
-        <AdminReservationWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await screen
-      .getByRole('combobox', { name: 'Režim registrace' })
-      .selectOptions('closed');
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny nastavení' })
-      .fill('Syntetický nácvik uzavření registrace.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat změnu nastavení' })
-      .click();
-    await expect
-      .element(
-        screen.getByRole('heading', { name: 'Potvrdit auditovanou změnu?' }),
-      )
-      .toHaveFocus();
-    await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Uložit mock nastavení' }).click();
-    await expect
-      .element(screen.getByText('Verze 6', { exact: true }))
-      .toBeVisible();
+    await expect.element(screen.getByText('1 v DLQ')).toBeVisible();
+    expect(document.body.textContent).not.toContain('recipient@example.test');
+    expect(document.body.textContent).not.toContain('raw-secret-token');
+    await expectComponentToPassAxe(adminRoot());
   });
 });

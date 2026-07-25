@@ -1,10 +1,16 @@
 'use client';
 
+import type {
+  AdminContextResponse,
+  AdminPermission,
+} from '@byzon/domain/contracts/admin';
+import type { ApiFailure, ApiProblem } from '@byzon/domain/contracts';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   createContext,
   Fragment,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -13,43 +19,35 @@ import {
   type ReactNode,
 } from 'react';
 
+import type { ApiPort } from '@/lib/api/endpoint';
 import {
-  adminDemoRoleSchema,
-  adminWorkspaceScopeSchema,
-  canAccessAdminSection,
-  type AdminDemoRole,
-  type AdminWorkspaceScope,
-  type AdminWorkspaceSection,
-} from './admin-workspace-contracts';
-import { adminDemoScope } from './admin-workspace-demo-data';
+  browserAdminApi,
+  browserAdminTicketImportUpload,
+  requestAdminContext,
+  type AdminTicketImportUploadPort,
+} from '@/lib/admin-api';
+
 import styles from './admin-workspace.module.css';
+
+type AdminWorkspaceSection =
+  | 'overview'
+  | 'import'
+  | 'support'
+  | 'announcements'
+  | 'operations'
+  | 'reservations'
+  | 'content';
 
 const navigation = [
   { href: '/admin', label: 'Přehled', section: 'overview' },
-  {
-    href: '/admin/vstupenky',
-    label: 'Import vstupenek',
-    section: 'import',
-  },
+  { href: '/admin/vstupenky', label: 'Import vstupenek', section: 'import' },
   { href: '/admin/ucastnici', label: 'Podpora', section: 'support' },
-  {
-    href: '/admin/oznameni',
-    label: 'Oznámení',
-    section: 'announcements',
-  },
+  { href: '/admin/oznameni', label: 'Oznámení', section: 'announcements' },
   { href: '/admin/role', label: 'Role operátorů', section: 'operations' },
   { href: '/admin/reporty', label: 'Reporty', section: 'operations' },
-  {
-    href: '/admin/rezervace',
-    label: 'Rezervace',
-    section: 'reservations',
-  },
+  { href: '/admin/rezervace', label: 'Rezervace', section: 'reservations' },
   { href: '/admin/audit', label: 'Audit', section: 'reservations' },
-  {
-    href: '/admin/nastaveni',
-    label: 'Nastavení',
-    section: 'reservations',
-  },
+  { href: '/admin/nastaveni', label: 'Nastavení', section: 'reservations' },
   { href: '/admin/obsah', label: 'Obsah akce', section: 'content' },
 ] as const satisfies readonly {
   readonly href: string;
@@ -63,29 +61,76 @@ const legacySections: Readonly<Record<string, AdminWorkspaceSection>> = {
   '/admin/provoz': 'operations',
 };
 
-const roleLabels: Record<AdminDemoRole, string> = {
-  organizer_admin: 'Administrátor',
-  support_operator: 'Podpora',
-  room_operator: 'Operátor sálu',
-  participant: 'Účastník bez přístupu',
+const sectionPermissions: Readonly<
+  Record<AdminWorkspaceSection, readonly AdminPermission[]>
+> = {
+  overview: ['operations:read'],
+  import: ['ticket:any:manage'],
+  support: ['participant:operational:read'],
+  announcements: ['announcement:send'],
+  operations: [
+    'operations:read',
+    'role:manage',
+    'personal-data:operational:export',
+  ],
+  reservations: [
+    'reservation:any:read',
+    'attendance:assigned:write',
+    'audit:read',
+    'event:settings:manage',
+  ],
+  content: ['agenda:any:override'],
 };
 
-const sectionForPath = (pathname: string): AdminWorkspaceSection => {
-  const match = [...navigation]
+const roleLabels = {
+  organizer_admin: 'Administrátor',
+  checkin_operator: 'Operátor check-inu',
+  moderator: 'Moderátor',
+  room_operator: 'Operátor sálu',
+} as const;
+
+const previewPersonas = {
+  organizer: 'Administrátor',
+  room_operator: 'Operátor sálu',
+  denied: 'Účet bez přístupu',
+} as const;
+
+type PreviewPersona = keyof typeof previewPersonas;
+
+const personaApi = (api: ApiPort, persona: PreviewPersona): ApiPort => ({
+  request: (endpoint, options) =>
+    api.request(endpoint, {
+      ...options,
+      path:
+        options.path === '/api/v1/admin/context'
+          ? `/api/v1/admin/context?persona=${encodeURIComponent(persona)}`
+          : options.path,
+    }),
+});
+
+const itemForPath = (pathname: string) =>
+  [...navigation]
     .sort((left, right) => right.href.length - left.href.length)
     .find(({ href }) =>
       href === '/admin'
         ? pathname === href
         : pathname === href || pathname.startsWith(`${href}/`),
     );
-  return (
-    match?.section ??
-    Object.entries(legacySections).find(
-      ([path]) => pathname === path || pathname.startsWith(`${path}/`),
-    )?.[1] ??
-    'overview'
+
+const sectionForPath = (pathname: string): AdminWorkspaceSection =>
+  itemForPath(pathname)?.section ??
+  Object.entries(legacySections).find(
+    ([path]) => pathname === path || pathname.startsWith(`${path}/`),
+  )?.[1] ??
+  'overview';
+
+const mayAccess = (
+  context: AdminContextResponse,
+  section: AdminWorkspaceSection,
+): boolean =>
+  sectionPermissions[section].some((permission) =>
+    context.actor.permissions.includes(permission),
   );
-};
 
 const AdminNavigation = ({
   activeHref,
@@ -107,42 +152,132 @@ const AdminNavigation = ({
   </nav>
 );
 
-const AdminWorkspaceContext = createContext<AdminWorkspaceScope | null>(null);
+export interface AdminWorkspaceValue {
+  readonly api: ApiPort;
+  readonly context: AdminContextResponse;
+  readonly eventId: string;
+  readonly eventName: string;
+  readonly eventTimezone: string;
+  readonly permissions: readonly AdminPermission[];
+  readonly assignedSessionIds: readonly string[];
+  readonly securityEpoch: number;
+  readonly uploadPort: AdminTicketImportUploadPort;
+  readonly refreshContext: () => void;
+  readonly invalidateSensitive: (message?: string) => void;
+}
 
-export const useAdminWorkspaceScope = (): AdminWorkspaceScope => {
+const AdminWorkspaceContext = createContext<AdminWorkspaceValue | null>(null);
+
+export const useAdminWorkspace = (): AdminWorkspaceValue => {
   const context = useContext(AdminWorkspaceContext);
   if (!context) {
-    throw new Error(
-      'useAdminWorkspaceScope must be used inside AdminWorkspaceShell.',
-    );
+    throw new Error('useAdminWorkspace must be used inside AdminWorkspaceShell.');
   }
   return context;
 };
 
+/** @deprecated Use `useAdminWorkspace`; retained for route-level compatibility. */
+export const useAdminWorkspaceScope = useAdminWorkspace;
+
+export const isAdminSecurityFailure = (
+  failure: ApiFailure<ApiProblem>,
+): boolean =>
+  failure.kind === 'offline' ||
+  failure.kind === 'session_expired' ||
+  (failure.kind === 'problem' &&
+    (failure.problem.status === 401 ||
+      failure.problem.status === 403 ||
+      failure.problem.code === 'AUTHENTICATION_REQUIRED' ||
+      failure.problem.code === 'AUTH_SESSION_EXPIRED' ||
+      failure.problem.code === 'EVENT_ACCESS_DENIED'));
+
+type ShellState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'ready'; readonly context: AdminContextResponse }
+  | { readonly kind: 'blocked'; readonly message: string };
+
+const failureMessage = (failure: ApiFailure<ApiProblem>): string => {
+  if (failure.kind === 'offline') {
+    return 'Administrace je online-only. Soukromá data byla odstraněna; obnovte připojení a načtěte kontext znovu.';
+  }
+  if (failure.kind === 'session_expired') {
+    return 'Relace vypršela. Soukromá data byla odstraněna a je nutné se znovu přihlásit.';
+  }
+  if (failure.kind === 'problem' && failure.problem.status === 403) {
+    return 'Aktuální účet nemá přístup k této akci. Žádná soukromá data nebyla ponechána.';
+  }
+  if (failure.kind === 'problem' && failure.problem.status === 401) {
+    return 'Pro otevření administrace je nutné ověřit přihlášení.';
+  }
+  return 'Administrační kontext se nepodařilo bezpečně ověřit. Zkuste načtení zopakovat.';
+};
+
 export const AdminWorkspaceShell = ({
+  api = browserAdminApi,
+  banner,
   children,
-  initialRole = 'organizer_admin',
+  environment = 'production',
+  uploadPort = browserAdminTicketImportUpload,
 }: {
+  readonly api?: ApiPort;
+  readonly banner?: ReactNode;
   readonly children: ReactNode;
-  readonly initialRole?: AdminDemoRole;
+  readonly environment?: 'production' | 'mocked';
+  readonly uploadPort?: AdminTicketImportUploadPort;
 }) => {
   const pathname = usePathname();
-  const [role, setRole] = useState<AdminDemoRole>(() =>
-    adminDemoRoleSchema.parse(initialRole),
-  );
   const previousPathname = useRef(pathname);
+  const [previewPersona, setPreviewPersona] =
+    useState<PreviewPersona>('organizer');
+  const [state, setState] = useState<ShellState>({ kind: 'loading' });
+  const [reload, setReload] = useState(0);
+  const [securityEpoch, setSecurityEpoch] = useState(0);
   const section = sectionForPath(pathname);
-  const activeNavigation =
-    navigation.find((item) => item.section === section) ?? navigation[0];
-  const scope = useMemo(
-    () =>
-      adminWorkspaceScopeSchema.parse({
-        ...adminDemoScope,
-        role,
-      }),
-    [role],
+  const activeNavigation = itemForPath(pathname) ?? navigation[0];
+  const effectiveApi = useMemo(
+    () => (environment === 'mocked' ? personaApi(api, previewPersona) : api),
+    [api, environment, previewPersona],
   );
-  const allowed = canAccessAdminSection(scope.role, section);
+
+  const invalidateSensitive = useCallback((message?: string) => {
+    setSecurityEpoch((current) => current + 1);
+    setState({
+      kind: 'blocked',
+      message:
+        message ??
+        'Oprávnění nebo připojení se změnilo. Soukromá data byla odstraněna.',
+    });
+  }, []);
+
+  const refreshContext = useCallback(() => {
+    setSecurityEpoch((current) => current + 1);
+    setState({ kind: 'loading' });
+    setReload((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void requestAdminContext(effectiveApi, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      if (!result.ok) {
+        setSecurityEpoch((current) => current + 1);
+        setState({
+          kind: 'blocked',
+          message: failureMessage(result.failure),
+        });
+        return;
+      }
+      if (result.kind === 'not_modified') {
+        setState({
+          kind: 'blocked',
+          message: 'Administrační kontext neposkytl úplný bezpečný snapshot.',
+        });
+        return;
+      }
+      setState({ kind: 'ready', context: result.data });
+    });
+    return () => controller.abort();
+  }, [effectiveApi, reload]);
 
   useEffect(() => {
     if (previousPathname.current !== pathname) {
@@ -151,98 +286,167 @@ export const AdminWorkspaceShell = ({
     }
   }, [pathname]);
 
+  const value = useMemo<AdminWorkspaceValue | null>(() => {
+    if (state.kind !== 'ready') return null;
+    return {
+      api: effectiveApi,
+      context: state.context,
+      eventId: state.context.event.id,
+      eventName: state.context.event.name,
+      eventTimezone: state.context.event.timezone,
+      permissions: state.context.actor.permissions,
+      assignedSessionIds: state.context.actor.assignedSessions.map(
+        ({ sessionId }) => sessionId,
+      ),
+      securityEpoch,
+      uploadPort,
+      refreshContext,
+      invalidateSensitive,
+    };
+  }, [
+    effectiveApi,
+    invalidateSensitive,
+    refreshContext,
+    securityEpoch,
+    state,
+    uploadPort,
+  ]);
+
+  const allowed =
+    state.kind === 'ready' ? mayAccess(state.context, section) : false;
+  const primaryRole =
+    state.kind === 'ready' ? state.context.actor.roles[0] : undefined;
+
   return (
-    <AdminWorkspaceContext.Provider value={scope}>
-      <div
-        className={styles.workspace}
-        data-admin-environment="mocked"
-        data-admin-role={scope.role}
-      >
-        <a className={styles.skipLink} href="#admin-main">
-          Přeskočit na hlavní obsah
-        </a>
+    <div
+      className={styles.workspace}
+      data-admin-environment={environment}
+      data-admin-role={primaryRole}
+    >
+      <a className={styles.skipLink} href="#admin-main">
+        Přeskočit na hlavní obsah
+      </a>
+      {banner}
+      {environment === 'mocked' && !banner ? (
         <div className={styles.mockBanner} role="status">
-          UI ready (mocked) · pouze syntetická data · žádná akce se neodesílá do
-          produkce
+          UI ready (mocked) · pouze syntetická data · API scénáře obsluhuje
+          vývojový MSW
         </div>
-        <div className={styles.shell}>
-          <aside className={styles.sidebar} aria-label="Administrace akce">
-            <p className={styles.brand}>Byzon administrace</p>
-            <p className={styles.scope}>
-              {scope.eventName}
-              <br />
-              Rozsah: {scope.eventId}
-            </p>
+      ) : null}
+      <div className={styles.shell}>
+        <aside className={styles.sidebar} aria-label="Administrace akce">
+          <p className={styles.brand}>Byzon administrace</p>
+          <p className={styles.scope}>
+            {state.kind === 'ready' ? (
+              <>
+                {state.context.event.name}
+                <br />
+                Rozsah: {state.context.event.id}
+              </>
+            ) : (
+              'Bez ověřeného rozsahu'
+            )}
+          </p>
+          {environment === 'mocked' ? (
             <label className={styles.roleControl}>
-              Demo role a oprávnění
+              Demo persona
               <select
-                value={scope.role}
                 onChange={(event) =>
-                  setRole(adminDemoRoleSchema.parse(event.target.value))
+                  {
+                    setSecurityEpoch((current) => current + 1);
+                    setState({ kind: 'loading' });
+                    setPreviewPersona(event.target.value as PreviewPersona);
+                  }
                 }
+                value={previewPersona}
               >
-                {adminDemoRoleSchema.options.map((option) => (
-                  <option key={option} value={option}>
-                    {roleLabels[option]}
+                {Object.entries(previewPersonas).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
                   </option>
                 ))}
               </select>
             </label>
-            <div className={styles.desktopNavigation}>
-              <AdminNavigation
-                activeHref={activeNavigation.href}
-                label="Hlavní administrace"
-              />
-            </div>
-            <details className={styles.mobileNavigation}>
-              <summary>Navigace administrace</summary>
-              <AdminNavigation
-                activeHref={activeNavigation.href}
-                label="Mobilní administrace"
-              />
-            </details>
-          </aside>
-          <div className={styles.mainColumn}>
-            <header className={styles.topbar}>
-              <nav aria-label="Drobečková navigace">
-                <ol className={styles.breadcrumbs}>
-                  <li>
-                    {section === 'overview' ? (
-                      <span>Administrace</span>
-                    ) : (
-                      <Link href="/admin">Administrace</Link>
-                    )}
-                  </li>
-                  {section !== 'overview' ? (
-                    <li aria-current="page">{activeNavigation.label}</li>
-                  ) : null}
-                </ol>
-              </nav>
-              <span className={styles.roleBadge}>
-                {roleLabels[scope.role]} · {scope.eventTimezone}
-              </span>
-            </header>
-            <main className={styles.content} id="admin-main" tabIndex={-1}>
-              <Fragment key={scope.role}>
-                {allowed ? (
-                  children
-                ) : (
-                  <section className={styles.forbidden} role="alert">
-                    <p className={styles.eyebrow}>403 · omezený rozsah</p>
-                    <h1>K této části nemáte oprávnění</h1>
-                    <p>
-                      Role {roleLabels[scope.role]} nemá v akci{' '}
-                      {scope.eventName} přístup k části {activeNavigation.label}
-                      . Žádná soukromá data nebyla načtena.
-                    </p>
-                    <Link href="/admin">Zpět na administraci</Link>
-                  </section>
-                )}
-              </Fragment>
-            </main>
+          ) : null}
+          <div className={styles.desktopNavigation}>
+            <AdminNavigation
+              activeHref={activeNavigation.href}
+              label="Hlavní administrace"
+            />
           </div>
+          <details className={styles.mobileNavigation}>
+            <summary>Navigace administrace</summary>
+            <AdminNavigation
+              activeHref={activeNavigation.href}
+              label="Mobilní administrace"
+            />
+          </details>
+        </aside>
+        <div className={styles.mainColumn}>
+          <header className={styles.topbar}>
+            <nav aria-label="Drobečková navigace">
+              <ol className={styles.breadcrumbs}>
+                <li>
+                  {section === 'overview' ? (
+                    <span>Administrace</span>
+                  ) : (
+                    <Link href="/admin">Administrace</Link>
+                  )}
+                </li>
+                {section !== 'overview' ? (
+                  <li aria-current="page">{activeNavigation.label}</li>
+                ) : null}
+              </ol>
+            </nav>
+            {state.kind === 'ready' && primaryRole ? (
+              <span className={styles.roleBadge}>
+                {roleLabels[primaryRole]} · {state.context.event.timezone}
+              </span>
+            ) : null}
+          </header>
+          <main className={styles.content} id="admin-main" tabIndex={-1}>
+            {state.kind === 'loading' ? (
+              <section className={styles.panel} aria-busy="true">
+                <p className={styles.eyebrow}>Ověřuji přístup</p>
+                <h1>Načítám administrační kontext…</h1>
+                <p>Soukromé zdroje se načtou až po ověření eventu a oprávnění.</p>
+              </section>
+            ) : state.kind === 'blocked' ? (
+              <section className={styles.forbidden} role="alert">
+                <p className={styles.eyebrow}>Přístup uzavřen</p>
+                <h1>Administraci nelze bezpečně zobrazit</h1>
+                <p>{state.message}</p>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={refreshContext}
+                  type="button"
+                >
+                  Ověřit přístup znovu
+                </button>
+              </section>
+            ) : (
+              <AdminWorkspaceContext.Provider value={value}>
+                <Fragment key={`${state.context.event.id}-${securityEpoch}`}>
+                  {allowed ? (
+                    children
+                  ) : (
+                    <section className={styles.forbidden} role="alert">
+                      <p className={styles.eyebrow}>403 · omezený rozsah</p>
+                      <h1>K této části nemáte oprávnění</h1>
+                      <p>
+                        Oprávnění pro část {activeNavigation.label} není součástí
+                        autoritativního kontextu. Žádná data této části nebyla
+                        načtena.
+                      </p>
+                      <Link href="/admin">Zpět na administraci</Link>
+                    </section>
+                  )}
+                </Fragment>
+              </AdminWorkspaceContext.Provider>
+            )}
+          </main>
         </div>
       </div>
-    </AdminWorkspaceContext.Provider>
+    </div>
   );
 };

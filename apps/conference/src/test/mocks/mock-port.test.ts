@@ -55,6 +55,14 @@ import {
   submitIdentitySessionAction,
   updateIdentityProfile,
 } from '../../lib/identity-api.js';
+import {
+  adminContextEndpoint,
+  requestAdminContext,
+  requestAdminOperationsOverview,
+  requestAdminSupportMutation,
+  requestAdminSupportSearch,
+} from '../../lib/admin-api.js';
+import { adminFixtureIds } from '@byzon/test-support/fixtures/admin';
 import { createMockServer } from './node.js';
 import {
   MOCK_REQUEST_ID,
@@ -67,6 +75,7 @@ import {
   configureMockIdentityAccess,
   configureMockParticipantPrincipal,
   pauseNextMockAgendaAction,
+  resetMockAdminState,
   resetMockActivationState,
   resetMockAgendaState,
   resetMockAnnouncementState,
@@ -114,10 +123,142 @@ afterEach(() => {
   resetMockAnnouncementState();
   resetMockCheckinState();
   resetMockIdentityState();
+  resetMockAdminState();
 });
 afterAll(() => server.close());
 
 describe('MSW through the production API port', () => {
+  it('runs canonical admin reads through the production port with event correlation', async () => {
+    const context = await requestAdminContext(client);
+    expect(context).toMatchObject({
+      ok: true,
+      data: {
+        event: { id: adminFixtureIds.event },
+        actor: { roles: ['organizer_admin'] },
+      },
+    });
+
+    const overview = await requestAdminOperationsOverview(
+      client,
+      adminFixtureIds.event,
+    );
+    expect(overview).toMatchObject({
+      ok: true,
+      data: {
+        eventId: adminFixtureIds.event,
+        metrics: expect.any(Array),
+        queues: expect.any(Array),
+      },
+    });
+  });
+
+  it('returns exact admin idempotent replay, collision and stale snapshots', async () => {
+    await requestAdminContext(client);
+    const search = await requestAdminSupportSearch(
+      client,
+      adminFixtureIds.event,
+      'single',
+    );
+    expect(search).toMatchObject({ ok: true, data: { outcome: 'single_match' } });
+    if (!search.ok || search.kind !== 'success') return;
+    const record = search.data.matches[0]!;
+    const body = {
+      participantId: record.participantId,
+      ticketId: record.ticketId,
+      action: 'block' as const,
+      expectedVersion: record.version,
+      reason: 'Bezpečný test blokace vstupenky.',
+      targetTicketId: null,
+    };
+    const key = 'admin-support-test-0001';
+    const first = await requestAdminSupportMutation(
+      client,
+      adminFixtureIds.event,
+      body,
+      key,
+    );
+    expect(first).toMatchObject({ ok: true, data: { outcome: 'applied' } });
+    const replay = await requestAdminSupportMutation(
+      client,
+      adminFixtureIds.event,
+      body,
+      key,
+    );
+    expect(replay).toMatchObject({
+      ok: true,
+      data: { outcome: 'already_applied' },
+    });
+    const collision = await requestAdminSupportMutation(
+      client,
+      adminFixtureIds.event,
+      { ...body, reason: 'Jiné tělo pod stejným klíčem.' },
+      key,
+    );
+    expect(collision).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+
+    if (!first.ok || first.kind !== 'success') return;
+    const stale = await requestAdminSupportMutation(
+      client,
+      adminFixtureIds.event,
+      {
+        participantId: first.data.record.participantId,
+        ticketId: first.data.record.ticketId,
+        action: 'reactivate',
+        expectedVersion: first.data.record.version,
+        reason: 'Stale scénář pro bezpečnou obnovu.',
+        targetTicketId: null,
+      },
+      'admin-support-stale-0001',
+    );
+    expect(stale).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'STALE_VERSION', currentVersion: 5 },
+      },
+    });
+    const refreshed = await requestAdminSupportSearch(
+      client,
+      adminFixtureIds.event,
+      'single',
+    );
+    expect(refreshed).toMatchObject({
+      ok: true,
+      data: { matches: [{ version: 5 }] },
+    });
+  });
+
+  it('serves exact admin 403 and session-expired problem envelopes', async () => {
+    const denied = await client.request(adminContextEndpoint, {
+      path: '/api/v1/admin/context?persona=denied',
+      cache: 'no-store',
+    });
+    expect(denied).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED', status: 403 },
+      },
+    });
+    const expired = await client.request(adminContextEndpoint, {
+      path: '/api/v1/admin/context?persona=session_expired',
+      cache: 'no-store',
+    });
+    expect(expired).toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'session_expired',
+        problem: { code: 'AUTH_SESSION_EXPIRED', status: 401 },
+      },
+    });
+  });
+
   it('runs check-in preview through the production fetch port and dev-only handlers', async () => {
     const context = await requestCheckinBootstrap(client);
     expect(context).toMatchObject({

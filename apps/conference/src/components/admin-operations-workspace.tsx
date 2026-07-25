@@ -1,145 +1,237 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import {
+  adminExportRequestSchema,
+  adminExportResponseSchema,
+  adminRoleAssignmentMutationRequestSchema,
+  adminRoleAssignmentMutationResponseSchema,
+  type AdminAssignmentRole,
+  type AdminExportRequest,
+  type AdminExportResponse,
+  type AdminOperationsOverviewResponse,
+  type AdminRoleAssignmentMutationRequest,
+  type AdminRoleAssignmentMutationResponse,
+} from '@byzon/domain/contracts/admin';
+import { useEffect, useMemo, useState } from 'react';
+
+import {
+  requestAdminExport,
+  requestAdminOperationsOverview,
+  requestAdminRoleAssignment,
+} from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
-  AdminMockMutationReplay,
-  adminDatasetMatchesEvent,
-  adminReasonSchema,
-  applyOperationsMutation,
-  operationsMutationRequestSchema,
-  type AuditEntry,
-  type OperationsMutationRequest,
-  type OperationsOverview,
-} from './admin-workspace-contracts';
-import { demoOperationsOverview } from './admin-workspace-demo-data';
-import { useAdminWorkspaceScope } from './admin-workspace-shell';
+  adminFailureMessage,
+  createAdminIdempotencyKey,
+  isAmbiguousAdminMutationFailure,
+  isStaleAdminFailure,
+} from './admin-workspace-runtime';
+import {
+  isAdminSecurityFailure,
+  useAdminWorkspace,
+} from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-type AssignmentRole = OperationsOverview['assignments'][number]['role'];
-type PendingOperation = OperationsMutationRequest | null;
-
-const roleLabels: Record<AssignmentRole, string> = {
-  checkin_operator: 'Check-in operátor',
-  room_operator: 'Operátor sálu',
+const roleLabels: Record<AdminAssignmentRole, string> = {
+  checkin_operator: 'Operátor check-inu',
   moderator: 'Moderátor',
+  room_operator: 'Operátor sálu',
 };
 
-const createOperationKey = () =>
-  `mock-operations-${globalThis.crypto?.randomUUID() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+type PendingOperation =
+  | Readonly<{
+      kind: 'role';
+      body: Extract<
+        AdminRoleAssignmentMutationRequest,
+        { readonly action: 'grant' }
+      >;
+      idempotencyKey: string;
+    }>
+  | Readonly<{
+      kind: 'export';
+      body: AdminExportRequest;
+      idempotencyKey: string;
+    }>;
 
-export const AdminOperationsWorkspace = ({
-  initialOverview = demoOperationsOverview,
-}: {
-  readonly initialOverview?: OperationsOverview;
-}) => {
-  const scope = useAdminWorkspaceScope();
-  const datasetScoped = adminDatasetMatchesEvent(scope.eventId, [
-    initialOverview,
-  ]);
-  const [overview, setOverview] = useState(initialOverview);
+export const AdminOperationsWorkspace = () => {
+  const { api, eventId, invalidateSensitive, permissions } =
+    useAdminWorkspace();
+  const [overview, setOverview] =
+    useState<AdminOperationsOverviewResponse | null>(null);
+  const [operatorId, setOperatorId] = useState('');
   const [operatorLabel, setOperatorLabel] = useState('');
   const [assignmentRole, setAssignmentRole] =
-    useState<AssignmentRole>('checkin_operator');
-  const [scopeLabel, setScopeLabel] = useState('Hlavní vstup');
+    useState<AdminAssignmentRole>('room_operator');
+  const [scopeLabel, setScopeLabel] = useState('Celá akce');
+  const [report, setReport] =
+    useState<AdminExportRequest['report']>('reservation_summary');
   const [reason, setReason] = useState('');
   const [attempted, setAttempted] = useState(false);
-  const [attemptKind, setAttemptKind] = useState<
-    'assignment' | 'export' | null
-  >(null);
-  const [pending, setPending] = useState<PendingOperation>(null);
-  const [audit, setAudit] = useState<AuditEntry | null>(null);
-  const [exportState, setExportState] = useState<'idle' | 'queued'>('idle');
-  const replay = useRef(new AdminMockMutationReplay());
+  const [pending, setPending] = useState<PendingOperation | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [ambiguous, setAmbiguous] = useState(false);
+  const [busy, setBusy] = useState<'read' | 'mutation' | null>('read');
+  const [error, setError] = useState<string | null>(null);
+  const [roleResult, setRoleResult] =
+    useState<AdminRoleAssignmentMutationResponse | null>(null);
+  const [exportResult, setExportResult] =
+    useState<AdminExportResponse | null>(null);
+  const [reload, setReload] = useState(0);
 
-  const assignmentRequest = operationsMutationRequestSchema.safeParse({
-    kind: 'assign_operator',
-    eventId: scope.eventId,
-    actorRole: 'organizer_admin',
-    expectedVersion: overview.version,
-    operatorLabel,
-    role: assignmentRole,
-    scopeLabel,
-    reason,
-    idempotencyKey: 'mock-operations-validation-only',
-  });
-  const assignmentInvalid =
-    attempted && attemptKind === 'assignment' && !assignmentRequest.success;
-  const reasonInvalid =
-    attempted && !adminReasonSchema.safeParse(reason).success;
+  const canReadOperations = permissions.includes('operations:read');
+  const canManageRoles = permissions.includes('role:manage');
+  const canExport = permissions.includes('personal-data:operational:export');
+
+  useEffect(() => {
+    if (!canReadOperations) return;
+    const controller = new AbortController();
+    void requestAdminOperationsOverview(api, eventId, controller.signal).then(
+      (result) => {
+        if (controller.signal.aborted) return;
+        setBusy(null);
+        if (!result.ok) {
+          setOverview(null);
+          if (isAdminSecurityFailure(result.failure)) {
+            invalidateSensitive(
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+            return;
+          }
+          setError(
+            adminFailureMessage(result.failure, result.metadata?.requestId),
+          );
+          return;
+        }
+        if (result.kind === 'success') setOverview(result.data);
+      },
+    );
+    return () => controller.abort();
+  }, [api, canReadOperations, eventId, invalidateSensitive, reload]);
+
   const queueTotals = useMemo(
     () =>
-      overview.queues.reduce(
+      overview?.queues.reduce(
         (total, queue) => ({
           ready: total.ready + queue.ready,
           processing: total.processing + queue.processing,
           failed: total.failed + queue.failed,
         }),
         { ready: 0, processing: 0, failed: 0 },
-      ),
-    [overview.queues],
+      ) ?? { ready: 0, processing: 0, failed: 0 },
+    [overview],
   );
 
-  const requestAssignment = () => {
+  const roleCandidate = adminRoleAssignmentMutationRequestSchema.safeParse({
+    action: 'grant',
+    operatorId,
+    role: assignmentRole,
+    scope: { kind: 'event', label: scopeLabel },
+    expectedVersion: overview?.version ?? 1,
+    reason,
+  });
+
+  const exportCandidate = adminExportRequestSchema.safeParse({
+    report,
+    format: 'csv',
+    range: null,
+    reason,
+  });
+
+  const prepareRole = () => {
     setAttempted(true);
-    setAttemptKind('assignment');
     if (
-      !assignmentRequest.success ||
-      !adminReasonSchema.safeParse(reason).success
+      !canManageRoles ||
+      !roleCandidate.success ||
+      roleCandidate.data.action !== 'grant' ||
+      !operatorLabel.trim()
     ) {
       return;
     }
     setPending({
-      ...assignmentRequest.data,
-      idempotencyKey: createOperationKey(),
+      kind: 'role',
+      body: roleCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('role-assignment'),
     });
+    setConfirming(true);
+    setAmbiguous(false);
   };
 
-  const requestExport = () => {
+  const prepareExport = () => {
     setAttempted(true);
-    setAttemptKind('export');
-    if (!adminReasonSchema.safeParse(reason).success) return;
-    setPending(
-      operationsMutationRequestSchema.parse({
-        kind: 'queue_export',
-        eventId: scope.eventId,
-        actorRole: 'organizer_admin',
-        expectedVersion: overview.version,
-        reason,
-        idempotencyKey: createOperationKey(),
-      }),
-    );
+    if (!canExport || !exportCandidate.success) return;
+    setPending({
+      kind: 'export',
+      body: exportCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('export'),
+    });
+    setConfirming(true);
+    setAmbiguous(false);
   };
 
-  const confirmOperation = () => {
-    if (!pending) return;
-    const response = applyOperationsMutation(overview, pending, replay.current);
-    setOverview(response.overview);
-    setAudit(response.audit);
-    if (pending.kind === 'assign_operator') {
-      setOperatorLabel('');
-    } else {
-      setExportState('queued');
+  const execute = async (attempt: PendingOperation) => {
+    setBusy('mutation');
+    setConfirming(false);
+    setError(null);
+    const result =
+      attempt.kind === 'role'
+        ? await requestAdminRoleAssignment(
+            api,
+            eventId,
+            attempt.body,
+            attempt.idempotencyKey,
+          )
+        : await requestAdminExport(
+            api,
+            eventId,
+            attempt.body,
+            attempt.idempotencyKey,
+          );
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result.failure)) {
+        setPending(null);
+        setOverview(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (isStaleAdminFailure(result.failure)) {
+        setPending(null);
+        setAmbiguous(false);
+        setError(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        setBusy('read');
+        setReload((value) => value + 1);
+        return;
+      }
+      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      setAmbiguous(retryable);
+      if (!retryable) setPending(null);
+      setError(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      return;
     }
-    setReason('');
-    setAttempted(false);
-    setAttemptKind(null);
-    setPending(null);
+    if (result.kind === 'success') {
+      if (attempt.kind === 'role') {
+        setRoleResult(
+          adminRoleAssignmentMutationResponseSchema.parse(result.data),
+        );
+        setOperatorId('');
+        setOperatorLabel('');
+      } else {
+        setExportResult(adminExportResponseSchema.parse(result.data));
+      }
+      setPending(null);
+      setAmbiguous(false);
+      setReason('');
+      setAttempted(false);
+      setReload((value) => value + 1);
+    }
   };
-
-  if (!datasetScoped) {
-    return (
-      <section className={styles.forbidden} role="alert">
-        <p className={styles.eyebrow}>Bezpečnostní hranice eventu</p>
-        <h1>Provozní přehled nelze zobrazit</h1>
-        <p>
-          Přehled neodpovídá aktuálnímu eventu. Fronty, role ani export nebyly
-          zpřístupněny.
-        </p>
-      </section>
-    );
-  }
 
   return (
     <div className={styles.stack}>
@@ -147,239 +239,283 @@ export const AdminOperationsWorkspace = ({
         <p className={styles.eyebrow}>F4 · role a provoz</p>
         <h1>Operátoři, fronty a export</h1>
         <p>
-          Scopeované role jsou vázané na tuto akci nebo stanoviště. Queue/DLQ
-          přehled ukazuje jen bezpečné počty a export probíhá asynchronně.
+          Autorita vychází pouze z eventového kontextu. Přehled front neobsahuje
+          payloady a každá změna je online-only, auditovaná a idempotentní.
         </p>
       </header>
 
-      <section className={styles.panel} aria-labelledby="queue-title">
-        <div className={styles.panelHeader}>
-          <div>
-            <h2 id="queue-title">Bezpečný queue a DLQ souhrn</h2>
-            <p className={styles.muted}>
-              Bez payloadu, adresátů, tokenů a raw chyb.
+      {canReadOperations ? (
+        <section
+          aria-busy={busy === 'read'}
+          aria-labelledby="queue-title"
+          className={styles.panel}
+        >
+          <div className={styles.panelHeader}>
+            <div>
+              <h2 id="queue-title">Bezpečný queue a DLQ souhrn</h2>
+              <p className={styles.muted}>
+                Bez adresátů, tokenů, payloadů a raw chyb.
+              </p>
+            </div>
+            {overview ? (
+              <span
+                className={`${styles.statusBadge} ${
+                  queueTotals.failed > 0
+                    ? styles.statusAttention
+                    : styles.statusHealthy
+                }`}
+              >
+                {queueTotals.failed > 0
+                  ? `${queueTotals.failed} v DLQ`
+                  : 'Bez DLQ'}
+              </span>
+            ) : null}
+          </div>
+          {!overview ? (
+            <p role="status">
+              {busy === 'read' ? 'Načítám provozní snapshot…' : 'Bez snapshotu.'}
             </p>
-          </div>
-          <span
-            className={`${styles.statusBadge} ${
-              queueTotals.failed > 0
-                ? styles.statusAttention
-                : styles.statusHealthy
-            }`}
-          >
-            {queueTotals.failed > 0
-              ? `${queueTotals.failed} úloha v DLQ`
-              : 'Bez DLQ'}
-          </span>
-        </div>
-        <div className={styles.summaryGrid}>
-          <div className={styles.metric}>
-            <small>Připraveno</small>
-            <strong>{queueTotals.ready}</strong>
-          </div>
-          <div className={styles.metric}>
-            <small>Zpracovává se</small>
-            <strong>{queueTotals.processing}</strong>
-          </div>
-          <div className={styles.metric}>
-            <small>DLQ</small>
-            <strong>{queueTotals.failed}</strong>
-          </div>
-        </div>
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <caption>Agregované počty úloh podle bezpečné kategorie.</caption>
-            <thead>
-              <tr>
-                <th scope="col">Fronta</th>
-                <th scope="col">Připraveno</th>
-                <th scope="col">Zpracování</th>
-                <th scope="col">DLQ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.queues.map((queue) => (
-                <tr key={queue.queue}>
-                  <th scope="row">{queue.queue}</th>
-                  <td>{queue.ready}</td>
-                  <td>{queue.processing}</td>
-                  <td>{queue.failed}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className={styles.cards}>
-          <ul className={styles.cardList}>
-            {overview.queues.map((queue) => (
-              <li className={styles.dataCard} key={queue.queue}>
-                <strong>{queue.queue}</strong>
-                <dl>
-                  <dt>Připraveno</dt>
-                  <dd>{queue.ready}</dd>
-                  <dt>Zpracování</dt>
-                  <dd>{queue.processing}</dd>
-                  <dt>DLQ</dt>
-                  <dd>{queue.failed}</dd>
-                </dl>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className={styles.panel} aria-labelledby="assignments-title">
-        <h2 id="assignments-title">Scopeované přiřazení operátorů</h2>
-        <ul className={styles.cardList}>
-          {overview.assignments.map((assignment) => (
-            <li className={styles.dataCard} key={assignment.assignmentId}>
-              <div className={styles.panelHeader}>
-                <strong>{assignment.operatorLabel}</strong>
-                <span className={styles.statusBadge}>
-                  {assignment.state === 'active' ? 'Aktivní' : 'Naplánováno'}
-                </span>
+          ) : overview.queues.length === 0 ? (
+            <p className={styles.empty}>
+              Žádná fronta nyní nehlásí čekající ani chybovou úlohu.
+            </p>
+          ) : (
+            <>
+              <div className={styles.summaryGrid}>
+                <div className={styles.metric}>
+                  <small>Připraveno</small>
+                  <strong>{queueTotals.ready}</strong>
+                </div>
+                <div className={styles.metric}>
+                  <small>Zpracovává se</small>
+                  <strong>{queueTotals.processing}</strong>
+                </div>
+                <div className={styles.metric}>
+                  <small>DLQ</small>
+                  <strong>{queueTotals.failed}</strong>
+                </div>
               </div>
-              <dl>
-                <dt>Role</dt>
-                <dd>{roleLabels[assignment.role]}</dd>
-                <dt>Rozsah</dt>
-                <dd>{assignment.scopeLabel}</dd>
-                <dt>Verze</dt>
-                <dd>{assignment.version}</dd>
-              </dl>
-            </li>
-          ))}
-        </ul>
-        {(assignmentInvalid || reasonInvalid) && attempted ? (
-          <section
-            aria-labelledby="assignment-errors"
-            className={styles.errorSummary}
-            role="alert"
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <caption>Agregované počty podle bezpečné kategorie.</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Fronta</th>
+                      <th scope="col">Připraveno</th>
+                      <th scope="col">Zpracování</th>
+                      <th scope="col">DLQ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overview.queues.map((queue) => (
+                      <tr key={queue.queue}>
+                        <th scope="row">{queue.queue}</th>
+                        <td>{queue.ready}</td>
+                        <td>{queue.processing}</td>
+                        <td>{queue.failed}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.cards}>
+                <ul className={styles.cardList} aria-label="Souhrn front">
+                  {overview.queues.map((queue) => (
+                    <li className={styles.dataCard} key={queue.queue}>
+                      <strong>{queue.queue}</strong>
+                      <dl>
+                        <dt>Připraveno</dt>
+                        <dd>{queue.ready}</dd>
+                        <dt>Zpracování</dt>
+                        <dd>{queue.processing}</dd>
+                        <dt>DLQ</dt>
+                        <dd>{queue.failed}</dd>
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
+
+      {error ? (
+        <section className={styles.errorSummary} role="alert">
+          <p>{error}</p>
+          {ambiguous && pending ? (
+            <button
+              className={styles.secondaryButton}
+              disabled={busy !== null}
+              onClick={() => void execute(pending)}
+              type="button"
+            >
+              Zopakovat přesně stejný pokus
+            </button>
+          ) : (
+            <button
+              className={styles.secondaryButton}
+              onClick={() => {
+                setError(null);
+                setBusy('read');
+                setReload((value) => value + 1);
+              }}
+              type="button"
+            >
+              Obnovit provozní snapshot
+            </button>
+          )}
+        </section>
+      ) : null}
+
+      {canManageRoles ? (
+        <section className={styles.panel} aria-labelledby="assignment-title">
+          <h2 id="assignment-title">Scopeované přiřazení operátora</h2>
+          <div className={styles.twoColumn}>
+            <label className={styles.field}>
+              <span>ID operátora</span>
+              <input
+                autoComplete="off"
+                onChange={(event) => setOperatorId(event.target.value)}
+                value={operatorId}
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Zobrazovaný štítek pro kontrolu</span>
+              <input
+                autoComplete="off"
+                maxLength={120}
+                onChange={(event) => setOperatorLabel(event.target.value)}
+                value={operatorLabel}
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Role</span>
+              <select
+                onChange={(event) =>
+                  setAssignmentRole(event.target.value as AdminAssignmentRole)
+                }
+                value={assignmentRole}
+              >
+                {Object.entries(roleLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Popis rozsahu</span>
+              <input
+                maxLength={120}
+                onChange={(event) => setScopeLabel(event.target.value)}
+                value={scopeLabel}
+              />
+            </label>
+          </div>
+          {roleResult ? (
+            <p className={styles.success} role="status">
+              {roleResult.outcome === 'already_applied'
+                ? 'Server potvrdil dřívější přiřazení.'
+                : `Role byla přiřazena (${roleResult.assignment?.assignmentId ?? 'bez aktivního přiřazení'}).`}
+            </p>
+          ) : null}
+          <button
+            className={styles.button}
+            disabled={busy !== null || !overview}
+            onClick={prepareRole}
+            type="button"
           >
-            <h2 id="assignment-errors">Přiřazení není připravené</h2>
-            <ul>
-              {assignmentInvalid ? (
-                <li>Doplňte opaque označení operátora a konkrétní rozsah.</li>
-              ) : null}
-              {reasonInvalid ? <li>Doplňte auditní důvod.</li> : null}
-            </ul>
-          </section>
-        ) : null}
-        <div className={styles.threeColumn}>
+            Zkontrolovat přiřazení
+          </button>
+        </section>
+      ) : null}
+
+      {canExport ? (
+        <section className={styles.panel} aria-labelledby="export-title">
+          <h2 id="export-title">Asynchronní export</h2>
           <label className={styles.field}>
-            <span>Označení operátora</span>
-            <input
-              autoComplete="off"
-              onChange={(event) => setOperatorLabel(event.target.value)}
-              placeholder="např. Operátor #31"
-              value={operatorLabel}
-            />
-          </label>
-          <label className={styles.field}>
-            <span>Role</span>
+            <span>Report</span>
             <select
               onChange={(event) =>
-                setAssignmentRole(event.target.value as AssignmentRole)
+                setReport(event.target.value as AdminExportRequest['report'])
               }
-              value={assignmentRole}
+              value={report}
             >
-              {Object.entries(roleLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+              <option value="participant_summary">Souhrn účastníků</option>
+              <option value="checkin_summary">Souhrn check-inu</option>
+              <option value="reservation_summary">Souhrn rezervací</option>
+              <option value="audit_log">Auditní log</option>
             </select>
           </label>
-          <label className={styles.field}>
-            <span>Rozsah</span>
-            <input
-              onChange={(event) => setScopeLabel(event.target.value)}
-              value={scopeLabel}
-            />
-          </label>
-        </div>
+          {exportResult ? (
+            <p className={styles.success} role="status">
+              Export {exportResult.exportId} je ve frontě (
+              {exportResult.outcome === 'already_queued'
+                ? 'dříve zařazen'
+                : 'nově zařazen'}
+              ).
+            </p>
+          ) : null}
+          <button
+            className={styles.secondaryButton}
+            disabled={busy !== null}
+            onClick={prepareExport}
+            type="button"
+          >
+            Zkontrolovat export
+          </button>
+        </section>
+      ) : null}
+
+      {(canManageRoles || canExport) ? (
         <label className={styles.field}>
-          <span>Společný auditní důvod pro další akci</span>
+          <span>Auditní důvod pro další operaci</span>
           <textarea
-            aria-invalid={reasonInvalid}
+            aria-invalid={
+              attempted &&
+              ((pending?.kind === 'role' && !roleCandidate.success) ||
+                (pending?.kind === 'export' && !exportCandidate.success))
+            }
             onChange={(event) => setReason(event.target.value)}
             value={reason}
           />
+          <span className={styles.helper}>
+            Nejméně 8 znaků. Mocked scénáře: „stale“, „timeout“,
+            „collision“.
+          </span>
         </label>
-        <div className={styles.actionRow}>
-          <button
-            className={styles.button}
-            onClick={requestAssignment}
-            type="button"
-          >
-            Zkontrolovat přiřazení role
-          </button>
-          <button
-            className={styles.secondaryButton}
-            disabled={exportState === 'queued'}
-            onClick={requestExport}
-            type="button"
-          >
-            Spustit bezpečný asynchronní export
-          </button>
-        </div>
-        {audit ? (
-          <section aria-live="polite" className={styles.success}>
-            <h3>
-              {audit.outcome === 'queued'
-                ? 'Export zařazen do fronty'
-                : 'Role přiřazena v mocku'}
-            </h3>
-            <p>
-              Audit <code>{audit.auditId}</code> · výsledek {audit.outcome}.
-            </p>
-          </section>
-        ) : null}
-      </section>
+      ) : null}
 
-      {pending ? (
+      {attempted &&
+      ((!roleCandidate.success && canManageRoles) ||
+        (!exportCandidate.success && canExport)) ? (
+        <p className={styles.warning} role="alert">
+          Zkontrolujte ID, popis rozsahu a auditní důvod.
+        </p>
+      ) : null}
+
+      {confirming && pending ? (
         <AdminConfirmDialog
-          acknowledgement={
-            pending.kind === 'assign_operator'
-              ? 'Potvrzuji scopeovanou roli a přesný rozsah v syntetickém eventu.'
-              : 'Potvrzuji export pouze agregovaných mock provozních dat.'
-          }
+          acknowledgement="Ověřil/a jsem rozsah, očekávanou verzi a auditní důvod."
           confirmLabel={
-            pending.kind === 'assign_operator'
-              ? 'Přiřadit roli v mocku'
-              : 'Zařadit mock export'
+            pending.kind === 'role' ? 'Přiřadit roli' : 'Zařadit export'
           }
+          danger={pending.kind === 'role'}
           description={
-            pending.kind === 'assign_operator'
-              ? 'Přiřazení platí jen pro aktuální event a uvedený rozsah; výsledek vytvoří audit.'
-              : 'Export se pouze zařadí do syntetické fronty a neobsahuje osobní data.'
+            pending.kind === 'role'
+              ? `Přiřadíte roli ${roleLabels[pending.body.role]} v rozsahu této akce.`
+              : `Do fronty bude zařazen report ${pending.body.report}.`
           }
-          impact={
-            <dl className={styles.detailList}>
-              <dt>Akce</dt>
-              <dd>
-                {pending.kind === 'assign_operator'
-                  ? roleLabels[pending.role]
-                  : 'Agregovaný provozní export'}
-              </dd>
-              <dt>Rozsah</dt>
-              <dd>
-                {pending.kind === 'assign_operator'
-                  ? pending.scopeLabel
-                  : pending.eventId}
-              </dd>
-              <dt>Očekávaná verze</dt>
-              <dd>{pending.expectedVersion}</dd>
-              <dt>Režim</dt>
-              <dd>UI ready (mocked)</dd>
-            </dl>
-          }
-          onConfirm={confirmOperation}
-          onDismiss={() => setPending(null)}
+          onConfirm={() => void execute(pending)}
+          onDismiss={() => {
+            setConfirming(false);
+            setPending(null);
+          }}
           title={
-            pending.kind === 'assign_operator'
-              ? 'Potvrdit scopeované přiřazení?'
-              : 'Spustit asynchronní export?'
+            pending.kind === 'role'
+              ? 'Potvrdit přiřazení role?'
+              : 'Potvrdit export?'
           }
         />
       ) : null}

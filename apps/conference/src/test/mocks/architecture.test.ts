@@ -7,10 +7,16 @@ import { describe, expect, it } from 'vitest';
 const mockRoot = dirname(fileURLToPath(import.meta.url));
 const allowedExternalImports = new Set([
   '@byzon/domain/contracts',
+  '@byzon/domain/contracts/admin',
   '@byzon/domain/contracts/check-in',
+  '@byzon/domain/contracts/support',
+  '@byzon/domain/contracts/ticket-import',
   '@byzon/test-support',
   '@byzon/test-support/fixtures',
+  '@byzon/test-support/fixtures/admin',
   '@byzon/test-support/fixtures/check-in',
+  '@byzon/test-support/fixtures/support',
+  '@byzon/test-support/fixtures/ticket-import',
   'msw',
   'msw/browser',
   'msw/node',

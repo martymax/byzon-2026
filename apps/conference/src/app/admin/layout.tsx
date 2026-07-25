@@ -9,7 +9,7 @@ export default function AdminLayout({
   readonly children: ReactNode;
 }) {
   return isFrontendPreviewAvailable() ? (
-    <AdminWorkspaceShell>{children}</AdminWorkspaceShell>
+    <AdminWorkspaceShell environment="mocked">{children}</AdminWorkspaceShell>
   ) : (
     children
   );
