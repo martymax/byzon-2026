@@ -79,14 +79,17 @@ export const ParticipantSessionAgendaAction = ({
       <div>
         <strong>Tento bod ještě nemáte v osobní agendě.</strong>
         <p>
-          Přidání potvrdí server. Na tomto zařízení si nevytváříme soukromou
-          kopii.
+          {resource.offline.cached
+            ? 'Přidání se bezpečně zařadí do fronty. V agendě se projeví až po potvrzení serverem.'
+            : 'Přidání potvrdí server a bezpečně uloží do kopie agendy pro tento účet.'}
         </p>
       </div>
       <Button
         disabled={
           resource.pending !== null ||
-          (resource.feedback !== null && resource.feedback.retry !== 'none')
+          (resource.feedback !== null && resource.feedback.retry !== 'none') ||
+          resource.offline.queue.total > 0 ||
+          resource.offline.syncing
         }
         loading={
           resource.pending?.sessionId === sessionId &&

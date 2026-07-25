@@ -18,6 +18,12 @@ export const ParticipantAgendaItemActions = ({
   const offered =
     item.state === 'waitlisted' && item.waitlist.state === 'offered';
   const actions = participantAgendaActions(item);
+  const offline = resource.offline.cached;
+  const visibleActions = offline
+    ? actions.filter(
+        ({ intent }) => intent.action === 'add' || intent.action === 'remove',
+      )
+    : actions;
   const pendingForItem =
     resource.pending?.sessionId === item.session.id
       ? resource.pending.action
@@ -33,14 +39,22 @@ export const ParticipantAgendaItemActions = ({
     );
   }
 
-  if (!offered && actions.length === 0) return null;
+  if (offline && (offered || visibleActions.length === 0)) {
+    return (
+      <p className="agenda-read-only-item">
+        Tato změna potřebuje aktuální potvrzení serveru.
+      </p>
+    );
+  }
+
+  if (!offered && visibleActions.length === 0) return null;
 
   return (
     <div
       className="agenda-item-actions"
       aria-label={`Akce pro ${item.session.title}`}
     >
-      {offered ? (
+      {offered && !offline ? (
         <Button
           disabled={resource.pending !== null || reconciliationPending}
           onClick={() => onOpenOffer(item)}
@@ -48,9 +62,14 @@ export const ParticipantAgendaItemActions = ({
           Otevřít nabídku místa
         </Button>
       ) : null}
-      {actions.map(({ intent, label, variant }) => (
+      {visibleActions.map(({ intent, label, variant }) => (
         <Button
-          disabled={resource.pending !== null || reconciliationPending}
+          disabled={
+            resource.pending !== null ||
+            reconciliationPending ||
+            resource.offline.queue.total > 0 ||
+            resource.offline.syncing
+          }
           key={`${intent.action}-${intent.sessionId}`}
           loading={pendingForItem === intent.action}
           loadingLabel="Potvrzuji se serverem…"

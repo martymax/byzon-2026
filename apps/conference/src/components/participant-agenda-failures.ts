@@ -23,14 +23,18 @@ export type AgendaMutationFeedbackKind =
   | 'not_found'
   | 'offer_expired'
   | 'offline'
+  | 'offline_restricted'
+  | 'queue_conflict'
+  | 'queued'
   | 'rejected'
   | 'stale'
+  | 'synced'
   | 'ticket_inactive';
 
 export interface AgendaMutationFeedback {
   readonly kind: AgendaMutationFeedbackKind;
   readonly requestId?: RequestId;
-  readonly retry: 'mutation' | 'read' | 'none';
+  readonly retry: 'mutation' | 'read' | 'sync' | 'none';
 }
 
 export const mapParticipantAgendaReadFailure = (

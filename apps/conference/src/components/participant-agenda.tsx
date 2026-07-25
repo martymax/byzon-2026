@@ -28,6 +28,7 @@ import {
   type ParticipantAgendaResource,
 } from './participant-agenda-resource';
 import {
+  ParticipantAgendaOfflineStatus,
   ParticipantAgendaMutationFeedback,
   ParticipantAgendaResourceStatus,
 } from './participant-agenda-status';
@@ -216,6 +217,7 @@ const ParticipantAgendaReadyView = ({
 
   return (
     <>
+      <ParticipantAgendaOfflineStatus resource={resource} />
       {resource.readOnly ? (
         <Alert title="Agenda je jen ke čtení" tone="info">
           <p>
@@ -234,8 +236,9 @@ const ParticipantAgendaReadyView = ({
           title="Osobní agenda je zatím prázdná"
         >
           <p>
-            Otevřete si detail bodu programu a přidejte ho do svého plánu.
-            Soukromou kopii na tomto zařízení nevytváříme.
+            Otevřete si detail bodu programu a přidejte ho do svého plánu. Po
+            prvním načtení zůstane osobní agenda bezpečně oddělená pro tuto akci
+            a účet i v offline režimu.
           </p>
         </StatePanel>
       ) : (

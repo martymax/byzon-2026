@@ -13,6 +13,72 @@ type AgendaFailureState = Exclude<
   { readonly status: 'ready' }
 >;
 
+const offlineAgendaTimestamp = (value: string | null): string => {
+  if (!value) return 'čas poslední synchronizace není dostupný';
+  try {
+    return new Intl.DateTimeFormat('cs-CZ', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value));
+  } catch {
+    return 'čas poslední synchronizace není dostupný';
+  }
+};
+
+export const ParticipantAgendaOfflineStatus = ({
+  resource,
+}: {
+  readonly resource: ParticipantAgendaResource;
+}) => {
+  const { cached, lastSyncedAt, queue, syncing } = resource.offline;
+  if (!cached && queue.total === 0 && !syncing) return null;
+  const queuedCopy = [
+    queue.pending > 0 ? `${queue.pending} čeká` : null,
+    queue.retry > 0 ? `${queue.retry} čeká na opakování` : null,
+    queue.conflict > 0 ? `${queue.conflict} v konfliktu` : null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(', ');
+
+  return (
+    <Alert
+      action={
+        !cached && (queue.retry > 0 || queue.conflict > 0) ? (
+          <Button
+            disabled={syncing}
+            loading={syncing}
+            loadingLabel="Synchronizuji…"
+            onClick={() => void resource.retryOfflineQueue()}
+          >
+            {queue.conflict > 0 ? 'Vyřešit konflikt' : 'Zkusit synchronizaci'}
+          </Button>
+        ) : null
+      }
+      title={
+        cached
+          ? 'Zobrazuje se offline kopie agendy'
+          : syncing
+            ? 'Synchronizuji odložené změny'
+            : 'Některé změny ještě čekají na server'
+      }
+      tone={queue.conflict > 0 ? 'warning' : 'info'}
+    >
+      <p>
+        {cached
+          ? `Poslední potvrzený stav: ${offlineAgendaTimestamp(lastSyncedAt)}.`
+          : 'Kanonický stav se změní až po potvrzení serverem.'}{' '}
+        {queuedCopy ? `Fronta: ${queuedCopy}.` : null}
+      </p>
+      {cached ? (
+        <p>
+          Bez připojení lze odložit jen přidání nebo odebrání bodu. Rezervace,
+          čekací listina, nabídky míst a check-in zůstávají online.
+        </p>
+      ) : null}
+    </Alert>
+  );
+};
+
 const failureCopy: Record<
   Exclude<AgendaFailureState['status'], 'error' | 'loading'>,
   { readonly detail: string; readonly title: string }
@@ -122,7 +188,7 @@ const feedbackCopy: Record<
   {
     readonly detail: string;
     readonly title: string;
-    readonly tone: 'danger' | 'info' | 'warning';
+    readonly tone: 'danger' | 'info' | 'success' | 'warning';
   }
 > = {
   offline: {
@@ -130,6 +196,30 @@ const feedbackCopy: Record<
     detail:
       'Požadavek nebyl zařazen do fronty. Připojte se a odešlete stejnou změnu znovu.',
     tone: 'warning',
+  },
+  offline_restricted: {
+    title: 'Tato změna vyžaduje připojení',
+    detail:
+      'Rezervace, čekací listina a nabídky míst se bez serveru nezařazují do fronty a nebyly provedeny.',
+    tone: 'warning',
+  },
+  queued: {
+    title: 'Změna čeká na připojení',
+    detail:
+      'Přidání nebo odebrání z agendy je bezpečně uložené ve frontě. Dokud ho nepotvrdí server, kanonický stav se nemění.',
+    tone: 'info',
+  },
+  queue_conflict: {
+    title: 'Odložená změna je v konfliktu',
+    detail:
+      'Agenda se na serveru mezitím změnila. Připojte se a potvrďte opakování proti aktuální verzi.',
+    tone: 'warning',
+  },
+  synced: {
+    title: 'Odložené změny jsou synchronizované',
+    detail:
+      'Server změny potvrdil a zobrazená agenda odpovídá jeho kanonickému stavu.',
+    tone: 'success',
   },
   capacity_full: {
     title: 'Kapacita se mezitím naplnila',
@@ -211,6 +301,10 @@ export const ParticipantAgendaMutationFeedback = ({
             </Button>
           ) : feedback.retry === 'read' ? (
             <Button onClick={resource.retry}>Načíst aktuální agendu</Button>
+          ) : feedback.retry === 'sync' ? (
+            <Button onClick={() => void resource.retryOfflineQueue()}>
+              Vyřešit proti aktuální agendě
+            </Button>
           ) : null}
           {feedback.retry === 'none' ? (
             <Button onClick={resource.dismissFeedback} variant="quiet">

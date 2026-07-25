@@ -16,6 +16,21 @@ import {
   type ParticipantAgendaMutationInput,
 } from '@/lib/agenda-api';
 import {
+  EMPTY_OFFLINE_AGENDA_QUEUE,
+  persistCanonicalOfflineAgenda,
+  queueApprovedOfflineAgendaMutation,
+  readOfflineAgendaQueueSummary,
+  readScopedOfflineAgenda,
+  retryOfflineAgendaConflict,
+  syncOfflineAgendaQueue,
+  type OfflineAgendaQueueSummary,
+} from '@/lib/offline/offline-agenda';
+import { wipeParticipantOfflineScope } from '@/lib/offline/offline-database';
+import {
+  OFFLINE_AGENDA_SYNC_EVENT,
+  type ParticipantOfflineScope,
+} from '@/lib/offline/offline-policy';
+import {
   invalidateParticipantPrivateResources,
   privateResourceInvalidationReason,
   subscribeToPrivateResourceInvalidation,
@@ -50,12 +65,14 @@ interface PendingAgendaMutation {
   readonly expectedVersion: number;
   readonly idempotencyKey: string;
   readonly intent: AgendaMutationIntent;
+  readonly offlineIdempotencyKey: string | null;
   readonly scopeKey: string;
 }
 
 export interface ParticipantAgendaResource {
   readonly conflict: AgendaConflict | null;
   readonly feedback: AgendaMutationFeedback | null;
+  readonly offline: ParticipantAgendaOfflineState;
   readonly pending: AgendaMutationIntent | null;
   readonly readOnly: boolean;
   readonly state: ParticipantAgendaResourceState;
@@ -63,17 +80,46 @@ export interface ParticipantAgendaResource {
   readonly dismissFeedback: () => void;
   readonly mutate: (intent: AgendaMutationIntent) => Promise<void>;
   readonly retry: () => void;
+  readonly retryOfflineQueue: () => Promise<void>;
   readonly retryMutation: () => Promise<void>;
 }
 
-const createAgendaIdempotencyKey = (): string => {
-  const suffix =
+export interface ParticipantAgendaOfflineState {
+  readonly cached: boolean;
+  readonly lastSyncedAt: string | null;
+  readonly queue: OfflineAgendaQueueSummary;
+  readonly syncing: boolean;
+}
+
+const createAgendaIdempotencyKeys = (): {
+  readonly idempotencyKey: string;
+  readonly offlineIdempotencyKey: string | null;
+} => {
+  const uuid =
     typeof globalThis.crypto !== 'undefined' &&
     typeof globalThis.crypto.randomUUID === 'function'
       ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `agenda-action:${suffix}`;
+      : null;
+  const suffix = uuid ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return {
+    idempotencyKey: `agenda-action:${suffix}`,
+    offlineIdempotencyKey: uuid,
+  };
 };
+
+const isOfflineApprovedIntent = (
+  intent: AgendaMutationIntent,
+): intent is Extract<AgendaMutationIntent, { action: 'add' | 'remove' }> =>
+  intent.action === 'add' || intent.action === 'remove';
+
+const agendaMatchesScope = (
+  data: ParticipantAgendaResponse,
+  scope: ParticipantOfflineScope,
+  timezone: string,
+): boolean =>
+  data.eventId === scope.eventId &&
+  data.userId === scope.userId &&
+  data.eventTimezone === timezone;
 
 const accountFailureState = (
   status: ParticipantAccountResourceState['status'],
@@ -203,6 +249,12 @@ export const useParticipantAgendaResource = (
   const [pending, setPending] = useState<AgendaMutationIntent | null>(null);
   const [feedback, setFeedback] = useState<AgendaMutationFeedback | null>(null);
   const [conflict, setConflict] = useState<AgendaConflict | null>(null);
+  const [offline, setOffline] = useState<ParticipantAgendaOfflineState>({
+    cached: false,
+    lastSyncedAt: null,
+    queue: EMPTY_OFFLINE_AGENDA_QUEUE,
+    syncing: false,
+  });
   const stateRef = useRef(state);
   const pendingAttempt = useRef<PendingAgendaMutation | null>(null);
   const mutationLock = useRef(false);
@@ -213,6 +265,7 @@ export const useParticipantAgendaResource = (
   const mutationController = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const activeAccountIdentity = useRef<string | null>(null);
+  const activeOfflineScope = useRef<ParticipantOfflineScope | null>(null);
 
   const accountState: ParticipantAccountResourceState = account?.state ?? {
     status: 'permission',
@@ -256,6 +309,12 @@ export const useParticipantAgendaResource = (
       readController.current?.abort();
       mutationController.current?.abort();
       clearTransientState();
+      setOffline({
+        cached: false,
+        lastSyncedAt: null,
+        queue: EMPTY_OFFLINE_AGENDA_QUEUE,
+        syncing: false,
+      });
       storeState(readStateForInvalidation(reason));
     },
     [clearTransientState, storeState],
@@ -286,6 +345,22 @@ export const useParticipantAgendaResource = (
       accountTimezone,
     ]);
     if (activeAccountIdentity.current !== accountIdentity) {
+      const previousScope = activeOfflineScope.current;
+      const nextScope =
+        accountEventId && accountUserId
+          ? { eventId: accountEventId, userId: accountUserId }
+          : null;
+      if (
+        previousScope &&
+        (!nextScope ||
+          previousScope.eventId !== nextScope.eventId ||
+          previousScope.userId !== nextScope.userId)
+      ) {
+        void wipeParticipantOfflineScope(previousScope, 'switch_account').catch(
+          () => undefined,
+        );
+      }
+      activeOfflineScope.current = nextScope;
       activeAccountIdentity.current = accountIdentity;
       readEpoch.current += 1;
       mutationEpoch.current += 1;
@@ -295,6 +370,12 @@ export const useParticipantAgendaResource = (
       mutationController.current = null;
       mutationLock.current = false;
       clearTransientState();
+      setOffline({
+        cached: false,
+        lastSyncedAt: null,
+        queue: EMPTY_OFFLINE_AGENDA_QUEUE,
+        syncing: false,
+      });
     }
 
     readController.current?.abort();
@@ -304,6 +385,7 @@ export const useParticipantAgendaResource = (
       accountStatus !== 'ready' ||
       !accountEventId ||
       !accountUserId ||
+      !accountTimezone ||
       !scopeKey
     ) {
       clearTransientState();
@@ -317,12 +399,54 @@ export const useParticipantAgendaResource = (
     }
 
     const controller = new AbortController();
+    const timezone = accountTimezone;
+    const offlineScope: ParticipantOfflineScope = {
+      eventId: accountEventId,
+      userId: accountUserId,
+    };
     readController.current = controller;
     clearTransientState();
     storeState({ status: 'loading' });
 
+    const exposeCachedAgenda = async (): Promise<boolean> => {
+      try {
+        const [record, queue] = await Promise.all([
+          readScopedOfflineAgenda(offlineScope),
+          readOfflineAgendaQueueSummary(offlineScope),
+        ]);
+        if (
+          !record ||
+          !agendaMatchesScope(record.snapshot, offlineScope, timezone) ||
+          controller.signal.aborted ||
+          !mounted.current ||
+          readEpoch.current !== epoch
+        ) {
+          return false;
+        }
+        storeState({
+          status: 'ready',
+          data: record.snapshot,
+          scopeKey,
+        });
+        setOffline({
+          cached: true,
+          lastSyncedAt: record.lastSyncedAt,
+          queue,
+          syncing: false,
+        });
+        if (queue.conflict > 0) {
+          setFeedback({ kind: 'queue_conflict', retry: 'sync' });
+        } else if (queue.total > 0) {
+          setFeedback({ kind: 'queued', retry: 'none' });
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     void requestParticipantAgenda(api, controller.signal)
-      .then((result) => {
+      .then(async (result) => {
         if (
           controller.signal.aborted ||
           !mounted.current ||
@@ -334,18 +458,112 @@ export const useParticipantAgendaResource = (
           if (
             result.kind !== 'success' ||
             result.data.eventId !== expectedEventId ||
-            result.data.eventId !== accountEventId ||
-            result.data.userId !== accountUserId ||
-            result.data.eventTimezone !== accountTimezone
+            !agendaMatchesScope(result.data, offlineScope, timezone)
           ) {
             invalidateParticipantPrivateResources('permission');
             return;
           }
+
           storeState({
             status: 'ready',
             data: result.data,
             scopeKey,
           });
+          setOffline((current) => ({
+            ...current,
+            cached: false,
+            syncing: false,
+          }));
+
+          const onlineCanonical = result.data;
+          void (async () => {
+            try {
+              const persisted = await persistCanonicalOfflineAgenda(
+                offlineScope,
+                onlineCanonical,
+              );
+              const pendingQueue =
+                await readOfflineAgendaQueueSummary(offlineScope);
+              if (
+                controller.signal.aborted ||
+                !mounted.current ||
+                readEpoch.current !== epoch
+              ) {
+                return;
+              }
+              if (pendingQueue.total === 0) {
+                setOffline({
+                  cached: false,
+                  lastSyncedAt: persisted.lastSyncedAt,
+                  queue: EMPTY_OFFLINE_AGENDA_QUEUE,
+                  syncing: false,
+                });
+                return;
+              }
+
+              setOffline({
+                cached: false,
+                lastSyncedAt: persisted.lastSyncedAt,
+                queue: pendingQueue,
+                syncing: true,
+              });
+              const synchronized = await syncOfflineAgendaQueue(
+                offlineScope,
+                api,
+              );
+              if (synchronized.invalidation) {
+                invalidateParticipantPrivateResources(
+                  synchronized.invalidation,
+                );
+                return;
+              }
+              if (
+                synchronized.canonical &&
+                !agendaMatchesScope(
+                  synchronized.canonical,
+                  offlineScope,
+                  timezone,
+                )
+              ) {
+                invalidateParticipantPrivateResources('permission');
+                return;
+              }
+              if (
+                controller.signal.aborted ||
+                !mounted.current ||
+                readEpoch.current !== epoch
+              ) {
+                return;
+              }
+              if (synchronized.canonical) {
+                storeState({
+                  status: 'ready',
+                  data: synchronized.canonical,
+                  scopeKey,
+                });
+              }
+              setOffline({
+                cached: false,
+                lastSyncedAt: new Date().toISOString(),
+                queue: synchronized.summary,
+                syncing: false,
+              });
+              if (synchronized.summary.conflict > 0) {
+                setFeedback({ kind: 'queue_conflict', retry: 'sync' });
+              } else if (synchronized.summary.total > 0) {
+                setFeedback({ kind: 'queued', retry: 'none' });
+              } else if (synchronized.processed > 0) {
+                setFeedback({ kind: 'synced', retry: 'none' });
+              }
+            } catch {
+              if (mounted.current && readEpoch.current === epoch) {
+                setOffline((current) => ({
+                  ...current,
+                  syncing: false,
+                }));
+              }
+            }
+          })();
           return;
         }
 
@@ -357,16 +575,26 @@ export const useParticipantAgendaResource = (
           invalidateParticipantPrivateResources(invalidation);
           return;
         }
+        if (
+          (result.failure.kind === 'offline' || !navigator.onLine) &&
+          (await exposeCachedAgenda())
+        ) {
+          return;
+        }
         const mapped = mapParticipantAgendaReadFailure(result.failure);
         if (mapped) storeState(mapped);
       })
-      .catch(() => {
+      .catch(async () => {
         if (
           !controller.signal.aborted &&
           mounted.current &&
           readEpoch.current === epoch
         ) {
-          storeState({ status: 'error' });
+          if (!(await exposeCachedAgenda())) {
+            storeState({
+              status: navigator.onLine ? 'error' : 'offline',
+            });
+          }
         }
       });
 
@@ -389,6 +617,16 @@ export const useParticipantAgendaResource = (
     setAttempt((value) => value + 1);
   }, []);
 
+  useEffect(() => {
+    const requestSync = () => retry();
+    window.addEventListener('online', requestSync);
+    window.addEventListener(OFFLINE_AGENDA_SYNC_EVENT, requestSync);
+    return () => {
+      window.removeEventListener('online', requestSync);
+      window.removeEventListener(OFFLINE_AGENDA_SYNC_EVENT, requestSync);
+    };
+  }, [retry]);
+
   const executeMutation = useCallback(
     async (request: PendingAgendaMutation): Promise<void> => {
       if (mutationLock.current) return;
@@ -401,16 +639,31 @@ export const useParticipantAgendaResource = (
         current.scopeKey !== request.scopeKey ||
         current.data.version !== request.expectedVersion ||
         current.data.eventId !== expectedEventId ||
+        !accountEventId ||
         current.data.eventId !== accountEventId ||
+        !accountUserId ||
         current.data.userId !== accountUserId ||
+        !accountTimezone ||
         readOnly
       ) {
         pendingAttempt.current = null;
         mutationLock.current = false;
         return;
       }
+      if (offline.queue.total > 0) {
+        setFeedback({
+          kind: offline.queue.conflict > 0 ? 'queue_conflict' : 'queued',
+          retry: offline.queue.conflict > 0 ? 'sync' : 'none',
+        });
+        mutationLock.current = false;
+        return;
+      }
 
       const epoch = ++mutationEpoch.current;
+      const mutationScope: ParticipantOfflineScope = {
+        eventId: accountEventId,
+        userId: accountUserId,
+      };
       const controller = new AbortController();
       mutationController.current?.abort();
       mutationController.current = controller;
@@ -420,6 +673,37 @@ export const useParticipantAgendaResource = (
       setConflict(null);
 
       try {
+        const queueOfflineMutation = async (): Promise<void> => {
+          if (
+            !isOfflineApprovedIntent(request.intent) ||
+            !request.offlineIdempotencyKey
+          ) {
+            pendingAttempt.current = null;
+            setFeedback({ kind: 'offline_restricted', retry: 'none' });
+            return;
+          }
+          await queueApprovedOfflineAgendaMutation(
+            mutationScope,
+            mutationInput(request.intent, request.expectedVersion),
+            request.offlineIdempotencyKey,
+          );
+          const queue = await readOfflineAgendaQueueSummary(mutationScope);
+          pendingAttempt.current = null;
+          reconciliationRequired.current = false;
+          setOffline((currentOffline) => ({
+            ...currentOffline,
+            cached: true,
+            queue,
+            syncing: false,
+          }));
+          setFeedback({ kind: 'queued', retry: 'none' });
+        };
+
+        if (offline.cached || !navigator.onLine) {
+          await queueOfflineMutation();
+          return;
+        }
+
         const result = await mutateParticipantAgenda(
           api,
           mutationInput(request.intent, request.expectedVersion),
@@ -456,11 +740,22 @@ export const useParticipantAgendaResource = (
           }
           pendingAttempt.current = null;
           reconciliationRequired.current = false;
+          const canonical = snapshotFromMutation(result.data);
           storeState({
             status: 'ready',
-            data: snapshotFromMutation(result.data),
+            data: canonical,
             scopeKey: request.scopeKey,
           });
+          void persistCanonicalOfflineAgenda(mutationScope, canonical)
+            .then((record) => {
+              if (!mounted.current) return;
+              setOffline((currentOffline) => ({
+                ...currentOffline,
+                cached: false,
+                lastSyncedAt: record.lastSyncedAt,
+              }));
+            })
+            .catch(() => undefined);
           setConflict(conflictFromMutation(result.data));
           return;
         }
@@ -472,6 +767,11 @@ export const useParticipantAgendaResource = (
         if (invalidation) {
           pendingAttempt.current = null;
           invalidateParticipantPrivateResources(invalidation);
+          return;
+        }
+
+        if (result.failure.kind === 'offline') {
+          await queueOfflineMutation();
           return;
         }
 
@@ -517,6 +817,9 @@ export const useParticipantAgendaResource = (
               data: canonical,
               scopeKey: request.scopeKey,
             });
+            void persistCanonicalOfflineAgenda(mutationScope, canonical).catch(
+              () => undefined,
+            );
           }
         }
 
@@ -534,7 +837,37 @@ export const useParticipantAgendaResource = (
         }
       } catch {
         if (!controller.signal.aborted && mounted.current) {
-          setFeedback({ kind: 'error', retry: 'mutation' });
+          if (!navigator.onLine) {
+            if (
+              isOfflineApprovedIntent(request.intent) &&
+              request.offlineIdempotencyKey
+            ) {
+              try {
+                await queueApprovedOfflineAgendaMutation(
+                  mutationScope,
+                  mutationInput(request.intent, request.expectedVersion),
+                  request.offlineIdempotencyKey,
+                );
+                const queue =
+                  await readOfflineAgendaQueueSummary(mutationScope);
+                pendingAttempt.current = null;
+                setOffline((currentOffline) => ({
+                  ...currentOffline,
+                  cached: true,
+                  queue,
+                  syncing: false,
+                }));
+                setFeedback({ kind: 'queued', retry: 'none' });
+              } catch {
+                setFeedback({ kind: 'error', retry: 'mutation' });
+              }
+            } else {
+              pendingAttempt.current = null;
+              setFeedback({ kind: 'offline_restricted', retry: 'none' });
+            }
+          } else {
+            setFeedback({ kind: 'error', retry: 'mutation' });
+          }
         }
       } finally {
         if (mounted.current && mutationEpoch.current === epoch) {
@@ -549,6 +882,7 @@ export const useParticipantAgendaResource = (
       accountUserId,
       api,
       expectedEventId,
+      offline,
       pending,
       readOnly,
       storeState,
@@ -568,10 +902,12 @@ export const useParticipantAgendaResource = (
       ) {
         return;
       }
+      const keys = createAgendaIdempotencyKeys();
       await executeMutation({
         expectedVersion: current.data.version,
-        idempotencyKey: createAgendaIdempotencyKey(),
+        idempotencyKey: keys.idempotencyKey,
         intent,
+        offlineIdempotencyKey: keys.offlineIdempotencyKey,
         scopeKey: current.scopeKey,
       });
     },
@@ -583,6 +919,88 @@ export const useParticipantAgendaResource = (
     if (!request || mutationLock.current || pending !== null) return;
     await executeMutation(request);
   }, [executeMutation, pending]);
+
+  const retryOfflineQueue = useCallback(async () => {
+    const current = stateRef.current;
+    if (
+      mutationLock.current ||
+      current.status !== 'ready' ||
+      !accountEventId ||
+      !accountUserId ||
+      !accountTimezone
+    ) {
+      return;
+    }
+    if (!navigator.onLine) {
+      setFeedback({ kind: 'queue_conflict', retry: 'sync' });
+      return;
+    }
+
+    mutationLock.current = true;
+    const scope: ParticipantOfflineScope = {
+      eventId: accountEventId,
+      userId: accountUserId,
+    };
+    setOffline((currentOffline) => ({
+      ...currentOffline,
+      syncing: true,
+    }));
+    try {
+      if (offline.queue.conflict > 0) {
+        await retryOfflineAgendaConflict(scope, current.data.version);
+      }
+      const synchronized = await syncOfflineAgendaQueue(scope, api);
+      if (synchronized.invalidation) {
+        invalidateParticipantPrivateResources(synchronized.invalidation);
+        return;
+      }
+      if (synchronized.canonical) {
+        if (
+          !agendaMatchesScope(synchronized.canonical, scope, accountTimezone)
+        ) {
+          invalidateParticipantPrivateResources('permission');
+          return;
+        }
+        storeState({
+          status: 'ready',
+          data: synchronized.canonical,
+          scopeKey: current.scopeKey,
+        });
+      }
+      setOffline({
+        cached: false,
+        lastSyncedAt: new Date().toISOString(),
+        queue: synchronized.summary,
+        syncing: false,
+      });
+      setFeedback(
+        synchronized.summary.conflict > 0
+          ? { kind: 'queue_conflict', retry: 'sync' }
+          : synchronized.summary.total > 0
+            ? { kind: 'queued', retry: 'none' }
+            : synchronized.processed > 0
+              ? { kind: 'synced', retry: 'none' }
+              : null,
+      );
+    } catch {
+      setFeedback({ kind: 'queue_conflict', retry: 'sync' });
+    } finally {
+      mutationLock.current = false;
+      if (mounted.current) {
+        setOffline((currentOffline) => ({
+          ...currentOffline,
+          syncing: false,
+        }));
+      }
+    }
+  }, [
+    accountEventId,
+    accountTimezone,
+    accountUserId,
+    api,
+    offline.queue.conflict,
+    storeState,
+  ]);
 
   const dismissFeedback = useCallback(() => {
     if (pendingAttempt.current !== null || reconciliationRequired.current) {
@@ -627,9 +1045,11 @@ export const useParticipantAgendaResource = (
       dismissFeedback,
       feedback: privateStateIsVisible ? feedback : null,
       mutate,
+      offline,
       pending: privateStateIsVisible ? pending : null,
       readOnly: !privateStateIsVisible || readOnly,
       retry,
+      retryOfflineQueue,
       retryMutation,
       state: visibleState,
     }),
@@ -638,10 +1058,12 @@ export const useParticipantAgendaResource = (
       dismissFeedback,
       feedback,
       mutate,
+      offline,
       pending,
       privateStateIsVisible,
       readOnly,
       retry,
+      retryOfflineQueue,
       retryMutation,
       visibleState,
     ],
