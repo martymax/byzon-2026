@@ -20,14 +20,33 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F3-01` až `F3-05` jsou na `track/frontend-complete` po závěrečném security
+  a code review ve stavu `UI ready (mocked)`; oba review skončily `PASS` bez
+  nevyřešeného actionable nálezu. `F3-06` zůstává správně blokovaný přes
+  `BLOCKER-RES-02`.
+- `/app/agenda` nabízí kompletní syntetický průchod přes uložené body,
+  rezervace, kapacitní stavy, čekací listinu, časově omezenou nabídku místa,
+  odhad účasti, konflikty a `.ics` export. Agenda je napojená na detail
+  programu i domovský přehled a pátý cíl primární navigace; návrat z detailu
+  zachová přesný bezpečný origin a owner-scoped scroll.
+- `CS-AGENDA-01` je strict event/user-scoped private/no-store kontrakt.
+  Mutace korelují action, session, offer, version a canonical postcondition,
+  rozlišují ponechaný saved zdroj od odstraněné projekce a při neurčitém
+  výsledku opakují stejný idempotency key. 401/403, revokace a změna účtu
+  okamžitě skryjí osobní data; rezervace se nikdy lokálně neslibuje.
+- Finální `F3` gate je zelený: 124 domain testů, 28 fixture testů, 273
+  conference unit testů, 36 očekávaně přeskočených DB scénářů a 618 Chromium
+  component/axe/responsive scénářů ve třech viewports. Prošly Prettier,
+  ESLint, relevantní typechecky, produkční Next build a source/post-build
+  mock boundary.
 - Celá etapa `F2` je na `track/frontend-complete` po závěrečném security a code
   review ve stavu `UI ready (mocked)`; oba review skončily `PASS` bez
   nevyřešeného actionable nálezu. Rozšířený `CS-BOOT-01` nese event/user
   scope, verzovanou správu profilového minima, úplný právní obsah nebo HTTPS
   odkaz, přesnou evidenci acknowledgement, privacy stavy a support e-mail.
 - `/app/vice` je nový funkční hub pro profil, soukromí, nastavení, vstupenku,
-  praktické informace, řečníky a partnery. Primární navigace má nyní čtyři
-  cíle `Přehled / Program / Oznámení / Více`; pátou `Agendu` doplní `F3`.
+  praktické informace, řečníky a partnery. Primární navigace má nyní pět cílů
+  `Přehled / Program / Agenda / Oznámení / Více`.
   `/app/profil` podporuje canonical save, stale-version reload, lokální
   validaci a ochranu rozepsaných změn. `/app/soukromi` zobrazuje aktuální
   právní verze/evidenci pouze pro čtení a export/smazání odesílá až po

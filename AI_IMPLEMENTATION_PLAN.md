@@ -2000,18 +2000,18 @@ mock boundary.
 - `integration_gate`: serverové mutace vracejí kanonický stav, version,
   kapacitu, konflikt a stabilní error code; race test je zelený.
 
-- [ ] `F3-01` S `P5-02` uzavřít `CS-AGENDA-01` a implementovat osobní agendu
+- [x] `F3-01` S `P5-02` uzavřít `CS-AGENDA-01` a implementovat osobní agendu
   po dnech s prázdným stavem, deep linkem na session, zachováním scrollu a
   zřetelným odlišením uložené položky, rezervace a waitlistu.
-- [ ] `F3-02` Implementovat add/remove, reserve/cancel a generický
+- [x] `F3-02` Implementovat add/remove, reserve/cancel a generický
   registration-estimate CTA jako explicitní stavový automat s pending
   ochranou; optimistic UI jen tam, kde lze bezpečně vrátit canonical response.
-- [ ] `F3-03` Implementovat capacity full, waiting, offered, expired,
+- [x] `F3-03` Implementovat capacity full, waiting, offered, expired,
   cancelled, closed a stale-version stavy bez pouhého barevného rozlišení.
-- [ ] `F3-04` Přidat dialog časového konfliktu a waitlist nabídky s
+- [x] `F3-04` Přidat dialog časového konfliktu a waitlist nabídky s
   klávesnicovým focusem, countdownem odvozeným ze serverového času a
   bezpečným retry.
-- [ ] `F3-05` Přidat osobní `.ics` export UI a component/axe/contract testy
+- [x] `F3-05` Přidat osobní `.ics` export UI a component/axe/contract testy
   všech stavů; specializovaný coaching ani plné networking UI nejsou součástí
   tohoto generického slice.
 - [ ] `F3-06` Až po `BLOCKER-RES-02` rozšířit společný session action pattern o
@@ -2022,6 +2022,20 @@ mock boundary.
 zobrazí serverový canonical stav; konflikt je srozumitelný i bez barvy; offline
 mutace jasně zůstane pending nebo je odmítnuta podle `F6`; integrovaný stav
 projde scénáři 6–9 z §20.2.
+
+Etapový security a code review F3 byl dokončen 25. 7. 2026 s výsledkem `PASS`.
+`CS-AGENDA-01`, typed klient, validované fixtures a stateful mock napájejí
+event/user-scoped agendu, programové CTA, rezervace, čekací listinu, konflikty,
+odhad registrace a autorizovaný `.ics` export. Canonical mutace korelují action,
+session, offer, version a postcondition; bezpečně rozlišují retained saved
+zdroj od odstraněné projekce. Neurčité výsledky zachovají idempotency key a
+uzamknou další změny do načtení kanonického stavu. Owner switch, revokace a
+401/403 synchronně mažou soukromý stav. Finální gate prošel jako 124 domain
+testů, 28 fixture testů, 273 conference unit testů, 36 očekávaně přeskočených
+DB scénářů a 618 Chromium component/axe/responsive scénářů ve třech
+viewports. Prošly také Prettier, ESLint, všechny relevantní typechecky,
+produkční Next build a source/post-build mock boundary. `F3-06` zůstává
+správně blokovaný přes `BLOCKER-RES-02`.
 
 #### F4 – admin, import a support
 
@@ -2719,3 +2733,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 4.3 | 25. 7. 2026 | Dokončen `F2-05` ve stavu `UI ready (mocked)`: participant `CS-ANN-01`, recipient-scoped fixtures a typed no-store mock podporují discoverable inbox, URL all/unread filtr, cursorové stránky, detail a online-only read. Security/code review doplnil event/route korelaci, okamžitý wipe při revokaci, nerozlišitelný missing/audience 404, globální pořadí, race-safe filtr, focus a bounded návratový kontext bez persistence soukromého obsahu. |
 | 4.4 | 25. 7. 2026 | Dokončen `F2-07` a účetní část `F2-06`: rozšířený `CS-BOOT-01`, validované fixtures a stateful typed mock napájí lazy account resource, hub `Více`, verzovaný profil, read-only právní dokumenty/evidence, potvrzené privacy žádosti, support a session controls. Account data zůstávají jen v paměti, canonical odpovědi se korelují podle event/user/version, revokace provádí wipe a 18 Chromium scénářů kryje tři schválené viewporty. |
 | 4.5 | 25. 7. 2026 | Uzavřen etapový security/code review F2 s výsledkem `PASS`. Privátní resource se nyní globálně invalidují při auth/event revokaci, account scope je serverově vázaný i pro archiv bez zveřejnění event ID, profil/privacy/session mutace odmítají stale canonical stav a exact recovery návrat prochází striktním allowlistem a token-bound mock replayem. Finální gate: 113 domain, 27 fixture, 229 conference unit a 510 browser scénářů; build a production mock boundary jsou zelené. |
+| 4.6 | 25. 7. 2026 | Dokončeny `F3-01` až `F3-05` a etapový security/code review skončil `PASS`. Event/user-scoped osobní agenda používá kanonické mutace pro save, rezervace, waitlist, nabídky a odhad účasti, neblokující konflikty, bezpečný retry, přesný návrat a autorizovaný `.ics` export. Finální gate: 124 domain, 28 fixture, 273 conference unit a 618 browser scénářů; `F3-06` zůstává za `BLOCKER-RES-02`. |
