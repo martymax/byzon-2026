@@ -97,6 +97,8 @@ import {
 type AdminMockPersona =
   | 'organizer'
   | 'room_operator'
+  | 'support_read_only'
+  | 'reservation_reader'
   | 'denied'
   | 'session_expired';
 
@@ -157,17 +159,36 @@ export const resetMockAdminState = (): void => {
   state = initialState();
 };
 
-const contextForPersona = (): AdminContextResponse =>
-  state.persona === 'room_operator'
-    ? clone(adminContextFixtures.room_operator!)
-    : clone(adminContextFixtures.organizer!);
+const contextForPersona = (): AdminContextResponse => {
+  if (state.persona === 'room_operator') {
+    return clone(adminContextFixtures.room_operator!);
+  }
+  const context = clone(adminContextFixtures.organizer!);
+  if (state.persona === 'support_read_only') {
+    return {
+      ...context,
+      actor: {
+        ...context.actor,
+        permissions: ['participant:operational:read'],
+      },
+    };
+  }
+  if (state.persona === 'reservation_reader') {
+    return {
+      ...context,
+      actor: {
+        ...context.actor,
+        permissions: ['reservation:any:read'],
+      },
+    };
+  }
+  return context;
+};
 
 const permissionsForPersona = (): readonly AdminPermission[] =>
-  state.persona === 'organizer'
-    ? adminContextFixtures.organizer!.actor.permissions
-    : state.persona === 'room_operator'
-      ? adminContextFixtures.room_operator!.actor.permissions
-      : [];
+  state.persona === 'denied' || state.persona === 'session_expired'
+    ? []
+    : contextForPersona().actor.permissions;
 
 const successOptions = (fixtureName: string): MockJsonResponseOptions => ({
   fixtureName,
@@ -201,10 +222,8 @@ const authorize = (
 const routeMatchesEvent = (eventId: unknown): boolean =>
   String(eventId) === adminFixtureIds.event;
 
-const mutationFingerprint = (
-  endpoint: string,
-  body: unknown,
-): string => `${endpoint}:${JSON.stringify(body)}`;
+const mutationFingerprint = (endpoint: string, body: unknown): string =>
+  `${endpoint}:${JSON.stringify(body)}`;
 
 const readMutationKey = (request: Request): string | null => {
   const parsed = idempotencyKeySchema.safeParse(
@@ -377,9 +396,14 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     const rawPersona = new URL(request.url).searchParams.get('persona');
     if (
       rawPersona &&
-      !['organizer', 'room_operator', 'denied', 'session_expired'].includes(
-        rawPersona,
-      )
+      ![
+        'organizer',
+        'room_operator',
+        'support_read_only',
+        'reservation_reader',
+        'denied',
+        'session_expired',
+      ].includes(rawPersona)
     ) {
       return mockProblemResponse(
         adminReadProblemSchema,
@@ -409,29 +433,26 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
 
-  http.get(
-    '*/api/v1/admin/events/:eventId/operations',
-    ({ params }) => {
-      const denied = authorize(
+  http.get('*/api/v1/admin/events/:eventId/operations', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['operations:read'],
+      'admin.mock.operations',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
         adminReadProblemSchema,
-        ['operations:read'],
-        'admin.mock.operations',
+        adminReadProblemFixtures.not_found,
+        { fixtureName: 'admin.mock.operations-not-found' },
       );
-      if (denied) return denied;
-      if (!routeMatchesEvent(params.eventId)) {
-        return mockProblemResponse(
-          adminReadProblemSchema,
-          adminReadProblemFixtures.not_found,
-          { fixtureName: 'admin.mock.operations-not-found' },
-        );
-      }
-      return mockJsonResponse(
-        adminOperationsOverviewResponseSchema,
-        state.overview,
-        successOptions('admin.mock.operations'),
-      );
-    },
-  ),
+    }
+    return mockJsonResponse(
+      adminOperationsOverviewResponseSchema,
+      state.overview,
+      successOptions('admin.mock.operations'),
+    );
+  }),
 
   http.post(
     '*/api/v1/admin/events/:eventId/ticket-imports/preview',
@@ -631,20 +652,18 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     },
   ),
 
-  http.get(
+  http.post(
     '*/api/v1/admin/events/:eventId/support/search',
-    ({ params, request }) => {
+    async ({ params, request }) => {
       const denied = authorize(
         supportSearchProblemSchema,
         ['participant:operational:read'],
         'admin.mock.support-search',
       );
       if (denied) return denied;
-      const url = new URL(request.url);
-      const query = supportSearchQuerySchema.safeParse({
-        query: url.searchParams.get('q'),
-        limit: Number(url.searchParams.get('limit')),
-      });
+      const query = supportSearchQuerySchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
       if (!routeMatchesEvent(params.eventId) || !query.success) {
         return mockProblemResponse(
           supportSearchProblemSchema,
@@ -672,7 +691,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     async ({ params, request }) => {
       const denied = authorize(
         supportMutationProblemSchema,
-        ['participant:operational:read'],
+        ['ticket:any:manage'],
         'admin.mock.support-mutation',
       );
       if (denied) return denied;
@@ -724,7 +743,10 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         !state.staleScenarios.has('support')
       ) {
         state.staleScenarios.add('support');
-        state.supportRecords[index] = { ...record, version: record.version + 1 };
+        state.supportRecords[index] = {
+          ...record,
+          version: record.version + 1,
+        };
         return mockProblemResponse(
           supportMutationProblemSchema,
           {
@@ -965,7 +987,10 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         !state.staleScenarios.has('role')
       ) {
         state.staleScenarios.add('role');
-        state.overview = { ...state.overview, version: state.overview.version + 1 };
+        state.overview = {
+          ...state.overview,
+          version: state.overview.version + 1,
+        };
         return mockProblemResponse(
           adminMutationProblemSchema,
           {
@@ -1079,46 +1104,43 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     },
   ),
 
-  http.get(
-    '*/api/v1/admin/events/:eventId/reservations',
-    ({ params }) => {
-      const denied = authorize(
+  http.get('*/api/v1/admin/events/:eventId/reservations', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['reservation:any:read', 'attendance:assigned:write'],
+      'admin.mock.reservations',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
         adminReadProblemSchema,
-        ['reservation:any:read', 'attendance:assigned:write'],
-        'admin.mock.reservations',
+        adminReadProblemFixtures.not_found,
+        { fixtureName: 'admin.mock.reservations-not-found' },
       );
-      if (denied) return denied;
-      if (!routeMatchesEvent(params.eventId)) {
-        return mockProblemResponse(
-          adminReadProblemSchema,
-          adminReadProblemFixtures.not_found,
-          { fixtureName: 'admin.mock.reservations-not-found' },
-        );
-      }
-      const items =
-        state.persona === 'room_operator'
-          ? state.reservations.filter(
-              ({ sessionId }) => sessionId === adminFixtureIds.session,
-            )
-          : state.reservations;
-      return mockJsonResponse(
-        adminReservationListResponseSchema,
-        {
-          ...clone(adminReservationFixtures.list!),
-          eventId: adminFixtureIds.event,
-          items,
-        },
-        successOptions('admin.mock.reservations'),
-      );
-    },
-  ),
+    }
+    const items =
+      state.persona === 'room_operator'
+        ? state.reservations.filter(
+            ({ sessionId }) => sessionId === adminFixtureIds.session,
+          )
+        : state.reservations;
+    return mockJsonResponse(
+      adminReservationListResponseSchema,
+      {
+        ...clone(adminReservationFixtures.list!),
+        eventId: adminFixtureIds.event,
+        items,
+      },
+      successOptions('admin.mock.reservations'),
+    );
+  }),
 
   http.post(
     '*/api/v1/admin/events/:eventId/reservations/actions',
     async ({ params, request }) => {
       const denied = authorize(
         adminMutationProblemSchema,
-        ['reservation:any:read', 'attendance:assigned:write'],
+        ['agenda:any:override', 'attendance:assigned:write'],
         'admin.mock.reservation-mutation',
       );
       if (denied) return denied;
@@ -1166,6 +1188,12 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       const attendance =
         body.data.action === 'mark_attended' ||
         body.data.action === 'undo_attendance';
+      const actionDenied = authorize(
+        adminMutationProblemSchema,
+        attendance ? ['attendance:assigned:write'] : ['agenda:any:override'],
+        'admin.mock.reservation-mutation-action',
+      );
+      if (actionDenied) return actionDenied;
       if (
         state.persona === 'room_operator' &&
         (!attendance || record.sessionId !== adminFixtureIds.session)
@@ -1229,71 +1257,64 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     },
   ),
 
-  http.get(
-    '*/api/v1/admin/events/:eventId/audit',
-    ({ params, request }) => {
-      const denied = authorize(
+  http.get('*/api/v1/admin/events/:eventId/audit', ({ params, request }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['audit:read'],
+      'admin.mock.audit',
+    );
+    if (denied) return denied;
+    const url = new URL(request.url);
+    const query = adminAuditQuerySchema.safeParse(
+      Object.fromEntries(
+        [...url.searchParams.entries()].map(([key, value]) => [
+          key,
+          key === 'limit' ? Number(value) : value,
+        ]),
+      ),
+    );
+    if (!routeMatchesEvent(params.eventId) || !query.success) {
+      return mockProblemResponse(
         adminReadProblemSchema,
-        ['audit:read'],
-        'admin.mock.audit',
+        adminReadProblemFixtures.validation,
+        { fixtureName: 'admin.mock.audit-validation' },
       );
-      if (denied) return denied;
-      const url = new URL(request.url);
-      const query = adminAuditQuerySchema.safeParse(
-        Object.fromEntries(
-          [...url.searchParams.entries()].map(([key, value]) => [
-            key,
-            key === 'limit' ? Number(value) : value,
-          ]),
-        ),
-      );
-      if (!routeMatchesEvent(params.eventId) || !query.success) {
-        return mockProblemResponse(
-          adminReadProblemSchema,
-          adminReadProblemFixtures.validation,
-          { fixtureName: 'admin.mock.audit-validation' },
-        );
-      }
-      const items = adminAuditFixtures.page!.items.filter(
-        ({ category }) =>
-          query.data.category === undefined ||
-          category === query.data.category,
-      );
-      return mockJsonResponse(
-        adminAuditResponseSchema,
-        {
-          eventId: adminFixtureIds.event,
-          items,
-          pageInfo: { nextCursor: null, hasMore: false },
-        },
-        successOptions('admin.mock.audit'),
-      );
-    },
-  ),
+    }
+    const items = adminAuditFixtures.page!.items.filter(
+      ({ category }) =>
+        query.data.category === undefined || category === query.data.category,
+    );
+    return mockJsonResponse(
+      adminAuditResponseSchema,
+      {
+        eventId: adminFixtureIds.event,
+        items,
+        pageInfo: { nextCursor: null, hasMore: false },
+      },
+      successOptions('admin.mock.audit'),
+    );
+  }),
 
-  http.get(
-    '*/api/v1/admin/events/:eventId/settings',
-    ({ params }) => {
-      const denied = authorize(
+  http.get('*/api/v1/admin/events/:eventId/settings', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['event:settings:manage'],
+      'admin.mock.settings',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
         adminReadProblemSchema,
-        ['event:settings:manage'],
-        'admin.mock.settings',
+        adminReadProblemFixtures.not_found,
+        { fixtureName: 'admin.mock.settings-not-found' },
       );
-      if (denied) return denied;
-      if (!routeMatchesEvent(params.eventId)) {
-        return mockProblemResponse(
-          adminReadProblemSchema,
-          adminReadProblemFixtures.not_found,
-          { fixtureName: 'admin.mock.settings-not-found' },
-        );
-      }
-      return mockJsonResponse(
-        adminEventSettingsSchema,
-        state.settings,
-        successOptions('admin.mock.settings'),
-      );
-    },
-  ),
+    }
+    return mockJsonResponse(
+      adminEventSettingsSchema,
+      state.settings,
+      successOptions('admin.mock.settings'),
+    );
+  }),
 
   http.put(
     '*/api/v1/admin/events/:eventId/settings',
@@ -1339,7 +1360,10 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         !state.staleScenarios.has('settings')
       ) {
         state.staleScenarios.add('settings');
-        state.settings = { ...state.settings, version: state.settings.version + 1 };
+        state.settings = {
+          ...state.settings,
+          version: state.settings.version + 1,
+        };
         return mockProblemResponse(
           adminMutationProblemSchema,
           {

@@ -20,7 +20,9 @@ import {
   type AdminEventSettingsUpdateRequest,
   type AdminExportRequest,
   type AdminReservationMutationRequest,
+  type AdminReservationMutationResponse,
   type AdminRoleAssignmentMutationRequest,
+  type AdminRoleAssignmentMutationResponse,
 } from '@byzon/domain/contracts/admin';
 import {
   adminAnnouncementPreviewProblemSchema,
@@ -42,6 +44,7 @@ import {
   supportSearchQuerySchema,
   supportSearchResponseSchema,
   type SupportMutationRequest,
+  type SupportMutationResponse,
 } from '@byzon/domain/contracts/support';
 import {
   ticketImportApplyProblemSchema,
@@ -150,8 +153,8 @@ export const adminTicketImportApplyEndpoint = defineApiEndpoint({
 });
 
 export const adminSupportSearchEndpoint = defineApiEndpoint({
-  method: 'GET',
-  requestSchema: null,
+  method: 'POST',
+  requestSchema: supportSearchQuerySchema,
   successSchema: supportSearchResponseSchema,
   problemSchema: supportSearchProblemSchema,
   problemCodes: [
@@ -163,7 +166,7 @@ export const adminSupportSearchEndpoint = defineApiEndpoint({
     'INTERNAL_ERROR',
   ],
   responseKind: 'json',
-  retry: 'safe-read',
+  retry: 'never',
   idempotency: 'forbidden',
 });
 
@@ -324,11 +327,7 @@ const correlated = <Success, Problem extends ApiProblem>(
   result: ApiResult<Success, Problem>,
   accepts: (data: Success) => boolean,
 ): ApiResult<Success, Problem> => {
-  if (
-    !result.ok ||
-    result.kind !== 'success' ||
-    accepts(result.data)
-  ) {
+  if (!result.ok || result.kind !== 'success' || accepts(result.data)) {
     return result;
   }
   return {
@@ -345,6 +344,79 @@ const correlated = <Success, Problem extends ApiProblem>(
 
 const sameJson = (left: unknown, right: unknown): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
+
+const matchesSupportMutation = (
+  data: SupportMutationResponse,
+  body: SupportMutationRequest,
+): boolean => {
+  const expectedTicketId =
+    body.action === 'reassign' || body.action === 'transfer'
+      ? body.targetTicketId
+      : body.ticketId;
+  if (
+    data.record.participantId !== body.participantId ||
+    data.record.ticketId !== expectedTicketId ||
+    data.record.version !== body.expectedVersion + 1
+  ) {
+    return false;
+  }
+  switch (body.action) {
+    case 'block':
+      return data.record.ticketState === 'blocked';
+    case 'reactivate':
+      return data.record.ticketState === 'active';
+    case 'reassign':
+    case 'transfer':
+      return data.record.ticketId === body.targetTicketId;
+    case 'resend':
+      return data.record.ticketId === body.ticketId;
+  }
+};
+
+const matchesRoleAssignmentMutation = (
+  data: AdminRoleAssignmentMutationResponse,
+  body: AdminRoleAssignmentMutationRequest,
+): boolean => {
+  if (data.assignmentsVersion !== body.expectedVersion + 1) return false;
+
+  if (body.action === 'revoke') {
+    return (
+      (data.outcome === 'revoked' || data.outcome === 'already_applied') &&
+      data.assignment === null
+    );
+  }
+
+  return (
+    (data.outcome === 'granted' || data.outcome === 'already_applied') &&
+    data.assignment !== null &&
+    data.assignment.operatorId === body.operatorId &&
+    data.assignment.role === body.role &&
+    sameJson(data.assignment.scope, body.scope)
+  );
+};
+
+const matchesReservationMutation = (
+  data: AdminReservationMutationResponse,
+  body: AdminReservationMutationRequest,
+): boolean => {
+  if (
+    data.record.reservationId !== body.reservationId ||
+    data.record.version !== body.expectedVersion + 1
+  ) {
+    return false;
+  }
+
+  switch (body.action) {
+    case 'capacity_override':
+      return data.record.capacity === body.capacity;
+    case 'mark_attended':
+      return data.record.state === 'attended';
+    case 'undo_attendance':
+      return data.record.state === 'reserved';
+    case 'cancel_reservation':
+      return data.record.state === 'cancelled';
+  }
+};
 
 export const requestAdminContext = (api: ApiPort, signal?: AbortSignal) =>
   api.request(adminContextEndpoint, {
@@ -385,7 +457,10 @@ export const requestAdminTicketImportApply = async (
     (data) =>
       data.eventId === eventId &&
       data.previewId === body.previewId &&
-      data.previewVersion === body.previewVersion,
+      data.previewVersion === body.previewVersion &&
+      data.result.created === body.expectedImpact.new &&
+      data.result.statusChanged === body.expectedImpact.statusChanged &&
+      data.result.unchanged === body.expectedImpact.unchanged,
   );
 
 export const requestAdminSupportSearch = async (
@@ -398,13 +473,10 @@ export const requestAdminSupportSearch = async (
     query,
     limit: SUPPORT_SEARCH_RESULT_LIMIT,
   });
-  const parameters = new URLSearchParams({
-    q: validated.query,
-    limit: String(validated.limit),
-  });
   return correlated(
     await api.request(adminSupportSearchEndpoint, {
-      path: eventPath(eventId, `/support/search?${parameters.toString()}`),
+      path: eventPath(eventId, '/support/search'),
+      body: validated,
       cache: 'no-store',
       ...(signal ? { signal } : {}),
     }),
@@ -429,11 +501,8 @@ export const requestAdminSupportMutation = async (
     }),
     (data) =>
       data.eventId === eventId &&
-      data.record.participantId === body.participantId &&
-      data.record.ticketId ===
-        (body.targetTicketId && ['reassign', 'transfer'].includes(body.action)
-          ? body.targetTicketId
-          : body.ticketId),
+      data.record.eventId === eventId &&
+      matchesSupportMutation(data, body),
   );
 
 export const requestAdminAnnouncementPreview = async (
@@ -490,10 +559,8 @@ export const requestAdminRoleAssignment = async (
     }),
     (data) =>
       data.eventId === eventId &&
-      (data.assignment === null ||
-        (data.assignment.eventId === eventId &&
-          (body.action === 'revoke' ||
-            data.assignment.operatorId === body.operatorId))),
+      (data.assignment === null || data.assignment.eventId === eventId) &&
+      matchesRoleAssignmentMutation(data, body),
   );
 
 export const requestAdminExport = async (
@@ -545,7 +612,8 @@ export const requestAdminReservationMutation = async (
     }),
     (data) =>
       data.eventId === eventId &&
-      data.record.reservationId === body.reservationId,
+      data.record.eventId === eventId &&
+      matchesReservationMutation(data, body),
   );
 
 export const requestAdminAudit = async (
@@ -602,7 +670,15 @@ export const requestAdminEventSettingsUpdate = async (
     (data) =>
       data.eventId === eventId &&
       data.settings.eventId === eventId &&
-      data.settings.version > body.expectedVersion,
+      data.settings.version === body.expectedVersion + 1 &&
+      sameJson(
+        {
+          registrationMode: data.settings.registrationMode,
+          reservationChangesAllowed: data.settings.reservationChangesAllowed,
+          supportMessage: data.settings.supportMessage,
+        },
+        body.settings,
+      ),
   );
 
 type FetchImplementation = (
@@ -618,13 +694,64 @@ export interface AdminTicketImportUploadPort {
   ) => ReturnType<typeof requestAdminTicketImportPreview>;
 }
 
-const mediaTypeForFile = (file: File): TicketImportMediaType => {
+const throwIfAborted = (signal?: AbortSignal): void => {
+  if (signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  }
+};
+
+const hasSafeCsvSignature = async (
+  file: File,
+  signal?: AbortSignal,
+): Promise<boolean> => {
+  throwIfAborted(signal);
+  const bytes = new Uint8Array(
+    await file.slice(0, Math.min(file.size, 4096)).arrayBuffer(),
+  );
+  throwIfAborted(signal);
+  if (bytes.length === 0) return false;
+  if (
+    bytes.some(
+      (byte) =>
+        byte === 0 ||
+        (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d),
+    )
+  ) {
+    return false;
+  }
+  try {
+    const sample = new TextDecoder('utf-8', { fatal: true })
+      .decode(bytes)
+      .replace(/^\uFEFF/, '');
+    return (
+      sample.trim().length > 0 &&
+      (sample.includes(',') ||
+        sample.includes(';') ||
+        sample.includes('\t') ||
+        /[\r\n]/.test(sample))
+    );
+  } catch {
+    return false;
+  }
+};
+
+const mediaTypeForFile = async (
+  file: File,
+  signal?: AbortSignal,
+): Promise<TicketImportMediaType> => {
   if (file.type === 'text/csv') return 'text/csv';
   if (
     file.type ===
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   ) {
     return file.type;
+  }
+  if (
+    file.type === '' &&
+    /\.csv$/i.test(file.name) &&
+    (await hasSafeCsvSignature(file, signal))
+  ) {
+    return 'text/csv';
   }
   throw new TypeError('Unsupported ticket import media type');
 };
@@ -642,17 +769,18 @@ export const requestAdminTicketImportPreview = async (
       cache: 'no-store',
       ...(signal ? { signal } : {}),
     }),
-    (data) =>
-      data.eventId === eventId && sameJson(data.source, source),
+    (data) => data.eventId === eventId && sameJson(data.source, source),
   );
 
 export const createAdminTicketImportUploadPort = (
   fetchImplementation: FetchImplementation = globalThis.fetch.bind(globalThis),
 ): AdminTicketImportUploadPort => ({
-  preview: (eventId, file, signal) => {
+  preview: async (eventId, file, signal) => {
+    const mediaType = await mediaTypeForFile(file, signal);
+    throwIfAborted(signal);
     const source = ticketImportSourceSchema.parse({
       fileName: file.name,
-      mediaType: mediaTypeForFile(file),
+      mediaType,
       byteSize: file.size,
     });
     const multipart = new FormData();

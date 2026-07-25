@@ -23,6 +23,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -31,6 +32,7 @@ import {
 } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
+  useAdminRequestFence,
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -73,19 +75,14 @@ const formatTimestamp = (value: string, timeZone: string): string => {
 };
 
 export const AdminReservationWorkspace = () => {
-  const {
-    api,
-    eventId,
-    eventTimezone,
-    invalidateSensitive,
-    permissions,
-  } = useAdminWorkspace();
+  const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
+    useAdminWorkspace();
+  const requestFence = useAdminRequestFence();
   const [records, setRecords] = useState<readonly AdminReservationRecord[]>([]);
   const [audits, setAudits] = useState<readonly AdminAuditEntry[]>([]);
   const [settings, setSettings] = useState<AdminEventSettings | null>(null);
   const [selected, setSelected] = useState<AdminReservationRecord | null>(null);
-  const [action, setAction] =
-    useState<AdminReservationAction>('mark_attended');
+  const [action, setAction] = useState<AdminReservationAction>('mark_attended');
   const [capacity, setCapacity] = useState(1);
   const [reason, setReason] = useState('');
   const [settingsDraft, setSettingsDraft] = useState<{
@@ -94,12 +91,17 @@ export const AdminReservationWorkspace = () => {
     supportMessage: string;
   } | null>(null);
   const [settingsReason, setSettingsReason] = useState('');
-  const [attempted, setAttempted] = useState(false);
+  const [attemptedKind, setAttemptedKind] = useState<
+    'reservation' | 'settings' | null
+  >(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorScope, setErrorScope] = useState<
+    'read' | 'reservation' | 'settings' | null
+  >(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
@@ -110,101 +112,121 @@ export const AdminReservationWorkspace = () => {
   const canReadReservations =
     permissions.includes('reservation:any:read') ||
     permissions.includes('attendance:assigned:write');
-  const canOverride = permissions.includes('reservation:any:read');
+  const canOverride = permissions.includes('agenda:any:override');
   const canAttend = permissions.includes('attendance:assigned:write');
   const canReadAudit = permissions.includes('audit:read');
   const canManageSettings = permissions.includes('event:settings:manage');
+  const canPerformReservationAction = (
+    candidate: AdminReservationAction,
+  ): boolean => {
+    const isAttendance =
+      candidate === 'mark_attended' || candidate === 'undo_attendance';
+    return isAttendance ? canAttend : canOverride;
+  };
 
   const handleReadFailure = (
-    failure: Parameters<typeof adminFailureMessage>[0],
-    requestId?: string,
+    result: Readonly<{
+      failure: Parameters<typeof adminFailureMessage>[0];
+      status?: number;
+      metadata?: { readonly requestId: string };
+    }>,
   ) => {
-    if (isAdminSecurityFailure(failure)) {
+    if (isAdminSecurityFailure(result)) {
       setRecords([]);
       setAudits([]);
       setSettings(null);
       setSelected(null);
       setPending(null);
-      invalidateSensitive(adminFailureMessage(failure, requestId));
+      invalidateSensitive(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
       return;
     }
-    setError(adminFailureMessage(failure, requestId));
+    setErrorScope('read');
+    setError(adminFailureMessage(result.failure, result.metadata?.requestId));
   };
 
   useEffect(() => {
     if (!canReadReservations) return;
-    const controller = new AbortController();
-    void requestAdminReservations(api, eventId, controller.signal).then(
+    const request = requestFence.begin('reservation-list');
+    void requestAdminReservations(api, eventId, request.signal).then(
       (result) => {
-        if (controller.signal.aborted) return;
+        if (!request.isCurrent()) return;
+        request.finish();
         setBusy(false);
         if (!result.ok) {
           setRecords([]);
-          handleReadFailure(result.failure, result.metadata?.requestId);
+          handleReadFailure(result);
           return;
         }
         if (result.kind === 'success') {
           setRecords(result.data.items);
           setSelected((current) =>
             current
-              ? result.data.items.find(
+              ? (result.data.items.find(
                   ({ reservationId }) =>
                     reservationId === current.reservationId,
-                ) ?? null
+                ) ?? null)
               : null,
           );
         }
       },
     );
-    return () => controller.abort();
+    return () => requestFence.cancel('reservation-list');
     // `handleReadFailure` intentionally resolves against the current shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, canReadReservations, eventId, reloadReservations]);
+  }, [api, canReadReservations, eventId, reloadReservations, requestFence]);
 
   useEffect(() => {
     if (!canReadAudit) return;
-    const controller = new AbortController();
-    void requestAdminAudit(api, eventId, {}, controller.signal).then(
-      (result) => {
-        if (controller.signal.aborted) return;
-        if (!result.ok) {
-          setAudits([]);
-          handleReadFailure(result.failure, result.metadata?.requestId);
-          return;
-        }
-        if (result.kind === 'success') setAudits(result.data.items);
-      },
-    );
-    return () => controller.abort();
+    const request = requestFence.begin('reservation-audit');
+    void requestAdminAudit(api, eventId, {}, request.signal).then((result) => {
+      if (!request.isCurrent()) return;
+      request.finish();
+      if (!result.ok) {
+        setAudits([]);
+        handleReadFailure(result);
+        return;
+      }
+      if (result.kind === 'success') setAudits(result.data.items);
+    });
+    return () => requestFence.cancel('reservation-audit');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, canReadAudit, eventId, reloadReservations, reloadSettings]);
+  }, [
+    api,
+    canReadAudit,
+    eventId,
+    reloadReservations,
+    reloadSettings,
+    requestFence,
+  ]);
 
   useEffect(() => {
     if (!canManageSettings) return;
-    const controller = new AbortController();
-    void requestAdminEventSettings(api, eventId, controller.signal).then(
+    const request = requestFence.begin('reservation-settings');
+    void requestAdminEventSettings(api, eventId, request.signal).then(
       (result) => {
-        if (controller.signal.aborted) return;
+        if (!request.isCurrent()) return;
+        request.finish();
         if (!result.ok) {
           setSettings(null);
           setSettingsDraft(null);
-          handleReadFailure(result.failure, result.metadata?.requestId);
+          handleReadFailure(result);
           return;
         }
         if (result.kind === 'success') {
           setSettings(result.data);
           setSettingsDraft({
             registrationMode: result.data.registrationMode,
-            reservationChangesAllowed:
-              result.data.reservationChangesAllowed,
+            reservationChangesAllowed: result.data.reservationChangesAllowed,
             supportMessage: result.data.supportMessage,
           });
         }
       },
     );
-    return () => controller.abort();
+    return () => requestFence.cancel('reservation-settings');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, canManageSettings, eventId, reloadSettings]);
+  }, [api, canManageSettings, eventId, reloadSettings, requestFence]);
 
   const filteredRecords = useMemo(
     () =>
@@ -219,8 +241,7 @@ export const AdminReservationWorkspace = () => {
   const visibleAudits = useMemo(
     () =>
       audits.filter(
-        ({ category }) =>
-          auditCategory === 'all' || category === auditCategory,
+        ({ category }) => auditCategory === 'all' || category === auditCategory,
       ),
     [auditCategory, audits],
   );
@@ -243,37 +264,34 @@ export const AdminReservationWorkspace = () => {
           reason: settingsReason,
         })
       : null;
+  const reservationValidationFailed =
+    attemptedKind === 'reservation' && reservationCandidate?.success === false;
+  const settingsValidationFailed =
+    attemptedKind === 'settings' && settingsCandidate?.success === false;
 
   const beginReservation = (record: AdminReservationRecord) => {
     const available = record.availableActions.filter(
-      (candidate) =>
-        (candidate === 'mark_attended' ||
-          candidate === 'undo_attendance') &&
-        canAttend
-          ? true
-          : canOverride,
+      canPerformReservationAction,
     );
+    const firstAvailable = available[0];
+    if (!firstAvailable) return;
     setSelected(record);
-    setAction(available[0] ?? record.availableActions[0] ?? 'mark_attended');
+    setAction(firstAvailable);
     setCapacity(record.capacity);
     setReason('');
-    setAttempted(false);
+    setAttemptedKind(null);
     setPending(null);
     setConfirming(false);
     setAmbiguous(false);
     setError(null);
+    setErrorScope(null);
     setSuccess(null);
   };
 
   const prepareReservation = () => {
-    setAttempted(true);
+    setAttemptedKind('reservation');
     if (!reservationCandidate?.success) return;
-    const isAttendance =
-      reservationCandidate.data.action === 'mark_attended' ||
-      reservationCandidate.data.action === 'undo_attendance';
-    if ((isAttendance && !canAttend && !canOverride) || (!isAttendance && !canOverride)) {
-      return;
-    }
+    if (!canPerformReservationAction(reservationCandidate.data.action)) return;
     setPending({
       kind: 'reservation',
       body: reservationCandidate.data,
@@ -284,7 +302,7 @@ export const AdminReservationWorkspace = () => {
   };
 
   const prepareSettings = () => {
-    setAttempted(true);
+    setAttemptedKind('settings');
     if (!canManageSettings || !settingsCandidate?.success) return;
     setPending({
       kind: 'settings',
@@ -296,9 +314,11 @@ export const AdminReservationWorkspace = () => {
   };
 
   const execute = async (attempt: PendingChange) => {
+    const request = requestFence.begin('reservation-mutation');
     setBusy(true);
     setConfirming(false);
     setError(null);
+    setErrorScope(null);
     setSuccess(null);
     const result =
       attempt.kind === 'reservation'
@@ -307,16 +327,20 @@ export const AdminReservationWorkspace = () => {
             eventId,
             attempt.body,
             attempt.idempotencyKey,
+            request.signal,
           )
         : await requestAdminEventSettingsUpdate(
             api,
             eventId,
             attempt.body,
             attempt.idempotencyKey,
+            request.signal,
           );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(false);
     if (!result.ok) {
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         setPending(null);
         setSelected(null);
         setRecords([]);
@@ -331,6 +355,7 @@ export const AdminReservationWorkspace = () => {
         setPending(null);
         setConfirming(false);
         setAmbiguous(false);
+        setErrorScope(attempt.kind);
         setError(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -342,12 +367,11 @@ export const AdminReservationWorkspace = () => {
         }
         return;
       }
-      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      const retryable = isAmbiguousAdminMutationFailure(result);
       setAmbiguous(retryable);
       if (!retryable) setPending(null);
-      setError(
-        adminFailureMessage(result.failure, result.metadata?.requestId),
-      );
+      setErrorScope(attempt.kind);
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
       return;
     }
     if (result.kind === 'success') {
@@ -385,7 +409,7 @@ export const AdminReservationWorkspace = () => {
       }
       setPending(null);
       setAmbiguous(false);
-      setAttempted(false);
+      setAttemptedKind(null);
       setReason('');
       setSettingsReason('');
     }
@@ -402,32 +426,26 @@ export const AdminReservationWorkspace = () => {
         </p>
       </header>
 
-      {error ? (
-        <section className={styles.errorSummary} role="alert">
-          <p>{error}</p>
-          {ambiguous && pending ? (
-            <button
-              className={styles.secondaryButton}
-              disabled={busy}
-              onClick={() => void execute(pending)}
-              type="button"
-            >
-              Zopakovat přesně stejný pokus
-            </button>
-          ) : (
-            <button
-              className={styles.secondaryButton}
-              onClick={() => {
-                setError(null);
-                setBusy(true);
-                setReloadReservations((value) => value + 1);
-                setReloadSettings((value) => value + 1);
-              }}
-              type="button"
-            >
-              Obnovit bezpečné snapshoty
-            </button>
-          )}
+      {error && errorScope === 'read' ? (
+        <section className={styles.stack}>
+          <AdminFormErrorSummary
+            descriptionId="admin-reservation-read-error"
+            heading="Bezpečný snapshot se nepodařilo načíst"
+            message={error}
+          />
+          <button
+            className={styles.secondaryButton}
+            onClick={() => {
+              setError(null);
+              setErrorScope(null);
+              setBusy(true);
+              setReloadReservations((value) => value + 1);
+              setReloadSettings((value) => value + 1);
+            }}
+            type="button"
+          >
+            Obnovit bezpečné snapshoty
+          </button>
         </section>
       ) : null}
       {success ? (
@@ -486,8 +504,8 @@ export const AdminReservationWorkspace = () => {
             <p role="status">Načítám rezervace…</p>
           ) : records.length === 0 ? (
             <p className={styles.empty}>
-              V oprávněném rozsahu nejsou žádné rezervace. Vyberte jinou
-              session nebo zkontrolujte nastavení registrace.
+              V oprávněném rozsahu nejsou žádné rezervace. Vyberte jinou session
+              nebo zkontrolujte nastavení registrace.
             </p>
           ) : null}
           <ul className={styles.cardList}>
@@ -509,36 +527,62 @@ export const AdminReservationWorkspace = () => {
                   <dt>Verze</dt>
                   <dd>{record.version}</dd>
                 </dl>
-                <button
-                  className={styles.secondaryButton}
-                  onClick={() => beginReservation(record)}
-                  type="button"
-                >
-                  Připravit změnu
-                </button>
+                {record.availableActions.some(canPerformReservationAction) ? (
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={pending !== null}
+                    onClick={() => beginReservation(record)}
+                    type="button"
+                  >
+                    Připravit změnu
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
           {selected ? (
             <div className={styles.stack}>
               <h3>Změna nad snapshotem v{selected.version}</h3>
+              {reservationValidationFailed ||
+              (error && errorScope === 'reservation') ? (
+                <>
+                  <AdminFormErrorSummary
+                    descriptionId="admin-reservation-form-error"
+                    heading="Změnu rezervace zatím nelze potvrdit"
+                    message={
+                      error && errorScope === 'reservation'
+                        ? error
+                        : 'Zkontrolujte povolenou akci, kapacitu a auditní důvod.'
+                    }
+                  />
+                  {ambiguous && pending?.kind === 'reservation' ? (
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={busy}
+                      onClick={() => void execute(pending)}
+                      type="button"
+                    >
+                      Zopakovat přesně stejný pokus
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
               <label className={styles.field}>
                 <span>Akce</span>
                 <select
+                  aria-describedby={
+                    reservationValidationFailed
+                      ? 'admin-reservation-form-error'
+                      : undefined
+                  }
+                  disabled={pending !== null}
                   onChange={(event) =>
                     setAction(event.target.value as AdminReservationAction)
                   }
                   value={action}
                 >
                   {selected.availableActions
-                    .filter((candidate) => {
-                      const attendance =
-                        candidate === 'mark_attended' ||
-                        candidate === 'undo_attendance';
-                      return attendance
-                        ? canAttend || canOverride
-                        : canOverride;
-                    })
+                    .filter(canPerformReservationAction)
                     .map((candidate) => (
                       <option key={candidate} value={candidate}>
                         {reservationActionLabels[candidate]}
@@ -550,6 +594,13 @@ export const AdminReservationWorkspace = () => {
                 <label className={styles.field}>
                   <span>Nová kapacita</span>
                   <input
+                    aria-describedby={
+                      reservationValidationFailed
+                        ? 'admin-reservation-form-error'
+                        : undefined
+                    }
+                    aria-invalid={reservationValidationFailed}
+                    disabled={pending !== null}
                     min={selected.reservedCount}
                     onChange={(event) =>
                       setCapacity(Number(event.target.value))
@@ -562,16 +613,20 @@ export const AdminReservationWorkspace = () => {
               <label className={styles.field}>
                 <span>Auditní důvod</span>
                 <textarea
-                  aria-invalid={
-                    attempted && reservationCandidate?.success === false
+                  aria-describedby={
+                    reservationValidationFailed
+                      ? 'admin-reservation-form-error'
+                      : undefined
                   }
+                  aria-invalid={reservationValidationFailed}
+                  disabled={pending !== null}
                   onChange={(event) => setReason(event.target.value)}
                   value={reason}
                 />
               </label>
               <button
                 className={styles.dangerButton}
-                disabled={busy}
+                disabled={busy || pending !== null}
                 onClick={prepareReservation}
                 type="button"
               >
@@ -591,6 +646,7 @@ export const AdminReservationWorkspace = () => {
           <label className={styles.field}>
             <span>Kategorie</span>
             <select
+              disabled={pending !== null}
               onChange={(event) => setAuditCategory(event.target.value)}
               value={auditCategory}
             >
@@ -636,9 +692,37 @@ export const AdminReservationWorkspace = () => {
             <h2 id="settings-title">Nastavení akce</h2>
             <span className={styles.badge}>Snapshot v{settings.version}</span>
           </div>
+          {settingsValidationFailed || (error && errorScope === 'settings') ? (
+            <>
+              <AdminFormErrorSummary
+                descriptionId="admin-settings-form-error"
+                heading="Nastavení zatím nelze potvrdit"
+                message={
+                  error && errorScope === 'settings'
+                    ? error
+                    : 'Zkontrolujte provozní zprávu a auditní důvod.'
+                }
+              />
+              {ambiguous && pending?.kind === 'settings' ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy}
+                  onClick={() => void execute(pending)}
+                  type="button"
+                >
+                  Zopakovat přesně stejný pokus
+                </button>
+              ) : null}
+            </>
+          ) : null}
           <label className={styles.field}>
             <span>Režim registrace</span>
             <select
+              aria-describedby={
+                settingsValidationFailed
+                  ? 'admin-settings-form-error'
+                  : undefined
+              }
               onChange={(event) =>
                 setSettingsDraft({
                   ...settingsDraft,
@@ -656,6 +740,7 @@ export const AdminReservationWorkspace = () => {
           <label className={styles.checkRow}>
             <input
               checked={settingsDraft.reservationChangesAllowed}
+              disabled={pending !== null}
               onChange={(event) =>
                 setSettingsDraft({
                   ...settingsDraft,
@@ -669,6 +754,13 @@ export const AdminReservationWorkspace = () => {
           <label className={styles.field}>
             <span>Provozní zpráva podpory</span>
             <textarea
+              aria-describedby={
+                settingsValidationFailed
+                  ? 'admin-settings-form-error'
+                  : undefined
+              }
+              aria-invalid={settingsValidationFailed}
+              disabled={pending !== null}
               maxLength={240}
               onChange={(event) =>
                 setSettingsDraft({
@@ -682,14 +774,20 @@ export const AdminReservationWorkspace = () => {
           <label className={styles.field}>
             <span>Auditní důvod změny</span>
             <textarea
-              aria-invalid={attempted && settingsCandidate?.success === false}
+              aria-describedby={
+                settingsValidationFailed
+                  ? 'admin-settings-form-error'
+                  : undefined
+              }
+              aria-invalid={settingsValidationFailed}
+              disabled={pending !== null}
               onChange={(event) => setSettingsReason(event.target.value)}
               value={settingsReason}
             />
           </label>
           <button
             className={styles.dangerButton}
-            disabled={busy}
+            disabled={busy || pending !== null}
             onClick={prepareSettings}
             type="button"
           >

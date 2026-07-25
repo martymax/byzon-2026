@@ -21,6 +21,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -29,6 +30,7 @@ import {
 } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
+  useAdminRequestFence,
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -54,9 +56,15 @@ type PendingOperation =
       idempotencyKey: string;
     }>;
 
+type OperationError = Readonly<{
+  kind: 'read' | 'role' | 'export';
+  message: string;
+}>;
+
 export const AdminOperationsWorkspace = () => {
   const { api, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
+  const requestFence = useAdminRequestFence();
   const [overview, setOverview] =
     useState<AdminOperationsOverviewResponse | null>(null);
   const [operatorId, setOperatorId] = useState('');
@@ -64,19 +72,23 @@ export const AdminOperationsWorkspace = () => {
   const [assignmentRole, setAssignmentRole] =
     useState<AdminAssignmentRole>('room_operator');
   const [scopeLabel, setScopeLabel] = useState('Celá akce');
-  const [report, setReport] =
-    useState<AdminExportRequest['report']>('reservation_summary');
+  const [report, setReport] = useState<AdminExportRequest['report']>(
+    'reservation_summary',
+  );
   const [reason, setReason] = useState('');
-  const [attempted, setAttempted] = useState(false);
+  const [attemptedOperation, setAttemptedOperation] = useState<
+    'role' | 'export' | null
+  >(null);
   const [pending, setPending] = useState<PendingOperation | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [busy, setBusy] = useState<'read' | 'mutation' | null>('read');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<OperationError | null>(null);
   const [roleResult, setRoleResult] =
     useState<AdminRoleAssignmentMutationResponse | null>(null);
-  const [exportResult, setExportResult] =
-    useState<AdminExportResponse | null>(null);
+  const [exportResult, setExportResult] = useState<AdminExportResponse | null>(
+    null,
+  );
   const [reload, setReload] = useState(0);
 
   const canReadOperations = permissions.includes('operations:read');
@@ -85,29 +97,41 @@ export const AdminOperationsWorkspace = () => {
 
   useEffect(() => {
     if (!canReadOperations) return;
-    const controller = new AbortController();
-    void requestAdminOperationsOverview(api, eventId, controller.signal).then(
+    const request = requestFence.begin('operations-overview');
+    void requestAdminOperationsOverview(api, eventId, request.signal).then(
       (result) => {
-        if (controller.signal.aborted) return;
+        if (!request.isCurrent()) return;
+        request.finish();
         setBusy(null);
         if (!result.ok) {
           setOverview(null);
-          if (isAdminSecurityFailure(result.failure)) {
+          if (isAdminSecurityFailure(result)) {
             invalidateSensitive(
               adminFailureMessage(result.failure, result.metadata?.requestId),
             );
             return;
           }
-          setError(
-            adminFailureMessage(result.failure, result.metadata?.requestId),
-          );
+          setError({
+            kind: 'read',
+            message: adminFailureMessage(
+              result.failure,
+              result.metadata?.requestId,
+            ),
+          });
           return;
         }
         if (result.kind === 'success') setOverview(result.data);
       },
     );
-    return () => controller.abort();
-  }, [api, canReadOperations, eventId, invalidateSensitive, reload]);
+    return () => requestFence.cancel('operations-overview');
+  }, [
+    api,
+    canReadOperations,
+    eventId,
+    invalidateSensitive,
+    reload,
+    requestFence,
+  ]);
 
   const queueTotals = useMemo(
     () =>
@@ -137,9 +161,16 @@ export const AdminOperationsWorkspace = () => {
     range: null,
     reason,
   });
+  const roleValidationFailed =
+    attemptedOperation === 'role' &&
+    (!roleCandidate.success ||
+      roleCandidate.data.action !== 'grant' ||
+      !operatorLabel.trim());
+  const exportValidationFailed =
+    attemptedOperation === 'export' && !exportCandidate.success;
 
   const prepareRole = () => {
-    setAttempted(true);
+    setAttemptedOperation('role');
     if (
       !canManageRoles ||
       !roleCandidate.success ||
@@ -158,7 +189,7 @@ export const AdminOperationsWorkspace = () => {
   };
 
   const prepareExport = () => {
-    setAttempted(true);
+    setAttemptedOperation('export');
     if (!canExport || !exportCandidate.success) return;
     setPending({
       kind: 'export',
@@ -170,6 +201,7 @@ export const AdminOperationsWorkspace = () => {
   };
 
   const execute = async (attempt: PendingOperation) => {
+    const request = requestFence.begin('operations-mutation');
     setBusy('mutation');
     setConfirming(false);
     setError(null);
@@ -180,16 +212,20 @@ export const AdminOperationsWorkspace = () => {
             eventId,
             attempt.body,
             attempt.idempotencyKey,
+            request.signal,
           )
         : await requestAdminExport(
             api,
             eventId,
             attempt.body,
             attempt.idempotencyKey,
+            request.signal,
           );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(null);
     if (!result.ok) {
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         setPending(null);
         setOverview(null);
         invalidateSensitive(
@@ -200,19 +236,27 @@ export const AdminOperationsWorkspace = () => {
       if (isStaleAdminFailure(result.failure)) {
         setPending(null);
         setAmbiguous(false);
-        setError(
-          adminFailureMessage(result.failure, result.metadata?.requestId),
-        );
+        setError({
+          kind: attempt.kind,
+          message: adminFailureMessage(
+            result.failure,
+            result.metadata?.requestId,
+          ),
+        });
         setBusy('read');
         setReload((value) => value + 1);
         return;
       }
-      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      const retryable = isAmbiguousAdminMutationFailure(result);
       setAmbiguous(retryable);
       if (!retryable) setPending(null);
-      setError(
-        adminFailureMessage(result.failure, result.metadata?.requestId),
-      );
+      setError({
+        kind: attempt.kind,
+        message: adminFailureMessage(
+          result.failure,
+          result.metadata?.requestId,
+        ),
+      });
       return;
     }
     if (result.kind === 'success') {
@@ -228,7 +272,7 @@ export const AdminOperationsWorkspace = () => {
       setPending(null);
       setAmbiguous(false);
       setReason('');
-      setAttempted(false);
+      setAttemptedOperation(null);
       setReload((value) => value + 1);
     }
   };
@@ -271,9 +315,30 @@ export const AdminOperationsWorkspace = () => {
               </span>
             ) : null}
           </div>
-          {!overview ? (
+          {error?.kind === 'read' ? (
+            <>
+              <AdminFormErrorSummary
+                descriptionId="admin-operations-read-error"
+                heading="Provozní snapshot se nepodařilo načíst"
+                message={error.message}
+              />
+              <button
+                className={styles.secondaryButton}
+                onClick={() => {
+                  setError(null);
+                  setBusy('read');
+                  setReload((value) => value + 1);
+                }}
+                type="button"
+              >
+                Obnovit provozní snapshot
+              </button>
+            </>
+          ) : !overview ? (
             <p role="status">
-              {busy === 'read' ? 'Načítám provozní snapshot…' : 'Bez snapshotu.'}
+              {busy === 'read'
+                ? 'Načítám provozní snapshot…'
+                : 'Bez snapshotu.'}
             </p>
           ) : overview.queues.length === 0 ? (
             <p className={styles.empty}>
@@ -340,42 +405,42 @@ export const AdminOperationsWorkspace = () => {
         </section>
       ) : null}
 
-      {error ? (
-        <section className={styles.errorSummary} role="alert">
-          <p>{error}</p>
-          {ambiguous && pending ? (
-            <button
-              className={styles.secondaryButton}
-              disabled={busy !== null}
-              onClick={() => void execute(pending)}
-              type="button"
-            >
-              Zopakovat přesně stejný pokus
-            </button>
-          ) : (
-            <button
-              className={styles.secondaryButton}
-              onClick={() => {
-                setError(null);
-                setBusy('read');
-                setReload((value) => value + 1);
-              }}
-              type="button"
-            >
-              Obnovit provozní snapshot
-            </button>
-          )}
-        </section>
-      ) : null}
-
       {canManageRoles ? (
         <section className={styles.panel} aria-labelledby="assignment-title">
           <h2 id="assignment-title">Scopeované přiřazení operátora</h2>
+          {roleValidationFailed || error?.kind === 'role' ? (
+            <>
+              <AdminFormErrorSummary
+                descriptionId="admin-role-form-error"
+                heading="Přiřazení role zatím nelze potvrdit"
+                message={
+                  error?.kind === 'role'
+                    ? error.message
+                    : 'Zkontrolujte ID operátora, kontrolní štítek, rozsah a auditní důvod.'
+                }
+              />
+              {ambiguous && pending?.kind === 'role' ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy !== null}
+                  onClick={() => void execute(pending)}
+                  type="button"
+                >
+                  Zopakovat přesně stejný pokus
+                </button>
+              ) : null}
+            </>
+          ) : null}
           <div className={styles.twoColumn}>
             <label className={styles.field}>
               <span>ID operátora</span>
               <input
                 autoComplete="off"
+                aria-describedby={
+                  roleValidationFailed ? 'admin-role-form-error' : undefined
+                }
+                aria-invalid={roleValidationFailed}
+                disabled={pending !== null}
                 onChange={(event) => setOperatorId(event.target.value)}
                 value={operatorId}
               />
@@ -384,6 +449,11 @@ export const AdminOperationsWorkspace = () => {
               <span>Zobrazovaný štítek pro kontrolu</span>
               <input
                 autoComplete="off"
+                aria-describedby={
+                  roleValidationFailed ? 'admin-role-form-error' : undefined
+                }
+                aria-invalid={roleValidationFailed}
+                disabled={pending !== null}
                 maxLength={120}
                 onChange={(event) => setOperatorLabel(event.target.value)}
                 value={operatorLabel}
@@ -392,6 +462,10 @@ export const AdminOperationsWorkspace = () => {
             <label className={styles.field}>
               <span>Role</span>
               <select
+                aria-describedby={
+                  roleValidationFailed ? 'admin-role-form-error' : undefined
+                }
+                disabled={pending !== null}
                 onChange={(event) =>
                   setAssignmentRole(event.target.value as AdminAssignmentRole)
                 }
@@ -407,6 +481,11 @@ export const AdminOperationsWorkspace = () => {
             <label className={styles.field}>
               <span>Popis rozsahu</span>
               <input
+                aria-describedby={
+                  roleValidationFailed ? 'admin-role-form-error' : undefined
+                }
+                aria-invalid={roleValidationFailed}
+                disabled={pending !== null}
                 maxLength={120}
                 onChange={(event) => setScopeLabel(event.target.value)}
                 value={scopeLabel}
@@ -422,7 +501,7 @@ export const AdminOperationsWorkspace = () => {
           ) : null}
           <button
             className={styles.button}
-            disabled={busy !== null || !overview}
+            disabled={busy !== null || !overview || pending !== null}
             onClick={prepareRole}
             type="button"
           >
@@ -434,9 +513,36 @@ export const AdminOperationsWorkspace = () => {
       {canExport ? (
         <section className={styles.panel} aria-labelledby="export-title">
           <h2 id="export-title">Asynchronní export</h2>
+          {exportValidationFailed || error?.kind === 'export' ? (
+            <>
+              <AdminFormErrorSummary
+                descriptionId="admin-export-form-error"
+                heading="Export zatím nelze potvrdit"
+                message={
+                  error?.kind === 'export'
+                    ? error.message
+                    : 'Zkontrolujte typ reportu a auditní důvod.'
+                }
+              />
+              {ambiguous && pending?.kind === 'export' ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy !== null}
+                  onClick={() => void execute(pending)}
+                  type="button"
+                >
+                  Zopakovat přesně stejný pokus
+                </button>
+              ) : null}
+            </>
+          ) : null}
           <label className={styles.field}>
             <span>Report</span>
             <select
+              aria-describedby={
+                exportValidationFailed ? 'admin-export-form-error' : undefined
+              }
+              disabled={pending !== null}
               onChange={(event) =>
                 setReport(event.target.value as AdminExportRequest['report'])
               }
@@ -459,7 +565,7 @@ export const AdminOperationsWorkspace = () => {
           ) : null}
           <button
             className={styles.secondaryButton}
-            disabled={busy !== null}
+            disabled={busy !== null || pending !== null}
             onClick={prepareExport}
             type="button"
           >
@@ -468,31 +574,26 @@ export const AdminOperationsWorkspace = () => {
         </section>
       ) : null}
 
-      {(canManageRoles || canExport) ? (
+      {canManageRoles || canExport ? (
         <label className={styles.field}>
           <span>Auditní důvod pro další operaci</span>
           <textarea
-            aria-invalid={
-              attempted &&
-              ((pending?.kind === 'role' && !roleCandidate.success) ||
-                (pending?.kind === 'export' && !exportCandidate.success))
+            aria-describedby={
+              roleValidationFailed
+                ? 'admin-role-form-error'
+                : exportValidationFailed
+                  ? 'admin-export-form-error'
+                  : 'admin-operation-reason-help'
             }
+            aria-invalid={roleValidationFailed || exportValidationFailed}
+            disabled={pending !== null}
             onChange={(event) => setReason(event.target.value)}
             value={reason}
           />
-          <span className={styles.helper}>
-            Nejméně 8 znaků. Mocked scénáře: „stale“, „timeout“,
-            „collision“.
+          <span className={styles.helper} id="admin-operation-reason-help">
+            Nejméně 8 znaků. Mocked scénáře: „stale“, „timeout“, „collision“.
           </span>
         </label>
-      ) : null}
-
-      {attempted &&
-      ((!roleCandidate.success && canManageRoles) ||
-        (!exportCandidate.success && canExport)) ? (
-        <p className={styles.warning} role="alert">
-          Zkontrolujte ID, popis rozsahu a auditní důvod.
-        </p>
       ) : null}
 
       {confirming && pending ? (

@@ -59,6 +59,8 @@ import {
   adminContextEndpoint,
   requestAdminContext,
   requestAdminOperationsOverview,
+  requestAdminReservationMutation,
+  requestAdminReservations,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
 } from '../../lib/admin-api.js';
@@ -159,7 +161,10 @@ describe('MSW through the production API port', () => {
       adminFixtureIds.event,
       'single',
     );
-    expect(search).toMatchObject({ ok: true, data: { outcome: 'single_match' } });
+    expect(search).toMatchObject({
+      ok: true,
+      data: { outcome: 'single_match' },
+    });
     if (!search.ok || search.kind !== 'success') return;
     const record = search.data.matches[0]!;
     const body = {
@@ -255,6 +260,79 @@ describe('MSW through the production API port', () => {
       failure: {
         kind: 'session_expired',
         problem: { code: 'AUTH_SESSION_EXPIRED', status: 401 },
+      },
+    });
+  });
+
+  it('allows read-only admin personas to read but rejects their write combinations', async () => {
+    await client.request(adminContextEndpoint, {
+      path: '/api/v1/admin/context?persona=support_read_only',
+      cache: 'no-store',
+    });
+    const search = await requestAdminSupportSearch(
+      client,
+      adminFixtureIds.event,
+      'single',
+    );
+    expect(search).toMatchObject({
+      ok: true,
+      data: { outcome: 'single_match' },
+    });
+    if (!search.ok || search.kind !== 'success') return;
+    const supportRecord = search.data.matches[0]!;
+    await expect(
+      requestAdminSupportMutation(
+        client,
+        adminFixtureIds.event,
+        {
+          participantId: supportRecord.participantId,
+          ticketId: supportRecord.ticketId,
+          action: 'block',
+          expectedVersion: supportRecord.version,
+          reason: 'Čtenář podpory nesmí měnit vstupenku.',
+          targetTicketId: null,
+        },
+        'admin-support-read-only-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 403,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
+      },
+    });
+
+    await client.request(adminContextEndpoint, {
+      path: '/api/v1/admin/context?persona=reservation_reader',
+      cache: 'no-store',
+    });
+    const reservations = await requestAdminReservations(
+      client,
+      adminFixtureIds.event,
+    );
+    expect(reservations).toMatchObject({ ok: true });
+    if (!reservations.ok || reservations.kind !== 'success') return;
+    const reservation = reservations.data.items[0]!;
+    await expect(
+      requestAdminReservationMutation(
+        client,
+        adminFixtureIds.event,
+        {
+          reservationId: reservation.reservationId,
+          action: 'capacity_override',
+          capacity: reservation.capacity + 1,
+          expectedVersion: reservation.version,
+          reason: 'Čtenář rezervací nesmí měnit kapacitu.',
+        },
+        'admin-reservation-read-only-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 403,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
       },
     });
   });

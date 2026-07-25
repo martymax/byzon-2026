@@ -19,6 +19,7 @@ import {
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
   adminReservationMutationFixtures,
+  supportSearchFixtures,
   ticketImportApplyFixtures,
   ticketImportPreviewFixtures,
 } from '@byzon/test-support/fixtures';
@@ -38,6 +39,7 @@ import {
   adminOperationsOverviewEndpoint,
   adminReservationMutationEndpoint,
   adminReservationsEndpoint,
+  adminSupportMutationEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
   type AdminTicketImportUploadPort,
@@ -59,10 +61,12 @@ const success = <Value,>(data: Value) =>
 
 const failure = (
   kind: 'offline' | 'timeout' | 'transport' | 'invalid_response',
+  status = 0,
 ) =>
   ({
     ok: false,
     kind: 'failure',
+    status,
     failure: { kind },
   }) as const;
 
@@ -72,8 +76,8 @@ type RequestHandler = (
 ) => Promise<unknown> | unknown;
 
 const createApi = (handler: RequestHandler): ApiPort => ({
-  request: vi.fn(
-    async (endpoint: unknown, options: unknown) => handler(endpoint, options),
+  request: vi.fn(async (endpoint: unknown, options: unknown) =>
+    handler(endpoint, options),
   ) as unknown as ApiPort['request'],
 });
 
@@ -138,6 +142,7 @@ describe('F4 contract-first admin journeys', () => {
   it('uploads multipart metadata and retries an ambiguous import with the exact body and key', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
     const applyCalls: unknown[] = [];
+    const applySignals: AbortSignal[] = [];
     let applyCount = 0;
     const file = new File(['reference,state\nT001,active'], 'tickets.csv', {
       type: 'text/csv',
@@ -159,7 +164,12 @@ describe('F4 contract-first admin journeys', () => {
     });
     const api = organizerApi((endpoint, options) => {
       if (endpoint === adminTicketImportApplyEndpoint) {
-        applyCalls.push(structuredClone(options));
+        const { signal, ...serializableOptions } = options as Record<
+          string,
+          unknown
+        > & { readonly signal: AbortSignal };
+        applyCalls.push(structuredClone(serializableOptions));
+        applySignals.push(signal);
         applyCount += 1;
         return applyCount === 1 ? failure('timeout') : success(applied);
       }
@@ -200,6 +210,9 @@ describe('F4 contract-first admin journeys', () => {
         }),
       )
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Auditní důvod' }))
+      .toBeDisabled();
     await screen
       .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
       .click();
@@ -208,7 +221,92 @@ describe('F4 contract-first admin journeys', () => {
       .toBeVisible();
     expect(applyCalls).toHaveLength(2);
     expect(applyCalls[1]).toEqual(applyCalls[0]);
+    expect(applySignals).toHaveLength(2);
+    expect(applySignals.every((signal) => signal instanceof AbortSignal)).toBe(
+      true,
+    );
     await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('aborts and fences an older upload when the selected file changes', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const firstFile = new File(
+      ['reference,state\nT001,active'],
+      'first-conflict.csv',
+      { type: 'text/csv' },
+    );
+    const secondFile = new File(
+      ['reference,state\nT002,active'],
+      'second-clean.csv',
+      { type: 'text/csv' },
+    );
+    const firstPreview = ticketImportPreviewResponseSchema.parse({
+      ...ticketImportPreviewFixtures.conflict!,
+      eventId: adminFixtureIds.event,
+      source: {
+        fileName: firstFile.name,
+        mediaType: firstFile.type,
+        byteSize: firstFile.size,
+      },
+    });
+    const secondPreview = ticketImportPreviewResponseSchema.parse({
+      ...ticketImportPreviewFixtures.clean!,
+      eventId: adminFixtureIds.event,
+      source: {
+        fileName: secondFile.name,
+        mediaType: secondFile.type,
+        byteSize: secondFile.size,
+      },
+    });
+    let resolveFirst: (result: unknown) => void = () => undefined;
+    const firstRequest = new Promise<unknown>((resolve) => {
+      resolveFirst = resolve;
+    });
+    let firstSignal: AbortSignal | undefined;
+    const previewRequest = vi.fn(
+      (_eventId: string, selected: File, signal?: AbortSignal) => {
+        if (selected.name === firstFile.name) {
+          firstSignal = signal;
+          return firstRequest;
+        }
+        return Promise.resolve(success(secondPreview));
+      },
+    );
+    const uploadPort: AdminTicketImportUploadPort = {
+      preview:
+        previewRequest as unknown as AdminTicketImportUploadPort['preview'],
+    };
+    const api = organizerApi(() => {
+      throw new Error('No mutation is expected during the upload race.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell
+        api={api}
+        environment="mocked"
+        uploadPort={uploadPort}
+      >
+        <AdminImportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    const input = screen.getByLabelText('Zdrojový soubor');
+
+    await input.upload(firstFile);
+    await screen
+      .getByRole('button', { name: 'Vytvořit validované preview' })
+      .click();
+    await input.upload(secondFile);
+    expect(firstSignal?.aborted).toBe(true);
+    await screen
+      .getByRole('button', { name: 'Vytvořit validované preview' })
+      .click();
+    await expect
+      .element(screen.getByText(new RegExp(secondPreview.previewId)))
+      .toBeVisible();
+
+    resolveFirst(success(firstPreview));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.body.textContent).toContain(secondPreview.previewId);
+    expect(document.body.textContent).not.toContain(firstPreview.previewId);
   });
 
   it('wipes support P3 state and closes the workspace when an online-only read reports offline', async () => {
@@ -237,6 +335,136 @@ describe('F4 contract-first admin journeys', () => {
       .toBeVisible();
     await expect.element(search).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('single');
+  });
+
+  it('wipes support P3 and never offers retry for a malformed top-level 403 mutation', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const searchResponse = {
+      ...supportSearchFixtures.single_match!,
+      eventId: adminFixtureIds.event,
+      matches: supportSearchFixtures.single_match!.matches.map((record) => ({
+        ...record,
+        eventId: adminFixtureIds.event,
+      })),
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminSupportSearchEndpoint) {
+        return success(searchResponse);
+      }
+      if (endpoint === adminSupportMutationEndpoint) {
+        return failure('invalid_response', 403);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('searchbox', { name: 'Reference nebo jméno' })
+      .fill('single');
+    await screen.getByRole('button', { name: 'Vyhledat' }).click();
+    await screen.getByRole('button', { name: 'Připravit podporu' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod' })
+      .fill('Bezpečný test odebraného oprávnění.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat a potvrdit' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('button', { name: 'Znovu odeslat aktivační výzvu' })
+      .click();
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain(
+      searchResponse.matches[0]!.displayName,
+    );
+    expect(
+      screen.getByRole('button', {
+        name: 'Zopakovat přesně stejný pokus',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows support records to a read-only actor without mounting mutation controls', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const readOnlyContext = {
+      ...adminContextFixtures.organizer!,
+      actor: {
+        ...adminContextFixtures.organizer!.actor,
+        permissions: ['participant:operational:read'] as const,
+      },
+    };
+    const searchResponse = {
+      ...supportSearchFixtures.single_match!,
+      eventId: adminFixtureIds.event,
+      matches: supportSearchFixtures.single_match!.matches.map((record) => ({
+        ...record,
+        eventId: adminFixtureIds.event,
+      })),
+    };
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) return success(readOnlyContext);
+      if (endpoint === adminSupportSearchEndpoint) {
+        return success(searchResponse);
+      }
+      throw new Error('A read-only support actor attempted a mutation.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('searchbox', { name: 'Reference nebo jméno' })
+      .fill('single');
+    await screen.getByRole('button', { name: 'Vyhledat' }).click();
+    await expect
+      .element(screen.getByText(searchResponse.matches[0]!.displayName))
+      .toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Připravit podporu' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows reservation records to a reader without capacity or attendance mutation controls', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const readOnlyContext = {
+      ...adminContextFixtures.organizer!,
+      actor: {
+        ...adminContextFixtures.organizer!.actor,
+        permissions: ['reservation:any:read'] as const,
+      },
+    };
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) return success(readOnlyContext);
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      throw new Error('A reservation reader attempted an unauthorized call.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminReservationWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByText('Růst bez zkratek', { exact: true }).last())
+      .toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Připravit změnu' }),
+    ).not.toBeInTheDocument();
   });
 
   it('invalidates edited announcement preview and sends only a reconfirmed canonical version', async () => {
@@ -299,9 +527,7 @@ describe('F4 contract-first admin journeys', () => {
       .fill('Informování přímo dotčené skupiny.');
     await screen.getByRole('button', { name: 'Zkontrolovat odeslání' }).click();
     await acknowledgeDialog(screen);
-    await screen
-      .getByRole('button', { name: 'Odeslat oznámení' })
-      .click();
+    await screen.getByRole('button', { name: 'Odeslat oznámení' }).click();
     await expect
       .element(screen.getByRole('heading', { name: 'Oznámení bylo odesláno' }))
       .toBeVisible();
@@ -341,9 +567,7 @@ describe('F4 contract-first admin journeys', () => {
     expect(
       screen.getByRole('heading', { name: 'Nastavení akce' }),
     ).not.toBeInTheDocument();
-    await screen
-      .getByRole('button', { name: 'Připravit změnu' })
-      .click();
+    await screen.getByRole('button', { name: 'Připravit změnu' }).click();
     await screen
       .getByRole('textbox', { name: 'Auditní důvod' })
       .fill('Potvrzení fyzické účasti v přidělené místnosti.');
@@ -380,7 +604,9 @@ describe('F4 contract-first admin journeys', () => {
     );
 
     await expect
-      .element(screen.getByRole('heading', { name: 'Bezpečný queue a DLQ souhrn' }))
+      .element(
+        screen.getByRole('heading', { name: 'Bezpečný queue a DLQ souhrn' }),
+      )
       .toBeVisible();
     await expect.element(screen.getByText('1 v DLQ')).toBeVisible();
     expect(document.body.textContent).not.toContain('recipient@example.test');

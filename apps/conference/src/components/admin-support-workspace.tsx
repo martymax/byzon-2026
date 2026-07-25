@@ -7,7 +7,7 @@ import {
   type SupportMutationRequest,
   type SupportRecord,
 } from '@byzon/domain/contracts/support';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   requestAdminSupportMutation,
@@ -23,6 +23,7 @@ import {
 } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
+  useAdminRequestFence,
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -41,7 +42,13 @@ type PendingMutation = Readonly<{
 }>;
 
 export const AdminSupportWorkspace = () => {
-  const { api, eventId, invalidateSensitive } = useAdminWorkspace();
+  const { api, eventId, invalidateSensitive, permissions } =
+    useAdminWorkspace();
+  const canReadSupport = permissions.includes('participant:operational:read');
+  const canMutateSupport = permissions.includes('ticket:any:manage');
+  const requestFence = useAdminRequestFence();
+  const mutationErrorSummaryRef = useRef<HTMLElement | null>(null);
+  const searchErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [records, setRecords] = useState<readonly SupportRecord[]>([]);
   const [searched, setSearched] = useState(false);
@@ -54,8 +61,10 @@ export const AdminSupportWorkspace = () => {
   const [pending, setPending] = useState<PendingMutation | null>(null);
   const [ambiguous, setAmbiguous] = useState(false);
   const [busy, setBusy] = useState<'search' | 'mutation' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [searchInvalid, setSearchInvalid] = useState(false);
 
   const requestCandidate = selected
     ? supportMutationRequestSchema.safeParse({
@@ -70,18 +79,38 @@ export const AdminSupportWorkspace = () => {
             : null,
       })
     : null;
+  const mutationValidationFailed =
+    attempted && requestCandidate?.success === false;
+  const mutationInvalidPaths = new Set(
+    mutationValidationFailed && requestCandidate
+      ? requestCandidate.error.issues.map(({ path }) => path[0])
+      : [],
+  );
+
+  useEffect(() => {
+    if (searchInvalid) {
+      searchErrorSummaryRef.current?.focus();
+    } else if (mutationValidationFailed || mutationError) {
+      mutationErrorSummaryRef.current?.focus();
+    }
+  }, [mutationError, mutationValidationFailed, searchInvalid]);
 
   const search = async (staleMessage?: string) => {
+    if (!canReadSupport) return;
     const validated = supportSearchQuerySchema.safeParse({
       query,
       limit: 5,
     });
     if (!validated.success) {
-      setError('Zadejte 2 až 80 bezpečných znaků.');
+      setSearchInvalid(true);
+      setSearchError('Zadejte 2 až 80 bezpečných znaků.');
       return;
     }
+    const request = requestFence.begin('support-search');
+    setSearchInvalid(false);
     setBusy('search');
-    setError(null);
+    setSearchError(null);
+    setMutationError(null);
     setSuccess(null);
     setSelected(null);
     setPending(null);
@@ -91,29 +120,33 @@ export const AdminSupportWorkspace = () => {
       api,
       eventId,
       validated.data.query,
+      request.signal,
     );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(null);
     setSearched(true);
     if (!result.ok) {
       setRecords([]);
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
       }
-      setError(
+      setSearchError(
         adminFailureMessage(result.failure, result.metadata?.requestId),
       );
       return;
     }
     if (result.kind === 'success') {
       setRecords(result.data.matches);
-      if (staleMessage) setError(staleMessage);
+      if (staleMessage) setSearchError(staleMessage);
     }
   };
 
   const selectRecord = (record: SupportRecord) => {
+    if (!canMutateSupport) return;
     setSelected(record);
     setAction(record.availableActions[0] ?? 'resend');
     setTargetTicketId('');
@@ -122,13 +155,14 @@ export const AdminSupportWorkspace = () => {
     setPending(null);
     setConfirming(false);
     setAmbiguous(false);
-    setError(null);
+    setSearchError(null);
+    setMutationError(null);
     setSuccess(null);
   };
 
   const prepare = () => {
     setAttempted(true);
-    if (!requestCandidate?.success) return;
+    if (!canMutateSupport || !requestCandidate?.success) return;
     const attempt = {
       body: requestCandidate.data,
       idempotencyKey: createAdminIdempotencyKey('support'),
@@ -139,18 +173,23 @@ export const AdminSupportWorkspace = () => {
   };
 
   const mutate = async (attempt: PendingMutation) => {
+    if (!canMutateSupport) return;
+    const request = requestFence.begin('support-mutation');
     setBusy('mutation');
     setConfirming(false);
-    setError(null);
+    setMutationError(null);
     const result = await requestAdminSupportMutation(
       api,
       eventId,
       attempt.body,
       attempt.idempotencyKey,
+      request.signal,
     );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(null);
     if (!result.ok) {
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         setRecords([]);
         setSelected(null);
         setPending(null);
@@ -167,10 +206,10 @@ export const AdminSupportWorkspace = () => {
         );
         return;
       }
-      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      const retryable = isAmbiguousAdminMutationFailure(result);
       setAmbiguous(retryable);
       if (!retryable) setPending(null);
-      setError(
+      setMutationError(
         adminFailureMessage(result.failure, result.metadata?.requestId),
       );
       return;
@@ -222,30 +261,45 @@ export const AdminSupportWorkspace = () => {
             <span>Reference nebo jméno</span>
             <input
               autoComplete="off"
+              aria-describedby={
+                searchInvalid
+                  ? 'admin-support-search-error'
+                  : 'admin-support-search-help'
+              }
+              aria-invalid={searchInvalid}
               maxLength={80}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                if (searchInvalid) setSearchError(null);
+                setSearchInvalid(false);
+              }}
+              disabled={pending !== null}
               type="search"
               value={query}
             />
-            <span className={styles.helper}>
-              V mocked režimu zkuste „single“, „ambiguous“, „none“ nebo
-              „error“.
+            <span className={styles.helper} id="admin-support-search-help">
+              V mocked režimu zkuste „single“, „ambiguous“, „none“ nebo „error“.
             </span>
           </label>
           <button
             className={styles.button}
-            disabled={busy !== null}
+            disabled={busy !== null || !canReadSupport || pending !== null}
             type="submit"
           >
             {busy === 'search' ? 'Hledám…' : 'Vyhledat'}
           </button>
         </form>
-        {error ? (
-          <p className={styles.warning} role="alert">
-            {error}
-          </p>
+        {searchError ? (
+          <section
+            className={searchInvalid ? styles.errorSummary : styles.warning}
+            ref={searchInvalid ? searchErrorSummaryRef : undefined}
+            role="alert"
+            tabIndex={searchInvalid ? -1 : undefined}
+          >
+            <p id="admin-support-search-error">{searchError}</p>
+          </section>
         ) : null}
-        {searched && records.length === 0 && !error ? (
+        {searched && records.length === 0 && !searchError ? (
           <p role="status">Nenalezen žádný odpovídající záznam.</p>
         ) : null}
         <ul className={styles.cardList}>
@@ -265,28 +319,54 @@ export const AdminSupportWorkspace = () => {
                 <dt>Verze</dt>
                 <dd>{record.version}</dd>
               </dl>
-              <button
-                className={styles.secondaryButton}
-                onClick={() => selectRecord(record)}
-                type="button"
-              >
-                Připravit podporu
-              </button>
+              {canMutateSupport ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={pending !== null}
+                  onClick={() => selectRecord(record)}
+                  type="button"
+                >
+                  Připravit podporu
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
       </section>
 
       {selected ? (
-        <section className={styles.panel} aria-labelledby="support-action-title">
+        <section
+          className={styles.panel}
+          aria-labelledby="support-action-title"
+        >
           <h2 id="support-action-title">2. Zkontrolovat změnu</h2>
           <p>
             {selected.displayName} · vstupenka ••{selected.referenceSuffix} ·
             snapshot v{selected.version}
           </p>
+          {mutationValidationFailed || mutationError ? (
+            <section
+              className={styles.errorSummary}
+              ref={mutationErrorSummaryRef}
+              role="alert"
+              tabIndex={-1}
+            >
+              <h2>Změnu zatím nelze potvrdit</h2>
+              <p id="admin-support-mutation-error">
+                {mutationError ??
+                  'Zkontrolujte auditní důvod a případné ID cílové vstupenky.'}
+              </p>
+            </section>
+          ) : null}
           <label className={styles.field}>
             <span>Akce</span>
             <select
+              aria-describedby={
+                mutationValidationFailed
+                  ? 'admin-support-mutation-error'
+                  : undefined
+              }
+              disabled={pending !== null}
               onChange={(event) => {
                 setAction(event.target.value as SupportAction);
                 setPending(null);
@@ -306,33 +386,50 @@ export const AdminSupportWorkspace = () => {
               <span>ID cílové vstupenky</span>
               <input
                 autoComplete="off"
+                aria-describedby={
+                  mutationInvalidPaths.has('targetTicketId')
+                    ? 'admin-support-target-error'
+                    : undefined
+                }
+                aria-invalid={mutationInvalidPaths.has('targetTicketId')}
+                disabled={pending !== null}
                 onChange={(event) => setTargetTicketId(event.target.value)}
                 value={targetTicketId}
               />
+              {mutationInvalidPaths.has('targetTicketId') ? (
+                <span className={styles.helper} id="admin-support-target-error">
+                  Zadejte jiné platné ID cílové vstupenky.
+                </span>
+              ) : null}
             </label>
           ) : null}
           <label className={styles.field}>
             <span>Auditní důvod</span>
             <textarea
-              aria-invalid={attempted && requestCandidate?.success === false}
+              aria-describedby={
+                mutationInvalidPaths.has('reason')
+                  ? 'admin-support-reason-error'
+                  : 'admin-support-reason-help'
+              }
+              aria-invalid={mutationInvalidPaths.has('reason')}
+              disabled={pending !== null}
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
-            <span className={styles.helper}>
+            <span className={styles.helper} id="admin-support-reason-help">
               Nejméně 8 znaků. Pro mocked chybové scénáře lze do důvodu přidat
               „stale“, „timeout“ nebo „collision“.
             </span>
+            {mutationInvalidPaths.has('reason') ? (
+              <span className={styles.helper} id="admin-support-reason-error">
+                Auditní důvod musí mít nejméně 8 viditelných znaků.
+              </span>
+            ) : null}
           </label>
-          {attempted && requestCandidate?.success === false ? (
-            <p className={styles.warning} role="alert">
-              Zkontrolujte důvod, povolenou akci a případné ID cílové
-              vstupenky.
-            </p>
-          ) : null}
           <div className={styles.actionRow}>
             <button
               className={styles.dangerButton}
-              disabled={busy !== null}
+              disabled={busy !== null || pending !== null}
               onClick={prepare}
               type="button"
             >
@@ -365,8 +462,7 @@ export const AdminSupportWorkspace = () => {
           description="Server znovu ověří oprávnění, dostupnou akci i očekávanou verzi."
           impact={
             <p>
-              {selected?.displayName} · snapshot v
-              {pending.body.expectedVersion}
+              {selected?.displayName} · snapshot v{pending.body.expectedVersion}
             </p>
           }
           onConfirm={() => void mutate(pending)}

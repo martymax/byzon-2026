@@ -1,7 +1,8 @@
-import { AdminSupportWorkspace } from '@/components/admin-support-workspace';
+import { redirect } from 'next/navigation';
+
 import { requireAdminFrontendPreview } from '@/lib/admin-frontend-preview';
 
 export default function AdminSupportPage() {
   requireAdminFrontendPreview();
-  return <AdminSupportWorkspace />;
+  redirect('/admin/ucastnici');
 }

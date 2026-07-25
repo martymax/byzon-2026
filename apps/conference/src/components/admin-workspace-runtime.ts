@@ -1,5 +1,12 @@
 import type { ApiFailure, ApiProblem } from '@byzon/domain/contracts';
 
+import type { ApiFailureResult } from '@/lib/api/endpoint';
+
+type AdminFailureResult<Problem extends ApiProblem = ApiProblem> = Pick<
+  ApiFailureResult<Problem>,
+  'failure' | 'status'
+>;
+
 export const createAdminIdempotencyKey = (operation: string): string => {
   const entropy =
     globalThis.crypto?.randomUUID() ??
@@ -7,9 +14,7 @@ export const createAdminIdempotencyKey = (operation: string): string => {
   return `admin:${operation}:${entropy}`;
 };
 
-export const isStaleAdminFailure = (
-  failure: ApiFailure<ApiProblem>,
-): boolean =>
+export const isStaleAdminFailure = (failure: ApiFailure<ApiProblem>): boolean =>
   failure.kind === 'problem' &&
   (failure.problem.code === 'STALE_VERSION' ||
     failure.problem.code === 'IMPORT_PREVIEW_STALE' ||
@@ -17,18 +22,32 @@ export const isStaleAdminFailure = (
     failure.problem.code === 'ANNOUNCEMENT_PREVIEW_EXPIRED');
 
 export const isAmbiguousAdminMutationFailure = (
-  failure: ApiFailure<ApiProblem>,
+  result: AdminFailureResult,
 ): boolean =>
-  failure.kind === 'timeout' ||
-  failure.kind === 'transport' ||
-  failure.kind === 'invalid_response' ||
-  (failure.kind === 'problem' &&
-    (failure.problem.code === 'IDEMPOTENCY_IN_PROGRESS' ||
-      failure.problem.code === 'INTERNAL_ERROR'));
+  result.status !== 401 &&
+  result.status !== 403 &&
+  (result.failure.kind === 'timeout' ||
+    result.failure.kind === 'transport' ||
+    result.failure.kind === 'invalid_response' ||
+    (result.failure.kind === 'problem' &&
+      (result.failure.problem.code === 'IDEMPOTENCY_IN_PROGRESS' ||
+        result.failure.problem.code === 'INTERNAL_ERROR')));
 
-const baseAdminFailureMessage = (
-  failure: ApiFailure<ApiProblem>,
-): string => {
+export const isAdminSecurityFailure = (
+  result: AdminFailureResult,
+): boolean =>
+  result.status === 401 ||
+  result.status === 403 ||
+  result.failure.kind === 'offline' ||
+  result.failure.kind === 'session_expired' ||
+  (result.failure.kind === 'problem' &&
+    (result.failure.problem.status === 401 ||
+      result.failure.problem.status === 403 ||
+      result.failure.problem.code === 'AUTHENTICATION_REQUIRED' ||
+      result.failure.problem.code === 'AUTH_SESSION_EXPIRED' ||
+      result.failure.problem.code === 'EVENT_ACCESS_DENIED'));
+
+const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
   if (failure.kind === 'aborted') return 'Požadavek byl zrušen.';
   if (failure.kind === 'offline') {
     return 'Připojení není dostupné. Administrace je online-only.';
@@ -79,7 +98,5 @@ export const adminFailureMessage = (
   requestId?: string,
 ): string => {
   const message = baseAdminFailureMessage(failure);
-  return requestId
-    ? `${message} Reference požadavku: ${requestId}.`
-    : message;
+  return requestId ? `${message} Reference požadavku: ${requestId}.` : message;
 };

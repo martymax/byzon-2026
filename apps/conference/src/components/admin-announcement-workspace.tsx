@@ -10,7 +10,7 @@ import {
   type AdminAnnouncementSendResponse,
   type AnnouncementSeverity,
 } from '@byzon/domain/contracts';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   requestAdminAnnouncementPreview,
@@ -26,6 +26,7 @@ import {
 } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
+  useAdminRequestFence,
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -43,6 +44,9 @@ const severityLabels: Record<AnnouncementSeverity, string> = {
 
 export const AdminAnnouncementWorkspace = () => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
+  const requestFence = useAdminRequestFence();
+  const draftErrorSummaryRef = useRef<HTMLElement | null>(null);
+  const sendErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [title, setTitle] = useState('');
   const [bodyText, setBodyText] = useState('');
   const [severity, setSeverity] = useState<AnnouncementSeverity>('info');
@@ -58,9 +62,9 @@ export const AdminAnnouncementWorkspace = () => {
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [busy, setBusy] = useState<'preview' | 'send' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] =
-    useState<AdminAnnouncementSendResponse | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sent, setSent] = useState<AdminAnnouncementSendResponse | null>(null);
 
   const draftCandidate = adminAnnouncementPreviewRequestSchema.safeParse({
     draft: {
@@ -73,6 +77,7 @@ export const AdminAnnouncementWorkspace = () => {
           : { kind: 'session', sessionId },
     },
   });
+  const draftValidationFailed = attempted && !draftCandidate.success;
 
   const resetImmutablePreview = () => {
     setPreview(null);
@@ -86,22 +91,31 @@ export const AdminAnnouncementWorkspace = () => {
     body: AdminAnnouncementPreviewRequest,
     staleMessage?: string,
   ) => {
+    const request = requestFence.begin('announcement-preview');
     setBusy('preview');
-    setError(null);
+    setDraftError(null);
+    setSendError(null);
     setPending(null);
     setConfirming(false);
     setAmbiguous(false);
-    const result = await requestAdminAnnouncementPreview(api, eventId, body);
+    const result = await requestAdminAnnouncementPreview(
+      api,
+      eventId,
+      body,
+      request.signal,
+    );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(null);
     if (!result.ok) {
       setPreview(null);
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
       }
-      setError(
+      setDraftError(
         adminFailureMessage(result.failure, result.metadata?.requestId),
       );
       return;
@@ -110,14 +124,14 @@ export const AdminAnnouncementWorkspace = () => {
       setPreview(result.data);
       setReason('');
       setAttempted(false);
-      if (staleMessage) setError(staleMessage);
+      if (staleMessage) setDraftError(staleMessage);
     }
   };
 
   const previewDraft = () => {
     setAttempted(true);
     if (!draftCandidate.success) {
-      setError(
+      setDraftError(
         'Doplňte bezpečný název, text a platné publikum bez HTML značek.',
       );
       return;
@@ -132,6 +146,15 @@ export const AdminAnnouncementWorkspace = () => {
         reason,
       })
     : null;
+  const sendValidationFailed = attempted && sendCandidate?.success === false;
+
+  useEffect(() => {
+    if (draftValidationFailed || draftError) {
+      draftErrorSummaryRef.current?.focus();
+    } else if (sendValidationFailed || sendError) {
+      sendErrorSummaryRef.current?.focus();
+    }
+  }, [draftError, draftValidationFailed, sendError, sendValidationFailed]);
 
   const prepareSend = () => {
     setAttempted(true);
@@ -147,18 +170,22 @@ export const AdminAnnouncementWorkspace = () => {
   };
 
   const send = async (attempt: PendingSend) => {
+    const request = requestFence.begin('announcement-send');
     setBusy('send');
     setConfirming(false);
-    setError(null);
+    setSendError(null);
     const result = await requestAdminAnnouncementSend(
       api,
       eventId,
       attempt.body,
       attempt.idempotencyKey,
+      request.signal,
     );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(null);
     if (!result.ok) {
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         setPreview(null);
         setPending(null);
         invalidateSensitive(
@@ -179,10 +206,10 @@ export const AdminAnnouncementWorkspace = () => {
         }
         return;
       }
-      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      const retryable = isAmbiguousAdminMutationFailure(result);
       setAmbiguous(retryable);
       if (!retryable) setPending(null);
-      setError(
+      setSendError(
         adminFailureMessage(result.failure, result.metadata?.requestId),
       );
       return;
@@ -209,10 +236,31 @@ export const AdminAnnouncementWorkspace = () => {
 
       <section className={styles.panel} aria-labelledby="announcement-draft">
         <h2 id="announcement-draft">1. Návrh</h2>
+        {draftValidationFailed || draftError ? (
+          <section
+            className={styles.errorSummary}
+            ref={draftErrorSummaryRef}
+            role="alert"
+            tabIndex={-1}
+          >
+            <h2>Preview zatím nelze vytvořit</h2>
+            <p id="admin-announcement-draft-error">
+              {draftError ??
+                'Doplňte bezpečný název, text a platné publikum bez HTML značek.'}
+            </p>
+          </section>
+        ) : null}
         <div className={styles.twoColumn}>
           <label className={styles.field}>
             <span>Název</span>
             <input
+              aria-describedby={
+                draftValidationFailed
+                  ? 'admin-announcement-draft-error'
+                  : undefined
+              }
+              aria-invalid={draftValidationFailed}
+              disabled={pending !== null}
               maxLength={160}
               onChange={(event) => {
                 setTitle(event.target.value);
@@ -224,6 +272,7 @@ export const AdminAnnouncementWorkspace = () => {
           <label className={styles.field}>
             <span>Závažnost</span>
             <select
+              disabled={pending !== null}
               onChange={(event) => {
                 setSeverity(event.target.value as AnnouncementSeverity);
                 resetImmutablePreview();
@@ -241,6 +290,13 @@ export const AdminAnnouncementWorkspace = () => {
         <label className={styles.field}>
           <span>Text oznámení</span>
           <textarea
+            aria-describedby={
+              draftValidationFailed
+                ? 'admin-announcement-draft-error'
+                : 'admin-announcement-body-help'
+            }
+            aria-invalid={draftValidationFailed}
+            disabled={pending !== null}
             maxLength={4000}
             onChange={(event) => {
               setBodyText(event.target.value);
@@ -248,7 +304,7 @@ export const AdminAnnouncementWorkspace = () => {
             }}
             value={bodyText}
           />
-          <span className={styles.helper}>
+          <span className={styles.helper} id="admin-announcement-body-help">
             Prostý text; HTML značky ani nebezpečné řídicí znaky nejsou
             povolené.
           </span>
@@ -257,6 +313,7 @@ export const AdminAnnouncementWorkspace = () => {
           <label className={styles.field}>
             <span>Publikum</span>
             <select
+              disabled={pending !== null}
               onChange={(event) => {
                 setAudienceKind(event.target.value as 'event' | 'session');
                 resetImmutablePreview();
@@ -271,6 +328,13 @@ export const AdminAnnouncementWorkspace = () => {
             <label className={styles.field}>
               <span>ID session</span>
               <input
+                aria-describedby={
+                  draftValidationFailed
+                    ? 'admin-announcement-draft-error'
+                    : undefined
+                }
+                aria-invalid={draftValidationFailed}
+                disabled={pending !== null}
                 onChange={(event) => {
                   setSessionId(event.target.value);
                   resetImmutablePreview();
@@ -282,21 +346,19 @@ export const AdminAnnouncementWorkspace = () => {
         </div>
         <button
           className={styles.button}
-          disabled={busy !== null}
+          disabled={busy !== null || pending !== null}
           onClick={previewDraft}
           type="button"
         >
           {busy === 'preview' ? 'Počítám publikum…' : 'Vytvořit preview'}
         </button>
-        {error ? (
-          <p className={styles.warning} role="alert">
-            {error}
-          </p>
-        ) : null}
       </section>
 
       {preview ? (
-        <section className={styles.panel} aria-labelledby="announcement-preview">
+        <section
+          className={styles.panel}
+          aria-labelledby="announcement-preview"
+        >
           <div className={styles.panelHeader}>
             <div>
               <h2 id="announcement-preview">2. Immutable preview</h2>
@@ -321,6 +383,20 @@ export const AdminAnnouncementWorkspace = () => {
               .map(({ participantReference }) => participantReference)
               .join(', ') || 'bez vzorku'}
           </p>
+          {sendValidationFailed || sendError ? (
+            <section
+              className={styles.errorSummary}
+              ref={sendErrorSummaryRef}
+              role="alert"
+              tabIndex={-1}
+            >
+              <h2>Odeslání zatím nelze potvrdit</h2>
+              <p id="admin-announcement-send-error">
+                {sendError ??
+                  'Doplňte auditní důvod o nejméně 8 viditelných znaků.'}
+              </p>
+            </section>
+          ) : null}
           {preview.audience.recipientCount === 0 ? (
             <p className={styles.warning} role="alert">
               Prázdné publikum nelze odeslat.
@@ -329,11 +405,17 @@ export const AdminAnnouncementWorkspace = () => {
           <label className={styles.field}>
             <span>Auditní důvod odeslání</span>
             <textarea
-              aria-invalid={attempted && sendCandidate?.success === false}
+              aria-describedby={
+                sendValidationFailed
+                  ? 'admin-announcement-send-error'
+                  : 'admin-announcement-reason-help'
+              }
+              aria-invalid={sendValidationFailed}
+              disabled={pending !== null}
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
-            <span className={styles.helper}>
+            <span className={styles.helper} id="admin-announcement-reason-help">
               Pro mocked scénáře lze přidat „stale“, „expired“, „timeout“ nebo
               „collision“.
             </span>
@@ -341,7 +423,11 @@ export const AdminAnnouncementWorkspace = () => {
           <div className={styles.actionRow}>
             <button
               className={styles.dangerButton}
-              disabled={busy !== null || preview.audience.recipientCount === 0}
+              disabled={
+                busy !== null ||
+                pending !== null ||
+                preview.audience.recipientCount === 0
+              }
               onClick={prepareSend}
               type="button"
             >

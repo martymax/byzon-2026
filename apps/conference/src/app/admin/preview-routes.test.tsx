@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const gateMock = vi.hoisted(() => vi.fn());
+const redirectMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/admin-frontend-preview', () => ({
   requireAdminFrontendPreview: gateMock,
+}));
+vi.mock('next/navigation', () => ({
+  redirect: redirectMock,
 }));
 vi.mock('@/components/admin-overview-workspace', () => ({
   AdminOverviewWorkspace: () => null,
@@ -55,6 +59,7 @@ const mockRoutes = [
 describe('F4 direct mock admin route boundary', () => {
   beforeEach(() => {
     gateMock.mockReset();
+    redirectMock.mockReset();
     gateMock.mockImplementation(() => {
       throw new Error('ADMIN_PREVIEW_NOT_FOUND');
     });
@@ -64,4 +69,20 @@ describe('F4 direct mock admin route boundary', () => {
     expect(() => page()).toThrow('ADMIN_PREVIEW_NOT_FOUND');
     expect(gateMock).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    ['legacy import', AdminImportPage, '/admin/vstupenky'],
+    ['legacy support', AdminSupportPage, '/admin/ucastnici'],
+    ['legacy operations', AdminOperationsPage, '/admin/role'],
+  ] as const)(
+    'redirects %s to its canonical route in preview',
+    (_name, page, canonicalPath) => {
+      gateMock.mockReset();
+
+      page();
+
+      expect(gateMock).toHaveBeenCalledOnce();
+      expect(redirectMock).toHaveBeenCalledWith(canonicalPath);
+    },
+  );
 });

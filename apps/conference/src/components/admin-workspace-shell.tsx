@@ -27,7 +27,10 @@ import {
   type AdminTicketImportUploadPort,
 } from '@/lib/admin-api';
 
+import { isAdminSecurityFailure } from './admin-workspace-runtime';
 import styles from './admin-workspace.module.css';
+
+export { isAdminSecurityFailure };
 
 type AdminWorkspaceSection =
   | 'overview'
@@ -59,6 +62,12 @@ const legacySections: Readonly<Record<string, AdminWorkspaceSection>> = {
   '/admin/import': 'import',
   '/admin/support': 'support',
   '/admin/provoz': 'operations',
+};
+
+const legacyNavigationTargets: Readonly<Record<string, string>> = {
+  '/admin/import': '/admin/vstupenky',
+  '/admin/support': '/admin/ucastnici',
+  '/admin/provoz': '/admin/role',
 };
 
 const sectionPermissions: Readonly<
@@ -108,14 +117,25 @@ const personaApi = (api: ApiPort, persona: PreviewPersona): ApiPort => ({
     }),
 });
 
-const itemForPath = (pathname: string) =>
-  [...navigation]
+const canonicalPathForNavigation = (pathname: string): string => {
+  const legacyPath = Object.keys(legacyNavigationTargets).find(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+  if (!legacyPath) return pathname;
+  return `${legacyNavigationTargets[legacyPath]}${pathname.slice(legacyPath.length)}`;
+};
+
+const itemForPath = (pathname: string) => {
+  const canonicalPathname = canonicalPathForNavigation(pathname);
+  return [...navigation]
     .sort((left, right) => right.href.length - left.href.length)
     .find(({ href }) =>
       href === '/admin'
-        ? pathname === href
-        : pathname === href || pathname.startsWith(`${href}/`),
+        ? canonicalPathname === href
+        : canonicalPathname === href ||
+          canonicalPathname.startsWith(`${href}/`),
     );
+};
 
 const sectionForPath = (pathname: string): AdminWorkspaceSection =>
   itemForPath(pathname)?.section ??
@@ -171,7 +191,9 @@ const AdminWorkspaceContext = createContext<AdminWorkspaceValue | null>(null);
 export const useAdminWorkspace = (): AdminWorkspaceValue => {
   const context = useContext(AdminWorkspaceContext);
   if (!context) {
-    throw new Error('useAdminWorkspace must be used inside AdminWorkspaceShell.');
+    throw new Error(
+      'useAdminWorkspace must be used inside AdminWorkspaceShell.',
+    );
   }
   return context;
 };
@@ -179,17 +201,78 @@ export const useAdminWorkspace = (): AdminWorkspaceValue => {
 /** @deprecated Use `useAdminWorkspace`; retained for route-level compatibility. */
 export const useAdminWorkspaceScope = useAdminWorkspace;
 
-export const isAdminSecurityFailure = (
-  failure: ApiFailure<ApiProblem>,
-): boolean =>
-  failure.kind === 'offline' ||
-  failure.kind === 'session_expired' ||
-  (failure.kind === 'problem' &&
-    (failure.problem.status === 401 ||
-      failure.problem.status === 403 ||
-      failure.problem.code === 'AUTHENTICATION_REQUIRED' ||
-      failure.problem.code === 'AUTH_SESSION_EXPIRED' ||
-      failure.problem.code === 'EVENT_ACCESS_DENIED'));
+interface ActiveAdminRequest {
+  readonly controller: AbortController;
+  readonly scope: string;
+  readonly token: symbol;
+}
+
+export interface AdminRequestLease {
+  readonly signal: AbortSignal;
+  readonly isCurrent: () => boolean;
+  readonly finish: () => void;
+}
+
+export interface AdminRequestFence {
+  readonly begin: (channel: string) => AdminRequestLease;
+  readonly cancel: (channel: string) => void;
+}
+
+/**
+ * Ties every request to the current event and security epoch. A replacement
+ * request aborts the previous request on that channel; unmounting or changing
+ * the authenticated scope aborts all in-flight work.
+ */
+export const useAdminRequestFence = (): AdminRequestFence => {
+  const { eventId, securityEpoch } = useAdminWorkspace();
+  const scope = `${eventId}:${securityEpoch}`;
+  const scopeRef = useRef(scope);
+  const activeRef = useRef(new Map<string, ActiveAdminRequest>());
+
+  useEffect(() => {
+    const activeRequests = activeRef.current;
+    scopeRef.current = scope;
+    return () => {
+      activeRequests.forEach(({ controller }) => controller.abort());
+      activeRequests.clear();
+    };
+  }, [scope]);
+
+  const begin = useCallback(
+    (channel: string): AdminRequestLease => {
+      activeRef.current.get(channel)?.controller.abort();
+      const controller = new AbortController();
+      const token = Symbol(channel);
+      activeRef.current.set(channel, { controller, scope, token });
+
+      const isCurrent = () => {
+        const active = activeRef.current.get(channel);
+        return (
+          !controller.signal.aborted &&
+          scopeRef.current === scope &&
+          active?.scope === scope &&
+          active.token === token
+        );
+      };
+
+      return {
+        signal: controller.signal,
+        isCurrent,
+        finish: () => {
+          if (isCurrent()) activeRef.current.delete(channel);
+        },
+      };
+    },
+    [scope],
+  );
+
+  const cancel = useCallback((channel: string) => {
+    activeRef.current.get(channel)?.controller.abort();
+    activeRef.current.delete(channel);
+  }, []);
+
+  return useMemo(() => ({ begin, cancel }), [begin, cancel]);
+};
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -351,13 +434,11 @@ export const AdminWorkspaceShell = ({
             <label className={styles.roleControl}>
               Demo persona
               <select
-                onChange={(event) =>
-                  {
-                    setSecurityEpoch((current) => current + 1);
-                    setState({ kind: 'loading' });
-                    setPreviewPersona(event.target.value as PreviewPersona);
-                  }
-                }
+                onChange={(event) => {
+                  setSecurityEpoch((current) => current + 1);
+                  setState({ kind: 'loading' });
+                  setPreviewPersona(event.target.value as PreviewPersona);
+                }}
                 value={previewPersona}
               >
                 {Object.entries(previewPersonas).map(([value, label]) => (
@@ -409,7 +490,9 @@ export const AdminWorkspaceShell = ({
               <section className={styles.panel} aria-busy="true">
                 <p className={styles.eyebrow}>Ověřuji přístup</p>
                 <h1>Načítám administrační kontext…</h1>
-                <p>Soukromé zdroje se načtou až po ověření eventu a oprávnění.</p>
+                <p>
+                  Soukromé zdroje se načtou až po ověření eventu a oprávnění.
+                </p>
               </section>
             ) : state.kind === 'blocked' ? (
               <section className={styles.forbidden} role="alert">
@@ -434,9 +517,9 @@ export const AdminWorkspaceShell = ({
                       <p className={styles.eyebrow}>403 · omezený rozsah</p>
                       <h1>K této části nemáte oprávnění</h1>
                       <p>
-                        Oprávnění pro část {activeNavigation.label} není součástí
-                        autoritativního kontextu. Žádná data této části nebyla
-                        načtena.
+                        Oprávnění pro část {activeNavigation.label} není
+                        součástí autoritativního kontextu. Žádná data této části
+                        nebyla načtena.
                       </p>
                       <Link href="/admin">Zpět na administraci</Link>
                     </section>

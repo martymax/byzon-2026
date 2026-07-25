@@ -8,6 +8,7 @@ import { requestAdminOperationsOverview } from '@/lib/admin-api';
 import { adminFailureMessage } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
+  useAdminRequestFence,
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -26,19 +27,21 @@ const metricStateLabel = {
 
 export const AdminOverviewWorkspace = () => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
+  const requestFence = useAdminRequestFence();
   const [overview, setOverview] =
     useState<AdminOperationsOverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void requestAdminOperationsOverview(api, eventId, controller.signal).then(
+    const request = requestFence.begin('admin-overview');
+    void requestAdminOperationsOverview(api, eventId, request.signal).then(
       (result) => {
-        if (controller.signal.aborted) return;
+        if (!request.isCurrent()) return;
+        request.finish();
         if (!result.ok) {
           setOverview(null);
-          if (isAdminSecurityFailure(result.failure)) {
+          if (isAdminSecurityFailure(result)) {
             invalidateSensitive(
               adminFailureMessage(result.failure, result.metadata?.requestId),
             );
@@ -52,8 +55,8 @@ export const AdminOverviewWorkspace = () => {
         if (result.kind === 'success') setOverview(result.data);
       },
     );
-    return () => controller.abort();
-  }, [api, eventId, invalidateSensitive, reload]);
+    return () => requestFence.cancel('admin-overview');
+  }, [api, eventId, invalidateSensitive, reload, requestFence]);
 
   return (
     <div className={styles.stack}>
@@ -136,12 +139,17 @@ export const AdminOverviewWorkspace = () => {
         )}
       </section>
 
-      <section className={styles.panel} aria-labelledby="overview-actions-title">
+      <section
+        className={styles.panel}
+        aria-labelledby="overview-actions-title"
+      >
         <h2 id="overview-actions-title">Doporučené provozní kroky</h2>
         <div className={styles.threeColumn}>
           <article className={styles.dataCard}>
             <h3>Zkontrolovat import</h3>
-            <p>Nejprve ověřte immutable preview a teprve poté potvrďte dopad.</p>
+            <p>
+              Nejprve ověřte immutable preview a teprve poté potvrďte dopad.
+            </p>
             <a className={styles.secondaryButton} href="/admin/vstupenky">
               Otevřít import
             </a>

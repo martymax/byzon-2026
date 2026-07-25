@@ -8,7 +8,7 @@ import {
   type TicketImportPreviewResponse,
   type TicketImportRowStatus,
 } from '@byzon/domain/contracts/ticket-import';
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 
 import { requestAdminTicketImportApply } from '@/lib/admin-api';
 
@@ -21,6 +21,7 @@ import {
 } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
+  useAdminRequestFence,
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -61,6 +62,9 @@ const safeFileNameForDisplay = (fileName: string) =>
     .replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '�')
     .slice(0, 180);
 
+const fileFingerprint = (file: File): string =>
+  [file.name, file.type, file.size, file.lastModified].join('\u0000');
+
 const formatTicketState = (state: string | null): string =>
   state === null
     ? '—'
@@ -72,18 +76,26 @@ const formatTicketState = (state: string | null): string =>
 
 export const AdminImportWorkspace = () => {
   const { api, eventId, invalidateSensitive, uploadPort } = useAdminWorkspace();
+  const requestFence = useAdminRequestFence();
+  const selectedFileFingerprintRef = useRef<string | null>(null);
+  const applyErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] =
-    useState<TicketImportPreviewResponse | null>(null);
+  const [preview, setPreview] = useState<TicketImportPreviewResponse | null>(
+    null,
+  );
   const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
   const [filter, setFilter] = useState<ImportFilter>('all');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'upload' | 'apply' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorScope, setErrorScope] = useState<'upload' | 'apply' | null>(null);
   const [attempted, setAttempted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState<PendingApply | null>(null);
   const [ambiguous, setAmbiguous] = useState(false);
+  const [uploadState, setUploadState] = useState<
+    'idle' | 'selected' | 'uploading' | 'validated' | 'error'
+  >('idle');
 
   const visibleRows = useMemo(
     () =>
@@ -102,34 +114,63 @@ export const AdminImportWorkspace = () => {
         reason,
       })
     : null;
-  const canApply =
-    preview !== null &&
-    canApplyTicketImportPreview(preview) &&
-    requestCandidate?.success === true;
+  const canPrepareApply =
+    preview !== null && canApplyTicketImportPreview(preview);
+  const applyValidationFailed =
+    attempted && requestCandidate?.success === false;
+
+  useEffect(() => {
+    if (applyValidationFailed || (error && errorScope === 'apply')) {
+      applyErrorSummaryRef.current?.focus();
+    }
+  }, [applyValidationFailed, error, errorScope]);
 
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
-    setFile(event.target.files?.[0] ?? null);
+    const selectedFile = event.target.files?.[0] ?? null;
+    requestFence.cancel('import-upload');
+    selectedFileFingerprintRef.current = selectedFile
+      ? fileFingerprint(selectedFile)
+      : null;
+    setBusy((current) => (current === 'upload' ? null : current));
+    setFile(selectedFile);
+    setUploadState(selectedFile ? 'selected' : 'idle');
     setPreview(null);
     setReport(null);
     setPending(null);
     setAmbiguous(false);
     setError(null);
+    setErrorScope(null);
     setAttempted(false);
     setFilter('all');
   };
 
   const upload = async (staleMessage?: string) => {
     if (!file) return;
+    const selectedFile = file;
+    const fingerprint = fileFingerprint(selectedFile);
+    const request = requestFence.begin('import-upload');
     setBusy('upload');
+    setUploadState('uploading');
     setError(null);
+    setErrorScope(null);
     setPreview(null);
     setReport(null);
     setPending(null);
     setAmbiguous(false);
     try {
-      const result = await uploadPort.preview(eventId, file);
+      const result = await uploadPort.preview(
+        eventId,
+        selectedFile,
+        request.signal,
+      );
+      if (
+        !request.isCurrent() ||
+        selectedFileFingerprintRef.current !== fingerprint
+      ) {
+        return;
+      }
       if (!result.ok) {
-        if (isAdminSecurityFailure(result.failure)) {
+        if (isAdminSecurityFailure(result)) {
           invalidateSensitive(
             adminFailureMessage(result.failure, result.metadata?.requestId),
           );
@@ -138,21 +179,41 @@ export const AdminImportWorkspace = () => {
         setError(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
+        setErrorScope('upload');
+        setUploadState('error');
         return;
       }
       if (result.kind === 'success') {
         setPreview(result.data);
+        setUploadState('validated');
         setFilter('all');
         setReason('');
         setAttempted(false);
-        if (staleMessage) setError(staleMessage);
+        if (staleMessage) {
+          setErrorScope('apply');
+          setError(staleMessage);
+        }
       }
     } catch {
+      if (
+        !request.isCurrent() ||
+        selectedFileFingerprintRef.current !== fingerprint
+      ) {
+        return;
+      }
       setError(
         'Soubor musí být neprázdný CSV nebo XLSX, mít odpovídající MIME typ a velikost nejvýše 10 MB.',
       );
+      setErrorScope('upload');
+      setUploadState('error');
     } finally {
-      setBusy(null);
+      if (
+        request.isCurrent() &&
+        selectedFileFingerprintRef.current === fingerprint
+      ) {
+        request.finish();
+        setBusy(null);
+      }
     }
   };
 
@@ -170,18 +231,23 @@ export const AdminImportWorkspace = () => {
   };
 
   const submitPending = async (attempt: PendingApply) => {
+    const request = requestFence.begin('import-apply');
     setBusy('apply');
     setConfirming(false);
     setError(null);
+    setErrorScope(null);
     const result = await requestAdminTicketImportApply(
       api,
       eventId,
       attempt.body,
       attempt.idempotencyKey,
+      request.signal,
     );
+    if (!request.isCurrent()) return;
+    request.finish();
     setBusy(null);
     if (!result.ok) {
-      if (isAdminSecurityFailure(result.failure)) {
+      if (isAdminSecurityFailure(result)) {
         setPending(null);
         setPreview(null);
         setFile(null);
@@ -198,12 +264,11 @@ export const AdminImportWorkspace = () => {
         );
         return;
       }
-      const retryable = isAmbiguousAdminMutationFailure(result.failure);
+      const retryable = isAmbiguousAdminMutationFailure(result);
       setAmbiguous(retryable);
       if (!retryable) setPending(null);
-      setError(
-        adminFailureMessage(result.failure, result.metadata?.requestId),
-      );
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      setErrorScope('apply');
       return;
     }
     if (result.kind === 'success') {
@@ -236,16 +301,19 @@ export const AdminImportWorkspace = () => {
           </div>
           <span className={styles.badge}>CSV / XLSX · max. 10 MB</span>
         </div>
-        <label className={styles.field}>
+        <label className={styles.field} htmlFor="admin-import-file">
           <span>Zdrojový soubor</span>
           <input
             accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            aria-describedby="admin-import-file-help"
+            disabled={busy === 'apply' || pending !== null}
+            id="admin-import-file"
             onChange={selectFile}
             type="file"
           />
-          <span className={styles.helper}>
-            V mocked režimu lze scénář měnit názvem souboru: běžný,
-            „conflict“, „unknown“, „stale“ nebo „collision“.
+          <span className={styles.helper} id="admin-import-file-help">
+            V mocked režimu lze scénář měnit názvem souboru: běžný, „conflict“,
+            „unknown“, „stale“ nebo „collision“.
           </span>
         </label>
         {file ? (
@@ -266,7 +334,28 @@ export const AdminImportWorkspace = () => {
               : 'Vytvořit validované preview'}
           </button>
         </div>
-        {error ? (
+        <div
+          aria-busy={uploadState === 'uploading'}
+          aria-live="polite"
+          className={styles.progress}
+          role="status"
+        >
+          {uploadState === 'uploading' ? (
+            <>
+              <progress aria-label="Nahrávání a serverová validace souboru" />
+              <span>Soubor se odesílá a server vytváří bezpečné preview…</span>
+            </>
+          ) : uploadState === 'validated' ? (
+            <span>Soubor byl nahrán a serverové preview je připravené.</span>
+          ) : uploadState === 'error' ? (
+            <span>Nahrání nebo validace souboru selhaly.</span>
+          ) : uploadState === 'selected' ? (
+            <span>Soubor je vybraný a čeká na nahrání.</span>
+          ) : (
+            <span>Vyberte soubor k nahrání.</span>
+          )}
+        </div>
+        {error && errorScope === 'upload' ? (
           <p className={styles.warning} role="alert">
             {error}
           </p>
@@ -274,7 +363,10 @@ export const AdminImportWorkspace = () => {
       </section>
 
       {preview ? (
-        <section className={styles.panel} aria-labelledby="import-preview-title">
+        <section
+          className={styles.panel}
+          aria-labelledby="import-preview-title"
+        >
           <div className={styles.summaryHeader}>
             <div>
               <h2 id="import-preview-title">2. Staging diff preview</h2>
@@ -307,7 +399,9 @@ export const AdminImportWorkspace = () => {
           <label className={styles.field}>
             <span>Filtrovat řádky</span>
             <select
-              onChange={(event) => setFilter(event.target.value as ImportFilter)}
+              onChange={(event) =>
+                setFilter(event.target.value as ImportFilter)
+              }
               value={filter}
             >
               {filterOptions.map(([value, label]) => (
@@ -400,20 +494,42 @@ export const AdminImportWorkspace = () => {
               nahrajte nový soubor; apply je fail-closed.
             </p>
           ) : null}
-          <label className={styles.field}>
+          {applyValidationFailed || (error && errorScope === 'apply') ? (
+            <section
+              className={styles.errorSummary}
+              ref={applyErrorSummaryRef}
+              role="alert"
+              tabIndex={-1}
+            >
+              <h2>Apply zatím nelze potvrdit</h2>
+              <p id="admin-import-apply-error">
+                {error && errorScope === 'apply'
+                  ? error
+                  : 'Doplňte auditní důvod o nejméně 8 viditelných znaků.'}
+              </p>
+            </section>
+          ) : null}
+          <label className={styles.field} htmlFor="admin-import-reason">
             <span>Auditní důvod</span>
             <textarea
-              aria-invalid={attempted && requestCandidate?.success === false}
+              aria-describedby={
+                applyValidationFailed || errorScope === 'apply'
+                  ? 'admin-import-apply-error'
+                  : 'admin-import-reason-help'
+              }
+              aria-invalid={applyValidationFailed}
+              disabled={pending !== null}
+              id="admin-import-reason"
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
-            <span className={styles.helper}>
+            <span className={styles.helper} id="admin-import-reason-help">
               Nejméně 8 viditelných znaků; důvod bude součástí auditu.
             </span>
           </label>
           <button
             className={styles.dangerButton}
-            disabled={!canApply || busy !== null}
+            disabled={!canPrepareApply || busy !== null || pending !== null}
             onClick={prepareApply}
             type="button"
           >
