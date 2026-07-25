@@ -1,0 +1,411 @@
+import { z } from 'zod';
+
+import {
+  defineApiProblemSchema,
+  idempotencyInProgressProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyKeySchema,
+  sessionExpiredProblemSchema,
+} from './base.js';
+
+export const TICKET_IMPORT_MAX_FILE_BYTES = 10_000_000;
+export const TICKET_IMPORT_MAX_PREVIEW_ROWS = 500;
+
+const uuidSchema = z.string().uuid();
+const dateTimeSchema = z.string().datetime({ offset: true });
+const versionSchema = z.number().int().positive();
+const unsafeInlineTextPattern =
+  /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/;
+const unsafeMultilineTextPattern =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/;
+
+const safeInlineTextSchema = (maximum: number) =>
+  z
+    .string()
+    .min(1)
+    .max(maximum)
+    .refine((value) => value.trim().length > 0, {
+      message: 'Text must not be blank',
+    })
+    .refine((value) => !unsafeInlineTextPattern.test(value), {
+      message: 'Text contains unsafe control characters or markup',
+    });
+
+const reasonSchema = z
+  .string()
+  .min(8)
+  .max(500)
+  .refine((value) => value.trim().length >= 8, {
+    message: 'Reason must contain at least eight visible characters',
+  })
+  .refine((value) => !unsafeMultilineTextPattern.test(value), {
+    message: 'Reason contains unsafe control characters or markup',
+  });
+
+/**
+ * CS-IMPORT-01 is an online-only P3/S workflow. Raw files are quarantined on
+ * the server and neither files nor previews may enter browser persistence or a
+ * shared/service-worker cache.
+ */
+export const ticketImportCachePolicy = Object.freeze({
+  cacheControl: 'private, no-store',
+  browserPersistence: 'forbidden',
+  rawFileStorage: 'private-quarantine-only',
+  previewMutation: 'online-only',
+  applyIdempotency: 'required',
+} as const);
+
+export const ticketImportMediaTypeSchema = z.enum([
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+export type TicketImportMediaType = z.infer<typeof ticketImportMediaTypeSchema>;
+
+const safeFileNameSchema = z
+  .string()
+  .min(1)
+  .max(180)
+  .refine(
+    (value) =>
+      value === value.trim() &&
+      !unsafeInlineTextPattern.test(value) &&
+      !/[\\/]/.test(value),
+    'File name contains path, control, bidi or markup characters',
+  );
+
+const maskedContactSchema = safeInlineTextSchema(120).refine(
+  (value) =>
+    /[*•…]/.test(value) &&
+    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
+  'Import contact must remain masked',
+);
+
+export const ticketImportSourceSchema = z
+  .strictObject({
+    fileName: safeFileNameSchema,
+    mediaType: ticketImportMediaTypeSchema,
+    byteSize: z.number().int().positive().max(TICKET_IMPORT_MAX_FILE_BYTES),
+  })
+  .superRefine((source, context) => {
+    const extension = source.fileName.toLocaleLowerCase('en-US');
+    const matchesMediaType =
+      (source.mediaType === 'text/csv' && extension.endsWith('.csv')) ||
+      (source.mediaType ===
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' &&
+        extension.endsWith('.xlsx'));
+    if (!matchesMediaType) {
+      context.addIssue({
+        code: 'custom',
+        path: ['mediaType'],
+        message: 'Detected media type must match the safe file extension',
+      });
+    }
+  });
+
+export type TicketImportSource = z.infer<typeof ticketImportSourceSchema>;
+
+export const ticketImportRowStatusSchema = z.enum([
+  'new',
+  'unchanged',
+  'status_changed',
+  'conflict',
+  'unknown',
+]);
+
+export type TicketImportRowStatus = z.infer<typeof ticketImportRowStatusSchema>;
+
+export const ticketImportTicketStateSchema = z.enum([
+  'active',
+  'blocked',
+  'cancelled',
+]);
+
+export type TicketImportTicketState = z.infer<
+  typeof ticketImportTicketStateSchema
+>;
+
+export const ticketImportIssueCodeSchema = z.enum([
+  'duplicate_source_reference',
+  'duplicate_existing_reference',
+  'missing_reference',
+  'missing_status',
+  'unknown_status',
+  'state_conflict',
+]);
+
+export type TicketImportIssueCode = z.infer<typeof ticketImportIssueCodeSchema>;
+
+const ticketImportIssueSchema = z.strictObject({
+  code: ticketImportIssueCodeSchema,
+  message: safeInlineTextSchema(240),
+});
+
+export const ticketImportRowSchema = z
+  .strictObject({
+    rowId: uuidSchema,
+    sourceRowNumber: z.number().int().positive().max(1_000_000),
+    referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
+    displayName: safeInlineTextSchema(160),
+    maskedContact: maskedContactSchema,
+    status: ticketImportRowStatusSchema,
+    incomingState: ticketImportTicketStateSchema.nullable(),
+    currentState: ticketImportTicketStateSchema.nullable(),
+    issues: z.array(ticketImportIssueSchema).max(8),
+  })
+  .superRefine((row, context) => {
+    const addStateIssue = (message: string): void => {
+      context.addIssue({
+        code: 'custom',
+        path: ['status'],
+        message,
+      });
+    };
+
+    switch (row.status) {
+      case 'new':
+        if (row.incomingState === null || row.currentState !== null) {
+          addStateIssue('A new row needs only an incoming state');
+        }
+        break;
+      case 'unchanged':
+        if (
+          row.incomingState === null ||
+          row.currentState === null ||
+          row.incomingState !== row.currentState
+        ) {
+          addStateIssue('An unchanged row needs equal incoming/current states');
+        }
+        break;
+      case 'status_changed':
+        if (
+          row.incomingState === null ||
+          row.currentState === null ||
+          row.incomingState === row.currentState
+        ) {
+          addStateIssue(
+            'A status-changed row needs different incoming/current states',
+          );
+        }
+        break;
+      case 'conflict':
+        if (row.issues.length === 0) {
+          addStateIssue('A conflict row needs at least one issue');
+        }
+        break;
+      case 'unknown':
+        if (
+          row.incomingState !== null ||
+          !row.issues.some(({ code }) => code === 'unknown_status')
+        ) {
+          addStateIssue(
+            'An unknown row needs no incoming state and an unknown-status issue',
+          );
+        }
+        break;
+    }
+  });
+
+export type TicketImportRow = z.infer<typeof ticketImportRowSchema>;
+
+export const ticketImportSummarySchema = z.strictObject({
+  total: z.number().int().positive().max(TICKET_IMPORT_MAX_PREVIEW_ROWS),
+  new: z.number().int().nonnegative(),
+  unchanged: z.number().int().nonnegative(),
+  statusChanged: z.number().int().nonnegative(),
+  conflict: z.number().int().nonnegative(),
+  unknown: z.number().int().nonnegative(),
+});
+
+export type TicketImportSummary = z.infer<typeof ticketImportSummarySchema>;
+
+const summaryForRows = (
+  rows: readonly TicketImportRow[],
+): TicketImportSummary => ({
+  total: rows.length,
+  new: rows.filter(({ status }) => status === 'new').length,
+  unchanged: rows.filter(({ status }) => status === 'unchanged').length,
+  statusChanged: rows.filter(({ status }) => status === 'status_changed')
+    .length,
+  conflict: rows.filter(({ status }) => status === 'conflict').length,
+  unknown: rows.filter(({ status }) => status === 'unknown').length,
+});
+
+export const ticketImportPreviewResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    previewId: uuidSchema,
+    previewVersion: versionSchema,
+    source: ticketImportSourceSchema,
+    createdAt: dateTimeSchema,
+    expiresAt: dateTimeSchema,
+    rows: z
+      .array(ticketImportRowSchema)
+      .min(1)
+      .max(TICKET_IMPORT_MAX_PREVIEW_ROWS),
+    summary: ticketImportSummarySchema,
+  })
+  .superRefine((preview, context) => {
+    if (Date.parse(preview.expiresAt) <= Date.parse(preview.createdAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expiresAt'],
+        message: 'Import preview expiry must follow creation',
+      });
+    }
+
+    const expected = summaryForRows(preview.rows);
+    for (const key of Object.keys(expected) as (keyof TicketImportSummary)[]) {
+      if (preview.summary[key] !== expected[key]) {
+        context.addIssue({
+          code: 'custom',
+          path: ['summary', key],
+          message: 'Import summary must match immutable preview rows',
+        });
+      }
+    }
+
+    const rowIds = preview.rows.map(({ rowId }) => rowId);
+    if (new Set(rowIds).size !== rowIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['rows'],
+        message: 'Import preview row IDs must be unique',
+      });
+    }
+  });
+
+export type TicketImportPreviewResponse = z.infer<
+  typeof ticketImportPreviewResponseSchema
+>;
+
+export const canApplyTicketImportPreview = (
+  preview: TicketImportPreviewResponse,
+): boolean => preview.summary.conflict === 0 && preview.summary.unknown === 0;
+
+export const ticketImportApplyRequestSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    previewId: uuidSchema,
+    previewVersion: versionSchema,
+    expectedImpact: ticketImportSummarySchema,
+    reason: reasonSchema,
+  })
+  .superRefine((request, context) => {
+    if (
+      request.expectedImpact.conflict > 0 ||
+      request.expectedImpact.unknown > 0
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expectedImpact'],
+        message: 'Conflicted or unknown import previews cannot be applied',
+      });
+    }
+  });
+
+export type TicketImportApplyRequest = z.infer<
+  typeof ticketImportApplyRequestSchema
+>;
+
+/**
+ * The idempotency key is transport metadata, never part of the mutation body.
+ */
+export const ticketImportApplyHeadersSchema = z.strictObject({
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export type TicketImportApplyHeaders = z.infer<
+  typeof ticketImportApplyHeadersSchema
+>;
+
+export const ticketImportApplyResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  batchId: uuidSchema,
+  previewId: uuidSchema,
+  previewVersion: versionSchema,
+  outcome: z.enum(['applied', 'already_applied']),
+  result: z.strictObject({
+    created: z.number().int().nonnegative(),
+    statusChanged: z.number().int().nonnegative(),
+    unchanged: z.number().int().nonnegative(),
+  }),
+  completedAt: dateTimeSchema,
+  audit: z.strictObject({
+    auditId: uuidSchema,
+  }),
+});
+
+export type TicketImportApplyResponse = z.infer<
+  typeof ticketImportApplyResponseSchema
+>;
+
+export const ticketImportAuthenticationRequiredProblemSchema =
+  defineApiProblemSchema('AUTHENTICATION_REQUIRED', 401);
+export const ticketImportEventAccessDeniedProblemSchema =
+  defineApiProblemSchema('EVENT_ACCESS_DENIED', 403);
+export const ticketImportBatchNotFoundProblemSchema = defineApiProblemSchema(
+  'IMPORT_BATCH_NOT_FOUND',
+  404,
+);
+export const ticketImportUnsupportedFormatProblemSchema =
+  defineApiProblemSchema('IMPORT_UNSUPPORTED_FORMAT', 415);
+export const ticketImportValidationProblemSchema = defineApiProblemSchema(
+  'IMPORT_VALIDATION_FAILED',
+  422,
+);
+export const ticketImportPreviewBlockedProblemSchema = defineApiProblemSchema(
+  'IMPORT_PREVIEW_BLOCKED',
+  409,
+);
+export const ticketImportStalePreviewProblemSchema = defineApiProblemSchema(
+  'IMPORT_PREVIEW_STALE',
+  409,
+).extend({
+  currentPreviewVersion: versionSchema,
+});
+export const ticketImportInternalErrorProblemSchema = defineApiProblemSchema(
+  'INTERNAL_ERROR',
+  500,
+);
+
+const ticketImportReadProblems = [
+  ticketImportAuthenticationRequiredProblemSchema,
+  sessionExpiredProblemSchema,
+  ticketImportEventAccessDeniedProblemSchema,
+  ticketImportBatchNotFoundProblemSchema,
+  ticketImportValidationProblemSchema,
+  ticketImportInternalErrorProblemSchema,
+] as const;
+
+export const ticketImportReadProblemSchema = z.discriminatedUnion(
+  'code',
+  ticketImportReadProblems,
+);
+
+export const ticketImportPreviewProblemSchema = z.discriminatedUnion('code', [
+  ticketImportAuthenticationRequiredProblemSchema,
+  sessionExpiredProblemSchema,
+  ticketImportEventAccessDeniedProblemSchema,
+  ticketImportUnsupportedFormatProblemSchema,
+  ticketImportValidationProblemSchema,
+  ticketImportInternalErrorProblemSchema,
+]);
+
+export const ticketImportApplyProblemSchema = z.discriminatedUnion('code', [
+  ...ticketImportReadProblems,
+  ticketImportPreviewBlockedProblemSchema,
+  ticketImportStalePreviewProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
+]);
+
+export type TicketImportReadProblem = z.infer<
+  typeof ticketImportReadProblemSchema
+>;
+export type TicketImportPreviewProblem = z.infer<
+  typeof ticketImportPreviewProblemSchema
+>;
+export type TicketImportApplyProblem = z.infer<
+  typeof ticketImportApplyProblemSchema
+>;

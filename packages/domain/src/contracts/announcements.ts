@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   defineApiProblemSchema,
   idempotencyInProgressProblemSchema,
+  idempotencyKeySchema,
   idempotencyKeyReusedProblemSchema,
   opaqueCursorSchema,
   sessionExpiredProblemSchema,
@@ -301,4 +302,218 @@ export type ParticipantAnnouncementDetailProblem = z.infer<
 >;
 export type ParticipantAnnouncementReadProblem = z.infer<
   typeof participantAnnouncementReadProblemSchema
+>;
+
+/**
+ * The F4/P8 admin slice is online-only. Audience snapshots may contain
+ * operational aggregates and must not enter browser persistence or a shared
+ * cache. The initial contract deliberately supports in-app delivery only.
+ */
+export const adminAnnouncementCachePolicy = Object.freeze({
+  cacheControl: 'private, no-store',
+  browserPersistence: 'forbidden',
+  sharedCache: 'forbidden',
+  previewMutation: 'online-only',
+  sendMutation: 'online-only',
+  sendIdempotency: 'required',
+  deliveryChannels: 'in-app-only',
+} as const);
+
+const adminAnnouncementBodySchema = z
+  .string()
+  .min(1)
+  .max(4_000)
+  .refine((value) => value.trim().length > 0, {
+    message: 'Body text must not be blank',
+  })
+  .refine((value) => !unsafeBodyTextPattern.test(value), {
+    message: 'Body text contains unsafe control characters',
+  })
+  .refine((value) => !/[<>]/.test(value), {
+    message: 'Body text must not contain HTML markup',
+  });
+
+const adminAnnouncementReasonSchema = z
+  .string()
+  .min(8)
+  .max(500)
+  .refine((value) => value.trim().length >= 8, {
+    message: 'Announcement send reason needs eight visible characters',
+  })
+  .refine((value) => !unsafeBodyTextPattern.test(value), {
+    message: 'Announcement send reason contains unsafe characters',
+  })
+  .refine((value) => !/[<>]/.test(value), {
+    message: 'Announcement send reason must not contain HTML markup',
+  });
+
+export const adminAnnouncementAudienceSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('event'),
+  }),
+  z.strictObject({
+    kind: z.literal('session'),
+    sessionId: uuidSchema,
+  }),
+]);
+
+export type AdminAnnouncementAudience = z.infer<
+  typeof adminAnnouncementAudienceSchema
+>;
+
+export const adminAnnouncementDraftSchema = z.strictObject({
+  title: safeInlineTextSchema(160),
+  bodyText: adminAnnouncementBodySchema,
+  severity: announcementSeveritySchema,
+  audience: adminAnnouncementAudienceSchema,
+});
+
+export type AdminAnnouncementDraft = z.infer<
+  typeof adminAnnouncementDraftSchema
+>;
+
+export const adminAnnouncementPreviewRequestSchema = z.strictObject({
+  draft: adminAnnouncementDraftSchema,
+});
+
+export type AdminAnnouncementPreviewRequest = z.infer<
+  typeof adminAnnouncementPreviewRequestSchema
+>;
+
+export const adminAnnouncementPreviewResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    previewId: uuidSchema,
+    previewVersion: z.number().int().positive(),
+    draft: adminAnnouncementDraftSchema,
+    audience: z.strictObject({
+      recipientCount: z.number().int().nonnegative().max(100_000),
+      excludedCount: z.number().int().nonnegative().max(100_000),
+      sample: z
+        .array(
+          z.strictObject({
+            participantReference: safeInlineTextSchema(80).refine(
+              (value) => /[*•…]/.test(value),
+              'Audience sample reference must remain masked',
+            ),
+          }),
+        )
+        .max(5),
+    }),
+    createdAt: dateTimeSchema,
+    expiresAt: dateTimeSchema,
+  })
+  .superRefine((preview, context) => {
+    if (Date.parse(preview.expiresAt) <= Date.parse(preview.createdAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expiresAt'],
+        message: 'Announcement preview expiry must follow creation',
+      });
+    }
+    if (
+      preview.audience.recipientCount === 0 &&
+      preview.audience.sample.length > 0
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['audience', 'sample'],
+        message: 'An empty audience cannot carry a participant sample',
+      });
+    }
+    if (preview.audience.sample.length > preview.audience.recipientCount) {
+      context.addIssue({
+        code: 'custom',
+        path: ['audience', 'sample'],
+        message: 'Audience sample cannot exceed the recipient count',
+      });
+    }
+  });
+
+export type AdminAnnouncementPreviewResponse = z.infer<
+  typeof adminAnnouncementPreviewResponseSchema
+>;
+
+/**
+ * Actor identity and role are derived from the authenticated event policy.
+ * The immutable preview/version and reason are the complete JSON body.
+ */
+export const adminAnnouncementSendRequestSchema = z.strictObject({
+  previewId: uuidSchema,
+  previewVersion: z.number().int().positive(),
+  reason: adminAnnouncementReasonSchema,
+});
+
+export type AdminAnnouncementSendRequest = z.infer<
+  typeof adminAnnouncementSendRequestSchema
+>;
+
+export const adminAnnouncementSendHeadersSchema = z.strictObject({
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export type AdminAnnouncementSendHeaders = z.infer<
+  typeof adminAnnouncementSendHeadersSchema
+>;
+
+export const adminAnnouncementSendResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  announcementId: uuidSchema,
+  previewId: uuidSchema,
+  previewVersion: z.number().int().positive(),
+  outcome: z.enum(['sent', 'already_sent']),
+  recipientCount: z.number().int().nonnegative().max(100_000),
+  sentAt: dateTimeSchema,
+  audit: z.strictObject({
+    auditId: uuidSchema,
+  }),
+});
+
+export type AdminAnnouncementSendResponse = z.infer<
+  typeof adminAnnouncementSendResponseSchema
+>;
+
+export const announcementEmptyAudienceProblemSchema = defineApiProblemSchema(
+  'ANNOUNCEMENT_EMPTY_AUDIENCE',
+  409,
+);
+export const announcementStalePreviewProblemSchema = defineApiProblemSchema(
+  'ANNOUNCEMENT_PREVIEW_STALE',
+  409,
+).extend({
+  currentPreviewVersion: z.number().int().positive(),
+});
+export const announcementPreviewExpiredProblemSchema = defineApiProblemSchema(
+  'ANNOUNCEMENT_PREVIEW_EXPIRED',
+  409,
+);
+
+const adminAnnouncementReadProblems = [
+  announcementAuthenticationRequiredProblemSchema,
+  sessionExpiredProblemSchema,
+  announcementEventAccessDeniedProblemSchema,
+  announcementsDisabledProblemSchema,
+  announcementValidationProblemSchema,
+  announcementInternalErrorProblemSchema,
+] as const;
+
+export const adminAnnouncementPreviewProblemSchema = z.discriminatedUnion(
+  'code',
+  [...adminAnnouncementReadProblems, announcementEmptyAudienceProblemSchema],
+);
+
+export const adminAnnouncementSendProblemSchema = z.discriminatedUnion('code', [
+  ...adminAnnouncementReadProblems,
+  announcementEmptyAudienceProblemSchema,
+  announcementStalePreviewProblemSchema,
+  announcementPreviewExpiredProblemSchema,
+  idempotencyKeyReusedProblemSchema,
+  idempotencyInProgressProblemSchema,
+]);
+
+export type AdminAnnouncementPreviewProblem = z.infer<
+  typeof adminAnnouncementPreviewProblemSchema
+>;
+export type AdminAnnouncementSendProblem = z.infer<
+  typeof adminAnnouncementSendProblemSchema
 >;

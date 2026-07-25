@@ -10,6 +10,7 @@ const ALLOWED_EXTERNAL_IMPORTS = new Set([
   'zod',
   '@byzon/domain',
   '@byzon/domain/contracts',
+  '@byzon/domain/contracts/check-in',
 ]);
 
 const sources = (directory = SOURCE_DIRECTORY): string[] =>

@@ -30,6 +30,13 @@ export const eventPermissions = [
   'session:assigned:moderate',
   'announcement:own:read',
   'announcement:send',
+  'ticket:any:manage',
+  'participant:operational:read',
+  'role:manage',
+  'operations:read',
+  'audit:read',
+  'event:settings:manage',
+  'attendance:assigned:write',
   'personal-data:own:export',
   'personal-data:operational:export',
 ] as const;
@@ -78,6 +85,13 @@ const rolePermissions = {
     'session:assigned:answer',
     'session:assigned:moderate',
     'announcement:send',
+    'ticket:any:manage',
+    'participant:operational:read',
+    'role:manage',
+    'operations:read',
+    'audit:read',
+    'event:settings:manage',
+    'attendance:assigned:write',
     'personal-data:operational:export',
   ],
   checkin_operator: [
@@ -91,7 +105,11 @@ const rolePermissions = {
     'session:assigned:moderate',
     'announcement:send',
   ],
-  room_operator: ['program:published:read', 'reservation:assigned:read'],
+  room_operator: [
+    'program:published:read',
+    'reservation:assigned:read',
+    'attendance:assigned:write',
+  ],
   system_worker: [],
 } as const satisfies Record<EventRole, readonly EventPermission[]>;
 
@@ -123,6 +141,7 @@ const contextAllows = (
       return context.assignedRoom === true || context.assignedSession === true;
     case 'session:assigned:answer':
     case 'session:assigned:moderate':
+    case 'attendance:assigned:write':
       return role === 'organizer_admin' || context.assignedSession === true;
     case 'announcement:send':
       return (

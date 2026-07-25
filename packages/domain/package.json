@@ -15,6 +15,18 @@
     "./contracts/check-in": {
       "types": "./src/contracts/check-in.ts",
       "default": "./dist/contracts/check-in.js"
+    },
+    "./contracts/admin": {
+      "types": "./src/contracts/admin.ts",
+      "default": "./dist/contracts/admin.js"
+    },
+    "./contracts/support": {
+      "types": "./src/contracts/support.ts",
+      "default": "./dist/contracts/support.js"
+    },
+    "./contracts/ticket-import": {
+      "types": "./src/contracts/ticket-import.ts",
+      "default": "./dist/contracts/ticket-import.js"
     }
   },
   "scripts": {

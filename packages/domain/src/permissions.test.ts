@@ -23,7 +23,7 @@ const allowed = (role: EventRole, permission: EventPermission): boolean =>
 describe('event permission matrix', () => {
   it('keeps the full role and permission matrix explicit', () => {
     expect(eventRoles).toHaveLength(7);
-    expect(eventPermissions).toHaveLength(21);
+    expect(eventPermissions).toHaveLength(28);
     expect(eventRoles).not.toContain('support_operator');
   });
 
@@ -39,6 +39,17 @@ describe('event permission matrix', () => {
     ['room_operator', 'reservation:assigned:read', true],
     ['room_operator', 'checkin:perform', false],
     ['organizer_admin', 'program:manage', true],
+    ['organizer_admin', 'ticket:any:manage', true],
+    ['organizer_admin', 'participant:operational:read', true],
+    ['organizer_admin', 'role:manage', true],
+    ['organizer_admin', 'operations:read', true],
+    ['organizer_admin', 'audit:read', true],
+    ['organizer_admin', 'event:settings:manage', true],
+    ['organizer_admin', 'attendance:assigned:write', true],
+    ['room_operator', 'attendance:assigned:write', true],
+    ['room_operator', 'ticket:any:manage', false],
+    ['checkin_operator', 'participant:operational:read', false],
+    ['moderator', 'role:manage', false],
     ['organizer_admin', 'networking:directory:read', false],
     ['system_worker', 'program:published:read', false],
   ] satisfies [EventRole, EventPermission, boolean][])(
@@ -87,6 +98,38 @@ describe('event permission matrix', () => {
     expect(
       hasEventPermission(['room_operator'], 'reservation:assigned:read'),
     ).toBe(false);
+    expect(
+      hasEventPermission(['room_operator'], 'attendance:assigned:write'),
+    ).toBe(false);
+  });
+
+  it('keeps F4 admin permissions explicit and attendance assignment-scoped', () => {
+    for (const permission of [
+      'ticket:any:manage',
+      'participant:operational:read',
+      'role:manage',
+      'operations:read',
+      'audit:read',
+      'event:settings:manage',
+    ] as const) {
+      expect(hasEventPermission(['organizer_admin'], permission)).toBe(true);
+      expect(hasEventPermission(['room_operator'], permission)).toBe(false);
+      expect(hasEventPermission(['participant'], permission)).toBe(false);
+    }
+
+    expect(
+      hasEventPermission(['room_operator'], 'attendance:assigned:write', {
+        assignedSession: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasEventPermission(['room_operator'], 'attendance:assigned:write', {
+        assignedRoom: true,
+      }),
+    ).toBe(false);
+    expect(
+      hasEventPermission(['organizer_admin'], 'attendance:assigned:write'),
+    ).toBe(true);
   });
 
   it('requires recipient membership for participant announcement reads', () => {

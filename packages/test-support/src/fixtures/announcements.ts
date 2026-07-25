@@ -1,4 +1,8 @@
 import {
+  adminAnnouncementPreviewProblemSchema,
+  adminAnnouncementPreviewResponseSchema,
+  adminAnnouncementSendProblemSchema,
+  adminAnnouncementSendResponseSchema,
   participantAnnouncementDetailProblemSchema,
   participantAnnouncementDetailResponseSchema,
   participantAnnouncementInboxProblemSchema,
@@ -18,6 +22,9 @@ export const announcementFixtureIds = Object.freeze({
   important: '01920000-0000-7000-8000-000000000004',
   information: '01920000-0000-7000-8000-000000000005',
   longContent: '01920000-0000-7000-8000-000000000006',
+  adminPreview: '01920000-0000-7000-8000-000000000007',
+  adminAnnouncement: '01920000-0000-7000-8000-000000000008',
+  adminAudit: '01920000-0000-7000-8000-000000000009',
   nextCursor: 'fixture-announcements-page-2',
 } as const);
 
@@ -193,6 +200,85 @@ export const participantAnnouncementReadFixtures = defineFixtureSet({
   },
 });
 
+const adminDraft = {
+  title: 'Změna sálu workshopu',
+  bodyText:
+    'Workshop Růst bez zkratek se přesouvá do sálu Vltava. Čas začátku zůstává beze změny.',
+  severity: 'important' as const,
+  audience: {
+    kind: 'session' as const,
+    sessionId: announcementFixtureIds.session,
+  },
+};
+
+export const adminAnnouncementPreviewFixtures = defineFixtureSet({
+  name: 'announcements.admin-preview',
+  schema: adminAnnouncementPreviewResponseSchema,
+  fixtures: {
+    session_audience: {
+      eventId: announcementFixtureIds.event,
+      previewId: announcementFixtureIds.adminPreview,
+      previewVersion: 2,
+      draft: adminDraft,
+      audience: {
+        recipientCount: 37,
+        excludedCount: 2,
+        sample: [
+          { participantReference: 'Účastník •001' },
+          { participantReference: 'Účastník •002' },
+        ],
+      },
+      createdAt: '2026-09-18T06:00:00.000Z',
+      expiresAt: '2026-09-18T06:15:00.000Z',
+    },
+    empty_audience: {
+      eventId: announcementFixtureIds.event,
+      previewId: announcementFixtureIds.adminPreview,
+      previewVersion: 3,
+      draft: {
+        ...adminDraft,
+        audience: {
+          kind: 'event',
+        },
+      },
+      audience: {
+        recipientCount: 0,
+        excludedCount: 440,
+        sample: [],
+      },
+      createdAt: '2026-09-18T06:20:00.000Z',
+      expiresAt: '2026-09-18T06:35:00.000Z',
+    },
+  },
+});
+
+const adminSendResponse = {
+  eventId: announcementFixtureIds.event,
+  announcementId: announcementFixtureIds.adminAnnouncement,
+  previewId: announcementFixtureIds.adminPreview,
+  previewVersion: 2,
+  recipientCount: 37,
+  sentAt: '2026-09-18T06:05:00.000Z',
+  audit: {
+    auditId: announcementFixtureIds.adminAudit,
+  },
+};
+
+export const adminAnnouncementSendFixtures = defineFixtureSet({
+  name: 'announcements.admin-send',
+  schema: adminAnnouncementSendResponseSchema,
+  fixtures: {
+    sent: {
+      ...adminSendResponse,
+      outcome: 'sent',
+    },
+    idempotent_replay: {
+      ...adminSendResponse,
+      outcome: 'already_sent',
+    },
+  },
+});
+
 interface AnnouncementProblemStatus {
   readonly AUTHENTICATION_REQUIRED: 401;
   readonly AUTH_SESSION_EXPIRED: 401;
@@ -202,6 +288,8 @@ interface AnnouncementProblemStatus {
   readonly VALIDATION_FAILED: 422;
   readonly IDEMPOTENCY_KEY_REUSED: 409;
   readonly IDEMPOTENCY_IN_PROGRESS: 409;
+  readonly ANNOUNCEMENT_EMPTY_AUDIENCE: 409;
+  readonly ANNOUNCEMENT_PREVIEW_EXPIRED: 409;
   readonly INTERNAL_ERROR: 500;
 }
 
@@ -251,6 +339,42 @@ export const participantAnnouncementReadProblemFixtures = defineFixtureSet({
     ...readOnlyProblems,
     not_found: nonEnumeratingNotFoundProblem,
     audience_denied: nonEnumeratingNotFoundProblem,
+    key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
+    in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
+  },
+});
+
+export const adminAnnouncementPreviewProblemFixtures = defineFixtureSet({
+  name: 'announcements.admin-preview-problem',
+  schema: adminAnnouncementPreviewProblemSchema,
+  fixtures: {
+    authentication: problem('AUTHENTICATION_REQUIRED', 401),
+    session_expired: problem('AUTH_SESSION_EXPIRED', 401),
+    permission: problem('EVENT_ACCESS_DENIED', 403),
+    disabled: problem('ANNOUNCEMENTS_DISABLED', 409),
+    empty_audience: problem('ANNOUNCEMENT_EMPTY_AUDIENCE', 409),
+    validation: problem('VALIDATION_FAILED', 422),
+    internal_error: problem('INTERNAL_ERROR', 500),
+  },
+});
+
+export const adminAnnouncementSendProblemFixtures = defineFixtureSet({
+  name: 'announcements.admin-send-problem',
+  schema: adminAnnouncementSendProblemSchema,
+  fixtures: {
+    permission: problem('EVENT_ACCESS_DENIED', 403),
+    disabled: problem('ANNOUNCEMENTS_DISABLED', 409),
+    empty_audience: problem('ANNOUNCEMENT_EMPTY_AUDIENCE', 409),
+    stale_preview: {
+      type: problemTypeForCode('ANNOUNCEMENT_PREVIEW_STALE'),
+      title: 'Announcement fixture problem',
+      status: 409,
+      code: 'ANNOUNCEMENT_PREVIEW_STALE',
+      detail: 'Synthetic admin announcement preview is stale.',
+      requestId: 'fixture-announcement-0002',
+      currentPreviewVersion: 3,
+    },
+    preview_expired: problem('ANNOUNCEMENT_PREVIEW_EXPIRED', 409),
     key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
     in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),
   },

@@ -50,5 +50,17 @@ describe('test-support public exports', () => {
     expect(fixtures.participantAnnouncementReadFixtures.success?.state).toBe(
       'read',
     );
+    expect(fixtures.ticketImportPreviewFixtures.clean?.summary.conflict).toBe(
+      0,
+    );
+    expect(fixtures.supportSearchFixtures.single_match?.outcome).toBe(
+      'single_match',
+    );
+    expect(fixtures.adminContextFixtures.organizer?.event.id).toBe(
+      fixtures.adminFixtureIds.event,
+    );
+    expect(
+      fixtures.adminAnnouncementSendFixtures.idempotent_replay?.outcome,
+    ).toBe('already_sent');
   });
 });

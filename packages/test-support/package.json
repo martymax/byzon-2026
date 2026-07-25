@@ -16,6 +16,18 @@
       "types": "./src/fixtures/check-in.ts",
       "default": "./dist/fixtures/check-in.js"
     },
+    "./fixtures/admin": {
+      "types": "./src/fixtures/admin.ts",
+      "default": "./dist/fixtures/admin.js"
+    },
+    "./fixtures/support": {
+      "types": "./src/fixtures/support.ts",
+      "default": "./dist/fixtures/support.js"
+    },
+    "./fixtures/ticket-import": {
+      "types": "./src/fixtures/ticket-import.ts",
+      "default": "./dist/fixtures/ticket-import.js"
+    },
     "./viewports": "./src/viewports.ts"
   },
   "scripts": {
