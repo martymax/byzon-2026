@@ -1201,7 +1201,7 @@ Evidence:
 
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
-| Aktivace a identita | `contract ready` | `F1-01`: striktní `CS-ACT-01`, validované landing/claim/identity/link/recovery fixtures, typed API port a development-only aktivační landing se všemi bezpečnými resource stavy; `F1-02`: exact opaque ruční claim bez enumerace; `F1-03`: server-gated progresivní kamera, syntetický QR, lifecycle cleanup a vždy dostupný ruční fallback | `F1-04` až `F1-06` pro úplné mocked UI; `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci |
+| Aktivace a identita | `contract ready` | `F1-01`: striktní `CS-ACT-01`, validované landing/claim/identity/link/recovery fixtures, typed API port a development-only aktivační landing se všemi bezpečnými resource stavy; `F1-02`: exact opaque ruční claim bez enumerace; `F1-03`: server-gated progresivní kamera, syntetický QR, lifecycle cleanup a vždy dostupný ruční fallback; `F1-04`: server-resumed identity, neenumerující link-sent a URL-scrubbed one-time link handoff bez skutečné session | `F1-05` a `F1-06` pro úplné mocked UI; `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci |
 | Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program a ticket component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `not started` | onboarding doména `P2-06`; UI `F2-07` a API `P4-13` plánované | `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
@@ -1817,9 +1817,18 @@ dark mode ani plošný redesign nejsou podmínkou.
   unavailable, offline, rate-limit, rejected, session-expired a bezpečný
   success mají explicitní stav; ruční fallback zůstává dostupný bez přenosu
   raw hodnoty. Kontrakt nově vyžaduje `manual_code`, kdykoli nabízí kameru.
-- [ ] `F1-04` Implementovat přechod claim → identita → session podle
+- [x] `F1-04` Implementovat přechod claim → identita → session podle
   kontraktu, včetně obnovení rozpracované cesty, same-origin `returnTo`,
-  dvojitého odeslání a vypršení.
+  dvojitého odeslání a vypršení. Development-only `/prihlaseni` obnovuje
+  pending flow výhradně ze serverového landing kontraktu, nikoli z URL nebo
+  browser storage, koreluje response `flowId`, allowlistuje `/app` či
+  `/onboarding` a proti same-tick double submitu používá synchronní lock.
+  Neurčitý retry drží stejnou idempotency key. `/aktivace/odkaz` zachytí právě
+  jeden token pouze do ref, okamžitě replace odstraní query i hash se
+  zachováním history state, teprve po potvrzení provede zamčený no-store
+  consume a přejde na serverem allowlistovaný `/onboarding`. Route má
+  `no-referrer`, `private, no-store`; mock nepoužívá Better Auth a nevytváří
+  session ani membership.
 - [ ] `F1-05` S `P4-13` uzavřít `CS-BOOT-01` a implementovat onboarding s
   versionovaným právním acknowledgement, odděleným dobrovolným networking
   opt-in a stavem nepublikované právní verze.
@@ -2639,3 +2648,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 3.6 | 25. 7. 2026 | Dokončen `F1-01`: `CS-ACT-01` pokrývá striktní landing/claim/identity/link/recovery kontrakty, validované syntetické fixtures a typed API port. Development-only `/aktivace` nabízí phase-aware anonymní i recovery stavy, bezpečný návrat a přístupnou/responzivní mockovanou vstupní obrazovku bez vytvoření session nebo membership. |
 | 3.7 | 25. 7. 2026 | Dokončen `F1-02`: development-only `/aktivace/kod` bezpečně odesílá přesný opaque ticket kód bez tiché normalizace, zakazuje dvojitý submit, používá no-store/idempotentní typed request a pro všechny neplatné kódy vrací jedinou neenumerující chybu. Syntetický úspěch nepředstírá účet, membership ani session; Strict Mode regresní test chrání dokončení asynchronního submitu. |
 | 3.8 | 25. 7. 2026 | Dokončen `F1-03`: development-only `/aktivace/skenovat` používá server-gated progresivní camera flow, žádá o oprávnění až po vysvětlení, bezpečně ukončuje stream ve všech lifecycle/race stavech a mock claimuje pouze jednorázovou in-memory syntetickou hodnotu. Kontrakt vynucuje ruční fallback pro každou camera nabídku, hlavička omezuje kameru na same-origin a UI kryje denied/unsupported/cancel/failure/success bez úniku raw hodnoty. |
+| 3.9 | 25. 7. 2026 | Dokončen `F1-04`: mock claim pokračuje klientskou navigací do server-resumed identity flow, bezpečně allowlistuje návrat, koreluje flow ID, blokuje dvojitý submit a drží idempotency při neurčitém retry. Jednorázový token `/aktivace/odkaz` se před akcí odstraní z URL/hash, nikdy se nepersistuje, route má no-referrer/no-store a úspěch pouze simuluje handoff na onboarding bez Better Auth session nebo membership. |

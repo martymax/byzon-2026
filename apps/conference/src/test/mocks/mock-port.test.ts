@@ -18,13 +18,19 @@ import {
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
 import { requestParticipantProgram } from '../../lib/content-api.js';
-import { submitActivationClaim } from '../../lib/activation-api.js';
+import {
+  consumeActivationLink,
+  requestActivationLanding,
+  submitActivationClaim,
+  submitActivationIdentity,
+} from '../../lib/activation-api.js';
 import { createMockServer } from './node.js';
 import {
   MOCK_REQUEST_ID,
   mockJsonResponse,
   mockProblemResponse,
 } from './response.js';
+import { resetMockActivationState } from './handlers.js';
 
 const ORIGIN = 'http://mock.byzon.test';
 const successSchema = z.strictObject({
@@ -58,7 +64,10 @@ const fetchWithOrigin: NonNullable<FetchApiClientOptions['fetch']> = (
 const client = createFetchApiClient({ fetch: fetchWithOrigin });
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  resetMockActivationState();
+});
 afterAll(() => server.close());
 
 describe('MSW through the production API port', () => {
@@ -198,6 +207,79 @@ describe('MSW through the production API port', () => {
         state: 'identity_required',
         membershipCreated: false,
         sessionCreated: false,
+      },
+    });
+  });
+
+  it('continues the synthetic identity and one-time-link handoff', async () => {
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: activationFixtureCode, method: 'manual_code' },
+        'claim-mock-port-handoff-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(requestActivationLanding(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        flow: {
+          state: 'claim_in_progress',
+          flowId: 'flow.synthetic.2026',
+        },
+      },
+    });
+
+    await expect(
+      submitActivationIdentity(
+        client,
+        {
+          flowId: 'flow.synthetic.2026',
+          email: 'alex@example.test',
+          returnTo: '/onboarding',
+        },
+        'identity-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'link_sent',
+        membershipCreated: false,
+        sessionCreated: false,
+      },
+    });
+
+    await expect(
+      consumeActivationLink(
+        client,
+        'link:00000000-0000-4000-8000-000000000001',
+        'link-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'onboarding_required',
+        continueTo: '/onboarding',
+      },
+    });
+
+    await expect(
+      consumeActivationLink(
+        client,
+        'link:00000000-0000-4000-8000-000000000001',
+        'link-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      consumeActivationLink(
+        client,
+        'link:00000000-0000-4000-8000-000000000001',
+        'link-mock-port-0002',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ACTIVATION_LINK_REJECTED' },
       },
     });
   });

@@ -16,6 +16,7 @@ import {
   type ApiFailure,
   type RequestId,
 } from '@byzon/domain/contracts';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import type { ApiPort } from '@/lib/api';
@@ -78,6 +79,7 @@ export const ActivationCodeForm = ({
   readonly api?: ApiPort;
   readonly createIdempotencyKey?: () => string;
 }) => {
+  const router = useRouter();
   const [code, setCode] = useState('');
   const [fieldError, setFieldError] = useState<string>();
   const [failure, setFailure] = useState<ClaimFailure>();
@@ -165,9 +167,9 @@ export const ActivationCodeForm = ({
         </header>
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni">
+            <Button onClick={() => router.push('/prihlaseni')}>
               {recovery ? 'Pokračovat k obnově' : 'Pokračovat k ověření'}
-            </ActionLink>
+            </Button>
           }
           kind="empty"
           title="Kód byl přijat v mock režimu"

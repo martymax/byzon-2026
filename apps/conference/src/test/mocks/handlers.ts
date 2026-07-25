@@ -2,7 +2,13 @@ import {
   activationClaimProblemSchema,
   activationClaimRequestSchema,
   activationClaimResponseSchema,
+  activationIdentityProblemSchema,
+  activationIdentityRequestSchema,
+  activationIdentityResponseSchema,
   activationLandingResponseSchema,
+  activationLinkProblemSchema,
+  activationLinkRequestSchema,
+  activationLinkResponseSchema,
   idempotencyKeySchema,
   participantContentProblemSchema,
   participantContentResponseSchema,
@@ -14,7 +20,12 @@ import {
   activationClaimFixtures,
   activationClaimProblemFixtures,
   activationFixtureCode,
+  activationFixtureFlowId,
+  activationIdentityFixtures,
+  activationIdentityProblemFixtures,
   activationLandingFixtures,
+  activationLinkFixtures,
+  activationLinkProblemFixtures,
   contentFixtureIds,
   participantContentFixtures,
   participantContentProblemFixtures,
@@ -26,6 +37,20 @@ import { http, type RequestHandler } from 'msw';
 
 import { mockJsonResponse, mockProblemResponse } from './response';
 
+interface MockActivationState {
+  claimed: boolean;
+  linkConsumptionKey?: string;
+}
+
+const mockActivationState: MockActivationState = {
+  claimed: false,
+};
+
+export const resetMockActivationState = (): void => {
+  mockActivationState.claimed = false;
+  delete mockActivationState.linkConsumptionKey;
+};
+
 /**
  * Development preview uses the same success contracts and synthetic fixtures
  * as component tests. Failure-state variants stay explicit in tests instead
@@ -35,7 +60,9 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
   http.get('*/api/v1/activation', () =>
     mockJsonResponse(
       activationLandingResponseSchema,
-      activationLandingFixtures.anonymous,
+      mockActivationState.claimed
+        ? activationLandingFixtures.in_progress
+        : activationLandingFixtures.anonymous,
       {
         fixtureName: 'activation.mock.landing',
         cacheControl: 'private, no-store',
@@ -70,11 +97,74 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       );
     }
 
+    mockActivationState.claimed = true;
+    delete mockActivationState.linkConsumptionKey;
     return mockJsonResponse(
       activationClaimResponseSchema,
       activationClaimFixtures.identity_required,
       {
         fixtureName: 'activation.mock.claim',
+        cacheControl: 'private, no-store',
+      },
+    );
+  }),
+  http.post('*/api/v1/activation/identity', async ({ request }) => {
+    const body = await request.json().catch(() => undefined);
+    const parsed = activationIdentityRequestSchema.safeParse(body);
+    const idempotencyKey = idempotencyKeySchema.safeParse(
+      request.headers.get('idempotency-key'),
+    );
+    if (
+      !parsed.success ||
+      !idempotencyKey.success ||
+      !mockActivationState.claimed ||
+      parsed.data.flowId !== activationFixtureFlowId
+    ) {
+      return mockProblemResponse(
+        activationIdentityProblemSchema,
+        activationIdentityProblemFixtures.expired,
+        { fixtureName: 'activation.mock.identity-expired' },
+      );
+    }
+    return mockJsonResponse(
+      activationIdentityResponseSchema,
+      activationIdentityFixtures.link_sent,
+      {
+        fixtureName: 'activation.mock.identity',
+        cacheControl: 'private, no-store',
+      },
+    );
+  }),
+  http.post('*/api/v1/activation/link', async ({ request }) => {
+    const body = await request.json().catch(() => undefined);
+    const parsed = activationLinkRequestSchema.safeParse(body);
+    const idempotencyKey = idempotencyKeySchema.safeParse(
+      request.headers.get('idempotency-key'),
+    );
+    const accepted =
+      parsed.success &&
+      /^link:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        parsed.data.token,
+      );
+    const replay =
+      idempotencyKey.success &&
+      mockActivationState.linkConsumptionKey === idempotencyKey.data;
+    const alreadyConsumed =
+      mockActivationState.linkConsumptionKey !== undefined;
+    if (!accepted || !idempotencyKey.success || (alreadyConsumed && !replay)) {
+      return mockProblemResponse(
+        activationLinkProblemSchema,
+        activationLinkProblemFixtures.rejected,
+        { fixtureName: 'activation.mock.link-rejected' },
+      );
+    }
+    mockActivationState.claimed = false;
+    mockActivationState.linkConsumptionKey = idempotencyKey.data;
+    return mockJsonResponse(
+      activationLinkResponseSchema,
+      activationLinkFixtures.onboarding_required,
+      {
+        fixtureName: 'activation.mock.link',
         cacheControl: 'private, no-store',
       },
     );

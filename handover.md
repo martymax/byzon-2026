@@ -20,6 +20,32 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F1-04` je dokončený na `track/frontend-complete`. Po manual/camera claimu
+  používá CTA klientskou Next navigaci, aby dev/test MSW zachoval syntetický
+  serverový pending stav. `/prihlaseni` vždy znovu čte landing
+  `claim_in_progress`; flow ID, e-mail ani ticket kód neukládá do URL,
+  history, cookie, local/session storage, IndexedDB ani Cache API.
+- Identity form přesně validuje e-mail a allowlisted `returnTo` (`/app` nebo
+  `/onboarding`), koreluje response `flowId`, má focusovatelný error summary,
+  same-tick submit lock a pro neurčitý offline/transport retry znovu použije
+  stejnou idempotency key. `link_sent` zůstává neenumerující a výslovně
+  potvrzuje, že mock nevytvořil session ani membership.
+- `/aktivace/odkaz` nečte token v RSC. Client effect vezme právě jednu query
+  hodnotu pouze do ref a před akcí nahradí URL čistou route se zachováním
+  `history.state`; odstraní také hash. Route má `noindex`, route-specific
+  `Referrer-Policy: no-referrer` a `Cache-Control: private, no-store`.
+  Explicitní consume je zamčený, při neurčitém retry drží stejný token/key jen
+  v paměti a terminální stav pokračuje pouze na kontraktem povolený
+  `/onboarding`.
+- Dev MSW modeluje claim → landing pending → identity → one-time link v paměti,
+  validuje každý body/idempotency key a stejnou link key replayne; jiná key po
+  spotřebování dostane generické odmítnutí. Skutečný Better Auth endpoint,
+  user, session ani membership se nepoužije; produkční handoff zůstává za
+  `BLOCKER-AUTH-01`/`P4`.
+- Ověření `F1-04` prošlo jako 105 conference testů (36 DB scénářů korektně
+  přeskočeno), 81 domain testů a 84 cílených komponentových scénářů na třech
+  viewports včetně axe, overflow a `44 px`. Prošly také ESLint, Prettier,
+  typecheck, produkční Next build a source/post-build mock boundary.
 - `F1-03` je dokončený na `track/frontend-complete`. Development-only
   `/aktivace/skenovat` nejprve přes landing kontrakt ověří otevřenou fázi,
   anonymní flow a serverem povolené `camera_scan`; teprve potom po explicitním

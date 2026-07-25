@@ -15,6 +15,7 @@ import {
   type ApiFailure,
   type RequestId,
 } from '@byzon/domain/contracts';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ApiPort } from '@/lib/api';
@@ -188,6 +189,7 @@ export const ActivationScanner = ({
   readonly camera?: ActivationCameraPort;
   readonly createClaimKey?: () => string;
 }) => {
+  const router = useRouter();
   const [state, setState] = useState<ScannerState>({ status: 'intro' });
   const mounted = useRef(true);
   const session = useRef<ActivationCameraSession | undefined>(undefined);
@@ -313,9 +315,9 @@ export const ActivationScanner = ({
         </h1>
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni">
+            <Button onClick={() => router.push('/prihlaseni')}>
               {recovery ? 'Pokračovat k obnově' : 'Pokračovat k ověření'}
-            </ActionLink>
+            </Button>
           }
           kind="empty"
           title="Syntetický QR byl přijat"
