@@ -147,6 +147,7 @@ describe('CS-ACT-01 activation contract', () => {
 
   it.each([
     '/app',
+    '/app/agenda',
     '/app/informace',
     '/app/nastaveni',
     '/app/oznameni',
@@ -159,6 +160,7 @@ describe('CS-ACT-01 activation contract', () => {
     '/app/vice',
     '/app/vstupenka',
     '/app/program/550e8400-e29b-41d4-a716-446655440000',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda',
     '/app/oznameni/01910000-0000-7000-8000-000000000011',
     '/app/recnici/jana-novakova',
   ] as const)(
@@ -182,6 +184,10 @@ describe('CS-ACT-01 activation contract', () => {
     '/app/program/%252Fprofil',
     '/app/program/550E8400-E29B-41D4-A716-446655440000',
     '/app/program/not-a-uuid',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?from=program',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda&next=%2Fapp',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda#secret',
+    '/app/oznameni/01910000-0000-7000-8000-000000000011?from=agenda',
     '/app/oznameni/01910000-0000-7000-8000-000000000011/extra',
     '/app/recnici/Jana-Novakova',
     `/app/recnici/${'a'.repeat(129)}`,

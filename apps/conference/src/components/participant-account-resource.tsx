@@ -447,24 +447,35 @@ export const ParticipantAccountResourceProvider = ({
   );
 };
 
-export const useParticipantAccountResource =
-  (): ParticipantAccountResourceValue => {
+export const useParticipantAccountResourceOptional =
+  (): ParticipantAccountResourceValue | null => {
     const resource = useContext(ParticipantAccountResourceContext);
-    if (!resource) {
-      throw new Error(
-        'useParticipantAccountResource must be used inside ParticipantAccountResourceProvider.',
-      );
-    }
-    const { activate } = resource;
-    const [mountSnapshot] = useState(() => ({
-      revision: resource.revision,
-      status: resource.state.status,
-    }));
-    useEffect(() => activate(), [activate]);
+    const activate = resource?.activate;
+    const [mountSnapshot] = useState(() =>
+      resource
+        ? {
+            revision: resource.revision,
+            status: resource.state.status,
+          }
+        : null,
+    );
+    useEffect(() => activate?.(), [activate]);
+    if (!resource || !mountSnapshot) return null;
     return resource.state.status === 'idle' ||
       (mountSnapshot.status === 'ready' &&
         resource.state.status === 'ready' &&
         resource.revision === mountSnapshot.revision)
       ? { ...resource, state: { status: 'loading' } }
       : resource;
+  };
+
+export const useParticipantAccountResource =
+  (): ParticipantAccountResourceValue => {
+    const resource = useParticipantAccountResourceOptional();
+    if (!resource) {
+      throw new Error(
+        'useParticipantAccountResource must be used inside ParticipantAccountResourceProvider.',
+      );
+    }
+    return resource;
   };

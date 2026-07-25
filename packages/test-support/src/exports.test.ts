@@ -11,9 +11,35 @@ describe('test-support public exports', () => {
     );
     expect(fixtures.fixtureContextMatrix).toHaveLength(35);
     expect(fixtures.participantProgramFixtures.happy?.version).toBe(3);
+    expect(fixtures.participantAgendaFixtures.happy?.items).toHaveLength(3);
+    expect(
+      fixtures.participantAgendaMutationFixtures.idempotent_replay?.mutation
+        .outcome,
+    ).toBe('already_applied');
+    expect(
+      fixtures.participantAgendaMutationFixtures.reserved_with_conflict
+        ?.timeConflict,
+    ).toMatchObject({
+      conflictingSessions: [{}],
+    });
     expect(fixtures.participantTicketFixtures.valid?.ticket.status).toBe(
       'valid',
     );
+    expect(
+      fixtures.identityBootstrapFixtures.complete?.profileManagement,
+    ).toEqual({
+      state: 'editable',
+      version: 1,
+    });
+    expect(
+      fixtures.identityProfileUpdateFixtures.updated?.profileManagement.version,
+    ).toBe(2);
+    expect(
+      fixtures.identityPrivacyRequestFixtures.export_pending?.request,
+    ).toMatchObject({
+      kind: 'data_export',
+      state: 'pending',
+    });
     expect(
       fixtures.participantAnnouncementInboxFixtures.happy?.items[0]?.severity,
     ).toBe('critical');

@@ -16,12 +16,59 @@ export const contentFixtureIds = Object.freeze({
   workshopRoom: '01910000-0000-7000-8000-000000000005',
   opening: '01910000-0000-7000-8000-000000000006',
   workshop: '01910000-0000-7000-8000-000000000007',
+  agendaWaiting: '01930000-0000-7000-8000-000000000002',
+  agendaOffered: '01930000-0000-7000-8000-000000000003',
+  agendaExpired: '01930000-0000-7000-8000-000000000004',
+  agendaCancelled: '01930000-0000-7000-8000-000000000005',
+  agendaFull: '01930000-0000-7000-8000-000000000006',
+  agendaClosed: '01930000-0000-7000-8000-000000000007',
+  agendaEstimate: '01930000-0000-7000-8000-000000000008',
+  agendaWaitlistCancelled: '01930000-0000-7000-8000-000000000009',
+  agendaConflictTarget: '01930000-0000-7000-8000-00000000000d',
   speaker: '01910000-0000-7000-8000-000000000008',
   partner: '01910000-0000-7000-8000-000000000009',
   venue: '01910000-0000-7000-8000-00000000000a',
   page: '01910000-0000-7000-8000-00000000000b',
   faq: '01910000-0000-7000-8000-00000000000c',
 } as const);
+
+const agendaProgramSession = ({
+  dayId = contentFixtureIds.saturday,
+  endsAt,
+  id,
+  roomId = contentFixtureIds.workshopRoom,
+  slug,
+  sortOrder,
+  startsAt,
+  status = 'published',
+  title,
+  type = 'workshop',
+}: {
+  readonly dayId?: string;
+  readonly endsAt: string;
+  readonly id: string;
+  readonly roomId?: string;
+  readonly slug: string;
+  readonly sortOrder: number;
+  readonly startsAt: string;
+  readonly status?: 'cancelled' | 'published';
+  readonly title: string;
+  readonly type?: 'mastermind' | 'networking' | 'workshop';
+}) => ({
+  id,
+  dayId,
+  roomId,
+  slug,
+  title,
+  summary: `Syntetický bod programu pro průchod stavem „${title}“.`,
+  description:
+    'Tento bod používá pouze syntetická data pro ověření osobní agendy.',
+  type,
+  status,
+  startsAt,
+  endsAt,
+  sortOrder,
+});
 
 const program = {
   days: [
@@ -71,6 +118,15 @@ const program = {
       endsAt: '2026-09-18T08:00:00.000Z',
       sortOrder: 0,
     },
+    agendaProgramSession({
+      id: contentFixtureIds.agendaConflictTarget,
+      dayId: contentFixtureIds.friday,
+      slug: 'prekryvajici-se-workshop',
+      title: 'Překrývající se workshop',
+      startsAt: '2026-09-18T07:30:00.000Z',
+      endsAt: '2026-09-18T08:30:00.000Z',
+      sortOrder: 1,
+    }),
     {
       id: contentFixtureIds.workshop,
       dayId: contentFixtureIds.saturday,
@@ -86,6 +142,74 @@ const program = {
       endsAt: '2026-09-19T09:30:00.000Z',
       sortOrder: 0,
     },
+    agendaProgramSession({
+      id: contentFixtureIds.agendaWaiting,
+      slug: 'kapacitni-workshop',
+      title: 'Kapacitní workshop',
+      startsAt: '2026-09-19T10:00:00.000Z',
+      endsAt: '2026-09-19T11:00:00.000Z',
+      sortOrder: 1,
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaOffered,
+      slug: 'workshop-s-aktivni-nabidkou',
+      title: 'Workshop s aktivní nabídkou',
+      startsAt: '2026-09-19T11:30:00.000Z',
+      endsAt: '2026-09-19T12:30:00.000Z',
+      sortOrder: 2,
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaExpired,
+      slug: 'workshop-po-vyprseni-nabidky',
+      title: 'Workshop po vypršení nabídky',
+      startsAt: '2026-09-19T13:00:00.000Z',
+      endsAt: '2026-09-19T14:00:00.000Z',
+      sortOrder: 3,
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaWaitlistCancelled,
+      slug: 'workshop-s-opustenym-poradnikem',
+      title: 'Workshop s opuštěným pořadníkem',
+      startsAt: '2026-09-19T14:30:00.000Z',
+      endsAt: '2026-09-19T15:30:00.000Z',
+      sortOrder: 4,
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaFull,
+      slug: 'plne-obsazeny-mastermind',
+      title: 'Plně obsazený mastermind',
+      startsAt: '2026-09-19T16:00:00.000Z',
+      endsAt: '2026-09-19T17:00:00.000Z',
+      sortOrder: 5,
+      type: 'mastermind',
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaClosed,
+      slug: 'uzavrena-rezervace',
+      title: 'Uzavřená rezervace',
+      startsAt: '2026-09-19T17:30:00.000Z',
+      endsAt: '2026-09-19T18:30:00.000Z',
+      sortOrder: 6,
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaEstimate,
+      roomId: contentFixtureIds.mainStage,
+      slug: 'rizeny-networking',
+      title: 'Řízený networking',
+      startsAt: '2026-09-19T19:00:00.000Z',
+      endsAt: '2026-09-19T20:00:00.000Z',
+      sortOrder: 7,
+      type: 'networking',
+    }),
+    agendaProgramSession({
+      id: contentFixtureIds.agendaCancelled,
+      slug: 'zruseny-workshop',
+      title: 'Zrušený workshop',
+      startsAt: '2026-09-19T20:30:00.000Z',
+      endsAt: '2026-09-19T21:30:00.000Z',
+      sortOrder: 8,
+      status: 'cancelled',
+    }),
   ],
 };
 

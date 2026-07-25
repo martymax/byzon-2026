@@ -1,4 +1,5 @@
 export * from './activation.js';
+export * from './agenda.js';
 export * from './announcements.js';
 export * from './content.js';
 export * from './context.js';

@@ -117,6 +117,42 @@ texty jsou označené jako neschválený syntetický draft. Produkční texty,
 souhlasy a UAT zůstávají za `BLOCKER-LEGAL-01`; skutečná autorizace a zápis
 `P4-13` nejsou mockovaným dokončením předstírané.
 
+## Personal agenda (`CS-AGENDA-01`)
+
+`agenda.ts` defines the strict event/user-scoped boundary for the personal
+agenda, reservations, waitlist offers and generic registration estimates.
+Every response carries canonical `serverNow`, the IANA `eventTimezone`, agenda
+and publication versions, and the complete ordered item list. Event-local days
+are validated from the instant and timezone, including UTC-midnight
+boundaries. Each item contains only a bounded session snapshot, its stable
+non-PII calendar `UID`/`SEQUENCE`, the current participant-owned state,
+canonical capacity and the server-selected action state. No identity of
+another participant is accepted.
+
+Agenda reads are `private, no-store`. Owner-bound offline snapshots remain
+blocked until `CS-OFFLINE-01`; reservation, waitlist and estimate mutations are
+always online-only and require a transport idempotency key. Mutation bodies are
+discriminated by action and always carry `sessionId` plus `expectedVersion`.
+Offer decisions additionally require the exact `offerId`; registration
+estimates carry an explicit target boolean and are never implicit toggles.
+Every success returns the complete new canonical snapshot instead of a locally
+predicted seat.
+
+Reservation capacity separates confirmed seats, all active holds and genuinely
+remaining seats. `actorAvailability` distinguishes a public seat from a
+specific participant offer, so a held seat cannot be rendered as generally
+available. `timeConflict` correlates the requested target with ordered,
+actually overlapping same-event sessions inside the successful canonical
+mutation response; it is a non-blocking warning, never a `409`, and the target
+remains saved or reserved. `STALE_VERSION`, `OFFER_EXPIRED`,
+`CAPACITY_FULL`, `RESERVATION_CLOSED` and `TICKET_INACTIVE` carry the canonical
+agenda version and target state needed for safe replacement. Active offer
+countdowns are derived from `serverNow`, never from an uncorrelated client
+clock. The calendar metadata exposes only the same-origin
+`/api/v1/me/agenda.ics` endpoint; the production representation remains owned
+by `P5-09`, while the `F3-05` synthetic adapter uses the same RFC 5545
+UID/sequence, UTC, cancellation, escaping and folding invariants.
+
 ## Participant ticket (`CS-TICKET-01`, status-only slice)
 
 `ticket.ts` defines the private, no-store participant status DTO used by the

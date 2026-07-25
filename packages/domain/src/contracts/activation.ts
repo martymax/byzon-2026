@@ -64,6 +64,7 @@ export const activationEmailSchema = z
 
 const participantActivationStaticReturnToValues = [
   '/app',
+  '/app/agenda',
   '/app/informace',
   '/app/nastaveni',
   '/app/oznameni',
@@ -89,7 +90,7 @@ const participantActivationStaticReturnToSet = new Set<string>(
   participantActivationStaticReturnToValues,
 );
 const participantActivationDetailReturnToPattern =
-  /^\/app\/(program|oznameni)\/([^/]+)$/;
+  /^\/app\/(program|oznameni)\/([^/?]+)(\?from=agenda)?$/;
 const participantSpeakerReturnToPattern =
   /^\/app\/recnici\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
@@ -100,8 +101,10 @@ const isParticipantActivationReturnTo = (
 
   const detailMatch = participantActivationDetailReturnToPattern.exec(value);
   if (detailMatch) {
+    const detailKind = detailMatch[1];
     const id = detailMatch[2];
     return (
+      (detailMatch[3] === undefined || detailKind === 'program') &&
       id !== undefined &&
       id === id.toLowerCase() &&
       uuidSchema.safeParse(id).success

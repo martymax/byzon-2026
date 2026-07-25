@@ -2,6 +2,11 @@ import {
   activationClaimResponseSchema,
   activationLandingResponseSchema,
   defineApiProblemSchema,
+  identityBootstrapResponseSchema,
+  identityPrivacyRequestResponseSchema,
+  identityProfileUpdateResponseSchema,
+  participantAgendaMutationResponseSchema,
+  participantAgendaResponseSchema,
   participantAnnouncementDetailResponseSchema,
   participantAnnouncementInboxResponseSchema,
   participantAnnouncementReadResponseSchema,
@@ -16,6 +21,7 @@ import {
   activationFixtureCode,
   activationFixtureRecoveryCode,
   activationLandingFixtures,
+  agendaFixtureIds,
   announcementFixtureIds,
   baseProblemFixture,
   baseProblemFixtureFactory,
@@ -23,8 +29,17 @@ import {
   fixtureContextMatrix,
   fixtureEventPhases,
   fixtureEventRoles,
+  identityBootstrapFixtures,
+  identityPrivacyRequestFixtures,
+  identityPrivacyRequestProblemFixtures,
+  identityProfileUpdateFixtures,
+  identityProfileUpdateProblemFixtures,
   participantContentFixtures,
   participantContentProblemFixtures,
+  participantAgendaFixtures,
+  participantAgendaMutationFixtures,
+  participantAgendaMutationProblemFixtures,
+  participantAgendaProblemFixtures,
   participantAnnouncementDetailFixtures,
   participantAnnouncementDetailProblemFixtures,
   participantAnnouncementInboxFixtures,
@@ -104,6 +119,186 @@ describe('content fixtures', () => {
     );
     expect(participantContentProblemFixtures.permission!.code).toBe(
       'CONTENT_NOT_FOUND',
+    );
+  });
+});
+
+describe('participant agenda fixtures', () => {
+  it('keeps every agenda deep link correlated with the published program', () => {
+    const publishedSessions = new Map(
+      participantProgramFixtures.happy!.program.sessions.map((session) => [
+        session.id,
+        session,
+      ]),
+    );
+    const agendaSessions = new Map(
+      Object.values(participantAgendaFixtures)
+        .flatMap((fixture) => fixture?.items ?? [])
+        .map(({ session }) => [session.id, session]),
+    );
+
+    for (const [sessionId, agendaSession] of agendaSessions) {
+      expect(
+        publishedSessions.get(sessionId),
+        `agenda session ${sessionId} must have a working program detail`,
+      ).toMatchObject({
+        id: agendaSession.id,
+        title: agendaSession.title,
+        startsAt: agendaSession.startsAt,
+        endsAt: agendaSession.endsAt,
+        status: agendaSession.status,
+      });
+    }
+  });
+
+  it('validates every personal, capacity and waitlist state', () => {
+    for (const fixture of Object.values(participantAgendaFixtures)) {
+      expect(participantAgendaResponseSchema.parse(fixture)).toEqual(fixture);
+    }
+    expect(participantAgendaFixtures.empty?.items).toHaveLength(0);
+    expect(participantAgendaFixtures.saved?.items[0]?.state).toBe('saved');
+    expect(participantAgendaFixtures.reserved?.items[0]?.state).toBe(
+      'reserved',
+    );
+    expect(participantAgendaFixtures.waiting?.items[0]).toMatchObject({
+      state: 'waitlisted',
+      waitlist: { state: 'waiting' },
+      action: { state: 'capacity_full' },
+    });
+    expect(participantAgendaFixtures.offered?.items[0]).toMatchObject({
+      waitlist: { state: 'offered' },
+      action: { state: 'available' },
+      capacity: {
+        held: 1,
+        remaining: 0,
+        actorAvailability: {
+          state: 'held_for_participant',
+          offerId: agendaFixtureIds.offer,
+        },
+      },
+    });
+    expect(participantAgendaFixtures.expired?.items[0]).toMatchObject({
+      waitlist: { state: 'expired' },
+    });
+    expect(
+      participantAgendaFixtures.waitlist_cancelled?.items[0],
+    ).toMatchObject({
+      waitlist: { state: 'cancelled' },
+    });
+    expect(participantAgendaFixtures.cancelled?.items[0]).toMatchObject({
+      session: { status: 'cancelled' },
+      action: { state: 'cancelled' },
+    });
+    expect(
+      participantAgendaFixtures.cancelled_registration_estimate?.items[0],
+    ).toMatchObject({
+      session: { status: 'cancelled' },
+      capacity: { mode: 'registration_estimate' },
+      action: { state: 'cancelled' },
+    });
+    expect(participantAgendaFixtures.full?.items[0]?.action.state).toBe(
+      'capacity_full',
+    );
+    expect(participantAgendaFixtures.closed?.items[0]?.action.state).toBe(
+      'closed',
+    );
+    expect(
+      participantAgendaFixtures.registration_estimate?.items[0],
+    ).toMatchObject({
+      capacity: { mode: 'registration_estimate' },
+      action: { state: 'registration_estimate', registered: true },
+    });
+  });
+
+  it('returns complete canonical mutation snapshots and explicit problems', () => {
+    for (const fixture of Object.values(participantAgendaMutationFixtures)) {
+      expect(participantAgendaMutationResponseSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+    }
+    expect(participantAgendaMutationFixtures.reserved?.version).toBe(8);
+    expect(
+      participantAgendaMutationFixtures.idempotent_replay?.mutation.outcome,
+    ).toBe('already_applied');
+    expect(participantAgendaProblemFixtures.permission?.code).toBe(
+      'EVENT_ACCESS_DENIED',
+    );
+    expect(
+      participantAgendaMutationFixtures.reserved_with_conflict?.timeConflict,
+    ).toMatchObject({
+      eventId: agendaFixtureIds.event,
+      conflictingSessions: [{ eventId: agendaFixtureIds.event }],
+    });
+    expect(
+      participantAgendaMutationProblemFixtures.stale_version,
+    ).toMatchObject({
+      code: 'STALE_VERSION',
+      currentVersion: 8,
+    });
+    expect(participantAgendaMutationProblemFixtures.offer_expired?.code).toBe(
+      'OFFER_EXPIRED',
+    );
+  });
+
+  it('contains no identity of another participant or credential data', () => {
+    const serialized = JSON.stringify({
+      snapshots: participantAgendaFixtures,
+      mutations: participantAgendaMutationFixtures,
+      problems: participantAgendaMutationProblemFixtures,
+    });
+
+    expect(serialized).not.toContain('participantEmail');
+    expect(serialized).not.toContain('otherUser');
+    expect(serialized).not.toContain('ticketCode');
+    expect(serialized).not.toContain('"email"');
+    expect(serialized).not.toContain(`${agendaFixtureIds.user}@`);
+    expect(serialized).not.toContain('example.test');
+  });
+});
+
+describe('identity account fixtures', () => {
+  it('covers editable, read-only and removed account bootstrap states', () => {
+    expect(
+      identityBootstrapResponseSchema.parse(identityBootstrapFixtures.complete),
+    ).toEqual(identityBootstrapFixtures.complete);
+    expect(identityBootstrapFixtures.complete?.profileManagement).toEqual({
+      state: 'editable',
+      version: 1,
+    });
+    expect(identityBootstrapFixtures.read_only?.profileManagement.state).toBe(
+      'read_only',
+    );
+    expect(identityBootstrapFixtures.removed).toMatchObject({
+      profile: null,
+      profileManagement: { state: 'removed' },
+      privacy: { deletionRequest: 'completed' },
+    });
+  });
+
+  it('exposes canonical profile and idempotent privacy outcomes', () => {
+    expect(
+      identityProfileUpdateResponseSchema.parse(
+        identityProfileUpdateFixtures.updated,
+      ),
+    ).toEqual(identityProfileUpdateFixtures.updated);
+    expect(
+      identityPrivacyRequestResponseSchema.parse(
+        identityPrivacyRequestFixtures.export_pending,
+      ),
+    ).toEqual(identityPrivacyRequestFixtures.export_pending);
+    expect(identityPrivacyRequestFixtures.export_pending).toEqual(
+      identityPrivacyRequestFixtures.export_pending,
+    );
+    expect(identityBootstrapFixtures.read_only?.privacy).toEqual({
+      exportRequest: 'completed',
+      deletionRequest: 'unavailable',
+    });
+    expect(identityProfileUpdateProblemFixtures.stale).toMatchObject({
+      code: 'STALE_VERSION',
+      currentVersion: 2,
+    });
+    expect(identityPrivacyRequestProblemFixtures.key_reused?.code).toBe(
+      'IDEMPOTENCY_KEY_REUSED',
     );
   });
 });
