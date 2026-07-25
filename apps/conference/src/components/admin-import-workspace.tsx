@@ -5,6 +5,7 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
   adminReasonSchema,
+  adminUploadFileNameSchema,
   applyTicketImportPreview,
   canApplyTicketImport,
   ticketImportApplyRequestSchema,
@@ -14,6 +15,7 @@ import {
 } from './admin-workspace-contracts';
 import {
   demoImportPreview,
+  demoImportPreviewWithConflict,
   demoImportPreviewWithUnknown,
 } from './admin-workspace-demo-data';
 import { useAdminWorkspaceScope } from './admin-workspace-shell';
@@ -61,15 +63,17 @@ const safeFileNameForDisplay = (fileName: string) =>
 export const AdminImportWorkspace = ({
   initialMode = 'empty',
 }: {
-  readonly initialMode?: 'empty' | 'known' | 'unknown';
+  readonly initialMode?: 'empty' | 'known' | 'conflict' | 'unknown';
 }) => {
   const scope = useAdminWorkspaceScope();
   const [preview, setPreview] = useState<TicketImportPreview | null>(() =>
     initialMode === 'known'
       ? demoImportPreview
-      : initialMode === 'unknown'
-        ? demoImportPreviewWithUnknown
-        : null,
+      : initialMode === 'conflict'
+        ? demoImportPreviewWithConflict
+        : initialMode === 'unknown'
+          ? demoImportPreviewWithUnknown
+          : null,
   );
   const [fileState, setFileState] = useState<
     | { readonly kind: 'empty' }
@@ -107,6 +111,14 @@ export const AdminImportWorkspace = ({
       setFileState({ kind: 'empty' });
       return;
     }
+    if (!adminUploadFileNameSchema.safeParse(file.name).success) {
+      setFileState({
+        kind: 'error',
+        message:
+          'Název souboru obsahuje nepovolené nebo matoucí znaky. Soubor přejmenujte.',
+      });
+      return;
+    }
     const extension = file.name.toLowerCase().split('.').at(-1);
     if (extension !== 'csv' && extension !== 'xlsx') {
       setFileState({
@@ -115,10 +127,29 @@ export const AdminImportWorkspace = ({
       });
       return;
     }
+    if (file.size < 1) {
+      setFileState({
+        kind: 'error',
+        message: 'Prázdný soubor nelze validovat.',
+      });
+      return;
+    }
     if (file.size > 10_000_000) {
       setFileState({
         kind: 'error',
         message: 'Soubor překračuje bezpečný limit 10 MB.',
+      });
+      return;
+    }
+    const expectedMediaTypes =
+      extension === 'csv'
+        ? ['text/csv', 'application/vnd.ms-excel']
+        : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (file.type && !expectedMediaTypes.includes(file.type.toLowerCase())) {
+      setFileState({
+        kind: 'error',
+        message:
+          'Přípona a typ souboru si neodpovídají. Vyberte původní CSV nebo XLSX.',
       });
       return;
     }
@@ -200,8 +231,8 @@ export const AdminImportWorkspace = ({
             type="file"
           />
           <span className={styles.helper}>
-            Typ je rozpoznán podle bezpečného seznamu přípon; skutečné mapování
-            patří serverovému adapteru.
+            Prohlížeč předběžně porovná příponu a dostupný MIME typ. Skutečný
+            typ, obsah i checksum musí autoritativně ověřit server v karanténě.
           </span>
         </label>
         {fileState.kind === 'error' ? (
@@ -222,7 +253,7 @@ export const AdminImportWorkspace = ({
             {progress === 0
               ? 'Čeká na soubor.'
               : progress < 100
-                ? 'Typ ověřen, připraveno k bezpečné validaci.'
+                ? 'Předběžná kontrola prošla; čeká serverová validace typu a obsahu.'
                 : 'Validace dokončena, immutable preview je připravené.'}
           </span>
         </div>
@@ -235,7 +266,10 @@ export const AdminImportWorkspace = ({
                 fileState.kind === 'selected' &&
                   fileState.fileName.toLowerCase().includes('unknown')
                   ? demoImportPreviewWithUnknown
-                  : demoImportPreview,
+                  : fileState.kind === 'selected' &&
+                      fileState.fileName.toLowerCase().includes('conflict')
+                    ? demoImportPreviewWithConflict
+                    : demoImportPreview,
               )
             }
             type="button"
@@ -248,6 +282,13 @@ export const AdminImportWorkspace = ({
             type="button"
           >
             Načíst syntetický CSV scénář
+          </button>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => createPreview(demoImportPreviewWithConflict)}
+            type="button"
+          >
+            Simulovat konflikt
           </button>
           <button
             className={styles.secondaryButton}
@@ -315,8 +356,8 @@ export const AdminImportWorkspace = ({
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <caption>
-                Validované změny; kontakty jsou maskované a konflikty nebudou
-                aplikovány.
+                Validované změny; kontakty jsou maskované a konflikt zablokuje
+                celý apply.
               </caption>
               <thead>
                 <tr>
@@ -392,13 +433,13 @@ export const AdminImportWorkspace = ({
         <section className={styles.panel} aria-labelledby="import-apply-title">
           <h2 id="import-apply-title">3. Potvrzení a report</h2>
           <p className={styles.warning}>
-            Toto je neprodukční mock apply. Konflikty se přeskočí; neznámý
-            status zablokuje celý apply.
+            Toto je neprodukční mock apply. Konflikt i neznámý status zablokují
+            celý apply a nic se nezmění.
           </p>
           {!applyAllowed ? (
             <p className={styles.errorSummary} role="alert">
-              Apply je zakázán: preview obsahuje neznámý stav. Opravte zdroj a
-              vytvořte novou immutable verzi.
+              Apply je zakázán: preview obsahuje konflikt nebo neznámý stav.
+              Opravte zdroj a vytvořte novou immutable verzi.
             </p>
           ) : null}
           {reasonInvalid ? (

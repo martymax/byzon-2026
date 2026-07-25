@@ -23,4 +23,10 @@ describe('frontend mocked preview gate', () => {
       }),
     ).toBe(false);
   });
+
+  it('fails closed when the environment is absent or misspelled', () => {
+    expect(frontendPreviewAvailable({ nodeEnv: undefined })).toBe(false);
+    expect(frontendPreviewAvailable({ nodeEnv: 'prod' })).toBe(false);
+    expect(frontendPreviewAvailable({ nodeEnv: '' })).toBe(false);
+  });
 });

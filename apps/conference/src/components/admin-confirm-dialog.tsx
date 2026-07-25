@@ -29,6 +29,7 @@ export const AdminConfirmDialog = ({
   const dialogRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const confirmLocked = useRef(false);
 
   useEffect(() => {
     previousFocusRef.current =
@@ -103,7 +104,16 @@ export const AdminConfirmDialog = ({
           <button
             className={danger ? styles.dangerButton : styles.button}
             disabled={!acknowledged}
-            onClick={onConfirm}
+            onClick={() => {
+              if (confirmLocked.current) return;
+              confirmLocked.current = true;
+              try {
+                onConfirm();
+              } catch (error) {
+                confirmLocked.current = false;
+                throw error;
+              }
+            }}
             type="button"
           >
             {confirmLabel}

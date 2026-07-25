@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
+  AdminMockMutationReplay,
+  adminDatasetMatchesEvent,
   adminReasonSchema,
   applySupportMutation,
   supportMutationRequestSchema,
@@ -26,10 +28,15 @@ const actionLabels: Record<SupportAction, string> = {
 const actionNeedsTarget = (action: SupportAction) =>
   action === 'reassign' || action === 'transfer';
 
-export const AdminSupportWorkspace = () => {
+export const AdminSupportWorkspace = ({
+  initialRecords = demoSupportRecords,
+}: {
+  readonly initialRecords?: readonly SupportRecord[];
+}) => {
   const scope = useAdminWorkspaceScope();
+  const datasetScoped = adminDatasetMatchesEvent(scope.eventId, initialRecords);
   const [records, setRecords] =
-    useState<readonly SupportRecord[]>(demoSupportRecords);
+    useState<readonly SupportRecord[]>(initialRecords);
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -39,16 +46,17 @@ export const AdminSupportWorkspace = () => {
   const [attempted, setAttempted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [audit, setAudit] = useState<AuditEntry | null>(null);
+  const replay = useRef(new AdminMockMutationReplay());
 
   const results = useMemo(() => {
-    if (!searched || query.trim().length < 3) return [];
+    if (!datasetScoped || !searched || query.trim().length < 3) return [];
     const normalized = query.trim().toLocaleLowerCase('cs');
     return records.filter(
       (record) =>
         record.ticketReference.toLocaleLowerCase('cs').includes(normalized) ||
         record.displayName.toLocaleLowerCase('cs').includes(normalized),
     );
-  }, [query, records, searched]);
+  }, [datasetScoped, query, records, searched]);
   const selected =
     records.find(({ participantId }) => participantId === selectedId) ?? null;
   const reasonInvalid =
@@ -112,7 +120,7 @@ export const AdminSupportWorkspace = () => {
       expectedVersion: selected.version,
       idempotencyKey: `mock-support-${selected.participantId}-${action}-v${selected.version}`,
     });
-    const response = applySupportMutation(selected, request);
+    const response = applySupportMutation(selected, request, replay.current);
     setRecords((current) =>
       current.map((record) =>
         record.participantId === response.record.participantId
@@ -126,6 +134,19 @@ export const AdminSupportWorkspace = () => {
     setReason('');
     setTargetReference('');
   };
+
+  if (!datasetScoped) {
+    return (
+      <section className={styles.forbidden} role="alert">
+        <p className={styles.eyebrow}>Bezpečnostní hranice eventu</p>
+        <h1>Data podpory nelze zobrazit</h1>
+        <p>
+          Odpověď neodpovídá aktuálnímu eventu. Žádný účastník ani vstupenka
+          nebyli zobrazeni.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <div className={styles.stack}>

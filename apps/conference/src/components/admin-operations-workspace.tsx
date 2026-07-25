@@ -1,13 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
+  AdminMockMutationReplay,
+  adminDatasetMatchesEvent,
   adminReasonSchema,
-  auditEntrySchema,
-  operationsOverviewSchema,
+  applyOperationsMutation,
+  operationsMutationRequestSchema,
   type AuditEntry,
+  type OperationsMutationRequest,
   type OperationsOverview,
 } from './admin-workspace-contracts';
 import { demoOperationsOverview } from './admin-workspace-demo-data';
@@ -15,8 +18,7 @@ import { useAdminWorkspaceScope } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
 type AssignmentRole = OperationsOverview['assignments'][number]['role'];
-type PendingOperation =
-  { readonly kind: 'assignment' } | { readonly kind: 'export' } | null;
+type PendingOperation = OperationsMutationRequest | null;
 
 const roleLabels: Record<AssignmentRole, string> = {
   checkin_operator: 'Check-in operátor',
@@ -24,9 +26,19 @@ const roleLabels: Record<AssignmentRole, string> = {
   moderator: 'Moderátor',
 };
 
-export const AdminOperationsWorkspace = () => {
+const createOperationKey = () =>
+  `mock-operations-${globalThis.crypto?.randomUUID() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+
+export const AdminOperationsWorkspace = ({
+  initialOverview = demoOperationsOverview,
+}: {
+  readonly initialOverview?: OperationsOverview;
+}) => {
   const scope = useAdminWorkspaceScope();
-  const [overview, setOverview] = useState(demoOperationsOverview);
+  const datasetScoped = adminDatasetMatchesEvent(scope.eventId, [
+    initialOverview,
+  ]);
+  const [overview, setOverview] = useState(initialOverview);
   const [operatorLabel, setOperatorLabel] = useState('');
   const [assignmentRole, setAssignmentRole] =
     useState<AssignmentRole>('checkin_operator');
@@ -39,21 +51,21 @@ export const AdminOperationsWorkspace = () => {
   const [pending, setPending] = useState<PendingOperation>(null);
   const [audit, setAudit] = useState<AuditEntry | null>(null);
   const [exportState, setExportState] = useState<'idle' | 'queued'>('idle');
+  const replay = useRef(new AdminMockMutationReplay());
 
-  const assignmentCandidate = {
-    assignmentId: `mock-assignment-${overview.assignments.length + 1}`,
+  const assignmentRequest = operationsMutationRequestSchema.safeParse({
+    kind: 'assign_operator',
+    eventId: scope.eventId,
+    actorRole: 'organizer_admin',
+    expectedVersion: overview.version,
     operatorLabel,
     role: assignmentRole,
     scopeLabel,
-    state: 'scheduled' as const,
-    version: 1,
-  };
-  const assignmentPreview = operationsOverviewSchema.safeParse({
-    ...overview,
-    assignments: [...overview.assignments, assignmentCandidate],
+    reason,
+    idempotencyKey: 'mock-operations-validation-only',
   });
   const assignmentInvalid =
-    attempted && attemptKind === 'assignment' && !assignmentPreview.success;
+    attempted && attemptKind === 'assignment' && !assignmentRequest.success;
   const reasonInvalid =
     attempted && !adminReasonSchema.safeParse(reason).success;
   const queueTotals = useMemo(
@@ -73,68 +85,61 @@ export const AdminOperationsWorkspace = () => {
     setAttempted(true);
     setAttemptKind('assignment');
     if (
-      !assignmentPreview.success ||
+      !assignmentRequest.success ||
       !adminReasonSchema.safeParse(reason).success
     ) {
       return;
     }
-    setPending({ kind: 'assignment' });
+    setPending({
+      ...assignmentRequest.data,
+      idempotencyKey: createOperationKey(),
+    });
   };
 
   const requestExport = () => {
     setAttempted(true);
     setAttemptKind('export');
     if (!adminReasonSchema.safeParse(reason).success) return;
-    setPending({ kind: 'export' });
+    setPending(
+      operationsMutationRequestSchema.parse({
+        kind: 'queue_export',
+        eventId: scope.eventId,
+        actorRole: 'organizer_admin',
+        expectedVersion: overview.version,
+        reason,
+        idempotencyKey: createOperationKey(),
+      }),
+    );
   };
 
   const confirmOperation = () => {
     if (!pending) return;
-    if (pending.kind === 'assignment') {
-      if (!assignmentPreview.success) return;
-      const nextAssignment = assignmentCandidate;
-      const nextOverview = operationsOverviewSchema.parse({
-        ...overview,
-        assignments: [...overview.assignments, nextAssignment],
-      });
-      setOverview(nextOverview);
-      setAudit(
-        auditEntrySchema.parse({
-          auditId: `mock-audit-role-${nextAssignment.assignmentId}`,
-          eventId: scope.eventId,
-          actorLabel: 'Demo administrátor',
-          category: 'role',
-          action: 'assign_scoped_operator',
-          targetReference: nextAssignment.assignmentId,
-          reason,
-          outcome: 'succeeded',
-          createdAt: '2026-07-25T13:00:00.000+02:00',
-          resultingVersion: 1,
-        }),
-      );
+    const response = applyOperationsMutation(overview, pending, replay.current);
+    setOverview(response.overview);
+    setAudit(response.audit);
+    if (pending.kind === 'assign_operator') {
       setOperatorLabel('');
     } else {
       setExportState('queued');
-      setAudit(
-        auditEntrySchema.parse({
-          auditId: 'mock-audit-export-operations-001',
-          eventId: scope.eventId,
-          actorLabel: 'Demo administrátor',
-          category: 'export',
-          action: 'queue_operations_export',
-          targetReference: 'mock-export-operations-001',
-          reason,
-          outcome: 'queued',
-          createdAt: '2026-07-25T13:02:00.000+02:00',
-          resultingVersion: null,
-        }),
-      );
     }
     setReason('');
     setAttempted(false);
     setAttemptKind(null);
     setPending(null);
   };
+
+  if (!datasetScoped) {
+    return (
+      <section className={styles.forbidden} role="alert">
+        <p className={styles.eyebrow}>Bezpečnostní hranice eventu</p>
+        <h1>Provozní přehled nelze zobrazit</h1>
+        <p>
+          Přehled neodpovídá aktuálnímu eventu. Fronty, role ani export nebyly
+          zpřístupněny.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <div className={styles.stack}>
@@ -335,17 +340,17 @@ export const AdminOperationsWorkspace = () => {
       {pending ? (
         <AdminConfirmDialog
           acknowledgement={
-            pending.kind === 'assignment'
+            pending.kind === 'assign_operator'
               ? 'Potvrzuji scopeovanou roli a přesný rozsah v syntetickém eventu.'
               : 'Potvrzuji export pouze agregovaných mock provozních dat.'
           }
           confirmLabel={
-            pending.kind === 'assignment'
+            pending.kind === 'assign_operator'
               ? 'Přiřadit roli v mocku'
               : 'Zařadit mock export'
           }
           description={
-            pending.kind === 'assignment'
+            pending.kind === 'assign_operator'
               ? 'Přiřazení platí jen pro aktuální event a uvedený rozsah; výsledek vytvoří audit.'
               : 'Export se pouze zařadí do syntetické fronty a neobsahuje osobní data.'
           }
@@ -353,14 +358,18 @@ export const AdminOperationsWorkspace = () => {
             <dl className={styles.detailList}>
               <dt>Akce</dt>
               <dd>
-                {pending.kind === 'assignment'
-                  ? roleLabels[assignmentRole]
+                {pending.kind === 'assign_operator'
+                  ? roleLabels[pending.role]
                   : 'Agregovaný provozní export'}
               </dd>
               <dt>Rozsah</dt>
               <dd>
-                {pending.kind === 'assignment' ? scopeLabel : scope.eventId}
+                {pending.kind === 'assign_operator'
+                  ? pending.scopeLabel
+                  : pending.eventId}
               </dd>
+              <dt>Očekávaná verze</dt>
+              <dd>{pending.expectedVersion}</dd>
               <dt>Režim</dt>
               <dd>UI ready (mocked)</dd>
             </dl>
@@ -368,7 +377,7 @@ export const AdminOperationsWorkspace = () => {
           onConfirm={confirmOperation}
           onDismiss={() => setPending(null)}
           title={
-            pending.kind === 'assignment'
+            pending.kind === 'assign_operator'
               ? 'Potvrdit scopeované přiřazení?'
               : 'Spustit asynchronní export?'
           }

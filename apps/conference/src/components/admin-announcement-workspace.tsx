@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
@@ -36,11 +36,14 @@ export const AdminAnnouncementWorkspace = () => {
   const scope = useAdminWorkspaceScope();
   const [fields, setFields] = useState<DraftFields>(initialDraft);
   const [preview, setPreview] = useState<AnnouncementPreview | null>(null);
+  const [previewWorking, setPreviewWorking] = useState(false);
   const [previewAttempted, setPreviewAttempted] = useState(false);
   const [reason, setReason] = useState('');
   const [sendAttempted, setSendAttempted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<AnnouncementSendResponse | null>(null);
+  const previewEpoch = useRef(0);
+  const previewLock = useRef(false);
 
   const draftCandidate = {
     title: fields.title,
@@ -64,19 +67,37 @@ export const AdminAnnouncementWorkspace = () => {
     key: Key,
     value: DraftFields[Key],
   ) => {
+    previewEpoch.current += 1;
+    previewLock.current = false;
+    setPreviewWorking(false);
     setFields((current) => ({ ...current, [key]: value }));
     setPreview(null);
     setResult(null);
     setConfirming(false);
   };
 
-  const buildPreview = () => {
+  const buildPreview = async () => {
     setPreviewAttempted(true);
-    if (!draftResult.success) return;
-    setPreview(createAnnouncementPreview(scope.eventId, draftResult.data));
-    setResult(null);
-    setReason('');
-    setSendAttempted(false);
+    if (!draftResult.success || previewLock.current) return;
+    const epoch = ++previewEpoch.current;
+    previewLock.current = true;
+    setPreviewWorking(true);
+    try {
+      const nextPreview = await createAnnouncementPreview(
+        scope.eventId,
+        draftResult.data,
+      );
+      if (previewEpoch.current !== epoch) return;
+      setPreview(nextPreview);
+      setResult(null);
+      setReason('');
+      setSendAttempted(false);
+    } finally {
+      if (previewEpoch.current === epoch) {
+        previewLock.current = false;
+        setPreviewWorking(false);
+      }
+    }
   };
 
   const requestSend = () => {
@@ -221,8 +242,15 @@ export const AdminAnnouncementWorkspace = () => {
             </label>
           ) : null}
         </fieldset>
-        <button className={styles.button} onClick={buildPreview} type="button">
-          Vytvořit audience preview
+        <button
+          className={styles.button}
+          disabled={previewWorking}
+          onClick={() => void buildPreview()}
+          type="button"
+        >
+          {previewWorking
+            ? 'Vytvářím bezpečné preview…'
+            : 'Vytvořit audience preview'}
         </button>
       </section>
 

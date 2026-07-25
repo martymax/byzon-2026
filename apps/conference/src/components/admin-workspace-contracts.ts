@@ -8,15 +8,41 @@ const opaqueIdSchema = z
   .regex(/^[a-z0-9._:-]+$/i);
 const versionSchema = z.number().int().positive();
 const timestampSchema = z.string().datetime({ offset: true });
+const unsafeInlineTextPattern =
+  /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069<>]/;
+const unsafeMultilineTextPattern =
+  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069<>]/;
 const safeText = (maximum: number) =>
   z
     .string()
     .trim()
     .min(1)
     .max(maximum)
-    .refine((value) => !/[\u0000-\u001f\u007f<>]/.test(value), {
+    .refine((value) => !unsafeInlineTextPattern.test(value), {
       message: 'Text obsahuje nepovolené znaky.',
     });
+const safeMultilineText = (maximum: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(maximum)
+    .refine((value) => !unsafeMultilineTextPattern.test(value), {
+      message: 'Text obsahuje nepovolené znaky.',
+    });
+export const adminUploadFileNameSchema = z
+  .string()
+  .min(1)
+  .max(180)
+  .refine(
+    (value) =>
+      value === value.trim() &&
+      !unsafeInlineTextPattern.test(value) &&
+      !/[\\/]/.test(value),
+    {
+      message: 'Název souboru obsahuje nepovolené nebo matoucí znaky.',
+    },
+  );
 
 export const adminDemoRoleSchema = z.enum([
   'organizer_admin',
@@ -66,6 +92,17 @@ export const canAccessAdminSection = (
   section: AdminWorkspaceSection,
 ): boolean => sectionAccess[role].includes(section);
 
+export const adminDatasetMatchesEvent = (
+  eventId: string,
+  records: readonly { readonly eventId: string }[],
+): boolean => {
+  const parsedEventId = opaqueIdSchema.safeParse(eventId);
+  return (
+    parsedEventId.success &&
+    records.every(({ eventId: recordEventId }) => recordEventId === eventId)
+  );
+};
+
 export const importRowStatusSchema = z.enum([
   'new',
   'unchanged',
@@ -102,7 +139,7 @@ export const ticketImportPreviewSchema = z
     eventId: opaqueIdSchema,
     previewVersion: opaqueIdSchema,
     source: z.strictObject({
-      fileName: safeText(180),
+      fileName: adminUploadFileNameSchema,
       mediaType: z.enum(['text/csv', 'application/vnd.openxmlformats']),
       byteSize: z.number().int().positive().max(10_000_000),
     }),
@@ -135,7 +172,7 @@ export const ticketImportPreviewSchema = z
 export type TicketImportPreview = z.infer<typeof ticketImportPreviewSchema>;
 
 export const canApplyTicketImport = (preview: TicketImportPreview): boolean =>
-  preview.summary.unknown === 0;
+  preview.summary.unknown === 0 && preview.summary.conflict === 0;
 
 export const ticketImportApplyRequestSchema = z
   .strictObject({
@@ -147,11 +184,14 @@ export const ticketImportApplyRequestSchema = z
     idempotencyKey: opaqueIdSchema,
   })
   .superRefine((request, context) => {
-    if (request.expectedImpact.unknown > 0) {
+    if (
+      request.expectedImpact.unknown > 0 ||
+      request.expectedImpact.conflict > 0
+    ) {
       context.addIssue({
         code: 'custom',
-        path: ['expectedImpact', 'unknown'],
-        message: 'Neznámý stav nesmí být aplikován.',
+        path: ['expectedImpact'],
+        message: 'Konfliktní ani neznámý stav nesmí být aplikován.',
       });
     }
   });
@@ -240,7 +280,7 @@ export const auditEntrySchema = z.strictObject({
   ]),
   action: safeText(100),
   targetReference: safeText(120),
-  reason: safeText(500),
+  reason: safeMultilineText(500),
   outcome: z.enum(['succeeded', 'rejected', 'queued']),
   createdAt: timestampSchema,
   resultingVersion: versionSchema.nullable(),
@@ -285,6 +325,7 @@ export type SupportMutationResponse = z.infer<
 export const applySupportMutation = (
   recordInput: SupportRecord,
   requestInput: SupportMutationRequest,
+  replay: AdminMockMutationReplay,
 ): SupportMutationResponse => {
   const record = supportRecordSchema.parse(recordInput);
   const request = supportMutationRequestSchema.parse(requestInput);
@@ -294,54 +335,66 @@ export const applySupportMutation = (
   ) {
     throw new Error('SUPPORT_SCOPE_MISMATCH');
   }
-  if (record.version !== request.expectedVersion) {
-    throw new Error('SUPPORT_STALE_VERSION');
-  }
-  if (
-    (request.action === 'block' && record.ticketState === 'blocked') ||
-    (request.action === 'reactivate' && record.ticketState === 'active')
-  ) {
-    throw new Error('SUPPORT_INVALID_TRANSITION');
-  }
 
-  const ticketState =
-    request.action === 'block'
-      ? 'blocked'
-      : request.action === 'reactivate'
-        ? 'active'
-        : record.ticketState;
-  const ticketReference =
-    request.action === 'reassign' || request.action === 'transfer'
-      ? request.targetTicketReference!
-      : record.ticketReference;
-  const resultingVersion = record.version + 1;
+  return replay.run(
+    request.idempotencyKey,
+    request,
+    () => {
+      if (record.version !== request.expectedVersion) {
+        throw new Error('SUPPORT_STALE_VERSION');
+      }
+      if (
+        (request.action === 'block' && record.ticketState === 'blocked') ||
+        (request.action === 'reactivate' && record.ticketState === 'active')
+      ) {
+        throw new Error('SUPPORT_INVALID_TRANSITION');
+      }
 
-  return supportMutationResponseSchema.parse({
-    record: {
-      ...record,
-      ticketState,
-      ticketReference,
-      version: resultingVersion,
+      const ticketState =
+        request.action === 'block'
+          ? 'blocked'
+          : request.action === 'reactivate'
+            ? 'active'
+            : record.ticketState;
+      const ticketReference =
+        request.action === 'reassign' || request.action === 'transfer'
+          ? request.targetTicketReference!
+          : record.ticketReference;
+      const resultingVersion = record.version + 1;
+
+      return supportMutationResponseSchema.parse({
+        record: {
+          ...record,
+          ticketState,
+          ticketReference,
+          version: resultingVersion,
+        },
+        result: 'applied',
+        audit: {
+          auditId: `mock-audit-${request.idempotencyKey}`,
+          eventId: record.eventId,
+          actorLabel: 'Demo operátor',
+          category: 'support',
+          action: request.action,
+          targetReference: record.ticketReference,
+          reason: request.reason,
+          outcome: 'succeeded',
+          createdAt: '2026-07-25T12:40:00.000+02:00',
+          resultingVersion,
+        },
+      });
     },
-    result: 'applied',
-    audit: {
-      auditId: `mock-audit-${request.idempotencyKey}`,
-      eventId: record.eventId,
-      actorLabel: 'Demo operátor',
-      category: 'support',
-      action: request.action,
-      targetReference: record.ticketReference,
-      reason: request.reason,
-      outcome: 'succeeded',
-      createdAt: '2026-07-25T12:40:00.000+02:00',
-      resultingVersion,
-    },
-  });
+    (existing) =>
+      supportMutationResponseSchema.parse({
+        ...existing,
+        result: 'already_applied',
+      }),
+  );
 };
 
 export const announcementDraftSchema = z.strictObject({
   title: safeText(160),
-  bodyText: safeText(4_000),
+  bodyText: safeMultilineText(4_000),
   severity: z.enum(['info', 'important', 'critical']),
   audience: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('event') }),
@@ -364,22 +417,45 @@ export const announcementPreviewSchema = z.strictObject({
 });
 export type AnnouncementPreview = z.infer<typeof announcementPreviewSchema>;
 
-export const createAnnouncementPreview = (
+const sha256Hex = async (value: string): Promise<string> => {
+  if (!globalThis.crypto?.subtle) {
+    throw new TypeError('Secure preview hashing is unavailable.');
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+export const createAnnouncementPreview = async (
   eventId: string,
   draftInput: AnnouncementDraft,
-): AnnouncementPreview => {
+): Promise<AnnouncementPreview> => {
+  const parsedEventId = opaqueIdSchema.parse(eventId);
   const draft = announcementDraftSchema.parse(draftInput);
-  const fingerprint = [
-    draft.title.length,
-    draft.bodyText.length,
-    draft.severity,
-    draft.audience.kind,
-    draft.audience.kind === 'session' ? draft.audience.sessionId : 'event',
-  ].join('-');
+  const fingerprint = await sha256Hex(
+    JSON.stringify({
+      domain: 'byzon:admin-announcement-preview:v1',
+      eventId: parsedEventId,
+      title: draft.title,
+      bodyText: draft.bodyText,
+      severity: draft.severity,
+      audience:
+        draft.audience.kind === 'event'
+          ? { kind: 'event' }
+          : {
+              kind: 'session',
+              sessionId: draft.audience.sessionId,
+            },
+    }),
+  );
   return announcementPreviewSchema.parse({
     previewId: `mock-ann-preview-${fingerprint}`,
     previewVersion: `mock-ann-version-${fingerprint}`,
-    eventId,
+    eventId: parsedEventId,
     draft,
     recipientCount: draft.audience.kind === 'event' ? 428 : 37,
     excludedCount: draft.audience.kind === 'event' ? 12 : 2,
@@ -415,7 +491,8 @@ export const sendAnnouncementPreview = (
   if (
     preview.eventId !== request.eventId ||
     preview.previewId !== request.previewId ||
-    preview.previewVersion !== request.previewVersion
+    preview.previewVersion !== request.previewVersion ||
+    request.idempotencyKey !== `mock-ann-send-${preview.previewId}`
   ) {
     throw new Error('ANNOUNCEMENT_PREVIEW_STALE');
   }
@@ -442,6 +519,7 @@ export const sendAnnouncementPreview = (
 
 export const operationsOverviewSchema = z.strictObject({
   eventId: opaqueIdSchema,
+  version: versionSchema,
   generatedAt: timestampSchema,
   metrics: z.array(
     z.strictObject({
@@ -497,9 +575,307 @@ export const eventSettingsSchema = z.strictObject({
   eventId: opaqueIdSchema,
   registrationMode: z.enum(['open', 'invite_only', 'closed']),
   reservationChangesAllowed: z.boolean(),
-  supportMessage: safeText(240),
+  supportMessage: safeMultilineText(240),
   version: versionSchema,
 });
 export type EventSettings = z.infer<typeof eventSettingsSchema>;
 
-export const adminReasonSchema = safeText(500);
+export const adminReasonSchema = safeMultilineText(500);
+
+export class AdminMockMutationReplay {
+  private readonly entries = new Map<
+    string,
+    { readonly payload: string; readonly response: unknown }
+  >();
+
+  run<Response>(
+    idempotencyKey: string,
+    payload: unknown,
+    execute: () => Response,
+    onReplay: (response: Response) => Response = (response) => response,
+  ): Response {
+    const serialized = JSON.stringify(payload);
+    const existing = this.entries.get(idempotencyKey);
+    if (existing) {
+      if (existing.payload !== serialized) {
+        throw new Error('ADMIN_IDEMPOTENCY_KEY_REUSED');
+      }
+      return onReplay(existing.response as Response);
+    }
+    const response = execute();
+    this.entries.set(idempotencyKey, {
+      payload: serialized,
+      response,
+    });
+    return response;
+  }
+}
+
+const operationsMutationCommon = {
+  eventId: opaqueIdSchema,
+  actorRole: z.literal('organizer_admin'),
+  expectedVersion: versionSchema,
+  reason: adminReasonSchema,
+  idempotencyKey: opaqueIdSchema,
+} as const;
+
+export const operationsMutationRequestSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('assign_operator'),
+    ...operationsMutationCommon,
+    operatorLabel: safeText(100),
+    role: z.enum(['checkin_operator', 'room_operator', 'moderator']),
+    scopeLabel: safeText(120),
+  }),
+  z.strictObject({
+    kind: z.literal('queue_export'),
+    ...operationsMutationCommon,
+  }),
+]);
+export type OperationsMutationRequest = z.infer<
+  typeof operationsMutationRequestSchema
+>;
+
+export const operationsMutationResponseSchema = z.strictObject({
+  result: z.enum(['assigned', 'queued']),
+  overview: operationsOverviewSchema,
+  exportId: opaqueIdSchema.nullable(),
+  audit: auditEntrySchema,
+});
+export type OperationsMutationResponse = z.infer<
+  typeof operationsMutationResponseSchema
+>;
+
+export const applyOperationsMutation = (
+  overviewInput: OperationsOverview,
+  requestInput: OperationsMutationRequest,
+  replay: AdminMockMutationReplay,
+): OperationsMutationResponse => {
+  const overview = operationsOverviewSchema.parse(overviewInput);
+  const request = operationsMutationRequestSchema.parse(requestInput);
+  if (overview.eventId !== request.eventId) {
+    throw new Error('ADMIN_OPERATIONS_STALE_OR_SCOPE_MISMATCH');
+  }
+
+  return replay.run(request.idempotencyKey, request, () => {
+    if (overview.version !== request.expectedVersion) {
+      throw new Error('ADMIN_OPERATIONS_STALE_OR_SCOPE_MISMATCH');
+    }
+    if (request.kind === 'assign_operator') {
+      const nextVersion = overview.version + 1;
+      const assignmentId = `mock-assignment-${nextVersion}-${overview.assignments.length + 1}`;
+      return operationsMutationResponseSchema.parse({
+        result: 'assigned',
+        overview: {
+          ...overview,
+          version: nextVersion,
+          assignments: [
+            ...overview.assignments,
+            {
+              assignmentId,
+              operatorLabel: request.operatorLabel,
+              role: request.role,
+              scopeLabel: request.scopeLabel,
+              state: 'scheduled',
+              version: 1,
+            },
+          ],
+        },
+        exportId: null,
+        audit: {
+          auditId: `mock-audit-role-${assignmentId}`,
+          eventId: overview.eventId,
+          actorLabel: 'Demo administrátor',
+          category: 'role',
+          action: 'assign_scoped_operator',
+          targetReference: assignmentId,
+          reason: request.reason,
+          outcome: 'succeeded',
+          createdAt: '2026-07-25T13:00:00.000+02:00',
+          resultingVersion: nextVersion,
+        },
+      });
+    }
+
+    const exportId = `mock-export-operations-v${overview.version}`;
+    return operationsMutationResponseSchema.parse({
+      result: 'queued',
+      overview,
+      exportId,
+      audit: {
+        auditId: `mock-audit-${request.idempotencyKey}`,
+        eventId: overview.eventId,
+        actorLabel: 'Demo administrátor',
+        category: 'export',
+        action: 'queue_operations_export',
+        targetReference: exportId,
+        reason: request.reason,
+        outcome: 'queued',
+        createdAt: '2026-07-25T13:02:00.000+02:00',
+        resultingVersion: null,
+      },
+    });
+  });
+};
+
+export const reservationAdminActionSchema = z.enum([
+  'increase_capacity',
+  'cancel_reservation',
+  'mark_attended',
+]);
+export type ReservationAdminAction = z.infer<
+  typeof reservationAdminActionSchema
+>;
+
+export const adminReservationMutationRequestSchema = z.discriminatedUnion(
+  'kind',
+  [
+    z.strictObject({
+      kind: z.literal('reservation'),
+      eventId: opaqueIdSchema,
+      actorRole: z.enum(['organizer_admin', 'room_operator']),
+      assignedSessionIds: z.array(opaqueIdSchema).max(30),
+      reservationId: opaqueIdSchema,
+      action: reservationAdminActionSchema,
+      expectedVersion: versionSchema,
+      reason: adminReasonSchema,
+      idempotencyKey: opaqueIdSchema,
+    }),
+    z.strictObject({
+      kind: z.literal('settings'),
+      eventId: opaqueIdSchema,
+      actorRole: z.literal('organizer_admin'),
+      expectedVersion: versionSchema,
+      next: eventSettingsSchema.omit({ eventId: true, version: true }),
+      reason: adminReasonSchema,
+      idempotencyKey: opaqueIdSchema,
+    }),
+  ],
+);
+export type AdminReservationMutationRequest = z.infer<
+  typeof adminReservationMutationRequestSchema
+>;
+
+export const adminReservationMutationResponseSchema = z.strictObject({
+  result: z.enum(['reservation_updated', 'settings_updated']),
+  record: reservationRecordSchema.nullable(),
+  settings: eventSettingsSchema.nullable(),
+  audit: auditEntrySchema,
+});
+export type AdminReservationMutationResponse = z.infer<
+  typeof adminReservationMutationResponseSchema
+>;
+
+export const applyAdminReservationMutation = (
+  recordsInput: readonly ReservationRecord[],
+  settingsInput: EventSettings,
+  requestInput: AdminReservationMutationRequest,
+  replay: AdminMockMutationReplay,
+): AdminReservationMutationResponse => {
+  const records = reservationRecordSchema.array().parse(recordsInput);
+  const settings = eventSettingsSchema.parse(settingsInput);
+  const request = adminReservationMutationRequestSchema.parse(requestInput);
+  if (
+    settings.eventId !== request.eventId ||
+    !adminDatasetMatchesEvent(request.eventId, records)
+  ) {
+    throw new Error('ADMIN_RESERVATION_SCOPE_MISMATCH');
+  }
+
+  return replay.run(request.idempotencyKey, request, () => {
+    if (request.kind === 'settings') {
+      if (settings.version !== request.expectedVersion) {
+        throw new Error('ADMIN_SETTINGS_STALE_VERSION');
+      }
+      const nextSettings = eventSettingsSchema.parse({
+        eventId: request.eventId,
+        ...request.next,
+        version: settings.version + 1,
+      });
+      return adminReservationMutationResponseSchema.parse({
+        result: 'settings_updated',
+        record: null,
+        settings: nextSettings,
+        audit: {
+          auditId: `mock-audit-settings-v${nextSettings.version}`,
+          eventId: request.eventId,
+          actorLabel: 'Demo administrátor',
+          category: 'settings',
+          action: 'update_event_settings',
+          targetReference: request.eventId,
+          reason: request.reason,
+          outcome: 'succeeded',
+          createdAt: '2026-07-25T13:12:00.000+02:00',
+          resultingVersion: nextSettings.version,
+        },
+      });
+    }
+
+    const current = records.find(
+      ({ reservationId }) => reservationId === request.reservationId,
+    );
+    if (
+      !current ||
+      current.eventId !== request.eventId ||
+      current.version !== request.expectedVersion
+    ) {
+      throw new Error('ADMIN_RESERVATION_STALE_OR_NOT_FOUND');
+    }
+    if (
+      request.actorRole === 'room_operator' &&
+      (request.action !== 'mark_attended' ||
+        !request.assignedSessionIds.includes(current.sessionId))
+    ) {
+      throw new Error('ADMIN_RESERVATION_FORBIDDEN');
+    }
+    if (
+      (request.action === 'cancel_reservation' &&
+        current.state === 'cancelled') ||
+      (request.action === 'mark_attended' && current.state !== 'reserved')
+    ) {
+      throw new Error('ADMIN_RESERVATION_INVALID_TRANSITION');
+    }
+
+    const nextVersion = current.version + 1;
+    const nextRecord = reservationRecordSchema.parse({
+      ...current,
+      state:
+        request.action === 'cancel_reservation'
+          ? 'cancelled'
+          : request.action === 'mark_attended'
+            ? 'attended'
+            : current.state,
+      capacity:
+        request.action === 'increase_capacity'
+          ? current.capacity + 1
+          : current.capacity,
+      reservedCount:
+        request.action === 'cancel_reservation'
+          ? Math.max(0, current.reservedCount - 1)
+          : current.reservedCount,
+      version: nextVersion,
+    });
+    const category =
+      request.action === 'mark_attended' ? 'attendance' : 'reservation';
+    return adminReservationMutationResponseSchema.parse({
+      result: 'reservation_updated',
+      record: nextRecord,
+      settings: null,
+      audit: {
+        auditId: `mock-audit-${category}-${current.reservationId}-v${nextVersion}`,
+        eventId: request.eventId,
+        actorLabel:
+          request.actorRole === 'organizer_admin'
+            ? 'Demo administrátor'
+            : 'Demo operátor sálu',
+        category,
+        action: request.action,
+        targetReference: current.reservationId,
+        reason: request.reason,
+        outcome: 'succeeded',
+        createdAt: '2026-07-25T13:10:00.000+02:00',
+        resultingVersion: nextVersion,
+      },
+    });
+  });
+};

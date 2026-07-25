@@ -4,7 +4,8 @@ export interface FrontendPreviewEnvironment {
 
 export const frontendPreviewAvailable = ({
   nodeEnv,
-}: FrontendPreviewEnvironment): boolean => nodeEnv !== 'production';
+}: FrontendPreviewEnvironment): boolean =>
+  nodeEnv === 'development' || nodeEnv === 'test';
 
 export const isFrontendPreviewAvailable = (): boolean =>
   frontendPreviewAvailable({

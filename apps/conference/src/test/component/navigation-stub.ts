@@ -1,11 +1,16 @@
 import { useSyncExternalStore } from 'react';
 
-export const usePathname = (): string => window.location.pathname;
-
 const subscribeToNavigation = (onStoreChange: () => void) => {
   window.addEventListener('popstate', onStoreChange);
   return () => window.removeEventListener('popstate', onStoreChange);
 };
+
+export const usePathname = (): string =>
+  useSyncExternalStore(
+    subscribeToNavigation,
+    () => window.location.pathname,
+    () => '/',
+  );
 
 export const useSearchParams = (): URLSearchParams => {
   const search = useSyncExternalStore(

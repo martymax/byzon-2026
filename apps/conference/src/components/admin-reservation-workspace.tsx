@@ -1,15 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
+  AdminMockMutationReplay,
+  applyAdminReservationMutation,
+  adminReservationMutationRequestSchema,
+  adminDatasetMatchesEvent,
   adminReasonSchema,
-  auditEntrySchema,
   eventSettingsSchema,
-  reservationRecordSchema,
+  type AdminReservationMutationRequest,
   type AuditEntry,
   type EventSettings,
+  type ReservationAdminAction,
   type ReservationRecord,
 } from './admin-workspace-contracts';
 import {
@@ -20,22 +24,16 @@ import {
 import { useAdminWorkspaceScope } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-type ReservationAction =
-  'increase_capacity' | 'cancel_reservation' | 'mark_attended';
-type PendingChange =
-  | {
-      readonly kind: 'reservation';
-      readonly record: ReservationRecord;
-      readonly action: ReservationAction;
-    }
-  | { readonly kind: 'settings' }
-  | null;
+type PendingChange = AdminReservationMutationRequest | null;
 
-const reservationActionLabels: Record<ReservationAction, string> = {
+const reservationActionLabels: Record<ReservationAdminAction, string> = {
   increase_capacity: 'Navýšit kapacitu o 1',
   cancel_reservation: 'Zrušit rezervaci',
   mark_attended: 'Označit účast v místnosti',
 };
+
+const createReservationMutationKey = () =>
+  `mock-admin-reservation-${globalThis.crypto?.randomUUID() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 
 const stateLabels: Record<ReservationRecord['state'], string> = {
   reserved: 'Rezervováno',
@@ -43,19 +41,47 @@ const stateLabels: Record<ReservationRecord['state'], string> = {
   attended: 'Účast potvrzena',
 };
 
-export const AdminReservationWorkspace = () => {
+const formatEventTimestamp = (value: string, timeZone: string): string => {
+  try {
+    return new Intl.DateTimeFormat('cs-CZ', {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+      timeZone,
+    }).format(new Date(value));
+  } catch {
+    return new Intl.DateTimeFormat('cs-CZ', {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+      timeZone: 'UTC',
+    }).format(new Date(value));
+  }
+};
+
+export const AdminReservationWorkspace = ({
+  initialAudits = demoAuditEntries,
+  initialRecords = demoReservations,
+  initialSettings = demoEventSettings,
+}: {
+  readonly initialAudits?: readonly AuditEntry[];
+  readonly initialRecords?: readonly ReservationRecord[];
+  readonly initialSettings?: EventSettings;
+}) => {
   const scope = useAdminWorkspaceScope();
   const isAdmin = scope.role === 'organizer_admin';
+  const datasetScoped =
+    adminDatasetMatchesEvent(scope.eventId, initialRecords) &&
+    adminDatasetMatchesEvent(scope.eventId, initialAudits) &&
+    adminDatasetMatchesEvent(scope.eventId, [initialSettings]);
   const [records, setRecords] =
-    useState<readonly ReservationRecord[]>(demoReservations);
-  const [audits, setAudits] = useState<readonly AuditEntry[]>(demoAuditEntries);
-  const [settings, setSettings] = useState<EventSettings>(demoEventSettings);
+    useState<readonly ReservationRecord[]>(initialRecords);
+  const [audits, setAudits] = useState<readonly AuditEntry[]>(initialAudits);
+  const [settings, setSettings] = useState<EventSettings>(initialSettings);
   const [sessionFilter, setSessionFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [auditCategory, setAuditCategory] = useState('all');
   const [auditOutcome, setAuditOutcome] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [action, setAction] = useState<ReservationAction>('mark_attended');
+  const [action, setAction] = useState<ReservationAdminAction>('mark_attended');
   const [reason, setReason] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [pending, setPending] = useState<PendingChange>(null);
@@ -63,6 +89,7 @@ export const AdminReservationWorkspace = () => {
   const [settingsDraft, setSettingsDraft] = useState(settings);
   const [settingsReason, setSettingsReason] = useState('');
   const [settingsAttempted, setSettingsAttempted] = useState(false);
+  const replay = useRef(new AdminMockMutationReplay());
 
   const roleScopedRecords = useMemo(
     () =>
@@ -86,15 +113,19 @@ export const AdminReservationWorkspace = () => {
     roleScopedRecords.find(
       ({ reservationId }) => reservationId === selectedId,
     ) ?? null;
-  const visibleAudits = useMemo(
-    () =>
-      audits.filter(
-        ({ category, outcome }) =>
-          (auditCategory === 'all' || category === auditCategory) &&
-          (auditOutcome === 'all' || outcome === auditOutcome),
-      ),
-    [auditCategory, auditOutcome, audits],
-  );
+  const visibleAudits = useMemo(() => {
+    const authorizedReservationIds = new Set(
+      roleScopedRecords.map(({ reservationId }) => reservationId),
+    );
+    return audits.filter(
+      ({ category, outcome, targetReference }) =>
+        (isAdmin ||
+          (category === 'attendance' &&
+            authorizedReservationIds.has(targetReference))) &&
+        (auditCategory === 'all' || category === auditCategory) &&
+        (auditOutcome === 'all' || outcome === auditOutcome),
+    );
+  }, [auditCategory, auditOutcome, audits, isAdmin, roleScopedRecords]);
   const reasonInvalid =
     attempted && !adminReasonSchema.safeParse(reason).success;
   const settingsReasonInvalid =
@@ -130,13 +161,26 @@ export const AdminReservationWorkspace = () => {
     setAttempted(true);
     if (
       !selected ||
+      (scope.role !== 'organizer_admin' && scope.role !== 'room_operator') ||
       !adminReasonSchema.safeParse(reason).success ||
       transitionInvalid ||
       actionForbidden
     ) {
       return;
     }
-    setPending({ kind: 'reservation', record: selected, action });
+    setPending(
+      adminReservationMutationRequestSchema.parse({
+        kind: 'reservation',
+        eventId: scope.eventId,
+        actorRole: scope.role,
+        assignedSessionIds: scope.assignedSessionIds,
+        reservationId: selected.reservationId,
+        action,
+        expectedVersion: selected.version,
+        reason,
+        idempotencyKey: createReservationMutationKey(),
+      }),
+    );
   };
 
   const requestSettingsChange = () => {
@@ -147,46 +191,34 @@ export const AdminReservationWorkspace = () => {
       !settingsCandidate.success
     )
       return;
-    setPending({ kind: 'settings' });
+    setPending(
+      adminReservationMutationRequestSchema.parse({
+        kind: 'settings',
+        eventId: scope.eventId,
+        actorRole: 'organizer_admin',
+        expectedVersion: settings.version,
+        next: {
+          registrationMode: settingsDraft.registrationMode,
+          reservationChangesAllowed: settingsDraft.reservationChangesAllowed,
+          supportMessage: settingsDraft.supportMessage,
+        },
+        reason: settingsReason,
+        idempotencyKey: createReservationMutationKey(),
+      }),
+    );
   };
 
   const confirmChange = () => {
     if (!pending) return;
+    const response = applyAdminReservationMutation(
+      records,
+      settings,
+      pending,
+      replay.current,
+    );
     if (pending.kind === 'reservation') {
-      const current = pending.record;
-      const nextVersion = current.version + 1;
-      const nextRecord = reservationRecordSchema.parse({
-        ...current,
-        state:
-          pending.action === 'cancel_reservation'
-            ? 'cancelled'
-            : pending.action === 'mark_attended'
-              ? 'attended'
-              : current.state,
-        capacity:
-          pending.action === 'increase_capacity'
-            ? current.capacity + 1
-            : current.capacity,
-        reservedCount:
-          pending.action === 'cancel_reservation'
-            ? Math.max(0, current.reservedCount - 1)
-            : current.reservedCount,
-        version: nextVersion,
-      });
-      const category =
-        pending.action === 'mark_attended' ? 'attendance' : 'reservation';
-      const audit = auditEntrySchema.parse({
-        auditId: `mock-audit-${category}-${current.reservationId}-v${nextVersion}`,
-        eventId: scope.eventId,
-        actorLabel: isAdmin ? 'Demo administrátor' : 'Demo operátor sálu',
-        category,
-        action: pending.action,
-        targetReference: current.reservationId,
-        reason,
-        outcome: 'succeeded',
-        createdAt: '2026-07-25T13:10:00.000+02:00',
-        resultingVersion: nextVersion,
-      });
+      const nextRecord = response.record;
+      if (!nextRecord) return;
       setRecords((currentRecords) =>
         currentRecords.map((record) =>
           record.reservationId === nextRecord.reservationId
@@ -194,34 +226,34 @@ export const AdminReservationWorkspace = () => {
             : record,
         ),
       );
-      setAudits((currentAudits) => [audit, ...currentAudits]);
-      setLastAudit(audit);
+      setAudits((currentAudits) => [response.audit, ...currentAudits]);
+      setLastAudit(response.audit);
       setReason('');
       setAttempted(false);
     } else {
-      if (!settingsCandidate.success) return;
-      const nextSettings = settingsCandidate.data;
-      const audit = auditEntrySchema.parse({
-        auditId: `mock-audit-settings-v${nextSettings.version}`,
-        eventId: scope.eventId,
-        actorLabel: 'Demo administrátor',
-        category: 'settings',
-        action: 'update_event_settings',
-        targetReference: scope.eventId,
-        reason: settingsReason,
-        outcome: 'succeeded',
-        createdAt: '2026-07-25T13:12:00.000+02:00',
-        resultingVersion: nextSettings.version,
-      });
-      setSettings(nextSettings);
-      setSettingsDraft(nextSettings);
-      setAudits((currentAudits) => [audit, ...currentAudits]);
-      setLastAudit(audit);
+      if (!response.settings) return;
+      setSettings(response.settings);
+      setSettingsDraft(response.settings);
+      setAudits((currentAudits) => [response.audit, ...currentAudits]);
+      setLastAudit(response.audit);
       setSettingsReason('');
       setSettingsAttempted(false);
     }
     setPending(null);
   };
+
+  if (!datasetScoped) {
+    return (
+      <section className={styles.forbidden} role="alert">
+        <p className={styles.eyebrow}>Bezpečnostní hranice eventu</p>
+        <h1>Provozní data nelze zobrazit</h1>
+        <p>
+          Rezervace, audit nebo nastavení neodpovídají aktuálnímu eventu.
+          Soukromý dataset byl odmítnut celý.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <div className={styles.stack}>
@@ -359,7 +391,7 @@ export const AdminReservationWorkspace = () => {
               <span>Akce</span>
               <select
                 onChange={(event) =>
-                  setAction(event.target.value as ReservationAction)
+                  setAction(event.target.value as ReservationAdminAction)
                 }
                 value={action}
               >
@@ -457,7 +489,9 @@ export const AdminReservationWorkspace = () => {
             <tbody>
               {visibleAudits.map((audit) => (
                 <tr key={audit.auditId}>
-                  <td>{new Date(audit.createdAt).toLocaleString('cs-CZ')}</td>
+                  <td>
+                    {formatEventTimestamp(audit.createdAt, scope.eventTimezone)}
+                  </td>
                   <td>{audit.category}</td>
                   <td>{audit.action}</td>
                   <td>{audit.targetReference}</td>
@@ -474,6 +508,10 @@ export const AdminReservationWorkspace = () => {
               <li className={styles.dataCard} key={audit.auditId}>
                 <strong>{audit.action}</strong>
                 <dl>
+                  <dt>Čas ({scope.eventTimezone})</dt>
+                  <dd>
+                    {formatEventTimestamp(audit.createdAt, scope.eventTimezone)}
+                  </dd>
                   <dt>Kategorie</dt>
                   <dd>{audit.category}</dd>
                   <dt>Cíl</dt>
@@ -581,8 +619,8 @@ export const AdminReservationWorkspace = () => {
         <AdminConfirmDialog
           acknowledgement={
             pending.kind === 'settings'
-              ? `Potvrzuji změnu z verze ${settings.version} a pouze v mock režimu.`
-              : `Potvrzuji canonical změnu rezervace z verze ${pending.record.version}.`
+              ? `Potvrzuji změnu z verze ${pending.expectedVersion} a pouze v mock režimu.`
+              : `Potvrzuji canonical změnu rezervace z verze ${pending.expectedVersion}.`
           }
           confirmLabel={
             pending.kind === 'settings'
@@ -605,11 +643,7 @@ export const AdminReservationWorkspace = () => {
                   : reservationActionLabels[pending.action]}
               </dd>
               <dt>Očekávaná verze</dt>
-              <dd>
-                {pending.kind === 'settings'
-                  ? settings.version
-                  : pending.record.version}
-              </dd>
+              <dd>{pending.expectedVersion}</dd>
               <dt>Režim</dt>
               <dd>UI ready (mocked)</dd>
             </dl>

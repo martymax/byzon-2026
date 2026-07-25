@@ -46,6 +46,10 @@ const importRows = [
     currentState: 'active',
     issues: ['Stav se změní z aktivní na zrušenou.'],
   },
+] as const;
+
+const conflictRows = [
+  ...importRows,
   {
     rowId: 'import-row-0004',
     sourceReference: 'SYN-10004',
@@ -55,7 +59,7 @@ const importRows = [
     incomingState: 'active',
     currentState: 'blocked',
     issues: [
-      'Reference odpovídá jiné syntetické vstupence; řádek bude přeskočen.',
+      'Reference odpovídá jiné syntetické vstupence; celý apply je zablokovaný.',
     ],
   },
 ] as const;
@@ -138,8 +142,22 @@ export const demoSupportRecords = supportRecordSchema.array().parse([
   },
 ]);
 
+export const demoImportPreviewWithConflict = ticketImportPreviewSchema.parse({
+  ...demoImportPreview,
+  previewId: 'mock-import-preview-conflict',
+  previewVersion: 'mock-import-version-conflict',
+  source: {
+    fileName: 'synthetic-tickets-conflict.csv',
+    mediaType: 'text/csv',
+    byteSize: 5_240,
+  },
+  rows: conflictRows,
+  summary: summaryFor(conflictRows),
+});
+
 export const demoOperationsOverview = operationsOverviewSchema.parse({
   eventId: adminDemoScope.eventId,
+  version: 3,
   generatedAt: '2026-07-25T12:00:00.000+02:00',
   metrics: [
     {

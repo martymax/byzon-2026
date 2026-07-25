@@ -713,6 +713,21 @@
   border: 0;
 }
 
+.mobileNavigation {
+  display: none;
+}
+
+.mobileNavigation summary {
+  min-height: 44px;
+  padding: 0.7rem 0.85rem;
+  color: var(--admin-ink);
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 0.75rem;
+}
+
 @media (max-width: 70rem) {
   .shell {
     grid-template-columns: 1fr;
@@ -749,14 +764,31 @@
 }
 
 @media (max-width: 48rem) {
-  .navigation {
+  .desktopNavigation {
+    display: none;
+  }
+
+  .mobileNavigation {
+    display: block;
+    margin-top: 1rem;
+  }
+
+  .mobileNavigation .navigation {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
+    grid-template-columns: 1fr;
+    max-height: min(65vh, 32rem);
+    margin-top: 0.5rem;
+    padding: 0.35rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 1rem 2rem rgb(15 23 42 / 16%);
     scroll-snap-type: none;
   }
 
-  .navigation a {
+  .mobileNavigation .navigation a {
     min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
