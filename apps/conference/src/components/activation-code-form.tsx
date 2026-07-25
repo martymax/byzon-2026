@@ -85,6 +85,7 @@ export const ActivationCodeForm = ({
   const [failure, setFailure] = useState<ClaimFailure>();
   const [outcome, setOutcome] = useState<ActivationClaimResponse>();
   const [submitting, setSubmitting] = useState(false);
+  const submitLocked = useRef(false);
   const mounted = useRef(true);
   const errorContainer = useRef<HTMLDivElement>(null);
 
@@ -105,7 +106,8 @@ export const ActivationCodeForm = ({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting) return;
+    if (submitLocked.current) return;
+    submitLocked.current = true;
 
     setFailure(undefined);
     setOutcome(undefined);
@@ -116,6 +118,7 @@ export const ActivationCodeForm = ({
     if (!parsed.success) {
       setFieldError('Zadejte celý kód přesně tak, jak jste jej obdrželi.');
       focusErrorSummary();
+      submitLocked.current = false;
       return;
     }
 
@@ -151,6 +154,7 @@ export const ActivationCodeForm = ({
         focusErrorSummary();
       }
     } finally {
+      submitLocked.current = false;
       if (mounted.current) setSubmitting(false);
     }
   };
@@ -167,7 +171,15 @@ export const ActivationCodeForm = ({
         </header>
         <StatePanel
           action={
-            <Button onClick={() => router.push('/prihlaseni')}>
+            <Button
+              onClick={() =>
+                router.push(
+                  recovery
+                    ? '/prihlaseni?mode=recovery&returnTo=%2Fapp'
+                    : '/prihlaseni?returnTo=%2Fonboarding',
+                )
+              }
+            >
               {recovery ? 'Pokračovat k obnově' : 'Pokračovat k ověření'}
             </Button>
           }
@@ -192,7 +204,10 @@ export const ActivationCodeForm = ({
         </h1>
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni" variant="secondary">
+            <ActionLink
+              href="/prihlaseni?mode=recovery&returnTo=%2Fapp"
+              variant="secondary"
+            >
               Obnovit dřívější přístup
             </ActionLink>
           }
@@ -267,7 +282,7 @@ export const ActivationCodeForm = ({
 
       <form className="activation-code-card" noValidate onSubmit={submit}>
         <FormField
-          helperText="Kód se neukládá do adresy, historie ani návrhu formuláře. Pro mock průchod použijte TST-OPAQUE-2026."
+          helperText="Kód se neukládá do adresy, historie ani návrhu formuláře. Pro nový průchod použijte TST-OPAQUE-2026, pro obnovu TST-RECOVERY-2026."
           label="Ticket kód"
           required
           {...(fieldError ? { error: fieldError } : {})}

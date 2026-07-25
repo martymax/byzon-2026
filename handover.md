@@ -20,6 +20,26 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F1-06` je dokončený na `track/frontend-complete`. Přesný syntetický
+  already-active kód `TST-RECOVERY-2026` vrátí `recovery_required` a vede na
+  samostatný neenumerující recovery formulář. E-mail se netrimuje ani
+  nepersistuje a po neutral accepted odpovědi není zobrazený; syntetický
+  recovery token se na `/aktivace/odkaz` okamžitě odstraní z URL a končí
+  kontraktním `active → /app`.
+- Mock replay jednorázového odkazu je vázaný na přesný token i idempotency key
+  a vrací původní větev; jiný token nebo key je obecně odmítnutý.
+  `/chyba-pristupu` zobrazuje pouze syntetický bezpečný access stav a opaque
+  support referenci bez PII. `/app/nastaveni` zpřístupňuje logout current,
+  logout all a switch account bez seznamu cizích účtů.
+- Všechny session akce vyžadují potvrzení, korelují response action a až po
+  canonical úspěchu spouštějí injektovatelný lokální wipe seam. Mock invaliduje
+  syntetický owner/bootstrap kontext, ale výslovně přiznává, že skutečná Better
+  Auth session nebyla změněná. `CS-BOOT-01` nově odmítá role u pending,
+  suspended i revoked membership.
+- Cíleně prošlo 38 conference contract/API/mock testů, 6 domain a 9 fixture
+  testů, 15 recovery/session komponentových scénářů a 48 activation/onboarding
+  regresí na třech viewports. Etapový F1 security/code review je další
+  samostatný krok před posunem capability na `UI ready (mocked)`.
 - `F1-05` je dokončený na `track/frontend-complete`. Nový `CS-BOOT-01`
   striktně popisuje private/no-store `/me/bootstrap` a idempotentní
   `/me/onboarding`: event, minimální identitu, pending/active access bez

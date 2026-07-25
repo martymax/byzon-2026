@@ -247,13 +247,13 @@ export const identityBootstrapResponseSchema = z
       });
     }
     if (
-      response.membership.access.state === 'pending_activation' &&
+      response.membership.access.state !== 'active' &&
       response.membership.roles.length > 0
     ) {
       context.addIssue({
         code: 'custom',
         path: ['membership', 'roles'],
-        message: 'Pending activation cannot grant event roles',
+        message: 'Inactive membership cannot grant event roles',
       });
     }
     if (onboarding.status === 'profile_required') {
@@ -467,6 +467,57 @@ export type IdentityOnboardingResponse = z.infer<
   typeof identityOnboardingResponseSchema
 >;
 
+export const identitySessionActionSchema = z.enum([
+  'logout_current',
+  'logout_all',
+  'switch_account',
+]);
+
+export type IdentitySessionAction = z.infer<typeof identitySessionActionSchema>;
+
+export const identitySessionActionRequestSchema = z.strictObject({
+  action: identitySessionActionSchema,
+});
+
+export type IdentitySessionActionRequest = z.infer<
+  typeof identitySessionActionRequestSchema
+>;
+
+const sessionActionResultShape = {
+  effect: z.enum(['completed', 'synthetic_preview']),
+  personalData: z.strictObject({
+    disposition: z.enum(['cleared', 'none_present']),
+  }),
+} as const;
+
+export const identitySessionActionResponseSchema = z.discriminatedUnion(
+  'action',
+  [
+    z.strictObject({
+      ...sessionActionResultShape,
+      action: z.literal('logout_current'),
+      state: z.literal('signed_out'),
+      continueTo: z.literal('/'),
+    }),
+    z.strictObject({
+      ...sessionActionResultShape,
+      action: z.literal('logout_all'),
+      state: z.literal('all_sessions_revoked'),
+      continueTo: z.literal('/'),
+    }),
+    z.strictObject({
+      ...sessionActionResultShape,
+      action: z.literal('switch_account'),
+      state: z.literal('account_switch_ready'),
+      continueTo: z.literal('/prihlaseni?mode=switch&returnTo=%2Fapp'),
+    }),
+  ],
+);
+
+export type IdentitySessionActionResponse = z.infer<
+  typeof identitySessionActionResponseSchema
+>;
+
 export const identityAuthenticationRequiredProblemSchema =
   defineApiProblemSchema('AUTHENTICATION_REQUIRED', 401);
 export const identityEventAccessDeniedProblemSchema = defineApiProblemSchema(
@@ -491,6 +542,8 @@ export const identityRequestIdReusedProblemSchema = defineApiProblemSchema(
   'REQUEST_ID_REUSED',
   409,
 );
+export const identitySessionActionRejectedProblemSchema =
+  defineApiProblemSchema('SESSION_ACTION_REJECTED', 409);
 export const identityInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
@@ -515,9 +568,20 @@ export const identityOnboardingProblemSchema = z.discriminatedUnion('code', [
   identityInternalErrorProblemSchema,
 ]);
 
+export const identitySessionActionProblemSchema = z.discriminatedUnion('code', [
+  identityAuthenticationRequiredProblemSchema,
+  sessionExpiredProblemSchema,
+  identityRequestIdReusedProblemSchema,
+  identitySessionActionRejectedProblemSchema,
+  identityInternalErrorProblemSchema,
+]);
+
 export type IdentityBootstrapProblem = z.infer<
   typeof identityBootstrapProblemSchema
 >;
 export type IdentityOnboardingProblem = z.infer<
   typeof identityOnboardingProblemSchema
+>;
+export type IdentitySessionActionProblem = z.infer<
+  typeof identitySessionActionProblemSchema
 >;

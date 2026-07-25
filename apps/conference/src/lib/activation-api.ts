@@ -15,6 +15,7 @@ import {
   activationRecoveryResponseSchema,
   type ActivationClaimRequest,
   type ActivationIdentityRequest,
+  type ActivationRecoveryRequest,
 } from '@byzon/domain/contracts';
 
 import { defineApiEndpoint, type ApiPort } from './api/endpoint';
@@ -134,6 +135,20 @@ export const consumeActivationLink = (
   api.request(activationLinkEndpoint, {
     path: '/api/v1/activation/link',
     body: activationLinkRequestSchema.parse({ token }),
+    idempotencyKey,
+    cache: 'no-store',
+    ...(signal ? { signal } : {}),
+  });
+
+export const submitActivationRecovery = (
+  api: ApiPort,
+  body: ActivationRecoveryRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  api.request(activationRecoveryEndpoint, {
+    path: '/api/v1/activation/recovery',
+    body,
     idempotencyKey,
     cache: 'no-store',
     ...(signal ? { signal } : {}),

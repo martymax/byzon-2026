@@ -3,6 +3,7 @@ import {
   identityFixtureIds,
   identityFixtureProfile,
   identityOnboardingFixtures,
+  identitySessionActionFixtures,
 } from '@byzon/test-support/fixtures';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +14,10 @@ import {
 import {
   identityBootstrapEndpoint,
   identityOnboardingEndpoint,
+  identitySessionActionEndpoint,
   requestIdentityBootstrap,
   submitIdentityOnboarding,
+  submitIdentitySessionAction,
 } from './identity-api';
 
 type TestFetch = NonNullable<FetchApiClientOptions['fetch']>;
@@ -120,5 +123,38 @@ describe('CS-BOOT-01 identity API port', () => {
         requestId: 'request-bootstrap-0002',
       },
     });
+  });
+
+  it('submits an exact session action through the no-store idempotent port', async () => {
+    const fetch = vi.fn<TestFetch>(async () =>
+      Response.json(identitySessionActionFixtures.switch_account, {
+        headers: {
+          'content-type': 'application/json',
+          'x-request-id': 'request-session-action-0001',
+        },
+      }),
+    );
+    const result = await submitIdentitySessionAction(
+      createFetchApiClient({ fetch, maxRetries: 0 }),
+      'switch_account',
+      'session-action-idempotency-0001',
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/me/session-action',
+      expect.objectContaining({
+        body: JSON.stringify({ action: 'switch_account' }),
+        cache: 'no-store',
+        method: 'POST',
+      }),
+    );
+    const init = fetch.mock.calls[0]?.[1];
+    expect(new Headers(init?.headers).get('idempotency-key')).toBe(
+      'session-action-idempotency-0001',
+    );
+    expect(identitySessionActionEndpoint.problemCodes).toContain(
+      'SESSION_ACTION_REJECTED',
+    );
   });
 });

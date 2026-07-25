@@ -1,14 +1,20 @@
 import {
   activationClaimFixtures,
   activationLandingFixtures,
+  activationRecoveryFixtures,
 } from '@byzon/test-support/fixtures';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createFetchApiClient } from './api/fetch-client';
+import {
+  createFetchApiClient,
+  type FetchApiClientOptions,
+} from './api/fetch-client';
 import {
   activationClaimEndpoint,
+  activationRecoveryEndpoint,
   requestActivationLanding,
   submitActivationClaim,
+  submitActivationRecovery,
 } from './activation-api';
 
 describe('activation API port', () => {
@@ -88,5 +94,42 @@ describe('activation API port', () => {
         requestId: 'request-activation-0003',
       },
     });
+  });
+
+  it('submits recovery neutrally without putting the email in the URL', async () => {
+    const fetch = vi.fn<NonNullable<FetchApiClientOptions['fetch']>>(async () =>
+      Response.json(activationRecoveryFixtures.accepted, {
+        headers: {
+          'content-type': 'application/json',
+          'x-request-id': 'request-recovery-0001',
+        },
+      }),
+    );
+    const result = await submitActivationRecovery(
+      createFetchApiClient({ fetch, maxRetries: 0 }),
+      { email: 'alex@example.test', returnTo: '/app' },
+      'recovery-idempotency-0001',
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/activation/recovery',
+      expect.objectContaining({
+        body: JSON.stringify({
+          email: 'alex@example.test',
+          returnTo: '/app',
+        }),
+        cache: 'no-store',
+        method: 'POST',
+      }),
+    );
+    const init = fetch.mock.calls[0]?.[1];
+    expect(new Headers(init?.headers).get('idempotency-key')).toBe(
+      'recovery-idempotency-0001',
+    );
+    expect(activationRecoveryEndpoint.problemCodes).toEqual([
+      'CLAIM_RATE_LIMITED',
+      'INTERNAL_ERROR',
+    ]);
   });
 });

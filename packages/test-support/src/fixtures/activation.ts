@@ -18,6 +18,7 @@ import { contentFixtureIds } from './content.js';
 
 export const activationFixtureFlowId = 'flow.synthetic.2026';
 export const activationFixtureCode = 'TST-OPAQUE-2026';
+export const activationFixtureRecoveryCode = 'TST-RECOVERY-2026';
 export const activationFixtureToken = 'link.synthetic.activation.2026';
 
 const event = {

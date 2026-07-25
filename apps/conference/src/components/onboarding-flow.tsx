@@ -297,7 +297,7 @@ const ResourceState = ({
       <StatePanel
         action={
           sessionExpired ? (
-            <ActionLink href="/prihlaseni?returnTo=%2Fonboarding">
+            <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fonboarding">
               Obnovit přihlášení
             </ActionLink>
           ) : permission ? (
@@ -482,7 +482,9 @@ export const OnboardingFlow = ({
       <section className="onboarding-page">
         <p className="eyebrow">Nastavení účasti</p>
         <h1 data-route-heading tabIndex={-1}>
-          Přístup je pozastavený
+          {access.state === 'suspended'
+            ? 'Přístup je pozastavený'
+            : 'Přístup byl zrušený'}
         </h1>
         <StatePanel
           action={<ActionLink href="/aktivace">Zpět na aktivaci</ActionLink>}

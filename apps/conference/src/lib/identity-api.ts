@@ -4,7 +4,11 @@ import {
   identityOnboardingProblemSchema,
   identityOnboardingRequestSchema,
   identityOnboardingResponseSchema,
+  identitySessionActionProblemSchema,
+  identitySessionActionRequestSchema,
+  identitySessionActionResponseSchema,
   type IdentityOnboardingRequest,
+  type IdentitySessionAction,
 } from '@byzon/domain/contracts';
 
 import { defineApiEndpoint, type ApiPort } from './api/endpoint';
@@ -47,6 +51,23 @@ export const identityOnboardingEndpoint = defineApiEndpoint({
   idempotency: 'required',
 });
 
+export const identitySessionActionEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: identitySessionActionRequestSchema,
+  successSchema: identitySessionActionResponseSchema,
+  problemSchema: identitySessionActionProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'REQUEST_ID_REUSED',
+    'SESSION_ACTION_REJECTED',
+    'INTERNAL_ERROR',
+  ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
 export const browserIdentityApi = createFetchApiClient();
 
 export const requestIdentityBootstrap = (api: ApiPort, signal?: AbortSignal) =>
@@ -65,6 +86,20 @@ export const submitIdentityOnboarding = (
   api.request(identityOnboardingEndpoint, {
     path: '/api/v1/me/onboarding',
     body,
+    idempotencyKey,
+    cache: 'no-store',
+    ...(signal ? { signal } : {}),
+  });
+
+export const submitIdentitySessionAction = (
+  api: ApiPort,
+  action: IdentitySessionAction,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  api.request(identitySessionActionEndpoint, {
+    path: '/api/v1/me/session-action',
+    body: identitySessionActionRequestSchema.parse({ action }),
     idempotencyKey,
     cache: 'no-store',
     ...(signal ? { signal } : {}),

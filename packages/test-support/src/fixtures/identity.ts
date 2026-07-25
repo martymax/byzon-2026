@@ -3,6 +3,8 @@ import {
   identityBootstrapResponseSchema,
   identityOnboardingProblemSchema,
   identityOnboardingResponseSchema,
+  identitySessionActionProblemSchema,
+  identitySessionActionResponseSchema,
   problemTypeForCode,
 } from '@byzon/domain/contracts';
 
@@ -190,6 +192,36 @@ export const identityOnboardingFixtures = defineFixtureSet({
   },
 });
 
+const syntheticSessionEffect = {
+  effect: 'synthetic_preview' as const,
+  personalData: { disposition: 'none_present' as const },
+};
+
+export const identitySessionActionFixtures = defineFixtureSet({
+  name: 'identity.session-action',
+  schema: identitySessionActionResponseSchema,
+  fixtures: {
+    logout_current: {
+      ...syntheticSessionEffect,
+      action: 'logout_current',
+      state: 'signed_out',
+      continueTo: '/',
+    },
+    logout_all: {
+      ...syntheticSessionEffect,
+      action: 'logout_all',
+      state: 'all_sessions_revoked',
+      continueTo: '/',
+    },
+    switch_account: {
+      ...syntheticSessionEffect,
+      action: 'switch_account',
+      state: 'account_switch_ready',
+      continueTo: '/prihlaseni?mode=switch&returnTo=%2Fapp',
+    },
+  },
+});
+
 interface IdentityProblemStatus {
   readonly AUTHENTICATION_REQUIRED: 401;
   readonly AUTH_SESSION_EXPIRED: 401;
@@ -198,6 +230,7 @@ interface IdentityProblemStatus {
   readonly LEGAL_CONFIGURATION_MISSING: 503;
   readonly NETWORKING_DISABLED: 409;
   readonly REQUEST_ID_REUSED: 409;
+  readonly SESSION_ACTION_REJECTED: 409;
   readonly STALE_LEGAL_DOCUMENT: 409;
   readonly VALIDATION_FAILED: 422;
 }
@@ -237,6 +270,18 @@ export const identityOnboardingProblemFixtures = defineFixtureSet({
     networking_disabled: problem('NETWORKING_DISABLED', 409),
     request_id_reused: problem('REQUEST_ID_REUSED', 409),
     validation: problem('VALIDATION_FAILED', 422),
+    internal_error: problem('INTERNAL_ERROR', 500),
+  },
+});
+
+export const identitySessionActionProblemFixtures = defineFixtureSet({
+  name: 'identity.session-action-problem',
+  schema: identitySessionActionProblemSchema,
+  fixtures: {
+    authentication: problem('AUTHENTICATION_REQUIRED', 401),
+    session_expired: problem('AUTH_SESSION_EXPIRED', 401),
+    request_id_reused: problem('REQUEST_ID_REUSED', 409),
+    rejected: problem('SESSION_ACTION_REJECTED', 409),
     internal_error: problem('INTERNAL_ERROR', 500),
   },
 });

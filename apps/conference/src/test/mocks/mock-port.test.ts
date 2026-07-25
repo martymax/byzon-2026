@@ -5,6 +5,7 @@ import {
 import { FixtureValidationError } from '@byzon/test-support';
 import {
   activationFixtureCode,
+  activationFixtureRecoveryCode,
   contentFixtureIds,
   identityFixtureIds,
   identityFixtureProfile,
@@ -25,10 +26,12 @@ import {
   requestActivationLanding,
   submitActivationClaim,
   submitActivationIdentity,
+  submitActivationRecovery,
 } from '../../lib/activation-api.js';
 import {
   requestIdentityBootstrap,
   submitIdentityOnboarding,
+  submitIdentitySessionAction,
 } from '../../lib/identity-api.js';
 import { createMockServer } from './node.js';
 import {
@@ -290,6 +293,60 @@ describe('MSW through the production API port', () => {
     });
   });
 
+  it('keeps already-active recovery neutral and returns the active branch', async () => {
+    await expect(
+      submitActivationClaim(
+        client,
+        { code: activationFixtureRecoveryCode, method: 'manual_code' },
+        'claim-recovery-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'recovery_required',
+        membershipCreated: false,
+        sessionCreated: false,
+      },
+    });
+    await expect(
+      submitActivationRecovery(
+        client,
+        { email: 'unknown@example.test', returnTo: '/app' },
+        'recovery-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { accepted: true, resendAfterSeconds: 60 },
+    });
+
+    const token = 'recovery:00000000-0000-4000-8000-000000000001';
+    await expect(
+      consumeActivationLink(client, token, 'recovery-link-port-0001'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'active', continueTo: '/app' },
+    });
+    await expect(
+      consumeActivationLink(client, token, 'recovery-link-port-0001'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { state: 'active', continueTo: '/app' },
+    });
+    await expect(
+      consumeActivationLink(
+        client,
+        'recovery:00000000-0000-4000-8000-000000000002',
+        'recovery-link-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ACTIVATION_LINK_REJECTED' },
+      },
+    });
+  });
+
   it('completes synthetic onboarding with exact legal versions and replay safety', async () => {
     await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
       ok: true,
@@ -344,6 +401,50 @@ describe('MSW through the production API port', () => {
       failure: {
         kind: 'problem',
         problem: { code: 'REQUEST_ID_REUSED' },
+      },
+    });
+  });
+
+  it('replays exact session actions and invalidates the mock owner context', async () => {
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'switch_account',
+        'session-action-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        action: 'switch_account',
+        effect: 'synthetic_preview',
+        personalData: { disposition: 'none_present' },
+      },
+    });
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'switch_account',
+        'session-action-port-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'logout_all',
+        'session-action-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'REQUEST_ID_REUSED' },
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
       },
     });
   });

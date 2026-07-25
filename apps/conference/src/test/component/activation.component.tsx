@@ -132,7 +132,7 @@ describe('F1-01 activation landing', () => {
     await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
     const login = screen.getByRole('link', { name: 'Obnovit přihlášení' });
     expect(login.element().getAttribute('href')).toBe(
-      '/prihlaseni?returnTo=%2Faktivace',
+      '/prihlaseni?mode=recovery&returnTo=%2Fapp',
     );
     expect(document.body.textContent).not.toContain(problem.detail);
   });

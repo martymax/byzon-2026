@@ -15,6 +15,7 @@ import {
   browserActivationApi,
   consumeActivationLink,
 } from '@/lib/activation-api';
+import { SessionExitControls } from '@/components/session-exit-controls';
 
 type LinkFailure =
   | { readonly kind: 'rejected' }
@@ -184,6 +185,7 @@ export const ActivationLinkConsumer = ({
             skutečnou Better Auth session ani membership.
           </p>
         </StatePanel>
+        {!onboarding ? <SessionExitControls /> : null}
       </section>
     );
   }
@@ -197,7 +199,10 @@ export const ActivationLinkConsumer = ({
         </h1>
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni" variant="secondary">
+            <ActionLink
+              href="/prihlaseni?mode=recovery&returnTo=%2Fapp"
+              variant="secondary"
+            >
               Vyžádat nový odkaz
             </ActionLink>
           }
@@ -226,7 +231,10 @@ export const ActivationLinkConsumer = ({
             failure.kind === 'offline' || failure.kind === 'error' ? (
               <Button onClick={() => void consume()}>Zkusit znovu</Button>
             ) : (
-              <ActionLink href="/prihlaseni" variant="secondary">
+              <ActionLink
+                href="/prihlaseni?mode=recovery&returnTo=%2Fapp"
+                variant="secondary"
+              >
                 Vyžádat nový odkaz
               </ActionLink>
             )

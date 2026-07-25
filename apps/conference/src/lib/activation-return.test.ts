@@ -24,4 +24,14 @@ describe('activation return destination', () => {
   ])('falls back safely for an untrusted destination %#', (value) => {
     expect(resolveActivationReturnTo(value)).toBe('/onboarding');
   });
+
+  it('allows the recovery caller to choose the safe app fallback', () => {
+    expect(resolveActivationReturnTo(undefined, '/app')).toBe('/app');
+    expect(resolveActivationReturnTo(['/app', '/onboarding'], '/app')).toBe(
+      '/app',
+    );
+    expect(resolveActivationReturnTo('https://evil.example/app', '/app')).toBe(
+      '/app',
+    );
+  });
 });

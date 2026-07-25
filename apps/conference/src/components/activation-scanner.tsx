@@ -315,7 +315,15 @@ export const ActivationScanner = ({
         </h1>
         <StatePanel
           action={
-            <Button onClick={() => router.push('/prihlaseni')}>
+            <Button
+              onClick={() =>
+                router.push(
+                  recovery
+                    ? '/prihlaseni?mode=recovery&returnTo=%2Fapp'
+                    : '/prihlaseni?returnTo=%2Fonboarding',
+                )
+              }
+            >
               {recovery ? 'Pokračovat k obnově' : 'Pokračovat k ověření'}
             </Button>
           }
@@ -508,7 +516,7 @@ export const ActivationScanner = ({
         ) : null}
         {state.status === 'failure' &&
         state.failure.kind === 'session_expired' ? (
-          <ActionLink href="/prihlaseni?returnTo=%2Faktivace">
+          <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fapp">
             Obnovit přihlášení
           </ActionLink>
         ) : null}
@@ -579,7 +587,7 @@ export const ActivationScannerGate = ({
       <ScannerGateShell>
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni?returnTo=%2Faktivace">
+            <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fapp">
               Obnovit přihlášení
             </ActionLink>
           }

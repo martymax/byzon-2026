@@ -267,7 +267,9 @@ export const ActivationIdentity = ({
         <StatePanel
           action={
             sessionExpired ? (
-              <ActionLink href="/prihlaseni">Obnovit přihlášení</ActionLink>
+              <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fapp">
+                Obnovit přihlášení
+              </ActionLink>
             ) : (
               <Button onClick={landing.retry}>Zkusit znovu</Button>
             )

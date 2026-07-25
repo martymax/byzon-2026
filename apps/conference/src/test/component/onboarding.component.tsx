@@ -405,7 +405,7 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
         .getByRole('link', { name: 'Obnovit přihlášení' })
         .element()
         .getAttribute('href'),
-    ).toBe('/prihlaseni?returnTo=%2Fonboarding');
+    ).toBe('/prihlaseni?mode=recovery&returnTo=%2Fonboarding');
   });
 
   it('is accessible, overflow-safe and keeps full choice rows touch-sized', async () => {

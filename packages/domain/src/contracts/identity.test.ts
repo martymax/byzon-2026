@@ -5,6 +5,8 @@ import {
   identityCachePolicy,
   identityOnboardingRequestSchema,
   identityOnboardingResponseSchema,
+  identitySessionActionRequestSchema,
+  identitySessionActionResponseSchema,
 } from './identity.js';
 
 const documents = [
@@ -92,6 +94,20 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
         dataMode: 'live',
       }).success,
     ).toBe(false);
+    for (const state of ['suspended', 'revoked'] as const) {
+      expect(
+        identityBootstrapResponseSchema.safeParse({
+          ...bootstrap,
+          membership: {
+            access: {
+              state,
+              supportReference: `MOCK-${state.toUpperCase()}-2026`,
+            },
+            roles: ['participant'],
+          },
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it('rejects inconsistent profile, legal and networking states', () => {
@@ -216,6 +232,35 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
             documentId: completion.acknowledgements[0].documentId,
           },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('keeps session actions explicit and same-origin', () => {
+    expect(
+      identitySessionActionRequestSchema.parse({
+        action: 'switch_account',
+      }),
+    ).toEqual({ action: 'switch_account' });
+    expect(
+      identitySessionActionResponseSchema.parse({
+        action: 'switch_account',
+        state: 'account_switch_ready',
+        effect: 'synthetic_preview',
+        personalData: { disposition: 'none_present' },
+        continueTo: '/prihlaseni?mode=switch&returnTo=%2Fapp',
+      }),
+    ).toMatchObject({
+      action: 'switch_account',
+      state: 'account_switch_ready',
+    });
+    expect(
+      identitySessionActionResponseSchema.safeParse({
+        action: 'switch_account',
+        state: 'account_switch_ready',
+        effect: 'synthetic_preview',
+        personalData: { disposition: 'none_present' },
+        continueTo: 'https://attacker.example/',
       }).success,
     ).toBe(false);
   });

@@ -24,6 +24,21 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/prihlaseni',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
+      {
+        source: '/chyba-pristupu',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
+        source: '/app/nastaveni',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
         source: '/onboarding',
         headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
       },

@@ -225,6 +225,10 @@ export const activationRecoveryRequestSchema = z.strictObject({
   returnTo: activationReturnToSchema,
 });
 
+export type ActivationRecoveryRequest = z.infer<
+  typeof activationRecoveryRequestSchema
+>;
+
 export const activationRecoveryResponseSchema = z.strictObject({
   accepted: z.literal(true),
   resendAfterSeconds: z.number().int().min(1).max(3_600),

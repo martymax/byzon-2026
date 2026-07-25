@@ -1284,3 +1284,55 @@ main > .ui-participant-nav-spacer {
     grid-column: 1 / -1;
   }
 }
+
+.access-problem-page {
+  width: min(100% - 1.5rem, 52rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.access-problem-page > header h1 {
+  max-width: 12ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 6.5rem);
+  line-height: 0.86;
+}
+.access-problem-page > .ui-state-panel,
+.access-problem-page > .preview-disclaimer,
+.access-problem-page > .session-controls {
+  margin-top: 1.25rem;
+}
+.session-controls {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: clamp(1rem, 4vw, 1.75rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.session-controls > header {
+  display: grid;
+  gap: 0.4rem;
+}
+.session-controls h2 {
+  color: var(--ink);
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  line-height: 1;
+}
+.session-controls-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+.session-controls-actions .ui-button {
+  width: 100%;
+}
+.account-settings-page > .session-controls {
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+}
+
+@media (min-width: 40rem) {
+  .session-controls-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -15,6 +15,7 @@ import {
   browserActivationApi,
   requestActivationLanding,
 } from '@/lib/activation-api';
+import { SessionExitControls } from '@/components/session-exit-controls';
 
 export type ActivationEntryState =
   | { readonly status: 'loading' }
@@ -140,7 +141,10 @@ const ActivationFlow = ({
     return (
       <StatePanel
         action={
-          <ActionLink href="/prihlaseni" variant="secondary">
+          <ActionLink
+            href="/prihlaseni?mode=recovery&returnTo=%2Fapp"
+            variant="secondary"
+          >
             Přejít k přihlášení
           </ActionLink>
         }
@@ -181,6 +185,7 @@ const ActivationFlow = ({
         title="Přístup už je aktivovaný"
       >
         <p>Pokračujte rovnou do účastnické aplikace.</p>
+        <SessionExitControls />
       </StatePanel>
     );
   }
@@ -258,7 +263,10 @@ const ActivationFlow = ({
         ) : null}
       </div>
       <p className="activation-recovery">
-        Už jste přístup aktivovali? <a href="/prihlaseni">Obnovit přihlášení</a>
+        Už jste přístup aktivovali?{' '}
+        <a href="/prihlaseni?mode=recovery&returnTo=%2Fapp">
+          Obnovit přihlášení
+        </a>
       </p>
       <aside className="preview-disclaimer" aria-label="Omezení ukázky">
         Tato vývojová ukázka používá výhradně syntetická data. Nevytvoří účet,
@@ -326,7 +334,10 @@ export const ActivationEntry = ({
       {state.status === 'closed' ? (
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni" variant="secondary">
+            <ActionLink
+              href="/prihlaseni?mode=recovery&returnTo=%2Fapp"
+              variant="secondary"
+            >
               Přejít k přihlášení
             </ActionLink>
           }
@@ -339,7 +350,7 @@ export const ActivationEntry = ({
       {state.status === 'session_expired' ? (
         <StatePanel
           action={
-            <ActionLink href="/prihlaseni?returnTo=%2Faktivace">
+            <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fapp">
               Obnovit přihlášení
             </ActionLink>
           }

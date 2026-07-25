@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activationClaimFixtures,
   activationFixtureCode,
+  activationFixtureRecoveryCode,
   activationLandingFixtures,
   baseProblemFixture,
   baseProblemFixtureFactory,
@@ -64,6 +65,7 @@ describe('activation fixtures', () => {
       sessionCreated: false,
     });
     expect(activationFixtureCode).toBe('TST-OPAQUE-2026');
+    expect(activationFixtureRecoveryCode).toBe('TST-RECOVERY-2026');
   });
 });
 

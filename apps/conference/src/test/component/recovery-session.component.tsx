@@ -1,0 +1,233 @@
+import {
+  activationRecoveryFixtures,
+  identitySessionActionFixtures,
+} from '@byzon/test-support/fixtures';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import '../../app/styles.css';
+import { AccessProblem } from '../../components/access-problem';
+import { RecoveryForm } from '../../components/recovery-form';
+import { SessionExitControls } from '../../components/session-exit-controls';
+import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
+import { expectComponentToPassAxe } from './accessibility';
+import { renderComponent } from './render';
+
+const metadata = { requestId: 'component-recovery-session-0001' } as const;
+type RecordedRequest = ApiRequestCommonOptions & { body?: unknown };
+
+const successApi = (
+  fixture: unknown,
+  onRequest?: (request: RecordedRequest) => void,
+): ApiPort => ({
+  request: async (endpoint, options) => {
+    onRequest?.(options);
+    return {
+      ok: true,
+      kind: 'success',
+      status: 200,
+      data: endpoint.successSchema.parse(fixture),
+      metadata,
+    };
+  },
+});
+
+const RecoveryProbe = ({ api }: { readonly api: ApiPort }) => (
+  <main id="main" tabIndex={-1}>
+    <RecoveryForm
+      api={api}
+      createIdempotencyKey={() => 'recovery-component-0001'}
+      createMockLinkToken={() =>
+        'recovery:00000000-0000-4000-8000-000000000001'
+      }
+    />
+  </main>
+);
+
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  window.history.replaceState({}, '', '/prihlaseni?mode=recovery');
+});
+
+describe('F1-06 recovery and safe session exit', () => {
+  it('submits recovery once and does not retain or reveal the email', async () => {
+    const calls: RecordedRequest[] = [];
+    const screen = await renderComponent(
+      <RecoveryProbe
+        api={successApi(activationRecoveryFixtures.accepted, (request) =>
+          calls.push(request),
+        )}
+      />,
+    );
+
+    await screen.getByLabelText('E-mail').fill('alex@example.test');
+    const submit = screen
+      .getByRole('button', { name: 'Poslat jednorázový odkaz' })
+      .element();
+    if (!(submit instanceof HTMLButtonElement)) {
+      throw new TypeError('Recovery submit must be a button.');
+    }
+    submit.click();
+    submit.click();
+
+    await expect.element(screen.getByText('Zkontrolujte e-mail')).toBeVisible();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toEqual({
+      email: 'alex@example.test',
+      returnTo: '/app',
+    });
+    expect(document.body.textContent).not.toContain('alex@example.test');
+    expect(window.location.search).toBe('?mode=recovery');
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+    expect(
+      screen
+        .getByRole('link', { name: 'Otevřít syntetický recovery odkaz' })
+        .element()
+        .getAttribute('href'),
+    ).toBe(
+      '/aktivace/odkaz?token=recovery%3A00000000-0000-4000-8000-000000000001',
+    );
+  });
+
+  it('reuses the recovery key after an ambiguous offline result', async () => {
+    const keys: string[] = [];
+    let requests = 0;
+    let keyCreations = 0;
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        requests += 1;
+        if (options.idempotencyKey) keys.push(options.idempotencyKey);
+        if (requests === 1) {
+          return {
+            ok: false,
+            kind: 'failure',
+            failure: { kind: 'offline' },
+          };
+        }
+        return {
+          ok: true,
+          kind: 'success',
+          status: 200,
+          data: endpoint.successSchema.parse(
+            activationRecoveryFixtures.accepted,
+          ),
+          metadata,
+        };
+      },
+    };
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <RecoveryForm
+          api={api}
+          createIdempotencyKey={() => {
+            keyCreations += 1;
+            return `recovery-retry-${keyCreations}`;
+          }}
+        />
+      </main>,
+    );
+
+    await screen.getByLabelText('E-mail').fill('unknown@example.test');
+    await screen
+      .getByRole('button', { name: 'Poslat jednorázový odkaz' })
+      .click();
+    await expect.element(screen.getByText('Jste offline')).toBeVisible();
+    await screen
+      .getByRole('button', { name: 'Poslat jednorázový odkaz' })
+      .click();
+
+    await expect.element(screen.getByText('Zkontrolujte e-mail')).toBeVisible();
+    expect(keyCreations).toBe(1);
+    expect(keys).toEqual(['recovery-retry-1', 'recovery-retry-1']);
+  });
+
+  it('confirms session exit and runs local wipe after the canonical response', async () => {
+    const order: string[] = [];
+    const api = successApi(
+      identitySessionActionFixtures.switch_account,
+      (request) => {
+        order.push(`request:${String(request.idempotencyKey)}`);
+      },
+    );
+    const clearPrivateData = vi.fn(async () => {
+      order.push('wipe');
+      return 'none_present' as const;
+    });
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <SessionExitControls
+          api={api}
+          clearPrivateData={clearPrivateData}
+          createIdempotencyKey={() => 'session-component-0001'}
+        />
+      </main>,
+    );
+
+    await screen.getByRole('button', { name: 'Použít jiný účet' }).click();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Přepnout na jiný účet?' }))
+      .toBeVisible();
+    await screen
+      .getByRole('button', { name: 'Pokračovat k jinému účtu' })
+      .click();
+
+    await expect
+      .element(screen.getByText('Náhled je připravený pro jiný účet'))
+      .toBeVisible();
+    expect(clearPrivateData).toHaveBeenCalledOnce();
+    expect(order).toEqual(['request:session-component-0001', 'wipe']);
+    await expect
+      .element(screen.getByRole('link', { name: 'Přejít k jinému účtu' }))
+      .toBeVisible();
+  });
+
+  it('rejects a mismatched session response without running the wipe seam', async () => {
+    const clearPrivateData = vi.fn(async () => 'none_present' as const);
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <SessionExitControls
+          api={successApi(identitySessionActionFixtures.switch_account)}
+          clearPrivateData={clearPrivateData}
+        />
+      </main>,
+    );
+
+    await screen.getByRole('button', { name: 'Odhlásit tento účet' }).click();
+    await screen.getByRole('button', { name: 'Odhlásit', exact: true }).click();
+
+    await expect
+      .element(screen.getByText('Změna relace se nepodařila'))
+      .toBeVisible();
+    expect(clearPrivateData).not.toHaveBeenCalled();
+    expect(document.querySelector('dialog[open]')).toBeNull();
+  });
+
+  it('keeps access states non-enumerating, accessible and overflow-safe', async () => {
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <AccessProblem
+          sessionApi={successApi(identitySessionActionFixtures.logout_current)}
+        />
+      </main>,
+    );
+    const main = document.querySelector('main');
+    if (!(main instanceof HTMLElement)) {
+      throw new TypeError('Access problem probe must render main.');
+    }
+
+    expect(document.body.textContent).not.toContain('@');
+    expect(document.body.textContent).not.toContain('TST-');
+    expect(document.body.textContent).not.toContain('example.test');
+    expect(
+      screen
+        .getByRole('button', { name: 'Odhlásit tento účet' })
+        .element()
+        .getBoundingClientRect().height,
+    ).toBeGreaterThanOrEqual(44);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    await expectComponentToPassAxe(main);
+  });
+});
