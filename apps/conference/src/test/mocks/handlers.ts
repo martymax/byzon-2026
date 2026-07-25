@@ -10,6 +10,10 @@ import {
   activationLinkRequestSchema,
   activationLinkResponseSchema,
   idempotencyKeySchema,
+  identityBootstrapResponseSchema,
+  identityOnboardingProblemSchema,
+  identityOnboardingRequestSchema,
+  identityOnboardingResponseSchema,
   participantContentProblemSchema,
   participantContentResponseSchema,
   participantProgramProblemSchema,
@@ -27,6 +31,10 @@ import {
   activationLinkFixtures,
   activationLinkProblemFixtures,
   contentFixtureIds,
+  identityBootstrapFixtures,
+  identityFixtureIds,
+  identityOnboardingFixtures,
+  identityOnboardingProblemFixtures,
   participantContentFixtures,
   participantContentProblemFixtures,
   participantProgramFixtures,
@@ -40,6 +48,16 @@ import { mockJsonResponse, mockProblemResponse } from './response';
 interface MockActivationState {
   claimed: boolean;
   linkConsumptionKey?: string;
+  onboarding?: {
+    fingerprint: string;
+    idempotencyKey: string;
+    networkingEnabled: boolean;
+    profile: {
+      firstName: string;
+      lastName: string;
+      contactEmail: string;
+    };
+  };
 }
 
 const mockActivationState: MockActivationState = {
@@ -49,6 +67,7 @@ const mockActivationState: MockActivationState = {
 export const resetMockActivationState = (): void => {
   mockActivationState.claimed = false;
   delete mockActivationState.linkConsumptionKey;
+  delete mockActivationState.onboarding;
 };
 
 /**
@@ -166,6 +185,89 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       {
         fixtureName: 'activation.mock.link',
         cacheControl: 'private, no-store',
+      },
+    );
+  }),
+  http.get('*/api/v1/me/bootstrap', () => {
+    const completion = mockActivationState.onboarding;
+    const fixture = completion
+      ? {
+          ...identityBootstrapFixtures.complete,
+          profile: completion.profile,
+          networking: {
+            ...identityBootstrapFixtures.complete!.networking,
+            enabled: completion.networkingEnabled,
+          },
+        }
+      : identityBootstrapFixtures.profile_required;
+    return mockJsonResponse(identityBootstrapResponseSchema, fixture, {
+      fixtureName: 'identity.mock.bootstrap',
+      cacheControl: 'private, no-store',
+      vary: ['authorization', 'cookie'],
+    });
+  }),
+  http.post('*/api/v1/me/onboarding', async ({ request }) => {
+    const body = await request.json().catch(() => undefined);
+    const parsed = identityOnboardingRequestSchema.safeParse(body);
+    const idempotencyKey = idempotencyKeySchema.safeParse(
+      request.headers.get('idempotency-key'),
+    );
+    if (!parsed.success || !idempotencyKey.success) {
+      return mockProblemResponse(
+        identityOnboardingProblemSchema,
+        identityOnboardingProblemFixtures.validation,
+        { fixtureName: 'identity.mock.onboarding-validation' },
+      );
+    }
+    const exactDocuments =
+      parsed.data.legal.termsDocumentId === identityFixtureIds.terms &&
+      parsed.data.legal.privacyNoticeDocumentId ===
+        identityFixtureIds.privacyNotice &&
+      (!parsed.data.networking.enabled ||
+        parsed.data.networking.consentDocumentId ===
+          identityFixtureIds.networkingConsent);
+    if (!exactDocuments) {
+      return mockProblemResponse(
+        identityOnboardingProblemSchema,
+        identityOnboardingProblemFixtures.stale_legal,
+        { fixtureName: 'identity.mock.onboarding-stale-legal' },
+      );
+    }
+
+    const fingerprint = JSON.stringify(parsed.data);
+    const previous = mockActivationState.onboarding;
+    if (
+      previous?.idempotencyKey === idempotencyKey.data &&
+      previous.fingerprint !== fingerprint
+    ) {
+      return mockProblemResponse(
+        identityOnboardingProblemSchema,
+        identityOnboardingProblemFixtures.request_id_reused,
+        { fixtureName: 'identity.mock.onboarding-key-reused' },
+      );
+    }
+    const networkingEnabled = parsed.data.networking.enabled;
+    if (!previous || previous.idempotencyKey !== idempotencyKey.data) {
+      mockActivationState.onboarding = {
+        fingerprint,
+        idempotencyKey: idempotencyKey.data,
+        networkingEnabled,
+        profile: parsed.data.profile,
+      };
+    }
+    const completion = networkingEnabled
+      ? identityOnboardingFixtures.opted_in
+      : identityOnboardingFixtures.opted_out;
+    return mockJsonResponse(
+      identityOnboardingResponseSchema,
+      {
+        ...completion,
+        profile: parsed.data.profile,
+      },
+      {
+        fixtureName: 'identity.mock.onboarding',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
       },
     );
   }),

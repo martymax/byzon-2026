@@ -20,6 +20,29 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F1-05` je dokončený na `track/frontend-complete`. Nový `CS-BOOT-01`
+  striktně popisuje private/no-store `/me/bootstrap` a idempotentní
+  `/me/onboarding`: event, minimální identitu, pending/active access bez
+  důvěry v klientskou roli, profil, feature flags, privacy minimum, onboarding
+  stav a právě aktuální právní dokumenty. Pending aktivace nenese role a live
+  data nesmí přijmout syntetické právní preview.
+- Development-only `/onboarding` vede kroky profil → podmínky/privacy →
+  dobrovolný networking. Jméno a e-mail kanonizuje podle domény, povinné
+  dokumenty potvrzuje přes exact ID/verzi a networking začíná bez předvolby;
+  opt-out neposílá networking consent ID, opt-in má samostatné potvrzení.
+  Back zachová jen in-memory draft, opuštění je chráněné a URL, local/session
+  storage, cache ani offline mutace P2 data nedostanou.
+- Chybějící/nepublikované či stale právní verze zastaví submit a zruší staré
+  checkboxy. Syntetické texty jsou výslovně označené jako neschválený draft.
+  Same-tick lock propustí jeden submit a neurčitý retry znovu použije stejnou
+  idempotency key; deterministický problem ji zahodí. Mock nikdy nevytvoří
+  skutečnou Better Auth session, membership nebo consent record.
+- Ověření `F1-05` prošlo jako 109 conference testů (36 DB scénářů korektně
+  přeskočeno), 118 domain/UI/test-support testů a 27 onboarding komponentových
+  scénářů na třech viewports včetně axe, overflow a `44 px`. Prošly také
+  cílený ESLint, Prettier, typecheck, produkční Next build a source/post-build
+  mock boundary. Produkční právní UAT zůstává za `BLOCKER-LEGAL-01` a skutečný
+  autorizovaný zápis za `P4-13`.
 - `F1-04` je dokončený na `track/frontend-complete`. Po manual/camera claimu
   používá CTA klientskou Next navigaci, aby dev/test MSW zachoval syntetický
   serverový pending stav. `/prihlaseni` vždy znovu čte landing

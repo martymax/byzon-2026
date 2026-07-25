@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/onboarding',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
         source: '/sw.js',
         headers: [
           {

@@ -249,6 +249,11 @@
   color: var(--byzon-text-muted);
 }
 
+.ui-choice__label,
+.ui-choice__description {
+  display: block;
+}
+
 .ui-field__error {
   color: var(--byzon-danger);
   font-weight: 600;
@@ -271,7 +276,18 @@
   grid-template-columns: 1.5rem 1fr;
   align-items: start;
   gap: var(--byzon-space-3);
-  padding-block: var(--byzon-space-2);
+  padding: var(--byzon-space-2);
+  border-radius: var(--byzon-radius-sm);
+  cursor: pointer;
+}
+
+.ui-choice:hover {
+  background: var(--byzon-surface-soft);
+}
+
+.ui-choice:has(.ui-choice__control:focus-visible) {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
 }
 
 .ui-choice__control {

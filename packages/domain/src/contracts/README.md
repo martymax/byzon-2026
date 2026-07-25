@@ -81,6 +81,27 @@ ukládat do URL historie, cache nebo logu. Produkční handshake zůstává za
 `BLOCKER-AUTH-01`/`BLOCKER-TKT-04`, zatímco frontend používá stejný kontrakt v
 jasně označeném development preview.
 
+## Identity bootstrap and onboarding (`CS-BOOT-01`)
+
+`identity.ts` je privátní/no-store runtime hranice pro `/me/bootstrap` a
+idempotentní `/me/onboarding`. Bootstrap striktně skládá event, minimální
+identitu, eventový vztah bez klientem dodané role, profil, feature flags,
+onboarding stav, privacy minimum a právě aktuální právní dokumenty. Pending
+aktivace nesmí nést eventové role; live odpověď nesmí obsahovat syntetické
+právní preview.
+
+Povinné podmínky (`accepted`) a informace o soukromí (`acknowledged`) používají
+přesná ID a verze. Dobrovolný networking je samostatná nepředvolená
+discriminated volba; při opt-out se networking document ID vůbec neposílá.
+Chybějící nebo zastaralá právní verze failne zavřeně a staré volby se nesmí
+znovu použít. Profil i volby jsou P2 data: žádná URL, browser persistence,
+offline mutace ani sdílená cache.
+
+Development fixtures nesou explicitní `dataMode: synthetic_preview` a právní
+texty jsou označené jako neschválený syntetický draft. Produkční texty,
+souhlasy a UAT zůstávají za `BLOCKER-LEGAL-01`; skutečná autorizace a zápis
+`P4-13` nejsou mockovaným dokončením předstírané.
+
 ## Participant ticket (`CS-TICKET-01`, status-only slice)
 
 `ticket.ts` defines the private, no-store participant status DTO used by the

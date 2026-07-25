@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   Button,
+  ChoiceField,
   Dialog,
   ErrorSummary,
   FormField,
@@ -54,6 +55,21 @@ describe('BYZON UI primitives', () => {
     expect(markup).toContain('aria-required="true"');
     expect(markup).toContain('required=""');
     expect(markup).toContain('role="alert"');
+  });
+
+  it('makes the complete choice row one labelled interaction target', () => {
+    const markup = renderToStaticMarkup(
+      <ChoiceField
+        description="Dobrovolná volba bez předvybrané hodnoty."
+        label="Zapnout networking"
+        type="radio"
+      />,
+    );
+    const id = markup.match(/<label[^>]+for="([^"]+)"/)?.[1];
+    expect(id).toBeTruthy();
+    expect(markup.startsWith('<label')).toBe(true);
+    expect(markup).toContain(`id="${id}"`);
+    expect(markup).toContain('aria-describedby=');
   });
 
   it('renders a labelled active destination and caps participant navigation', () => {

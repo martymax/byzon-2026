@@ -6,6 +6,8 @@ import { FixtureValidationError } from '@byzon/test-support';
 import {
   activationFixtureCode,
   contentFixtureIds,
+  identityFixtureIds,
+  identityFixtureProfile,
   sessionExpiredProblemFixture,
 } from '@byzon/test-support/fixtures';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -24,6 +26,10 @@ import {
   submitActivationClaim,
   submitActivationIdentity,
 } from '../../lib/activation-api.js';
+import {
+  requestIdentityBootstrap,
+  submitIdentityOnboarding,
+} from '../../lib/identity-api.js';
 import { createMockServer } from './node.js';
 import {
   MOCK_REQUEST_ID,
@@ -280,6 +286,64 @@ describe('MSW through the production API port', () => {
       failure: {
         kind: 'problem',
         problem: { code: 'ACTIVATION_LINK_REJECTED' },
+      },
+    });
+  });
+
+  it('completes synthetic onboarding with exact legal versions and replay safety', async () => {
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        dataMode: 'synthetic_preview',
+        membership: { access: { state: 'pending_activation' } },
+        onboarding: { status: 'profile_required' },
+      },
+    });
+    const request = {
+      profile: identityFixtureProfile,
+      legal: {
+        termsDocumentId: identityFixtureIds.terms,
+        termsAccepted: true,
+        privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
+        privacyAcknowledged: true,
+      },
+      networking: { enabled: false },
+    } as const;
+
+    await expect(
+      submitIdentityOnboarding(client, request, 'onboarding-mock-port-0001'),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        state: 'complete',
+        networkingEnabled: false,
+      },
+    });
+    await expect(
+      submitIdentityOnboarding(client, request, 'onboarding-mock-port-0001'),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        onboarding: { status: 'complete' },
+        networking: { enabled: false },
+      },
+    });
+
+    await expect(
+      submitIdentityOnboarding(
+        client,
+        {
+          ...request,
+          profile: { ...request.profile, firstName: 'Jiný' },
+        },
+        'onboarding-mock-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'REQUEST_ID_REUSED' },
       },
     });
   });
