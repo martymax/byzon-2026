@@ -14,5 +14,15 @@ describe('test-support public exports', () => {
     expect(fixtures.participantTicketFixtures.valid?.ticket.status).toBe(
       'valid',
     );
+    expect(
+      fixtures.participantAnnouncementInboxFixtures.happy?.items[0]?.severity,
+    ).toBe('critical');
+    expect(
+      fixtures.participantAnnouncementDetailFixtures.unread?.announcement
+        .readAt,
+    ).toBeNull();
+    expect(fixtures.participantAnnouncementReadFixtures.success?.state).toBe(
+      'read',
+    );
   });
 });

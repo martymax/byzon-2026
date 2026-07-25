@@ -55,13 +55,13 @@ const participantNavigationItems: NavigationItem[] = [
     ),
   },
   {
-    id: 'partners',
-    href: '/app/partneri',
-    label: 'Partneři',
+    id: 'announcements',
+    href: '/app/oznameni',
+    label: 'Oznámení',
     icon: (
       <NavigationIcon>
-        <rect height="13" rx="2" width="18" x="3" y="8" />
-        <path d="M9 8V5h6v3M3 13h18M10 13v2h4v-2" />
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M10 21h4" />
       </NavigationIcon>
     ),
   },

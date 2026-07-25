@@ -2,6 +2,9 @@ import {
   activationClaimResponseSchema,
   activationLandingResponseSchema,
   defineApiProblemSchema,
+  participantAnnouncementDetailResponseSchema,
+  participantAnnouncementInboxResponseSchema,
+  participantAnnouncementReadResponseSchema,
   participantContentResponseSchema,
   participantProgramResponseSchema,
   sessionExpiredProblemSchema,
@@ -13,6 +16,7 @@ import {
   activationFixtureCode,
   activationFixtureRecoveryCode,
   activationLandingFixtures,
+  announcementFixtureIds,
   baseProblemFixture,
   baseProblemFixtureFactory,
   fixtureContextName,
@@ -21,6 +25,12 @@ import {
   fixtureEventRoles,
   participantContentFixtures,
   participantContentProblemFixtures,
+  participantAnnouncementDetailFixtures,
+  participantAnnouncementDetailProblemFixtures,
+  participantAnnouncementInboxFixtures,
+  participantAnnouncementInboxProblemFixtures,
+  participantAnnouncementReadFixtures,
+  participantAnnouncementReadProblemFixtures,
   participantProgramFixtures,
   participantProgramProblemFixtures,
   participantTicketFixtures,
@@ -95,6 +105,89 @@ describe('content fixtures', () => {
     expect(participantContentProblemFixtures.permission!.code).toBe(
       'CONTENT_NOT_FOUND',
     );
+  });
+});
+
+describe('participant announcement fixtures', () => {
+  it('validates inbox, detail and read states against production schemas', () => {
+    expect(
+      participantAnnouncementInboxResponseSchema.parse(
+        participantAnnouncementInboxFixtures.happy,
+      ),
+    ).toEqual(participantAnnouncementInboxFixtures.happy);
+    expect(
+      participantAnnouncementDetailResponseSchema.parse(
+        participantAnnouncementDetailFixtures.critical,
+      ),
+    ).toEqual(participantAnnouncementDetailFixtures.critical);
+    expect(
+      participantAnnouncementReadResponseSchema.parse(
+        participantAnnouncementReadFixtures.success,
+      ),
+    ).toEqual(participantAnnouncementReadFixtures.success);
+  });
+
+  it('correlates event and session context with published content fixtures', () => {
+    expect(announcementFixtureIds.event).toBe(
+      participantContentFixtures.happy?.eventId,
+    );
+    expect(
+      participantAnnouncementDetailFixtures.critical?.announcement.context,
+    ).toMatchObject({
+      kind: 'session',
+      session: { id: announcementFixtureIds.session },
+    });
+  });
+
+  it('covers empty filters, long Czech content and endpoint problems', () => {
+    expect(participantAnnouncementInboxFixtures.empty?.items).toHaveLength(0);
+    expect(
+      participantAnnouncementInboxFixtures.empty_unread?.items,
+    ).toHaveLength(0);
+    expect(participantAnnouncementInboxFixtures.first_page?.pageInfo).toEqual({
+      nextCursor: announcementFixtureIds.nextCursor,
+      hasMore: true,
+    });
+    expect(participantAnnouncementInboxFixtures.second_page?.pageInfo).toEqual({
+      nextCursor: null,
+      hasMore: false,
+    });
+    expect(
+      participantAnnouncementInboxFixtures.long_content?.items[0]?.summary
+        .length,
+    ).toBeGreaterThan(450);
+    expect(
+      participantAnnouncementDetailFixtures.long_content?.announcement.bodyText
+        .length,
+    ).toBeGreaterThan(15_000);
+    expect(participantAnnouncementInboxProblemFixtures.disabled?.code).toBe(
+      'ANNOUNCEMENTS_DISABLED',
+    );
+    expect(participantAnnouncementDetailProblemFixtures.not_found?.code).toBe(
+      'ANNOUNCEMENT_NOT_FOUND',
+    );
+    expect(
+      participantAnnouncementDetailProblemFixtures.audience_denied,
+    ).toEqual(participantAnnouncementDetailProblemFixtures.not_found);
+    expect(participantAnnouncementReadProblemFixtures.audience_denied).toEqual(
+      participantAnnouncementReadProblemFixtures.not_found,
+    );
+    expect(participantAnnouncementReadProblemFixtures.in_progress?.code).toBe(
+      'IDEMPOTENCY_IN_PROGRESS',
+    );
+  });
+
+  it('contains no audience, sender or delivery metadata', () => {
+    const serialized = JSON.stringify({
+      inbox: participantAnnouncementInboxFixtures,
+      detail: participantAnnouncementDetailFixtures,
+      read: participantAnnouncementReadFixtures,
+    });
+
+    expect(serialized).not.toContain('audience');
+    expect(serialized).not.toContain('sender');
+    expect(serialized).not.toContain('delivery');
+    expect(serialized).not.toContain('@');
   });
 });
 

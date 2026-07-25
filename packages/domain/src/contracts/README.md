@@ -115,3 +115,26 @@ verifier before any available/value branch can be added. Unknown fields,
 presentation values, unsafe control/bidi characters and inconsistent
 status/reason combinations are rejected. The full `CS-TICKET-01` lifecycle
 therefore remains `not started` until that server/client contract is complete.
+
+## Participant announcements (`CS-ANN-01`, inbox slice)
+
+`announcements.ts` defines the Priority A participant list, detail and
+idempotent read-result boundary. All DTOs are strict, audience-scoped and
+`private, no-store`; they carry only bounded operational title, summary, plain
+body text, severity, publication/read timestamps and an optional published
+session context. Sender identity, recipient lists, audience definitions,
+delivery/provider state and admin metadata are excluded.
+
+Inbox entries are unique and ordered newest-first. The detail and read
+endpoints must return the same `ANNOUNCEMENT_NOT_FOUND` response for a missing
+announcement and for an authenticated user outside its immutable recipient
+snapshot. The `announcement:own:read` permission additionally requires
+`announcementRecipient: true`; role membership alone is insufficient.
+`unreadCount` uses the same display-safe `999` ceiling as the identity
+bootstrap; servers clamp larger counts instead of emitting a different shape.
+
+Participant read state is P2 data. It is not eligible for shared or
+service-worker caching, and the mutation remains online-only until
+`CS-OFFLINE-01` defines an owner-safe queue and revocation behavior. Advanced
+audience authoring, immutable preview/send and delivery channels remain owned
+by `P8-05`, `P8-06` and `F4-06`.

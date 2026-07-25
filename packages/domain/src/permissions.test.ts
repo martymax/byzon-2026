@@ -13,6 +13,7 @@ const allowed = (role: EventRole, permission: EventPermission): boolean =>
     ownsResource: true,
     networkingOptedIn: true,
     acceptedConnection: true,
+    announcementRecipient: true,
     assignedSession: true,
     assignedRoom: true,
     moderatorCanAnnounce: true,
@@ -22,12 +23,14 @@ const allowed = (role: EventRole, permission: EventPermission): boolean =>
 describe('event permission matrix', () => {
   it('keeps the full role and permission matrix explicit', () => {
     expect(eventRoles).toHaveLength(7);
-    expect(eventPermissions).toHaveLength(20);
+    expect(eventPermissions).toHaveLength(21);
     expect(eventRoles).not.toContain('support_operator');
   });
 
   it.each([
     ['participant', 'agenda:own:write', true],
+    ['participant', 'announcement:own:read', true],
+    ['speaker', 'announcement:own:read', false],
     ['speaker', 'agenda:own:write', false],
     ['speaker', 'program:own-materials:write', true],
     ['checkin_operator', 'checkin:perform', true],
@@ -72,6 +75,9 @@ describe('event permission matrix', () => {
 
   it('fails closed when conditional policy context is absent', () => {
     expect(hasEventPermission(['participant'], 'agenda:own:write')).toBe(false);
+    expect(hasEventPermission(['participant'], 'announcement:own:read')).toBe(
+      false,
+    );
     expect(
       hasEventPermission(['participant'], 'networking:directory:read'),
     ).toBe(false);
@@ -81,6 +87,29 @@ describe('event permission matrix', () => {
     expect(
       hasEventPermission(['room_operator'], 'reservation:assigned:read'),
     ).toBe(false);
+  });
+
+  it('requires recipient membership for participant announcement reads', () => {
+    expect(
+      hasEventPermission(['participant'], 'announcement:own:read', {
+        announcementRecipient: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasEventPermission(['participant'], 'announcement:own:read', {
+        ownsResource: true,
+      }),
+    ).toBe(false);
+    expect(
+      hasEventPermission(['speaker'], 'announcement:own:read', {
+        announcementRecipient: true,
+      }),
+    ).toBe(false);
+    expect(
+      hasEventPermission(['speaker', 'participant'], 'announcement:own:read', {
+        announcementRecipient: true,
+      }),
+    ).toBe(true);
   });
 
   it('lets an admin act broadly but requires an audit marker for exceptions', () => {

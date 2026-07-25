@@ -12,6 +12,7 @@ import {
   activationRecoveryProblemSchema,
   activationRecoveryRequestSchema,
   activationRecoveryResponseSchema,
+  announcementInboxQuerySchema,
   idempotencyKeySchema,
   identityBootstrapProblemSchema,
   identityBootstrapResponseSchema,
@@ -21,6 +22,13 @@ import {
   identitySessionActionProblemSchema,
   identitySessionActionRequestSchema,
   identitySessionActionResponseSchema,
+  participantAnnouncementDetailProblemSchema,
+  participantAnnouncementDetailResponseSchema,
+  participantAnnouncementInboxProblemSchema,
+  participantAnnouncementInboxResponseSchema,
+  participantAnnouncementParamsSchema,
+  participantAnnouncementReadProblemSchema,
+  participantAnnouncementReadResponseSchema,
   participantContentProblemSchema,
   participantContentResponseSchema,
   participantProgramProblemSchema,
@@ -40,6 +48,7 @@ import {
   activationLinkProblemFixtures,
   activationRecoveryFixtures,
   activationRecoveryProblemFixtures,
+  announcementFixtureIds,
   contentFixtureIds,
   identityBootstrapFixtures,
   identityBootstrapProblemFixtures,
@@ -50,6 +59,12 @@ import {
   identitySessionActionProblemFixtures,
   participantContentFixtures,
   participantContentProblemFixtures,
+  participantAnnouncementDetailFixtures,
+  participantAnnouncementDetailProblemFixtures,
+  participantAnnouncementInboxFixtures,
+  participantAnnouncementInboxProblemFixtures,
+  participantAnnouncementReadFixtures,
+  participantAnnouncementReadProblemFixtures,
   participantProgramFixtures,
   participantProgramProblemFixtures,
   participantTicketFixtures,
@@ -116,6 +131,28 @@ interface MockActivationState {
   };
 }
 
+interface MockAnnouncementState {
+  featureEnabled: boolean;
+  eventAccess: boolean;
+  readonly recipientAnnouncementIds: Set<string>;
+  readonly readAtById: Map<string, string>;
+  readonly readRequests: Map<
+    string,
+    {
+      fingerprint: string;
+      response: NonNullable<
+        (typeof participantAnnouncementReadFixtures)['success']
+      >;
+    }
+  >;
+}
+
+const defaultRecipientAnnouncementIds = Object.freeze([
+  announcementFixtureIds.critical,
+  announcementFixtureIds.important,
+  announcementFixtureIds.information,
+]);
+
 const mockActivationState: MockActivationState = {
   claimed: false,
   signedOut: false,
@@ -126,6 +163,19 @@ const mockActivationState: MockActivationState = {
   consumedLinkFingerprints: new Set(),
   sessionActions: new Map(),
   onboardingRequests: new Map(),
+};
+
+const mockAnnouncementState: MockAnnouncementState = {
+  featureEnabled: true,
+  eventAccess: true,
+  recipientAnnouncementIds: new Set(defaultRecipientAnnouncementIds),
+  readAtById: new Map([
+    [
+      announcementFixtureIds.information,
+      participantAnnouncementReadFixtures.already_read!.readAt,
+    ],
+  ]),
+  readRequests: new Map(),
 };
 
 export const resetMockActivationState = (): void => {
@@ -139,6 +189,67 @@ export const resetMockActivationState = (): void => {
   mockActivationState.sessionActions.clear();
   mockActivationState.onboardingRequests.clear();
   delete mockActivationState.onboarding;
+};
+
+export const resetMockAnnouncementState = (): void => {
+  mockAnnouncementState.featureEnabled = true;
+  mockAnnouncementState.eventAccess = true;
+  mockAnnouncementState.recipientAnnouncementIds.clear();
+  for (const announcementId of defaultRecipientAnnouncementIds) {
+    mockAnnouncementState.recipientAnnouncementIds.add(announcementId);
+  }
+  mockAnnouncementState.readAtById.clear();
+  mockAnnouncementState.readAtById.set(
+    announcementFixtureIds.information,
+    participantAnnouncementReadFixtures.already_read!.readAt,
+  );
+  mockAnnouncementState.readRequests.clear();
+};
+
+export const configureMockAnnouncementAccess = (options: {
+  readonly eventAccess?: boolean;
+  readonly featureEnabled?: boolean;
+  readonly recipientAnnouncementIds?: readonly string[];
+}): void => {
+  if (options.eventAccess !== undefined) {
+    mockAnnouncementState.eventAccess = options.eventAccess;
+  }
+  if (options.featureEnabled !== undefined) {
+    mockAnnouncementState.featureEnabled = options.featureEnabled;
+  }
+  if (options.recipientAnnouncementIds !== undefined) {
+    mockAnnouncementState.recipientAnnouncementIds.clear();
+    for (const announcementId of options.recipientAnnouncementIds) {
+      mockAnnouncementState.recipientAnnouncementIds.add(announcementId);
+    }
+  }
+};
+
+const isRecipientAnnouncement = (announcementId: string): boolean =>
+  mockAnnouncementState.recipientAnnouncementIds.has(announcementId);
+
+const recipientAnnouncementItems = () =>
+  participantAnnouncementInboxFixtures.happy!.items.filter(({ id }) =>
+    isRecipientAnnouncement(id),
+  );
+
+const canonicalAnnouncementUnreadCount = (): number =>
+  recipientAnnouncementItems().filter(
+    ({ id }) => !mockAnnouncementState.readAtById.has(id),
+  ).length;
+
+const announcementCursorForOffset = (offset: number): string =>
+  `fixture-announcements-offset-${String(offset)}`;
+
+const announcementOffsetFromCursor = (
+  cursor: string | undefined,
+  itemCount: number,
+): number | null => {
+  if (cursor === undefined) return 0;
+  const match = /^fixture-announcements-offset-([1-9][0-9]?)$/.exec(cursor);
+  if (!match) return null;
+  const offset = Number(match[1]);
+  return offset <= itemCount ? offset : null;
 };
 
 const opaqueFingerprint = async (value: string): Promise<string> => {
@@ -420,11 +531,21 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
           },
         }
       : identityBootstrapFixtures.profile_required;
-    return mockJsonResponse(identityBootstrapResponseSchema, fixture, {
-      fixtureName: 'identity.mock.bootstrap',
-      cacheControl: 'private, no-store',
-      vary: ['authorization', 'cookie'],
-    });
+    return mockJsonResponse(
+      identityBootstrapResponseSchema,
+      {
+        ...fixture,
+        unreadCounts: {
+          ...fixture!.unreadCounts,
+          announcements: canonicalAnnouncementUnreadCount(),
+        },
+      },
+      {
+        fixtureName: 'identity.mock.bootstrap',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
+      },
+    );
   }),
   http.post('*/api/v1/me/onboarding', async ({ request }) => {
     const body = await request.json().catch(() => undefined);
@@ -543,6 +664,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       mockActivationState.onboardingRequests.clear();
       mockActivationState.linkConsumptions.clear();
       mockActivationState.consumedLinkFingerprints.clear();
+      resetMockAnnouncementState();
     }
     return mockJsonResponse(
       identitySessionActionResponseSchema,
@@ -554,6 +676,288 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       },
     );
   }),
+  http.get('*/api/v1/me/announcements', ({ request }) => {
+    if (mockActivationState.signedOut) {
+      return mockProblemResponse(
+        participantAnnouncementInboxProblemSchema,
+        participantAnnouncementInboxProblemFixtures.authentication,
+        { fixtureName: 'announcements.mock.inbox-authentication' },
+      );
+    }
+    if (!mockAnnouncementState.eventAccess) {
+      return mockProblemResponse(
+        participantAnnouncementInboxProblemSchema,
+        participantAnnouncementInboxProblemFixtures.permission,
+        { fixtureName: 'announcements.mock.inbox-permission' },
+      );
+    }
+    if (!mockAnnouncementState.featureEnabled) {
+      return mockProblemResponse(
+        participantAnnouncementInboxProblemSchema,
+        participantAnnouncementInboxProblemFixtures.disabled,
+        { fixtureName: 'announcements.mock.inbox-disabled' },
+      );
+    }
+
+    const url = new URL(request.url);
+    const allowedQueryKeys = new Set(['filter', 'cursor', 'limit']);
+    const hasUnknownOrRepeatedQuery = [...url.searchParams.keys()].some(
+      (key) =>
+        !allowedQueryKeys.has(key) || url.searchParams.getAll(key).length !== 1,
+    );
+    const rawLimit = url.searchParams.get('limit');
+    const query = announcementInboxQuerySchema.safeParse({
+      filter: url.searchParams.get('filter') ?? undefined,
+      ...(url.searchParams.has('cursor')
+        ? { cursor: url.searchParams.get('cursor') }
+        : {}),
+      ...(rawLimit !== null && /^\d+$/.test(rawLimit)
+        ? { limit: Number(rawLimit) }
+        : rawLimit === null
+          ? {}
+          : { limit: rawLimit }),
+    });
+    if (hasUnknownOrRepeatedQuery || !query.success) {
+      return mockProblemResponse(
+        participantAnnouncementInboxProblemSchema,
+        participantAnnouncementInboxProblemFixtures.validation,
+        { fixtureName: 'announcements.mock.inbox-validation' },
+      );
+    }
+
+    const allItems = recipientAnnouncementItems().map((item) => ({
+      ...item,
+      readAt: mockAnnouncementState.readAtById.get(item.id) ?? null,
+    }));
+    const filteredItems =
+      query.data.filter === 'unread'
+        ? allItems.filter(({ readAt }) => readAt === null)
+        : allItems;
+    const offset = announcementOffsetFromCursor(
+      query.data.cursor,
+      filteredItems.length,
+    );
+    if (offset === null) {
+      return mockProblemResponse(
+        participantAnnouncementInboxProblemSchema,
+        participantAnnouncementInboxProblemFixtures.validation,
+        { fixtureName: 'announcements.mock.inbox-validation' },
+      );
+    }
+    const limit = query.data.limit ?? 50;
+    const items = filteredItems.slice(offset, offset + limit);
+    const hasMore = offset + items.length < filteredItems.length;
+    const unreadCount = canonicalAnnouncementUnreadCount();
+
+    return mockJsonResponse(
+      participantAnnouncementInboxResponseSchema,
+      {
+        eventId: announcementFixtureIds.event,
+        items,
+        pageInfo: {
+          nextCursor: hasMore
+            ? announcementCursorForOffset(offset + items.length)
+            : null,
+          hasMore,
+        },
+        unreadCount,
+      },
+      {
+        fixtureName: 'announcements.mock.inbox',
+        cacheControl: 'private, no-store',
+        vary: ['authorization', 'cookie'],
+      },
+    );
+  }),
+  http.get(
+    '*/api/v1/me/announcements/:announcementId',
+    ({ params, request }) => {
+      if (mockActivationState.signedOut) {
+        return mockProblemResponse(
+          participantAnnouncementDetailProblemSchema,
+          participantAnnouncementDetailProblemFixtures.authentication,
+          { fixtureName: 'announcements.mock.detail-authentication' },
+        );
+      }
+      if (!mockAnnouncementState.eventAccess) {
+        return mockProblemResponse(
+          participantAnnouncementDetailProblemSchema,
+          participantAnnouncementDetailProblemFixtures.permission,
+          { fixtureName: 'announcements.mock.detail-permission' },
+        );
+      }
+      if (!mockAnnouncementState.featureEnabled) {
+        return mockProblemResponse(
+          participantAnnouncementDetailProblemSchema,
+          participantAnnouncementDetailProblemFixtures.disabled,
+          { fixtureName: 'announcements.mock.detail-disabled' },
+        );
+      }
+
+      const parsed = participantAnnouncementParamsSchema.safeParse({
+        announcementId: String(params.announcementId),
+      });
+      if (!parsed.success || new URL(request.url).search.length > 0) {
+        return mockProblemResponse(
+          participantAnnouncementDetailProblemSchema,
+          participantAnnouncementDetailProblemFixtures.validation,
+          { fixtureName: 'announcements.mock.detail-validation' },
+        );
+      }
+
+      const fixture =
+        parsed.data.announcementId === announcementFixtureIds.critical
+          ? participantAnnouncementDetailFixtures.critical
+          : parsed.data.announcementId === announcementFixtureIds.important
+            ? participantAnnouncementDetailFixtures.unread
+            : parsed.data.announcementId === announcementFixtureIds.information
+              ? participantAnnouncementDetailFixtures.read
+              : undefined;
+      if (!fixture || !isRecipientAnnouncement(parsed.data.announcementId)) {
+        return mockProblemResponse(
+          participantAnnouncementDetailProblemSchema,
+          participantAnnouncementDetailProblemFixtures.not_found,
+          { fixtureName: 'announcements.mock.detail-not-found' },
+        );
+      }
+
+      return mockJsonResponse(
+        participantAnnouncementDetailResponseSchema,
+        {
+          ...fixture,
+          announcement: {
+            ...fixture.announcement,
+            readAt:
+              mockAnnouncementState.readAtById.get(fixture.announcement.id) ??
+              null,
+          },
+        },
+        {
+          fixtureName: 'announcements.mock.detail',
+          cacheControl: 'private, no-store',
+          vary: ['authorization', 'cookie'],
+        },
+      );
+    },
+  ),
+  http.post(
+    '*/api/v1/me/announcements/:announcementId/read',
+    async ({ params, request }) => {
+      if (mockActivationState.signedOut) {
+        return mockProblemResponse(
+          participantAnnouncementReadProblemSchema,
+          participantAnnouncementReadProblemFixtures.authentication,
+          { fixtureName: 'announcements.mock.read-authentication' },
+        );
+      }
+      if (!mockAnnouncementState.eventAccess) {
+        return mockProblemResponse(
+          participantAnnouncementReadProblemSchema,
+          participantAnnouncementReadProblemFixtures.permission,
+          { fixtureName: 'announcements.mock.read-permission' },
+        );
+      }
+      if (!mockAnnouncementState.featureEnabled) {
+        return mockProblemResponse(
+          participantAnnouncementReadProblemSchema,
+          participantAnnouncementReadProblemFixtures.disabled,
+          { fixtureName: 'announcements.mock.read-disabled' },
+        );
+      }
+
+      const parsed = participantAnnouncementParamsSchema.safeParse({
+        announcementId: String(params.announcementId),
+      });
+      const idempotencyKey = idempotencyKeySchema.safeParse(
+        request.headers.get('idempotency-key'),
+      );
+      const url = new URL(request.url);
+      const body = await request.text().catch(() => undefined);
+      if (
+        !parsed.success ||
+        !idempotencyKey.success ||
+        url.search.length > 0 ||
+        body !== ''
+      ) {
+        return mockProblemResponse(
+          participantAnnouncementReadProblemSchema,
+          participantAnnouncementReadProblemFixtures.validation,
+          { fixtureName: 'announcements.mock.read-validation' },
+        );
+      }
+
+      const announcementExistsForRecipient =
+        new Set<string>([
+          announcementFixtureIds.critical,
+          announcementFixtureIds.important,
+          announcementFixtureIds.information,
+        ]).has(parsed.data.announcementId) &&
+        isRecipientAnnouncement(parsed.data.announcementId);
+      if (!announcementExistsForRecipient) {
+        return mockProblemResponse(
+          participantAnnouncementReadProblemSchema,
+          participantAnnouncementReadProblemFixtures.not_found,
+          { fixtureName: 'announcements.mock.read-not-found' },
+        );
+      }
+
+      const fingerprint = await opaqueFingerprint(
+        `${request.method}:${url.pathname}`,
+      );
+      const previous = mockAnnouncementState.readRequests.get(
+        idempotencyKey.data,
+      );
+      if (previous) {
+        if (previous.fingerprint !== fingerprint) {
+          return mockProblemResponse(
+            participantAnnouncementReadProblemSchema,
+            participantAnnouncementReadProblemFixtures.key_reused,
+            { fixtureName: 'announcements.mock.read-key-reused' },
+          );
+        }
+        return mockJsonResponse(
+          participantAnnouncementReadResponseSchema,
+          previous.response,
+          {
+            fixtureName: 'announcements.mock.read-replay',
+            cacheControl: 'private, no-store',
+            vary: ['authorization', 'cookie'],
+          },
+        );
+      }
+
+      const existingReadAt = mockAnnouncementState.readAtById.get(
+        parsed.data.announcementId,
+      );
+      const readAt =
+        existingReadAt ??
+        (parsed.data.announcementId === announcementFixtureIds.critical
+          ? '2026-09-19T07:35:00.000Z'
+          : participantAnnouncementReadFixtures.success!.readAt);
+      mockAnnouncementState.readAtById.set(parsed.data.announcementId, readAt);
+      const response = {
+        eventId: announcementFixtureIds.event,
+        announcementId: parsed.data.announcementId,
+        state: 'read' as const,
+        readAt,
+        unreadCount: canonicalAnnouncementUnreadCount(),
+      };
+      mockAnnouncementState.readRequests.set(idempotencyKey.data, {
+        fingerprint,
+        response,
+      });
+
+      return mockJsonResponse(
+        participantAnnouncementReadResponseSchema,
+        response,
+        {
+          fixtureName: 'announcements.mock.read',
+          cacheControl: 'private, no-store',
+          vary: ['authorization', 'cookie'],
+        },
+      );
+    },
+  ),
   http.get('*/api/v1/events/:eventId/program', ({ params }) => {
     if (String(params.eventId) !== contentFixtureIds.event) {
       return mockProblemResponse(

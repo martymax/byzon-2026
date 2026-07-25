@@ -118,6 +118,9 @@ describe('F2-06 participant shell and program quality gate', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Program', exact: true }))
       .toHaveAttribute('aria-current', 'page');
+    await expect
+      .element(screen.getByRole('link', { name: 'Oznámení', exact: true }))
+      .toHaveAttribute('href', '/app/oznameni');
     expect(filters).toHaveLength(2);
     for (const filter of filters) {
       expect(filter.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

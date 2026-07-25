@@ -39,6 +39,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
       },
       {
+        source: '/app/oznameni/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
         source: '/onboarding',
         headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
       },

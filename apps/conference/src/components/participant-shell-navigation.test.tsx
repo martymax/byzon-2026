@@ -8,7 +8,8 @@ describe('participant shell navigation', () => {
     ['/app/program', 'program'],
     ['/app/program/session-1', 'program'],
     ['/app/recnici/jana-novakova', 'speakers'],
-    ['/app/partneri', 'partners'],
+    ['/app/oznameni', 'announcements'],
+    ['/app/oznameni/announcement-1', 'announcements'],
     ['/app/informace', 'information'],
   ])('maps %s to its parent destination', (pathname, expected) => {
     expect(participantNavigationActiveId(pathname)).toBe(expected);

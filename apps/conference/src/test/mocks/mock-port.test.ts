@@ -6,6 +6,7 @@ import { FixtureValidationError } from '@byzon/test-support';
 import {
   activationFixtureCode,
   activationFixtureRecoveryCode,
+  announcementFixtureIds,
   contentFixtureIds,
   identityFixtureIds,
   identityFixtureProfile,
@@ -21,6 +22,11 @@ import {
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
 import { requestParticipantProgram } from '../../lib/content-api.js';
+import {
+  markAnnouncementRead,
+  requestAnnouncementDetail,
+  requestAnnouncementInbox,
+} from '../../lib/announcement-api.js';
 import {
   consumeActivationLink,
   requestActivationLanding,
@@ -39,7 +45,11 @@ import {
   mockJsonResponse,
   mockProblemResponse,
 } from './response.js';
-import { resetMockActivationState } from './handlers.js';
+import {
+  configureMockAnnouncementAccess,
+  resetMockActivationState,
+  resetMockAnnouncementState,
+} from './handlers.js';
 
 const ORIGIN = 'http://mock.byzon.test';
 const successSchema = z.strictObject({
@@ -76,6 +86,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => {
   server.resetHandlers();
   resetMockActivationState();
+  resetMockAnnouncementState();
 });
 afterAll(() => server.close());
 
@@ -169,6 +180,295 @@ describe('MSW through the production API port', () => {
 
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toBe('authorization, cookie');
+  });
+
+  it('serves a private announcement inbox and updates canonical read state', async () => {
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        eventId: announcementFixtureIds.event,
+        unreadCount: 2,
+        items: [
+          { id: announcementFixtureIds.critical, readAt: null },
+          { id: announcementFixtureIds.important, readAt: null },
+          {
+            id: announcementFixtureIds.information,
+            readAt: '2026-09-17T12:15:00.000Z',
+          },
+        ],
+      },
+    });
+
+    await expect(
+      markAnnouncementRead(
+        client,
+        announcementFixtureIds.important,
+        'announcement-read-port-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        announcementId: announcementFixtureIds.important,
+        state: 'read',
+        unreadCount: 1,
+      },
+    });
+    await expect(
+      requestAnnouncementDetail(client, announcementFixtureIds.important),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        announcement: {
+          id: announcementFixtureIds.important,
+          readAt: '2026-09-18T06:35:00.000Z',
+        },
+      },
+    });
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'unread' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        unreadCount: 1,
+        items: [{ id: announcementFixtureIds.critical, readAt: null }],
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        unreadCounts: { announcements: 1 },
+      },
+    });
+
+    const response = await fetchWithOrigin(
+      '/api/v1/me/announcements?filter=all',
+    );
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('authorization, cookie');
+  });
+
+  it('scopes the announcement inbox and unread count to the current recipient', async () => {
+    configureMockAnnouncementAccess({
+      recipientAnnouncementIds: [
+        announcementFixtureIds.critical,
+        announcementFixtureIds.information,
+      ],
+    });
+
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        unreadCount: 1,
+        items: [
+          { id: announcementFixtureIds.critical, readAt: null },
+          {
+            id: announcementFixtureIds.information,
+            readAt: '2026-09-17T12:15:00.000Z',
+          },
+        ],
+        pageInfo: { hasMore: false, nextCursor: null },
+      },
+    });
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'unread' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        unreadCount: 1,
+        items: [{ id: announcementFixtureIds.critical, readAt: null }],
+      },
+    });
+    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
+      ok: true,
+      data: { unreadCounts: { announcements: 1 } },
+    });
+  });
+
+  it('does not distinguish a cross-recipient announcement from a missing ID', async () => {
+    configureMockAnnouncementAccess({
+      recipientAnnouncementIds: [
+        announcementFixtureIds.critical,
+        announcementFixtureIds.information,
+      ],
+    });
+    const missingId = '01920000-0000-7000-8000-000000000099';
+
+    const crossRecipientDetail = await fetchWithOrigin(
+      `/api/v1/me/announcements/${announcementFixtureIds.important}`,
+    );
+    const missingDetail = await fetchWithOrigin(
+      `/api/v1/me/announcements/${missingId}`,
+    );
+    expect(crossRecipientDetail.status).toBe(404);
+    expect(missingDetail.status).toBe(404);
+    expect(await crossRecipientDetail.text()).toBe(await missingDetail.text());
+
+    const readRequest = {
+      method: 'POST',
+      headers: {
+        'idempotency-key': 'announcement-recipient-probe-0001',
+      },
+    };
+    const crossRecipientRead = await fetchWithOrigin(
+      `/api/v1/me/announcements/${announcementFixtureIds.important}/read`,
+      readRequest,
+    );
+    const missingRead = await fetchWithOrigin(
+      `/api/v1/me/announcements/${missingId}/read`,
+      readRequest,
+    );
+    expect(crossRecipientRead.status).toBe(404);
+    expect(missingRead.status).toBe(404);
+    expect(await crossRecipientRead.text()).toBe(await missingRead.text());
+  });
+
+  it('replays an exact announcement read and rejects key reuse for another item', async () => {
+    const key = 'announcement-read-replay-0001';
+    const first = await markAnnouncementRead(
+      client,
+      announcementFixtureIds.important,
+      key,
+    );
+    const replay = await markAnnouncementRead(
+      client,
+      announcementFixtureIds.important,
+      key,
+    );
+    expect(replay).toEqual(first);
+
+    await expect(
+      markAnnouncementRead(client, announcementFixtureIds.critical, key),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+  });
+
+  it('advances bounded announcement cursors without repeating a page', async () => {
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all', limit: 1 }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        items: [{ id: announcementFixtureIds.critical }],
+        pageInfo: {
+          hasMore: true,
+          nextCursor: 'fixture-announcements-offset-1',
+        },
+      },
+    });
+    await expect(
+      requestAnnouncementInbox(client, {
+        filter: 'all',
+        cursor: 'fixture-announcements-offset-1',
+        limit: 1,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        items: [{ id: announcementFixtureIds.important }],
+        pageInfo: {
+          hasMore: true,
+          nextCursor: 'fixture-announcements-offset-2',
+        },
+      },
+    });
+    await expect(
+      requestAnnouncementInbox(client, {
+        filter: 'all',
+        cursor: 'fixture-announcements-offset-2',
+        limit: 1,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        items: [{ id: announcementFixtureIds.information }],
+        pageInfo: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+
+  it('fails announcement access closed for auth, feature, scope and missing IDs', async () => {
+    configureMockAnnouncementAccess({ featureEnabled: false });
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all' }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ANNOUNCEMENTS_DISABLED' },
+      },
+    });
+
+    resetMockAnnouncementState();
+    configureMockAnnouncementAccess({ eventAccess: false });
+    await expect(
+      requestAnnouncementDetail(client, announcementFixtureIds.critical),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'EVENT_ACCESS_DENIED' },
+      },
+    });
+
+    resetMockAnnouncementState();
+    const missingId = '01920000-0000-7000-8000-000000000099';
+    await expect(
+      requestAnnouncementDetail(client, missingId),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 404,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ANNOUNCEMENT_NOT_FOUND' },
+      },
+    });
+    await expect(
+      markAnnouncementRead(client, missingId, 'announcement-read-missing-0001'),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 404,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'ANNOUNCEMENT_NOT_FOUND' },
+      },
+    });
+
+    await expect(
+      submitIdentitySessionAction(
+        client,
+        'logout_current',
+        'announcement-logout-port-0001',
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      requestAnnouncementInbox(client, { filter: 'all' }),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 401,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'AUTHENTICATION_REQUIRED' },
+      },
+    });
+  });
+
+  it('rejects announcement query failure switches as validation errors', async () => {
+    const response = await fetchWithOrigin(
+      '/api/v1/me/announcements?filter=all&failure=offline',
+    );
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
   });
 
   it('accepts only the canonical synthetic claim code without enumeration', async () => {

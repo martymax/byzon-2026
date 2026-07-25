@@ -9,7 +9,7 @@ import {
 import { defineFixtureSet } from '../fixture-harness.js';
 
 export const contentFixtureIds = Object.freeze({
-  event: '01910000-0000-7000-8000-000000000001',
+  event: '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
   friday: '01910000-0000-7000-8000-000000000002',
   saturday: '01910000-0000-7000-8000-000000000003',
   mainStage: '01910000-0000-7000-8000-000000000004',

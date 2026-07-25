@@ -597,7 +597,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `not started` |
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `not started` |
 | `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | `P6-01` až `P6-06`, `F5` | `F5` | `not started` |
-| `CS-ANN-01` | in-app draft, audience preview, send, inbox a read | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | `not started` |
+| `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | `contract ready` pro striktní participant subset; admin/send kontrakt čeká na `P8` |
 | `CS-ADMIN-01` | dashboard, role, override, audit, export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08` | `F4` | `not started` |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `not started` |
 
@@ -1202,7 +1202,7 @@ Evidence:
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
 | Aktivace a identita | `UI ready (mocked)` | `F1-01` až `F1-06`: striktní `CS-ACT-01`/`CS-BOOT-01`, validované fixtures, veřejná aktivace, exact opaque claim, progresivní kamera, server-resumed identita, fragmentový one-time link, verzovaný onboarding, neenumerující recovery, bezpečné access stavy a potvrzené session actions. Závěrečný F1 security/code review doplnil race, idempotency, draft/focus a secret-redaction regrese; 133 conference unit testů, 87 domain, 18 fixtures a 252 browser component scénářů jsou zelené. | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci; `BLOCKER-LEGAL-01` pro právní UAT |
-| Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program a ticket component axe, responsive/reduced-motion a targeted visual řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
+| Program a informace | `contract ready` | `F2-01`: sdílený participant navigation primitive, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; dílčí `F2-02`: serverovým event statusem řízený nepersonalizovaný home nad publikovaným `CS-CONTENT-01`, bezpečné pre/live/post/archivní stavy a pátý funkční nav cíl; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-05` přidal discoverable inbox do pěticestné navigace; `F2-06`: hotový shell/program, ticket a inbox component axe/responsive řez | `F2-02` čeká na `CS-BOOT-01`, `CS-AGENDA-01` a archivní navigační gate; `F2-06` zůstává otevřený pro účet po `F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `contract ready` | onboarding doména `P2-06`; `F1-05` dodal striktní `CS-BOOT-01`, validované fixtures, typed mock port a přístupný onboarding; úplná správa účtu/profilu/soukromí zůstává ve `F2-07` | `P4-13` pro autorizované API, `F2-07` pro úplné UI, `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
 | Vstupenka účastníka | `not started` | `F2-04`: dokončený status-only mocked UI řez nad striktním privátním/no-store kontraktem, validovanými fixtures a typed API portem; prezentační union přijímá pouze bezpečný unavailable stav | úplný `CS-TICKET-01`, skutečný `/me/ticket`, `P4-12` a available credential blokuje `BLOCKER-TKT-05`; home shortcut/Více čeká na nav/bootstrap integraci |
@@ -1210,7 +1210,7 @@ Evidence:
 | Import a support | `not started` | schema foundation `P4-01`; `F4` plánované | `TKT-01`/`TKT-02` prod apply; `TKT-03` jen prod sync |
 | Check-in | `not started` | `P6`, `F5` plánované | `TKT-04` source kód; `TKT-05` jen app credential; `OPS-*` UAT |
 | Admin Priority A | `not started` | content subset `P3-05` až `P3-07` integrovaný; `P9`, `F4` plánované | capability-specific |
-| Provozní oznámení minimum | `not started` | `P8`, `F2-05`, `F4-06` plánované | provider blokuje jen produkční e-mail |
+| Provozní oznámení minimum | `UI ready (mocked)` | `F2-05`: striktní participant `CS-ANN-01`, recipient-scoped validované fixtures a typed no-store API; discoverable cursorový inbox, all/unread filtr, detail, online-only read, návrat se zachováním hloubky/scrollu a úplné loading/empty/offline/auth/permission/disabled/error stavy. Security/code review doplnil event/ID korelaci, revocation wipe, neenumerující audience 404, stale-resource race, pořadí napříč stránkami a focus/URL continuity. | skutečný participant announcement endpoint a autorizace čekají na `P8-06`; admin draft/audience/send na `P8-05`/`F4-06`; provider blokuje jen produkční e-mail |
 
 Původní `[x]` u `P3-04`/`P3-10` prokazuje dokončení jejich tehdejšího úzkého
 scope, nikoli automaticky nový lifecycle stav všech participant obrazovek.
@@ -1885,9 +1885,9 @@ je `UI ready (mocked)`; produkční integrace zůstává za pojmenovanými block
   link. Detailové routy aktivují rodičovský cíl, používají kanonický fallback a
   bounded focus čeká i na asynchronní nadpis bez odebrání focusu aktivnímu
   uživateli. První rozšíření cílové informační architektury o funkční
-  `Přehled` proběhlo dílčím `F2-02`; Agenda,
-  Oznámení a Více přibudou až s funkčními routami v `F2-05`, `F3` a
-  souvisejících řezech, takže shell mezitím neslibuje neexistující funkce.
+  `Přehled` proběhlo dílčím `F2-02`; `F2-05` nahradil v pěticestné primární
+  navigaci méně důležitý cíl funkčními `Oznámeními`. Agenda a Více přibudou
+  s `F3` a `F2-07`, takže shell mezitím neslibuje neexistující funkce.
 - [ ] `F2-02` Přidat domovský přehled podle fáze eventu: dnešní minimum,
   praktické informace, další uložený bod a jasný stav před/po akci bez
   vymyšlených live dat. Dílčí řez je implementovaný v
@@ -1921,9 +1921,18 @@ je `UI ready (mocked)`; produkční integrace zůstává za pojmenovanými block
   `cache: no-store` a deterministický dev mock. Úplný `CS-TICKET-01`,
   produkční `/me/ticket`, dostupný credential a home/Více discoverability
   zůstávají integrační prací za `BLOCKER-TKT-05` a bootstrap/nav gate.
-- [ ] `F2-05` Přidat minimální Priority A in-app inbox: seznam, detail,
+- [x] `F2-05` Přidat minimální Priority A in-app inbox: seznam, detail,
   unread/read a bezpečné prázdné/offline stavy; pokročilé cílení a e-mail
-  zůstávají v Priority B.
+  zůstávají v Priority B. Implementovaný participant subset `CS-ANN-01`
+  používá striktní DTO, recipient-scoped syntetické fixtures, privátní
+  `no-store` typed adapter a online-only idempotentní read. `/app/oznameni`
+  nabízí all/unread filtr řízený URL, cursorové načítání, přesné pořadí,
+  nebarevné read cues a zachování validované hloubky/číselného scrollu při
+  návratu z detailu bez persistence obsahu, ID či cursoru. Detail koreluje
+  event i route ID před renderem/read a autoritativní revokace okamžitě maže
+  obsah i návratový kontext. Recipient a missing ID vracejí shodnou 404.
+  Závěrečný security i code review je `PASS`; produkční endpoint/admin send
+  zůstávají v `P8-06`/`P8-05` a `F4-06`.
 - [ ] `F2-06` Doplnit component/axe a omezené visual smoke testy klíčového
   shellu, programu, vstupenky, inboxu a správy účtu/soukromí. Dílčí
   shell/program gate je implementovaný v
@@ -1933,8 +1942,11 @@ je `UI ready (mocked)`; produkční integrace zůstává za pojmenovanými block
   viewport. Ticketová část je doplněná v
   [`apps/conference/src/test/component/participant-ticket.component.tsx`](apps/conference/src/test/component/participant-ticket.component.tsx)
   pro všechny čtyři stavy, privátní failure taxonomy, `axe`, overflow, touch
-  target a tři visual baseline. Úkol zůstává otevřený pro UI, které vznikne v
-  `F2-05` a `F2-07`.
+  target a tři visual baseline. Inboxová část je doplněná v
+  [`apps/conference/src/test/component/participant-announcements.component.tsx`](apps/conference/src/test/component/participant-announcements.component.tsx)
+  včetně tří viewportů, axe, `44 px`, focus, overflow, filtru, pagination,
+  návratu a bezpečnostních regresí. Úkol zůstává otevřený pro účet, který
+  vznikne v `F2-07`.
 - [ ] `F2-07` Implementovat Priority A účet/profil/soukromí/nastavení:
   profilové minimum, právní dokumenty a acknowledgement, privacy žádost,
   kontaktní podporu, správu relace, logout/logout-all a switch-account.
@@ -2674,3 +2686,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 4.0 | 25. 7. 2026 | Dokončen `F1-05`: `CS-BOOT-01` definuje private/no-store identity bootstrap a idempotentní onboarding nad přesnými právními verzemi. Development-only tříkrokový flow drží P2 data jen v paměti, odděluje nepředvolený networking opt-in, failne zavřeně při chybějící/stale právní konfiguraci a zřetelně označuje syntetické drafty i absenci skutečné session, membership a consent zápisu. |
 | 4.1 | 25. 7. 2026 | Dokončen `F1-06`: already-active kód, neenumerující recovery a jednorázový active link tvoří úplný syntetický návrat do aplikace. Přidány bezpečné suspended/revoked/session-expired stavy, potvrzené logout/switch session actions, token-bound replay, lokální wipe seam a dostupná nastavení účtu; mock nikdy nepotvrzuje existenci cizího účtu ani změnu skutečné Better Auth session. |
 | 4.2 | 25. 7. 2026 | Uzavřen etapový security/code review F1 a capability posunuta na `UI ready (mocked)`. Tokeny se přijímají pouze z URL fragmentu a ihned se odstraňují; mutace drží nebo rotují idempotency key podle autoritativního výsledku, scanner je race-safe, recovery zachová bezpečný návrat, login query neobejde rozpracovaný claim, onboarding chrání draft a úspěšné stavové přechody řídí focus. Mock replay ukládá jen opaque fingerprinty a diagnostiky neodhalují secrets ani PII. |
+| 4.3 | 25. 7. 2026 | Dokončen `F2-05` ve stavu `UI ready (mocked)`: participant `CS-ANN-01`, recipient-scoped fixtures a typed no-store mock podporují discoverable inbox, URL all/unread filtr, cursorové stránky, detail a online-only read. Security/code review doplnil event/route korelaci, okamžitý wipe při revokaci, nerozlišitelný missing/audience 404, globální pořadí, race-safe filtr, focus a bounded návratový kontext bez persistence soukromého obsahu. |

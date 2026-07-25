@@ -1,4 +1,20 @@
+import { useSyncExternalStore } from 'react';
+
 export const usePathname = (): string => window.location.pathname;
+
+const subscribeToNavigation = (onStoreChange: () => void) => {
+  window.addEventListener('popstate', onStoreChange);
+  return () => window.removeEventListener('popstate', onStoreChange);
+};
+
+export const useSearchParams = (): URLSearchParams => {
+  const search = useSyncExternalStore(
+    subscribeToNavigation,
+    () => window.location.search,
+    () => '',
+  );
+  return new URLSearchParams(search);
+};
 
 const navigate = (href: string, replace: boolean) => {
   const method = replace ? 'replaceState' : 'pushState';
@@ -7,6 +23,12 @@ const navigate = (href: string, replace: boolean) => {
 };
 
 export const useRouter = () => ({
-  push: (href: string) => navigate(href, false),
-  replace: (href: string) => navigate(href, true),
+  push: (href: string, options?: { readonly scroll?: boolean }) => {
+    void options;
+    navigate(href, false);
+  },
+  replace: (href: string, options?: { readonly scroll?: boolean }) => {
+    void options;
+    navigate(href, true);
+  },
 });

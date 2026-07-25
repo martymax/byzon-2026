@@ -480,6 +480,208 @@ main > .ui-participant-nav-spacer {
   color: var(--byzon-text-muted);
   font-size: 0.9375rem;
 }
+.announcement-page {
+  display: grid;
+  gap: clamp(1.25rem, 4vw, 2rem);
+  max-width: 58rem;
+}
+.announcement-heading {
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.announcement-heading h1 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: clamp(3.5rem, 11vw, 7rem);
+  line-height: 0.85;
+}
+.announcement-heading .lead {
+  max-width: 44rem;
+}
+.announcement-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--byzon-space-2);
+  padding: var(--byzon-space-1);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-pill);
+  background: var(--byzon-surface);
+  width: fit-content;
+  max-width: 100%;
+}
+.announcement-filter button {
+  min-width: 7rem;
+  min-height: var(--byzon-touch-target);
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-text);
+  background: transparent;
+  font: 700 1rem/1.2 var(--byzon-font-display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.announcement-filter button[aria-pressed='true'] {
+  color: var(--byzon-surface);
+  background: var(--byzon-brand-hover);
+}
+.announcement-filter button:focus-visible,
+.announcement-card:focus-visible,
+.announcement-back-link:focus-visible,
+.announcement-context-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.announcement-result-count {
+  color: var(--byzon-text-muted);
+  font-weight: 650;
+}
+.announcement-list {
+  display: grid;
+  gap: var(--byzon-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.announcement-list li {
+  min-width: 0;
+}
+.announcement-card {
+  min-width: 0;
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: var(--byzon-space-3);
+  padding: clamp(1rem, 4vw, 1.5rem);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-text);
+  background: var(--byzon-surface);
+  text-decoration: none;
+  box-shadow: var(--byzon-shadow-sm);
+  overflow-wrap: anywhere;
+}
+.announcement-card:hover {
+  border-color: var(--byzon-brand);
+}
+.announcement-card--unread {
+  border-inline-start: 0.35rem solid var(--byzon-brand-hover);
+  background: linear-gradient(
+    90deg,
+    var(--byzon-brand-subtle),
+    var(--byzon-surface) 38%
+  );
+}
+.announcement-card-topline,
+.announcement-detail-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-2) var(--byzon-space-4);
+}
+.announcement-card time,
+.announcement-detail time {
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+.announcement-read-label,
+.announcement-severity {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--byzon-space-2);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-text-muted);
+  background: var(--byzon-surface-soft);
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+.announcement-read-label svg {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+.announcement-read-label--unread {
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+}
+.announcement-severity--important {
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+}
+.announcement-severity--critical {
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.announcement-card h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.35rem, 4vw, 1.75rem);
+  line-height: 1.15;
+}
+.announcement-card-summary {
+  max-width: 70ch;
+}
+.announcement-detail {
+  min-width: 0;
+  display: grid;
+  gap: clamp(1rem, 4vw, 1.5rem);
+  padding: clamp(1.1rem, 5vw, 2rem);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+  overflow-wrap: anywhere;
+}
+.announcement-detail h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  line-height: 1;
+}
+.announcement-detail-body {
+  display: grid;
+  gap: var(--byzon-space-3);
+  max-width: 72ch;
+  white-space: pre-line;
+}
+.announcement-context {
+  display: grid;
+  gap: var(--byzon-space-2);
+  padding-top: var(--byzon-space-4);
+  border-top: 1px solid var(--byzon-border);
+}
+.announcement-context strong {
+  color: var(--byzon-ink);
+}
+.announcement-context-link,
+.announcement-back-link {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+}
+.announcement-read-status {
+  display: grid;
+  gap: var(--byzon-space-2);
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface-soft);
+}
+.announcement-read-status strong {
+  color: var(--byzon-ink);
+}
+.announcement-read-status--error {
+  border-color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.announcement-read-status:focus {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
 .app-page {
   width: min(100% - 2rem, 72rem);
   margin: auto;
@@ -858,6 +1060,19 @@ main > .ui-participant-nav-spacer {
   .ticket-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .announcement-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .announcement-card-topline,
+  .announcement-card h2,
+  .announcement-card-summary {
+    grid-column: 1;
+  }
+  .announcement-card .announcement-severity {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   @keyframes content-progress {
@@ -877,7 +1092,8 @@ main > .ui-participant-nav-spacer {
       border-color var(--byzon-motion-fast) var(--byzon-ease);
   }
   .home-primary-action,
-  .home-session-list a {
+  .home-session-list a,
+  .announcement-card {
     transition:
       background-color var(--byzon-motion-fast) var(--byzon-ease),
       border-color var(--byzon-motion-fast) var(--byzon-ease);

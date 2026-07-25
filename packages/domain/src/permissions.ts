@@ -28,6 +28,7 @@ export const eventPermissions = [
   'reservation:any:read',
   'session:assigned:answer',
   'session:assigned:moderate',
+  'announcement:own:read',
   'announcement:send',
   'personal-data:own:export',
   'personal-data:operational:export',
@@ -39,6 +40,7 @@ export interface PermissionContext {
   ownsResource?: boolean;
   networkingOptedIn?: boolean;
   acceptedConnection?: boolean;
+  announcementRecipient?: boolean;
   assignedSession?: boolean;
   assignedRoom?: boolean;
   moderatorCanAnnounce?: boolean;
@@ -53,6 +55,7 @@ const rolePermissions = {
     'networking:connection:message',
     'checkin:own-code:read',
     'reservation:own:read',
+    'announcement:own:read',
     'personal-data:own:export',
   ],
   speaker: [
@@ -98,6 +101,8 @@ const contextAllows = (
   context: PermissionContext,
 ): boolean => {
   switch (permission) {
+    case 'announcement:own:read':
+      return context.announcementRecipient === true;
     case 'agenda:own:write':
     case 'checkin:own-code:read':
     case 'reservation:own:read':

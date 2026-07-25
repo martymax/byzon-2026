@@ -20,6 +20,31 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- `F2-05` je na `track/frontend-complete` dokončený ve stavu
+  `UI ready (mocked)`. Nový participant subset `CS-ANN-01` pokrývá privátní
+  inbox, detail a online-only read včetně přesných problem kódů,
+  idempotency, recipient oprávnění a validovaných syntetických fixtures.
+  Produkční participant endpoint zůstává v `P8-06`, admin draft/audience/send
+  v `P8-05`/`F4-06`; e-mail provider tento mocked řez neblokuje.
+- `/app/oznameni` je dostupné z pěticestné participant navigace. Inbox má URL
+  all/unread filtr reagující na Back/Forward, cursorové načítání se zachováním
+  globálního newest-first pořadí, bezpečné prázdné/offline/auth/permission/
+  disabled/error stavy a nebarevné read cues. Detail zachová filtr, načtenou
+  hloubku a číselný scroll bez uložení announcement ID, obsahu nebo cursoru;
+  read se spouští až po validovaném renderu a neurčitý retry drží stejný key.
+- Závěrečný security i code review `F2-05` skončil `PASS`. Zapracované regrese
+  failnou zavřeně při neshodě eventu/route ID, synchronně skryjí P1/P2 data
+  při autoritativní revokaci, odříznou stale resource/filter race a v mocku
+  vracejí bitově shodnou 404 pro neexistující i cizí recipient snapshot.
+  Bounded return context se nejprve strict-validuje, po auth/revokaci maže a
+  crafted URL nemůže spustit cursor request amplification.
+- Finální `F2-05` gate prošel jako 144 conference unit testů a 36 korektně
+  přeskočených DB scénářů, 68 domain testů, 22 fixture testů a 369 Chromium
+  component/axe/responsive scénářů ve třech viewports. Prošly všechny
+  workspace typechecky, ESLint, Prettier, produkční Next build a source/
+  post-build mock boundary. Skutečný Next server nad izolovanou migrovanou a
+  seednutou PostgreSQL vrátil `200` pro inbox i detail a použil stejný
+  kanonický event ID jako mock DTO.
 - Celá etapa `F1` je po závěrečném security a code review ve stavu
   `UI ready (mocked)`. Review opravil race při camera permission/claim/cancel,
   stabilní idempotency pro neurčité výsledky a přesné serverové
@@ -167,7 +192,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   layout nad validovanou syntetickou fixture, focus/touch/overflow/responsive
   geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
   pro každý schválený viewport. Ticketová část je nově pokrytá v `F2-04`;
-  celý `F2-06` zůstává otevřený pro inbox a účet po `F2-05`/`F2-07`.
+  inboxová část je pokrytá v `F2-05` a celý `F2-06` zůstává otevřený už jen
+  pro účet po `F2-07`.
 - `F2-01` je commitnutý jako `8c4d1cc` a pushnutý na
   `origin/track/frontend-b/F2-01-participant-shell`. Participant layout používá sdílený
   `ParticipantNavigation` pro čtyři existující funkční cíle, každý s
@@ -303,16 +329,16 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   pro současné funkční participant routy, první řez `F2-02` přidal
   nepersonalizovaný phase-aware přehled a shell/program část `F2-06` je
   pokrytá, ale `F2-02` čeká na `CS-BOOT-01`/`CS-AGENDA-01` a celý `F2-06`
-  zůstává otevřený pro inbox a správu účtu/soukromí, které dosud neexistují a
-  vzniknou v `F2-05`/`F2-07`; teprve potom lze capability označit jako
-  `UI ready (mocked)`. `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
-  contract-first práci. `F6-02` může paralelně začít nad public částí
-  `CS-CONTENT-01`.
-- V pracovním stromu zůstává cizí nestagovaný soubor
-  `apps/conference/src/components/content-state 2.tsx`, stará kopie z
-  22. července. Při produkčních kontrolách byl pouze dočasně přesunut mimo
-  `src` a vrácen; není součástí `F2-01`, `F2-02`, `F2-03`, `F2-04` ani
-  `F2-06` a nesmí být commitnutý.
+  zůstává otevřený pro správu účtu/soukromí, která vznikne v `F2-07`; teprve
+  potom lze participant quality capability uzavřít. `BLOCKER-CONTENT-01`
+  blokuje až obsahové UAT, ne další contract-first práci. `F6-02` může
+  paralelně začít nad public částí `CS-CONTENT-01`.
+- V pracovním stromu zůstávají cizí nestagované soubory
+  `apps/conference/src/components/content-state 2.tsx` a
+  `apps/conference/src/components/content-state 3.tsx`. Při produkčních
+  kontrolách byly pouze dočasně přesunuty mimo
+  `src` a vráceny; nejsou součástí `F2-01` až `F2-06` a nesmí být
+  commitnuté.
 - Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
   `origin/track/frontend-a/F0-06-component-a11y`.
   Samostatný Vitest Browser/Playwright component runner vykresluje React 19
