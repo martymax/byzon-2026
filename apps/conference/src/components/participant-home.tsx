@@ -6,6 +6,14 @@ import Link from 'next/link';
 
 import type { ApiPort } from '@/lib/api';
 import {
+  participantAgendaItemStatus,
+  selectNextParticipantAgendaItem,
+} from './participant-agenda-model';
+import {
+  useParticipantAgendaResource,
+  type ParticipantAgendaResource,
+} from './participant-agenda-resource';
+import {
   ResourceStatus,
   useParticipantContent,
   useParticipantProgram,
@@ -128,14 +136,14 @@ const PhaseHeader = ({ event }: { readonly event: ParticipantHomeEvent }) => {
 };
 
 const ProgramOverview = ({
+  agenda,
   api,
   event,
-  nextSavedSessionId,
   now,
 }: {
+  readonly agenda: ParticipantAgendaResource;
   readonly api?: ApiPort;
   readonly event: ParticipantHomeEvent;
-  readonly nextSavedSessionId?: string | null;
   readonly now: string;
 }) => {
   const state = useParticipantProgram(event.id, api);
@@ -149,16 +157,13 @@ const ProgramOverview = ({
     program: state.data.program,
     timezone: event.timezone,
   });
-  const currentTime = validDate(now)?.getTime();
-  const savedSession =
-    nextSavedSessionId && currentTime !== undefined
-      ? state.data.program.sessions.find(
-          ({ endsAt, id, status }) =>
-            id === nextSavedSessionId &&
-            status !== 'cancelled' &&
-            (validDate(endsAt)?.getTime() ?? 0) > currentTime,
-        )
+  const nextAgendaItem =
+    agenda.state.status === 'ready'
+      ? selectNextParticipantAgendaItem(agenda.state.data, now)
       : null;
+  const nextAgendaStatus = nextAgendaItem
+    ? participantAgendaItemStatus(nextAgendaItem)
+    : null;
 
   return (
     <section className="home-section" aria-labelledby="home-program-heading">
@@ -228,31 +233,59 @@ const ProgramOverview = ({
 
         <Card className="home-card">
           <p className="home-card-kicker">Moje další položka</p>
-          {savedSession ? (
+          {nextAgendaItem && nextAgendaStatus ? (
             <>
               <p className="home-session-time">
-                {sessionDateTime(savedSession.startsAt, event.timezone)}
+                {sessionDateTime(
+                  nextAgendaItem.session.startsAt,
+                  agenda.state.status === 'ready'
+                    ? agenda.state.data.eventTimezone
+                    : event.timezone,
+                )}
               </p>
-              <h3>{savedSession.title}</h3>
+              <h3>{nextAgendaItem.session.title}</h3>
               <p>
-                Tento uložený bod vychází z aktuálně publikovaného programu.
+                {nextAgendaStatus.label}. {nextAgendaStatus.detail}
               </p>
               <Link
                 className="home-card-link"
-                href={`/app/program/${encodeURIComponent(savedSession.id)}`}
+                href={`/app/program/${encodeURIComponent(
+                  nextAgendaItem.session.id,
+                )}`}
               >
                 Otevřít detail
               </Link>
             </>
+          ) : agenda.state.status === 'ready' ? (
+            <div className="home-card-empty" role="status">
+              <h3>
+                {event.phase === 'ended'
+                  ? 'Osobní agenda zůstává dostupná'
+                  : 'Osobní agenda je zatím prázdná'}
+              </h3>
+              <p>
+                {event.phase === 'ended'
+                  ? 'V uloženém plánu si můžete projít body skončené akce.'
+                  : 'V detailu programu si uložte první bod do osobního plánu.'}
+              </p>
+              <Link
+                className="home-card-link"
+                href={event.phase === 'ended' ? '/app/agenda' : '/app/program'}
+              >
+                {event.phase === 'ended'
+                  ? 'Prohlédnout osobní agendu'
+                  : 'Prohlédnout program'}
+              </Link>
+            </div>
           ) : (
             <div className="home-card-empty" role="status">
               <h3>Uložené body zatím nejsou v přehledu dostupné</h3>
               <p>
-                Objeví se tady, až bude osobní plán pro tuto akci dostupný.
-                Publikovaný program si můžete projít už teď.
+                Soukromý plán na tomto zařízení neodhadujeme ani neukládáme.
+                Aktuální stav zkuste otevřít přímo v agendě.
               </p>
-              <Link className="home-card-link" href="/app/program">
-                Prohlédnout program
+              <Link className="home-card-link" href="/app/agenda">
+                Otevřít osobní agendu
               </Link>
             </div>
           )}
@@ -329,42 +362,45 @@ const PracticalOverview = ({
 };
 
 const ParticipantHomeContent = ({
+  agendaApi,
   contentApi,
   event,
-  nextSavedSessionId,
   now,
   programApi,
 }: {
+  readonly agendaApi?: ApiPort;
   readonly contentApi?: ApiPort;
   readonly event: ParticipantHomeEvent;
-  readonly nextSavedSessionId?: string | null;
   readonly now: string;
   readonly programApi?: ApiPort;
-}) => (
-  <>
-    <ProgramOverview
-      event={event}
-      now={now}
-      {...(programApi ? { api: programApi } : {})}
-      {...(nextSavedSessionId === undefined ? {} : { nextSavedSessionId })}
-    />
-    <PracticalOverview
-      event={event}
-      {...(contentApi ? { api: contentApi } : {})}
-    />
-  </>
-);
+}) => {
+  const agenda = useParticipantAgendaResource(event.id, agendaApi);
+  return (
+    <>
+      <ProgramOverview
+        agenda={agenda}
+        event={event}
+        now={now}
+        {...(programApi ? { api: programApi } : {})}
+      />
+      <PracticalOverview
+        event={event}
+        {...(contentApi ? { api: contentApi } : {})}
+      />
+    </>
+  );
+};
 
 export const ParticipantHome = ({
+  agendaApi,
   contentApi,
   event,
-  nextSavedSessionId,
   now,
   programApi,
 }: {
+  readonly agendaApi?: ApiPort;
   readonly contentApi?: ApiPort;
   readonly event: ParticipantHomeEvent;
-  readonly nextSavedSessionId?: string | null;
   readonly now: string;
   readonly programApi?: ApiPort;
 }) => (
@@ -374,8 +410,8 @@ export const ParticipantHome = ({
       <ParticipantHomeContent
         event={event}
         now={now}
+        {...(agendaApi ? { agendaApi } : {})}
         {...(contentApi ? { contentApi } : {})}
-        {...(nextSavedSessionId === undefined ? {} : { nextSavedSessionId })}
         {...(programApi ? { programApi } : {})}
       />
     )}

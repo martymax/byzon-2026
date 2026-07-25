@@ -1,4 +1,5 @@
 import {
+  contentFixtureIds,
   participantContentFixtures,
   participantProgramFixtures,
 } from '@byzon/test-support/fixtures';
@@ -16,6 +17,16 @@ import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
 const program = participantProgramFixtures.happy!;
+const qualityProgram = {
+  ...program,
+  program: {
+    ...program.program,
+    sessions: program.program.sessions.filter(
+      ({ id }) =>
+        id === contentFixtureIds.opening || id === contentFixtureIds.workshop,
+    ),
+  },
+};
 const content = participantContentFixtures.happy!;
 
 const apiFor = (fixture: unknown, requestId: string) =>
@@ -63,7 +74,7 @@ const ParticipantProgramProbe = () => (
       </h1>
       <ProgramView
         eventId={program.eventId}
-        api={apiFor(program, 'component-quality-program-0001')}
+        api={apiFor(qualityProgram, 'component-quality-program-0001')}
       />
     </section>
   </ParticipantProbe>
@@ -136,7 +147,7 @@ describe('F2-06 participant shell and program quality gate', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
-    expect(navigationElement.querySelectorAll('a')).toHaveLength(4);
+    expect(navigationElement.querySelectorAll('a')).toHaveLength(5);
     for (const link of navigationElement.querySelectorAll('a')) {
       const bounds = link.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);

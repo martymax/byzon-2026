@@ -1,4 +1,7 @@
-import { participantProgramFixtures } from '@byzon/test-support/fixtures';
+import {
+  contentFixtureIds,
+  participantProgramFixtures,
+} from '@byzon/test-support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -34,7 +37,10 @@ describe('participant home view model', () => {
         program,
         timezone: 'Europe/Prague',
       }).map(({ id }) => id),
-    ).toEqual(program.sessions.map(({ id }) => id));
+    ).toEqual([
+      contentFixtureIds.opening,
+      contentFixtureIds.agendaConflictTarget,
+    ]);
   });
 
   it('uses the event local day and published times during the event', () => {
@@ -45,7 +51,7 @@ describe('participant home view model', () => {
         program,
         timezone: 'Europe/Prague',
       }).map(({ title }) => title),
-    ).toEqual(['Otevření konference']);
+    ).toEqual(['Otevření konference', 'Překrývající se workshop']);
   });
 
   it('does not invent current sessions after the event or for invalid time data', () => {

@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 
+import type { ApiPort } from '@/lib/api';
+
 import {
   ParticipantAccountResourceProvider,
   type ParticipantAccountScope,
@@ -13,10 +15,12 @@ import {
 import { RouteFocus } from './route-focus';
 
 export const ParticipantLayoutShell = ({
+  accountApi,
   accountScope,
   children,
   navigationMode = 'active',
 }: {
+  readonly accountApi?: ApiPort;
   readonly accountScope: ParticipantAccountScope;
   readonly children: ReactNode;
   readonly navigationMode?: ParticipantShellNavigationMode;
@@ -29,6 +33,7 @@ export const ParticipantLayoutShell = ({
         : accountScope.kind;
   return (
     <ParticipantAccountResourceProvider
+      {...(accountApi ? { api: accountApi } : {})}
       key={accountScopeKey}
       scope={accountScope}
     >

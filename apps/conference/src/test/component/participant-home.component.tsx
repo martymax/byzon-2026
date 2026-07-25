@@ -1,7 +1,9 @@
 import {
+  contentFixtureIds,
   identityBootstrapFixtures,
   participantContentFixtures,
   participantContentProblemFixtures,
+  participantAgendaFixtures,
   participantProgramFixtures,
   participantProgramProblemFixtures,
 } from '@byzon/test-support/fixtures';
@@ -58,24 +60,61 @@ const HomeProbe = ({
   readonly nextSavedSessionId?: string | null;
   readonly now?: string;
   readonly phase?: ParticipantEventPhase;
-}) => (
-  <main
-    id="main"
-    data-testid="participant-home-shell"
-    style={visualTestStyle}
-    tabIndex={-1}
-  >
-    <ParticipantLayout accountScope={{ kind: 'active', eventId: event.id }}>
-      <ParticipantHome
-        contentApi={apiFor(content, 'component-home-content-0001')}
-        event={{ ...event, phase }}
-        now={now}
-        programApi={apiFor(program, 'component-home-program-0001')}
-        {...(nextSavedSessionId === undefined ? {} : { nextSavedSessionId })}
-      />
-    </ParticipantLayout>
-  </main>
-);
+}) => {
+  const agendaFixture =
+    nextSavedSessionId === undefined
+      ? null
+      : nextSavedSessionId === contentFixtureIds.workshop
+        ? participantAgendaFixtures.reserved!
+        : nextSavedSessionId === contentFixtureIds.opening
+          ? participantAgendaFixtures.saved!
+          : participantAgendaFixtures.empty!;
+  const scopedAgenda = agendaFixture
+    ? {
+        ...agendaFixture,
+        eventId: event.id,
+        userId: identityBootstrapFixtures.complete!.user.id,
+        eventTimezone: event.timezone,
+      }
+    : null;
+  const scopedIdentity = {
+    ...identityBootstrapFixtures.complete!,
+    event: {
+      ...identityBootstrapFixtures.complete!.event,
+      id: event.id,
+      phase,
+    },
+    membership: {
+      access: { state: 'active' as const },
+      roles: ['participant' as const],
+    },
+  };
+  return (
+    <main
+      id="main"
+      data-testid="participant-home-shell"
+      style={visualTestStyle}
+      tabIndex={-1}
+    >
+      <ParticipantLayout
+        accountApi={apiFor(scopedIdentity, 'component-home-account-probe-0001')}
+        accountScope={{ kind: 'active', eventId: event.id }}
+      >
+        <ParticipantHome
+          contentApi={apiFor(content, 'component-home-content-0001')}
+          event={{ ...event, phase }}
+          now={now}
+          programApi={apiFor(program, 'component-home-program-0001')}
+          {...(scopedAgenda
+            ? {
+                agendaApi: apiFor(scopedAgenda, 'component-home-agenda-0001'),
+              }
+            : {})}
+        />
+      </ParticipantLayout>
+    </main>
+  );
+};
 
 const CanonicalPrivateClear = () => {
   const resource = useParticipantAccountResource();
@@ -98,23 +137,30 @@ beforeEach(() => {
 describe('F2-02 participant home overview', () => {
   it('prioritizes phase-safe program, saved and practical information', async () => {
     const screen = await renderComponent(
-      <HomeProbe nextSavedSessionId={program.program.sessions[1]!.id} />,
+      <HomeProbe nextSavedSessionId={contentFixtureIds.workshop} />,
     );
 
     await expect
       .element(screen.getByRole('heading', { level: 1, name: 'Dnes na BYZON' }))
       .toHaveFocus();
-    await expect
-      .element(screen.getByText('Právě podle času v programu'))
-      .toBeVisible();
+    const currentTimingLabels = screen
+      .getByText('Právě podle času v programu')
+      .elements();
+    expect(currentTimingLabels).toHaveLength(2);
+    for (const label of currentTimingLabels) {
+      expect(label.getClientRects()).not.toHaveLength(0);
+    }
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await expect
+      .element(screen.getByText('Překrývající se workshop', { exact: true }))
+      .toBeVisible();
     await expect.element(screen.getByText('Růst bez zkratek')).toBeVisible();
     await expect.element(screen.getByText('Výstaviště')).toBeVisible();
 
     const navigation = screen.getByRole('navigation', {
       name: 'Hlavní navigace',
     });
-    expect(navigation.element().querySelectorAll('a')).toHaveLength(4);
+    expect(navigation.element().querySelectorAll('a')).toHaveLength(5);
     await expect
       .element(navigation.getByRole('link', { name: 'Přehled', exact: true }))
       .toHaveAttribute('aria-current', 'page');
