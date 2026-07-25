@@ -48,8 +48,15 @@ describe('CS-CONTENT-01 participant UI', () => {
       .getByRole('combobox', { name: 'Typ' })
       .selectOptions('workshop');
 
-    await expect.element(screen.getByText('1 bodů programu')).toBeVisible();
+    const workshopCount =
+      participantProgramFixtures.happy!.program.sessions.filter(
+        ({ type }) => type === 'workshop',
+      ).length;
+    await expect
+      .element(screen.getByText(`${String(workshopCount)} bodů programu`))
+      .toBeVisible();
     await expect.element(screen.getByText('Růst bez zkratek')).toBeVisible();
+    expect(screen.getByText('Otevření konference').elements()).toHaveLength(0);
     expect(new URL(window.location.href).searchParams.get('type')).toBe(
       'workshop',
     );
@@ -170,6 +177,28 @@ describe('CS-CONTENT-01 participant UI', () => {
         )}`,
       );
     await sessionScreen.unmount();
+
+    const agendaSessionScreen = await renderComponent(
+      <SessionView
+        eventId={participantProgramFixtures.happy!.eventId}
+        returnOrigin="agenda"
+        sessionId={sessionId}
+        api={programApi}
+      />,
+    );
+    await expect
+      .element(
+        agendaSessionScreen.getByRole('link', {
+          name: 'Přihlásit se znovu',
+        }),
+      )
+      .toHaveAttribute(
+        'href',
+        `/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
+          `/app/program/${sessionId}?from=agenda`,
+        )}`,
+      );
+    await agendaSessionScreen.unmount();
 
     const contentProblem = participantContentProblemFixtures.authentication!;
     const contentApi = createFetchApiClient({
