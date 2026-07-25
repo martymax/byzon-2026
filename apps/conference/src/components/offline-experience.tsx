@@ -1,32 +1,45 @@
 'use client';
 
-import type { PublicContentResponse } from '@byzon/domain/contracts';
+import type {
+  OfflineFeatureGate,
+  PublicContentResponse,
+} from '@byzon/domain/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   loadPublicOfflineContent,
   type PublicOfflineContentResult,
 } from '@/lib/offline/public-offline-content';
+import { participantOfflineFeatureGate } from '@/lib/offline/offline-policy';
 
 import styles from './offline-experience.module.css';
 
 interface OfflineCapabilityState {
+  readonly agendaMutationReplay: boolean;
   readonly database: boolean;
   readonly dataMode: 'preview' | 'preview_failed' | 'production';
+  readonly ownerLease: boolean;
+  readonly personalAgendaCache: boolean;
   readonly persistentStorage: boolean | null;
   readonly serviceWorker: boolean;
 }
 
 const initialCapabilities: OfflineCapabilityState = {
+  agendaMutationReplay: false,
   database: false,
   dataMode: 'production',
+  ownerLease: false,
+  personalAgendaCache: false,
   persistentStorage: null,
   serviceWorker: false,
 };
 
-const browserCapabilities = (): OfflineCapabilityState => {
+const browserCapabilities = (
+  featureGate: OfflineFeatureGate,
+): OfflineCapabilityState => {
   const mode = document.documentElement.dataset.byzonMockMode;
   return {
+    agendaMutationReplay: featureGate.agendaMutationReplay,
     database: 'indexedDB' in window,
     dataMode:
       mode === 'active'
@@ -34,6 +47,8 @@ const browserCapabilities = (): OfflineCapabilityState => {
         : mode === 'failed'
           ? 'preview_failed'
           : 'production',
+    ownerLease: featureGate.ownerLease === 'lease-v1',
+    personalAgendaCache: featureGate.personalAgendaCache,
     persistentStorage: null,
     serviceWorker: 'serviceWorker' in navigator,
   };
@@ -163,9 +178,11 @@ const PracticalPreview = ({
 
 export function OfflineExperience({
   eventSlug = 'byzon-2026',
+  featureGate = participantOfflineFeatureGate,
   loader = loadPublicOfflineContent,
 }: {
   readonly eventSlug?: string;
+  readonly featureGate?: () => OfflineFeatureGate;
   readonly loader?: (
     eventSlug: string,
     options?: { readonly signal?: AbortSignal },
@@ -179,7 +196,7 @@ export function OfflineExperience({
   /* eslint-disable react-hooks/set-state-in-effect -- Browser capabilities do
      not exist during SSR and are deliberately revealed only after hydration. */
   useEffect(() => {
-    const current = browserCapabilities();
+    const current = browserCapabilities(featureGate());
     setCapabilities(current);
     if ('storage' in navigator && navigator.storage.persisted) {
       void navigator.storage
@@ -189,7 +206,7 @@ export function OfflineExperience({
         )
         .catch(() => undefined);
     }
-  }, []);
+  }, [featureGate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -219,9 +236,10 @@ export function OfflineExperience({
           Důležité informace zůstávají po ruce
         </h1>
         <p>
-          Do zařízení ukládáme jen verzovaný veřejný program, praktické
-          informace a agendu přihlášeného účtu. Rezervace ani odbavení nikdy
-          nepotvrzujeme bez serveru.
+          {capabilities.personalAgendaCache
+            ? 'Do zařízení ukládáme verzovaný veřejný program, praktické informace a owner-lease kopii agendy přihlášeného účtu.'
+            : 'Do zařízení ukládáme jen verzovaný veřejný program a praktické informace. Osobní agenda zůstává online, dokud produkční API neposkytne owner-lease integraci.'}{' '}
+          Rezervace ani odbavení nikdy nepotvrzujeme bez serveru.
         </p>
       </header>
 
@@ -306,9 +324,45 @@ export function OfflineExperience({
           <div>
             <dt>Osobní offline agenda</dt>
             <dd
-              data-state={capabilities.database ? 'available' : 'unavailable'}
+              data-state={
+                capabilities.personalAgendaCache ? 'available' : 'unavailable'
+              }
             >
-              {capabilities.database ? 'Podporovaná' : 'Nepodporovaná'}
+              {capabilities.personalAgendaCache
+                ? 'Zapnutá feature gatem'
+                : 'Vypnutá feature gatem'}
+            </dd>
+          </div>
+          <div>
+            <dt>Serverový owner lease</dt>
+            <dd
+              data-state={
+                capabilities.ownerLease ? 'available' : 'unavailable'
+              }
+            >
+              {capabilities.ownerLease
+                ? 'Integrovaný'
+                : 'Chybí · osobní data se neukládají'}
+            </dd>
+          </div>
+          <div>
+            <dt>Odložené změny agendy</dt>
+            <dd
+              data-state={
+                capabilities.agendaMutationReplay
+                  ? 'available'
+                  : 'unavailable'
+              }
+            >
+              {capabilities.agendaMutationReplay
+                ? 'Zapnuté owner-bound replay'
+                : 'Vypnuté · změny vyžadují server'}
+            </dd>
+          </div>
+          <div>
+            <dt>Lokální úložiště zařízení</dt>
+            <dd data-state={capabilities.database ? 'available' : 'unavailable'}>
+              {capabilities.database ? 'Dostupné' : 'Nedostupné'}
             </dd>
           </div>
           <div>
@@ -346,10 +400,19 @@ export function OfflineExperience({
           <h2 id="offline-rules-title">Pravidla změn bez připojení</h2>
         </div>
         <ul>
-          <li>
-            <strong>Lze odložit:</strong> přidání nebo odebrání bodu z osobní
-            agendy. Uvidíte stav čekání, konflikt i možnost opakování.
-          </li>
+          {capabilities.agendaMutationReplay ? (
+            <li>
+              <strong>Lze odložit:</strong> přidání nebo odebrání bodu z osobní
+              agendy. Uvidíte stav čekání, konflikt, selhání i bezpečnou cestu
+              obnovy.
+            </li>
+          ) : (
+            <li>
+              <strong>Nelze odložit:</strong> ani přidání nebo odebrání bodu z
+              osobní agendy. Produkční owner-lease a owner-bound replay nejsou
+              integrovány, proto změnu odešlete až po připojení.
+            </li>
+          )}
           <li>
             <strong>Vyžaduje server:</strong> rezervace, čekací listina, nabídka
             místa, vstupenka a check-in. Bez připojení nikdy nezobrazíme úspěch.

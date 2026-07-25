@@ -17,7 +17,7 @@ const section = (start: string, end: string): string => {
 
 describe('application service-worker source policy', () => {
   it('uses a unique build shell cache and retains one verified rollback', () => {
-    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.3';");
+    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.4';");
     expect(workerSource).toContain(
       'const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${WORKER_VERSION}`;',
     );
@@ -46,6 +46,9 @@ describe('application service-worker source policy', () => {
     expect(workerSource).toContain('const verified = await Promise.all(');
     expect(workerSource).toContain('await caches.delete(SHELL_CACHE)');
     expect(workerSource).toContain('complete: true');
+    expect(workerSource).toContain('cacheName: SHELL_CACHE');
+    expect(workerSource).toContain('assets: [...SHELL_ASSETS]');
+    expect(workerSource).toContain('storedAssetValid');
     expect(workerSource).toContain('response.redirected');
     expect(messages).toContain("event.data?.type === 'BYZON_SKIP_WAITING'");
     expect(messages).toContain('event.data.version === WORKER_VERSION');

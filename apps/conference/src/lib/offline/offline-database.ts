@@ -319,8 +319,11 @@ export const migrateParticipantOfflineDatabase: OfflineMigration = (
   ensureIndex(queue, 'createdAt', 'createdAt');
 
   if (oldVersion < PARTICIPANT_OFFLINE_DATABASE_VERSION) {
-    // Queue record v3 adds strict schema/owner metadata. Unknown older records
-    // are never replayed under the new authenticated principal.
+    // Schema v3 changes the owner binding shared by the snapshot, metadata and
+    // queue. Clear all three stores in this upgrade transaction so no v2
+    // private record can survive under the newly rotated ownership epoch.
+    agenda.clear();
+    metadata.clear();
     queue.clear();
     control.put({
       key: PARTICIPANT_OFFLINE_EPOCH_KEY,
@@ -605,7 +608,7 @@ export const readOfflineAgendaSnapshot = async (
     await wipeParticipantOfflineScope(
       parsedScope,
       'migration_failure',
-      options,
+      { ...options, expectedEpoch: result.epoch },
     );
     return null;
   }
@@ -860,6 +863,7 @@ export const listOfflineAgendaQueue = async (
       requestValue<unknown[]>(index.getAll(scopeKey)),
     ]);
     const records: OfflineAgendaQueueRecord[] = [];
+    const now = Date.now();
     values.forEach((value, indexPosition) => {
       try {
         const record = parseOfflineAgendaQueueRecord(
@@ -868,7 +872,12 @@ export const listOfflineAgendaQueue = async (
           scopeKey,
           control.epoch,
         );
-        if (record.status !== 'superseded') records.push(record);
+        const key = keys[indexPosition];
+        if (Date.parse(record.expiresAt) <= now) {
+          if (key !== undefined) store.delete(key);
+        } else if (record.status !== 'superseded') {
+          records.push(record);
+        }
       } catch {
         const key = keys[indexPosition];
         if (key !== undefined) store.delete(key);
@@ -881,11 +890,101 @@ export const listOfflineAgendaQueue = async (
   }, options);
 };
 
+const queueAttemptUnchanged = (
+  expected: OfflineAgendaQueueRecord,
+  current: OfflineAgendaQueueRecord,
+): boolean =>
+  current.id === expected.id &&
+  current.updatedAt === expected.updatedAt &&
+  current.status === expected.status &&
+  current.attempts === expected.attempts &&
+  current.expectedVersion === expected.expectedVersion &&
+  current.ownerLeaseId === expected.ownerLeaseId &&
+  current.revocationEpoch === expected.revocationEpoch &&
+  current.action === expected.action &&
+  current.sessionId === expected.sessionId;
+
+/**
+ * Revalidates one replay candidate and removes an expired/invalid record in the
+ * same owner-epoch transaction. A caller invokes this again immediately before
+ * POST so a record cannot be replayed merely because an earlier list was fresh.
+ */
+export const preflightOfflineAgendaQueueRecord = async (
+  record: OfflineAgendaQueueRecord,
+  options?: ParticipantOfflineOperationOptions,
+): Promise<OfflineAgendaQueueRecord | null> => {
+  const scope = parseParticipantOfflineScope({
+    eventId: record.eventId,
+    userId: record.userId,
+  });
+  const expectedScopeKey = participantOfflineScopeKey(scope);
+  if (record.scopeKey !== expectedScopeKey) {
+    throw new TypeError('Offline queue preflight scope is invalid.');
+  }
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(
+      [
+        participantOfflineStoreNames.control,
+        participantOfflineStoreNames.syncQueue,
+      ],
+      'readwrite',
+    );
+    const control = await assertExpectedEpoch(
+      transaction,
+      options?.expectedEpoch,
+    );
+    const store = transaction.objectStore(
+      participantOfflineStoreNames.syncQueue,
+    );
+    const value = await requestValue<unknown>(store.get(record.id));
+    if (value === undefined) {
+      await transactionDone(transaction);
+      return null;
+    }
+    let current: OfflineAgendaQueueRecord;
+    try {
+      current = parseOfflineAgendaQueueRecord(
+        value,
+        scope,
+        expectedScopeKey,
+        control.epoch,
+      );
+    } catch {
+      store.delete(record.id);
+      await transactionDone(transaction);
+      return null;
+    }
+    if (
+      Date.parse(current.expiresAt) <= Date.now() ||
+      current.status === 'failed' ||
+      current.status === 'superseded' ||
+      !queueAttemptUnchanged(record, current)
+    ) {
+      if (Date.parse(current.expiresAt) <= Date.now()) {
+        store.delete(current.id);
+      }
+      await transactionDone(transaction);
+      return null;
+    }
+    await transactionDone(transaction);
+    return current;
+  }, options);
+};
+
+const queueStatusTransitions: Readonly<
+  Record<OfflineQueueStatus, ReadonlySet<OfflineQueueStatus>>
+> = Object.freeze({
+  pending: new Set<OfflineQueueStatus>(['conflict', 'retry']),
+  retry: new Set<OfflineQueueStatus>(['conflict', 'failed', 'retry']),
+  conflict: new Set<OfflineQueueStatus>(),
+  failed: new Set<OfflineQueueStatus>(),
+  superseded: new Set<OfflineQueueStatus>(),
+});
+
 export const updateOfflineAgendaQueueRecord = async (
   record: OfflineAgendaQueueRecord,
   update: {
     readonly attempts: number;
-    readonly expectedVersion?: number;
     readonly lastProblemCode: string | null;
     readonly status: OfflineQueueStatus;
     readonly updatedAt?: Date | string;
@@ -904,16 +1003,16 @@ export const updateOfflineAgendaQueueRecord = async (
     parsedScope,
     participantOfflineScopeKey(parsedScope),
   );
+  if (
+    !queueStatusTransitions[parsedRecord.status].has(update.status) ||
+    update.attempts !== parsedRecord.attempts + 1
+  ) {
+    throw new TypeError('Offline queue status transition is invalid.');
+  }
   const next: OfflineAgendaQueueRecord = {
     ...parsedRecord,
-    attempts: Math.min(
-      OFFLINE_QUEUE_MAX_ATTEMPTS,
-      Math.max(0, Math.trunc(update.attempts)),
-    ),
-    expectedVersion:
-      update.expectedVersion === undefined
-        ? record.expectedVersion
-        : Math.max(1, Math.trunc(update.expectedVersion)),
+    attempts: update.attempts,
+    expectedVersion: parsedRecord.expectedVersion,
     lastProblemCode: update.lastProblemCode,
     status: update.status,
     updatedAt: isoNow(update.updatedAt ?? new Date()),
@@ -960,12 +1059,11 @@ export const updateOfflineAgendaQueueRecord = async (
       );
     }
     if (
-      current.status === 'failed' ||
-      current.status === 'superseded' ||
-      update.status === 'superseded'
+      !queueStatusTransitions[current.status].has(update.status) ||
+      update.attempts !== current.attempts + 1
     ) {
       transaction.abort();
-      throw new TypeError('Offline queue terminal state cannot be updated.');
+      throw new TypeError('Offline queue status transition is invalid.');
     }
     store.put(next);
     await transactionDone(transaction);
@@ -1158,18 +1256,20 @@ const deleteQueueScope = async (
 export const wipeParticipantOfflineScope = async (
   scope: ParticipantOfflineScope,
   reason: OfflineWipeReason,
-  options?: OpenParticipantOfflineDatabaseOptions,
+  options?: ParticipantOfflineOperationOptions,
 ): Promise<void> => {
   const scopeKey = participantOfflineScopeKey(scope);
   await withDatabase(async (database) => {
     const transaction = database.transaction(
       [
         participantOfflineStoreNames.agenda,
+        participantOfflineStoreNames.control,
         participantOfflineStoreNames.metadata,
         participantOfflineStoreNames.syncQueue,
       ],
       'readwrite',
     );
+    await assertExpectedEpoch(transaction, options?.expectedEpoch);
     transaction
       .objectStore(participantOfflineStoreNames.agenda)
       .delete(scopeKey);

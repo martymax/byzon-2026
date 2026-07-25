@@ -2,8 +2,11 @@ import {
   OFFLINE_CONTRACT_VERSION,
   OFFLINE_OWNER_LEASE_MAX_MS,
   OFFLINE_QUEUE_MAX_ATTEMPTS as CONTRACT_OFFLINE_QUEUE_MAX_ATTEMPTS,
+  offlineFeatureGateDefaults,
+  offlineFeatureGateSchema,
   participantAgendaMutationRequestSchema,
   participantAgendaResponseSchema,
+  type OfflineFeatureGate,
   type ParticipantAgendaMutationRequest,
   type ParticipantAgendaResponse,
 } from '@byzon/domain/contracts';
@@ -43,20 +46,36 @@ export interface ApprovedOfflineAgendaMutation {
 
 export type PublicCacheFreshness = 'fresh' | 'stale';
 
-/**
- * Personal replay stays fail-closed in production until the server exposes an
- * owner-bound CS-OFFLINE-01 replay endpoint. Development mocks and tests still
- * exercise the complete queue UX, but a production bundle cannot POST a stale
- * local principal's intent to the current cookie principal.
- */
-export const offlineParticipantAgendaCacheAvailable = (): boolean =>
+const mockedOfflineFeatureGate: OfflineFeatureGate =
+  offlineFeatureGateSchema.parse({
+    ...offlineFeatureGateDefaults,
+    personalAgendaCache: true,
+    agendaMutationReplay: true,
+    ownerLease: 'lease-v1',
+    ownerBoundReplay: 'lease-v1',
+  });
+
+const mockedOfflineRuntimeAvailable = (): boolean =>
   process.env.NODE_ENV === 'test' ||
   (process.env.NODE_ENV === 'development' &&
     typeof document !== 'undefined' &&
     document.documentElement.dataset.byzonMockMode === 'active');
 
+/**
+ * Personal storage and replay stay fail-closed in production until the server
+ * exposes the owner-bound CS-OFFLINE-01 lease and replay preflight. Only the
+ * development mock port and tests opt into the complete synthetic workflow.
+ */
+export const participantOfflineFeatureGate = (): OfflineFeatureGate =>
+  mockedOfflineRuntimeAvailable()
+    ? mockedOfflineFeatureGate
+    : offlineFeatureGateDefaults;
+
+export const offlineParticipantAgendaCacheAvailable = (): boolean =>
+  participantOfflineFeatureGate().personalAgendaCache;
+
 export const offlineAgendaReplayAvailable = (): boolean =>
-  offlineParticipantAgendaCacheAvailable();
+  participantOfflineFeatureGate().agendaMutationReplay;
 
 export const isUuid = (value: string): boolean => uuidPattern.test(value);
 

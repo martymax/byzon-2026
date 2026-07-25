@@ -3,8 +3,13 @@ import { createContext, Script } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
 const ORIGIN = 'https://app.byzon.test';
-const CURRENT_SHELL = 'byzon-pwa-shell-2026.07.25.3';
+const CURRENT_SHELL = 'byzon-pwa-shell-2026.07.25.4';
 const PUBLIC_CACHE = 'byzon-pwa-public-v3';
+const SHELL_ASSETS = [
+  '/offline',
+  '/icons/icon.svg',
+  '/icons/maskable.svg',
+] as const;
 const workerSource = readFileSync(
   new URL('../../../public/sw.js', import.meta.url),
   'utf8',
@@ -169,11 +174,44 @@ const shellResponse = (request: Request): Response => {
   );
 };
 
-const publicContent = (version: number) => ({
+const seedVerifiedShell = async (
+  caches: MemoryCacheStorage,
+  name: string,
+  installedAt: string,
+): Promise<MemoryCache> => {
+  const cache = await caches.open(name);
+  for (const path of SHELL_ASSETS) {
+    await cache.put(path, shellResponse(new WorkerRequest(path)));
+  }
+  await cache.put(
+    '/__byzon_pwa_shell_metadata__',
+    Response.json(
+      {
+        assets: [...SHELL_ASSETS],
+        cacheName: name,
+        complete: true,
+        installedAt,
+        version: name.replace('byzon-pwa-shell-', ''),
+      },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'application/json',
+        },
+      },
+    ),
+  );
+  return cache;
+};
+
+const publicContent = (
+  version: number,
+  eventId = '01930000-0000-7000-8000-000000000001',
+) => ({
   version,
   publishedAt: '2026-07-25T08:00:00.000Z',
   event: {
-    id: '01930000-0000-7000-8000-000000000001',
+    id: eventId,
     slug: 'byzon-2026',
     name: 'BYZON 2026',
     timezone: 'Europe/Prague',
@@ -198,8 +236,9 @@ const publicResponse = (
   request: Request,
   version: number,
   extraHeaders: Record<string, string> = {},
+  body: unknown = publicContent(version),
 ): Response =>
-  responseAt(request.url, JSON.stringify(publicContent(version)), {
+  responseAt(request.url, JSON.stringify(body), {
     status: 200,
     headers: {
       'cache-control': 'public, max-age=60',
@@ -207,6 +246,42 @@ const publicResponse = (
       ...extraHeaders,
     },
   });
+
+const publicContentWithProgram = (version: number) => ({
+  ...publicContent(version),
+  program: {
+    days: [
+      {
+        id: '01930000-0000-7000-8000-000000000011',
+        localDate: '2026-09-18',
+        title: 'Pátek',
+        sortOrder: 0,
+      },
+    ],
+    rooms: [
+      {
+        id: '01930000-0000-7000-8000-000000000012',
+        slug: 'main-stage',
+        name: 'Main stage',
+        sortOrder: 0,
+      },
+    ],
+    sessions: [
+      {
+        id: '01930000-0000-7000-8000-000000000013',
+        dayId: '01930000-0000-7000-8000-000000000011',
+        roomId: '01930000-0000-7000-8000-000000000012',
+        slug: 'opening',
+        title: 'Opening',
+        type: 'talk',
+        status: 'published',
+        startsAt: '2026-09-18T07:00:00.000Z',
+        endsAt: '2026-09-18T08:00:00.000Z',
+        sortOrder: 0,
+      },
+    ],
+  },
+});
 
 describe('service-worker runtime policy', () => {
   it('keeps the old shell intact when a new build install is incomplete', async () => {
@@ -242,14 +317,11 @@ describe('service-worker runtime policy', () => {
       ['byzon-pwa-shell-2026.07.22.1', '2026-07-22T08:00:00.000Z'],
       ['byzon-pwa-shell-2026.07.24.1', '2026-07-24T08:00:00.000Z'],
     ] as const) {
-      const cache = await worker.caches.open(name);
-      await cache.put('/offline', new Response('old offline'));
-      await cache.put(
-        '/__byzon_pwa_shell_metadata__',
-        Response.json({ complete: true, installedAt, version: name }),
-      );
+      await seedVerifiedShell(worker.caches, name, installedAt);
     }
     await worker.caches.open('byzon-pwa-shell-unverified');
+    const legacy = await worker.caches.open('byzon-shell-v1');
+    await legacy.put('/offline', shellResponse(new WorkerRequest('/offline')));
     worker.setFetch(async (request) => shellResponse(request));
 
     await worker.dispatchWaitUntil('install');
@@ -259,6 +331,60 @@ describe('service-worker runtime policy', () => {
       [CURRENT_SHELL, 'byzon-pwa-shell-2026.07.24.1'].sort(),
     );
     expect(worker.serviceWorker.clients.claim).toHaveBeenCalledOnce();
+  });
+
+  it('rejects rollback caches with a partial manifest, mismatched metadata or unsafe asset', async () => {
+    const worker = createWorkerHarness();
+    const partial = await seedVerifiedShell(
+      worker.caches,
+      'byzon-pwa-shell-2026.07.23.1',
+      '2026-07-23T08:00:00.000Z',
+    );
+    await partial.delete('/icons/maskable.svg');
+    const mismatched = await seedVerifiedShell(
+      worker.caches,
+      'byzon-pwa-shell-2026.07.24.1',
+      '2026-07-24T08:00:00.000Z',
+    );
+    await mismatched.put(
+      '/__byzon_pwa_shell_metadata__',
+      Response.json(
+        {
+          assets: [...SHELL_ASSETS],
+          cacheName: 'byzon-pwa-shell-other',
+          complete: true,
+          installedAt: '2026-07-24T08:00:00.000Z',
+          version: '2026.07.24.1',
+        },
+        {
+          headers: {
+            'cache-control': 'no-store',
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+    const unsafe = await seedVerifiedShell(
+      worker.caches,
+      'byzon-pwa-shell-2026.07.25.1',
+      '2026-07-25T08:00:00.000Z',
+    );
+    await unsafe.put(
+      '/icons/icon.svg',
+      responseAt(`${ORIGIN}/icons/icon.svg`, '<svg/>', {
+        status: 200,
+        headers: {
+          'cache-control': 'private, no-store',
+          'content-type': 'image/svg+xml',
+        },
+      }),
+    );
+    worker.setFetch(async (request) => shellResponse(request));
+
+    await worker.dispatchWaitUntil('install');
+    await worker.dispatchWaitUntil('activate');
+
+    expect(await worker.caches.keys()).toEqual([CURRENT_SHELL]);
   });
 
   it('handshakes the exact waiting version before skip-waiting', async () => {
@@ -271,7 +397,7 @@ describe('service-worker runtime policy', () => {
     expect(replies).toEqual([
       {
         type: 'BYZON_WORKER_VERSION',
-        version: '2026.07.25.3',
+        version: '2026.07.25.4',
       },
     ]);
 
@@ -279,7 +405,7 @@ describe('service-worker runtime policy', () => {
     worker.handlers.get('message')?.({
       data: {
         type: 'BYZON_SKIP_WAITING',
-        version: '2026.07.25.2',
+        version: '2026.07.25.3',
       },
       waitUntil: (promise) => {
         completion = promise;
@@ -291,7 +417,7 @@ describe('service-worker runtime policy', () => {
     worker.handlers.get('message')?.({
       data: {
         type: 'BYZON_SKIP_WAITING',
-        version: '2026.07.25.3',
+        version: '2026.07.25.4',
       },
       waitUntil: (promise) => {
         completion = promise;
@@ -327,6 +453,141 @@ describe('service-worker runtime policy', () => {
     expect(
       await (await worker.caches.open(PUBLIC_CACHE)).match(request),
     ).toBeDefined();
+  });
+
+  it('preserves a good cache when a higher version violates content refinements', async () => {
+    const worker = createWorkerHarness();
+    const request = new WorkerRequest(
+      `${ORIGIN}/api/v1/public/events/byzon-2026/content`,
+    );
+    const good = publicContentWithProgram(5);
+    worker.setFetch(async (networkRequest) =>
+      publicResponse(networkRequest, 5, {}, good),
+    );
+    expect((await (await worker.dispatchFetch(request)).json()).version).toBe(5);
+
+    const session = good.program.sessions[0]!;
+    const invalidBodies = [
+      {
+        ...good,
+        version: 6,
+        event: {
+          ...good.event,
+          endsAt: good.event.startsAt,
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        program: {
+          ...good.program,
+          sessions: [session, { ...session }],
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        program: {
+          ...good.program,
+          sessions: [
+            {
+              ...session,
+              dayId: '01930000-0000-7000-8000-000000000099',
+            },
+          ],
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        program: {
+          ...good.program,
+          sessions: [
+            {
+              ...session,
+              roomId: '01930000-0000-7000-8000-000000000098',
+            },
+          ],
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        program: {
+          ...good.program,
+          sessions: [{ ...session, endsAt: session.startsAt }],
+        },
+      },
+    ];
+
+    for (const invalid of invalidBodies) {
+      worker.setFetch(async (networkRequest) =>
+        publicResponse(networkRequest, 6, {}, invalid),
+      );
+      const response = await worker.dispatchFetch(request);
+      expect((await response.json()).version).toBe(5);
+      expect(response.headers.get('x-byzon-cache-source')).toBe('cache');
+    }
+
+    const persisted = await (
+      await worker.caches.open(PUBLIC_CACHE)
+    ).match(request);
+    expect((await persisted?.json()).version).toBe(5);
+  });
+
+  it('serializes same-key v5/v4 fetches so the lower version cannot win', async () => {
+    const worker = createWorkerHarness();
+    const request = new WorkerRequest(
+      `${ORIGIN}/api/v1/public/events/byzon-2026/content`,
+    );
+    let call = 0;
+    worker.setFetch(async (networkRequest) => {
+      call += 1;
+      return publicResponse(networkRequest, call === 1 ? 5 : 4);
+    });
+
+    const [first, second] = await Promise.all([
+      worker.dispatchFetch(request),
+      worker.dispatchFetch(request),
+    ]);
+
+    expect((await first.json()).version).toBe(5);
+    expect((await second.json()).version).toBe(5);
+    const persisted = await (
+      await worker.caches.open(PUBLIC_CACHE)
+    ).match(request);
+    expect((await persisted?.json()).version).toBe(5);
+  });
+
+  it('evicts a same-slug cache when the canonical event id changes', async () => {
+    const worker = createWorkerHarness();
+    const request = new WorkerRequest(
+      `${ORIGIN}/api/v1/public/events/byzon-2026/content`,
+    );
+    const replacementEventId =
+      '01930000-0000-7000-8000-000000000099';
+    worker.setFetch(async (networkRequest) =>
+      publicResponse(networkRequest, 9),
+    );
+    await worker.dispatchFetch(request);
+    worker.setFetch(async (networkRequest) =>
+      publicResponse(
+        networkRequest,
+        1,
+        {},
+        publicContent(1, replacementEventId),
+      ),
+    );
+
+    const replacement = await worker.dispatchFetch(request);
+    expect((await replacement.json()).event.id).toBe(replacementEventId);
+    expect(replacement.headers.get('x-byzon-cache-source')).toBe('network');
+    const persisted = await (
+      await worker.caches.open(PUBLIC_CACHE)
+    ).match(request);
+    expect(persisted?.headers.get('x-byzon-event-id')).toBe(
+      replacementEventId,
+    );
   });
 
   it('rejects Vary/Cookie, Set-Cookie and oversized responses from cache', async () => {

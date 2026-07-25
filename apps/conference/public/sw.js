@@ -1,17 +1,19 @@
 'use strict';
 
-const WORKER_VERSION = '2026.07.25.3';
+const WORKER_VERSION = '2026.07.25.4';
 const CACHE_NAMESPACE = 'byzon-pwa';
 const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${WORKER_VERSION}`;
 const PUBLIC_CACHE = `${CACHE_NAMESPACE}-public-v3`;
 const LEGACY_SHELL_CACHE = 'byzon-shell-v1';
 const OFFLINE_URL = '/offline';
 const SHELL_METADATA_URL = '/__byzon_pwa_shell_metadata__';
-const SHELL_ASSETS = [OFFLINE_URL, '/icons/icon.svg', '/icons/maskable.svg'];
-const MAX_SHELL_ASSET_BYTES = 2 * 1024 * 1024;
+const SHELL_ASSETS = Object.freeze(
+  [OFFLINE_URL, '/icons/icon.svg', '/icons/maskable.svg']);
+const MAX_SHELL_BYTES = 2 * 1024 * 1024;
+const MAX_METADATA_BYTES = 16 * 1024;
 const MAX_PUBLIC_RESPONSE_BYTES = 8 * 1024 * 1024;
 const OFFLINE_CONTRACT_VERSION = 1;
-const MAX_PUBLIC_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const PUBLIC_TTL = 7 * 24 * 60 * 60 * 1000;
 const PUBLIC_CONTENT_PATH =
   /^\/api\/v1\/public\/events\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(bootstrap|content)$/;
 const INVALID = Symbol('invalid-public-field');
@@ -19,7 +21,7 @@ const INVALID = Symbol('invalid-public-field');
 const isOwnedCache = (name) =>
   name === LEGACY_SHELL_CACHE || name.startsWith(`${CACHE_NAMESPACE}-`);
 
-const responseSizeAllowed = (response, maximum) => {
+const sizeAllowed = (response, maximum) => {
   const declared = response.headers.get('content-length');
   if (declared === null) return true;
   const size = Number(declared);
@@ -37,7 +39,7 @@ const responseIsPublic = (response) => {
   );
 };
 
-const safeResponseHeaders = (response, contentType) => {
+const safeHeaders = (response, contentType) => {
   const headers = new Headers({
     'cache-control': 'public, max-age=0, must-revalidate',
     'content-type': contentType,
@@ -45,11 +47,8 @@ const safeResponseHeaders = (response, contentType) => {
     'x-content-type-options': 'nosniff',
   });
   const contentSecurityPolicy = response.headers.get('content-security-policy');
-  if (
-    contentSecurityPolicy &&
-    contentSecurityPolicy.length <= 4096 &&
-    !/[\r\n\u0000]/.test(contentSecurityPolicy)
-  ) {
+  if (contentSecurityPolicy?.length <= 4096 &&
+      !/[\r\n\u0000]/.test(contentSecurityPolicy)) {
     headers.set('content-security-policy', contentSecurityPolicy);
   }
   const etag = response.headers.get('etag');
@@ -61,34 +60,44 @@ const safeResponseHeaders = (response, contentType) => {
   return headers;
 };
 
-const verifiedShellAsset = async (path, response) => {
+const shellAllowed = (path, response, stored = false) => {
   const expected = new URL(path, self.location.origin);
   const contentType = response.headers.get('content-type') ?? '';
   const typeAllowed =
     path === OFFLINE_URL
       ? /^text\/html(?:;|$)/i.test(contentType)
       : /^image\/svg\+xml(?:;|$)/i.test(contentType);
-  if (
-    !response.ok ||
-    response.status !== 200 ||
-    response.redirected ||
-    response.url !== expected.href ||
-    !typeAllowed ||
-    !responseIsPublic(response) ||
-    !responseSizeAllowed(response, MAX_SHELL_ASSET_BYTES)
-  ) {
-    throw new TypeError(`Shell asset ${path} is not safely cacheable.`);
+  return (
+    response.ok &&
+    response.status === 200 &&
+    !response.redirected &&
+    (stored
+      ? response.url === '' || response.url === expected.href
+      : response.url === expected.href) &&
+    typeAllowed &&
+    responseIsPublic(response) &&
+    sizeAllowed(response, MAX_SHELL_BYTES)
+  );
+};
+
+const verifyShell = async (path, response) => {
+  if (!shellAllowed(path, response)) {
+    throw new TypeError('Shell asset not safely cacheable.');
   }
   const body = await response.clone().arrayBuffer();
-  if (body.byteLength > MAX_SHELL_ASSET_BYTES) {
-    throw new TypeError(`Shell asset ${path} exceeds its transfer budget.`);
+  if (body.byteLength > MAX_SHELL_BYTES) {
+    throw new TypeError('Shell too large.');
   }
   return new Response(body, {
     status: 200,
-    headers: safeResponseHeaders(response, contentType),
+    headers: safeHeaders(response, response.headers.get('content-type') ?? ''),
   });
 };
-
+const storedAssetValid = async (path, response) => {
+  if (!response || !shellAllowed(path, response, true)) return false;
+  const body = await response.clone().arrayBuffer();
+  return body.byteLength <= MAX_SHELL_BYTES;
+};
 const precacheShell = async () => {
   const verified = await Promise.all(
     SHELL_ASSETS.map(async (path) => {
@@ -99,28 +108,27 @@ const precacheShell = async () => {
           redirect: 'error',
         }),
       );
-      return [path, await verifiedShellAsset(path, response)];
+      return [path, await verifyShell(path, response)];
     }),
   );
   try {
     const cache = await caches.open(SHELL_CACHE);
-    await Promise.all(
-      verified.map(([path, response]) => cache.put(path, response)),
-    );
+    await Promise.all(verified.map(([path, response]) =>
+      cache.put(path, response)));
     await cache.put(
       SHELL_METADATA_URL,
       Response.json(
         {
           complete: true,
+          cacheName: SHELL_CACHE,
+          assets: [...SHELL_ASSETS],
           installedAt: new Date().toISOString(),
           version: WORKER_VERSION,
         },
-        {
-          headers: {
-            'cache-control': 'no-store',
-            'content-type': 'application/json',
-          },
-        },
+        { headers: {
+          'cache-control': 'no-store',
+          'content-type': 'application/json',
+        } },
       ),
     );
   } catch (error) {
@@ -129,25 +137,57 @@ const precacheShell = async () => {
   }
 };
 
-const shellMetadata = async (name) => {
+const shellInfo = async (name) => {
+  const shellPrefix = `${CACHE_NAMESPACE}-shell-`;
+  if (!name.startsWith(shellPrefix)) return null;
+  const version = name.slice(shellPrefix.length);
+  if (version.length < 1) return null;
   const cache = await caches.open(name);
-  const offline = await cache.match(OFFLINE_URL);
-  if (!offline) return null;
-  if (name === LEGACY_SHELL_CACHE) {
-    return { installedAt: '1970-01-01T00:00:00.000Z', name };
-  }
   const response = await cache.match(SHELL_METADATA_URL);
-  if (!response) return null;
+  if (
+    !response ||
+    !response.ok ||
+    response.status !== 200 ||
+    response.redirected ||
+    (response.url !== '' &&
+      response.url !== new URL(SHELL_METADATA_URL, self.location.origin).href) ||
+    !/^application\/json(?:;|$)/i.test(
+      response.headers.get('content-type') ?? '',
+    ) ||
+    !/\bno-store\b/i.test(response.headers.get('cache-control') ?? '') ||
+    /(?:^|,)\s*(?:\*|cookie|authorization)(?:\s|,|$)/i.test(
+      response.headers.get('vary') ?? '',
+    ) ||
+    response.headers.has('set-cookie')
+  ) {
+    return null;
+  }
   try {
-    const value = await response.json();
+    const text = await response.clone().text();
+    if (new TextEncoder().encode(text).byteLength > MAX_METADATA_BYTES) {
+      return null;
+    }
+    const value = JSON.parse(text);
+    const keys = Object.keys(value ?? {}).sort().join(',');
     if (
-      value?.complete !== true ||
-      typeof value.version !== 'string' ||
-      value.version.length < 1 ||
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      keys !== 'assets,cacheName,complete,installedAt,version' ||
+      value.complete !== true ||
+      value.cacheName !== name ||
+      value.version !== version ||
+      !Array.isArray(value.assets) ||
+      JSON.stringify(value.assets) !== JSON.stringify(SHELL_ASSETS) ||
       typeof value.installedAt !== 'string' ||
       !Number.isFinite(Date.parse(value.installedAt))
     ) {
       return null;
+    }
+    for (const path of SHELL_ASSETS) {
+      if (!(await storedAssetValid(path, await cache.match(path)))) {
+        return null;
+      }
     }
     return { installedAt: value.installedAt, name };
   } catch {
@@ -155,15 +195,11 @@ const shellMetadata = async (name) => {
   }
 };
 
-const verifiedShellCaches = async (names) => {
+const verifiedShells = async (names) => {
   const candidates = await Promise.all(
     names
-      .filter(
-        (name) =>
-          name === LEGACY_SHELL_CACHE ||
-          name.startsWith(`${CACHE_NAMESPACE}-shell-`),
-      )
-      .map(shellMetadata),
+      .filter((name) => name.startsWith(`${CACHE_NAMESPACE}-shell-`))
+      .map(shellInfo),
   );
   return candidates
     .filter((candidate) => candidate !== null)
@@ -178,23 +214,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
-      const verified = await verifiedShellCaches(names);
+      const verified = await verifiedShells(names);
       const rollback = verified.find(({ name }) => name !== SHELL_CACHE)?.name;
-      const retained = new Set(
-        [SHELL_CACHE, PUBLIC_CACHE, rollback].filter(
-          (name) => typeof name === 'string',
-        ),
-      );
+      const retained = new Set([SHELL_CACHE, PUBLIC_CACHE, rollback].filter(
+        (name) => typeof name === 'string'));
       await Promise.all(
         names
           .filter((name) => isOwnedCache(name) && !retained.has(name))
           .map((name) => caches.delete(name)),
       );
       await self.clients.claim();
-      const clients = await self.clients.matchAll({
-        includeUncontrolled: true,
-        type: 'window',
-      });
+      const clients = await self.clients.matchAll(
+        { includeUncontrolled: true, type: 'window' });
       for (const client of clients) {
         client.postMessage({
           type: 'BYZON_WORKER_ACTIVATED',
@@ -241,7 +272,7 @@ const publicRequestDescriptor = (request) => {
   };
 };
 
-const anonymousPublicRequest = (request) => {
+const publicRequest = (request) => {
   const descriptor = publicRequestDescriptor(request);
   if (!descriptor) return null;
   return new Request(descriptor.url.href, {
@@ -273,12 +304,9 @@ const nonBlankString = (maximum) => (value) =>
   value.trim().length > 0
     ? value
     : INVALID;
-const integerValue =
-  (minimum = 0) =>
-  (value) =>
-    Number.isSafeInteger(value) && value >= minimum ? value : INVALID;
-const enumValue = (allowed) => (value) =>
-  allowed.has(value) ? value : INVALID;
+const integerValue = (minimum = 0) => (value) =>
+  Number.isSafeInteger(value) && value >= minimum ? value : INVALID;
+const enumValue = (allowed) => (value) => allowed.has(value) ? value : INVALID;
 const nullable = (sanitize) => (value) =>
   value === null ? null : sanitize(value);
 const arrayValue = (maximum, sanitize) => (value) => {
@@ -341,123 +369,77 @@ const safeExternalUrl = nullable((value) => {
 });
 
 const eventValue = objectValue({
-  id: field(uuid),
-  slug: field(slug),
-  name: field(nonBlankString(256)),
-  timezone: field(nonBlankString(128)),
-  startsAt: field(isoDateTime),
+  id: field(uuid), slug: field(slug), name: field(nonBlankString(256)),
+  timezone: field(nonBlankString(128)), startsAt: field(isoDateTime),
   endsAt: field(isoDateTime),
 });
 const dayValue = objectValue({
-  id: field(uuid),
-  localDate: field(localDate),
-  title: field(nonBlankString(256)),
+  id: field(uuid), localDate: field(localDate),
+  title: field(nonBlankString(256)), sortOrder: field(integerValue()),
   description: optionalField(nullableText(8192)),
-  sortOrder: field(integerValue()),
 });
 const roomValue = objectValue({
-  id: field(uuid),
-  slug: field(slug),
-  name: field(nonBlankString(256)),
-  description: optionalField(nullableText(8192)),
+  id: field(uuid), slug: field(slug), name: field(nonBlankString(256)),
   sortOrder: field(integerValue()),
+  description: optionalField(nullableText(8192)),
 });
 const sessionValue = objectValue({
-  id: field(uuid),
-  dayId: field(uuid),
-  roomId: field(nullable(uuid)),
-  slug: field(slug),
-  title: field(nonBlankString(512)),
+  id: field(uuid), dayId: field(uuid), roomId: field(nullable(uuid)),
+  slug: field(slug), title: field(nonBlankString(512)),
+  startsAt: field(isoDateTime), endsAt: field(isoDateTime),
+  sortOrder: field(integerValue()),
   summary: optionalField(nullableText(2048)),
   description: optionalField(nullableText(65536)),
-  type: field(
-    enumValue(
-      new Set([
-        'talk',
-        'panel',
-        'workshop',
-        'mastermind',
-        'coaching',
-        'networking',
-        'break',
-        'meal',
-        'gala',
-        'other',
-      ]),
-    ),
-  ),
+  type: field(enumValue(new Set([
+    'talk', 'panel', 'workshop', 'mastermind', 'coaching',
+    'networking', 'break', 'meal', 'gala', 'other',
+  ]))),
   status: optionalField(enumValue(new Set(['published', 'cancelled']))),
-  startsAt: field(isoDateTime),
-  endsAt: field(isoDateTime),
-  sortOrder: field(integerValue()),
 });
 const programValue = objectValue({
-  days: field(arrayValue(64, dayValue)),
-  rooms: field(arrayValue(256, roomValue)),
+  days: field(arrayValue(64, dayValue)), rooms: field(arrayValue(256, roomValue)),
   sessions: field(arrayValue(4096, sessionValue)),
 });
 const speakerValue = objectValue({
-  id: field(uuid),
-  slug: field(slug),
-  firstName: field(nonBlankString(256)),
-  lastName: field(nonBlankString(256)),
-  company: field(nullableText(256)),
-  jobTitle: field(nullableText(256)),
+  id: field(uuid), slug: field(slug),
+  firstName: field(nonBlankString(256)), lastName: field(nonBlankString(256)),
+  company: field(nullableText(256)), jobTitle: field(nullableText(256)),
   bioMarkdown: field(nullableText(65536)),
-  linkedinUrl: field(safeExternalUrl),
-  websiteUrl: field(safeExternalUrl),
-  photoAssetId: field(nullable(uuid)),
-  status: field(published),
-  sortOrder: field(integerValue()),
-  version: field(integerValue(1)),
+  linkedinUrl: field(safeExternalUrl), websiteUrl: field(safeExternalUrl),
+  photoAssetId: field(nullable(uuid)), status: field(published),
+  sortOrder: field(integerValue()), version: field(integerValue(1)),
 });
 const partnerValue = objectValue({
-  id: field(uuid),
-  slug: field(slug),
-  name: field(nonBlankString(256)),
+  id: field(uuid), slug: field(slug), name: field(nonBlankString(256)),
   descriptionMarkdown: field(nullableText(65536)),
-  websiteUrl: field(safeExternalUrl),
-  category: field(nullableText(128)),
-  tier: field(nullableText(128)),
-  logoAssetId: field(nullable(uuid)),
-  status: field(published),
-  sortOrder: field(integerValue()),
+  websiteUrl: field(safeExternalUrl), category: field(nullableText(128)),
+  tier: field(nullableText(128)), logoAssetId: field(nullable(uuid)),
+  status: field(published), sortOrder: field(integerValue()),
   version: field(integerValue(1)),
 });
 const venueValue = objectValue({
-  id: field(uuid),
-  slug: field(slug),
-  name: field(nonBlankString(256)),
-  addressLine1: field(nullableText(256)),
-  addressLine2: field(nullableText(256)),
-  city: field(nullableText(128)),
-  postalCode: field(nullableText(32)),
+  id: field(uuid), slug: field(slug), name: field(nonBlankString(256)),
+  addressLine1: field(nullableText(256)), addressLine2: field(nullableText(256)),
+  city: field(nullableText(128)), postalCode: field(nullableText(32)),
   countryCode: field(nullable(stringValue(2, 2, /^[A-Z]{2}$/))),
-  mapQuery: field(nullableText(1024)),
+  mapQuery: field(nullableText(1024)), status: field(published),
   navigationMarkdown: field(nullableText(65536)),
   accessibilityMarkdown: field(nullableText(65536)),
-  status: field(published),
-  sortOrder: field(integerValue()),
-  version: field(integerValue(1)),
+  sortOrder: field(integerValue()), version: field(integerValue(1)),
 });
 const practicalPageValue = objectValue({
-  id: field(uuid),
-  slug: field(slug),
+  id: field(uuid), slug: field(slug),
   kind: field(enumValue(new Set(['practical', 'marketing', 'other']))),
-  title: field(nonBlankString(256)),
-  summary: field(nullableText(2048)),
+  title: field(nonBlankString(256)), summary: field(nullableText(2048)),
   bodyMarkdown: field(stringValue(65536)),
-  status: field(published),
-  sortOrder: field(integerValue()),
+  status: field(published), sortOrder: field(integerValue()),
   version: field(integerValue(1)),
 });
 const faqValue = objectValue({
-  id: field(uuid),
-  category: field(nullableText(128)),
+  id: field(uuid), category: field(nullableText(128)),
   question: field(nonBlankString(1024)),
   answerMarkdown: field(stringValue(65536)),
-  status: field(published),
-  sortOrder: field(integerValue()),
+  status: field(published), sortOrder: field(integerValue()),
   version: field(integerValue(1)),
 });
 const practicalValue = objectValue({
@@ -480,6 +462,31 @@ const contentValue = objectValue({
   practical: field(practicalValue),
 });
 
+const uniqueValues = (values) => new Set(values).size === values.length;
+const intervalIsPositive = (start, end) => Date.parse(end) > Date.parse(start);
+const bodyIsValid = (body, kind) => {
+  if (!intervalIsPositive(body.event.startsAt, body.event.endsAt)) return false;
+  if (kind === 'bootstrap') return true;
+  const { days, rooms, sessions } = body.program;
+  if (
+    !uniqueValues(days.map(({ id }) => id)) ||
+    !uniqueValues(rooms.map(({ id }) => id)) ||
+    !uniqueValues(rooms.map(({ slug: roomSlug }) => roomSlug)) ||
+    !uniqueValues(sessions.map(({ id }) => id)) ||
+    !uniqueValues(sessions.map(({ slug: value }) => value))
+  ) {
+    return false;
+  }
+  const dayIds = new Set(days.map(({ id }) => id));
+  const roomIds = new Set(rooms.map(({ id }) => id));
+  return sessions.every(
+    (session) =>
+      dayIds.has(session.dayId) &&
+      (session.roomId === null || roomIds.has(session.roomId)) &&
+      intervalIsPositive(session.startsAt, session.endsAt),
+  );
+};
+
 const sanitizePublicResponse = async (
   request,
   response,
@@ -497,7 +504,7 @@ const sanitizePublicResponse = async (
     !/^application\/json(?:;|$)/i.test(
       response.headers.get('content-type') ?? '',
     ) ||
-    !responseSizeAllowed(response, MAX_PUBLIC_RESPONSE_BYTES)
+    !sizeAllowed(response, MAX_PUBLIC_RESPONSE_BYTES)
   ) {
     return null;
   }
@@ -510,7 +517,13 @@ const sanitizePublicResponse = async (
       descriptor.kind === 'bootstrap'
         ? bootstrapValue(JSON.parse(text))
         : contentValue(JSON.parse(text));
-    if (body === INVALID || body.event.slug !== descriptor.slug) return null;
+    if (
+      body === INVALID ||
+      body.event.slug !== descriptor.slug ||
+      !bodyIsValid(body, descriptor.kind)
+    ) {
+      return null;
+    }
     const serialized = JSON.stringify(body);
     if (
       new TextEncoder().encode(serialized).byteLength >
@@ -530,7 +543,7 @@ const sanitizePublicResponse = async (
       eventId: body.event.id,
       eventSlug: body.event.slug,
       expiresAt: new Date(
-        storedAt.getTime() + MAX_PUBLIC_CACHE_AGE_MS,
+        storedAt.getTime() + PUBLIC_TTL,
       ).toISOString(),
       publicationVersion: body.version,
       storedAt: storedAt.toISOString(),
@@ -541,27 +554,21 @@ const sanitizePublicResponse = async (
 };
 
 const publicResponse = (response, metadata, source) => {
-  const headers = safeResponseHeaders(response, 'application/json');
-  headers.set(
-    'x-byzon-offline-contract-version',
-    String(metadata.contractVersion),
-  );
+  const headers = safeHeaders(response, 'application/json');
+  headers.set('x-byzon-offline-contract-version',
+    String(metadata.contractVersion));
   headers.set('x-byzon-event-id', metadata.eventId);
   headers.set('x-byzon-event-slug', metadata.eventSlug);
   headers.set('x-byzon-cache-expires-at', metadata.expiresAt);
-  headers.set(
-    'x-byzon-publication-version',
-    String(metadata.publicationVersion),
-  );
+  headers.set('x-byzon-publication-version',
+    String(metadata.publicationVersion));
   headers.set('x-byzon-cache-stored-at', metadata.storedAt);
   headers.set('x-byzon-cache-source', source);
-  if (source === 'cache') {
-    headers.set('warning', '110 - "Response is stale"');
-  }
+  if (source === 'cache') headers.set('warning', '110 - "Response is stale"');
   return new Response(metadata.body, { status: 200, headers });
 };
 
-const cachedPublicEntry = async (request) => {
+const cachedEntry = async (request) => {
   const cache = await caches.open(PUBLIC_CACHE);
   const cached = await cache.match(request);
   if (!cached) return null;
@@ -612,8 +619,8 @@ const cachedPublicEntry = async (request) => {
   };
 };
 
-const rejectedPublicResponse = () =>
-  new Response('Public content response rejected', {
+const rejectedResponse = () =>
+  new Response('Rejected', {
     status: 502,
     headers: {
       'cache-control': 'no-store',
@@ -621,16 +628,20 @@ const rejectedPublicResponse = () =>
     },
   });
 
-const networkFirstPublicContent = async (request) => {
-  const anonymousRequest = anonymousPublicRequest(request);
+const fetchPublic = async (request) => {
+  const anonymousRequest = publicRequest(request);
   if (!anonymousRequest) {
-    throw new TypeError('Public request is not anonymously cacheable.');
+    throw new TypeError('Unsafe request.');
   }
   try {
     const response = await fetch(anonymousRequest);
     const metadata = await sanitizePublicResponse(anonymousRequest, response);
     if (metadata) {
-      const cached = await cachedPublicEntry(anonymousRequest);
+      let cached = await cachedEntry(anonymousRequest);
+      if (cached && cached.metadata.eventId !== metadata.eventId) {
+        await (await caches.open(PUBLIC_CACHE)).delete(anonymousRequest);
+        cached = null;
+      }
       if (
         cached &&
         cached.metadata.publicationVersion > metadata.publicationVersion
@@ -638,45 +649,59 @@ const networkFirstPublicContent = async (request) => {
         return cached.response;
       }
       const cacheable = publicResponse(response, metadata, 'network');
-      await (
-        await caches.open(PUBLIC_CACHE)
-      ).put(anonymousRequest, cacheable.clone());
+      await (await caches.open(PUBLIC_CACHE))
+        .put(anonymousRequest, cacheable.clone());
       return cacheable;
     }
-    const cached = await cachedPublicEntry(anonymousRequest);
+    const cached = await cachedEntry(anonymousRequest);
     if (cached) return cached.response;
     if (response.status === 200) {
-      return rejectedPublicResponse();
+      return rejectedResponse();
     }
     return response;
   } catch {
-    const cached = await cachedPublicEntry(anonymousRequest);
+    const cached = await cachedEntry(anonymousRequest);
     if (cached) return cached.response;
-    throw new TypeError('Public content is unavailable offline');
+    throw new TypeError('Content unavailable');
   }
 };
 
-const rollbackShellResponse = async () => {
+const publicRequests = new Map();
+const serializePublic = (request) => {
+  const key = request.url;
+  const previous = publicRequests.get(key) ?? Promise.resolve();
+  const current = previous
+    .catch(() => undefined)
+    .then(() => fetchPublic(request))
+    .finally(() => {
+      if (publicRequests.get(key) === current) {
+        publicRequests.delete(key);
+      }
+    });
+  publicRequests.set(key, current);
+  return current;
+};
+
+const rollbackResponse = async () => {
   const names = await caches.keys();
-  const verified = await verifiedShellCaches(names);
+  const verified = await verifiedShells(names);
   for (const candidate of verified) {
     if (candidate.name === SHELL_CACHE) continue;
-    const response = await (
-      await caches.open(candidate.name)
-    ).match(OFFLINE_URL);
+    const response = await (await caches.open(candidate.name))
+      .match(OFFLINE_URL);
     if (response) return response;
   }
   return null;
 };
 
-const navigationFallback = async (request) => {
+const navigationResponse = async (request) => {
   try {
     return await fetch(request);
   } catch {
     const current = await (await caches.open(SHELL_CACHE)).match(OFFLINE_URL);
     if (current) return current;
     return (
-      (await rollbackShellResponse()) ??
+      (await rollbackResponse()) ??
       new Response('Offline', {
         status: 503,
         headers: { 'content-type': 'text/plain; charset=utf-8' },
@@ -687,11 +712,11 @@ const navigationFallback = async (request) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
-    event.respondWith(navigationFallback(event.request));
+    event.respondWith(navigationResponse(event.request));
     return;
   }
   if (publicRequestDescriptor(event.request)) {
-    event.respondWith(networkFirstPublicContent(event.request));
+    event.respondWith(serializePublic(event.request));
   }
 });
 

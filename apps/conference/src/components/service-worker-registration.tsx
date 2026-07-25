@@ -13,7 +13,7 @@ import { OFFLINE_AGENDA_SYNC_EVENT } from '../lib/offline/offline-policy';
 import styles from './service-worker-registration.module.css';
 
 const APP_SERVICE_WORKER_PATH = '/sw.js';
-export const APP_SERVICE_WORKER_VERSION = '2026.07.25.3';
+export const APP_SERVICE_WORKER_VERSION = '2026.07.25.4';
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1_000;
 

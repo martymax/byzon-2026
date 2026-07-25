@@ -61,7 +61,7 @@ export const loadPublicOfflineContent = async (
     }
 
     const parsed = publicContentResponseSchema.safeParse(await response.json());
-    if (!parsed.success) {
+    if (!parsed.success || parsed.data.event.slug !== eventSlug) {
       return { status: 'unavailable', reason: 'invalid_response' };
     }
 
@@ -70,6 +70,17 @@ export const loadPublicOfflineContent = async (
       sourceHeader !== null &&
       sourceHeader !== 'cache' &&
       sourceHeader !== 'network'
+    ) {
+      return { status: 'unavailable', reason: 'invalid_response' };
+    }
+    const eventIdHeader = response.headers.get('x-byzon-event-id');
+    const eventSlugHeader = response.headers.get('x-byzon-event-slug');
+    if (
+      (sourceHeader !== null ||
+        eventIdHeader !== null ||
+        eventSlugHeader !== null) &&
+      (eventIdHeader !== parsed.data.event.id ||
+        eventSlugHeader !== parsed.data.event.slug)
     ) {
       return { status: 'unavailable', reason: 'invalid_response' };
     }

@@ -16,6 +16,7 @@ import {
   type ParticipantAgendaMutationInput,
 } from '@/lib/agenda-api';
 import {
+  discardFailedOfflineAgendaQueue,
   EMPTY_OFFLINE_AGENDA_QUEUE,
   persistCanonicalOfflineAgenda,
   queueApprovedOfflineAgendaMutation,
@@ -78,6 +79,7 @@ export interface ParticipantAgendaResource {
   readonly pending: AgendaMutationIntent | null;
   readonly readOnly: boolean;
   readonly state: ParticipantAgendaResourceState;
+  readonly discardFailedOfflineQueue: () => Promise<void>;
   readonly dismissConflict: () => void;
   readonly dismissFeedback: () => void;
   readonly mutate: (intent: AgendaMutationIntent) => Promise<void>;
@@ -92,6 +94,17 @@ export interface ParticipantAgendaOfflineState {
   readonly queue: OfflineAgendaQueueSummary;
   readonly syncing: boolean;
 }
+
+const feedbackForOfflineQueue = (
+  queue: OfflineAgendaQueueSummary,
+): AgendaMutationFeedback | null =>
+  queue.failed > 0
+    ? { kind: 'queue_failed', retry: 'discard' }
+    : queue.conflict > 0
+      ? { kind: 'queue_conflict', retry: 'sync' }
+      : queue.total > 0
+        ? { kind: 'queued', retry: 'none' }
+        : null;
 
 const createAgendaIdempotencyKeys = (): {
   readonly idempotencyKey: string;
@@ -457,11 +470,7 @@ export const useParticipantAgendaResource = (
           queue,
           syncing: false,
         });
-        if (queue.conflict > 0) {
-          setFeedback({ kind: 'queue_conflict', retry: 'sync' });
-        } else if (queue.total > 0) {
-          setFeedback({ kind: 'queued', retry: 'none' });
-        }
+        setFeedback(feedbackForOfflineQueue(queue));
         return true;
       } catch {
         return false;
@@ -587,10 +596,11 @@ export const useParticipantAgendaResource = (
                 queue: synchronized.summary,
                 syncing: false,
               });
-              if (synchronized.summary.conflict > 0) {
-                setFeedback({ kind: 'queue_conflict', retry: 'sync' });
-              } else if (synchronized.summary.total > 0) {
-                setFeedback({ kind: 'queued', retry: 'none' });
+              const queueFeedback = feedbackForOfflineQueue(
+                synchronized.summary,
+              );
+              if (queueFeedback) {
+                setFeedback(queueFeedback);
               } else if (synchronized.processed > 0) {
                 setFeedback({ kind: 'synced', retry: 'none' });
               }
@@ -692,10 +702,7 @@ export const useParticipantAgendaResource = (
         return;
       }
       if (offline.queue.total > 0) {
-        setFeedback({
-          kind: offline.queue.conflict > 0 ? 'queue_conflict' : 'queued',
-          retry: offline.queue.conflict > 0 ? 'sync' : 'none',
-        });
+        setFeedback(feedbackForOfflineQueue(offline.queue));
         mutationLock.current = false;
         return;
       }
@@ -1000,6 +1007,10 @@ export const useParticipantAgendaResource = (
     ) {
       return;
     }
+    if (offline.queue.failed > 0) {
+      setFeedback({ kind: 'queue_failed', retry: 'discard' });
+      return;
+    }
     if (!navigator.onLine) {
       setFeedback({ kind: 'queue_conflict', retry: 'sync' });
       return;
@@ -1064,13 +1075,10 @@ export const useParticipantAgendaResource = (
         syncing: false,
       });
       setFeedback(
-        synchronized.summary.conflict > 0
-          ? { kind: 'queue_conflict', retry: 'sync' }
-          : synchronized.summary.total > 0
-            ? { kind: 'queued', retry: 'none' }
-            : synchronized.processed > 0
-              ? { kind: 'synced', retry: 'none' }
-              : null,
+        feedbackForOfflineQueue(synchronized.summary) ??
+          (synchronized.processed > 0
+            ? { kind: 'synced', retry: 'none' }
+            : null),
       );
     } catch {
       setFeedback({ kind: 'queue_conflict', retry: 'sync' });
@@ -1089,7 +1097,51 @@ export const useParticipantAgendaResource = (
     accountUserId,
     api,
     offline.queue.conflict,
+    offline.queue.failed,
     storeState,
+  ]);
+
+  const discardFailedOfflineQueue = useCallback(async () => {
+    const current = stateRef.current;
+    const offlineEpoch = activeOfflineEpoch.current;
+    if (
+      mutationLock.current ||
+      current.status !== 'ready' ||
+      !accountEventId ||
+      !accountUserId ||
+      !offlineEpoch ||
+      offline.queue.failed === 0
+    ) {
+      return;
+    }
+    mutationLock.current = true;
+    setOffline((currentOffline) => ({ ...currentOffline, syncing: true }));
+    try {
+      const queue = await discardFailedOfflineAgendaQueue(
+        { eventId: accountEventId, userId: accountUserId },
+        offlineEpoch,
+      );
+      setOffline((currentOffline) => ({
+        ...currentOffline,
+        queue,
+        syncing: false,
+      }));
+      setFeedback({ kind: 'queue_discarded', retry: 'none' });
+    } catch {
+      setFeedback({ kind: 'queue_failed', retry: 'discard' });
+    } finally {
+      mutationLock.current = false;
+      if (mounted.current) {
+        setOffline((currentOffline) => ({
+          ...currentOffline,
+          syncing: false,
+        }));
+      }
+    }
+  }, [
+    accountEventId,
+    accountUserId,
+    offline.queue.failed,
   ]);
 
   const dismissFeedback = useCallback(() => {
@@ -1131,6 +1183,7 @@ export const useParticipantAgendaResource = (
   return useMemo(
     () => ({
       conflict: privateStateIsVisible ? conflict : null,
+      discardFailedOfflineQueue,
       dismissConflict: () => setConflict(null),
       dismissFeedback,
       feedback: privateStateIsVisible ? feedback : null,
@@ -1145,6 +1198,7 @@ export const useParticipantAgendaResource = (
     }),
     [
       conflict,
+      discardFailedOfflineQueue,
       dismissFeedback,
       feedback,
       mutate,

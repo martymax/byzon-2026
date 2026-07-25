@@ -33,6 +33,8 @@ describe('public offline content loader', () => {
       json(fixture, {
         'x-byzon-cache-source': 'cache',
         'x-byzon-cache-stored-at': '2026-07-24T08:00:00.000Z',
+        'x-byzon-event-id': fixture.event.id,
+        'x-byzon-event-slug': fixture.event.slug,
         'x-byzon-publication-version': '3',
       }),
     );
@@ -78,6 +80,8 @@ describe('public offline content loader', () => {
           json(fixture, {
             'x-byzon-cache-source': 'cache',
             'x-byzon-cache-stored-at': '2026-07-24T08:00:00.000Z',
+            'x-byzon-event-id': fixture.event.id,
+            'x-byzon-event-slug': fixture.event.slug,
             'x-byzon-publication-version': '4',
           }),
       }),
@@ -94,6 +98,38 @@ describe('public offline content loader', () => {
       status: 'unavailable',
       reason: 'invalid_response',
     });
+  });
+
+  it('rejects a body or service-worker metadata outside the requested event slug', async () => {
+    const otherSlug = {
+      ...fixture,
+      event: { ...fixture.event, slug: 'other-event' },
+    };
+    for (const response of [
+      json(otherSlug),
+      json(fixture, {
+        'x-byzon-cache-source': 'cache',
+        'x-byzon-cache-stored-at': '2026-07-24T08:00:00.000Z',
+        'x-byzon-event-id': '01930000-0000-7000-8000-000000000099',
+        'x-byzon-event-slug': fixture.event.slug,
+        'x-byzon-publication-version': String(fixture.version),
+      }),
+      json(fixture, {
+        'x-byzon-cache-source': 'network',
+        'x-byzon-event-id': fixture.event.id,
+        'x-byzon-event-slug': 'other-event',
+        'x-byzon-publication-version': String(fixture.version),
+      }),
+    ]) {
+      await expect(
+        loadPublicOfflineContent('byzon-2026', {
+          fetch: async () => response.clone(),
+        }),
+      ).resolves.toEqual({
+        status: 'unavailable',
+        reason: 'invalid_response',
+      });
+    }
   });
 
   it('keeps not-found, server and transport failures distinct', async () => {

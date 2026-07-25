@@ -36,6 +36,7 @@ export const ParticipantAgendaOfflineStatus = ({
     queue.pending > 0 ? `${queue.pending} čeká` : null,
     queue.retry > 0 ? `${queue.retry} čeká na opakování` : null,
     queue.conflict > 0 ? `${queue.conflict} v konfliktu` : null,
+    queue.failed > 0 ? `${queue.failed} trvale selhalo` : null,
   ]
     .filter((value): value is string => value !== null)
     .join(', ');
@@ -43,7 +44,9 @@ export const ParticipantAgendaOfflineStatus = ({
   return (
     <Alert
       action={
-        !cached && (queue.retry > 0 || queue.conflict > 0) ? (
+        queue.failed === 0 &&
+        !cached &&
+        (queue.retry > 0 || queue.conflict > 0) ? (
           <Button
             disabled={syncing}
             loading={syncing}
@@ -55,13 +58,21 @@ export const ParticipantAgendaOfflineStatus = ({
         ) : null
       }
       title={
-        cached
+        queue.failed > 0
+          ? 'Odložené změny vyčerpaly pokusy'
+          : cached
           ? 'Zobrazuje se offline kopie agendy'
           : syncing
             ? 'Synchronizuji odložené změny'
             : 'Některé změny ještě čekají na server'
       }
-      tone={queue.conflict > 0 ? 'warning' : 'info'}
+      tone={
+        queue.failed > 0
+          ? 'danger'
+          : queue.conflict > 0
+            ? 'warning'
+            : 'info'
+      }
     >
       <p>
         {cached
@@ -215,6 +226,18 @@ const feedbackCopy: Record<
       'Agenda se na serveru mezitím změnila. Připojte se a potvrďte opakování proti aktuální verzi.',
     tone: 'warning',
   },
+  queue_failed: {
+    title: 'Odloženou změnu se nepodařilo potvrdit',
+    detail:
+      'Po maximálním počtu pokusů už ji automaticky neposíláme. Server ji nepotvrdil; zahoďte tento lokální pokus, načtěte aktuální stav a případnou změnu potvrďte znovu.',
+    tone: 'danger',
+  },
+  queue_discarded: {
+    title: 'Neprovedená změna byla zahozena',
+    detail:
+      'Lokální pokus už agendu nezamyká. Před novou změnou zkontrolujte aktuální stav potvrzený serverem.',
+    tone: 'success',
+  },
   synced: {
     title: 'Odložené změny jsou synchronizované',
     detail:
@@ -304,6 +327,13 @@ export const ParticipantAgendaMutationFeedback = ({
           ) : feedback.retry === 'sync' ? (
             <Button onClick={() => void resource.retryOfflineQueue()}>
               Vyřešit proti aktuální agendě
+            </Button>
+          ) : feedback.retry === 'discard' ? (
+            <Button
+              onClick={() => void resource.discardFailedOfflineQueue()}
+              variant="danger"
+            >
+              Zahodit neprovedené změny
             </Button>
           ) : null}
           {feedback.retry === 'none' ? (

@@ -16,6 +16,7 @@ import {
   assertParticipantOfflineEpoch,
   enqueueOfflineAgendaMutation,
   listOfflineAgendaQueue,
+  preflightOfflineAgendaQueueRecord,
   readOfflineAgendaSnapshot,
   rebaseOfflineAgendaConflict,
   removeOfflineAgendaQueueRecord,
@@ -42,6 +43,7 @@ import { invalidateParticipantPrivateResources } from '../private-resource-event
 
 export interface OfflineAgendaQueueSummary {
   readonly conflict: number;
+  readonly failed: number;
   readonly pending: number;
   readonly retry: number;
   readonly total: number;
@@ -58,6 +60,7 @@ export interface OfflineAgendaSyncResult {
 export const EMPTY_OFFLINE_AGENDA_QUEUE: OfflineAgendaQueueSummary =
   Object.freeze({
     conflict: 0,
+    failed: 0,
     pending: 0,
     retry: 0,
     total: 0,
@@ -83,14 +86,14 @@ const queueSummary = (
 ): OfflineAgendaQueueSummary => {
   const pending = records.filter(({ status }) => status === 'pending').length;
   const retry = records.filter(({ status }) => status === 'retry').length;
-  const conflict = records.filter(
-    ({ status }) => status === 'conflict' || status === 'failed',
-  ).length;
+  const conflict = records.filter(({ status }) => status === 'conflict').length;
+  const failed = records.filter(({ status }) => status === 'failed').length;
   return {
     pending,
     retry,
     conflict,
-    total: pending + retry + conflict,
+    failed,
+    total: pending + retry + conflict + failed,
   };
 };
 
@@ -126,6 +129,20 @@ export const retryOfflineAgendaConflict = async (
     new Date(),
     { expectedEpoch },
   );
+  return readOfflineAgendaQueueSummary(parsedScope, expectedEpoch);
+};
+
+export const discardFailedOfflineAgendaQueue = async (
+  scope: ParticipantOfflineScope,
+  expectedEpoch: string,
+): Promise<OfflineAgendaQueueSummary> => {
+  const parsedScope = parseParticipantOfflineScope(scope);
+  const records = await listOfflineAgendaQueue(parsedScope, { expectedEpoch });
+  for (const record of records) {
+    if (record.status === 'failed') {
+      await removeOfflineAgendaQueueRecord(record, { expectedEpoch });
+    }
+  }
   return readOfflineAgendaQueueSummary(parsedScope, expectedEpoch);
 };
 
@@ -175,7 +192,7 @@ const scheduleBackgroundSync = (): void => {
 export const queueApprovedOfflineAgendaMutation = async (
   scope: ParticipantOfflineScope,
   mutation: unknown,
-  idempotencyKey = globalThis.crypto?.randomUUID(),
+  idempotencyKey: string | undefined = globalThis.crypto?.randomUUID(),
   expectedEpoch?: string,
 ): Promise<OfflineAgendaQueueRecord> => {
   if (!offlineAgendaReplayAvailable()) {
@@ -328,15 +345,19 @@ const executeSync = async (
   let processed = 0;
   let ownerAgendaVersion = owner.data.version;
 
-  for (const record of records) {
+  for (const listedRecord of records) {
     if (
       signal.aborted ||
-      record.status === 'conflict' ||
-      record.status === 'failed' ||
-      record.status === 'superseded'
+      listedRecord.status === 'conflict' ||
+      listedRecord.status === 'failed' ||
+      listedRecord.status === 'superseded'
     ) {
       continue;
     }
+    const record = await preflightOfflineAgendaQueueRecord(listedRecord, {
+      expectedEpoch,
+    });
+    if (!record) continue;
     if (record.expectedVersion !== ownerAgendaVersion) {
       await markQueueFailure(
         record,
@@ -362,10 +383,14 @@ const executeSync = async (
       },
       record: toOfflineAgendaQueueContract(record),
     });
+    const replayRecord = await preflightOfflineAgendaQueueRecord(record, {
+      expectedEpoch,
+    });
+    if (!replayRecord) continue;
     const result = await mutateParticipantAgenda(
       api,
-      toAgendaMutationRequest(record),
-      record.idempotencyKey,
+      toAgendaMutationRequest(replayRecord),
+      replayRecord.idempotencyKey,
       signal,
     );
     if (signal.aborted) break;
@@ -374,11 +399,11 @@ const executeSync = async (
       if (
         result.kind !== 'success' ||
         !canonicalMatchesScope(result.data, parsedScope) ||
-        result.data.mutation.action !== record.action ||
-        result.data.mutation.sessionId !== record.sessionId
+        result.data.mutation.action !== replayRecord.action ||
+        result.data.mutation.sessionId !== replayRecord.sessionId
       ) {
         await markQueueFailure(
-          record,
+          replayRecord,
           'conflict',
           'INVALID_RESPONSE',
           expectedEpoch,
@@ -390,7 +415,7 @@ const executeSync = async (
       await writeOfflineAgendaSnapshot(parsedScope, canonical, new Date(), {
         expectedEpoch,
       });
-      await removeOfflineAgendaQueueRecord(record, { expectedEpoch });
+      await removeOfflineAgendaQueueRecord(replayRecord, { expectedEpoch });
       processed += 1;
       continue;
     }
@@ -424,7 +449,7 @@ const executeSync = async (
         result.failure.problem.code === 'IDEMPOTENCY_IN_PROGRESS' ||
         result.failure.problem.code === 'INTERNAL_ERROR';
       await markQueueFailure(
-        record,
+        replayRecord,
         retryable ? 'retry' : 'conflict',
         result.failure.problem.code,
         expectedEpoch,
@@ -445,7 +470,7 @@ const executeSync = async (
     }
     if (result.failure.kind === 'aborted') break;
     await markQueueFailure(
-      record,
+      replayRecord,
       'retry',
       result.failure.kind.toUpperCase(),
       expectedEpoch,

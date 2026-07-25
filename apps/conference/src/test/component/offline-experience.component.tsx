@@ -1,4 +1,7 @@
-import { publicContentResponseSchema } from '@byzon/domain/contracts';
+import {
+  offlineFeatureGateDefaults,
+  publicContentResponseSchema,
+} from '@byzon/domain/contracts';
 import {
   participantContentFixtures,
   participantProgramFixtures,
@@ -139,6 +142,32 @@ describe('offline experience', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    await expectComponentToPassAxe(screen.container);
+  });
+
+  it('reports the production owner-lease gate honestly and never promises replay', async () => {
+    const screen = await renderComponent(
+      <div style={visualTestStyle}>
+        <OfflineExperience
+          featureGate={() => offlineFeatureGateDefaults}
+          loader={async () => cached('fresh')}
+        />
+      </div>,
+    );
+
+    await expect
+      .element(screen.getByText('Vypnutá feature gatem'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('Chybí · osobní data se neukládají'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('Vypnuté · změny vyžadují server'))
+      .toBeVisible();
+    expect(screen.container.textContent).toContain(
+      'Produkční owner-lease a owner-bound replay nejsou integrovány',
+    );
+    expect(screen.container.textContent).not.toContain('Lze odložit:');
     await expectComponentToPassAxe(screen.container);
   });
 

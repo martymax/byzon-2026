@@ -29,8 +29,11 @@ import { SessionView } from '../../components/program-view';
 import { RouteFocus } from '../../components/route-focus';
 import type { ApiPort } from '../../lib/api';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
+import { queueApprovedOfflineAgendaMutation } from '../../lib/offline/offline-agenda';
 import {
   listOfflineAgendaQueue,
+  readParticipantOfflineEpoch,
+  updateOfflineAgendaQueueRecord,
   wipeAllParticipantOfflineData,
   writeOfflineAgendaSnapshot,
 } from '../../lib/offline/offline-database';
@@ -1615,7 +1618,83 @@ describe('F3-01..F3-05 participant agenda', () => {
       if (onlineDescriptor) {
         Object.defineProperty(Navigator.prototype, 'onLine', onlineDescriptor);
       }
-      delete (navigator as Navigator & { onLine?: boolean }).onLine;
+      Reflect.deleteProperty(navigator, 'onLine');
+    }
+  });
+
+  it('offers an explicit discard recovery and unlocks mutations after a failed offline replay', async () => {
+    const scope = {
+      eventId: agendaFixtureIds.event,
+      userId: agendaFixtureIds.user,
+    } as const;
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    await writeOfflineAgendaSnapshot(
+      scope,
+      participantAgendaFixtures.happy!,
+      new Date(),
+      { expectedEpoch: offlineEpoch },
+    );
+    let failed = await queueApprovedOfflineAgendaMutation(
+      scope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      '01930000-0000-7000-8000-0000000000d9',
+      offlineEpoch,
+    );
+    for (let attempts = 1; attempts <= 5; attempts += 1) {
+      failed = await updateOfflineAgendaQueueRecord(
+        failed,
+        {
+          attempts,
+          lastProblemCode: 'TRANSPORT',
+          status: attempts === 5 ? 'failed' : 'retry',
+        },
+        { expectedEpoch: offlineEpoch },
+      );
+    }
+    const { api, fetch } = agendaApiFor({
+      onRead: participantAgendaFixtures.happy!,
+    });
+
+    try {
+      const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+      await expect
+        .element(
+          screen.getByText('Odloženou změnu se nepodařilo potvrdit', {
+            exact: true,
+          }),
+        )
+        .toBeVisible();
+      const discard = screen.getByRole('button', {
+        name: 'Zahodit neprovedené změny',
+      });
+      await expect.element(discard).toBeVisible();
+      const remove = screen.getByRole('button', {
+        name: 'Odebrat z agendy',
+      });
+      await expect.element(remove).toBeDisabled();
+      expect(
+        fetch.mock.calls.filter(
+          ([input, init]) => requestMethod(input, init) === 'POST',
+        ),
+      ).toHaveLength(0);
+
+      await discard.click();
+
+      await expect
+        .element(
+          screen.getByText('Neprovedená změna byla zahozena', {
+            exact: true,
+          }),
+        )
+        .toBeVisible();
+      await expect.element(remove).not.toBeDisabled();
+      expect(await listOfflineAgendaQueue(scope)).toHaveLength(0);
+    } finally {
+      await wipeAllParticipantOfflineData('user_request');
     }
   });
 });
