@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 24. července 2026
+> Poslední aktualizace: 25. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,14 +20,38 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
-- Frontendový řez `F2-03` je implementovaný, ale dosud necommitnutý na stacked
-  větvi `track/frontend-b/F2-03-content-contract` nad pushnutým commitem
-  `f14c6d5`. `CS-CONTENT-01` v
+- Frontendový řez `F2-03` je commitnutý jako `ece9c10` a pushnutý na
+  `origin/track/frontend-b/F2-03-content-contract`. `CS-CONTENT-01` v
   [`packages/domain/src/contracts/content.ts`](packages/domain/src/contracts/content.ts)
   nyní definuje striktní publikovaný program, directory/practical DTO, query a
   přesné problem uniony i cache/offline/PII hranici. Serverové P3 snapshot
   extraktory, response validace, typed browser `ApiPort`, dev MSW handlery a
   syntetické fixtures používají stejný runtime kontrakt.
+- Na navazující nepushnuté větvi
+  `track/frontend-b/F2-06-content-a11y` je rozpracovaný dokončitelný řez
+  `F2-06` pro existující participant shell a program. Přidává browser-side
+  `axe-core` WCAG A/AA helper s redigovaným výstupem, skutečný participant
+  layout nad validovanou syntetickou fixture, focus/touch/overflow/responsive
+  geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
+  pro každý schválený viewport. Baseline cesta obsahuje viewport ID a
+  záměrně toleruje pouze malý rozdíl rasterizace mezi vývojovým macOS a
+  linuxovým CI.
+- Nový `F2-06` řez přidal 9 scénářů; celý component suite nyní prochází jako
+  27 testů v 9 souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`.
+  Prošlo také 65 conference unit/architecture testů; 36 DB-dependent scénářů
+  se bez lokálního PostgreSQL korektně přeskočilo. Prošel celý workspace
+  Prettier a ESLint, conference typecheck po opravení povinného test callbacku,
+  kompletní web/worker production build se záměrně nastaveným
+  `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` i source/post-build boundary. High
+  audit gate prošel a eviduje jediný známý moderate vývojový `esbuild` přes
+  `drizzle-kit`.
+- Security a code review dílčího `F2-06` diffu proběhly. Zapracovaný nález
+  přesunul `axe-core` k conference jako explicitní dev dependency a rozšířil
+  architecture i production source/build guard, aby se browserový audit
+  runtime nemohl dostat do produkce. Axe chyba vypisuje pouze rule metadata a
+  počty uzlů, baseline obsahují výhradně validované syntetické fixtures a CDP
+  media emulace se po testu úplně resetuje. Nezůstává otevřený actionable
+  security ani code-review nález tohoto dílčího řezu.
 - Participant program, detail, řečníci, partneři a praktické informace mají
   bezpečné loading/empty/offline/authentication/session-expired/permission/
   invalid-response stavy s retry, pouze validovanou request referencí a bez
@@ -57,15 +81,17 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   a eviduje jediný známý moderate vývojový `esbuild` přes `drizzle-kit`.
   Docker CLI je dostupné, ale lokální daemon neběží, proto skutečné P3 DB
   integrační testy zůstávají na PostgreSQL-backed GitHub CI.
-- Capability Program a informace je po `F2-03` pouze `contract ready`.
-  `F2-06` zůstává explicitní component/axe/visual gate před označením
-  `UI ready (mocked)`; `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
-  contract-first práci. Následující samostatná fáze může být `F2-06`; `F6-02`
-  může paralelně začít nad public částí `CS-CONTENT-01`.
+- Capability Program a informace zůstává `contract ready`. Shell/program část
+  `F2-06` je pokrytá, ale celý úkol zůstává otevřený pro vstupenku, inbox a
+  správu účtu/soukromí, které dosud neexistují a vzniknou v
+  `F2-04`/`F2-05`/`F2-07`; teprve potom lze capability označit jako
+  `UI ready (mocked)`. `BLOCKER-CONTENT-01` blokuje až obsahové UAT, ne další
+  contract-first práci. `F6-02` může paralelně začít nad public částí
+  `CS-CONTENT-01`.
 - V pracovním stromu zůstává cizí nestagovaný soubor
   `apps/conference/src/components/content-state 2.tsx`, stará kopie z
-  22. července. Při produkčním buildu byl pouze dočasně přesunut mimo `src` a
-  vrácen; není součástí `F2-03` a nesmí být commitnutý.
+  22. července. Při produkčních kontrolách byl pouze dočasně přesunut mimo
+  `src` a vrácen; není součástí `F2-03` ani `F2-06` a nesmí být commitnutý.
 - Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
   `origin/track/frontend-a/F0-06-component-a11y`.
   Samostatný Vitest Browser/Playwright component runner vykresluje React 19

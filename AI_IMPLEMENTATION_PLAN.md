@@ -1202,7 +1202,7 @@ Evidence:
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
 | Aktivace a identita | `not started` | `P2` identity/onboarding doména existuje; `P4`, `F1` plánované | `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` |
-| Program a informace | `contract ready` | `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů | `F2-06` component/axe gate před `UI ready (mocked)`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
+| Program a informace | `contract ready` | `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-06`: hotový shell/program component axe, responsive/reduced-motion a targeted visual řez | `F2-06` zůstává otevřený pro vstupenku, inbox a účet po `F2-04`/`F2-05`/`F2-07`; `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A | `not started` | onboarding doména `P2-06`; UI `F2-07` a API `P4-13` plánované | `BLOCKER-LEGAL-01` pro UAT |
 | Agenda a rezervace | `not started` | `P5`, `F3` plánované | `BLOCKER-RES-*` pro produkční konfiguraci |
 | Vstupenka účastníka | `not started` | `F2-04`, `P4-12` plánované | `BLOCKER-TKT-05` |
@@ -1849,7 +1849,13 @@ skutečnou membership/session. Integrovaný stav vyžaduje E2E scénáře 1–5 
   unread/read a bezpečné prázdné/offline stavy; pokročilé cílení a e-mail
   zůstávají v Priority B.
 - [ ] `F2-06` Doplnit component/axe a omezené visual smoke testy klíčového
-  shellu, programu, vstupenky, inboxu a správy účtu/soukromí.
+  shellu, programu, vstupenky, inboxu a správy účtu/soukromí. Dílčí
+  shell/program gate je implementovaný v
+  [`apps/conference/src/test/component/participant-quality.component.tsx`](apps/conference/src/test/component/participant-quality.component.tsx):
+  redigovaný axe helper, focus/touch/overflow/responsive geometrie,
+  reduced-motion a jeden deterministický visual baseline na každý schválený
+  viewport. Úkol zůstává otevřený pro UI, které vznikne v `F2-04`, `F2-05` a
+  `F2-07`.
 - [ ] `F2-07` Implementovat Priority A účet/profil/soukromí/nastavení:
   profilové minimum, právní dokumenty a acknowledgement, privacy žádost,
   kontaktní podporu, správu relace, logout/logout-all a switch-account.

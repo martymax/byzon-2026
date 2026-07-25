@@ -14,6 +14,7 @@ const forbiddenComponentTokens = [
   'next/',
 ];
 const testOnlyTokens = [
+  'axe-core',
   'vitest-browser-react',
   'vitest/browser',
   '/test/component',

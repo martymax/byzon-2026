@@ -32,6 +32,7 @@ const forbiddenRuntimePatterns = [
   ['mock source path', /(?:\/|\\)test(?:\/|\\)mocks/],
   ['Vitest browser runtime', /vitest-browser-react|vitest\/browser/],
   ['axe Playwright runtime', /@axe-core\/playwright/],
+  ['axe browser runtime', /(?:^|["'/])axe-core(?:["'/]|$)/m],
   ['component test source path', /(?:\/|\\)test(?:\/|\\)component/],
 ];
 
@@ -62,7 +63,7 @@ const reportMatches = (file, source, patterns = forbiddenRuntimePatterns) => {
 const checkSourceBoundary = () => {
   const packageJsonPath = resolve(appRoot, 'package.json');
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-  for (const dependency of ['msw', '@byzon/test-support']) {
+  for (const dependency of ['msw', '@byzon/test-support', 'axe-core']) {
     if (packageJson.dependencies?.[dependency]) {
       failures.push(`${dependency} must remain a devDependency`);
     }
@@ -136,7 +137,7 @@ const checkBuildBoundary = () => {
     const source = readFileSync(file, 'utf8');
     if (basename(file) === 'package.json') {
       const packageJson = JSON.parse(source);
-      for (const dependency of ['msw', '@byzon/test-support']) {
+      for (const dependency of ['msw', '@byzon/test-support', 'axe-core']) {
         if (
           packageJson.dependencies?.[dependency] ||
           packageJson.optionalDependencies?.[dependency]

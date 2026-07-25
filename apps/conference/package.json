@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@byzon/test-support": "workspace:*",
+    "axe-core": "4.12.1",
     "msw": "2.15.0"
   }
 }
