@@ -178,6 +178,44 @@ h1 span {
 .button:hover {
   background: var(--byzon-brand-active);
 }
+.preview-journeys {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.preview-journeys a {
+  min-width: 0;
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  align-content: center;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-ink);
+  background: var(--byzon-surface);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.preview-journeys a:hover {
+  border-color: var(--byzon-brand-active);
+  box-shadow: var(--byzon-shadow-sm);
+}
+.preview-journeys a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.preview-journeys span,
+.preview-disclaimer {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+}
+.preview-disclaimer {
+  max-width: 68ch;
+  margin-top: 1rem;
+}
 .participant-shell-content {
   min-width: 0;
   padding-bottom: calc(4.5rem + var(--byzon-safe-bottom));

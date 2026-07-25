@@ -32,9 +32,36 @@ export default function HomePage() {
           </div>
         </div>
         {previewAvailable ? (
-          <a className="button" href="/aktivace">
-            Otevřít mock průchod
-          </a>
+          <>
+            <a className="button" href="/aktivace">
+              Začít účastnickou aktivací
+            </a>
+            <nav
+              aria-label="Syntetické uživatelské průchody"
+              className="preview-journeys"
+            >
+              <a href="/app">
+                <strong>Účastnická aplikace</strong>
+                <span>Program, agenda, oznámení, vstupenka a účet</span>
+              </a>
+              <a href="/admin">
+                <strong>Organizační provoz</strong>
+                <span>Import, podpora, oznámení, role a audit</span>
+              </a>
+              <a href="/check-in">
+                <strong>Check-in operátor</strong>
+                <span>Scanner, ruční lookup, potvrzení a bezpečné undo</span>
+              </a>
+              <a href="/offline">
+                <strong>PWA a offline stav</strong>
+                <span>Cache, synchronizace, aktualizace a dostupnost dat</span>
+              </a>
+            </nav>
+            <p className="preview-disclaimer">
+              Všechny průchody používají výhradně syntetická data. Produkční
+              účty, vstupenky ani provozní akce se nemění.
+            </p>
+          </>
         ) : null}
       </div>
     </section>
