@@ -23,6 +23,12 @@ import {
   createFetchApiClient,
   type FetchApiClientOptions,
 } from '../../lib/api/fetch-client.js';
+import {
+  requestCheckinBootstrap,
+  requestCheckinConfirm,
+  requestCheckinLookup,
+  requestCheckinUndo,
+} from '../../lib/checkin-api.js';
 import { requestParticipantProgram } from '../../lib/content-api.js';
 import {
   mutateParticipantAgenda,
@@ -64,6 +70,7 @@ import {
   resetMockActivationState,
   resetMockAgendaState,
   resetMockAnnouncementState,
+  resetMockCheckinState,
   resetMockIdentityState,
   selectMockAgendaConflictingSessions,
 } from './handlers.js';
@@ -105,11 +112,77 @@ afterEach(() => {
   resetMockActivationState();
   resetMockAgendaState();
   resetMockAnnouncementState();
+  resetMockCheckinState();
   resetMockIdentityState();
 });
 afterAll(() => server.close());
 
 describe('MSW through the production API port', () => {
+  it('runs check-in preview through the production fetch port and dev-only handlers', async () => {
+    const context = await requestCheckinBootstrap(client);
+    expect(context).toMatchObject({
+      ok: true,
+      data: {
+        actor: { permissions: { confirm: true, undo: true } },
+        device: { state: 'trusted' },
+      },
+    });
+    if (!context.ok || context.kind !== 'success') return;
+
+    const lookup = await requestCheckinLookup(client, {
+      method: 'manual_code',
+      credential: {
+        adapter: 'synthetic_demo',
+        opaqueValue: 'DEMO-VALID',
+      },
+    });
+    expect(lookup).toMatchObject({
+      ok: true,
+      data: { outcome: 'valid' },
+    });
+    if (
+      !lookup.ok ||
+      lookup.kind !== 'success' ||
+      lookup.data.outcome !== 'valid'
+    ) {
+      return;
+    }
+
+    const confirmBody = {
+      lookupId: lookup.data.lookupId,
+      stationId: context.data.station.id,
+      deviceId: context.data.device.id,
+    };
+    const confirmed = await requestCheckinConfirm(
+      client,
+      confirmBody,
+      'checkin-confirm-msw-test-0001',
+    );
+    const replay = await requestCheckinConfirm(
+      client,
+      confirmBody,
+      'checkin-confirm-msw-test-0001',
+    );
+    expect(confirmed).toEqual(replay);
+    expect(confirmed).toMatchObject({
+      ok: true,
+      data: { outcome: 'checked_in' },
+    });
+    if (!confirmed.ok || confirmed.kind !== 'success') return;
+
+    await expect(
+      requestCheckinUndo(
+        client,
+        confirmed.data.checkin.id,
+        { reason: 'Syntetický check-in byl označen omylem.' },
+        'checkin-undo-msw-test-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { outcome: 'undone' },
+    });
+  });
+
   it('validates a synthetic success fixture and returns normal ApiPort data', async () => {
     server.use(
       http.get(`${ORIGIN}/api/v1/foundation`, () =>

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { CheckinOperator } from '@/components/checkin-operator';
 import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 
 export const metadata: Metadata = {
@@ -9,7 +8,15 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function CheckinPage() {
+export default async function CheckinPage() {
   if (!isFrontendPreviewAvailable()) notFound();
-  return <CheckinOperator />;
+  if (
+    process.env.NODE_ENV !== 'development' &&
+    process.env.NODE_ENV !== 'test'
+  ) {
+    notFound();
+  }
+  const { CheckinPreviewOperator } =
+    await import('../../test/mocks/checkin-preview-operator');
+  return <CheckinPreviewOperator />;
 }

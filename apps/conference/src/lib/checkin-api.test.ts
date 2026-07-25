@@ -105,4 +105,81 @@ describe('CS-CHECKIN-01 API descriptors', () => {
     );
     expect(undone).toEqual(undoReplay);
   });
+
+  it('rejects an idempotency key reused with a different exact mutation', async () => {
+    const api = createCheckinDemoApi();
+    const context = await api.request(checkinBootstrapEndpoint, {
+      path: '/api/v1/check-in/context',
+      cache: 'no-store',
+    });
+    const lookup = await api.request(checkinLookupEndpoint, {
+      path: '/api/v1/check-in/lookup',
+      body: {
+        method: 'manual_code',
+        credential: {
+          adapter: 'synthetic_demo',
+          opaqueValue: 'DEMO-VALID',
+        },
+      },
+    });
+    if (
+      !context.ok ||
+      context.kind !== 'success' ||
+      !lookup.ok ||
+      lookup.kind !== 'success'
+    ) {
+      throw new Error('Synthetic setup failed');
+    }
+
+    const confirmBody = {
+      lookupId: lookup.data.lookupId,
+      stationId: context.data.station.id,
+      deviceId: context.data.device.id,
+    };
+    const confirmed = await requestCheckinConfirm(
+      api,
+      confirmBody,
+      'checkin-confirm-collision-0001',
+    );
+    await expect(
+      requestCheckinConfirm(
+        api,
+        {
+          ...confirmBody,
+          deviceId: '019f9200-0000-7000-8000-000000000099',
+        },
+        'checkin-confirm-collision-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+    if (!confirmed.ok || confirmed.kind !== 'success') {
+      throw new Error('Synthetic confirm failed');
+    }
+
+    await requestCheckinUndo(
+      api,
+      confirmed.data.checkin.id,
+      { reason: 'První dostatečně dlouhý auditní důvod.' },
+      'checkin-undo-collision-0001',
+    );
+    await expect(
+      requestCheckinUndo(
+        api,
+        confirmed.data.checkin.id,
+        { reason: 'Jiný dostatečně dlouhý auditní důvod.' },
+        'checkin-undo-collision-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        kind: 'problem',
+        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+      },
+    });
+  });
 });

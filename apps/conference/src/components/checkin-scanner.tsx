@@ -4,9 +4,15 @@ import { Button, FormField, Input } from '@byzon/ui';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import type { CheckinLookupRequest } from '@byzon/domain/contracts/check-in';
-import { checkinDemoScenarioCodes } from '@/lib/checkin-demo-api';
 import { useTransitionFocus } from './use-transition-focus';
 import styles from './checkin.module.css';
+
+export interface CheckinScenarioCode {
+  readonly code: string;
+  readonly label: string;
+}
+
+const noScenarioCodes: readonly CheckinScenarioCode[] = Object.freeze([]);
 
 export interface CheckinCameraSession {
   readonly attach: (video: HTMLVideoElement) => void;
@@ -71,7 +77,9 @@ export const browserCheckinCamera: CheckinCameraPort = Object.freeze({
       return { kind: 'unavailable' };
     }
   },
-  readSyntheticCredential: async () => 'DEMO-VALID',
+  readSyntheticCredential: async () => {
+    throw new Error('Synthetic credential adapter is unavailable.');
+  },
 });
 
 type CameraState =
@@ -111,10 +119,12 @@ export const CheckinScanner = ({
   camera = browserCheckinCamera,
   disabled = false,
   onLookup,
+  scenarioCodes = noScenarioCodes,
 }: {
   readonly camera?: CheckinCameraPort;
   readonly disabled?: boolean;
   readonly onLookup: (request: CheckinLookupRequest) => void;
+  readonly scenarioCodes?: readonly CheckinScenarioCode[];
 }) => {
   const [cameraState, setCameraState] = useState<CameraState>('intro');
   const [manualCode, setManualCode] = useState('');
@@ -177,17 +187,17 @@ export const CheckinScanner = ({
     try {
       result = await camera.request();
     } catch {
-      requestLocked.current = false;
       if (mounted.current && currentGeneration === generation.current) {
+        requestLocked.current = false;
         setCameraState('unavailable');
       }
       return;
     }
-    requestLocked.current = false;
     if (!mounted.current || currentGeneration !== generation.current) {
       if (result.kind === 'granted') result.session.stop();
       return;
     }
+    requestLocked.current = false;
     if (result.kind !== 'granted') {
       setCameraState(result.kind);
       return;
@@ -214,22 +224,36 @@ export const CheckinScanner = ({
       return;
     }
     scanLocked.current = true;
+    const currentGeneration = generation.current;
+    const activeSession = session.current;
     let opaqueValue: string;
     try {
       opaqueValue = await camera.readSyntheticCredential();
     } catch {
-      scanLocked.current = false;
-      stopCamera();
-      if (mounted.current) setCameraState('unavailable');
+      if (
+        mounted.current &&
+        currentGeneration === generation.current &&
+        session.current === activeSession
+      ) {
+        scanLocked.current = false;
+        stopCamera();
+        setCameraState('unavailable');
+      }
       return;
     }
-    stopCamera();
-    if (mounted.current) {
-      onLookup({
-        method: 'camera_scan',
-        credential: { adapter: 'synthetic_demo', opaqueValue },
-      });
+    if (
+      !mounted.current ||
+      currentGeneration !== generation.current ||
+      session.current !== activeSession
+    ) {
+      return;
     }
+    generation.current += 1;
+    stopCamera();
+    onLookup({
+      method: 'camera_scan',
+      credential: { adapter: 'synthetic_demo', opaqueValue },
+    });
   };
 
   const submitManual = (event: FormEvent) => {
@@ -426,29 +450,31 @@ export const CheckinScanner = ({
             </Button>
           </form>
 
-          <details className={styles.demoScenarios}>
-            <summary>Testovací scénáře</summary>
-            <p>
-              Pouze syntetická data. Tyto hodnoty nejsou formátem reálné
-              vstupenky ani credential adapterem.
-            </p>
-            <div className={styles.scenarioGrid}>
-              {checkinDemoScenarioCodes.map((scenario) => (
-                <button
-                  disabled={disabled}
-                  key={scenario.code}
-                  onClick={() => {
-                    setManualCode(scenario.code);
-                    setManualError(undefined);
-                  }}
-                  type="button"
-                >
-                  <span>{scenario.label}</span>
-                  <code>{scenario.code}</code>
-                </button>
-              ))}
-            </div>
-          </details>
+          {scenarioCodes.length > 0 && (
+            <details className={styles.demoScenarios}>
+              <summary>Testovací scénáře</summary>
+              <p>
+                Pouze syntetická data. Tyto hodnoty nejsou formátem reálné
+                vstupenky ani credential adapterem.
+              </p>
+              <div className={styles.scenarioGrid}>
+                {scenarioCodes.map((scenario) => (
+                  <button
+                    disabled={disabled}
+                    key={scenario.code}
+                    onClick={() => {
+                      setManualCode(scenario.code);
+                      setManualError(undefined);
+                    }}
+                    type="button"
+                  >
+                    <span>{scenario.label}</span>
+                    <code>{scenario.code}</code>
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
         </article>
       </div>
     </section>

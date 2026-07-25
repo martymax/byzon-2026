@@ -10,6 +10,7 @@ import type {
   CheckinCameraSession,
 } from '../../components/checkin-scanner';
 import { createCheckinDemoApi } from '../../lib/checkin-demo-api';
+import { checkinPreviewScenarioCodes } from '../mocks/checkin-preview-operator';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
@@ -59,8 +60,15 @@ const recordingApi = (
   },
 });
 
-const renderOperator = (props: Parameters<typeof CheckinOperator>[0] = {}) =>
-  renderComponent(
+const renderOperator = (props: Parameters<typeof CheckinOperator>[0] = {}) => {
+  const {
+    api = createCheckinDemoApi(),
+    camera = unsupportedCamera,
+    debounceMs = 10,
+    scenarioCodes = checkinPreviewScenarioCodes,
+    ...rest
+  } = props;
+  return renderComponent(
     <div
       style={
         {
@@ -69,9 +77,16 @@ const renderOperator = (props: Parameters<typeof CheckinOperator>[0] = {}) =>
         } as CSSProperties
       }
     >
-      <CheckinOperator camera={unsupportedCamera} debounceMs={10} {...props} />
+      <CheckinOperator
+        api={api}
+        camera={camera}
+        debounceMs={debounceMs}
+        scenarioCodes={scenarioCodes}
+        {...rest}
+      />
     </div>,
   );
+};
 
 const submitCode = async (
   screen: Awaited<ReturnType<typeof renderOperator>>,
@@ -277,6 +292,45 @@ describe('F5-01..F5-06 check-in operator', () => {
     expect(stopped).toBe(1);
   });
 
+  it('invalidates a pending camera read when the operator cancels the session', async () => {
+    let resolveRead: ((value: string) => void) | undefined;
+    let stopped = 0;
+    const { api, calls } = recordingApi();
+    const camera: CheckinCameraPort = {
+      isSupported: () => true,
+      request: async () => ({
+        kind: 'granted',
+        session: {
+          attach: () => undefined,
+          stop: () => {
+            stopped += 1;
+          },
+        },
+      }),
+      readSyntheticCredential: () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    };
+    const screen = await renderOperator({ api, camera });
+
+    await screen.getByRole('button', { name: 'Povolit kameru' }).click();
+    await screen
+      .getByRole('button', { name: 'Načíst syntetický testovací kód' })
+      .click();
+    await screen.getByRole('button', { name: 'Zrušit' }).click();
+    resolveRead?.('DEMO-VALID');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect
+      .element(screen.getByText('Skenování bylo zrušeno'))
+      .toBeVisible();
+    expect(stopped).toBe(1);
+    expect(
+      calls.filter((call) => call.path === '/api/v1/check-in/lookup'),
+    ).toHaveLength(0);
+  });
+
   it('does not expose a scanner or queue mutations when context loading is offline', async () => {
     const api: ApiPort = {
       request: async () => ({
@@ -333,6 +387,103 @@ describe('F5-01..F5-06 check-in operator', () => {
       calls.filter((call) => call.path === '/api/v1/check-in/confirm'),
     ).toHaveLength(0);
   });
+
+  it('rejects bidi and control characters before a search request is created', async () => {
+    const { api, calls } = recordingApi();
+    const screen = await renderOperator({ api, debounceMs: 10 });
+
+    await screen.getByLabelText('Jméno nebo e-mail').fill('Te\u202Est');
+    await expect
+      .element(
+        screen.getByText(
+          'Dotaz obsahuje nepovolené řídicí nebo obousměrné znaky. Zadejte jej znovu.',
+        ),
+      )
+      .toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(
+      calls.filter((call) => call.path.startsWith('/api/v1/check-in/search')),
+    ).toHaveLength(0);
+  });
+
+  it('keeps lookup available while explaining a missing confirm permission', async () => {
+    const api = createCheckinDemoApi({
+      actor: {
+        role: 'organizer_admin',
+        permissions: { confirm: false, undo: true },
+      },
+    });
+    const screen = await renderOperator({ api });
+
+    await expect
+      .element(screen.getByLabelText('Opaque kód vstupenky'))
+      .toBeEnabled();
+    await submitCode(screen, 'DEMO-VALID');
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: 'Potvrdit check-in této osoby',
+        }),
+      )
+      .toBeDisabled();
+    expect(document.body.textContent).toContain(
+      'Přihlášená role nemá oprávnění potvrdit check-in',
+    );
+  });
+
+  it('disables confirmation after the authoritative lookup expiry', async () => {
+    const screen = await renderOperator({
+      wallClockNow: () => Date.parse('2026-09-11T07:48:00.000+02:00'),
+    });
+
+    await submitCode(screen, 'DEMO-VALID');
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: 'Potvrdit check-in této osoby',
+        }),
+      )
+      .toBeDisabled();
+    expect(document.body.textContent).toContain(
+      'Platnost tohoto lookupu vypršela',
+    );
+  });
+
+  it('separates undo permission and canonical expiry from confirm capability', async () => {
+    const noUndoApi = createCheckinDemoApi({
+      actor: {
+        role: 'organizer_admin',
+        permissions: { confirm: true, undo: false },
+      },
+    });
+    const noPermission = await renderOperator({ api: noUndoApi });
+    await submitCode(noPermission, 'DEMO-VALID');
+    await noPermission
+      .getByRole('button', { name: 'Potvrdit check-in této osoby' })
+      .click();
+    await expect
+      .element(noPermission.getByText('Vstup je zaznamenaný'))
+      .toBeVisible();
+    await expect
+      .element(noPermission.getByRole('button', { name: 'Vrátit check-in' }))
+      .toBeDisabled();
+    expect(document.body.textContent).toContain(
+      'Přihlášená role nemá oprávnění vrátit check-in',
+    );
+    await noPermission.unmount();
+
+    const expired = await renderOperator({
+      wallClockNow: () => Date.parse('2026-09-11T08:00:00.000+02:00'),
+    });
+    await submitCode(expired, 'DEMO-DUPLICATE');
+    await expect
+      .element(expired.getByRole('button', { name: 'Vrátit původní check-in' }))
+      .toBeDisabled();
+    expect(document.body.textContent).toContain(
+      'Časové okno pro vrácení tohoto check-inu právě skončilo',
+    );
+  }, 30_000);
 
   it.each([
     ['DEMO-VALID', 'Platný lookup', 'check'],
@@ -456,7 +607,7 @@ describe('F5-01..F5-06 check-in operator', () => {
     expect(undoCalls).toHaveLength(1);
     expect(undoCalls[0]?.body).toEqual({ reason });
     expect(document.body.textContent).toContain('Původní záznam nebyl smazán');
-  });
+  }, 30_000);
 
   it('supports keyboard submit, landscape geometry, axe and scan-to-result measurement', async () => {
     const browser = await cdp();

@@ -8,6 +8,7 @@ const sourceRoot = resolve(appRoot, 'src');
 const mockRoot = resolve(sourceRoot, 'test/mocks');
 const componentTestRoot = resolve(sourceRoot, 'test/component');
 const instrumentationPath = resolve(sourceRoot, 'instrumentation-client.ts');
+const checkinPreviewPagePath = resolve(sourceRoot, 'app/check-in/page.tsx');
 const generatedWorkerPath = resolve(appRoot, 'public/mockServiceWorker.js');
 const buildRoot = resolve(appRoot, '.next');
 const mode = process.argv[2];
@@ -34,6 +35,18 @@ const forbiddenRuntimePatterns = [
   ['axe Playwright runtime', /@axe-core\/playwright/],
   ['axe browser runtime', /(?:^|["'/])axe-core(?:["'/]|$)/m],
   ['component test source path', /(?:\/|\\)test(?:\/|\\)component/],
+  [
+    'check-in demo transport import',
+    /from\s*['"][^'"]*checkin-demo-api(?:\.[cm]?[jt]sx?)?['"]/,
+  ],
+];
+const forbiddenBuildPatterns = [
+  ...forbiddenRuntimePatterns,
+  ['check-in preview scenario marker', /BYZON_CHECKIN_PREVIEW_SCENARIOS_F5/],
+  [
+    'check-in synthetic scenario code',
+    /DEMO-(?:VALID|DUPLICATE|CANCELLED|REFUNDED|BLOCKED|UNKNOWN|ERROR)/,
+  ],
 ];
 
 const filesUnder = (directory) => {
@@ -88,7 +101,13 @@ const checkSourceBoundary = () => {
       continue;
     }
     if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
-    reportMatches(file, readFileSync(file, 'utf8'));
+    const patterns =
+      file === checkinPreviewPagePath
+        ? forbiddenRuntimePatterns.filter(
+            ([label]) => label !== 'mock source path',
+          )
+        : forbiddenRuntimePatterns;
+    reportMatches(file, readFileSync(file, 'utf8'), patterns);
   }
 
   if (!existsSync(instrumentationPath)) {
@@ -114,6 +133,19 @@ const checkSourceBoundary = () => {
   if (!instrumentation.includes("await import('./test/mocks/browser')")) {
     failures.push(
       'instrumentation-client must dynamically import browser mocks',
+    );
+  }
+
+  const checkinPreviewPage = readFileSync(checkinPreviewPagePath, 'utf8');
+  if (
+    !checkinPreviewPage.includes("process.env.NODE_ENV !== 'development'") ||
+    !checkinPreviewPage.includes("process.env.NODE_ENV !== 'test'") ||
+    !/await\s+import\(\s*['"]\.\.\/\.\.\/test\/mocks\/checkin-preview-operator['"]\s*\)/.test(
+      checkinPreviewPage,
+    )
+  ) {
+    failures.push(
+      'check-in preview scenarios must stay behind the explicit build-time environment guard and dynamic import',
     );
   }
 };
@@ -149,7 +181,7 @@ const checkBuildBoundary = () => {
       }
       continue;
     }
-    reportMatches(file, source);
+    reportMatches(file, source, forbiddenBuildPatterns);
   }
 };
 

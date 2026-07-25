@@ -4,6 +4,7 @@ import type {
   CheckinLookupRequest,
   CheckinSearchResponse,
 } from '@byzon/domain/contracts/check-in';
+import { checkinSearchQuerySchema } from '@byzon/domain/contracts/check-in';
 import { Button, FormField, Input } from '@byzon/ui';
 import { useEffect, useRef, useState } from 'react';
 
@@ -51,6 +52,7 @@ export const CheckinSearch = ({
     generation.current += 1;
     const currentGeneration = generation.current;
     const canonical = query.trim();
+    const parsedQuery = checkinSearchQuerySchema.safeParse(query);
     if (
       disabled ||
       canonical.length < checkinSearchInputBounds.minimum ||
@@ -58,11 +60,14 @@ export const CheckinSearch = ({
     ) {
       return;
     }
+    if (!parsedQuery.success) {
+      return;
+    }
 
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setState({ status: 'loading' });
-      void requestCheckinSearch(api, canonical, controller.signal).then(
+      void requestCheckinSearch(api, parsedQuery.data, controller.signal).then(
         (result) => {
           if (generation.current !== currentGeneration) return;
           if (result.ok && result.kind === 'success') {
@@ -127,11 +132,18 @@ export const CheckinSearch = ({
             onChange={(event) => {
               const value = event.currentTarget.value;
               const canonical = value.trim();
+              const parsed = checkinSearchQuerySchema.safeParse(value);
               setQuery(value);
               setState(
                 canonical.length >= checkinSearchInputBounds.minimum &&
                   canonical.length <= checkinSearchInputBounds.maximum
-                  ? { status: 'waiting' }
+                  ? parsed.success
+                    ? { status: 'waiting' }
+                    : {
+                        status: 'failure',
+                        title:
+                          'Dotaz obsahuje nepovolené řídicí nebo obousměrné znaky. Zadejte jej znovu.',
+                      }
                   : { status: 'idle' },
               );
             }}

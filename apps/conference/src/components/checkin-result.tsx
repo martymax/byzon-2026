@@ -199,6 +199,36 @@ const formatDate = (value: string, timezone: string) =>
     timeZone: timezone,
   }).format(new Date(value));
 
+const undoRecordUnavailableCopy = {
+  role_forbidden:
+    'Server tento záznam označil jako nedostupný pro přihlášenou roli.',
+  window_expired: 'Časové okno pro vrácení tohoto check-inu už skončilo.',
+  already_undone: 'Tento check-in už byl auditovaně vrácen.',
+} as const;
+
+const useExpiryReached = (
+  expiresAt: string | undefined,
+  wallClockNow: () => number,
+): boolean => {
+  const [revision, setRevision] = useState(0);
+  const expiration = expiresAt
+    ? Date.parse(expiresAt)
+    : Number.POSITIVE_INFINITY;
+
+  useEffect(() => {
+    if (!Number.isFinite(expiration)) return;
+    const remaining = expiration - wallClockNow();
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(
+      () => setRevision((current) => current + 1),
+      Math.min(remaining + 25, 2_147_000_000),
+    );
+    return () => window.clearTimeout(timer);
+  }, [expiration, revision, wallClockNow]);
+
+  return Number.isFinite(expiration) && expiration <= wallClockNow();
+};
+
 const PersonSummary = ({
   lookup,
 }: {
@@ -244,7 +274,7 @@ const CanonicalRecord = ({
 );
 
 export const CheckinResult = ({
-  mutationDisabled = false,
+  confirmUnavailableReason,
   onConfirm,
   onReset,
   onRetryConfirm,
@@ -252,8 +282,10 @@ export const CheckinResult = ({
   onUndo,
   stage,
   timezone,
+  undoUnavailableReason,
+  wallClockNow = Date.now,
 }: {
-  readonly mutationDisabled?: boolean;
+  readonly confirmUnavailableReason?: string;
   readonly onConfirm: () => void;
   readonly onReset: () => void;
   readonly onRetryConfirm: () => void;
@@ -261,6 +293,8 @@ export const CheckinResult = ({
   readonly onUndo: (checkinId: string, reason: string) => void;
   readonly stage: CheckinResultStage;
   readonly timezone: string;
+  readonly undoUnavailableReason?: string;
+  readonly wallClockNow?: () => number;
 }) => {
   const [undoOpen, setUndoOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -298,9 +332,37 @@ export const CheckinResult = ({
     }
     return undefined;
   }, [stage]);
+  const lookupExpiresAt =
+    stage.kind === 'lookup' && stage.lookup.outcome === 'valid'
+      ? stage.lookup.expiresAt
+      : undefined;
+  const lookupExpired = useExpiryReached(lookupExpiresAt, wallClockNow);
+  const undoExpired = useExpiryReached(
+    record?.undo.expiresAt ?? undefined,
+    wallClockNow,
+  );
+  const confirmActionUnavailableReason =
+    confirmUnavailableReason ??
+    (lookupExpired
+      ? 'Platnost tohoto lookupu vypršela. Proveďte nový scan.'
+      : undefined);
+  const recordUndoUnavailableReason =
+    record && !record.undo.allowed && record.undo.unavailableReason
+      ? undoRecordUnavailableCopy[record.undo.unavailableReason]
+      : undefined;
+  const undoActionUnavailableReason =
+    undoUnavailableReason ??
+    recordUndoUnavailableReason ??
+    (undoExpired
+      ? 'Časové okno pro vrácení tohoto check-inu právě skončilo.'
+      : undefined);
 
   const submitUndo = (event: FormEvent) => {
     event.preventDefault();
+    if (undoActionUnavailableReason) {
+      setReasonError(undoActionUnavailableReason);
+      return;
+    }
     const canonical = reason.trim();
     if (canonical.length < CHECKIN_UNDO_REASON_MIN_LENGTH) {
       setReasonError(
@@ -414,7 +476,10 @@ export const CheckinResult = ({
           )}
           <div className={styles.resultActions}>
             {stage.retryExact && (
-              <Button disabled={mutationDisabled} onClick={onRetryConfirm}>
+              <Button
+                disabled={Boolean(confirmUnavailableReason)}
+                onClick={onRetryConfirm}
+              >
                 Bezpečně zopakovat stejný požadavek
               </Button>
             )}
@@ -425,10 +490,17 @@ export const CheckinResult = ({
             )}
           </div>
           {stage.retryExact && (
-            <p className={styles.safetyNote}>
-              Retry používá stejný payload i idempotency key. Nevytvoří druhý
-              check-in.
-            </p>
+            <>
+              <p className={styles.safetyNote}>
+                Retry používá stejný payload i idempotency key. Nevytvoří druhý
+                check-in.
+              </p>
+              {confirmUnavailableReason && (
+                <p className={styles.safetyNote} role="status">
+                  {confirmUnavailableReason}
+                </p>
+              )}
+            </>
           )}
         </div>
       </section>
@@ -499,7 +571,10 @@ export const CheckinResult = ({
           )}
           <div className={styles.resultActions}>
             {stage.retryExact && (
-              <Button disabled={mutationDisabled} onClick={onRetryUndo}>
+              <Button
+                disabled={Boolean(undoUnavailableReason)}
+                onClick={onRetryUndo}
+              >
                 Zopakovat stejnou reverzní operaci
               </Button>
             )}
@@ -509,6 +584,11 @@ export const CheckinResult = ({
               </Button>
             )}
           </div>
+          {stage.retryExact && undoUnavailableReason && (
+            <p className={styles.safetyNote} role="status">
+              {undoUnavailableReason}
+            </p>
+          )}
         </div>
       </section>
     );
@@ -544,15 +624,13 @@ export const CheckinResult = ({
           />
           <div className={styles.resultActions}>
             <Button onClick={onReset}>Další návštěvník</Button>
-            {stage.confirmation.checkin.undo.allowed && (
-              <Button
-                disabled={mutationDisabled}
-                onClick={() => setUndoOpen((current) => !current)}
-                variant="danger"
-              >
-                Vrátit check-in
-              </Button>
-            )}
+            <Button
+              disabled={Boolean(undoActionUnavailableReason)}
+              onClick={() => setUndoOpen((current) => !current)}
+              variant="danger"
+            >
+              Vrátit check-in
+            </Button>
           </div>
           {stage.confirmation.checkin.undo.allowed &&
             stage.confirmation.checkin.undo.expiresAt && (
@@ -565,6 +643,11 @@ export const CheckinResult = ({
                 .
               </p>
             )}
+          {undoActionUnavailableReason && (
+            <p className={styles.safetyNote} role="status">
+              Vrácení není dostupné: {undoActionUnavailableReason}
+            </p>
+          )}
           {undoOpen && (
             <form className={styles.undoForm} onSubmit={submitUndo}>
               <h2>Auditované vrácení check-inu</h2>
@@ -591,7 +674,7 @@ export const CheckinResult = ({
               </FormField>
               <div className={styles.resultActions}>
                 <Button
-                  disabled={mutationDisabled}
+                  disabled={Boolean(undoActionUnavailableReason)}
                   type="submit"
                   variant="danger"
                 >
@@ -651,7 +734,10 @@ export const CheckinResult = ({
         </p>
         <div className={styles.resultActions}>
           {stage.lookup.outcome === 'valid' && (
-            <Button disabled={mutationDisabled} onClick={onConfirm}>
+            <Button
+              disabled={Boolean(confirmActionUnavailableReason)}
+              onClick={onConfirm}
+            >
               Potvrdit check-in této osoby
             </Button>
           )}
@@ -663,9 +749,9 @@ export const CheckinResult = ({
               ? 'Zrušit bez změny'
               : 'Nový scan'}
           </Button>
-          {lookupRecord?.undo.allowed && (
+          {lookupRecord && (
             <Button
-              disabled={mutationDisabled}
+              disabled={Boolean(undoActionUnavailableReason)}
               onClick={() => setUndoOpen((current) => !current)}
               variant="danger"
             >
@@ -674,9 +760,21 @@ export const CheckinResult = ({
           )}
         </div>
         {stage.lookup.outcome === 'valid' && (
-          <p className={styles.safetyNote}>
-            Až následující tlačítko odešle idempotentní mutaci. Dosavadní scan
-            nic nezměnil.
+          <>
+            <p className={styles.safetyNote}>
+              Až následující tlačítko odešle idempotentní mutaci. Dosavadní scan
+              nic nezměnil.
+            </p>
+            {confirmActionUnavailableReason && (
+              <p className={styles.safetyNote} role="status">
+                Potvrzení není dostupné: {confirmActionUnavailableReason}
+              </p>
+            )}
+          </>
+        )}
+        {lookupRecord && undoActionUnavailableReason && (
+          <p className={styles.safetyNote} role="status">
+            Vrácení není dostupné: {undoActionUnavailableReason}
           </p>
         )}
         {undoOpen && lookupRecord && (
@@ -702,7 +800,7 @@ export const CheckinResult = ({
             </FormField>
             <div className={styles.resultActions}>
               <Button
-                disabled={mutationDisabled}
+                disabled={Boolean(undoActionUnavailableReason)}
                 type="submit"
                 variant="danger"
               >

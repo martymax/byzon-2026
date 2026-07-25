@@ -40,16 +40,6 @@ const lookupBase = {
   expiresAt: '2026-09-11T07:47:00.000+02:00',
 } as const;
 
-export const checkinDemoScenarioCodes = Object.freeze([
-  { code: 'DEMO-VALID', label: 'Platná vstupenka' },
-  { code: 'DEMO-DUPLICATE', label: 'Duplicitní vstup' },
-  { code: 'DEMO-CANCELLED', label: 'Zrušená vstupenka' },
-  { code: 'DEMO-REFUNDED', label: 'Vrácená vstupenka' },
-  { code: 'DEMO-BLOCKED', label: 'Blokovaná vstupenka' },
-  { code: 'DEMO-UNKNOWN', label: 'Neznámý kód' },
-  { code: 'DEMO-ERROR', label: 'Chyba spojení se službou' },
-] as const);
-
 const json = (body: unknown, status = 200, requestId = 'demo-checkin-0001') =>
   Response.json(body, {
     status,
@@ -98,11 +88,29 @@ const idempotencyKeyFor = (init?: RequestInit): string =>
  * Deterministic preview transport. It validates every synthetic response with
  * CS-CHECKIN-01 but does not decode or verify any real credential.
  */
-export const createCheckinDemoApi = (): ApiPort => {
+export const createCheckinDemoApi = ({
+  actor,
+}: {
+  readonly actor?: {
+    readonly role: 'checkin_operator' | 'organizer_admin';
+    readonly permissions: {
+      readonly confirm: boolean;
+      readonly undo: boolean;
+    };
+  };
+} = {}): ApiPort => {
   let checkedIn = false;
   let undone = false;
-  const confirms = new Map<string, unknown>();
-  const undos = new Map<string, unknown>();
+  const mutations = new Map<
+    string,
+    { readonly fingerprint: string; readonly response: unknown }
+  >();
+
+  const mutationFingerprint = (
+    method: string,
+    path: string,
+    body: unknown,
+  ): string => JSON.stringify({ method, path, body });
 
   const record = () => ({
     id: ids.checkin,
@@ -180,8 +188,11 @@ export const createCheckinDemoApi = (): ApiPort => {
             },
             actor: {
               displayLabel: 'Demo operátor',
-              role: 'checkin_operator',
-              permissions: { confirm: true, undo: true },
+              role: actor?.role ?? 'checkin_operator',
+              permissions: actor?.permissions ?? {
+                confirm: true,
+                undo: true,
+              },
             },
             policy: {
               credentialAdapter: 'synthetic_demo_only',
@@ -248,8 +259,13 @@ export const createCheckinDemoApi = (): ApiPort => {
       if (method === 'POST' && url.pathname === '/api/v1/check-in/confirm') {
         const request = checkinConfirmRequestSchema.parse(parsedBody(init));
         const key = idempotencyKeyFor(init);
-        const replay = confirms.get(key);
-        if (replay) return json(replay);
+        const fingerprint = mutationFingerprint(method, url.pathname, request);
+        const replay = mutations.get(key);
+        if (replay) {
+          return replay.fingerprint === fingerprint
+            ? json(replay.response)
+            : problem('IDEMPOTENCY_KEY_REUSED', 409);
+        }
         if (
           request.lookupId !== ids.lookup ||
           request.stationId !== ids.station ||
@@ -266,7 +282,7 @@ export const createCheckinDemoApi = (): ApiPort => {
           ticket,
           checkin: record(),
         });
-        confirms.set(key, response);
+        mutations.set(key, { fingerprint, response });
         return json(response);
       }
 
@@ -274,10 +290,15 @@ export const createCheckinDemoApi = (): ApiPort => {
         /^\/api\/v1\/check-in\/([^/]+)\/undo$/,
       );
       if (method === 'POST' && undoMatch) {
-        checkinUndoRequestSchema.parse(parsedBody(init));
+        const request = checkinUndoRequestSchema.parse(parsedBody(init));
         const key = idempotencyKeyFor(init);
-        const replay = undos.get(key);
-        if (replay) return json(replay);
+        const fingerprint = mutationFingerprint(method, url.pathname, request);
+        const replay = mutations.get(key);
+        if (replay) {
+          return replay.fingerprint === fingerprint
+            ? json(replay.response)
+            : problem('IDEMPOTENCY_KEY_REUSED', 409);
+        }
         if (undoMatch[1] !== ids.checkin) {
           return problem('CHECKIN_NOT_FOUND', 404);
         }
@@ -288,7 +309,7 @@ export const createCheckinDemoApi = (): ApiPort => {
         });
         checkedIn = false;
         undone = true;
-        undos.set(key, response);
+        mutations.set(key, { fingerprint, response });
         return json(response);
       }
 

@@ -18,19 +18,23 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { ApiPort } from '@/lib/api';
 import {
+  browserCheckinApi,
   requestCheckinBootstrap,
   requestCheckinConfirm,
   requestCheckinLookup,
   requestCheckinUndo,
 } from '@/lib/checkin-api';
-import { createCheckinDemoApi } from '@/lib/checkin-demo-api';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 import {
   CheckinResult,
   type CheckinResultStage,
   type CheckinUiFailure,
 } from './checkin-result';
-import { CheckinScanner, type CheckinCameraPort } from './checkin-scanner';
+import {
+  CheckinScanner,
+  type CheckinCameraPort,
+  type CheckinScenarioCode,
+} from './checkin-scanner';
 import { CheckinSearch } from './checkin-search';
 import { CheckinShell } from './checkin-shell';
 import styles from './checkin.module.css';
@@ -247,15 +251,18 @@ export const CheckinOperator = ({
   createKey = createMutationKey,
   debounceMs,
   now = defaultNow,
+  scenarioCodes,
+  wallClockNow = Date.now,
 }: {
   readonly api?: ApiPort;
   readonly camera?: CheckinCameraPort;
   readonly createKey?: (prefix: 'confirm' | 'undo') => string;
   readonly debounceMs?: number;
   readonly now?: () => number;
+  readonly scenarioCodes?: readonly CheckinScenarioCode[];
+  readonly wallClockNow?: () => number;
 }) => {
-  const [localApi] = useState<ApiPort>(() => createCheckinDemoApi());
-  const resolvedApi = api ?? localApi;
+  const resolvedApi = api ?? browserCheckinApi;
   const connectivity = useConnectivity();
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [bootstrap, setBootstrap] = useState<BootstrapState>({
@@ -422,7 +429,10 @@ export const CheckinOperator = ({
       stage?.kind !== 'lookup' ||
       stage.lookup.outcome !== 'valid' ||
       bootstrap.status !== 'ready' ||
-      connectivity === 'offline'
+      connectivity === 'offline' ||
+      bootstrap.data.device.state === 'revoked' ||
+      !bootstrap.data.actor.permissions.confirm ||
+      Date.parse(stage.lookup.expiresAt) <= wallClockNow()
     ) {
       return;
     }
@@ -493,6 +503,7 @@ export const CheckinOperator = ({
     if (
       connectivity === 'offline' ||
       bootstrap.status !== 'ready' ||
+      bootstrap.data.device.state === 'revoked' ||
       !bootstrap.data.actor.permissions.undo
     ) {
       return;
@@ -502,7 +513,15 @@ export const CheckinOperator = ({
     if (stage?.kind === 'lookup' && stage.lookup.outcome === 'duplicate') {
       record = stage.lookup.previousCheckin;
     }
-    if (!record || record.id !== checkinId || !record.undo.allowed) return;
+    if (
+      !record ||
+      record.id !== checkinId ||
+      !record.undo.allowed ||
+      !record.undo.expiresAt ||
+      Date.parse(record.undo.expiresAt) <= wallClockNow()
+    ) {
+      return;
+    }
     const attempt: UndoAttempt = {
       body: { reason },
       checkinId,
@@ -562,10 +581,24 @@ export const CheckinOperator = ({
   const reconciliationLocked =
     (stage?.kind === 'confirm_failure' && stage.retryExact) ||
     (stage?.kind === 'undo_failure' && stage.retryExact);
-  const deviceBlocked =
-    bootstrap.data.device.state === 'revoked' ||
-    !bootstrap.data.actor.permissions.confirm;
-  const disabled = connectivity === 'offline' || deviceBlocked;
+  const deviceRevoked = bootstrap.data.device.state === 'revoked';
+  const lookupDisabled = connectivity === 'offline' || deviceRevoked;
+  const confirmUnavailableReason =
+    connectivity === 'offline'
+      ? 'Potvrzení vyžaduje online připojení.'
+      : deviceRevoked
+        ? 'Zařízení bylo revokované. Potvrzení není dostupné.'
+        : !bootstrap.data.actor.permissions.confirm
+          ? 'Přihlášená role nemá oprávnění potvrdit check-in.'
+          : undefined;
+  const undoUnavailableReason =
+    connectivity === 'offline'
+      ? 'Vrácení vyžaduje online připojení.'
+      : deviceRevoked
+        ? 'Zařízení bylo revokované. Vrácení není dostupné.'
+        : !bootstrap.data.actor.permissions.undo
+          ? 'Přihlášená role nemá oprávnění vrátit check-in.'
+          : undefined;
 
   return (
     <CheckinShell
@@ -574,32 +607,33 @@ export const CheckinOperator = ({
       onReset={reset}
       resetDisabled={mutationPending || reconciliationLocked}
     >
-      {deviceBlocked && (
+      {(deviceRevoked || !bootstrap.data.actor.permissions.confirm) && (
         <div className={styles.deviceBlock} role="alert">
           <strong>Na tomto zařízení nelze potvrzovat check-in.</strong>
           <span>
-            Zařízení je revokované nebo role nemá serverově ověřené oprávnění.
-            Kontaktujte administrátora.
+            {confirmUnavailableReason} Lookup zůstává dostupný pouze na
+            důvěryhodném zařízení.
           </span>
         </div>
       )}
       {!stage ? (
-        <div key={`${scannerGeneration}:${disabled}`}>
+        <div key={`${scannerGeneration}:${lookupDisabled}`}>
           <CheckinScanner
             {...(camera ? { camera } : {})}
-            disabled={disabled}
+            disabled={lookupDisabled}
             onLookup={(request) => void lookup(request)}
+            {...(scenarioCodes ? { scenarioCodes } : {})}
           />
           <CheckinSearch
             api={resolvedApi}
             {...(debounceMs === undefined ? {} : { debounceMs })}
-            disabled={disabled}
+            disabled={lookupDisabled}
             onLookup={(request) => void lookup(request)}
           />
         </div>
       ) : (
         <CheckinResult
-          mutationDisabled={disabled}
+          {...(confirmUnavailableReason ? { confirmUnavailableReason } : {})}
           onConfirm={confirm}
           onReset={reset}
           onRetryConfirm={retryConfirm}
@@ -607,6 +641,8 @@ export const CheckinOperator = ({
           onUndo={undo}
           stage={stage}
           timezone={bootstrap.data.event.timezone}
+          {...(undoUnavailableReason ? { undoUnavailableReason } : {})}
+          wallClockNow={wallClockNow}
         />
       )}
     </CheckinShell>

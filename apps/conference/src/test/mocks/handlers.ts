@@ -99,7 +99,10 @@ import {
 import { http, HttpResponse, type RequestHandler } from 'msw';
 
 import { participantAgendaCalendar } from './calendar';
+import { checkinMockHandlers } from './checkin-handlers';
 import { mockJsonResponse, mockProblemResponse } from './response';
+
+export { resetMockCheckinState } from './checkin-handlers';
 
 interface MockActivationState {
   claimed: boolean;
@@ -1251,6 +1254,7 @@ const parseMockActivationLink = (
  * of adding production-looking query switches to the API.
  */
 export const mockHandlers: readonly RequestHandler[] = Object.freeze([
+  ...checkinMockHandlers,
   http.get('*/api/v1/activation', () =>
     mockJsonResponse(
       activationLandingResponseSchema,
