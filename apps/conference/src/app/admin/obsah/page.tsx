@@ -1,11 +1,21 @@
-import { AdminContentConsole } from '@/components/admin-content-console';
-import { AdminContentDemoWorkspace } from '@/components/admin-content-demo-workspace';
-import { PublicationControl } from '@/components/publication-control';
+import { notFound } from 'next/navigation';
+
+import { AdminContentWorkspace } from '@/components/admin-content-workspace';
 import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import { loadCurrentEvent } from '@/server/current-event';
+
 export const dynamic = 'force-dynamic';
+
 export default async function AdminContentPage() {
   if (isFrontendPreviewAvailable()) {
+    if (
+      process.env.NODE_ENV !== 'development' &&
+      process.env.NODE_ENV !== 'test'
+    ) {
+      notFound();
+    }
+    const { AdminContentDemoWorkspace } =
+      await import('../../../components/admin-content-demo-workspace');
     return <AdminContentDemoWorkspace />;
   }
   const event = await loadCurrentEvent();
@@ -14,10 +24,11 @@ export default async function AdminContentPage() {
       <p className="eyebrow">Administrace</p>
       <h1>Obsah akce</h1>
       {event ? (
-        <>
-          <PublicationControl eventId={event.id} />
-          <AdminContentConsole eventId={event.id} timezone={event.timezone} />
-        </>
+        <AdminContentWorkspace
+          eventId={event.id}
+          readOnly={event.status === 'archived'}
+          timezone={event.timezone}
+        />
       ) : (
         <p role="alert">Akce není dostupná.</p>
       )}

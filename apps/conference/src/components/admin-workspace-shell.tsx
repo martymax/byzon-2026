@@ -20,6 +20,7 @@ import {
 } from 'react';
 
 import type { ApiPort } from '@/lib/api/endpoint';
+import { mayLeaveAdminContentDraft } from '@/lib/admin-content-dirty-guard';
 import {
   browserAdminApi,
   browserAdminTicketImportUpload,
@@ -88,7 +89,7 @@ const sectionPermissions: Readonly<
     'audit:read',
     'event:settings:manage',
   ],
-  content: ['agenda:any:override'],
+  content: ['program:manage'],
 };
 
 const roleLabels = {
@@ -412,8 +413,8 @@ export const AdminWorkspaceShell = ({
       {banner}
       {environment === 'mocked' && !banner ? (
         <div className={styles.mockBanner} role="status">
-          UI ready (mocked) · pouze syntetická data · API scénáře obsluhuje
-          vývojový MSW
+          UI ready (mocked) · pouze syntetická data · scénáře obsluhuje vývojový
+          mock transport
         </div>
       ) : null}
       <div className={styles.shell}>
@@ -435,6 +436,7 @@ export const AdminWorkspaceShell = ({
               Demo persona
               <select
                 onChange={(event) => {
+                  if (!mayLeaveAdminContentDraft()) return;
                   setSecurityEpoch((current) => current + 1);
                   setState({ kind: 'loading' });
                   setPreviewPersona(event.target.value as PreviewPersona);

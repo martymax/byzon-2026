@@ -15,6 +15,10 @@ const mockRoot = resolve(sourceRoot, 'test/mocks');
 const componentTestRoot = resolve(sourceRoot, 'test/component');
 const instrumentationPath = resolve(sourceRoot, 'instrumentation-client.ts');
 const checkinPreviewPagePath = resolve(sourceRoot, 'app/check-in/page.tsx');
+const adminContentPreviewPagePath = resolve(
+  sourceRoot,
+  'app/admin/obsah/page.tsx',
+);
 const participantCurrentEventPath = resolve(
   sourceRoot,
   'server/current-event.ts',
@@ -63,6 +67,7 @@ const forbiddenRuntimePatterns = [
 ];
 const forbiddenBuildPatterns = [
   ...forbiddenRuntimePatterns,
+  ['admin content preview marker', /BYZON_ADMIN_CONTENT_PREVIEW_F4/],
   ['check-in preview scenario marker', /BYZON_CHECKIN_PREVIEW_SCENARIOS_F5/],
   [
     'check-in synthetic scenario code',
@@ -307,6 +312,27 @@ const checkSourceBoundary = () => {
   ) {
     failures.push(
       'participant preview event must stay behind explicit environment guards and a dynamic mock import',
+    );
+  }
+
+  const adminContentPreviewPage = readFileSync(
+    adminContentPreviewPagePath,
+    'utf8',
+  );
+  if (
+    !adminContentPreviewPage.includes(
+      "process.env.NODE_ENV !== 'development'",
+    ) ||
+    !adminContentPreviewPage.includes("process.env.NODE_ENV !== 'test'") ||
+    !/await\s+import\(\s*['"]\.\.\/\.\.\/\.\.\/components\/admin-content-demo-workspace['"]\s*\)/.test(
+      adminContentPreviewPage,
+    ) ||
+    /^import\s+.*admin-content-(?:demo-workspace|preview-port)/m.test(
+      adminContentPreviewPage,
+    )
+  ) {
+    failures.push(
+      'admin content preview must stay behind explicit environment guards and one dynamic preview-workspace import',
     );
   }
 };

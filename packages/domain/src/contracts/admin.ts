@@ -74,6 +74,7 @@ export const adminCachePolicy = Object.freeze({
 } as const);
 
 export const adminPermissionSchema = z.enum([
+  'program:manage',
   'ticket:any:manage',
   'participant:operational:read',
   'role:manage',
@@ -114,7 +115,7 @@ export const adminContextResponseSchema = z
     actor: z.strictObject({
       displayLabel: safeInlineTextSchema(120),
       roles: z.array(adminActorRoleSchema).min(1).max(4),
-      permissions: z.array(adminPermissionSchema).max(11),
+      permissions: z.array(adminPermissionSchema).max(12),
       assignedSessions: z.array(assignedSessionSchema).max(30),
     }),
   })

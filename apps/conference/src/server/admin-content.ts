@@ -7,9 +7,21 @@ import {
   withTransaction,
   type Database,
 } from '@byzon/database';
+import {
+  participantSessionTypeSchema,
+  publishedFaqSchema,
+  publishedPartnerSchema,
+  publishedPracticalPageSchema,
+  publishedProgramDaySchema,
+  publishedProgramRoomSchema,
+  publishedProgramSessionSchema,
+  publishedSpeakerSchema,
+  publishedVenueSchema,
+} from '@byzon/domain/contracts';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import { requireWritableAdminEvent } from './admin-event-writability';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 import {
   ContentValidationError,
@@ -17,21 +29,10 @@ import {
 } from './content-validation';
 
 const uuid = z.string().uuid();
-const slug = z
-  .string()
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-  .max(128);
-const text = z.string().trim().min(1).max(10_000);
-const nullableText = z.string().trim().max(10_000).nullable().optional();
-const sortOrder = z.number().int().nonnegative();
+const slug = publishedVenueSchema.shape.slug;
+const sortOrder = publishedProgramDaySchema.shape.sortOrder;
 const version = z.number().int().positive();
 const status = z.enum(['draft', 'published', 'archived']).optional();
-const safeExternalUrl = z
-  .string()
-  .url()
-  .refine((value) => /^https?:\/\//i.test(value))
-  .nullable()
-  .optional();
 const instant = z
   .string()
   .datetime({ offset: true })
@@ -49,26 +50,127 @@ export const adminContentResources = [
 ] as const;
 export type AdminContentResource = (typeof adminContentResources)[number];
 
+export const adminContentListColumns = {
+  days: {
+    description: true,
+    eventId: true,
+    id: true,
+    localDate: true,
+    sortOrder: true,
+    title: true,
+  },
+  venues: {
+    eventId: true,
+    id: true,
+    mapQuery: true,
+    name: true,
+    navigationMarkdown: true,
+    slug: true,
+    sortOrder: true,
+    status: true,
+    version: true,
+  },
+  rooms: {
+    capacity: true,
+    description: true,
+    eventId: true,
+    id: true,
+    name: true,
+    slug: true,
+    sortOrder: true,
+    status: true,
+    venueId: true,
+    version: true,
+  },
+  sessions: {
+    dayId: true,
+    description: true,
+    endsAt: true,
+    eventId: true,
+    id: true,
+    roomId: true,
+    slug: true,
+    sortOrder: true,
+    startsAt: true,
+    status: true,
+    summary: true,
+    title: true,
+    type: true,
+    version: true,
+  },
+  speakers: {
+    bioMarkdown: true,
+    company: true,
+    eventId: true,
+    firstName: true,
+    id: true,
+    jobTitle: true,
+    lastName: true,
+    linkedinUrl: true,
+    slug: true,
+    sortOrder: true,
+    status: true,
+    version: true,
+    websiteUrl: true,
+  },
+  partners: {
+    category: true,
+    descriptionMarkdown: true,
+    eventId: true,
+    id: true,
+    name: true,
+    slug: true,
+    sortOrder: true,
+    status: true,
+    tier: true,
+    version: true,
+    websiteUrl: true,
+  },
+  pages: {
+    bodyMarkdown: true,
+    eventId: true,
+    id: true,
+    kind: true,
+    slug: true,
+    sortOrder: true,
+    status: true,
+    summary: true,
+    title: true,
+    version: true,
+  },
+  faqs: {
+    answerMarkdown: true,
+    category: true,
+    eventId: true,
+    id: true,
+    question: true,
+    sortOrder: true,
+    status: true,
+    version: true,
+  },
+} as const;
+
 const schemas = {
   days: z.object({
     localDate: z.string().date(),
-    title: text,
-    description: nullableText,
+    title: publishedProgramDaySchema.shape.title,
+    description: publishedProgramDaySchema.shape.description,
     sortOrder,
   }),
   venues: z.object({
     slug,
-    name: text,
-    mapQuery: nullableText,
-    navigationMarkdown: nullableText,
+    name: publishedVenueSchema.shape.name,
+    mapQuery: publishedVenueSchema.shape.mapQuery.optional(),
+    navigationMarkdown:
+      publishedVenueSchema.shape.navigationMarkdown.optional(),
     sortOrder,
     status,
   }),
   rooms: z.object({
     venueId: uuid,
     slug,
-    name: text,
-    description: nullableText,
+    name: publishedProgramRoomSchema.shape.name,
+    description: publishedProgramRoomSchema.shape.description,
     capacity: z.number().int().positive().nullable().optional(),
     sortOrder,
     status,
@@ -77,21 +179,10 @@ const schemas = {
     dayId: uuid,
     roomId: uuid.nullable().optional(),
     slug,
-    title: text,
-    summary: nullableText,
-    description: nullableText,
-    type: z.enum([
-      'talk',
-      'panel',
-      'workshop',
-      'mastermind',
-      'coaching',
-      'networking',
-      'break',
-      'meal',
-      'gala',
-      'other',
-    ]),
+    title: publishedProgramSessionSchema.shape.title,
+    summary: publishedProgramSessionSchema.shape.summary,
+    description: publishedProgramSessionSchema.shape.description,
+    type: participantSessionTypeSchema,
     startsAt: instant,
     endsAt: instant,
     sortOrder,
@@ -100,43 +191,46 @@ const schemas = {
   }),
   speakers: z.object({
     slug,
-    firstName: text,
-    lastName: text,
-    company: nullableText,
-    jobTitle: nullableText,
-    bioMarkdown: nullableText,
-    linkedinUrl: safeExternalUrl,
-    websiteUrl: safeExternalUrl,
+    firstName: publishedSpeakerSchema.shape.firstName.max(128),
+    lastName: publishedSpeakerSchema.shape.lastName.max(128),
+    company: publishedSpeakerSchema.shape.company.optional(),
+    jobTitle: publishedSpeakerSchema.shape.jobTitle.optional(),
+    bioMarkdown: publishedSpeakerSchema.shape.bioMarkdown.optional(),
+    linkedinUrl: publishedSpeakerSchema.shape.linkedinUrl.optional(),
+    websiteUrl: publishedSpeakerSchema.shape.websiteUrl.optional(),
     sortOrder,
     status,
   }),
   partners: z.object({
     slug,
-    name: text,
-    descriptionMarkdown: nullableText,
-    websiteUrl: safeExternalUrl,
-    category: nullableText,
-    tier: nullableText,
+    name: publishedPartnerSchema.shape.name,
+    descriptionMarkdown:
+      publishedPartnerSchema.shape.descriptionMarkdown.optional(),
+    websiteUrl: publishedPartnerSchema.shape.websiteUrl.optional(),
+    category: publishedPartnerSchema.shape.category.optional(),
+    tier: publishedPartnerSchema.shape.tier.optional(),
     sortOrder,
     status,
   }),
   pages: z.object({
     slug,
     kind: z.enum(['practical', 'marketing', 'other']),
-    title: text,
-    summary: nullableText,
-    bodyMarkdown: text,
+    title: publishedPracticalPageSchema.shape.title,
+    summary: publishedPracticalPageSchema.shape.summary.optional(),
+    bodyMarkdown: publishedPracticalPageSchema.shape.bodyMarkdown,
     sortOrder,
     status,
   }),
   faqs: z.object({
-    category: nullableText,
-    question: text,
-    answerMarkdown: text,
+    category: publishedFaqSchema.shape.category.optional(),
+    question: publishedFaqSchema.shape.question,
+    answerMarkdown: publishedFaqSchema.shape.answerMarkdown,
     sortOrder,
     status,
   }),
 } satisfies Record<AdminContentResource, z.ZodType>;
+
+export const adminContentInputSchemas = schemas;
 
 const resourceOf = (value: string): AdminContentResource => {
   const parsed = z.enum(adminContentResources).safeParse(value);
@@ -210,25 +304,30 @@ const listRows = async (
   switch (resource) {
     case 'days':
       return db.query.eventDays.findMany({
+        columns: adminContentListColumns.days,
         where: eq(schema.eventDays.eventId, eventId),
         orderBy: [asc(schema.eventDays.sortOrder)],
       });
     case 'rooms':
       return db.query.rooms.findMany({
+        columns: adminContentListColumns.rooms,
         where: eq(schema.rooms.eventId, eventId),
         orderBy: [asc(schema.rooms.sortOrder)],
       });
     case 'venues':
       return db.query.venues.findMany({
+        columns: adminContentListColumns.venues,
         where: eq(schema.venues.eventId, eventId),
         orderBy: [asc(schema.venues.sortOrder)],
       });
     case 'sessions': {
       const sessions = await db.query.programSessions.findMany({
+        columns: adminContentListColumns.sessions,
         where: eq(schema.programSessions.eventId, eventId),
         orderBy: [asc(schema.programSessions.startsAt)],
       });
       const links = await db.query.sessionSpeakers.findMany({
+        columns: { sessionId: true, speakerProfileId: true },
         where: eq(schema.sessionSpeakers.eventId, eventId),
         orderBy: [asc(schema.sessionSpeakers.sortOrder)],
       });
@@ -241,21 +340,25 @@ const listRows = async (
     }
     case 'speakers':
       return db.query.speakerProfiles.findMany({
+        columns: adminContentListColumns.speakers,
         where: eq(schema.speakerProfiles.eventId, eventId),
         orderBy: [asc(schema.speakerProfiles.sortOrder)],
       });
     case 'partners':
       return db.query.partners.findMany({
+        columns: adminContentListColumns.partners,
         where: eq(schema.partners.eventId, eventId),
         orderBy: [asc(schema.partners.sortOrder)],
       });
     case 'pages':
       return db.query.contentPages.findMany({
+        columns: adminContentListColumns.pages,
         where: eq(schema.contentPages.eventId, eventId),
         orderBy: [asc(schema.contentPages.sortOrder)],
       });
     case 'faqs':
       return db.query.faqItems.findMany({
+        columns: adminContentListColumns.faqs,
         where: eq(schema.faqItems.eventId, eventId),
         orderBy: [asc(schema.faqItems.sortOrder)],
       });
@@ -572,6 +675,7 @@ export const handleAdminContent = async (
       dependencies.db,
       async (transaction) => {
         await acquireTransactionLock(transaction, `content-publish:${eventId}`);
+        await requireWritableAdminEvent(transaction, eventId);
         let targetId = id;
         if (request.method === 'POST' && !id) {
           const { data } = await parseBody(request, resource, false);
@@ -674,14 +778,23 @@ export const handleAdminContent = async (
       typeof error.cause === 'object' &&
       error.cause !== null &&
       'code' in error.cause &&
-      error.cause.code === '23503'
+      (error.cause.code === '23503' || error.cause.code === '23505')
     )
       return problemResponse(
         new ApiProblemError({
           status: 409,
-          code: 'CONTENT_IN_USE',
-          title: 'Content is in use',
-          detail: 'The content cannot be removed while another item uses it.',
+          code:
+            error.cause.code === '23503'
+              ? 'CONTENT_IN_USE'
+              : 'CONTENT_CONFLICT',
+          title:
+            error.cause.code === '23503'
+              ? 'Content is in use'
+              : 'Content conflicts with another item',
+          detail:
+            error.cause.code === '23503'
+              ? 'The content cannot be removed while another item uses it.'
+              : 'Another content item already uses a unique value.',
         }),
         requestId,
       );

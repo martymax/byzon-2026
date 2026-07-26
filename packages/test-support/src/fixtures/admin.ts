@@ -46,6 +46,7 @@ export const adminContextFixtures = defineFixtureSet({
         displayLabel: 'Demo administrátor',
         roles: ['organizer_admin'],
         permissions: [
+          'program:manage',
           'ticket:any:manage',
           'participant:operational:read',
           'role:manage',

@@ -118,6 +118,7 @@ export const handleAdminPublication = async (
     if (error instanceof ContentPublicationError) {
       const stale =
         error.code === 'STALE_VERSION' || error.code === 'STALE_DRAFT';
+      const noChanges = error.code === 'NO_CHANGES';
       return problemResponse(
         new ApiProblemError({
           status: stale ? 409 : 422,
@@ -125,13 +126,21 @@ export const handleAdminPublication = async (
             ? error.code === 'STALE_DRAFT'
               ? 'STALE_PUBLICATION_PREVIEW'
               : 'STALE_PUBLICATION_VERSION'
-            : 'CONTENT_NOT_PUBLISHABLE',
-          title: stale ? 'Publication changed' : 'Content is not publishable',
+            : noChanges
+              ? 'NO_CONTENT_CHANGES'
+              : 'CONTENT_NOT_PUBLISHABLE',
+          title: stale
+            ? 'Publication changed'
+            : noChanges
+              ? 'No content changes'
+              : 'Content is not publishable',
           detail: stale
             ? error.code === 'STALE_DRAFT'
               ? 'The draft changed after the preview was created.'
               : 'A newer publication already exists.'
-            : 'The draft does not satisfy publication requirements.',
+            : noChanges
+              ? 'The current draft is identical to the latest publication.'
+              : 'The draft does not satisfy publication requirements.',
           ...(error.issues.length
             ? { fieldErrors: { content: error.issues } }
             : {}),

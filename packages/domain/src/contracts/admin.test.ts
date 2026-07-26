@@ -33,9 +33,13 @@ describe('CS-ADMIN-01 contracts', () => {
         phase: 'live' as const,
       },
       actor: {
-        displayLabel: 'Operátor místnosti',
-        roles: ['room_operator'] as const,
-        permissions: ['operations:read', 'attendance:assigned:write'] as const,
+        displayLabel: 'Administrátor akce',
+        roles: ['organizer_admin'] as const,
+        permissions: [
+          'program:manage',
+          'operations:read',
+          'attendance:assigned:write',
+        ] as const,
         assignedSessions: [
           {
             sessionId: ids.session,

@@ -12,19 +12,29 @@ vi.mock('@/lib/frontend-preview', () => ({
 vi.mock('@/server/current-event', () => ({
   loadCurrentEvent: mocks.loadCurrentEvent,
 }));
-vi.mock('@/components/admin-content-demo-workspace', () => ({
+vi.mock('../../../components/admin-content-demo-workspace', () => ({
   AdminContentDemoWorkspace: () => (
     <section data-testid="synthetic-content">Syntetický obsah</section>
   ),
 }));
-vi.mock('@/components/admin-content-console', () => ({
-  AdminContentConsole: () => (
-    <section data-testid="integrated-console">Editor obsahu</section>
-  ),
-}));
-vi.mock('@/components/publication-control', () => ({
-  PublicationControl: () => (
-    <section data-testid="integrated-publication">Publikace</section>
+vi.mock('@/components/admin-content-workspace', () => ({
+  AdminContentWorkspace: ({
+    eventId,
+    readOnly,
+    timezone,
+  }: {
+    readonly eventId: string;
+    readonly readOnly: boolean;
+    readonly timezone: string;
+  }) => (
+    <section
+      data-event-id={eventId}
+      data-read-only={String(readOnly)}
+      data-testid="integrated-content-workspace"
+      data-timezone={timezone}
+    >
+      Editor a publikace
+    </section>
   ),
 }));
 
@@ -42,22 +52,38 @@ describe('/admin/obsah preview and production branches', () => {
     const markup = renderToStaticMarkup(await AdminContentPage());
 
     expect(markup).toContain('synthetic-content');
-    expect(markup).not.toContain('integrated-console');
+    expect(markup).not.toContain('integrated-content-workspace');
     expect(mocks.loadCurrentEvent).not.toHaveBeenCalled();
   });
 
-  it('preserves the integrated publication and content console in production', async () => {
+  it('mounts one shared production workspace with the authoritative event scope', async () => {
     mocks.previewAvailable.mockReturnValue(false);
     mocks.loadCurrentEvent.mockResolvedValue({
       id: 'event-integrated-0001',
+      status: 'live',
       timezone: 'Europe/Prague',
     });
 
     const markup = renderToStaticMarkup(await AdminContentPage());
 
-    expect(markup).toContain('integrated-publication');
-    expect(markup).toContain('integrated-console');
+    expect(markup).toContain('integrated-content-workspace');
+    expect(markup).toContain('data-event-id="event-integrated-0001"');
+    expect(markup).toContain('data-timezone="Europe/Prague"');
+    expect(markup).toContain('data-read-only="false"');
     expect(markup).not.toContain('synthetic-content');
     expect(mocks.loadCurrentEvent).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an archived production event read-only', async () => {
+    mocks.previewAvailable.mockReturnValue(false);
+    mocks.loadCurrentEvent.mockResolvedValue({
+      id: 'event-integrated-0002',
+      status: 'archived',
+      timezone: 'Europe/Prague',
+    });
+
+    const markup = renderToStaticMarkup(await AdminContentPage());
+
+    expect(markup).toContain('data-read-only="true"');
   });
 });
