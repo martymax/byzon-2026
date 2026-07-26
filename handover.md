@@ -32,9 +32,11 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Security a code review všech etap i pozdní post-review oprav skončily
   `PASS`. Finální hardening uzavřel agenda owner/epoch race, stale auto-sync,
   mock dependency boundary, E2E preview parity, React keyed-children warning a
-  novou high-severity `brace-expansion` advisory.
-- Kompletní lokální gate je zelený: 736 unit/integration testů, publication
-  4/4 proti PostgreSQL 17, browser komponenty 837/837, Playwright E2E 15/15,
+  novou high-severity `brace-expansion` advisory. Následný PR rereview navíc
+  oddělil mock-only participant a archivní navigaci/agendu od produkčního
+  režimu; oba P1 thready jsou opravené, otestované a uzavřené.
+- Kompletní lokální gate je zelený: 747 unit/integration testů, publication
+  4/4 proti PostgreSQL 17, browser komponenty 840/840, Playwright E2E 15/15,
   Prettier, ESLint, sedm typechecků, static smoke, produkční Next/worker build,
   source/post-build mock boundary a standalone runtime smoke.
 - Produkční build obsahuje 25 statických app stránek a 26 digestovaných

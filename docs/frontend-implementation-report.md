@@ -23,6 +23,9 @@ aktivuje se jen kombinací development režimu a explicitního
 Hotový frontend neznamená hotový backend, produkční přihlášení, skutečné
 vstupenky, staging UAT ani provozní schválení. UI tyto hranice výslovně
 označuje a u neintegrovaných autoritativních funkcí failne zavřeně.
+Produkční participant shell proto nabízí jen trasy se skutečným serverovým
+protějškem; agenda, oznámení a účetní hub se zpřístupní pouze v explicitním
+frontendovém preview. Stejná hranice platí pro odkazy archivovaného účtu.
 
 ## 2. Spuštění mockovaného preview
 
@@ -102,10 +105,12 @@ vymazání privátního stavu.
 
 ### Účastník
 
-Pěticílový responsive shell pokrývá přehled, program, osobní agendu, oznámení
-a hub `Více`. Přehled reaguje na fázi eventu a ukazuje publikovaný program,
-praktické informace a nejbližší kanonický bod osobní agendy bez vymyšlených
-live dat.
+Pěticílový responsive preview shell pokrývá přehled, program, osobní agendu,
+oznámení a hub `Více`. Produkční režim failne zavřeně a do doplnění
+autorizovaných endpointů ukazuje jen přehled a program; mock-only route ani
+agenda request nelze otevřít nepřímou navigací či deep-linkem. Přehled reaguje
+na fázi eventu a v preview ukazuje publikovaný program, praktické informace a
+nejbližší kanonický bod osobní agendy bez vymyšlených live dat.
 
 Program má filtr, detail session, řečníky, partnery a praktický obsah. Agenda
 podporuje save/remove, rezervaci/cancel, waitlist, nabídku s expirací,
@@ -261,8 +266,11 @@ live/progress region.
 - Finální hardening: preview boundary opravy `4f01336` a `bf786f2`, agenda
   owner/epoch race a stale sync fencing `5304a64`, stabilní tříviewportový
   runner `2817953`, mock E2E server `c5d573f`, React 19/SWC keyed-children
-  oprava `206d048` a bezpečný `brace-expansion 5.0.8` backport `0c25160`.
-  Každý pozdní řez prošel samostatným read-only review; výsledky `PASS`.
+  oprava `206d048`, bezpečný `brace-expansion 5.0.8` backport `0c25160` a
+  fail-closed oddělení produkčních a preview participant průchodů `4ce8dae`.
+  Poslední řez uzavřel oba P1 PR thready včetně souvisejícího archivního
+  deep-linku. Každý pozdní řez prošel samostatným read-only review; výsledky
+  `PASS`.
 
 Potvrzené nálezy nebyly pouze zdokumentované: byly opravené, dostaly regresní
 testy a prošly opakovaným nezávislým review před merge.
@@ -284,10 +292,10 @@ Cílené post-review ověření:
 Kompletní před-merge lokální gate je `PASS`:
 
 - Prettier, ESLint a všech sedm workspace typechecků;
-- 736 unit/integration testů prošlo a 51 databázových testů bylo při
+- 747 unit/integration testů prošlo a 51 databázových testů bylo při
   bezdatabázovém běhu očekávaně přeskočeno; opravená publication regrese navíc
   prošla 4/4 proti dočasné PostgreSQL 17;
-- 60 browser component souborů a 837/837 scénářů prošlo společně v phone,
+- 60 browser component souborů a 840/840 scénářů prošlo společně v phone,
   tablet a desktop Chromium;
 - Playwright prošel 15/15 skutečných mock E2E scénářů ve třech viewports,
   včetně axe, route focusu, navigace, touch targetů, overflow a čisté React
@@ -298,7 +306,7 @@ Kompletní před-merge lokální gate je `PASS`:
 - Next `16.2.11` produkční build vygeneroval 25 statických app stránek,
   source i post-build mock boundary prošly a worker bundle se sestavil;
 - offline balíček obsahuje 26 digestovaných assetů, manifest verze
-  `21d45c701fdca2fc2952ad445e9b22f93bc769cb483ac9c8811aa6e12a850356`
+  `546da19aa63a23395d4e27e8b712d4d846115f02f65b0e6ddf918d2ef7c66631`
   a service worker o 24 057 bytech, tedy pod limitem 24 KiB;
 - standalone runtime vrátil `200` pro root, offline shell, manifest, oba PWA
   assety, obě ikony a oba health endpointy a zachoval bezpečnostní/cache
@@ -308,7 +316,7 @@ Kompletní před-merge lokální gate je `PASS`:
   transitivním `esbuild` dev-toolingu.
 
 PR gate spouští stejný formát, lint, typecheck, PostgreSQL integrace, unit,
-produkční build, 837 browser scénářů, 15 E2E scénářů a audit. Merge je povolen
+produkční build, 840 browser scénářů, 15 E2E scénářů a audit. Merge je povolen
 až na zeleném finálním headu.
 
 ## 10. Otevřené blokátory a backend handoff
