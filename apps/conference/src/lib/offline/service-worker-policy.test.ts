@@ -19,16 +19,16 @@ describe('application service-worker source policy', () => {
   it('uses a unique build shell cache and retains one verified rollback', () => {
     expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.5';");
     expect(workerSource).toContain(
-      'const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${SHELL_VERSION}`;',
+      'const SHELL_CACHE = `${CACHE_NS}-shell-${SHELL_VERSION}`;',
     );
     expect(workerSource).toContain(
-      'const PUBLIC_CACHE = `${CACHE_NAMESPACE}-public-v3`;',
+      'const PUBLIC_CACHE = `${CACHE_NS}-public-v3`;',
     );
     expect(workerSource).toContain(
       "const LEGACY_SHELL_CACHE = 'byzon-shell-v1';",
     );
     expect(workerSource).toContain('[SHELL_CACHE, PUBLIC_CACHE, rollback]');
-    expect(workerSource).toContain('const SHELL_METADATA_URL');
+    expect(workerSource).toContain('const SHELL_META_URL');
     expect(workerSource).toContain("importScripts('/sw-shell-manifest.js')");
     expect(workerSource).toContain(
       'const SHELL_VERSION = `${WORKER_VERSION}-${META.version}`;',
@@ -67,7 +67,7 @@ describe('application service-worker source policy', () => {
   it('allows only anonymous, correlated and sanitized public GET data', () => {
     const eligibility = section(
       'const publicRequestDescriptor',
-      'const field =',
+      'const optional =',
     );
     const validation = section(
       'const sanitizePublicResponse',
@@ -86,7 +86,7 @@ describe('application service-worker source policy', () => {
     expect(validation).toContain('responseIsPublic(response)');
     expect(workerSource).toContain('private|no-store');
     expect(workerSource).toContain("'set-cookie'");
-    expect(workerSource).toContain('MAX_PUBLIC_RESPONSE_BYTES');
+    expect(workerSource).toContain('MAX_PUBLIC_BYTES');
     expect(validation).toContain('body.event.slug !== descriptor.slug');
     expect(workerSource).toContain('bootstrapValue(JSON.parse(text))');
     expect(workerSource).toContain('contentValue(JSON.parse(text))');

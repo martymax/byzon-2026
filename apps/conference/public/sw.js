@@ -1,15 +1,15 @@
 'use strict';
 importScripts('/sw-shell-manifest.js');
 const WORKER_VERSION = '2026.07.25.5';
-const CACHE_NAMESPACE = 'byzon-pwa';
-const PUBLIC_CACHE = `${CACHE_NAMESPACE}-public-v3`;
+const CACHE_NS = 'byzon-pwa';
+const PUBLIC_CACHE = `${CACHE_NS}-public-v3`;
 const LEGACY_SHELL_CACHE = 'byzon-shell-v1';
 const OFFLINE_URL = '/offline';
-const SHELL_METADATA_URL = '/__byzon_pwa_shell_metadata__';
+const SHELL_META_URL = '/__byzon_pwa_shell_metadata__';
 const BASE_ASSETS = Object.freeze([OFFLINE_URL, '/icons/icon.svg', '/icons/maskable.svg', '/manifest.webmanifest']);
 const SHELL_LIMIT = 2 * 1024 * 1024;
 const META_LIMIT = 16 * 1024;
-const MAX_PUBLIC_RESPONSE_BYTES = 8 * 1024 * 1024;
+const MAX_PUBLIC_BYTES = 8 * 1024 * 1024;
 const CONTRACT_VERSION = 1;
 const PUBLIC_TTL = 7 * 24 * 60 * 60 * 1000;
 const PUBLIC_PATH = /^\/api\/v1\/public\/events\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(bootstrap|content)$/;
@@ -26,8 +26,8 @@ if (!META || !validList(META.assets) || !validDigests(META.assets, META.digests)
 const ASSETS=Object.freeze([...META.assets]);
 const DIGESTS=Object.freeze({...META.digests});
 const SHELL_VERSION = `${WORKER_VERSION}-${META.version}`;
-const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${SHELL_VERSION}`;
-const owned = (name) => name === LEGACY_SHELL_CACHE || name.startsWith(`${CACHE_NAMESPACE}-`);
+const SHELL_CACHE = `${CACHE_NS}-shell-${SHELL_VERSION}`;
+const owned = (name) => name === LEGACY_SHELL_CACHE || name.startsWith(`${CACHE_NS}-`);
 const bounded = (response, maximum) => {
  const declared = response.headers.get('content-length');
  if (declared === null) return true;
@@ -103,7 +103,7 @@ const precache = async () => {
  const cache = await caches.open(SHELL_CACHE);
  await Promise.all(verified.map(([path, response]) => cache.put(path, response)));
  await cache.put(
- SHELL_METADATA_URL,
+ SHELL_META_URL,
  Response.json(
  {
  complete: true,
@@ -127,13 +127,13 @@ const precache = async () => {
  }
 };
 const shellInfo = async (name) => {
- const shellPrefix = `${CACHE_NAMESPACE}-shell-`;
+ const shellPrefix = `${CACHE_NS}-shell-`;
  if (!name.startsWith(shellPrefix)) return null;
  const version = name.slice(shellPrefix.length);
  if (version.length < 1) return null;
  const cache = await caches.open(name);
- const response = await cache.match(SHELL_METADATA_URL);
- if (!response || !response.ok || response.status !== 200 || response.redirected || (response.url !== '' && response.url !== new URL(SHELL_METADATA_URL, self.location.origin).href) || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? '') || !/\bno-store\b/i.test(response.headers.get('cache-control') ?? '') || /(?:^|,)\s*(?:\*|cookie|authorization)(?:\s|,|$)/i.test(response.headers.get('vary') ?? '') || response.headers.has('set-cookie')) {
+ const response = await cache.match(SHELL_META_URL);
+ if (!response || !response.ok || response.status !== 200 || response.redirected || (response.url !== '' && response.url !== new URL(SHELL_META_URL, self.location.origin).href) || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? '') || !/\bno-store\b/i.test(response.headers.get('cache-control') ?? '') || /(?:^|,)\s*(?:\*|cookie|authorization)(?:\s|,|$)/i.test(response.headers.get('vary') ?? '') || response.headers.has('set-cookie')) {
  return null;
  }
  try {
@@ -159,7 +159,7 @@ const shellInfo = async (name) => {
  }
 };
 const validShells = async (names) => {
- const candidates = await Promise.all(names.filter((name) => name.startsWith(`${CACHE_NAMESPACE}-shell-`)).map(shellInfo));
+ const candidates = await Promise.all(names.filter((name) => name.startsWith(`${CACHE_NS}-shell-`)).map(shellInfo));
  return candidates.filter((candidate) => candidate !== null).sort((left, right) => right.installedAt.localeCompare(left.installedAt));
 };
 self.addEventListener('install', (event) => {
@@ -170,6 +170,10 @@ self.addEventListener('activate', (event) => {
  (async () => {
  const names = await caches.keys();
  const verified = await validShells(names);
+ if (!verified.some(({ name }) => name === SHELL_CACHE)) {
+ await caches.delete(SHELL_CACHE);
+ throw new TypeError('Current shell invalid.');
+ }
  const rollback = verified.find(({ name }) => name !== SHELL_CACHE)?.name;
  const retained = new Set([SHELL_CACHE, PUBLIC_CACHE, rollback].filter((name) => typeof name === 'string'));
  await Promise.all(names.filter((name) => owned(name) && !retained.has(name)).map((name) => caches.delete(name)));
@@ -223,8 +227,7 @@ const publicRequest = (request) => {
  referrerPolicy: 'no-referrer',
  });
 };
-const field = (sanitize, optional = false) => ({ optional, sanitize });
-const optional = (sanitize) => field(sanitize, true);
+const optional = (sanitize) => ({ sanitize });
 const text =
  (maximum, minimum = 0, pattern = null) =>
  (value) =>
@@ -252,11 +255,12 @@ const objectOf = (shape) => (value) => {
  }
  const result = {};
  for (const [key, descriptor] of Object.entries(shape)) {
+ const required = typeof descriptor === 'function';
  if (!(key in value)) {
- if (descriptor.optional) continue;
+ if (!required) continue;
  return INVALID;
  }
- const sanitized = descriptor.sanitize(value[key]);
+ const sanitized = (required ? descriptor : descriptor.sanitize)(value[key]);
  if (sanitized === INVALID) return INVALID;
  result[key] = sanitized;
  }
@@ -289,128 +293,128 @@ const safeUrl = nullable((value) => {
  }
 });
 const eventValue = objectOf({
- id: field(uuid),
- slug: field(slug),
- name: field(nonBlank(256)),
- timezone: field(nonBlank(128)),
- startsAt: field(isoDateTime),
- endsAt: field(isoDateTime),
+ id: uuid,
+ slug: slug,
+ name: nonBlank(256),
+ timezone: nonBlank(128),
+ startsAt: isoDateTime,
+ endsAt: isoDateTime,
 });
 const dayValue = objectOf({
- id: field(uuid),
- localDate: field(localDate),
- title: field(nonBlank(256)),
- sortOrder: field(integer()),
+ id: uuid,
+ localDate: localDate,
+ title: nonBlank(256),
+ sortOrder: integer(),
  description: optional(nullableText(8192)),
 });
 const roomValue = objectOf({
- id: field(uuid),
- slug: field(slug),
- name: field(nonBlank(256)),
- sortOrder: field(integer()),
+ id: uuid,
+ slug: slug,
+ name: nonBlank(256),
+ sortOrder: integer(),
  description: optional(nullableText(8192)),
 });
 const sessionValue = objectOf({
- id: field(uuid),
- dayId: field(uuid),
- roomId: field(nullable(uuid)),
- slug: field(slug),
- title: field(nonBlank(512)),
- startsAt: field(isoDateTime),
- endsAt: field(isoDateTime),
- sortOrder: field(integer()),
+ id: uuid,
+ dayId: uuid,
+ roomId: nullable(uuid),
+ slug: slug,
+ title: nonBlank(512),
+ startsAt: isoDateTime,
+ endsAt: isoDateTime,
+ sortOrder: integer(),
  summary: optional(nullableText(2048)),
  description: optional(nullableText(65536)),
- type: field(oneOf(new Set(['talk', 'panel', 'workshop', 'mastermind', 'coaching', 'networking', 'break', 'meal', 'gala', 'other']))),
+ type: oneOf(new Set(['talk', 'panel', 'workshop', 'mastermind', 'coaching', 'networking', 'break', 'meal', 'gala', 'other'])),
  status: optional(oneOf(new Set(['published', 'cancelled']))),
 });
 const programValue = objectOf({
- days: field(arrayOf(64, dayValue)),
- rooms: field(arrayOf(256, roomValue)),
- sessions: field(arrayOf(4096, sessionValue)),
+ days: arrayOf(64, dayValue),
+ rooms: arrayOf(256, roomValue),
+ sessions: arrayOf(4096, sessionValue),
 });
 const speakerValue = objectOf({
- id: field(uuid),
- slug: field(slug),
- firstName: field(nonBlank(256)),
- lastName: field(nonBlank(256)),
- company: field(nullableText(256)),
- jobTitle: field(nullableText(256)),
- bioMarkdown: field(nullableText(65536)),
- linkedinUrl: field(safeUrl),
- websiteUrl: field(safeUrl),
- photoAssetId: field(nullable(uuid)),
- status: field(published),
- sortOrder: field(integer()),
- version: field(integer(1)),
+ id: uuid,
+ slug: slug,
+ firstName: nonBlank(256),
+ lastName: nonBlank(256),
+ company: nullableText(256),
+ jobTitle: nullableText(256),
+ bioMarkdown: nullableText(65536),
+ linkedinUrl: safeUrl,
+ websiteUrl: safeUrl,
+ photoAssetId: nullable(uuid),
+ status: published,
+ sortOrder: integer(),
+ version: integer(1),
 });
 const partnerValue = objectOf({
- id: field(uuid),
- slug: field(slug),
- name: field(nonBlank(256)),
- descriptionMarkdown: field(nullableText(65536)),
- websiteUrl: field(safeUrl),
- category: field(nullableText(128)),
- tier: field(nullableText(128)),
- logoAssetId: field(nullable(uuid)),
- status: field(published),
- sortOrder: field(integer()),
- version: field(integer(1)),
+ id: uuid,
+ slug: slug,
+ name: nonBlank(256),
+ descriptionMarkdown: nullableText(65536),
+ websiteUrl: safeUrl,
+ category: nullableText(128),
+ tier: nullableText(128),
+ logoAssetId: nullable(uuid),
+ status: published,
+ sortOrder: integer(),
+ version: integer(1),
 });
 const venueValue = objectOf({
- id: field(uuid),
- slug: field(slug),
- name: field(nonBlank(256)),
- addressLine1: field(nullableText(256)),
- addressLine2: field(nullableText(256)),
- city: field(nullableText(128)),
- postalCode: field(nullableText(32)),
- countryCode: field(nullable(text(2, 2, /^[A-Z]{2}$/))),
- mapQuery: field(nullableText(1024)),
- status: field(published),
- navigationMarkdown: field(nullableText(65536)),
- accessibilityMarkdown: field(nullableText(65536)),
- sortOrder: field(integer()),
- version: field(integer(1)),
+ id: uuid,
+ slug: slug,
+ name: nonBlank(256),
+ addressLine1: nullableText(256),
+ addressLine2: nullableText(256),
+ city: nullableText(128),
+ postalCode: nullableText(32),
+ countryCode: nullable(text(2, 2, /^[A-Z]{2}$/)),
+ mapQuery: nullableText(1024),
+ status: published,
+ navigationMarkdown: nullableText(65536),
+ accessibilityMarkdown: nullableText(65536),
+ sortOrder: integer(),
+ version: integer(1),
 });
 const practicalPageValue = objectOf({
- id: field(uuid),
- slug: field(slug),
- kind: field(oneOf(new Set(['practical', 'marketing', 'other']))),
- title: field(nonBlank(256)),
- summary: field(nullableText(2048)),
- bodyMarkdown: field(text(65536)),
- status: field(published),
- sortOrder: field(integer()),
- version: field(integer(1)),
+ id: uuid,
+ slug: slug,
+ kind: oneOf(new Set(['practical', 'marketing', 'other'])),
+ title: nonBlank(256),
+ summary: nullableText(2048),
+ bodyMarkdown: text(65536),
+ status: published,
+ sortOrder: integer(),
+ version: integer(1),
 });
 const faqValue = objectOf({
- id: field(uuid),
- category: field(nullableText(128)),
- question: field(nonBlank(1024)),
- answerMarkdown: field(text(65536)),
- status: field(published),
- sortOrder: field(integer()),
- version: field(integer(1)),
+ id: uuid,
+ category: nullableText(128),
+ question: nonBlank(1024),
+ answerMarkdown: text(65536),
+ status: published,
+ sortOrder: integer(),
+ version: integer(1),
 });
 const practicalValue = objectOf({
- pages: field(arrayOf(512, practicalPageValue)),
- faqs: field(arrayOf(512, faqValue)),
+ pages: arrayOf(512, practicalPageValue),
+ faqs: arrayOf(512, faqValue),
 });
 const bootstrapValue = objectOf({
- version: field(integer(1)),
- publishedAt: field(isoDateTime),
- event: field(eventValue),
+ version: integer(1),
+ publishedAt: isoDateTime,
+ event: eventValue,
 });
 const contentValue = objectOf({
- version: field(integer(1)),
- publishedAt: field(isoDateTime),
- event: field(eventValue),
- program: field(programValue),
- speakers: field(arrayOf(2048, speakerValue)),
- partners: field(arrayOf(2048, partnerValue)),
- venues: field(arrayOf(2048, venueValue)),
- practical: field(practicalValue),
+ version: integer(1),
+ publishedAt: isoDateTime,
+ event: eventValue,
+ program: programValue,
+ speakers: arrayOf(2048, speakerValue),
+ partners: arrayOf(2048, partnerValue),
+ venues: arrayOf(2048, venueValue),
+ practical: practicalValue,
 });
 const unique = (values) => new Set(values).size === values.length;
 const positive = (start, end) => Date.parse(end) > Date.parse(start);
@@ -427,12 +431,12 @@ const validBody = (body, kind) => {
 };
 const sanitizePublicResponse = async (request, response, { stored = false, storedAt: cachedAt = null } = {}) => {
  const descriptor = publicRequestDescriptor(request);
- if (!descriptor || !response.ok || response.status !== 200 || (!stored && (response.redirected || (response.url !== '' && response.url !== descriptor.url.href))) || !responseIsPublic(response) || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? '') || !bounded(response, MAX_PUBLIC_RESPONSE_BYTES)) {
+ if (!descriptor || !response.ok || response.status !== 200 || (!stored && (response.redirected || (response.url !== '' && response.url !== descriptor.url.href))) || !responseIsPublic(response) || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') ?? '') || !bounded(response, MAX_PUBLIC_BYTES)) {
  return null;
  }
  try {
  const text = await response.clone().text();
- if (new TextEncoder().encode(text).byteLength > MAX_PUBLIC_RESPONSE_BYTES) {
+ if (new TextEncoder().encode(text).byteLength > MAX_PUBLIC_BYTES) {
  return null;
  }
  const body = descriptor.kind === 'bootstrap' ? bootstrapValue(JSON.parse(text)) : contentValue(JSON.parse(text));
@@ -440,7 +444,7 @@ const sanitizePublicResponse = async (request, response, { stored = false, store
  return null;
  }
  const serialized = JSON.stringify(body);
- if (new TextEncoder().encode(serialized).byteLength > MAX_PUBLIC_RESPONSE_BYTES) {
+ if (new TextEncoder().encode(serialized).byteLength > MAX_PUBLIC_BYTES) {
  return null;
  }
  const storedAt = stored && typeof cachedAt === 'string' && Number.isFinite(Date.parse(cachedAt)) ? new Date(cachedAt) : new Date();
@@ -590,7 +594,8 @@ const navigate = async (request) => {
  return await fetch(request);
  } catch {
  const current = await (await caches.open(SHELL_CACHE)).match(OFFLINE_URL);
- if (current) return current;
+ if (await storedAssetValid(OFFLINE_URL, current, DIGESTS[OFFLINE_URL])) return current;
+ await caches.delete(SHELL_CACHE);
  return (
  (await rollback()) ??
  new Response('Offline', {

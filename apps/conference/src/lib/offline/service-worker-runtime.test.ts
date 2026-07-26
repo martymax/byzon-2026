@@ -451,6 +451,70 @@ describe('service-worker runtime policy', () => {
     expect(worker.serviceWorker.clients.claim).toHaveBeenCalledOnce();
   });
 
+  it('refuses activation when the installed current shell changes before activate', async () => {
+    const worker = createWorkerHarness();
+    const rollbackName = shellCacheName('2026.07.24.1');
+    await seedVerifiedShell(
+      worker.caches,
+      rollbackName,
+      '2026-07-24T08:00:00.000Z',
+    );
+    worker.setFetch(async (request) => shellResponse(request));
+    await worker.dispatchWaitUntil('install');
+    const current = await worker.caches.open(CURRENT_SHELL);
+    await current.put(
+      '/offline',
+      responseAt(`${ORIGIN}/offline`, '<main>changed after install</main>', {
+        status: 200,
+        headers: {
+          'cache-control': 'public',
+          'content-type': 'text/html; charset=utf-8',
+        },
+      }),
+    );
+
+    await expect(worker.dispatchWaitUntil('activate')).rejects.toThrow(
+      'Current shell invalid',
+    );
+    expect(worker.serviceWorker.clients.claim).not.toHaveBeenCalled();
+    expect(await worker.caches.keys()).toContain(rollbackName);
+    expect(await worker.caches.keys()).not.toContain(CURRENT_SHELL);
+  });
+
+  it('rejects a changed current offline document before navigation fallback', async () => {
+    const worker = createWorkerHarness();
+    const rollbackName = shellCacheName('2026.07.24.1');
+    await seedVerifiedShell(
+      worker.caches,
+      rollbackName,
+      '2026-07-24T08:00:00.000Z',
+    );
+    worker.setFetch(async (request) => shellResponse(request));
+    await worker.dispatchWaitUntil('install');
+    const current = await worker.caches.open(CURRENT_SHELL);
+    await current.put(
+      '/offline',
+      responseAt(`${ORIGIN}/offline`, '<main>changed after install</main>', {
+        status: 200,
+        headers: {
+          'cache-control': 'public',
+          'content-type': 'text/html; charset=utf-8',
+        },
+      }),
+    );
+    worker.setFetch(async () => {
+      throw new TypeError('offline');
+    });
+    const navigation = new WorkerRequest(`${ORIGIN}/app`);
+    Object.defineProperty(navigation, 'mode', { value: 'navigate' });
+
+    const response = await worker.dispatchFetch(navigation);
+
+    expect(await response.text()).toBe('shell:/offline');
+    expect(await worker.caches.keys()).not.toContain(CURRENT_SHELL);
+    expect(await worker.caches.keys()).toContain(rollbackName);
+  });
+
   it('rejects rollback caches with a partial manifest, mismatched metadata, unsafe asset or changed bytes', async () => {
     const worker = createWorkerHarness();
     const partial = await seedVerifiedShell(
