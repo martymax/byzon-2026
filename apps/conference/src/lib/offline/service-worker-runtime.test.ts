@@ -3,13 +3,28 @@ import { createContext, Script } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
 const ORIGIN = 'https://app.byzon.test';
-const CURRENT_SHELL = 'byzon-pwa-shell-2026.07.25.4';
 const PUBLIC_CACHE = 'byzon-pwa-public-v3';
 const SHELL_ASSETS = [
   '/offline',
   '/icons/icon.svg',
   '/icons/maskable.svg',
+  '/manifest.webmanifest',
+  '/_next/static/chunks/offline.css',
+  '/_next/static/chunks/offline.js',
+  '/_next/static/media/offline.woff2',
 ] as const;
+const shellManifestVersion = (assets: readonly string[]): string => {
+  let hash = 2_166_136_261;
+  for (const character of JSON.stringify(assets)) {
+    hash = Math.imul(hash ^ character.charCodeAt(0), 16_777_619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+const shellCacheName = (
+  workerVersion: string,
+  assets: readonly string[] = SHELL_ASSETS,
+) => `byzon-pwa-shell-${workerVersion}-${shellManifestVersion(assets)}`;
+const CURRENT_SHELL = shellCacheName('2026.07.25.5');
 const workerSource = readFileSync(
   new URL('../../../public/sw.js', import.meta.url),
   'utf8',
@@ -99,6 +114,10 @@ const createWorkerHarness = () => {
     matchAll: vi.fn(async () => []),
   };
   const serviceWorker = {
+    __BYZON_SHELL_MANIFEST__: Object.freeze({
+      assets: Object.freeze([...SHELL_ASSETS]),
+      version: shellManifestVersion(SHELL_ASSETS),
+    }),
     addEventListener: (type: string, handler: WorkerHandler) => {
       handlers.set(type, handler);
     },
@@ -117,6 +136,7 @@ const createWorkerHarness = () => {
     caches,
     console,
     fetch: (request: Request) => fetchImplementation(request),
+    importScripts: vi.fn(),
     self: serviceWorker,
   });
   new Script(workerSource, { filename: 'sw.js' }).runInContext(context);
@@ -160,15 +180,29 @@ const createWorkerHarness = () => {
 
 const shellResponse = (request: Request): Response => {
   const url = new URL(request.url);
-  const svg = url.pathname.endsWith('.svg');
+  const extension = url.pathname.split('.').at(-1);
+  const contentType =
+    url.pathname === '/offline'
+      ? 'text/html; charset=utf-8'
+      : url.pathname === '/manifest.webmanifest'
+        ? 'application/manifest+json'
+        : extension === 'svg'
+          ? 'image/svg+xml'
+          : extension === 'css'
+            ? 'text/css'
+            : extension === 'js'
+              ? 'application/javascript'
+              : 'font/woff2';
   return responseAt(
     url.href,
-    svg ? '<svg xmlns="http://www.w3.org/2000/svg"/>' : '<h1>Offline</h1>',
+    extension === 'svg'
+      ? '<svg xmlns="http://www.w3.org/2000/svg"/>'
+      : `shell:${url.pathname}`,
     {
       status: 200,
       headers: {
         'cache-control': 'public, max-age=3600',
-        'content-type': svg ? 'image/svg+xml' : 'text/html; charset=utf-8',
+        'content-type': contentType,
       },
     },
   );
@@ -311,11 +345,45 @@ describe('service-worker runtime policy', () => {
     expect(await old.match('/offline')).toBeDefined();
   });
 
+  it('precaches and serves every generated CSS, JS, font and document dependency offline', async () => {
+    const worker = createWorkerHarness();
+    const fetched: Request[] = [];
+    worker.setFetch(async (request) => {
+      fetched.push(request);
+      return shellResponse(request);
+    });
+
+    await worker.dispatchWaitUntil('install');
+
+    expect(fetched.map(({ url }) => new URL(url).pathname)).toEqual([
+      ...SHELL_ASSETS,
+    ]);
+    expect(fetched.every(({ credentials }) => credentials === 'omit')).toBe(
+      true,
+    );
+    worker.setFetch(async () => {
+      throw new TypeError('offline');
+    });
+    const css = await worker.dispatchFetch(
+      new WorkerRequest(`${ORIGIN}/_next/static/chunks/offline.css`),
+    );
+    const script = await worker.dispatchFetch(
+      new WorkerRequest(`${ORIGIN}/_next/static/chunks/offline.js`),
+    );
+    const font = await worker.dispatchFetch(
+      new WorkerRequest(`${ORIGIN}/_next/static/media/offline.woff2`),
+    );
+
+    expect(await css.text()).toContain('offline.css');
+    expect(await script.text()).toContain('offline.js');
+    expect(await font.text()).toContain('offline.woff2');
+  });
+
   it('activates a complete shell and retains only one verified rollback', async () => {
     const worker = createWorkerHarness();
     for (const [name, installedAt] of [
-      ['byzon-pwa-shell-2026.07.22.1', '2026-07-22T08:00:00.000Z'],
-      ['byzon-pwa-shell-2026.07.24.1', '2026-07-24T08:00:00.000Z'],
+      [shellCacheName('2026.07.22.1'), '2026-07-22T08:00:00.000Z'],
+      [shellCacheName('2026.07.24.1'), '2026-07-24T08:00:00.000Z'],
     ] as const) {
       await seedVerifiedShell(worker.caches, name, installedAt);
     }
@@ -328,7 +396,7 @@ describe('service-worker runtime policy', () => {
     await worker.dispatchWaitUntil('activate');
 
     expect((await worker.caches.keys()).sort()).toEqual(
-      [CURRENT_SHELL, 'byzon-pwa-shell-2026.07.24.1'].sort(),
+      [CURRENT_SHELL, shellCacheName('2026.07.24.1')].sort(),
     );
     expect(worker.serviceWorker.clients.claim).toHaveBeenCalledOnce();
   });
@@ -337,13 +405,13 @@ describe('service-worker runtime policy', () => {
     const worker = createWorkerHarness();
     const partial = await seedVerifiedShell(
       worker.caches,
-      'byzon-pwa-shell-2026.07.23.1',
+      shellCacheName('2026.07.23.1'),
       '2026-07-23T08:00:00.000Z',
     );
     await partial.delete('/icons/maskable.svg');
     const mismatched = await seedVerifiedShell(
       worker.caches,
-      'byzon-pwa-shell-2026.07.24.1',
+      shellCacheName('2026.07.24.1'),
       '2026-07-24T08:00:00.000Z',
     );
     await mismatched.put(
@@ -366,7 +434,7 @@ describe('service-worker runtime policy', () => {
     );
     const unsafe = await seedVerifiedShell(
       worker.caches,
-      'byzon-pwa-shell-2026.07.25.1',
+      shellCacheName('2026.07.25.1'),
       '2026-07-25T08:00:00.000Z',
     );
     await unsafe.put(
@@ -397,7 +465,7 @@ describe('service-worker runtime policy', () => {
     expect(replies).toEqual([
       {
         type: 'BYZON_WORKER_VERSION',
-        version: '2026.07.25.4',
+        version: '2026.07.25.5',
       },
     ]);
 
@@ -405,7 +473,7 @@ describe('service-worker runtime policy', () => {
     worker.handlers.get('message')?.({
       data: {
         type: 'BYZON_SKIP_WAITING',
-        version: '2026.07.25.3',
+        version: '2026.07.25.4',
       },
       waitUntil: (promise) => {
         completion = promise;
@@ -417,7 +485,7 @@ describe('service-worker runtime policy', () => {
     worker.handlers.get('message')?.({
       data: {
         type: 'BYZON_SKIP_WAITING',
-        version: '2026.07.25.4',
+        version: '2026.07.25.5',
       },
       waitUntil: (promise) => {
         completion = promise;
@@ -464,7 +532,9 @@ describe('service-worker runtime policy', () => {
     worker.setFetch(async (networkRequest) =>
       publicResponse(networkRequest, 5, {}, good),
     );
-    expect((await (await worker.dispatchFetch(request)).json()).version).toBe(5);
+    expect((await (await worker.dispatchFetch(request)).json()).version).toBe(
+      5,
+    );
 
     const session = good.program.sessions[0]!;
     const invalidBodies = [
@@ -474,6 +544,35 @@ describe('service-worker runtime policy', () => {
         event: {
           ...good.event,
           endsAt: good.event.startsAt,
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        publishedAt: '2026-07-25T08:00:00',
+      },
+      {
+        ...good,
+        version: 6,
+        event: {
+          ...good.event,
+          startsAt: '2026-02-30T08:00:00.000Z',
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        program: {
+          ...good.program,
+          days: [{ ...good.program.days[0]!, localDate: '2026-02-30' }],
+        },
+      },
+      {
+        ...good,
+        version: 6,
+        program: {
+          ...good.program,
+          sessions: [{ ...session, startsAt: '2026-09-18T07:00:00.000' }],
         },
       },
       {
@@ -564,8 +663,7 @@ describe('service-worker runtime policy', () => {
     const request = new WorkerRequest(
       `${ORIGIN}/api/v1/public/events/byzon-2026/content`,
     );
-    const replacementEventId =
-      '01930000-0000-7000-8000-000000000099';
+    const replacementEventId = '01930000-0000-7000-8000-000000000099';
     worker.setFetch(async (networkRequest) =>
       publicResponse(networkRequest, 9),
     );
@@ -585,9 +683,7 @@ describe('service-worker runtime policy', () => {
     const persisted = await (
       await worker.caches.open(PUBLIC_CACHE)
     ).match(request);
-    expect(persisted?.headers.get('x-byzon-event-id')).toBe(
-      replacementEventId,
-    );
+    expect(persisted?.headers.get('x-byzon-event-id')).toBe(replacementEventId);
   });
 
   it('rejects Vary/Cookie, Set-Cookie and oversized responses from cache', async () => {

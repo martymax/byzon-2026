@@ -17,13 +17,17 @@ import {
   participantAgendaMutationProblemFixtures,
   participantProgramFixtures,
 } from '@byzon/test-support/fixtures';
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, type CSSProperties, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cdp, userEvent } from 'vitest/browser';
 
 import '../../app/styles.css';
 import { ParticipantAccountResourceProvider } from '../../components/participant-account-resource';
 import { ParticipantAgenda } from '../../components/participant-agenda';
+import {
+  useParticipantAgendaResource,
+  type ParticipantAgendaResource,
+} from '../../components/participant-agenda-resource';
 import { ParticipantSessionAgendaAction } from '../../components/participant-session-agenda-action';
 import { SessionView } from '../../components/program-view';
 import { RouteFocus } from '../../components/route-focus';
@@ -302,6 +306,20 @@ const AgendaProbe = ({
     </ParticipantAccountResourceProvider>
   </main>
 );
+
+const AgendaResourceProbe = ({
+  agendaApi,
+  eventId,
+  onResource,
+}: {
+  readonly agendaApi: ApiPort;
+  readonly eventId: string;
+  readonly onResource: (resource: ParticipantAgendaResource) => void;
+}) => {
+  const resource = useParticipantAgendaResource(eventId, agendaApi);
+  useEffect(() => onResource(resource), [onResource, resource]);
+  return <p data-testid="agenda-resource-state">{resource.state.status}</p>;
+};
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -1410,6 +1428,106 @@ describe('F3-01..F3-05 participant agenda', () => {
       .element(screen.getByText('Osobní agenda je zatím prázdná'))
       .toBeVisible();
     expect(screen.container.textContent).not.toContain('Otevření konference');
+  });
+
+  it('fences stale offline retry and discard callbacks after an account switch', async () => {
+    const oldScope = {
+      eventId: agendaFixtureIds.event,
+      userId: agendaFixtureIds.user,
+    } as const;
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    let queued = await queueApprovedOfflineAgendaMutation(
+      oldScope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      '01930000-0000-7000-8000-0000000000e0',
+      offlineEpoch,
+    );
+    for (let attempts = 1; attempts <= 5; attempts += 1) {
+      queued = await updateOfflineAgendaQueueRecord(
+        queued,
+        {
+          attempts,
+          lastProblemCode: 'TRANSPORT',
+          status: attempts === 5 ? 'failed' : 'retry',
+        },
+        { expectedEpoch: offlineEpoch },
+      );
+    }
+    let currentRead = participantAgendaFixtures.happy!;
+    const switchedAgenda = agendaForScope(
+      participantAgendaFixtures.empty!,
+      agendaFixtureIds.event,
+      otherScope.userId,
+    );
+    const switchedIdentity = identityForScope(
+      agendaFixtureIds.event,
+      otherScope.userId,
+    );
+    const { api } = agendaApiFor({
+      onRead: () => jsonResponse(currentRead),
+    });
+    let oldResource: ParticipantAgendaResource | undefined;
+    let newResource: ParticipantAgendaResource | undefined;
+    const captureOld = (resource: ParticipantAgendaResource) => {
+      oldResource = resource;
+    };
+    const captureNew = (resource: ParticipantAgendaResource) => {
+      newResource = resource;
+    };
+
+    try {
+      const screen = await renderComponent(
+        <AgendaProbe agendaApi={api}>
+          <AgendaResourceProbe
+            agendaApi={api}
+            eventId={agendaFixtureIds.event}
+            onResource={captureOld}
+          />
+        </AgendaProbe>,
+      );
+      await vi.waitFor(() => {
+        expect(oldResource?.state.status).toBe('ready');
+        expect(oldResource?.offline.queue.failed).toBe(1);
+      });
+      const staleDiscard = oldResource!.discardFailedOfflineQueue;
+      const staleRetry = oldResource!.retryOfflineQueue;
+
+      currentRead = switchedAgenda;
+      await screen.rerender(
+        <AgendaProbe agendaApi={api} identity={switchedIdentity}>
+          <AgendaResourceProbe
+            agendaApi={api}
+            eventId={agendaFixtureIds.event}
+            onResource={captureNew}
+          />
+        </AgendaProbe>,
+      );
+      await vi.waitFor(() => {
+        expect(newResource?.state.status).toBe('ready');
+        if (newResource?.state.status === 'ready') {
+          expect(newResource.state.data.userId).toBe(otherScope.userId);
+        }
+      });
+
+      await staleDiscard();
+      await staleRetry();
+
+      expect(newResource?.feedback).toBeNull();
+      expect(newResource?.offline.syncing).toBe(false);
+      expect(newResource?.offline.queue).toEqual({
+        conflict: 0,
+        failed: 0,
+        pending: 0,
+        retry: 0,
+        total: 0,
+      });
+    } finally {
+      await wipeAllParticipantOfflineData('user_request');
+    }
   });
 
   it('aborts a pending old-owner mutation and unlocks the new owner scope', async () => {

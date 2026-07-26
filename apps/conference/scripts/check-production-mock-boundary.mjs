@@ -2,6 +2,11 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  REQUIRED_SHELL_ASSETS,
+  shellManifestVersion,
+} from './offline-shell-manifest.mjs';
+
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDirectory, '..');
 const sourceRoot = resolve(appRoot, 'src');
@@ -16,6 +21,17 @@ const participantCurrentEventPath = resolve(
 const generatedWorkerPath = resolve(appRoot, 'public/mockServiceWorker.js');
 const buildRoot = resolve(appRoot, '.next');
 const mode = process.argv[2];
+const standaloneAppRoot = resolve(
+  buildRoot,
+  'standalone',
+  'apps',
+  'conference',
+);
+const standaloneShellManifestPath = resolve(
+  standaloneAppRoot,
+  'public/sw-shell-manifest.js',
+);
+const nextStaticPrefix = '/_next/static/';
 
 const failures = [];
 const runtimeExtensions = new Set([
@@ -74,6 +90,100 @@ const reportMatches = (file, source, patterns = forbiddenRuntimePatterns) => {
   for (const [label, pattern] of patterns) {
     if (pattern.test(source)) {
       failures.push(`${relative(appRoot, file)} contains ${label}`);
+    }
+  }
+};
+
+const checkStandaloneShellManifest = () => {
+  if (!existsSync(standaloneShellManifestPath)) {
+    failures.push(
+      '.next standalone output is missing public/sw-shell-manifest.js',
+    );
+    return;
+  }
+  const source = readFileSync(standaloneShellManifestPath, 'utf8');
+  const match =
+    /^'use strict';\nself\.__BYZON_SHELL_MANIFEST__=Object\.freeze\(\{version:("[0-9a-f]{8}"),assets:Object\.freeze\((\[[^\r\n]+\])\)\}\);\n$/.exec(
+      source,
+    );
+  if (!match) {
+    failures.push(
+      '.next standalone shell manifest does not match the generated format',
+    );
+    return;
+  }
+
+  let version;
+  let assets;
+  try {
+    version = JSON.parse(match[1]);
+    assets = JSON.parse(match[2]);
+  } catch {
+    failures.push('.next standalone shell manifest is not valid JSON');
+    return;
+  }
+  if (
+    !Array.isArray(assets) ||
+    assets.length > 256 ||
+    assets.some((asset) => typeof asset !== 'string') ||
+    new Set(assets).size !== assets.length ||
+    REQUIRED_SHELL_ASSETS.some((asset) => !assets.includes(asset)) ||
+    !assets.some((asset) => asset.endsWith('.css')) ||
+    !assets.some((asset) => asset.endsWith('.js')) ||
+    !assets.some((asset) => asset.endsWith('.woff2')) ||
+    shellManifestVersion(assets) !== version
+  ) {
+    failures.push(
+      '.next standalone shell manifest is incomplete or has an invalid fingerprint',
+    );
+    return;
+  }
+
+  for (const asset of assets) {
+    if (
+      asset.includes('\\') ||
+      asset.includes('..') ||
+      asset.includes('?') ||
+      asset.includes('#') ||
+      !/^\/[A-Za-z0-9._/-]+$/.test(asset)
+    ) {
+      failures.push(
+        `.next standalone shell manifest contains unsafe asset ${asset}`,
+      );
+      continue;
+    }
+
+    let packagedPath = null;
+    if (asset.startsWith(nextStaticPrefix)) {
+      packagedPath = resolve(
+        standaloneAppRoot,
+        '.next/static',
+        asset.slice(nextStaticPrefix.length),
+      );
+    } else if (asset === '/manifest.webmanifest') {
+      packagedPath = resolve(
+        standaloneAppRoot,
+        '.next/server/app/manifest.webmanifest.body',
+      );
+    } else if (asset !== '/offline') {
+      packagedPath = resolve(standaloneAppRoot, 'public', asset.slice(1));
+    }
+    if (
+      packagedPath &&
+      (!existsSync(packagedPath) || !lstatSync(packagedPath).isFile())
+    ) {
+      failures.push(
+        `.next standalone shell asset ${asset} is not packaged as a regular file`,
+      );
+    }
+  }
+
+  for (const routeAsset of ['.next/server/app/offline.html', 'public/sw.js']) {
+    const packagedPath = resolve(standaloneAppRoot, routeAsset);
+    if (!existsSync(packagedPath) || !lstatSync(packagedPath).isFile()) {
+      failures.push(
+        `.next standalone offline runtime is missing ${routeAsset}`,
+      );
     }
   }
 };
@@ -209,6 +319,7 @@ const checkBuildBoundary = () => {
     }
     reportMatches(file, source, forbiddenBuildPatterns);
   }
+  checkStandaloneShellManifest();
 };
 
 if (mode === 'source') {

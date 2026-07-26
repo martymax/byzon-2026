@@ -13,9 +13,13 @@ import { OFFLINE_AGENDA_SYNC_EVENT } from '../lib/offline/offline-policy';
 import styles from './service-worker-registration.module.css';
 
 const APP_SERVICE_WORKER_PATH = '/sw.js';
-export const APP_SERVICE_WORKER_VERSION = '2026.07.25.4';
+export const APP_SERVICE_WORKER_VERSION = '2026.07.25.5';
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1_000;
+
+export const shouldEnableAppServiceWorker = (
+  nodeEnvironment: string | undefined,
+): boolean => nodeEnvironment === 'production';
 
 const subscribeToConnectivity = (onChange: () => void): (() => void) => {
   window.addEventListener('online', onChange);
@@ -156,7 +160,12 @@ export function ServiceWorkerRegistration() {
   }, []);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
+    if (
+      !shouldEnableAppServiceWorker(process.env.NODE_ENV) ||
+      !('serviceWorker' in navigator)
+    ) {
+      return;
+    }
 
     let disposed = false;
     let waitingProbe = 0;

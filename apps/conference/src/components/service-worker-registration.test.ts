@@ -4,6 +4,7 @@ import {
   APP_SERVICE_WORKER_VERSION,
   requestServiceWorkerVersion,
   serviceWorkerNotice,
+  shouldEnableAppServiceWorker,
   shouldRegisterAppServiceWorker,
 } from './service-worker-registration';
 
@@ -17,6 +18,13 @@ const transferredPorts = (
     : (transfer as StructuredSerializeOptions).transfer;
 
 describe('application service worker ownership', () => {
+  it('enables the generated app worker only for a production build', () => {
+    expect(shouldEnableAppServiceWorker('production')).toBe(true);
+    expect(shouldEnableAppServiceWorker('development')).toBe(false);
+    expect(shouldEnableAppServiceWorker('test')).toBe(false);
+    expect(shouldEnableAppServiceWorker(undefined)).toBe(false);
+  });
+
   it('reads the waiting worker version through a dedicated message port', async () => {
     const postMessage = vi.fn(
       (

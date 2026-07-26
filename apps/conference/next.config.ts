@@ -1,5 +1,8 @@
 import type { NextConfig } from 'next';
 
+export const publicShellCacheControl =
+  'public, max-age=0, s-maxage=0, must-revalidate';
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
   output: 'standalone',
@@ -51,6 +54,27 @@ const nextConfig: NextConfig = {
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },
           { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
+      {
+        source: '/offline',
+        headers: [{ key: 'Cache-Control', value: publicShellCacheControl }],
+      },
+      {
+        source: '/manifest.webmanifest',
+        headers: [{ key: 'Cache-Control', value: publicShellCacheControl }],
+      },
+      {
+        source: '/icons/:path*',
+        headers: [{ key: 'Cache-Control', value: publicShellCacheControl }],
+      },
+      {
+        source: '/sw-shell-manifest.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
         ],
       },
       {

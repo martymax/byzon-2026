@@ -17,9 +17,9 @@ const section = (start: string, end: string): string => {
 
 describe('application service-worker source policy', () => {
   it('uses a unique build shell cache and retains one verified rollback', () => {
-    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.4';");
+    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.5';");
     expect(workerSource).toContain(
-      'const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${WORKER_VERSION}`;',
+      'const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${SHELL_VERSION}`;',
     );
     expect(workerSource).toContain(
       'const PUBLIC_CACHE = `${CACHE_NAMESPACE}-public-v3`;',
@@ -29,6 +29,10 @@ describe('application service-worker source policy', () => {
     );
     expect(workerSource).toContain('[SHELL_CACHE, PUBLIC_CACHE, rollback]');
     expect(workerSource).toContain('const SHELL_METADATA_URL');
+    expect(workerSource).toContain("importScripts('/sw-shell-manifest.js')");
+    expect(workerSource).toContain(
+      'const SHELL_VERSION = `${WORKER_VERSION}-${manifest.version}`;',
+    );
   });
 
   it('stages a complete verified shell and deletes a partial failed build', () => {
@@ -41,7 +45,7 @@ describe('application service-worker source policy', () => {
       'const publicRequestDescriptor',
     );
 
-    expect(install).toContain('event.waitUntil(precacheShell())');
+    expect(install).toContain('event.waitUntil(precache())');
     expect(install).not.toContain('skipWaiting');
     expect(workerSource).toContain('const verified = await Promise.all(');
     expect(workerSource).toContain('await caches.delete(SHELL_CACHE)');
@@ -50,6 +54,7 @@ describe('application service-worker source policy', () => {
     expect(workerSource).toContain('assets: [...SHELL_ASSETS]');
     expect(workerSource).toContain('storedAssetValid');
     expect(workerSource).toContain('response.redirected');
+    expect(workerSource).toContain('SHELL_ASSETS.includes(url.pathname)');
     expect(messages).toContain("event.data?.type === 'BYZON_SKIP_WAITING'");
     expect(messages).toContain('event.data.version === WORKER_VERSION');
     expect(messages).toContain('self.skipWaiting()');
@@ -94,6 +99,10 @@ describe('application service-worker source policy', () => {
       "self.addEventListener('sync'",
     );
     expect(fetchHandler).toContain('publicRequestDescriptor(event.request)');
+    expect(fetchHandler).toContain('cachedPath(event.request)');
+    expect(fetchHandler).toContain(
+      'event.respondWith(cachedShell(event.request, shellPath))',
+    );
     expect(fetchHandler).not.toContain('caches.match(event.request)');
     expect(workerSource).not.toContain('/api/v1/me');
     expect(workerSource).not.toContain('/api/v1/events');

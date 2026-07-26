@@ -139,11 +139,12 @@ export const privateResourceInvalidationReason = <Problem extends ApiProblem>(
   return failure.problem.code === 'EVENT_ACCESS_DENIED' ? 'permission' : null;
 };
 
-export const invalidateParticipantPrivateResources = (
+const dispatchParticipantPrivateResourceInvalidation = (
   reason: PrivateResourceInvalidationReason,
-  wipeReason: OfflineWipeReason = defaultWipeReason(reason),
+  wipeReason: OfflineWipeReason,
+  notifyCurrentContext: boolean,
 ): Promise<void> => {
-  notifyListeners(reason);
+  if (notifyCurrentContext) notifyListeners(reason);
   const message: PrivateResourceBroadcast = {
     id: createTombstone(),
     reason,
@@ -153,6 +154,19 @@ export const invalidateParticipantPrivateResources = (
   ensureBroadcastChannel()?.postMessage(message);
   return scheduleDurableCleanup(wipeReason, message.id);
 };
+
+export const invalidateParticipantPrivateResources = (
+  reason: PrivateResourceInvalidationReason,
+  wipeReason: OfflineWipeReason = defaultWipeReason(reason),
+): Promise<void> =>
+  dispatchParticipantPrivateResourceInvalidation(reason, wipeReason, true);
+
+export const transitionParticipantPrivateResourceScope = (): Promise<void> =>
+  dispatchParticipantPrivateResourceInvalidation(
+    'permission',
+    'switch_account',
+    false,
+  );
 
 export const subscribeToPrivateResourceInvalidation = (
   listener: Listener,

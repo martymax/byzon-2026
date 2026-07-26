@@ -37,6 +37,7 @@ import {
   invalidateParticipantPrivateResources,
   privateResourceInvalidationReason,
   subscribeToPrivateResourceInvalidation,
+  transitionParticipantPrivateResourceScope,
   type PrivateResourceInvalidationReason,
 } from '@/lib/private-resource-events';
 
@@ -135,6 +136,11 @@ const agendaMatchesScope = (
   data.eventId === scope.eventId &&
   data.userId === scope.userId &&
   data.eventTimezone === timezone;
+
+const offlineScopesMatch = (
+  left: ParticipantOfflineScope | null,
+  right: ParticipantOfflineScope,
+): boolean => left?.eventId === right.eventId && left.userId === right.userId;
 
 const accountFailureState = (
   status: ParticipantAccountResourceState['status'],
@@ -299,6 +305,13 @@ export const useParticipantAgendaResource = (
     accountEventId && accountUserId
       ? `${accountEventId}:${accountUserId}`
       : null;
+  const accountIdentityKey = JSON.stringify([
+    accountStatus,
+    accountEventId,
+    accountUserId,
+    accountTimezone,
+  ]);
+  const callbackOfflineEpoch = activeOfflineEpoch.current;
   const readOnly =
     accountPhase !== null &&
     accountPhase !== 'activation_open' &&
@@ -355,13 +368,7 @@ export const useParticipantAgendaResource = (
      remote resource lifecycle. An account identity transition must atomically
      abort and mask the previous principal's private state before a new read. */
   useEffect(() => {
-    const accountIdentity = JSON.stringify([
-      accountStatus,
-      accountEventId,
-      accountUserId,
-      accountTimezone,
-    ]);
-    if (activeAccountIdentity.current !== accountIdentity) {
+    if (activeAccountIdentity.current !== accountIdentityKey) {
       const previousScope = activeOfflineScope.current;
       const nextScope =
         accountEventId && accountUserId
@@ -373,14 +380,11 @@ export const useParticipantAgendaResource = (
           previousScope.eventId !== nextScope.eventId ||
           previousScope.userId !== nextScope.userId)
       ) {
-        void invalidateParticipantPrivateResources(
-          'permission',
-          'switch_account',
-        );
+        void transitionParticipantPrivateResourceScope();
       }
       activeOfflineScope.current = nextScope;
       activeOfflineEpoch.current = null;
-      activeAccountIdentity.current = accountIdentity;
+      activeAccountIdentity.current = accountIdentityKey;
       readEpoch.current += 1;
       mutationEpoch.current += 1;
       readController.current?.abort();
@@ -649,6 +653,7 @@ export const useParticipantAgendaResource = (
 
     return () => controller.abort();
   }, [
+    accountIdentityKey,
     accountEventId,
     accountStatus,
     accountTimezone,
@@ -998,15 +1003,28 @@ export const useParticipantAgendaResource = (
 
   const retryOfflineQueue = useCallback(async () => {
     const current = stateRef.current;
+    const offlineEpoch = callbackOfflineEpoch;
     if (
+      !mounted.current ||
+      activeAccountIdentity.current !== accountIdentityKey ||
+      activeOfflineEpoch.current !== callbackOfflineEpoch ||
       mutationLock.current ||
       current.status !== 'ready' ||
       !accountEventId ||
       !accountUserId ||
-      !accountTimezone
+      !accountTimezone ||
+      !scopeKey ||
+      current.scopeKey !== scopeKey ||
+      current.data.eventId !== accountEventId ||
+      current.data.userId !== accountUserId
     ) {
       return;
     }
+    const scope: ParticipantOfflineScope = {
+      eventId: accountEventId,
+      userId: accountUserId,
+    };
+    if (!offlineScopesMatch(activeOfflineScope.current, scope)) return;
     if (offline.queue.failed > 0) {
       setFeedback({ kind: 'queue_failed', retry: 'discard' });
       return;
@@ -1015,17 +1033,20 @@ export const useParticipantAgendaResource = (
       setFeedback({ kind: 'queue_conflict', retry: 'sync' });
       return;
     }
-    if (!offlineAgendaReplayAvailable() || !activeOfflineEpoch.current) {
+    if (!offlineAgendaReplayAvailable() || !offlineEpoch) {
       setFeedback({ kind: 'offline_restricted', retry: 'none' });
       return;
     }
 
+    const operationEpoch = mutationEpoch.current;
+    const operationIsCurrent = () =>
+      mounted.current &&
+      mutationEpoch.current === operationEpoch &&
+      activeOfflineEpoch.current === offlineEpoch &&
+      offlineScopesMatch(activeOfflineScope.current, scope) &&
+      stateRef.current.status === 'ready' &&
+      stateRef.current.scopeKey === scopeKey;
     mutationLock.current = true;
-    const offlineEpoch = activeOfflineEpoch.current;
-    const scope: ParticipantOfflineScope = {
-      eventId: accountEventId,
-      userId: accountUserId,
-    };
     setOffline((currentOffline) => ({
       ...currentOffline,
       syncing: true,
@@ -1037,12 +1058,14 @@ export const useParticipantAgendaResource = (
           current.data.version,
           offlineEpoch,
         );
+        if (!operationIsCurrent()) return;
       }
       const synchronized = await syncOfflineAgendaQueue(
         scope,
         api,
         offlineEpoch,
       );
+      if (!operationIsCurrent()) return;
       if (synchronized.invalidation) {
         return;
       }
@@ -1081,10 +1104,14 @@ export const useParticipantAgendaResource = (
             : null),
       );
     } catch {
-      setFeedback({ kind: 'queue_conflict', retry: 'sync' });
+      if (operationIsCurrent()) {
+        setFeedback({ kind: 'queue_conflict', retry: 'sync' });
+      }
     } finally {
-      mutationLock.current = false;
-      if (mounted.current) {
+      if (mutationEpoch.current === operationEpoch) {
+        mutationLock.current = false;
+      }
+      if (operationIsCurrent()) {
         setOffline((currentOffline) => ({
           ...currentOffline,
           syncing: false,
@@ -1092,35 +1119,56 @@ export const useParticipantAgendaResource = (
       }
     }
   }, [
+    accountIdentityKey,
     accountEventId,
     accountTimezone,
     accountUserId,
     api,
+    callbackOfflineEpoch,
     offline.queue.conflict,
     offline.queue.failed,
+    scopeKey,
     storeState,
   ]);
 
   const discardFailedOfflineQueue = useCallback(async () => {
     const current = stateRef.current;
-    const offlineEpoch = activeOfflineEpoch.current;
+    const offlineEpoch = callbackOfflineEpoch;
     if (
+      !mounted.current ||
+      activeAccountIdentity.current !== accountIdentityKey ||
+      activeOfflineEpoch.current !== callbackOfflineEpoch ||
       mutationLock.current ||
       current.status !== 'ready' ||
       !accountEventId ||
       !accountUserId ||
+      !scopeKey ||
+      current.scopeKey !== scopeKey ||
+      current.data.eventId !== accountEventId ||
+      current.data.userId !== accountUserId ||
       !offlineEpoch ||
       offline.queue.failed === 0
     ) {
       return;
     }
+    const scope: ParticipantOfflineScope = {
+      eventId: accountEventId,
+      userId: accountUserId,
+    };
+    if (!offlineScopesMatch(activeOfflineScope.current, scope)) return;
+    const operationEpoch = mutationEpoch.current;
+    const operationIsCurrent = () =>
+      mounted.current &&
+      mutationEpoch.current === operationEpoch &&
+      activeOfflineEpoch.current === offlineEpoch &&
+      offlineScopesMatch(activeOfflineScope.current, scope) &&
+      stateRef.current.status === 'ready' &&
+      stateRef.current.scopeKey === scopeKey;
     mutationLock.current = true;
     setOffline((currentOffline) => ({ ...currentOffline, syncing: true }));
     try {
-      const queue = await discardFailedOfflineAgendaQueue(
-        { eventId: accountEventId, userId: accountUserId },
-        offlineEpoch,
-      );
+      const queue = await discardFailedOfflineAgendaQueue(scope, offlineEpoch);
+      if (!operationIsCurrent()) return;
       setOffline((currentOffline) => ({
         ...currentOffline,
         queue,
@@ -1128,10 +1176,14 @@ export const useParticipantAgendaResource = (
       }));
       setFeedback({ kind: 'queue_discarded', retry: 'none' });
     } catch {
-      setFeedback({ kind: 'queue_failed', retry: 'discard' });
+      if (operationIsCurrent()) {
+        setFeedback({ kind: 'queue_failed', retry: 'discard' });
+      }
     } finally {
-      mutationLock.current = false;
-      if (mounted.current) {
+      if (mutationEpoch.current === operationEpoch) {
+        mutationLock.current = false;
+      }
+      if (operationIsCurrent()) {
         setOffline((currentOffline) => ({
           ...currentOffline,
           syncing: false,
@@ -1140,8 +1192,11 @@ export const useParticipantAgendaResource = (
     }
   }, [
     accountEventId,
+    accountIdentityKey,
     accountUserId,
+    callbackOfflineEpoch,
     offline.queue.failed,
+    scopeKey,
   ]);
 
   const dismissFeedback = useCallback(() => {

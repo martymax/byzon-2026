@@ -54,7 +54,7 @@ describe('public offline content loader', () => {
       '/api/v1/public/events/byzon-2026/content',
       expect.objectContaining({
         cache: 'no-cache',
-        credentials: 'same-origin',
+        credentials: 'omit',
       }),
     );
   });

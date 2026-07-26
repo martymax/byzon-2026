@@ -42,7 +42,7 @@ export const loadPublicOfflineContent = async (
   try {
     const response = await fetcher(publicContentPath(eventSlug), {
       cache: 'no-cache',
-      credentials: 'same-origin',
+      credentials: 'omit',
       headers: { accept: 'application/json' },
       ...(options.signal ? { signal: options.signal } : {}),
     });

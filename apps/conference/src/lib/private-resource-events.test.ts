@@ -5,6 +5,7 @@ import {
   invalidateParticipantPrivateResources,
   privateResourceInvalidationReason,
   subscribeToPrivateResourceInvalidation,
+  transitionParticipantPrivateResourceScope,
 } from './private-resource-events.js';
 
 describe('participant private-resource invalidation', () => {
@@ -34,5 +35,15 @@ describe('participant private-resource invalidation', () => {
 
     expect(listener).toHaveBeenCalledOnce();
     expect(listener).toHaveBeenCalledWith('session_expired');
+  });
+
+  it('rotates owner storage without invalidating the newly loaded local account', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToPrivateResourceInvalidation(listener);
+
+    await transitionParticipantPrivateResourceScope();
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
   });
 });
