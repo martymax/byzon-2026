@@ -1,4 +1,5 @@
 import { ParticipantHome } from '@/components/participant-home';
+import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import { loadParticipantCurrentEvent } from '@/server/current-event';
 import Link from 'next/link';
 
@@ -6,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ParticipantHomePage() {
   const currentEvent = await loadParticipantCurrentEvent();
+  const previewAvailable = isFrontendPreviewAvailable();
   if (currentEvent.kind === 'archived') {
     return (
       <section className="app-page">
@@ -14,19 +16,22 @@ export default async function ParticipantHomePage() {
           Akce byla archivována
         </h1>
         <p>
-          Obsah akce už není dostupný. Své údaje a přihlášená zařízení můžete
-          dál spravovat v účtu.
+          {previewAvailable
+            ? 'Obsah akce už není dostupný. Své údaje a přihlášená zařízení můžete dál spravovat v účtu.'
+            : 'Obsah akce už není dostupný.'}
         </p>
-        <nav aria-label="Možnosti archivovaného účtu">
-          <ul className="settings-list">
-            <li>
-              <Link href="/app/soukromi">Správa soukromí</Link>
-            </li>
-            <li>
-              <Link href="/app/nastaveni">Nastavení účtu</Link>
-            </li>
-          </ul>
-        </nav>
+        {previewAvailable ? (
+          <nav aria-label="Možnosti archivovaného účtu">
+            <ul className="settings-list">
+              <li>
+                <Link href="/app/soukromi">Správa soukromí</Link>
+              </li>
+              <li>
+                <Link href="/app/nastaveni">Nastavení účtu</Link>
+              </li>
+            </ul>
+          </nav>
+        ) : null}
       </section>
     );
   }
@@ -48,6 +53,7 @@ export default async function ParticipantHomePage() {
   const { event } = currentEvent;
   return (
     <ParticipantHome
+      enableAgendaJourney={previewAvailable}
       event={{
         endsAt: event.endsAt.toISOString(),
         id: event.id,

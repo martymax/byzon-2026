@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 export type ParticipantShellNavigationMode =
-  'active' | 'archived' | 'unavailable';
+  'active' | 'active-preview' | 'archived' | 'archived-preview' | 'unavailable';
 
 const NavigationIcon = ({ children }: { readonly children: ReactNode }) => (
   <svg
@@ -34,19 +34,21 @@ const overviewNavigationItem: NavigationItem = {
   ),
 };
 
+const programNavigationItem: NavigationItem = {
+  id: 'program',
+  href: '/app/program',
+  label: 'Program',
+  icon: (
+    <NavigationIcon>
+      <rect height="16" rx="2" width="18" x="3" y="5" />
+      <path d="M8 3v4M16 3v4M3 10h18M7 14h3M14 14h3M7 18h3" />
+    </NavigationIcon>
+  ),
+};
+
 const participantNavigationItems: NavigationItem[] = [
   overviewNavigationItem,
-  {
-    id: 'program',
-    href: '/app/program',
-    label: 'Program',
-    icon: (
-      <NavigationIcon>
-        <rect height="16" rx="2" width="18" x="3" y="5" />
-        <path d="M8 3v4M16 3v4M3 10h18M7 14h3M14 14h3M7 18h3" />
-      </NavigationIcon>
-    ),
-  },
+  programNavigationItem,
   {
     id: 'agenda',
     href: '/app/agenda',
@@ -84,7 +86,12 @@ const participantNavigationItems: NavigationItem[] = [
   },
 ];
 
-const archivedNavigationItems: NavigationItem[] = [
+const productionNavigationItems: NavigationItem[] = [
+  overviewNavigationItem,
+  programNavigationItem,
+];
+
+const archivedPreviewNavigationItems: NavigationItem[] = [
   overviewNavigationItem,
   {
     id: 'privacy',
@@ -137,9 +144,12 @@ export const participantNavigationActiveId = (pathname: string): string => {
 export const participantNavigationItemsForMode = (
   mode: ParticipantShellNavigationMode,
 ): NavigationItem[] => {
-  if (mode === 'archived') return archivedNavigationItems;
+  if (mode === 'archived-preview') return archivedPreviewNavigationItems;
+  if (mode === 'archived') return [overviewNavigationItem];
   if (mode === 'unavailable') return [];
-  return participantNavigationItems;
+  return mode === 'active-preview'
+    ? participantNavigationItems
+    : productionNavigationItems;
 };
 
 export const archivedNavigationActiveId = (pathname: string): string => {
@@ -156,20 +166,19 @@ export const ParticipantShellNavigation = ({
 }) => {
   const pathname = usePathname();
   const items = participantNavigationItemsForMode(mode);
+  const archived = mode === 'archived' || mode === 'archived-preview';
 
   if (items.length === 0) return null;
 
   return (
     <ParticipantNavigation
       activeItemId={
-        mode === 'archived'
+        archived
           ? archivedNavigationActiveId(pathname)
           : participantNavigationActiveId(pathname)
       }
       items={items}
-      label={
-        mode === 'archived' ? 'Navigace archivovaného účtu' : 'Hlavní navigace'
-      }
+      label={archived ? 'Navigace archivovaného účtu' : 'Hlavní navigace'}
     />
   );
 };

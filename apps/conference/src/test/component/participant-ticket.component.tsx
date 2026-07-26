@@ -58,6 +58,7 @@ const TicketProbe = ({
   >
     <ParticipantLayout
       accountScope={{ kind: 'active', eventId: ticketFixtureEventId }}
+      navigationMode="active-preview"
     >
       <ParticipantTicket
         api={apiFor(fixture, 'component-ticket-0001')}

@@ -56,6 +56,7 @@ const ParticipantProbe = ({ children }: { readonly children: ReactNode }) => (
   >
     <ParticipantLayout
       accountScope={{ kind: 'active', eventId: program.eventId }}
+      navigationMode="active-preview"
     >
       {children}
     </ParticipantLayout>
@@ -105,7 +106,7 @@ const ArchivedParticipantProbe = () => (
         eventFingerprint:
           '9caa2f149fcc7d8e862b204f15035cc4a72782f6d49ef14698672e50dd3ee86a',
       }}
-      navigationMode="archived"
+      navigationMode="archived-preview"
     >
       <section className="app-page">
         <h1 data-route-heading tabIndex={-1}>

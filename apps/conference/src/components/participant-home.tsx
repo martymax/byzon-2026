@@ -141,7 +141,7 @@ const ProgramOverview = ({
   event,
   now,
 }: {
-  readonly agenda: ParticipantAgendaResource;
+  readonly agenda?: ParticipantAgendaResource;
   readonly api?: ApiPort;
   readonly event: ParticipantHomeEvent;
   readonly now: string;
@@ -158,7 +158,7 @@ const ProgramOverview = ({
     timezone: event.timezone,
   });
   const nextAgendaItem =
-    agenda.state.status === 'ready'
+    agenda?.state.status === 'ready'
       ? selectNextParticipantAgendaItem(agenda.state.data, now)
       : null;
   const nextAgendaStatus = nextAgendaItem
@@ -231,65 +231,69 @@ const ProgramOverview = ({
           )}
         </Card>
 
-        <Card className="home-card">
-          <p className="home-card-kicker">Moje další položka</p>
-          {nextAgendaItem && nextAgendaStatus ? (
-            <>
-              <p className="home-session-time">
-                {sessionDateTime(
-                  nextAgendaItem.session.startsAt,
-                  agenda.state.status === 'ready'
-                    ? agenda.state.data.eventTimezone
-                    : event.timezone,
-                )}
-              </p>
-              <h3>{nextAgendaItem.session.title}</h3>
-              <p>
-                {nextAgendaStatus.label}. {nextAgendaStatus.detail}
-              </p>
-              <Link
-                className="home-card-link"
-                href={`/app/program/${encodeURIComponent(
-                  nextAgendaItem.session.id,
-                )}`}
-              >
-                Otevřít detail
-              </Link>
-            </>
-          ) : agenda.state.status === 'ready' ? (
-            <div className="home-card-empty" role="status">
-              <h3>
-                {event.phase === 'ended'
-                  ? 'Osobní agenda zůstává dostupná'
-                  : 'Osobní agenda je zatím prázdná'}
-              </h3>
-              <p>
-                {event.phase === 'ended'
-                  ? 'V uloženém plánu si můžete projít body skončené akce.'
-                  : 'V detailu programu si uložte první bod do osobního plánu.'}
-              </p>
-              <Link
-                className="home-card-link"
-                href={event.phase === 'ended' ? '/app/agenda' : '/app/program'}
-              >
-                {event.phase === 'ended'
-                  ? 'Prohlédnout osobní agendu'
-                  : 'Prohlédnout program'}
-              </Link>
-            </div>
-          ) : (
-            <div className="home-card-empty" role="status">
-              <h3>Uložené body zatím nejsou v přehledu dostupné</h3>
-              <p>
-                Soukromý plán na tomto zařízení neodhadujeme ani neukládáme.
-                Aktuální stav zkuste otevřít přímo v agendě.
-              </p>
-              <Link className="home-card-link" href="/app/agenda">
-                Otevřít osobní agendu
-              </Link>
-            </div>
-          )}
-        </Card>
+        {agenda ? (
+          <Card className="home-card">
+            <p className="home-card-kicker">Moje další položka</p>
+            {nextAgendaItem && nextAgendaStatus ? (
+              <>
+                <p className="home-session-time">
+                  {sessionDateTime(
+                    nextAgendaItem.session.startsAt,
+                    agenda.state.status === 'ready'
+                      ? agenda.state.data.eventTimezone
+                      : event.timezone,
+                  )}
+                </p>
+                <h3>{nextAgendaItem.session.title}</h3>
+                <p>
+                  {nextAgendaStatus.label}. {nextAgendaStatus.detail}
+                </p>
+                <Link
+                  className="home-card-link"
+                  href={`/app/program/${encodeURIComponent(
+                    nextAgendaItem.session.id,
+                  )}`}
+                >
+                  Otevřít detail
+                </Link>
+              </>
+            ) : agenda.state.status === 'ready' ? (
+              <div className="home-card-empty" role="status">
+                <h3>
+                  {event.phase === 'ended'
+                    ? 'Osobní agenda zůstává dostupná'
+                    : 'Osobní agenda je zatím prázdná'}
+                </h3>
+                <p>
+                  {event.phase === 'ended'
+                    ? 'V uloženém plánu si můžete projít body skončené akce.'
+                    : 'V detailu programu si uložte první bod do osobního plánu.'}
+                </p>
+                <Link
+                  className="home-card-link"
+                  href={
+                    event.phase === 'ended' ? '/app/agenda' : '/app/program'
+                  }
+                >
+                  {event.phase === 'ended'
+                    ? 'Prohlédnout osobní agendu'
+                    : 'Prohlédnout program'}
+                </Link>
+              </div>
+            ) : (
+              <div className="home-card-empty" role="status">
+                <h3>Uložené body zatím nejsou v přehledu dostupné</h3>
+                <p>
+                  Soukromý plán na tomto zařízení neodhadujeme ani neukládáme.
+                  Aktuální stav zkuste otevřít přímo v agendě.
+                </p>
+                <Link className="home-card-link" href="/app/agenda">
+                  Otevřít osobní agendu
+                </Link>
+              </div>
+            )}
+          </Card>
+        ) : null}
       </div>
     </section>
   );
@@ -361,7 +365,34 @@ const PracticalOverview = ({
   );
 };
 
-const ParticipantHomeContent = ({
+const ParticipantHomeSections = ({
+  agenda,
+  contentApi,
+  event,
+  now,
+  programApi,
+}: {
+  readonly agenda?: ParticipantAgendaResource;
+  readonly contentApi?: ApiPort;
+  readonly event: ParticipantHomeEvent;
+  readonly now: string;
+  readonly programApi?: ApiPort;
+}) => (
+  <>
+    <ProgramOverview
+      event={event}
+      now={now}
+      {...(agenda ? { agenda } : {})}
+      {...(programApi ? { api: programApi } : {})}
+    />
+    <PracticalOverview
+      event={event}
+      {...(contentApi ? { api: contentApi } : {})}
+    />
+  </>
+);
+
+const ParticipantHomeSectionsWithAgenda = ({
   agendaApi,
   contentApi,
   event,
@@ -376,30 +407,27 @@ const ParticipantHomeContent = ({
 }) => {
   const agenda = useParticipantAgendaResource(event.id, agendaApi);
   return (
-    <>
-      <ProgramOverview
-        agenda={agenda}
-        event={event}
-        now={now}
-        {...(programApi ? { api: programApi } : {})}
-      />
-      <PracticalOverview
-        event={event}
-        {...(contentApi ? { api: contentApi } : {})}
-      />
-    </>
+    <ParticipantHomeSections
+      agenda={agenda}
+      event={event}
+      now={now}
+      {...(contentApi ? { contentApi } : {})}
+      {...(programApi ? { programApi } : {})}
+    />
   );
 };
 
 export const ParticipantHome = ({
   agendaApi,
   contentApi,
+  enableAgendaJourney,
   event,
   now,
   programApi,
 }: {
   readonly agendaApi?: ApiPort;
   readonly contentApi?: ApiPort;
+  readonly enableAgendaJourney: boolean;
   readonly event: ParticipantHomeEvent;
   readonly now: string;
   readonly programApi?: ApiPort;
@@ -407,13 +435,24 @@ export const ParticipantHome = ({
   <section className="app-page home-page">
     <PhaseHeader event={event} />
     {event.phase === 'draft' || event.phase === 'archived' ? null : (
-      <ParticipantHomeContent
-        event={event}
-        now={now}
-        {...(agendaApi ? { agendaApi } : {})}
-        {...(contentApi ? { contentApi } : {})}
-        {...(programApi ? { programApi } : {})}
-      />
+      <>
+        {enableAgendaJourney ? (
+          <ParticipantHomeSectionsWithAgenda
+            event={event}
+            now={now}
+            {...(agendaApi ? { agendaApi } : {})}
+            {...(contentApi ? { contentApi } : {})}
+            {...(programApi ? { programApi } : {})}
+          />
+        ) : (
+          <ParticipantHomeSections
+            event={event}
+            now={now}
+            {...(contentApi ? { contentApi } : {})}
+            {...(programApi ? { programApi } : {})}
+          />
+        )}
+      </>
     )}
   </section>
 );

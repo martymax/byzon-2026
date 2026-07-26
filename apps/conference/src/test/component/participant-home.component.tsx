@@ -99,9 +99,11 @@ const HomeProbe = ({
       <ParticipantLayout
         accountApi={apiFor(scopedIdentity, 'component-home-account-probe-0001')}
         accountScope={{ kind: 'active', eventId: event.id }}
+        navigationMode="active-preview"
       >
         <ParticipantHome
           contentApi={apiFor(content, 'component-home-content-0001')}
+          enableAgendaJourney
           event={{ ...event, phase }}
           now={now}
           programApi={apiFor(program, 'component-home-program-0001')}
@@ -204,6 +206,25 @@ describe('F2-02 participant home overview', () => {
     ).not.toContain('Otevřít detail');
   });
 
+  it('does not mount or expose the mock-only agenda outside frontend preview', async () => {
+    const agendaFetch = vi.fn();
+    const screen = await renderComponent(
+      <ParticipantHome
+        agendaApi={createFetchApiClient({ fetch: agendaFetch })}
+        contentApi={apiFor(content, 'component-home-content-production-0001')}
+        enableAgendaJourney={false}
+        event={event}
+        now="2026-09-18T07:30:00.000Z"
+        programApi={apiFor(program, 'component-home-program-production-0001')}
+      />,
+    );
+
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    expect(agendaFetch).not.toHaveBeenCalled();
+    expect(screen.getByText('Moje další položka').elements()).toHaveLength(0);
+    expect(document.querySelectorAll('a[href="/app/agenda"]')).toHaveLength(0);
+  });
+
   it('uses post-event copy and rejects an already ended saved session', async () => {
     const screen = await renderComponent(
       <HomeProbe
@@ -230,6 +251,7 @@ describe('F2-02 participant home overview', () => {
     const screen = await renderComponent(
       <ParticipantHome
         contentApi={api}
+        enableAgendaJourney
         event={{ ...event, phase: 'archived' }}
         now="2026-10-01T08:00:00.000Z"
         programApi={api}
@@ -278,6 +300,7 @@ describe('F2-02 participant home overview', () => {
               ? delayedApi
               : apiFor(content, 'component-home-content-ready-0001')
           }
+          enableAgendaJourney
           event={event}
           now="2026-09-18T07:30:00.000Z"
           programApi={
@@ -321,6 +344,7 @@ describe('F2-02 participant home overview', () => {
     const screen = await renderComponent(
       <ParticipantHome
         contentApi={malformedUnauthorizedApi}
+        enableAgendaJourney
         event={event}
         now="2026-09-18T07:30:00.000Z"
         programApi={apiFor(program, 'component-home-program-malformed-0001')}
@@ -365,6 +389,7 @@ describe('F2-02 participant home overview', () => {
         <CanonicalPrivateClear />
         <ParticipantHome
           contentApi={apiFor(content, 'component-home-content-clear-0001')}
+          enableAgendaJourney
           event={event}
           now="2026-09-18T07:30:00.000Z"
           programApi={apiFor(program, 'component-home-program-clear-0001')}
@@ -414,6 +439,7 @@ describe('F2-02 participant home overview', () => {
         <AccountResourceActivationProbe />
         <ParticipantHome
           contentApi={apiFor(content, 'component-home-content-revoked-0001')}
+          enableAgendaJourney
           event={event}
           now="2026-09-18T07:30:00.000Z"
           programApi={apiFor(program, 'component-home-program-revoked-0001')}

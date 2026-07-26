@@ -32,18 +32,36 @@ describe('participant shell navigation', () => {
     expect(participantNavigationActiveId('/application')).toBe('');
   });
 
-  it('exposes only account-safe destinations after archival', () => {
+  it('keeps production archive navigation on backed destinations', () => {
     expect(
       participantNavigationItemsForMode('archived').map(({ href }) => href),
+    ).toEqual(['/app']);
+  });
+
+  it('exposes mocked account destinations only in archived preview', () => {
+    expect(
+      participantNavigationItemsForMode('archived-preview').map(
+        ({ href }) => href,
+      ),
     ).toEqual(['/app', '/app/soukromi', '/app/nastaveni']);
     expect(
-      participantNavigationItemsForMode('archived').map(({ label }) => label),
+      participantNavigationItemsForMode('archived-preview').map(
+        ({ label }) => label,
+      ),
     ).toEqual(['Přehled', 'Soukromí', 'Nastavení']);
   });
 
-  it('exposes agenda as the fifth active participant destination', () => {
+  it('exposes only production-backed destinations by default', () => {
     expect(
       participantNavigationItemsForMode('active').map(({ href }) => href),
+    ).toEqual(['/app', '/app/program']);
+  });
+
+  it('exposes all mocked participant journeys only in frontend preview', () => {
+    expect(
+      participantNavigationItemsForMode('active-preview').map(
+        ({ href }) => href,
+      ),
     ).toEqual([
       '/app',
       '/app/program',

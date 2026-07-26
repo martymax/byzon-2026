@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const layoutMocks = vi.hoisted(() => ({
   accountScope: vi.fn(),
+  frontendPreviewAvailable: vi.fn(),
   loadParticipantLayoutEventContext: vi.fn(),
   navigation: vi.fn(),
 }));
@@ -10,6 +11,10 @@ const layoutMocks = vi.hoisted(() => ({
 vi.mock('@/server/current-event', () => ({
   loadParticipantLayoutEventContext:
     layoutMocks.loadParticipantLayoutEventContext,
+}));
+
+vi.mock('@/lib/frontend-preview', () => ({
+  isFrontendPreviewAvailable: layoutMocks.frontendPreviewAvailable,
 }));
 
 vi.mock('@/components/participant-layout-shell', () => ({
@@ -23,7 +28,12 @@ vi.mock('@/components/participant-layout-shell', () => ({
       | { readonly kind: 'archived'; readonly eventFingerprint: string }
       | { readonly kind: 'unavailable' };
     readonly children: React.ReactNode;
-    readonly navigationMode?: 'active' | 'archived' | 'unavailable';
+    readonly navigationMode?:
+      | 'active'
+      | 'active-preview'
+      | 'archived'
+      | 'archived-preview'
+      | 'unavailable';
   }) => {
     layoutMocks.accountScope(accountScope);
     layoutMocks.navigation(navigationMode);
@@ -40,6 +50,8 @@ import ParticipantLayout, {
 describe('participant layout event-phase gate', () => {
   beforeEach(() => {
     layoutMocks.accountScope.mockReset();
+    layoutMocks.frontendPreviewAvailable.mockReset();
+    layoutMocks.frontendPreviewAvailable.mockReturnValue(false);
     layoutMocks.loadParticipantLayoutEventContext.mockReset();
     layoutMocks.navigation.mockReset();
   });
@@ -49,12 +61,19 @@ describe('participant layout event-phase gate', () => {
   });
 
   it.each([
-    [{ kind: 'available', event: {} }, 'active'],
-    [{ kind: 'archived' }, 'archived'],
-    [{ kind: 'unavailable' }, 'unavailable'],
-  ] as const)('maps %j to the %s shell', (state, expectedMode) => {
-    expect(participantShellNavigationMode(state)).toBe(expectedMode);
-  });
+    [{ kind: 'available', event: {} }, false, 'active'],
+    [{ kind: 'available', event: {} }, true, 'active-preview'],
+    [{ kind: 'archived' }, false, 'archived'],
+    [{ kind: 'archived' }, true, 'archived-preview'],
+    [{ kind: 'unavailable' }, true, 'unavailable'],
+  ] as const)(
+    'maps %j with preview %s to the %s shell',
+    (state, previewAvailable, expectedMode) => {
+      expect(participantShellNavigationMode(state, previewAvailable)).toBe(
+        expectedMode,
+      );
+    },
+  );
 
   it('projects only the active event id into the private account scope', () => {
     expect(

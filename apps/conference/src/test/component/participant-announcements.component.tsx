@@ -67,6 +67,7 @@ const AnnouncementProbe = ({ children }: { readonly children: ReactNode }) => (
         kind: 'active',
         eventId: announcementFixtureIds.event,
       }}
+      navigationMode="active-preview"
     >
       {children}
     </ParticipantLayout>

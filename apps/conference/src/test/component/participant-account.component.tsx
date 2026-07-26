@@ -216,7 +216,10 @@ const AccountProbe = ({
     style={visualTestStyle}
     tabIndex={-1}
   >
-    <ParticipantLayout accountScope={activeAccountScope}>
+    <ParticipantLayout
+      accountScope={activeAccountScope}
+      navigationMode="active-preview"
+    >
       <ParticipantAccountResourceProvider api={api} scope={activeAccountScope}>
         {children}
       </ParticipantAccountResourceProvider>
@@ -336,7 +339,7 @@ const AccountJourney = ({
           scope={activeAccountScope}
         >
           <AccountProviderLifetime {...(onMount ? { onMount } : {})} />
-          <ParticipantShellNavigation />
+          <ParticipantShellNavigation mode="active-preview" />
           <div className="participant-shell-content">
             {pathname === '/app/profil' ? (
               <ParticipantProfile api={api} />
