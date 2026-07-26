@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 25. července 2026
+> Poslední aktualizace: 26. července 2026
 
 ## Pokyny pro pokračování
 
@@ -19,6 +19,41 @@ Etapu neuzavírej ani nemerguj, dokud nejsou nálezy opravené a ověřené; úp
 kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
+
+- Celý frontendový track `F0` až `F6-05` je dokončený ve stavu
+  `UI ready (mocked)` na `track/frontend-complete` a předává se přes
+  [PR #17](https://github.com/martymax/byzon-2026/pull/17). Syntetické preview
+  se spouští jediným příkazem `pnpm dev:mock`; root nabízí vstupy do
+  účastnické aplikace, organizačního provozu, check-inu a offline centra.
+- Propojené průchody pokrývají aktivaci, identity/onboarding/recovery,
+  participant home/program/agendu/oznámení/vstupenku/účet, kompletní admin
+  provoz a obsah, check-in confirm/undo i PWA/offline lifecycle. Přesné vstupy,
+  routes a scénáře jsou v `docs/frontend-implementation-report.md`.
+- Security a code review všech etap i pozdní post-review oprav skončily
+  `PASS`. Finální hardening uzavřel agenda owner/epoch race, stale auto-sync,
+  mock dependency boundary, E2E preview parity, React keyed-children warning a
+  novou high-severity `brace-expansion` advisory.
+- Kompletní lokální gate je zelený: 736 unit/integration testů, publication
+  4/4 proti PostgreSQL 17, browser komponenty 837/837, Playwright E2E 15/15,
+  Prettier, ESLint, sedm typechecků, static smoke, produkční Next/worker build,
+  source/post-build mock boundary a standalone runtime smoke.
+- Produkční build obsahuje 25 statických app stránek a 26 digestovaných
+  offline assetů. Service worker má 24 057 B, standalone server vrátil `200`
+  pro root/offline/PWA assety/ikony/health a mock runtime v produkčních
+  chunkech není.
+- `pnpm audit --audit-level high` je zelený. Kompatibilní větve používají
+  `brace-expansion 5.0.8`; legacy `minimatch 3.1.5` má malý reprodukovatelný
+  API adapter patch. Zůstává jedna `moderate` transitivní položka starého
+  `esbuild` pouze v dev-toolingu.
+- Produkční auth, autorizované endpointy, skutečný ticket credential,
+  SimpleShop synchronizace, offline lease/replay, staging UAT a fyzická
+  zařízení zůstávají správně backend/provozními handoffy. Nejde o chybějící
+  mockované frontendové obrazovky.
+
+## Historický průběh frontendové větve
+
+Následující body zachovávají etapový stav v okamžiku jednotlivých commitů.
+Aktuální souhrn a konečné počty jsou výše.
 
 - `F3-01` až `F3-05` jsou na `track/frontend-complete` po závěrečném security
   a code review ve stavu `UI ready (mocked)`; oba review skončily `PASS` bez

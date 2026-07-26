@@ -14,10 +14,11 @@ administrátora, operátora sálu, check-in operátora a PWA/offline režim.
 Vývojový mock běží přes stejné typované API porty a stejné striktní Zod
 kontrakty jako budoucí serverová integrace. Mock handlery, přímo injektované
 preview porty a syntetické fixtures smějí být pouze v development/test grafu;
-source boundary tuto závislost aktuálně odmítá a prošla. Čerstvý produkční
-build a post-build artefakty ověří až kompletní finální gate. Serverová preview
-větev poskytuje syntetický aktuální event bez PostgreSQL a aktivuje se jen
-kombinací development režimu a explicitního `BYZON_FRONTEND_PREVIEW`.
+source boundary tuto závislost odmítá a prošla před i po produkčním buildem.
+Čerstvý standalone artefakt byl ověřený také jako skutečně spuštěný server.
+Serverová preview větev poskytuje syntetický aktuální event bez PostgreSQL a
+aktivuje se jen kombinací development režimu a explicitního
+`BYZON_FRONTEND_PREVIEW`.
 
 Hotový frontend neznamená hotový backend, produkční přihlášení, skutečné
 vstupenky, staging UAT ani provozní schválení. UI tyto hranice výslovně
@@ -257,6 +258,11 @@ live/progress region.
   bezdatabázové participant preview `2b7a9d3`, offline packaging `afb1239`,
   obsahové fingerprinty `4772a95` a fail-closed current-shell opravy
   `b6abbb3`; opakovaný nezávislý post-review skončil `PASS`.
+- Finální hardening: preview boundary opravy `4f01336` a `bf786f2`, agenda
+  owner/epoch race a stale sync fencing `5304a64`, stabilní tříviewportový
+  runner `2817953`, mock E2E server `c5d573f`, React 19/SWC keyed-children
+  oprava `206d048` a bezpečný `brace-expansion 5.0.8` backport `0c25160`.
+  Každý pozdní řez prošel samostatným read-only review; výsledky `PASS`.
 
 Potvrzené nálezy nebyly pouze zdokumentované: byly opravené, dostaly regresní
 testy a prošly opakovaným nezávislým review před merge.
@@ -275,12 +281,35 @@ Cílené post-review ověření:
 - F4/F6-scoped ESLint, TypeScript a source mock boundary,
   `git diff --check` a syntax service workeru: `PASS`.
 
-Kompletní před-merge gate je zatím `PENDING`; výše jsou cílené etapové výsledky.
-V samostatném finálním gate se spouští monorepo lint, typecheck, unit testy,
-produkční Next build, source/post-build mock boundary, static-site smoke a
-celý browser component suite serializovaně ve phone/tablet/desktop projektech.
-Přesný souhrn kompletního gate bude zapsaný do závěrečného předávacího reportu
-po posledním čistém běhu před merge.
+Kompletní před-merge lokální gate je `PASS`:
+
+- Prettier, ESLint a všech sedm workspace typechecků;
+- 736 unit/integration testů prošlo a 51 databázových testů bylo při
+  bezdatabázovém běhu očekávaně přeskočeno; opravená publication regrese navíc
+  prošla 4/4 proti dočasné PostgreSQL 17;
+- 60 browser component souborů a 837/837 scénářů prošlo společně v phone,
+  tablet a desktop Chromium;
+- Playwright prošel 15/15 skutečných mock E2E scénářů ve třech viewports,
+  včetně axe, route focusu, navigace, touch targetů, overflow a čisté React
+  konzole;
+- development route sweep ověřil 37 kanonických odpovědí, tři přesné legacy
+  redirecty a jeden očekávaný `404`;
+- static-site smoke ověřil 25 HTML dokumentů a 58 assetů;
+- Next `16.2.11` produkční build vygeneroval 25 statických app stránek,
+  source i post-build mock boundary prošly a worker bundle se sestavil;
+- offline balíček obsahuje 26 digestovaných assetů, manifest verze
+  `21d45c701fdca2fc2952ad445e9b22f93bc769cb483ac9c8811aa6e12a850356`
+  a service worker o 24 057 bytech, tedy pod limitem 24 KiB;
+- standalone runtime vrátil `200` pro root, offline shell, manifest, oba PWA
+  assety, obě ikony a oba health endpointy a zachoval bezpečnostní/cache
+  hlavičky;
+- frozen install je reprodukovatelný a `pnpm audit --audit-level high` končí
+  kódem `0`. Zůstává jedna nesouvisející `moderate` položka ve starém
+  transitivním `esbuild` dev-toolingu.
+
+PR gate spouští stejný formát, lint, typecheck, PostgreSQL integrace, unit,
+produkční build, 837 browser scénářů, 15 E2E scénářů a audit. Merge je povolen
+až na zeleném finálním headu.
 
 ## 10. Otevřené blokátory a backend handoff
 
@@ -305,5 +334,7 @@ Tyto body nejsou chybějící mockované FE průchody:
 ## 11. Git předání
 
 Implementace vznikla na `track/frontend-complete` v malých F0–F6 commitech;
-každý krok byl pushnutý. Větev se merguje do `main` až po úspěšném kompletním
-gate; výsledný merge SHA je součástí závěrečného předání.
+každý krok byl pushnutý. Předání probíhá přes
+[PR #17](https://github.com/martymax/byzon-2026/pull/17) a větev se merguje do
+`main` až po úspěšném kompletním gate. Výsledný merge SHA je součástí
+závěrečného uživatelského reportu.
