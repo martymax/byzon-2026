@@ -104,6 +104,12 @@ Kompletní vývojový frontend nad výhradně syntetickými daty spustíte oddě
 pnpm dev:mock
 ```
 
-Poté otevřete `http://localhost:3000/`. Režim je viditelně označený, všechny
-neobsloužené lokální API požadavky selžou zavřeně a v produkčním buildu nejsou
-mock handlery ani fixtures.
+Poté otevřete `http://localhost:3000/`. `dev:mock` je výhradně development
+režim a je viditelně označený; všechny neobsloužené lokální API požadavky
+selžou zavřeně. Produkční dependency graph používá kanonické fetch adaptery a
+source i post-build kontrola odmítne mock handlery, preview porty a syntetické
+fixtures.
+
+Přehled všech průchodů, rout, syntetických vstupů, kontraktů a otevřených
+integračních blokátorů je v
+[`docs/frontend-implementation-report.md`](docs/frontend-implementation-report.md).

@@ -63,9 +63,10 @@ HTTP response.
   public content. E-mail, user identity, ticket state, private notes and admin
   metadata are absent from every response schema and synthetic fixture.
 - `publishedProgramSnapshotSchema` and
-  `publishedContentSnapshotSchema` exist only for server-side extraction.
-  Browser code consumes the strict `*ResponseSchema` exports through the typed
-  API port.
+  `publishedContentSnapshotSchema` are authoritative for server extraction
+  and trusted immutable admin-preview validation. Participant/public browser
+  clients consume the strict `*ResponseSchema` exports through typed API
+  ports.
 
 ## Activation (`CS-ACT-01`)
 
@@ -129,9 +130,11 @@ non-PII calendar `UID`/`SEQUENCE`, the current participant-owned state,
 canonical capacity and the server-selected action state. No identity of
 another participant is accepted.
 
-Agenda reads are `private, no-store`. Owner-bound offline snapshots remain
-blocked until `CS-OFFLINE-01`; reservation, waitlist and estimate mutations are
-always online-only and require a transport idempotency key. Mutation bodies are
+Agenda HTTP reads are `private, no-store`. `CS-OFFLINE-01` provides
+owner/event-scoped IndexedDB snapshots and add/remove replay guarded by lease
+and revocation epoch; the production feature remains disabled without a real
+`lease-v1` preflight. Reservation, waitlist and estimate mutations are always
+online-only and require a transport idempotency key. Mutation bodies are
 discriminated by action and always carry `sessionId` plus `expectedVersion`.
 Offer decisions additionally require the exact `offerId`; registration
 estimates carry an explicit target boolean and are never implicit toggles.
@@ -185,7 +188,101 @@ snapshot. The `announcement:own:read` permission additionally requires
 bootstrap; servers clamp larger counts instead of emitting a different shape.
 
 Participant read state is P2 data. It is not eligible for shared or
-service-worker caching, and the mutation remains online-only until
-`CS-OFFLINE-01` defines an owner-safe queue and revocation behavior. Advanced
-audience authoring, immutable preview/send and delivery channels remain owned
-by `P8-05`, `P8-06` and `F4-06`.
+service-worker caching. `CS-OFFLINE-01` now defines the owner lease, revocation
+epoch and queue rules required before an offline read-state adapter could be
+enabled; the current participant mutation remains online-only.
+
+The same module also defines the Priority A admin draft, audience preview and
+immutable send slice. Preview binds event, draft fingerprint, audience,
+recipient count and expiry; send requires that exact preview version plus an
+idempotency key and returns a correlated immutable result. Delivery providers,
+advanced targeting and reporting remain server work in `P8-05`/`P8-06`.
+
+## Ticket import (`CS-IMPORT-01`)
+
+`ticket-import.ts` defines an online-only, vendor-neutral CSV/XLSX workflow.
+The browser sends only bounded multipart source metadata and a file to a
+server-side quarantine; raw files, previews and operational PII are forbidden
+from browser persistence and shared/service-worker caches. Rows expose masked
+contacts and one of `new`, `unchanged`, `status_changed`, `conflict` or
+`unknown`, with totals validated against the complete preview.
+
+Apply binds the exact event, preview ID/version and immutable SHA-256 digest,
+requires a visible reason and transport idempotency key, and is rejected while
+any conflict or unknown row remains. Success returns the correlated impact and
+report reference; ambiguous transport outcomes may retry only the exact frozen
+request.
+
+## Operational support (`CS-SUPPORT-01`)
+
+`support.ts` defines bounded POST-based search with at most five masked results
+and explicit `no_match`, `single_match` and `ambiguous` outcomes. Queries,
+names, contacts and reasons never belong in URLs, persistence or caches.
+Reading operational participant data and mutating tickets are separate
+permissions.
+
+Resend, reassign, block, reactivate and transfer requests require the exact
+participant/ticket pair, expected version, valid action-specific target,
+reason and idempotency metadata. Canonical success correlates action, resulting
+record/version and audit reference. Permission loss, logout or event switch
+must synchronously discard all P3 state.
+
+## Check-in (`CS-CHECKIN-01`)
+
+`check-in.ts` is deliberately online-authoritative. Bootstrap binds event,
+station, trusted device, role, permissions, server time and policy. Lookup can
+use camera/manual opaque demo credentials or a selected privacy-safe search
+result; it never performs a hidden check-in mutation. Outcomes cover valid,
+duplicate, cancelled, refunded, blocked and unknown with only minimum masked
+identity.
+
+Confirm and undo are separate idempotent operations. Undo is bounded by the
+canonical server-time window, permission and mandatory reason. Browser
+persistence, an offline queue and the real credential format are outside this
+contract.
+
+## Admin operations (`CS-ADMIN-01`)
+
+`admin.ts` defines the event-scoped context and exact permission set used by
+the Priority A admin shell, plus operations overview, scoped role assignments,
+async exports, reservation/attendance actions, audit browsing and minimal
+event settings. All reads are `private, no-store`; P3 data and mutation drafts
+are online-only.
+
+Mutations carry expected versions, reasons where required and idempotency
+metadata, and return a canonical correlated state plus audit/job reference.
+Self-lockout, last-administrator removal, stale version, forbidden transition
+and export availability are explicit problem branches. The UI role guard is
+never a substitute for server authorization.
+
+The `/admin/obsah` editor requires exact `program:manage` permission and uses
+one typed port for days, venues, rooms, sessions, speakers, partners, practical
+pages and FAQs. Production reads pass explicit fetch response schemas and
+publication uses an immutable canonical preview; only development may inject
+the stateful synthetic preview port. Days may be permanently deleted after an
+explicit acknowledgement; the other seven resources use archive status.
+Archived items remain visible but read-only in the admin list and are excluded
+from publication snapshots, while an archived event makes the whole workspace
+read-only.
+
+## Offline ownership and replay (`CS-OFFLINE-01`)
+
+`offline.ts` separates anonymous published snapshots from owner-bound personal
+data. Public snapshots bind event ID, slug, publication version, expiry and a
+strict `CS-CONTENT-01` payload. Personal agenda storage additionally binds
+event, user, owner lease, revocation epoch and canonical agenda/publication
+versions; authenticated responses are never eligible for the service-worker
+public cache.
+
+Only agenda `add` and `remove` may be queued. Every attempt uses one UUID as
+record ID and idempotency key, has a bounded expiry/attempt count and requires
+a fresh lease preflight immediately before replay. Conflict rebase creates a
+new UUID; expired, failed and superseded records cannot be replayed. Feature
+defaults leave personal cache and replay disabled until a real `lease-v1`
+owner endpoint is integrated.
+
+The service worker accepts only the build-generated complete shell manifest.
+Every shell asset is SHA-256 verified during install, current-cache activation,
+navigation fallback and rollback, so a missing or corrupted active asset fails
+closed. In non-production the registration effect unregisters only the
+same-origin `/sw.js` it owns and never removes MSW or another worker.
