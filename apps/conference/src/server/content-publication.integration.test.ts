@@ -123,6 +123,10 @@ integration('content publication integration', () => {
   });
 
   it('rejects draft changes made after the reviewed preview', async () => {
+    await client.db
+      .update(schema.programSessions)
+      .set({ title: 'Reviewed draft' })
+      .where(eq(schema.programSessions.id, sessionId));
     const reviewed = await previewContentPublication(client.db, eventId);
     await client.db
       .update(schema.programSessions)
