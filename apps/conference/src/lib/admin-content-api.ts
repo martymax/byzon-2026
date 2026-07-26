@@ -1,5 +1,7 @@
 import {
   publishedContentSnapshotSchema,
+  publishedFaqSchema,
+  publishedPracticalPageSchema,
   publishedProgramSnapshotSchema,
 } from '@byzon/domain/contracts';
 import { z } from 'zod';
@@ -222,7 +224,7 @@ const resourceItemSchemas = {
   pages: z
     .object({
       ...versionedItemBase,
-      bodyMarkdown: itemText,
+      bodyMarkdown: publishedPracticalPageSchema.shape.bodyMarkdown,
       kind: z.enum(['practical', 'marketing', 'other']),
       slug: itemSlug,
       status: itemStatus,
@@ -233,7 +235,7 @@ const resourceItemSchemas = {
   faqs: z
     .object({
       ...versionedItemBase,
-      answerMarkdown: itemText,
+      answerMarkdown: publishedFaqSchema.shape.answerMarkdown,
       category: itemNullableText,
       question: itemText,
       status: itemStatus,

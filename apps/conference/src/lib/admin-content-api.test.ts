@@ -84,6 +84,84 @@ describe('admin content fetch port', () => {
     );
   });
 
+  it('accepts the full server-supported Markdown range for pages and FAQs', async () => {
+    const markdown = 'x'.repeat(65_536);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          resource: 'pages',
+          items: [
+            {
+              bodyMarkdown: markdown,
+              eventId: ids.event,
+              id: ids.item,
+              kind: 'practical',
+              slug: 'dlouha-stranka',
+              sortOrder: 0,
+              status: 'draft',
+              title: 'Dlouhá stránka',
+              version: 1,
+            },
+          ],
+          requestId: 'admin-content-test-0001',
+        }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          resource: 'faqs',
+          items: [
+            {
+              answerMarkdown: markdown,
+              category: null,
+              eventId: ids.event,
+              id: ids.item,
+              question: 'Dlouhá odpověď?',
+              sortOrder: 0,
+              status: 'draft',
+              version: 1,
+            },
+          ],
+          requestId: 'admin-content-test-0001',
+        }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          resource: 'pages',
+          items: [
+            {
+              bodyMarkdown: `${markdown}x`,
+              eventId: ids.event,
+              id: ids.item,
+              kind: 'practical',
+              slug: 'prilis-dlouha-stranka',
+              sortOrder: 0,
+              status: 'draft',
+              title: 'Příliš dlouhá stránka',
+              version: 1,
+            },
+          ],
+          requestId: 'admin-content-test-0001',
+        }),
+      );
+    const port = createFetchAdminContentPort(
+      fetcher as unknown as typeof fetch,
+    );
+
+    await expect(port.list(ids.event, 'pages')).resolves.toMatchObject({
+      ok: true,
+      data: { items: [{ bodyMarkdown: markdown }] },
+    });
+    await expect(port.list(ids.event, 'faqs')).resolves.toMatchObject({
+      ok: true,
+      data: { items: [{ answerMarkdown: markdown }] },
+    });
+    await expect(port.list(ids.event, 'pages')).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'invalid_response' },
+    });
+  });
+
   it('sends exact create, update and archive intents and correlates replies', async () => {
     const fetcher = vi
       .fn()
