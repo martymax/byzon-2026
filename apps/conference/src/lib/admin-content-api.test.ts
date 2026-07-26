@@ -143,6 +143,24 @@ describe('admin content fetch port', () => {
           ],
           requestId: 'admin-content-test-0001',
         }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          resource: 'faqs',
+          items: [
+            {
+              answerMarkdown: `${markdown}x`,
+              category: null,
+              eventId: ids.event,
+              id: ids.item,
+              question: 'Příliš dlouhá odpověď?',
+              sortOrder: 0,
+              status: 'draft',
+              version: 1,
+            },
+          ],
+          requestId: 'admin-content-test-0001',
+        }),
       );
     const port = createFetchAdminContentPort(
       fetcher as unknown as typeof fetch,
@@ -157,6 +175,10 @@ describe('admin content fetch port', () => {
       data: { items: [{ answerMarkdown: markdown }] },
     });
     await expect(port.list(ids.event, 'pages')).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'invalid_response' },
+    });
+    await expect(port.list(ids.event, 'faqs')).resolves.toMatchObject({
       ok: false,
       failure: { kind: 'invalid_response' },
     });
