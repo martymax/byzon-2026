@@ -33,8 +33,8 @@ export const ParticipantLayoutShell = ({
         : accountScope.kind;
   return (
     <ParticipantAccountResourceProvider
-      {...(accountApi ? { api: accountApi } : {})}
       key={accountScopeKey}
+      {...(accountApi ? { api: accountApi } : {})}
       scope={accountScope}
     >
       <RouteFocus />

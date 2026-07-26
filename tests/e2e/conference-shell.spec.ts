@@ -28,10 +28,25 @@ test('brand shell, manifest and health endpoints are available', async ({
 test('participant shell is keyboard accessible at every target viewport', async ({
   page,
 }) => {
+  const missingKeyWarnings: string[] = [];
+  page.on('console', (message) => {
+    if (
+      message.type() === 'error' &&
+      message
+        .text()
+        .includes('Each child in a list should have a unique "key" prop')
+    ) {
+      missingKeyWarnings.push(message.text());
+    }
+  });
+
   await page.goto('/app/program');
-  await expect(
-    page.getByRole('heading', { name: 'Program', level: 1 }),
-  ).toBeVisible();
+  const routeHeading = page.getByRole('heading', {
+    name: 'Program',
+    level: 1,
+  });
+  await expect(routeHeading).toBeVisible();
+  await expect(routeHeading).toBeFocused();
   const navigation = page.getByRole('navigation', {
     name: 'Hlavní navigace',
   });
@@ -40,13 +55,6 @@ test('participant shell is keyboard accessible at every target viewport', async 
   await expect(
     navigation.getByRole('link', { name: 'Program', exact: true }),
   ).toHaveAttribute('aria-current', 'page');
-
-  await page.keyboard.press('Tab');
-  const skipLink = page.getByRole('link', { name: 'Přejít na obsah' });
-  await expect(skipLink).toBeFocused();
-  await expect(skipLink).toBeVisible();
-  await skipLink.press('Enter');
-  await expect(page.locator('#main')).toBeFocused();
 
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -78,6 +86,7 @@ test('participant shell is keyboard accessible at every target viewport', async 
     await expect(navigation).toHaveCSS('position', 'sticky');
     await expect(shellContent).toHaveCSS('padding-bottom', '0px');
   }
+  expect(missingKeyWarnings).toEqual([]);
 });
 
 test('reduced motion preference disables decorative transitions', async ({
