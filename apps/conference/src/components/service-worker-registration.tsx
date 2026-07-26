@@ -102,6 +102,13 @@ export const shouldRegisterAppServiceWorker = (
     }
   });
 
+export const shouldUnregisterAppServiceWorker = (
+  scriptUrls: readonly string[],
+  expectedOrigin: string,
+): boolean =>
+  scriptUrls.length > 0 &&
+  shouldRegisterAppServiceWorker(scriptUrls, expectedOrigin);
+
 export const serviceWorkerNotice = ({
   failed,
   installAvailable,
@@ -128,6 +135,21 @@ const registrationWorkers = (
         .filter((worker): worker is ServiceWorker => worker !== null)
         .filter((worker, index, workers) => workers.indexOf(worker) === index)
     : [];
+
+export const unregisterOwnedAppServiceWorkers = async (
+  serviceWorkers: Pick<ServiceWorkerContainer, 'getRegistrations'>,
+  expectedOrigin: string,
+): Promise<number> => {
+  const registrations = await serviceWorkers.getRegistrations();
+  const owned = registrations.filter((registration) =>
+    shouldUnregisterAppServiceWorker(
+      registrationWorkers(registration).map(({ scriptURL }) => scriptURL),
+      expectedOrigin,
+    ),
+  );
+  await Promise.all(owned.map((registration) => registration.unregister()));
+  return owned.length;
+};
 
 export function ServiceWorkerRegistration() {
   const [failed, setFailed] = useState(false);
@@ -160,10 +182,14 @@ export function ServiceWorkerRegistration() {
   }, []);
 
   useEffect(() => {
-    if (
-      !shouldEnableAppServiceWorker(process.env.NODE_ENV) ||
-      !('serviceWorker' in navigator)
-    ) {
+    if (!('serviceWorker' in navigator)) {
+      return;
+    }
+    if (!shouldEnableAppServiceWorker(process.env.NODE_ENV)) {
+      void unregisterOwnedAppServiceWorkers(
+        navigator.serviceWorker,
+        window.location.origin,
+      ).catch(() => undefined);
       return;
     }
 

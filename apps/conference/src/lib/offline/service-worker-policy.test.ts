@@ -31,7 +31,7 @@ describe('application service-worker source policy', () => {
     expect(workerSource).toContain('const SHELL_METADATA_URL');
     expect(workerSource).toContain("importScripts('/sw-shell-manifest.js')");
     expect(workerSource).toContain(
-      'const SHELL_VERSION = `${WORKER_VERSION}-${manifest.version}`;',
+      'const SHELL_VERSION = `${WORKER_VERSION}-${META.version}`;',
     );
   });
 
@@ -51,10 +51,12 @@ describe('application service-worker source policy', () => {
     expect(workerSource).toContain('await caches.delete(SHELL_CACHE)');
     expect(workerSource).toContain('complete: true');
     expect(workerSource).toContain('cacheName: SHELL_CACHE');
-    expect(workerSource).toContain('assets: [...SHELL_ASSETS]');
+    expect(workerSource).toContain('assets: [...ASSETS]');
+    expect(workerSource).toContain('digests: { ...DIGESTS }');
+    expect(workerSource).toContain("crypto.subtle.digest('SHA-256'");
     expect(workerSource).toContain('storedAssetValid');
     expect(workerSource).toContain('response.redirected');
-    expect(workerSource).toContain('SHELL_ASSETS.includes(url.pathname)');
+    expect(workerSource).toContain('ASSETS.includes(url.pathname)');
     expect(messages).toContain("event.data?.type === 'BYZON_SKIP_WAITING'");
     expect(messages).toContain('event.data.version === WORKER_VERSION');
     expect(messages).toContain('self.skipWaiting()');

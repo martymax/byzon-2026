@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   REQUIRED_SHELL_ASSETS,
+  shellAssetDigest,
   shellManifestVersion,
 } from './offline-shell-manifest.mjs';
 
@@ -103,7 +104,7 @@ const checkStandaloneShellManifest = () => {
   }
   const source = readFileSync(standaloneShellManifestPath, 'utf8');
   const match =
-    /^'use strict';\nself\.__BYZON_SHELL_MANIFEST__=Object\.freeze\(\{version:("[0-9a-f]{8}"),assets:Object\.freeze\((\[[^\r\n]+\])\)\}\);\n$/.exec(
+    /^'use strict';\nself\.__BYZON_SHELL_MANIFEST__=Object\.freeze\(\{version:("[0-9a-f]{64}"),assets:Object\.freeze\((\[[^\r\n]+\])\),digests:Object\.freeze\((\{[^\r\n]+\})\)\}\);\n$/.exec(
       source,
     );
   if (!match) {
@@ -115,9 +116,11 @@ const checkStandaloneShellManifest = () => {
 
   let version;
   let assets;
+  let digests;
   try {
     version = JSON.parse(match[1]);
     assets = JSON.parse(match[2]);
+    digests = JSON.parse(match[3]);
   } catch {
     failures.push('.next standalone shell manifest is not valid JSON');
     return;
@@ -127,11 +130,21 @@ const checkStandaloneShellManifest = () => {
     assets.length > 256 ||
     assets.some((asset) => typeof asset !== 'string') ||
     new Set(assets).size !== assets.length ||
+    !digests ||
+    typeof digests !== 'object' ||
+    Array.isArray(digests) ||
+    Object.keys(digests).length !== assets.length ||
+    assets.some(
+      (asset) =>
+        !Object.hasOwn(digests, asset) ||
+        typeof digests[asset] !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(digests[asset]),
+    ) ||
     REQUIRED_SHELL_ASSETS.some((asset) => !assets.includes(asset)) ||
     !assets.some((asset) => asset.endsWith('.css')) ||
     !assets.some((asset) => asset.endsWith('.js')) ||
     !assets.some((asset) => asset.endsWith('.woff2')) ||
-    shellManifestVersion(assets) !== version
+    shellManifestVersion(assets, digests) !== version
   ) {
     failures.push(
       '.next standalone shell manifest is incomplete or has an invalid fingerprint',
@@ -165,7 +178,12 @@ const checkStandaloneShellManifest = () => {
         standaloneAppRoot,
         '.next/server/app/manifest.webmanifest.body',
       );
-    } else if (asset !== '/offline') {
+    } else if (asset === '/offline') {
+      packagedPath = resolve(
+        standaloneAppRoot,
+        '.next/server/app/offline.html',
+      );
+    } else {
       packagedPath = resolve(standaloneAppRoot, 'public', asset.slice(1));
     }
     if (
@@ -174,6 +192,13 @@ const checkStandaloneShellManifest = () => {
     ) {
       failures.push(
         `.next standalone shell asset ${asset} is not packaged as a regular file`,
+      );
+    } else if (
+      packagedPath &&
+      shellAssetDigest(readFileSync(packagedPath)) !== digests[asset]
+    ) {
+      failures.push(
+        `.next standalone shell asset ${asset} does not match its build digest`,
       );
     }
   }

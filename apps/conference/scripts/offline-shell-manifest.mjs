@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { cp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,13 +14,13 @@ const NEXT_STATIC_PREFIX = '/_next/static/';
 const MAX_SHELL_ASSETS = 256;
 const MAX_SHELL_ASSET_BYTES = 2 * 1024 * 1024;
 
-export const shellManifestVersion = (assets) => {
-  let hash = 2_166_136_261;
-  for (const character of JSON.stringify(assets)) {
-    hash = Math.imul(hash ^ character.charCodeAt(0), 16_777_619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
-};
+export const shellAssetDigest = (content) =>
+  createHash('sha256').update(content).digest('hex');
+
+export const shellManifestVersion = (assets, digests) =>
+  shellAssetDigest(
+    JSON.stringify(assets.map((asset) => [asset, digests[asset]])),
+  );
 
 export const extractOfflineShellAssets = (html) => {
   const assets = new Set();
@@ -45,6 +46,30 @@ const assertRegularAsset = async (path, label) => {
   if (!metadata.isFile() || metadata.size > MAX_SHELL_ASSET_BYTES) {
     throw new TypeError(`${label} is not a bounded regular file.`);
   }
+};
+
+const readShellAsset = async ({
+  asset,
+  html,
+  publicDirectory,
+  routeDirectory,
+  staticDirectory,
+}) => {
+  if (asset === '/offline') {
+    const content = Buffer.from(html, 'utf8');
+    if (content.byteLength > MAX_SHELL_ASSET_BYTES) {
+      throw new TypeError(`${asset} is not a bounded regular file.`);
+    }
+    return content;
+  }
+
+  const path = asset.startsWith(NEXT_STATIC_PREFIX)
+    ? join(staticDirectory, asset.slice(NEXT_STATIC_PREFIX.length))
+    : asset === '/manifest.webmanifest' && routeDirectory
+      ? join(routeDirectory, 'manifest.webmanifest.body')
+      : join(publicDirectory, asset.slice(1));
+  await assertRegularAsset(path, asset);
+  return readFile(path);
 };
 
 export const createOfflineShellManifest = async ({
@@ -79,30 +104,35 @@ export const createOfflineShellManifest = async ({
     ) {
       throw new TypeError(`Unsafe offline shell asset ${asset}.`);
     }
-    if (asset.startsWith(NEXT_STATIC_PREFIX)) {
-      await assertRegularAsset(
-        join(staticDirectory, asset.slice(NEXT_STATIC_PREFIX.length)),
-        asset,
-      );
-    } else if (asset === '/manifest.webmanifest' && routeDirectory) {
-      await assertRegularAsset(
-        join(routeDirectory, 'manifest.webmanifest.body'),
-        asset,
-      );
-    } else if (asset !== '/offline') {
-      await assertRegularAsset(join(publicDirectory, asset.slice(1)), asset);
-    }
   }
+  const digestEntries = await Promise.all(
+    assets.map(async (asset) => [
+      asset,
+      shellAssetDigest(
+        await readShellAsset({
+          asset,
+          html,
+          publicDirectory,
+          routeDirectory,
+          staticDirectory,
+        }),
+      ),
+    ]),
+  );
+  const digests = Object.freeze(Object.fromEntries(digestEntries));
   return Object.freeze({
     assets: Object.freeze(assets),
-    version: shellManifestVersion(assets),
+    digests,
+    version: shellManifestVersion(assets, digests),
   });
 };
 
-export const renderOfflineShellManifest = ({ assets, version }) =>
+export const renderOfflineShellManifest = ({ assets, digests, version }) =>
   `'use strict';\nself.__BYZON_SHELL_MANIFEST__=Object.freeze({version:${JSON.stringify(
     version,
-  )},assets:Object.freeze(${JSON.stringify(assets)})});\n`;
+  )},assets:Object.freeze(${JSON.stringify(
+    assets,
+  )}),digests:Object.freeze(${JSON.stringify(digests)})});\n`;
 
 export const packageOfflineShell = async (appRoot) => {
   const nextDirectory = join(appRoot, '.next');

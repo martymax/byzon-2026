@@ -13,21 +13,19 @@ const MAX_PUBLIC_RESPONSE_BYTES = 8 * 1024 * 1024;
 const CONTRACT_VERSION = 1;
 const PUBLIC_TTL = 7 * 24 * 60 * 60 * 1000;
 const PUBLIC_PATH = /^\/api\/v1\/public\/events\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(bootstrap|content)$/;
+const SHA256=/^[0-9a-f]{64}$/;
 const INVALID = Symbol('invalid-public-field');
-const shellVersion = (assets) => {
- let hash = 2166136261;
- for (const character of JSON.stringify(assets)) {
- hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
- }
- return (hash >>> 0).toString(16).padStart(8, '0');
-};
+const sha256=async(content)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',content))].map((byte)=>byte.toString(16).padStart(2,'0')).join('');
+const shellVersion=(assets,digests)=>sha256(new TextEncoder().encode(JSON.stringify(assets.map((asset)=>[asset,digests[asset]]))));
 const validList = (assets) => Array.isArray(assets) && assets.length <= 256 && new Set(assets).size === assets.length && BASE_ASSETS.every((path) => assets.includes(path)) && assets.every((path) => typeof path === 'string' && /^\/[A-Za-z0-9._/-]+$/.test(path) && !path.includes('..'));
-const manifest = self.__BYZON_SHELL_MANIFEST__;
-if (!manifest || !validList(manifest.assets) || !/^[0-9a-f]{8}$/.test(manifest.version) || manifest.version !== shellVersion(manifest.assets)) {
+const validDigests=(assets,digests)=>Object.keys(digests??{}).length===assets.length&&assets.every((asset)=>SHA256.test(digests[asset]??''));
+const META=self.__BYZON_SHELL_MANIFEST__;
+if (!META || !validList(META.assets) || !validDigests(META.assets, META.digests) || !SHA256.test(META.version)) {
  throw new TypeError('Invalid offline shell manifest.');
 }
-const SHELL_ASSETS = Object.freeze([...manifest.assets]);
-const SHELL_VERSION = `${WORKER_VERSION}-${manifest.version}`;
+const ASSETS=Object.freeze([...META.assets]);
+const DIGESTS=Object.freeze({...META.digests});
+const SHELL_VERSION = `${WORKER_VERSION}-${META.version}`;
 const SHELL_CACHE = `${CACHE_NAMESPACE}-shell-${SHELL_VERSION}`;
 const owned = (name) => name === LEGACY_SHELL_CACHE || name.startsWith(`${CACHE_NAMESPACE}-`);
 const bounded = (response, maximum) => {
@@ -66,7 +64,7 @@ const shellAllowed = (path, response, stored = false) => {
  const contentType = response.headers.get('content-type') ?? '';
  return response.ok && response.status === 200 && !response.redirected && (stored ? response.url === '' || response.url === expected.href : response.url === expected.href) && shellType(path, contentType) && responseIsPublic(response) && bounded(response, SHELL_LIMIT);
 };
-const verifyShell = async (path, response) => {
+const verifyShell = async (path, response, digest) => {
  if (!shellAllowed(path, response)) {
  throw new TypeError('Shell asset not safely cacheable.');
  }
@@ -74,19 +72,23 @@ const verifyShell = async (path, response) => {
  if (body.byteLength > SHELL_LIMIT) {
  throw new TypeError('Shell too large.');
  }
+ if ((await sha256(body)) !== digest) {
+ throw new TypeError('Shell digest mismatch.');
+ }
  return new Response(body, {
  status: 200,
  headers: safeHead(response, response.headers.get('content-type') ?? ''),
  });
 };
-const storedAssetValid = async (path, response) => {
+const storedAssetValid = async (path, response, digest) => {
  if (!response || !shellAllowed(path, response, true)) return false;
  const body = await response.clone().arrayBuffer();
- return body.byteLength <= SHELL_LIMIT;
+ return body.byteLength <= SHELL_LIMIT && (await sha256(body)) === digest;
 };
 const precache = async () => {
+ if (await shellVersion(ASSETS,DIGESTS) !== META.version) throw new TypeError('Fingerprint mismatch.');
  const verified = await Promise.all(
- SHELL_ASSETS.map(async (path) => {
+ ASSETS.map(async (path) => {
  const response = await fetch(
  new Request(path, {
  cache: 'reload',
@@ -94,7 +96,7 @@ const precache = async () => {
  redirect: 'error',
  }),
  );
- return [path, await verifyShell(path, response)];
+ return [path, await verifyShell(path, response, DIGESTS[path])];
  }),
  );
  try {
@@ -106,7 +108,8 @@ const precache = async () => {
  {
  complete: true,
  cacheName: SHELL_CACHE,
- assets: [...SHELL_ASSETS],
+ assets: [...ASSETS],
+ digests: { ...DIGESTS },
  installedAt: new Date().toISOString(),
  version: SHELL_VERSION,
  },
@@ -142,11 +145,11 @@ const shellInfo = async (name) => {
  const keys = Object.keys(value ?? {})
  .sort()
  .join(',');
- if (!value || typeof value !== 'object' || Array.isArray(value) || keys !== 'assets,cacheName,complete,installedAt,version' || value.complete !== true || value.cacheName !== name || value.version !== version || !validList(value.assets) || !version.endsWith(`-${shellVersion(value.assets)}`) || (name === SHELL_CACHE && JSON.stringify(value.assets) !== JSON.stringify(SHELL_ASSETS)) || typeof value.installedAt !== 'string' || !Number.isFinite(Date.parse(value.installedAt))) {
+ if (!value || typeof value !== 'object' || Array.isArray(value) || keys !== 'assets,cacheName,complete,digests,installedAt,version' || value.complete !== true || value.cacheName !== name || value.version !== version || !validList(value.assets) || !validDigests(value.assets, value.digests) || !version.endsWith(`-${await shellVersion(value.assets, value.digests)}`) || (name === SHELL_CACHE && (JSON.stringify(value.assets) !== JSON.stringify(ASSETS) || JSON.stringify(value.digests) !== JSON.stringify(DIGESTS))) || typeof value.installedAt !== 'string' || !Number.isFinite(Date.parse(value.installedAt))) {
  return null;
  }
  for (const path of value.assets) {
- if (!(await storedAssetValid(path, await cache.match(path)))) {
+ if (!(await storedAssetValid(path, await cache.match(path), value.digests[path]))) {
  return null;
  }
  }
@@ -557,12 +560,12 @@ const serialPublic = (request) => {
 const cachedPath = (request) => {
  if (request.method !== 'GET') return null;
  const url = new URL(request.url);
- return url.origin === self.location.origin && url.search === '' && SHELL_ASSETS.includes(url.pathname) ? url.pathname : null;
+ return url.origin === self.location.origin && url.search === '' && ASSETS.includes(url.pathname) ? url.pathname : null;
 };
 const cachedShell = async (request, path) => {
  const cache = await caches.open(SHELL_CACHE);
  const cached = await cache.match(path);
- if (await storedAssetValid(path, cached)) return cached;
+ if (await storedAssetValid(path, cached, DIGESTS[path])) return cached;
  if (cached) await cache.delete(path);
  return fetch(
  new Request(request.url, {

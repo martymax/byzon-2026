@@ -6,6 +6,8 @@ import {
   serviceWorkerNotice,
   shouldEnableAppServiceWorker,
   shouldRegisterAppServiceWorker,
+  shouldUnregisterAppServiceWorker,
+  unregisterOwnedAppServiceWorkers,
 } from './service-worker-registration';
 
 const ORIGIN = 'https://app.byzon.test';
@@ -91,6 +93,51 @@ describe('application service worker ownership', () => {
       shouldRegisterAppServiceWorker(['https://other.test/sw.js'], ORIGIN),
     ).toBe(false);
     expect(shouldRegisterAppServiceWorker(['not a URL'], ORIGIN)).toBe(false);
+  });
+
+  it('unregisters only an existing same-origin app worker outside production', async () => {
+    const registration = (
+      scriptURL: string | null,
+    ): ServiceWorkerRegistration => {
+      const worker = scriptURL
+        ? ({ scriptURL } as Pick<ServiceWorker, 'scriptURL'> as ServiceWorker)
+        : null;
+      return {
+        active: worker,
+        installing: null,
+        unregister: vi.fn(async () => true),
+        waiting: null,
+      } as Pick<
+        ServiceWorkerRegistration,
+        'active' | 'installing' | 'unregister' | 'waiting'
+      > as ServiceWorkerRegistration;
+    };
+    const owned = registration(`${ORIGIN}/sw.js`);
+    const mockWorker = registration(`${ORIGIN}/mockServiceWorker.js`);
+    const unknown = registration(null);
+    const serviceWorkers = {
+      getRegistrations: vi.fn(async () => [owned, mockWorker, unknown]),
+    };
+
+    expect(
+      shouldUnregisterAppServiceWorker([`${ORIGIN}/sw.js`], ORIGIN),
+    ).toBe(true);
+    expect(shouldUnregisterAppServiceWorker([], ORIGIN)).toBe(false);
+    expect(
+      shouldUnregisterAppServiceWorker(
+        [`${ORIGIN}/mockServiceWorker.js`],
+        ORIGIN,
+      ),
+    ).toBe(false);
+    await expect(
+      unregisterOwnedAppServiceWorkers(
+        serviceWorkers as Pick<ServiceWorkerContainer, 'getRegistrations'>,
+        ORIGIN,
+      ),
+    ).resolves.toBe(1);
+    expect(owned.unregister).toHaveBeenCalledOnce();
+    expect(mockWorker.unregister).not.toHaveBeenCalled();
+    expect(unknown.unregister).not.toHaveBeenCalled();
   });
 });
 

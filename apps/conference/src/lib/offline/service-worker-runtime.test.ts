@@ -1,3 +1,4 @@
+import { createHash, webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createContext, Script } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,17 +14,32 @@ const SHELL_ASSETS = [
   '/_next/static/chunks/offline.js',
   '/_next/static/media/offline.woff2',
 ] as const;
-const shellManifestVersion = (assets: readonly string[]): string => {
-  let hash = 2_166_136_261;
-  for (const character of JSON.stringify(assets)) {
-    hash = Math.imul(hash ^ character.charCodeAt(0), 16_777_619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
-};
+const shellBody = (path: string): string =>
+  path.endsWith('.svg')
+    ? '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    : `shell:${path}`;
+const shellAssetDigest = (content: string): string =>
+  createHash('sha256').update(content).digest('hex');
+const SHELL_DIGESTS = Object.freeze(
+  Object.fromEntries(
+    SHELL_ASSETS.map((asset) => [asset, shellAssetDigest(shellBody(asset))]),
+  ),
+);
+const shellManifestVersion = (
+  assets: readonly string[],
+  digests: Readonly<Record<string, string>> = SHELL_DIGESTS,
+): string =>
+  shellAssetDigest(
+    JSON.stringify(assets.map((asset) => [asset, digests[asset]])),
+  );
 const shellCacheName = (
   workerVersion: string,
   assets: readonly string[] = SHELL_ASSETS,
-) => `byzon-pwa-shell-${workerVersion}-${shellManifestVersion(assets)}`;
+) =>
+  `byzon-pwa-shell-${workerVersion}-${shellManifestVersion(
+    assets,
+    SHELL_DIGESTS,
+  )}`;
 const CURRENT_SHELL = shellCacheName('2026.07.25.5');
 const workerSource = readFileSync(
   new URL('../../../public/sw.js', import.meta.url),
@@ -102,7 +118,9 @@ type WorkerHandler = (event: {
   waitUntil?(promise: Promise<unknown>): void;
 }) => void;
 
-const createWorkerHarness = () => {
+const createWorkerHarness = (
+  manifestVersion = shellManifestVersion(SHELL_ASSETS, SHELL_DIGESTS),
+) => {
   const caches = new MemoryCacheStorage();
   const handlers = new Map<string, WorkerHandler>();
   let fetchImplementation = async (request: Request): Promise<Response> => {
@@ -116,7 +134,8 @@ const createWorkerHarness = () => {
   const serviceWorker = {
     __BYZON_SHELL_MANIFEST__: Object.freeze({
       assets: Object.freeze([...SHELL_ASSETS]),
-      version: shellManifestVersion(SHELL_ASSETS),
+      digests: SHELL_DIGESTS,
+      version: manifestVersion,
     }),
     addEventListener: (type: string, handler: WorkerHandler) => {
       handlers.set(type, handler);
@@ -135,6 +154,7 @@ const createWorkerHarness = () => {
     URL,
     caches,
     console,
+    crypto: webcrypto,
     fetch: (request: Request) => fetchImplementation(request),
     importScripts: vi.fn(),
     self: serviceWorker,
@@ -195,9 +215,7 @@ const shellResponse = (request: Request): Response => {
               : 'font/woff2';
   return responseAt(
     url.href,
-    extension === 'svg'
-      ? '<svg xmlns="http://www.w3.org/2000/svg"/>'
-      : `shell:${url.pathname}`,
+    shellBody(url.pathname),
     {
       status: 200,
       headers: {
@@ -224,6 +242,7 @@ const seedVerifiedShell = async (
         assets: [...SHELL_ASSETS],
         cacheName: name,
         complete: true,
+        digests: { ...SHELL_DIGESTS },
         installedAt,
         version: name.replace('byzon-pwa-shell-', ''),
       },
@@ -318,6 +337,16 @@ const publicContentWithProgram = (version: number) => ({
 });
 
 describe('service-worker runtime policy', () => {
+  it('rejects a manifest fingerprint that does not match its asset digests', async () => {
+    const worker = createWorkerHarness('0'.repeat(64));
+    worker.setFetch(async (request) => shellResponse(request));
+
+    await expect(worker.dispatchWaitUntil('install')).rejects.toThrow(
+      'Fingerprint mismatch',
+    );
+    expect(await worker.caches.keys()).not.toContain(CURRENT_SHELL);
+  });
+
   it('keeps the old shell intact when a new build install is incomplete', async () => {
     const worker = createWorkerHarness();
     const old = await worker.caches.open('byzon-pwa-shell-2026.07.24.1');
@@ -343,6 +372,27 @@ describe('service-worker runtime policy', () => {
     );
     expect(await worker.caches.keys()).not.toContain(CURRENT_SHELL);
     expect(await old.match('/offline')).toBeDefined();
+  });
+
+  it('rejects a cacheable shell response whose bytes differ from the build manifest', async () => {
+    const worker = createWorkerHarness();
+    worker.setFetch(async (request) => {
+      if (new URL(request.url).pathname === '/icons/icon.svg') {
+        return responseAt(request.url, '<svg><title>tampered</title></svg>', {
+          status: 200,
+          headers: {
+            'cache-control': 'public',
+            'content-type': 'image/svg+xml',
+          },
+        });
+      }
+      return shellResponse(request);
+    });
+
+    await expect(worker.dispatchWaitUntil('install')).rejects.toThrow(
+      'digest mismatch',
+    );
+    expect(await worker.caches.keys()).not.toContain(CURRENT_SHELL);
   });
 
   it('precaches and serves every generated CSS, JS, font and document dependency offline', async () => {
@@ -401,7 +451,7 @@ describe('service-worker runtime policy', () => {
     expect(worker.serviceWorker.clients.claim).toHaveBeenCalledOnce();
   });
 
-  it('rejects rollback caches with a partial manifest, mismatched metadata or unsafe asset', async () => {
+  it('rejects rollback caches with a partial manifest, mismatched metadata, unsafe asset or changed bytes', async () => {
     const worker = createWorkerHarness();
     const partial = await seedVerifiedShell(
       worker.caches,
@@ -421,6 +471,7 @@ describe('service-worker runtime policy', () => {
           assets: [...SHELL_ASSETS],
           cacheName: 'byzon-pwa-shell-other',
           complete: true,
+          digests: { ...SHELL_DIGESTS },
           installedAt: '2026-07-24T08:00:00.000Z',
           version: '2026.07.24.1',
         },
@@ -446,6 +497,25 @@ describe('service-worker runtime policy', () => {
           'content-type': 'image/svg+xml',
         },
       }),
+    );
+    const changed = await seedVerifiedShell(
+      worker.caches,
+      shellCacheName('2026.07.25.2'),
+      '2026-07-25T09:00:00.000Z',
+    );
+    await changed.put(
+      '/icons/icon.svg',
+      responseAt(
+        `${ORIGIN}/icons/icon.svg`,
+        '<svg><title>changed</title></svg>',
+        {
+          status: 200,
+          headers: {
+            'cache-control': 'public',
+            'content-type': 'image/svg+xml',
+          },
+        },
+      ),
     );
     worker.setFetch(async (request) => shellResponse(request));
 

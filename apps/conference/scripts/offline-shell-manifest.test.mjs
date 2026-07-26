@@ -8,6 +8,7 @@ import {
   extractOfflineShellAssets,
   packageOfflineShell,
   renderOfflineShellManifest,
+  shellAssetDigest,
   shellManifestVersion,
 } from './offline-shell-manifest.mjs';
 
@@ -72,10 +73,55 @@ describe('offline shell build manifest', () => {
       '/_next/static/chunks/app.js',
       '/_next/static/media/font.woff2',
     ]);
-    expect(manifest.version).toBe(shellManifestVersion(manifest.assets));
+    expect(Object.keys(manifest.digests)).toEqual(manifest.assets);
+    expect(manifest.digests['/offline']).toBe(
+      shellAssetDigest(completeHtml),
+    );
+    expect(manifest.digests['/icons/icon.svg']).toBe(
+      shellAssetDigest('<svg/>'),
+    );
+    expect(manifest.version).toBe(
+      shellManifestVersion(manifest.assets, manifest.digests),
+    );
     expect(renderOfflineShellManifest(manifest)).toContain(
       'self.__BYZON_SHELL_MANIFEST__=Object.freeze',
     );
+    expect(renderOfflineShellManifest(manifest)).toContain(
+      'digests:Object.freeze',
+    );
+  });
+
+  it('rotates the fingerprint when route or stable asset content changes', async () => {
+    const paths = await fixture();
+    const original = await createOfflineShellManifest({
+      html: completeHtml,
+      ...paths,
+    });
+    const changedRoute = await createOfflineShellManifest({
+      html: completeHtml.replace('ignored', 'changed route copy'),
+      ...paths,
+    });
+
+    expect(changedRoute.assets).toEqual(original.assets);
+    expect(changedRoute.digests['/offline']).not.toBe(
+      original.digests['/offline'],
+    );
+    expect(changedRoute.version).not.toBe(original.version);
+
+    await writeFile(
+      join(paths.publicDirectory, 'icons', 'icon.svg'),
+      '<svg><title>changed</title></svg>',
+    );
+    const changedIcon = await createOfflineShellManifest({
+      html: completeHtml,
+      ...paths,
+    });
+
+    expect(changedIcon.assets).toEqual(original.assets);
+    expect(changedIcon.digests['/icons/icon.svg']).not.toBe(
+      original.digests['/icons/icon.svg'],
+    );
+    expect(changedIcon.version).not.toBe(original.version);
   });
 
   it('fails the production build for an incomplete or missing dependency', async () => {
