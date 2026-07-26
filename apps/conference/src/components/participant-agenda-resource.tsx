@@ -38,6 +38,7 @@ import {
   privateResourceInvalidationReason,
   subscribeToPrivateResourceInvalidation,
   transitionParticipantPrivateResourceScope,
+  waitForParticipantPrivateResourceCleanup,
   type PrivateResourceInvalidationReason,
 } from '@/lib/private-resource-events';
 
@@ -400,6 +401,7 @@ export const useParticipantAgendaResource = (
         syncing: false,
       });
     }
+    const scopeTransition = waitForParticipantPrivateResourceCleanup();
 
     readController.current?.abort();
     const epoch = ++readEpoch.current;
@@ -428,19 +430,21 @@ export const useParticipantAgendaResource = (
       userId: accountUserId,
     };
     const offlineCacheAvailable = offlineParticipantAgendaCacheAvailable();
-    const epochPromise =
-      offlineCacheAvailable && activeOfflineEpoch.current === null
-        ? readParticipantOfflineEpoch().then((offlineEpoch) => {
-            if (
-              !controller.signal.aborted &&
-              mounted.current &&
-              readEpoch.current === epoch
-            ) {
-              activeOfflineEpoch.current = offlineEpoch;
-            }
-            return offlineEpoch;
-          })
-        : Promise.resolve(activeOfflineEpoch.current);
+    const epochPromise = scopeTransition.then(() => {
+      if (!offlineCacheAvailable || activeOfflineEpoch.current !== null) {
+        return activeOfflineEpoch.current;
+      }
+      return readParticipantOfflineEpoch().then((offlineEpoch) => {
+        if (
+          !controller.signal.aborted &&
+          mounted.current &&
+          readEpoch.current === epoch
+        ) {
+          activeOfflineEpoch.current = offlineEpoch;
+        }
+        return offlineEpoch;
+      });
+    });
     readController.current = controller;
     clearTransientState();
     storeState({ status: 'loading' });
@@ -481,8 +485,19 @@ export const useParticipantAgendaResource = (
       }
     };
 
-    void requestParticipantAgenda(api, controller.signal)
+    void epochPromise
+      .then(() => {
+        if (
+          controller.signal.aborted ||
+          !mounted.current ||
+          readEpoch.current !== epoch
+        ) {
+          return null;
+        }
+        return requestParticipantAgenda(api, controller.signal);
+      })
       .then(async (result) => {
+        if (result === null) return;
         if (
           controller.signal.aborted ||
           !mounted.current ||
@@ -500,123 +515,147 @@ export const useParticipantAgendaResource = (
             return;
           }
 
-          storeState({
-            status: 'ready',
-            data: result.data,
-            scopeKey,
-          });
-          setOffline((current) => ({
-            ...current,
-            cached: false,
-            syncing: false,
-          }));
-
           const onlineCanonical = result.data;
-          if (!offlineCacheAvailable) return;
-          void (async () => {
-            try {
-              const offlineEpoch = await epochPromise;
-              if (!offlineEpoch) return;
-              const persisted = await persistCanonicalOfflineAgenda(
+          if (!offlineCacheAvailable) {
+            storeState({
+              status: 'ready',
+              data: onlineCanonical,
+              scopeKey,
+            });
+            setOffline({
+              cached: false,
+              lastSyncedAt: null,
+              queue: EMPTY_OFFLINE_AGENDA_QUEUE,
+              syncing: false,
+            });
+            return;
+          }
+
+          const offlineEpoch = await epochPromise;
+          if (!offlineEpoch) {
+            storeState({ status: 'error' });
+            return;
+          }
+
+          let persisted: Awaited<
+            ReturnType<typeof persistCanonicalOfflineAgenda>
+          >;
+          let pendingQueue: OfflineAgendaQueueSummary;
+          try {
+            [persisted, pendingQueue] = await Promise.all([
+              persistCanonicalOfflineAgenda(
                 offlineScope,
                 onlineCanonical,
                 offlineEpoch,
-              );
-              const pendingQueue = await readOfflineAgendaQueueSummary(
-                offlineScope,
-                offlineEpoch,
-              );
-              if (
-                controller.signal.aborted ||
-                !mounted.current ||
-                readEpoch.current !== epoch
-              ) {
-                return;
-              }
-              if (pendingQueue.total === 0) {
-                setOffline({
-                  cached: false,
-                  lastSyncedAt: persisted.lastSyncedAt,
-                  queue: EMPTY_OFFLINE_AGENDA_QUEUE,
-                  syncing: false,
-                });
-                return;
-              }
+              ),
+              readOfflineAgendaQueueSummary(offlineScope, offlineEpoch),
+            ]);
+          } catch {
+            if (
+              !controller.signal.aborted &&
+              mounted.current &&
+              readEpoch.current === epoch
+            ) {
+              storeState({ status: 'error' });
+            }
+            return;
+          }
+          if (
+            controller.signal.aborted ||
+            !mounted.current ||
+            readEpoch.current !== epoch
+          ) {
+            return;
+          }
 
-              setOffline({
-                cached: false,
-                lastSyncedAt: persisted.lastSyncedAt,
-                queue: pendingQueue,
-                syncing: true,
-              });
-              const synchronized = await syncOfflineAgendaQueue(
-                offlineScope,
-                api,
-                offlineEpoch,
-              );
-              if (synchronized.invalidation) {
-                return;
-              }
-              if (synchronized.blocked) {
-                setOffline((current) => ({
-                  ...current,
-                  queue: synchronized.summary,
-                  syncing: false,
-                }));
-                setFeedback({
-                  kind: 'offline_restricted',
-                  retry: 'none',
-                });
-                return;
-              }
-              if (
-                synchronized.canonical &&
-                !agendaMatchesScope(
-                  synchronized.canonical,
-                  offlineScope,
-                  timezone,
-                )
-              ) {
-                void invalidateParticipantPrivateResources('permission');
-                return;
-              }
-              if (
-                controller.signal.aborted ||
-                !mounted.current ||
-                readEpoch.current !== epoch
-              ) {
-                return;
-              }
-              if (synchronized.canonical) {
-                storeState({
-                  status: 'ready',
-                  data: synchronized.canonical,
-                  scopeKey,
-                });
-              }
-              setOffline({
-                cached: false,
-                lastSyncedAt: new Date().toISOString(),
+          storeState({
+            status: 'ready',
+            data: onlineCanonical,
+            scopeKey,
+          });
+          if (pendingQueue.total === 0) {
+            setOffline({
+              cached: false,
+              lastSyncedAt: persisted.lastSyncedAt,
+              queue: EMPTY_OFFLINE_AGENDA_QUEUE,
+              syncing: false,
+            });
+            return;
+          }
+
+          setOffline({
+            cached: false,
+            lastSyncedAt: persisted.lastSyncedAt,
+            queue: pendingQueue,
+            syncing: true,
+          });
+          try {
+            const synchronized = await syncOfflineAgendaQueue(
+              offlineScope,
+              api,
+              offlineEpoch,
+            );
+            if (
+              controller.signal.aborted ||
+              !mounted.current ||
+              readEpoch.current !== epoch
+            ) {
+              return;
+            }
+            if (synchronized.invalidation) {
+              return;
+            }
+            if (synchronized.blocked) {
+              setOffline((current) => ({
+                ...current,
                 queue: synchronized.summary,
                 syncing: false,
+              }));
+              setFeedback({
+                kind: 'offline_restricted',
+                retry: 'none',
               });
-              const queueFeedback = feedbackForOfflineQueue(
-                synchronized.summary,
-              );
-              if (queueFeedback) {
-                setFeedback(queueFeedback);
-              } else if (synchronized.processed > 0) {
-                setFeedback({ kind: 'synced', retry: 'none' });
-              }
-            } catch {
-              if (mounted.current && readEpoch.current === epoch) {
-                setOffline((current) => ({
-                  ...current,
-                  syncing: false,
-                }));
-              }
+              return;
             }
-          })();
+            if (
+              synchronized.canonical &&
+              !agendaMatchesScope(
+                synchronized.canonical,
+                offlineScope,
+                timezone,
+              )
+            ) {
+              void invalidateParticipantPrivateResources('permission');
+              return;
+            }
+            if (synchronized.canonical) {
+              storeState({
+                status: 'ready',
+                data: synchronized.canonical,
+                scopeKey,
+              });
+            }
+            setOffline({
+              cached: false,
+              lastSyncedAt: new Date().toISOString(),
+              queue: synchronized.summary,
+              syncing: false,
+            });
+            const queueFeedback = feedbackForOfflineQueue(synchronized.summary);
+            if (queueFeedback) {
+              setFeedback(queueFeedback);
+            } else if (synchronized.processed > 0) {
+              setFeedback({ kind: 'synced', retry: 'none' });
+            }
+          } catch {
+            if (mounted.current && readEpoch.current === epoch) {
+              setOffline((current) => ({
+                ...current,
+                syncing: false,
+              }));
+              setFeedback(feedbackForOfflineQueue(pendingQueue));
+            }
+          }
           return;
         }
 
@@ -698,8 +737,6 @@ export const useParticipantAgendaResource = (
         !accountUserId ||
         current.data.userId !== accountUserId ||
         !accountTimezone ||
-        (offlineParticipantAgendaCacheAvailable() &&
-          !activeOfflineEpoch.current) ||
         readOnly
       ) {
         pendingAttempt.current = null;
@@ -708,6 +745,15 @@ export const useParticipantAgendaResource = (
       }
       if (offline.queue.total > 0) {
         setFeedback(feedbackForOfflineQueue(offline.queue));
+        mutationLock.current = false;
+        return;
+      }
+      if (
+        offlineParticipantAgendaCacheAvailable() &&
+        !activeOfflineEpoch.current
+      ) {
+        pendingAttempt.current = null;
+        setFeedback({ kind: 'offline_restricted', retry: 'none' });
         mutationLock.current = false;
         return;
       }

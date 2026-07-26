@@ -25,6 +25,7 @@ interface PrivateResourceBroadcast {
 
 let broadcastChannel: BroadcastChannel | null = null;
 let cleanupTail: Promise<void> = Promise.resolve();
+let scopeTransitionInFlight: Promise<void> | null = null;
 const receivedBroadcastIds = new Set<string>();
 const wipeReasons = new Set<OfflineWipeReason>([
   'logout',
@@ -161,12 +162,43 @@ export const invalidateParticipantPrivateResources = (
 ): Promise<void> =>
   dispatchParticipantPrivateResourceInvalidation(reason, wipeReason, true);
 
-export const transitionParticipantPrivateResourceScope = (): Promise<void> =>
-  dispatchParticipantPrivateResourceInvalidation(
+export const transitionParticipantPrivateResourceScope = (): Promise<void> => {
+  abortParticipantPrivateOperations();
+  if (scopeTransitionInFlight) return scopeTransitionInFlight;
+
+  const transition = dispatchParticipantPrivateResourceInvalidation(
     'permission',
     'switch_account',
     false,
   );
+  scopeTransitionInFlight = transition;
+  void transition.then(
+    () => {
+      if (scopeTransitionInFlight === transition) {
+        scopeTransitionInFlight = null;
+      }
+    },
+    () => {
+      if (scopeTransitionInFlight === transition) {
+        scopeTransitionInFlight = null;
+      }
+    },
+  );
+  return transition;
+};
+
+export const waitForParticipantPrivateResourceCleanup =
+  async (): Promise<void> => {
+    // Let every passive effect in the current task publish its transition,
+    // then keep following the serialized tail until no later wipe was queued.
+    await Promise.resolve();
+    let observedCleanup = cleanupTail;
+    for (;;) {
+      await observedCleanup;
+      if (observedCleanup === cleanupTail) return;
+      observedCleanup = cleanupTail;
+    }
+  };
 
 export const subscribeToPrivateResourceInvalidation = (
   listener: Listener,

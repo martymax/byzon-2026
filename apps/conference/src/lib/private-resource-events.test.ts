@@ -6,6 +6,7 @@ import {
   privateResourceInvalidationReason,
   subscribeToPrivateResourceInvalidation,
   transitionParticipantPrivateResourceScope,
+  waitForParticipantPrivateResourceCleanup,
 } from './private-resource-events.js';
 
 describe('participant private-resource invalidation', () => {
@@ -45,5 +46,18 @@ describe('participant private-resource invalidation', () => {
 
     expect(listener).not.toHaveBeenCalled();
     unsubscribe();
+  });
+
+  it('coalesces concurrent owner transitions behind one cleanup barrier', async () => {
+    const first = transitionParticipantPrivateResourceScope();
+    const duplicate = transitionParticipantPrivateResourceScope();
+    const waiter = waitForParticipantPrivateResourceCleanup();
+
+    expect(duplicate).toBe(first);
+    await Promise.all([first, duplicate, waiter]);
+
+    const later = transitionParticipantPrivateResourceScope();
+    expect(later).not.toBe(first);
+    await later;
   });
 });

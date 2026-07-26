@@ -41,6 +41,7 @@ import {
   wipeAllParticipantOfflineData,
   writeOfflineAgendaSnapshot,
 } from '../../lib/offline/offline-database';
+import { waitForParticipantPrivateResourceCleanup } from '../../lib/private-resource-events';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
@@ -321,8 +322,10 @@ const AgendaResourceProbe = ({
   return <p data-testid="agenda-resource-state">{resource.state.status}</p>;
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.restoreAllMocks();
+  await waitForParticipantPrivateResourceCleanup();
+  await wipeAllParticipantOfflineData('user_request');
   window.history.replaceState({}, '', '/app/agenda');
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -789,7 +792,9 @@ describe('F3-01..F3-05 participant agenda', () => {
         },
       });
       const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-      const button = screen.getByRole('button', { name: buttonName }).element();
+      const buttonLocator = screen.getByRole('button', { name: buttonName });
+      await expect.element(buttonLocator).toBeVisible();
+      const button = buttonLocator.element();
       if (!(button instanceof HTMLButtonElement)) {
         throw new TypeError('Agenda action must render a native button.');
       }
@@ -1204,6 +1209,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     const triggerLocator = screen.getByRole('button', {
       name: 'Rezervovat místo',
     });
+    await expect.element(triggerLocator).toBeVisible();
     const trigger = triggerLocator.element();
     if (!(trigger instanceof HTMLButtonElement)) {
       throw new TypeError('Conflict trigger must render a native button.');
@@ -1471,12 +1477,20 @@ describe('F3-01..F3-05 participant agenda', () => {
       onRead: () => jsonResponse(currentRead),
     });
     let oldResource: ParticipantAgendaResource | undefined;
+    let oldPeerResource: ParticipantAgendaResource | undefined;
     let newResource: ParticipantAgendaResource | undefined;
+    let newPeerResource: ParticipantAgendaResource | undefined;
     const captureOld = (resource: ParticipantAgendaResource) => {
       oldResource = resource;
     };
+    const captureOldPeer = (resource: ParticipantAgendaResource) => {
+      oldPeerResource = resource;
+    };
     const captureNew = (resource: ParticipantAgendaResource) => {
       newResource = resource;
+    };
+    const captureNewPeer = (resource: ParticipantAgendaResource) => {
+      newPeerResource = resource;
     };
 
     try {
@@ -1487,11 +1501,18 @@ describe('F3-01..F3-05 participant agenda', () => {
             eventId={agendaFixtureIds.event}
             onResource={captureOld}
           />
+          <AgendaResourceProbe
+            agendaApi={api}
+            eventId={agendaFixtureIds.event}
+            onResource={captureOldPeer}
+          />
         </AgendaProbe>,
       );
       await vi.waitFor(() => {
         expect(oldResource?.state.status).toBe('ready');
+        expect(oldPeerResource?.state.status).toBe('ready');
         expect(oldResource?.offline.queue.failed).toBe(1);
+        expect(oldPeerResource?.offline.queue.failed).toBe(1);
       });
       const staleDiscard = oldResource!.discardFailedOfflineQueue;
       const staleRetry = oldResource!.retryOfflineQueue;
@@ -1504,18 +1525,53 @@ describe('F3-01..F3-05 participant agenda', () => {
             eventId={agendaFixtureIds.event}
             onResource={captureNew}
           />
+          <AgendaResourceProbe
+            agendaApi={api}
+            eventId={agendaFixtureIds.event}
+            onResource={captureNewPeer}
+          />
         </AgendaProbe>,
       );
       await vi.waitFor(() => {
         expect(newResource?.state.status).toBe('ready');
+        expect(newPeerResource?.state.status).toBe('ready');
         if (newResource?.state.status === 'ready') {
           expect(newResource.state.data.userId).toBe(otherScope.userId);
         }
+        if (newPeerResource?.state.status === 'ready') {
+          expect(newPeerResource.state.data.userId).toBe(otherScope.userId);
+        }
       });
+
+      const switchedScope = {
+        eventId: agendaFixtureIds.event,
+        userId: otherScope.userId,
+      } as const;
+      const switchedEpoch = await readParticipantOfflineEpoch();
+      const switchedQueueRecord = await queueApprovedOfflineAgendaMutation(
+        switchedScope,
+        {
+          action: 'add',
+          expectedVersion: switchedAgenda.version,
+          sessionId: agendaFixtureIds.savedSession,
+        },
+        '01930000-0000-7000-8000-0000000000e3',
+        switchedEpoch,
+      );
+      expect(
+        await listOfflineAgendaQueue(oldScope, {
+          expectedEpoch: switchedEpoch,
+        }),
+      ).toHaveLength(0);
 
       await staleDiscard();
       await staleRetry();
 
+      expect(
+        await listOfflineAgendaQueue(switchedScope, {
+          expectedEpoch: switchedEpoch,
+        }),
+      ).toEqual([switchedQueueRecord]);
       expect(newResource?.feedback).toBeNull();
       expect(newResource?.offline.syncing).toBe(false);
       expect(newResource?.offline.queue).toEqual({
@@ -1526,6 +1582,97 @@ describe('F3-01..F3-05 participant agenda', () => {
         total: 0,
       });
     } finally {
+      await wipeAllParticipantOfflineData('user_request');
+    }
+  });
+
+  it('ignores a late old-owner auto-sync result after an account switch', async () => {
+    const oldScope = {
+      eventId: agendaFixtureIds.event,
+      userId: agendaFixtureIds.user,
+    } as const;
+    const offlineEpoch = await readParticipantOfflineEpoch();
+    await queueApprovedOfflineAgendaMutation(
+      oldScope,
+      {
+        action: 'remove',
+        expectedVersion: participantAgendaFixtures.happy!.version,
+        sessionId: agendaFixtureIds.savedSession,
+      },
+      '01930000-0000-7000-8000-0000000000e4',
+      offlineEpoch,
+    );
+    let currentRead = participantAgendaFixtures.happy!;
+    let readCount = 0;
+    let releaseOldSync: (() => void) | undefined;
+    const oldSyncRead = new Promise<Response>((resolve) => {
+      releaseOldSync = () =>
+        resolve(jsonResponse(participantAgendaFixtures.happy!));
+    });
+    const switchedAgenda = agendaForScope(
+      participantAgendaFixtures.empty!,
+      agendaFixtureIds.event,
+      otherScope.userId,
+    );
+    const switchedIdentity = identityForScope(
+      agendaFixtureIds.event,
+      otherScope.userId,
+    );
+    const { api } = agendaApiFor({
+      onRead: () => {
+        readCount += 1;
+        return readCount === 2 ? oldSyncRead : jsonResponse(currentRead);
+      },
+    });
+    let resource: ParticipantAgendaResource | undefined;
+    const capture = (next: ParticipantAgendaResource) => {
+      resource = next;
+    };
+
+    try {
+      const screen = await renderComponent(
+        <AgendaProbe agendaApi={api}>
+          <AgendaResourceProbe
+            agendaApi={api}
+            eventId={agendaFixtureIds.event}
+            onResource={capture}
+          />
+        </AgendaProbe>,
+      );
+      await vi.waitFor(() => {
+        expect(readCount).toBe(2);
+        expect(resource?.state.status).toBe('ready');
+        expect(resource?.offline.queue.pending).toBe(1);
+        expect(resource?.offline.syncing).toBe(true);
+      });
+
+      currentRead = switchedAgenda;
+      await screen.rerender(
+        <AgendaProbe agendaApi={api} identity={switchedIdentity}>
+          <AgendaResourceProbe
+            agendaApi={api}
+            eventId={agendaFixtureIds.event}
+            onResource={capture}
+          />
+        </AgendaProbe>,
+      );
+      await vi.waitFor(() => {
+        expect(resource?.state.status).toBe('ready');
+        if (resource?.state.status === 'ready') {
+          expect(resource.state.data.userId).toBe(otherScope.userId);
+        }
+        expect(resource?.offline.queue.total).toBe(0);
+        expect(resource?.offline.syncing).toBe(false);
+      });
+
+      releaseOldSync?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(resource?.feedback).toBeNull();
+      expect(resource?.offline.queue.total).toBe(0);
+      expect(resource?.offline.syncing).toBe(false);
+    } finally {
+      releaseOldSync?.();
       await wipeAllParticipantOfflineData('user_request');
     }
   });
