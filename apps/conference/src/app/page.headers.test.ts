@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import nextConfig from '../../next.config';
 
 describe('private root login document policy', () => {
+  it('allows the dedicated Railway mock preview host to connect to dev HMR', () => {
+    expect(nextConfig.allowedDevOrigins).toContain(
+      'byzonconference-fe-mock-preview.up.railway.app',
+    );
+  });
+
   it('serves the login shell as private no-store with no referrer', async () => {
     const rules = await nextConfig.headers?.();
     const rootRule = rules?.find((rule) => rule.source === '/');

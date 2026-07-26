@@ -4,7 +4,10 @@ export const publicShellCacheControl =
   'public, max-age=0, s-maxage=0, must-revalidate';
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['127.0.0.1'],
+  allowedDevOrigins: [
+    '127.0.0.1',
+    'byzonconference-fe-mock-preview.up.railway.app',
+  ],
   output: 'standalone',
   poweredByHeader: false,
   transpilePackages: ['@byzon/config'],
