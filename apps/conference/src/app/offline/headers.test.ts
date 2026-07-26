@@ -11,6 +11,7 @@ describe('public offline shell response policy', () => {
       '/offline',
       '/manifest.webmanifest',
       '/icons/:path*',
+      '/brand/:path*',
     ]) {
       expect(
         rules?.find((rule) => rule.source === source)?.headers,

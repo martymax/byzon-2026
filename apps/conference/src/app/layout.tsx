@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Khand } from 'next/font/google';
+import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AppMain } from '@/components/app-main';
@@ -41,15 +42,17 @@ export default function RootLayout({
           Přejít na obsah
         </a>
         <header className="app-header">
-          <Link className="brand" href="/" aria-label="BYZON 2026 – úvod">
-            <span className="brand-mark" aria-hidden="true">
-              B
-            </span>
-            <span>
-              BYZON <b>2026</b>
-            </span>
+          <Link className="brand" href="/" aria-label="BYZON – přihlášení">
+            <Image
+              alt=""
+              className="brand-logo"
+              height={451}
+              priority
+              src="/brand/logo.png"
+              unoptimized
+              width={2884}
+            />
           </Link>
-          <span className="shell-badge">Konferenční aplikace</span>
         </header>
         <AppMain>{children}</AppMain>
         <ServiceWorkerRegistration />

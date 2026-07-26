@@ -1,12 +1,12 @@
 'use strict';
 importScripts('/sw-shell-manifest.js');
-const WORKER_VERSION = '2026.07.25.5';
+const WORKER_VERSION = '2026.07.26.1';
 const CACHE_NS = 'byzon-pwa';
 const PUBLIC_CACHE = `${CACHE_NS}-public-v3`;
 const LEGACY_SHELL_CACHE = 'byzon-shell-v1';
 const OFFLINE_URL = '/offline';
 const SHELL_META_URL = '/__byzon_pwa_shell_metadata__';
-const BASE_ASSETS = Object.freeze([OFFLINE_URL, '/icons/icon.svg', '/icons/maskable.svg', '/manifest.webmanifest']);
+const BASE_ASSETS = Object.freeze([OFFLINE_URL, '/icons/icon.svg', '/icons/maskable.svg', '/brand/logo.png', '/manifest.webmanifest']);
 const SHELL_LIMIT = 2 * 1024 * 1024;
 const META_LIMIT = 16 * 1024;
 const MAX_PUBLIC_BYTES = 8 * 1024 * 1024;
@@ -58,7 +58,7 @@ const safeHead = (response, contentType) => {
  }
  return headers;
 };
-const shellType = (path, contentType) => (path === OFFLINE_URL ? /^text\/html(?:;|$)/i.test(contentType) : path.endsWith('.svg') ? /^image\/svg\+xml(?:;|$)/i.test(contentType) : path.endsWith('.css') ? /^text\/css(?:;|$)/i.test(contentType) : path.endsWith('.js') ? /^(?:application|text)\/javascript(?:;|$)/i.test(contentType) : path.endsWith('.woff2') ? /^font\/woff2(?:;|$)/i.test(contentType) : path === '/manifest.webmanifest' && /^(?:application\/manifest\+json|application\/json)(?:;|$)/i.test(contentType));
+const shellType = (path, contentType) => (path === OFFLINE_URL ? /^text\/html(?:;|$)/i.test(contentType) : path.endsWith('.svg') ? /^image\/svg\+xml(?:;|$)/i.test(contentType) : path.endsWith('.png') ? /^image\/png(?:;|$)/i.test(contentType) : path.endsWith('.css') ? /^text\/css(?:;|$)/i.test(contentType) : path.endsWith('.js') ? /^(?:application|text)\/javascript(?:;|$)/i.test(contentType) : path.endsWith('.woff2') ? /^font\/woff2(?:;|$)/i.test(contentType) : path === '/manifest.webmanifest' && /^(?:application\/manifest\+json|application\/json)(?:;|$)/i.test(contentType));
 const shellAllowed = (path, response, stored = false) => {
  const expected = new URL(path, self.location.origin);
  const contentType = response.headers.get('content-type') ?? '';

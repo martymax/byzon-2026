@@ -69,6 +69,7 @@ const runtimeSecret = (prefix: string): string => {
 export const RecoveryForm = ({
   api = browserActivationApi,
   mode = 'recovery',
+  presentation = 'recovery',
   returnTo = '/app',
   createIdempotencyKey = () => runtimeSecret('recovery-request'),
   createMockLinkToken = (destination) =>
@@ -76,10 +77,12 @@ export const RecoveryForm = ({
 }: {
   readonly api?: ApiPort;
   readonly mode?: Extract<LoginMode, 'recovery' | 'switch'>;
+  readonly presentation?: 'login' | 'recovery';
   readonly returnTo?: ActivationReturnTo;
   readonly createIdempotencyKey?: () => string;
   readonly createMockLinkToken?: (destination: ActivationReturnTo) => string;
 }) => {
+  const isLogin = mode === 'recovery' && presentation === 'login';
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string>();
   const [failure, setFailure] = useState<RecoveryFailure>();
@@ -182,18 +185,24 @@ export const RecoveryForm = ({
   if (sent) {
     return (
       <section className="activation-form-page">
-        <p className="eyebrow">Obnova přístupu</p>
+        <p className="eyebrow">{isLogin ? 'Přihlášení' : 'Obnova přístupu'}</p>
         <h1 data-route-heading ref={sentHeading} tabIndex={-1}>
           Zkontrolujte e-mail
         </h1>
         <StatePanel
           action={
             <ActionLink href={sent.mockLink}>
-              Otevřít syntetický odkaz pro obnovu
+              {isLogin
+                ? 'Otevřít syntetický odkaz pro přihlášení'
+                : 'Otevřít syntetický odkaz pro obnovu'}
             </ActionLink>
           }
           kind="empty"
-          title="Pokud lze přístup obnovit, odkaz byl odeslán"
+          title={
+            isLogin
+              ? 'Pokud lze účet přihlásit, odkaz byl odeslán'
+              : 'Pokud lze přístup obnovit, odkaz byl odeslán'
+          }
         >
           <p>
             Odpověď je stejná pro existující i neexistující účet. V mock režimu
@@ -213,16 +222,23 @@ export const RecoveryForm = ({
     <section className="activation-form-page">
       <header>
         <p className="eyebrow">
-          {mode === 'switch' ? 'Jiný účet' : 'Obnova přístupu'}
+          {mode === 'switch'
+            ? 'Jiný účet'
+            : isLogin
+              ? 'Konferenční aplikace'
+              : 'Obnova přístupu'}
         </p>
         <h1 data-route-heading tabIndex={-1}>
           {mode === 'switch'
             ? 'Přihlaste se jiným účtem'
-            : 'Obnovte bezpečný přístup'}
+            : isLogin
+              ? 'Přihlaste se do BYZON'
+              : 'Obnovte bezpečný přístup'}
         </h1>
         <p className="lead">
-          Pošleme jednorázový odkaz. Nikdy nepotvrdíme, zda zadaný účet
-          existuje.
+          {isLogin
+            ? 'Pošleme vám jednorázový přihlašovací odkaz na e-mail. Heslo nepotřebujete.'
+            : 'Pošleme jednorázový odkaz. Nikdy nepotvrdíme, zda zadaný účet existuje.'}
         </p>
       </header>
 
@@ -292,10 +308,10 @@ export const RecoveryForm = ({
         </FormField>
         <div className="activation-form-actions">
           <ActionLink href="/aktivace" variant="quiet">
-            Zpět na aktivaci
+            {isLogin ? 'Aktivovat vstupenku' : 'Zpět na aktivaci'}
           </ActionLink>
           <Button loading={submitting} loadingLabel="Odesílám…" type="submit">
-            Poslat jednorázový odkaz
+            {isLogin ? 'Poslat přihlašovací odkaz' : 'Poslat jednorázový odkaz'}
           </Button>
         </div>
       </form>

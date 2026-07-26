@@ -84,6 +84,11 @@ const renderIndicator = (state: IndicatorState): void => {
       color: var(--byzon-danger, #b42318);
       background: var(--byzon-danger-soft, #ffebe9);
     }
+    @media (max-width: 47.999rem) {
+      body:not(:has(.ui-participant-nav)):not(:has([data-checkin-route])) #${INDICATOR_ID} {
+        bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+      }
+    }
   `;
   document.head.append(style);
 

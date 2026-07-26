@@ -28,6 +28,26 @@ export type ActivationEntryState =
       readonly data: ActivationLandingResponse;
     };
 
+const AUTOMATIC_SAFE_READ_RETRY_MS = 1_000;
+
+const waitForSafeReadRetry = (
+  signal: AbortSignal,
+  delayMs = AUTOMATIC_SAFE_READ_RETRY_MS,
+): Promise<boolean> => {
+  if (signal.aborted) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const cancel = () => {
+      globalThis.clearTimeout(timeout);
+      resolve(false);
+    };
+    const timeout = globalThis.setTimeout(() => {
+      signal.removeEventListener('abort', cancel);
+      resolve(true);
+    }, delayMs);
+    signal.addEventListener('abort', cancel, { once: true });
+  });
+};
+
 const mapFailure = (
   failure: ApiFailure<ActivationLandingProblem>,
 ): Exclude<ActivationEntryState, { readonly status: 'ready' }> | null => {
@@ -63,32 +83,36 @@ export const useActivationEntry = (
 
   useEffect(() => {
     const controller = new AbortController();
-    void requestActivationLanding(api, controller.signal)
-      .then(
-        (
-          result: ApiResult<
-            ActivationLandingResponse,
-            ActivationLandingProblem
-          >,
-        ) => {
-          if (controller.signal.aborted) return;
-          if (result.ok) {
-            setState(
-              result.kind === 'success'
-                ? { status: 'ready', data: result.data, attempt }
-                : { status: 'error', attempt },
-            );
-            return;
-          }
-          const failure = mapFailure(result.failure);
-          if (failure) setState({ ...failure, attempt });
-        },
-      )
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setState({ status: 'error', attempt });
-        }
-      });
+    const load = async () => {
+      let result: ApiResult<
+        ActivationLandingResponse,
+        ActivationLandingProblem
+      > = await requestActivationLanding(api, controller.signal);
+      if (
+        !result.ok &&
+        result.failure.kind === 'invalid_response' &&
+        (await waitForSafeReadRetry(controller.signal))
+      ) {
+        result = await requestActivationLanding(api, controller.signal);
+      }
+      if (controller.signal.aborted) return;
+      if (result.ok) {
+        setState(
+          result.kind === 'success'
+            ? { status: 'ready', data: result.data, attempt }
+            : { status: 'error', attempt },
+        );
+        return;
+      }
+      const failure = mapFailure(result.failure);
+      if (failure) setState({ ...failure, attempt });
+    };
+
+    void load().catch(() => {
+      if (!controller.signal.aborted) {
+        setState({ status: 'error', attempt });
+      }
+    });
     return () => controller.abort();
   }, [api, attempt]);
 

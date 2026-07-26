@@ -31,10 +31,12 @@ const LoginGate = ({
 export const LoginFlow = ({
   api = browserActivationApi,
   mode,
+  presentation = 'recovery',
   returnTo,
 }: {
   readonly api?: ApiPort;
   readonly mode: Extract<LoginMode, 'recovery' | 'switch'>;
+  readonly presentation?: 'login' | 'recovery';
   readonly returnTo: ActivationReturnTo;
 }) => {
   const entry = useActivationEntry(api);
@@ -99,5 +101,12 @@ export const LoginFlow = ({
     );
   }
 
-  return <RecoveryForm api={api} mode={mode} returnTo={returnTo} />;
+  return (
+    <RecoveryForm
+      api={api}
+      mode={mode}
+      presentation={presentation}
+      returnTo={returnTo}
+    />
+  );
 };

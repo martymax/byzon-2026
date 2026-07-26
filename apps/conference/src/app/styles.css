@@ -61,43 +61,13 @@ h5,
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
   min-height: var(--byzon-touch-target);
-  color: var(--ink);
-  font-size: 1.25rem;
-  font-weight: 700;
   text-decoration: none;
-  letter-spacing: 0.04em;
 }
-.brand b {
-  color: var(--pink);
-}
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 0.75rem;
-  background: var(--pink);
-  color: white;
-  font-size: 1.5rem;
-  transform: rotate(-4deg);
-}
-.shell-badge {
-  padding: 0.35rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--byzon-surface-translucent);
-  font-size: 0.9rem;
-}
-.hero {
-  min-height: calc(100vh - 5rem);
-  display: grid;
-  place-items: center;
-  padding: 3rem 1.25rem 7rem;
-}
-.hero-card {
-  width: min(100%, 58rem);
+.brand-logo {
+  display: block;
+  width: clamp(9rem, 24vw, 11.875rem);
+  height: auto;
 }
 .eyebrow {
   color: var(--pink-dark);
@@ -120,35 +90,6 @@ h1 span {
   max-width: 38rem;
   font-size: clamp(1.25rem, 3vw, 1.7rem);
   line-height: 1.35;
-}
-.status-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  width: fit-content;
-  margin-top: 2.5rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  background: white;
-  box-shadow: var(--byzon-shadow-md);
-}
-.status-card strong,
-.status-card small {
-  display: block;
-}
-.status-card strong {
-  color: var(--ink);
-}
-.status-card small {
-  font-size: 0.9rem;
-}
-.status-dot {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-  background: var(--byzon-success);
-  box-shadow: 0 0 0 0.3rem var(--byzon-success-soft);
 }
 .message-page {
   max-width: 42rem;
@@ -177,44 +118,6 @@ h1 span {
 }
 .button:hover {
   background: var(--byzon-brand-active);
-}
-.preview-journeys {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-}
-.preview-journeys a {
-  min-width: 0;
-  min-height: var(--byzon-touch-target);
-  display: grid;
-  align-content: center;
-  gap: 0.25rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--byzon-border);
-  border-radius: var(--byzon-radius-md);
-  color: var(--byzon-ink);
-  background: var(--byzon-surface);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-.preview-journeys a:hover {
-  border-color: var(--byzon-brand-active);
-  box-shadow: var(--byzon-shadow-sm);
-}
-.preview-journeys a:focus-visible {
-  outline: 3px solid var(--byzon-focus);
-  outline-offset: 3px;
-}
-.preview-journeys span,
-.preview-disclaimer {
-  color: var(--byzon-text-muted);
-  font-size: 0.875rem;
-}
-.preview-disclaimer {
-  max-width: 68ch;
-  margin-top: 1rem;
 }
 .participant-shell-content {
   min-width: 0;
@@ -1310,12 +1213,6 @@ main > .ui-participant-nav-spacer {
   gap: 0.4rem;
 }
 @media (max-width: 36rem) {
-  .shell-badge {
-    display: none;
-  }
-  .status-card {
-    width: 100%;
-  }
   .filter-bar {
     grid-template-columns: 1fr;
   }
@@ -1402,12 +1299,6 @@ main > .ui-participant-nav-spacer {
     transition:
       background-color var(--byzon-motion-fast) var(--byzon-ease),
       border-color var(--byzon-motion-fast) var(--byzon-ease);
-  }
-  .brand-mark {
-    transition: transform 0.2s;
-  }
-  .brand:hover .brand-mark {
-    transform: rotate(2deg) scale(1.05);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1519,6 +1410,8 @@ main > .ui-participant-nav-spacer {
   font-weight: 700;
 }
 .preview-disclaimer {
+  max-width: 68ch;
+  margin-top: 1rem;
   padding: 1rem;
   border: 1px dashed var(--byzon-warning);
   border-radius: var(--byzon-radius-md);

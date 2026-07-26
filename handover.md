@@ -23,8 +23,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Celý frontendový track `F0` až `F6-05` je dokončený ve stavu
   `UI ready (mocked)` na `track/frontend-complete` a předává se přes
   [PR #17](https://github.com/martymax/byzon-2026/pull/17). Syntetické preview
-  se spouští jediným příkazem `pnpm dev:mock`; root nabízí vstupy do
-  účastnické aplikace, organizačního provozu, check-inu a offline centra.
+  se spouští jediným příkazem `pnpm dev:mock`; root nabízí rovnou passwordless
+  přihlášení a aktivaci vstupenky, ostatní průchody jsou dostupné na přímých
+  routes `/app`, `/admin`, `/check-in` a `/offline`.
 - Propojené průchody pokrývají aktivaci, identity/onboarding/recovery,
   participant home/program/agendu/oznámení/vstupenku/účet, kompletní admin
   provoz a obsah, check-in confirm/undo i PWA/offline lifecycle. Přesné vstupy,
@@ -35,14 +36,20 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   novou high-severity `brace-expansion` advisory. Následný PR rereview navíc
   oddělil mock-only participant a archivní navigaci/agendu od produkčního
   režimu; oba P1 thready jsou opravené, otestované a uzavřené.
-- Kompletní lokální gate je zelený: 747 unit/integration testů, publication
+- Před-merge gate PR #17 byl zelený: 747 unit/integration testů, publication
   4/4 proti PostgreSQL 17, browser komponenty 840/840, Playwright E2E 15/15,
   Prettier, ESLint, sedm typechecků, static smoke, produkční Next/worker build,
   source/post-build mock boundary a standalone runtime smoke.
-- Produkční build obsahuje 25 statických app stránek a 26 digestovaných
-  offline assetů. Service worker má 24 057 B, standalone server vrátil `200`
+- Produkční build PR #17 obsahoval 25 statických app stránek a 26 digestovaných
+  offline assetů. Service worker měl 24 057 B, standalone server vrátil `200`
   pro root/offline/PWA assety/ikony/health a mock runtime v produkčních
   chunkech není.
+- Následná korekce rootu na přímé přihlášení prošla 29/29 cílenými unit/PWA
+  testy, 45/45 browser component běhy, 15/15 mock E2E scénáři a static smoke
+  všech 25 stránek. Aktuální offline shell má 27 assetů včetně oficiálního
+  loga, manifest
+  `ec4b7f4743633482876c658d157532327303ae529da2b1613f5198871a475556`
+  a service worker 24 142 B.
 - `pnpm audit --audit-level high` je zelený. Kompatibilní větve používají
   `brace-expansion 5.0.8`; legacy `minimatch 3.1.5` má malý reprodukovatelný
   API adapter patch. Zůstává jedna `moderate` transitivní položka starého
@@ -256,8 +263,9 @@ Aktuální souhrn a konečné počty jsou výše.
   handshake neodemkne `BLOCKER-AUTH-01`.
 - Development-only `/aktivace` pokrývá anonymní, rozpracovaný, aktivovaný,
   suspended, před/po/archivně uzavřený, loading, offline, error a
-  session-expired stav. Root v developmentu odkazuje do mock průchodu;
-  `pnpm dev:mock` jej spustí s viditelným syntetickým režimem. Cíleně prošlo
+  session-expired stav. Root v developmentu nabízí přihlášení a odkazuje na
+  aktivační mock průchod; `pnpm dev:mock` jej spustí s viditelným syntetickým
+  režimem. Cíleně prošlo
   21 unit/contract/fixture testů, 18 browser komponentových scénářů ve třech
   viewports, axe, overflow, `44 px`, ESLint, Prettier a typecheck.
 - Kompletační práce pokračuje lineárně na

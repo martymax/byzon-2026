@@ -88,6 +88,14 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     required_markers = {
         "homepage skip link": (home, 'href="#main"'),
         "homepage Czech language": (home, '<html lang="cs">'),
+        "conference app desktop link": (
+            home,
+            '<a href="https://app.byzon.cz/">Konferenční aplikace</a>',
+        ),
+        "conference app mobile link": (
+            home,
+            '<a class="nav-link" href="https://app.byzon.cz/" data-drawer-close>Konferenční aplikace</a>',
+        ),
         "program heading": (program, content["program"]["title"]),  # type: ignore[index]
         "SimpleShop form id": (
             checkout,

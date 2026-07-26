@@ -40,10 +40,12 @@ const RecoveryProbe = ({
   api,
   createMockLinkToken = () =>
     'recovery-app:00000000-0000-4000-8000-000000000001',
+  presentation = 'recovery',
   returnTo = '/app',
 }: {
   readonly api: ApiPort;
   readonly createMockLinkToken?: (destination: ActivationReturnTo) => string;
+  readonly presentation?: 'login' | 'recovery';
   readonly returnTo?: ActivationReturnTo;
 }) => (
   <main id="main" tabIndex={-1}>
@@ -52,6 +54,7 @@ const RecoveryProbe = ({
         api={api}
         createIdempotencyKey={() => 'recovery-component-0001'}
         createMockLinkToken={createMockLinkToken}
+        presentation={presentation}
         returnTo={returnTo}
       />
     </LoginLayout>
@@ -65,6 +68,119 @@ beforeEach(() => {
 });
 
 describe('F1-06 recovery and safe session exit', () => {
+  it('presents the root recovery mechanism as direct passwordless login', async () => {
+    const screen = await renderComponent(
+      <RecoveryProbe
+        api={successApi(activationRecoveryFixtures.accepted)}
+        presentation="login"
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Přihlaste se do BYZON' }))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('button', { name: 'Poslat přihlašovací odkaz' }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Aktivovat vstupenku' }))
+      .toBeVisible();
+
+    await screen.getByLabelText('E-mail').fill('alex@example.test');
+    await screen
+      .getByRole('button', { name: 'Poslat přihlašovací odkaz' })
+      .click();
+
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Otevřít syntetický odkaz pro přihlášení',
+        }),
+      )
+      .toBeVisible();
+  });
+
+  it('recovers the initial safe read once when the mock worker wins a cold-start race', async () => {
+    let requests = 0;
+    const api: ApiPort = {
+      request: async (endpoint) => {
+        requests += 1;
+        if (requests === 1) {
+          return {
+            ok: false,
+            kind: 'failure',
+            failure: { kind: 'invalid_response' },
+          };
+        }
+        return {
+          ok: true,
+          kind: 'success',
+          status: 200,
+          data: endpoint.successSchema.parse(
+            activationLandingFixtures.anonymous,
+          ),
+          metadata,
+        };
+      },
+    };
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <LoginLayout>
+          <LoginFlow
+            api={api}
+            mode="recovery"
+            presentation="login"
+            returnTo="/app"
+          />
+        </LoginLayout>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Přihlaste se do BYZON' }))
+      .toBeVisible();
+    expect(requests).toBe(2);
+  });
+
+  it('does not stack another retry on a transport failure already handled by the API client', async () => {
+    let requests = 0;
+    const api: ApiPort = {
+      request: async () => {
+        requests += 1;
+        return {
+          ok: false,
+          kind: 'failure',
+          failure: { kind: 'transport' },
+        };
+      },
+    };
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <LoginLayout>
+          <LoginFlow
+            api={api}
+            mode="recovery"
+            presentation="login"
+            returnTo="/app"
+          />
+        </LoginLayout>
+      </main>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Přihlášení teď nelze otevřít',
+        }),
+      )
+      .toBeVisible();
+    // The browser component harness mounts effects twice in development mode.
+    // A second retry layer would increase this count beyond those two mounts.
+    expect(requests).toBe(2);
+  });
+
   it('submits recovery once and does not retain or reveal the email', async () => {
     const calls: RecordedRequest[] = [];
     const screen = await renderComponent(

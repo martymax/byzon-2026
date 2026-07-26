@@ -7,6 +7,7 @@ export const REQUIRED_SHELL_ASSETS = Object.freeze([
   '/offline',
   '/icons/icon.svg',
   '/icons/maskable.svg',
+  '/brand/logo.png',
   '/manifest.webmanifest',
 ]);
 
@@ -28,6 +29,7 @@ export const extractOfflineShellAssets = (html) => {
     const asset = match[1];
     if (
       asset === '/manifest.webmanifest' ||
+      asset === '/brand/logo.png' ||
       asset.startsWith(NEXT_STATIC_PREFIX)
     ) {
       assets.add(asset);

@@ -9,6 +9,7 @@ const SHELL_ASSETS = [
   '/offline',
   '/icons/icon.svg',
   '/icons/maskable.svg',
+  '/brand/logo.png',
   '/manifest.webmanifest',
   '/_next/static/chunks/offline.css',
   '/_next/static/chunks/offline.js',
@@ -40,7 +41,7 @@ const shellCacheName = (
     assets,
     SHELL_DIGESTS,
   )}`;
-const CURRENT_SHELL = shellCacheName('2026.07.25.5');
+const CURRENT_SHELL = shellCacheName('2026.07.26.1');
 const workerSource = readFileSync(
   new URL('../../../public/sw.js', import.meta.url),
   'utf8',
@@ -208,11 +209,13 @@ const shellResponse = (request: Request): Response => {
         ? 'application/manifest+json'
         : extension === 'svg'
           ? 'image/svg+xml'
-          : extension === 'css'
-            ? 'text/css'
-            : extension === 'js'
-              ? 'application/javascript'
-              : 'font/woff2';
+          : extension === 'png'
+            ? 'image/png'
+            : extension === 'css'
+              ? 'text/css'
+              : extension === 'js'
+                ? 'application/javascript'
+                : 'font/woff2';
   return responseAt(url.href, shellBody(url.pathname), {
     status: 200,
     headers: {
@@ -595,7 +598,7 @@ describe('service-worker runtime policy', () => {
     expect(replies).toEqual([
       {
         type: 'BYZON_WORKER_VERSION',
-        version: '2026.07.25.5',
+        version: '2026.07.26.1',
       },
     ]);
 
@@ -615,7 +618,7 @@ describe('service-worker runtime policy', () => {
     worker.handlers.get('message')?.({
       data: {
         type: 'BYZON_SKIP_WAITING',
-        version: '2026.07.25.5',
+        version: '2026.07.26.1',
       },
       waitUntil: (promise) => {
         completion = promise;

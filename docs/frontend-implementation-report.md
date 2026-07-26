@@ -37,9 +37,11 @@ pnpm install --frozen-lockfile
 pnpm dev:mock
 ```
 
-Poté otevřete `http://localhost:3000/`. Úvodní stránka nabízí čtyři hlavní
-průchody: účastnickou aplikaci, organizační provoz, check-in a offline centrum.
-Všechny obrazovky jsou viditelně označené jako syntetické preview.
+Poté otevřete `http://localhost:3000/`. Root zobrazuje rovnou passwordless
+přihlášení a jako sekundární cestu aktivaci vstupenky. Ostatní syntetické
+průchody zůstávají dostupné přímo na `/app`, `/admin`, `/check-in` a
+`/offline`; marketingový rozcestník patří na statický web, ne do aplikace.
+Všechny mockované obrazovky jsou viditelně označené jako syntetické preview.
 
 ## 3. Rychlé testovací vstupy
 
@@ -96,12 +98,14 @@ dokud server neposkytne skutečný `lease-v1` preflight.
 
 ### Veřejný vstup, aktivace a identita
 
-Úvod rozlišuje dostupnost preview a vede na ruční nebo camera aktivaci.
-Aktivační kód zůstává opaque, neukládá se do URL ani draftu a všechny neplatné
-varianty mají neenumerující odpověď. Navazující identita, jednorázový fragment
-link, login/recovery, onboarding, právní acknowledgement, session expiry,
-logout, logout-all a switch-account používají bezpečný návrat a synchronní
-vymazání privátního stavu.
+Root je přímý passwordless login s neenumerující odpovědí a sekundárním odkazem
+na aktivaci. Před zobrazením formuláře respektuje serverem potvrzený
+rozpracovaný claim, takže neobchází bezpečný aktivační handoff. Aktivační kód
+zůstává opaque, neukládá se do URL ani draftu a všechny neplatné varianty mají
+neenumerující odpověď. Navazující identita, jednorázový fragment link,
+login/recovery, onboarding, právní acknowledgement, session expiry, logout,
+logout-all a switch-account používají bezpečný návrat a synchronní vymazání
+privátního stavu.
 
 ### Účastník
 
@@ -289,7 +293,7 @@ Cílené post-review ověření:
 - F4/F6-scoped ESLint, TypeScript a source mock boundary,
   `git diff --check` a syntax service workeru: `PASS`.
 
-Kompletní před-merge lokální gate je `PASS`:
+Kompletní před-merge lokální gate pro PR #17 byl `PASS`:
 
 - Prettier, ESLint a všech sedm workspace typechecků;
 - 747 unit/integration testů prošlo a 51 databázových testů bylo při
@@ -315,7 +319,15 @@ Kompletní před-merge lokální gate je `PASS`:
   kódem `0`. Zůstává jedna nesouvisející `moderate` položka ve starém
   transitivním `esbuild` dev-toolingu.
 
-PR gate spouští stejný formát, lint, typecheck, PostgreSQL integrace, unit,
+Následná korekce přihlašovacího rootu prošla 29/29 cílenými unit/PWA testy,
+45/45 browser component běhy ve třech viewports, 15/15 mock E2E scénáři,
+statickým smoke testem všech 25 HTML stránek, TypeScriptem, ESLintem,
+Prettierem a produkčním Next buildem. Aktuální offline balíček obsahuje 27
+digestovaných assetů včetně oficiálního loga, manifest verze
+`ec4b7f4743633482876c658d157532327303ae529da2b1613f5198871a475556`
+a service worker o 24 142 bytech.
+
+PR #17 gate spouštěl stejný formát, lint, typecheck, PostgreSQL integrace, unit,
 produkční build, 840 browser scénářů, 15 E2E scénářů a audit. Merge je povolen
 až na zeleném finálním headu.
 

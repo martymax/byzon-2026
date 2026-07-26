@@ -17,7 +17,8 @@ const section = (start: string, end: string): string => {
 
 describe('application service-worker source policy', () => {
   it('uses a unique build shell cache and retains one verified rollback', () => {
-    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.25.5';");
+    expect(workerSource).toContain("const WORKER_VERSION = '2026.07.26.1';");
+    expect(workerSource).toContain("path.endsWith('.png')");
     expect(workerSource).toContain(
       'const SHELL_CACHE = `${CACHE_NS}-shell-${SHELL_VERSION}`;',
     );

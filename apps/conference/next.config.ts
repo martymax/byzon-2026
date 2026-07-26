@@ -27,6 +27,13 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
+      {
         source: '/prihlaseni',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },
@@ -66,6 +73,10 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/icons/:path*',
+        headers: [{ key: 'Cache-Control', value: publicShellCacheControl }],
+      },
+      {
+        source: '/brand/:path*',
         headers: [{ key: 'Cache-Control', value: publicShellCacheControl }],
       },
       {

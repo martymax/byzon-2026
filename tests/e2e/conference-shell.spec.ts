@@ -6,10 +6,18 @@ test('brand shell, manifest and health endpoints are available', async ({
   request,
 }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle(/BYZON 2026/);
+  await expect(page).toHaveTitle('Přihlášení');
   await expect(
-    page.getByRole('heading', { name: /Byznys bez náhubku/i }),
+    page.getByRole('heading', { name: 'Přihlaste se do BYZON' }),
   ).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'E-mail' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Poslat přihlašovací odkaz' }),
+  ).toBeVisible();
+  await expect(page.locator('.brand-logo')).toHaveAttribute(
+    'src',
+    '/brand/logo.png',
+  );
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
     'href',
     '/manifest.webmanifest',
@@ -94,7 +102,7 @@ test('reduced motion preference disables decorative transitions', async ({
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await expect(page.locator('.brand-mark')).toHaveCSS(
+  await expect(page.locator('.brand-logo')).toHaveCSS(
     'transition-duration',
     '0s',
   );

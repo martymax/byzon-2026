@@ -30,10 +30,11 @@ explicit synthetic fixture name, and validate the fixture against the same Zod
 schema used by the production client. Do not copy production data or invent a
 feature DTO in this foundation.
 
-The first stateful journey starts at `/aktivace`: its landing handler uses the
-validated anonymous `CS-ACT-01` fixture. Mutating claim, identity and recovery
-handlers are added by their owning F1 steps; an unimplemented step therefore
-fails closed instead of calling a real auth or ticket endpoint.
+The default stateful journey starts at `/` with passwordless login; `/aktivace`
+remains the secondary new-ticket path. Both begin by reading the validated
+anonymous `CS-ACT-01` fixture. Mutating claim, identity and recovery handlers
+are added by their owning F1 steps; an unimplemented step therefore fails
+closed instead of calling a real auth or ticket endpoint.
 
 The application already has an offline service worker. Browser mock bootstrap
 runs before hydration and temporarily owns the root scope. The normal

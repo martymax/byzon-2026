@@ -20,11 +20,13 @@ const fixture = async () => {
   const publicDirectory = join(root, 'public');
   const staticDirectory = join(root, 'static');
   await Promise.all([
+    mkdir(join(publicDirectory, 'brand'), { recursive: true }),
     mkdir(join(publicDirectory, 'icons'), { recursive: true }),
     mkdir(join(staticDirectory, 'chunks'), { recursive: true }),
     mkdir(join(staticDirectory, 'media'), { recursive: true }),
   ]);
   await Promise.all([
+    writeFile(join(publicDirectory, 'brand', 'logo.png'), 'logo'),
     writeFile(join(publicDirectory, 'icons', 'icon.svg'), '<svg/>'),
     writeFile(join(publicDirectory, 'icons', 'maskable.svg'), '<svg/>'),
     writeFile(join(publicDirectory, 'manifest.webmanifest'), '{}'),
@@ -40,6 +42,7 @@ const completeHtml = `<!doctype html>
   <link rel="preload" href="/_next/static/media/font.woff2">
   <link rel="stylesheet" href="/_next/static/chunks/app.css">
   <script src="/_next/static/chunks/app.js"></script>
+  <img src="/brand/logo.png" alt="">
   <a href="/">ignored</a>`;
 
 afterEach(async () => {
@@ -62,12 +65,14 @@ describe('offline shell build manifest', () => {
       '/_next/static/chunks/app.css',
       '/_next/static/chunks/app.js',
       '/_next/static/media/font.woff2',
+      '/brand/logo.png',
       '/manifest.webmanifest',
     ]);
     expect(manifest.assets).toEqual([
       '/offline',
       '/icons/icon.svg',
       '/icons/maskable.svg',
+      '/brand/logo.png',
       '/manifest.webmanifest',
       '/_next/static/chunks/app.css',
       '/_next/static/chunks/app.js',
@@ -78,6 +83,7 @@ describe('offline shell build manifest', () => {
     expect(manifest.digests['/icons/icon.svg']).toBe(
       shellAssetDigest('<svg/>'),
     );
+    expect(manifest.digests['/brand/logo.png']).toBe(shellAssetDigest('logo'));
     expect(manifest.version).toBe(
       shellManifestVersion(manifest.assets, manifest.digests),
     );
@@ -148,6 +154,7 @@ describe('offline shell build manifest', () => {
     const nextDirectory = join(root, '.next');
     const staticDirectory = join(nextDirectory, 'static');
     await Promise.all([
+      mkdir(join(publicDirectory, 'brand'), { recursive: true }),
       mkdir(join(publicDirectory, 'icons'), { recursive: true }),
       mkdir(join(staticDirectory, 'chunks'), { recursive: true }),
       mkdir(join(staticDirectory, 'media'), { recursive: true }),
@@ -158,6 +165,7 @@ describe('offline shell build manifest', () => {
     ]);
     await Promise.all([
       writeFile(join(publicDirectory, 'sw.js'), 'worker'),
+      writeFile(join(publicDirectory, 'brand', 'logo.png'), 'logo'),
       writeFile(join(publicDirectory, 'icons', 'icon.svg'), '<svg/>'),
       writeFile(join(publicDirectory, 'icons', 'maskable.svg'), '<svg/>'),
       writeFile(join(staticDirectory, 'chunks', 'app.css'), 'body{}'),
