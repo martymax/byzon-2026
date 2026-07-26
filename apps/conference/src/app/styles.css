@@ -635,8 +635,7 @@ main > .ui-participant-nav-spacer {
   line-height: 0.9;
 }
 [data-route-heading]:focus {
-  outline: 3px solid var(--byzon-focus);
-  outline-offset: 0.35rem;
+  outline: none;
 }
 .filter-bar {
   display: grid;
