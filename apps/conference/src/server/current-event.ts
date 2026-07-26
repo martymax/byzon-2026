@@ -37,6 +37,19 @@ export type ParticipantCurrentEventState =
 const PARTICIPANT_ACCOUNT_SCOPE_DOMAIN =
   'byzon:participant-account-scope:v1\u0000';
 
+const loadParticipantPreviewEvent = async (): Promise<CurrentEvent | null> => {
+  if (
+    process.env.NODE_ENV !== 'development' &&
+    process.env.NODE_ENV !== 'test'
+  ) {
+    return null;
+  }
+  if (process.env.BYZON_FRONTEND_PREVIEW !== 'enabled') return null;
+  const { participantPreviewCurrentEvent } =
+    await import('../test/mocks/participant-preview-event');
+  return participantPreviewCurrentEvent;
+};
+
 export const participantAccountEventFingerprint = (eventId: string): string =>
   createHash('sha256')
     .update(`${PARTICIPANT_ACCOUNT_SCOPE_DOMAIN}${eventId}`, 'utf8')
@@ -94,6 +107,8 @@ export const projectParticipantLayoutEventContext = (
 };
 
 export const loadCurrentEventId = async (): Promise<string | null> => {
+  const preview = await loadParticipantPreviewEvent();
+  if (preview) return preview.id;
   const event = await database.db.query.events.findFirst({
     where: eq(schema.events.slug, CURRENT_EVENT_SLUG),
     columns: { id: true, status: true },
@@ -104,6 +119,8 @@ export const loadCurrentEventId = async (): Promise<string | null> => {
 };
 
 export const loadCurrentEvent = async (): Promise<CurrentEvent | null> => {
+  const preview = await loadParticipantPreviewEvent();
+  if (preview) return preview;
   const event = await database.db.query.events.findFirst({
     where: eq(schema.events.slug, CURRENT_EVENT_SLUG),
     columns: {

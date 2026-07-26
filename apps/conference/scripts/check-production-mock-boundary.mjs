@@ -9,6 +9,10 @@ const mockRoot = resolve(sourceRoot, 'test/mocks');
 const componentTestRoot = resolve(sourceRoot, 'test/component');
 const instrumentationPath = resolve(sourceRoot, 'instrumentation-client.ts');
 const checkinPreviewPagePath = resolve(sourceRoot, 'app/check-in/page.tsx');
+const participantCurrentEventPath = resolve(
+  sourceRoot,
+  'server/current-event.ts',
+);
 const generatedWorkerPath = resolve(appRoot, 'public/mockServiceWorker.js');
 const buildRoot = resolve(appRoot, '.next');
 const mode = process.argv[2];
@@ -47,6 +51,7 @@ const forbiddenBuildPatterns = [
     'check-in synthetic scenario code',
     /DEMO-(?:VALID|DUPLICATE|CANCELLED|REFUNDED|BLOCKED|UNKNOWN|ERROR)/,
   ],
+  ['participant preview event marker', /BYZON_PARTICIPANT_PREVIEW_EVENT_F6/],
 ];
 
 const filesUnder = (directory) => {
@@ -102,7 +107,7 @@ const checkSourceBoundary = () => {
     }
     if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
     const patterns =
-      file === checkinPreviewPagePath
+      file === checkinPreviewPagePath || file === participantCurrentEventPath
         ? forbiddenRuntimePatterns.filter(
             ([label]) => label !== 'mock source path',
           )
@@ -146,6 +151,27 @@ const checkSourceBoundary = () => {
   ) {
     failures.push(
       'check-in preview scenarios must stay behind the explicit build-time environment guard and dynamic import',
+    );
+  }
+
+  const participantCurrentEvent = readFileSync(
+    participantCurrentEventPath,
+    'utf8',
+  );
+  if (
+    !participantCurrentEvent.includes(
+      "process.env.NODE_ENV !== 'development'",
+    ) ||
+    !participantCurrentEvent.includes("process.env.NODE_ENV !== 'test'") ||
+    !participantCurrentEvent.includes(
+      "process.env.BYZON_FRONTEND_PREVIEW !== 'enabled'",
+    ) ||
+    !/await\s+import\(\s*['"]\.\.\/test\/mocks\/participant-preview-event['"]\s*\)/.test(
+      participantCurrentEvent,
+    )
+  ) {
+    failures.push(
+      'participant preview event must stay behind explicit environment guards and a dynamic mock import',
     );
   }
 };

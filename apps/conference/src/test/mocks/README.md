@@ -4,7 +4,7 @@ MSW intercepts the same native `fetch` used by `ApiPort`; there is no second
 mock client. Enable browser mocks only for a local development compile:
 
 ```bash
-NEXT_PUBLIC_BYZON_API_MOCKS=enabled corepack pnpm --filter @byzon/conference dev
+BYZON_FRONTEND_PREVIEW=enabled NEXT_PUBLIC_BYZON_API_MOCKS=enabled corepack pnpm --filter @byzon/conference dev
 ```
 
 The dev command builds `@byzon/domain` and `@byzon/test-support` first, so

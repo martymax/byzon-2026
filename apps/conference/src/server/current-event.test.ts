@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const databaseMocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
@@ -18,6 +18,7 @@ vi.mock('./database', () => ({
 
 import {
   isParticipantVisibleEventStatus,
+  loadCurrentEvent,
   loadCurrentEventId,
   loadParticipantCurrentEvent,
   loadParticipantLayoutEventContext,
@@ -42,6 +43,34 @@ describe('participant current-event projection', () => {
   beforeEach(() => {
     databaseMocks.findFirst.mockReset();
   });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('uses the explicit dev:mock event without touching PostgreSQL', async () => {
+    vi.stubEnv('BYZON_FRONTEND_PREVIEW', 'enabled');
+
+    await expect(loadCurrentEvent()).resolves.toMatchObject({
+      id: '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
+      status: 'live',
+      timezone: 'Europe/Prague',
+    });
+    await expect(loadCurrentEventId()).resolves.toBe(
+      '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
+    );
+    await expect(loadParticipantCurrentEvent()).resolves.toMatchObject({
+      kind: 'available',
+      event: { id: '019f7e6f-62ed-7c87-bce7-b742be58ce0b' },
+    });
+    await expect(loadParticipantLayoutEventContext()).resolves.toMatchObject({
+      currentEvent: {
+        kind: 'available',
+        event: { id: '019f7e6f-62ed-7c87-bce7-b742be58ce0b' },
+      },
+    });
+    expect(databaseMocks.findFirst).not.toHaveBeenCalled();
+  }, 20_000);
 
   it.each(['draft', 'archived'] as const)(
     'projects %s events to no participant-visible data',
