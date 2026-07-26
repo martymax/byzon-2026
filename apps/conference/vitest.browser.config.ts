@@ -25,10 +25,10 @@ export default defineConfig({
     include: ['axe-core', 'zod'],
   },
   test: {
-    // Chromium component files are intentionally integration-heavy. Capping
-    // workers keeps CI scheduling latency below the per-test timeout without
-    // weakening timeout-based deadlock detection.
-    maxWorkers: 3,
+    // Each viewport is a separate Vitest project, so this keeps the complete
+    // three-viewport run at three Chromium workers in total. That avoids CPU
+    // starvation without weakening timeout-based deadlock detection.
+    maxWorkers: 1,
     include: ['src/**/*.component.tsx'],
     setupFiles: ['./src/test/component/setup.ts'],
     browser: {
