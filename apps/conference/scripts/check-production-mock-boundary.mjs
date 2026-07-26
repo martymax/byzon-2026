@@ -7,6 +7,7 @@ import {
   shellAssetDigest,
   shellManifestVersion,
 } from './offline-shell-manifest.mjs';
+import { hasSingleGuardedPreviewImport } from './source-preview-guard.mjs';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDirectory, '..');
@@ -283,14 +284,13 @@ const checkSourceBoundary = () => {
 
   const checkinPreviewPage = readFileSync(checkinPreviewPagePath, 'utf8');
   if (
-    !checkinPreviewPage.includes("process.env.NODE_ENV !== 'development'") ||
-    !checkinPreviewPage.includes("process.env.NODE_ENV !== 'test'") ||
-    !/await\s+import\(\s*['"]\.\.\/\.\.\/test\/mocks\/checkin-preview-operator['"]\s*\)/.test(
+    !hasSingleGuardedPreviewImport(
       checkinPreviewPage,
+      '../../test/mocks/checkin-preview-operator',
     )
   ) {
     failures.push(
-      'check-in preview scenarios must stay behind the explicit build-time environment guard and dynamic import',
+      'check-in preview scenarios must stay inside the positive build-time environment guard and dynamic import',
     );
   }
 
@@ -320,15 +320,10 @@ const checkSourceBoundary = () => {
     'utf8',
   );
   if (
-    !adminContentPreviewPage.includes(
-      "process.env.NODE_ENV !== 'development'",
-    ) ||
-    !adminContentPreviewPage.includes("process.env.NODE_ENV !== 'test'") ||
-    !/await\s+import\(\s*['"]\.\.\/\.\.\/\.\.\/components\/admin-content-demo-workspace['"]\s*\)/.test(
+    !hasSingleGuardedPreviewImport(
       adminContentPreviewPage,
-    ) ||
-    /^import\s+.*admin-content-(?:demo-workspace|preview-port)/m.test(
-      adminContentPreviewPage,
+      '../../../components/admin-content-demo-workspace',
+      ['admin-content-demo-workspace', 'admin-content-preview-port'],
     )
   ) {
     failures.push(

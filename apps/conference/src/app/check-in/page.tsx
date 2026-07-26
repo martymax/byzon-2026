@@ -9,14 +9,14 @@ export const metadata: Metadata = {
 };
 
 export default async function CheckinPage() {
-  if (!isFrontendPreviewAvailable()) notFound();
   if (
-    process.env.NODE_ENV !== 'development' &&
-    process.env.NODE_ENV !== 'test'
+    process.env.NODE_ENV === 'development' ||
+    process.env.NODE_ENV === 'test'
   ) {
-    notFound();
+    if (!isFrontendPreviewAvailable()) notFound();
+    const { CheckinPreviewOperator } =
+      await import('../../test/mocks/checkin-preview-operator');
+    return <CheckinPreviewOperator />;
   }
-  const { CheckinPreviewOperator } =
-    await import('../../test/mocks/checkin-preview-operator');
-  return <CheckinPreviewOperator />;
+  notFound();
 }
