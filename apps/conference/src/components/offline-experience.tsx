@@ -336,9 +336,7 @@ export function OfflineExperience({
           <div>
             <dt>Serverový owner lease</dt>
             <dd
-              data-state={
-                capabilities.ownerLease ? 'available' : 'unavailable'
-              }
+              data-state={capabilities.ownerLease ? 'available' : 'unavailable'}
             >
               {capabilities.ownerLease
                 ? 'Integrovaný'
@@ -349,9 +347,7 @@ export function OfflineExperience({
             <dt>Odložené změny agendy</dt>
             <dd
               data-state={
-                capabilities.agendaMutationReplay
-                  ? 'available'
-                  : 'unavailable'
+                capabilities.agendaMutationReplay ? 'available' : 'unavailable'
               }
             >
               {capabilities.agendaMutationReplay
@@ -361,7 +357,9 @@ export function OfflineExperience({
           </div>
           <div>
             <dt>Lokální úložiště zařízení</dt>
-            <dd data-state={capabilities.database ? 'available' : 'unavailable'}>
+            <dd
+              data-state={capabilities.database ? 'available' : 'unavailable'}
+            >
               {capabilities.database ? 'Dostupné' : 'Nedostupné'}
             </dd>
           </div>

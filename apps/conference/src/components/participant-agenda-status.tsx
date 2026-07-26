@@ -61,17 +61,13 @@ export const ParticipantAgendaOfflineStatus = ({
         queue.failed > 0
           ? 'Odložené změny vyčerpaly pokusy'
           : cached
-          ? 'Zobrazuje se offline kopie agendy'
-          : syncing
-            ? 'Synchronizuji odložené změny'
-            : 'Některé změny ještě čekají na server'
+            ? 'Zobrazuje se offline kopie agendy'
+            : syncing
+              ? 'Synchronizuji odložené změny'
+              : 'Některé změny ještě čekají na server'
       }
       tone={
-        queue.failed > 0
-          ? 'danger'
-          : queue.conflict > 0
-            ? 'warning'
-            : 'info'
+        queue.failed > 0 ? 'danger' : queue.conflict > 0 ? 'warning' : 'info'
       }
     >
       <p>

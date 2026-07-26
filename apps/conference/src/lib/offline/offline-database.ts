@@ -605,11 +605,10 @@ export const readOfflineAgendaSnapshot = async (
       result.epoch,
     );
   } catch {
-    await wipeParticipantOfflineScope(
-      parsedScope,
-      'migration_failure',
-      { ...options, expectedEpoch: result.epoch },
-    );
+    await wipeParticipantOfflineScope(parsedScope, 'migration_failure', {
+      ...options,
+      expectedEpoch: result.epoch,
+    });
     return null;
   }
 };

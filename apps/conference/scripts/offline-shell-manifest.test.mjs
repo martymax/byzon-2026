@@ -74,9 +74,7 @@ describe('offline shell build manifest', () => {
       '/_next/static/media/font.woff2',
     ]);
     expect(Object.keys(manifest.digests)).toEqual(manifest.assets);
-    expect(manifest.digests['/offline']).toBe(
-      shellAssetDigest(completeHtml),
-    );
+    expect(manifest.digests['/offline']).toBe(shellAssetDigest(completeHtml));
     expect(manifest.digests['/icons/icon.svg']).toBe(
       shellAssetDigest('<svg/>'),
     );

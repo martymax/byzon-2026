@@ -119,9 +119,9 @@ describe('application service worker ownership', () => {
       getRegistrations: vi.fn(async () => [owned, mockWorker, unknown]),
     };
 
-    expect(
-      shouldUnregisterAppServiceWorker([`${ORIGIN}/sw.js`], ORIGIN),
-    ).toBe(true);
+    expect(shouldUnregisterAppServiceWorker([`${ORIGIN}/sw.js`], ORIGIN)).toBe(
+      true,
+    );
     expect(shouldUnregisterAppServiceWorker([], ORIGIN)).toBe(false);
     expect(
       shouldUnregisterAppServiceWorker(

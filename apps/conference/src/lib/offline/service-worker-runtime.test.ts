@@ -213,17 +213,13 @@ const shellResponse = (request: Request): Response => {
             : extension === 'js'
               ? 'application/javascript'
               : 'font/woff2';
-  return responseAt(
-    url.href,
-    shellBody(url.pathname),
-    {
-      status: 200,
-      headers: {
-        'cache-control': 'public, max-age=3600',
-        'content-type': contentType,
-      },
+  return responseAt(url.href, shellBody(url.pathname), {
+    status: 200,
+    headers: {
+      'cache-control': 'public, max-age=3600',
+      'content-type': contentType,
     },
-  );
+  });
 };
 
 const seedVerifiedShell = async (

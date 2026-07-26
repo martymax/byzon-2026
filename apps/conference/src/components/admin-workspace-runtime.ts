@@ -33,9 +33,7 @@ export const isAmbiguousAdminMutationFailure = (
       (result.failure.problem.code === 'IDEMPOTENCY_IN_PROGRESS' ||
         result.failure.problem.code === 'INTERNAL_ERROR')));
 
-export const isAdminSecurityFailure = (
-  result: AdminFailureResult,
-): boolean =>
+export const isAdminSecurityFailure = (result: AdminFailureResult): boolean =>
   result.status === 401 ||
   result.status === 403 ||
   result.failure.kind === 'offline' ||

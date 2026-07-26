@@ -434,7 +434,7 @@ describe('participant offline IndexedDB', () => {
         await readOfflineAgendaSnapshot(scope, {
           expectedEpoch: replacementEpoch,
         })
-      )?.snapshot
+      )?.snapshot,
     ).toEqual(participantAgendaFixtures.happy);
   });
 
@@ -477,12 +477,12 @@ describe('participant offline IndexedDB', () => {
     );
     const conflict = await updateOfflineAgendaQueueRecord(
       queued,
-      ({
+      {
         attempts: 1,
         expectedVersion: participantAgendaFixtures.happy!.version + 99,
         lastProblemCode: 'AGENDA_VERSION_CONFLICT',
         status: 'conflict',
-      } as unknown) as Parameters<typeof updateOfflineAgendaQueueRecord>[1],
+      } as unknown as Parameters<typeof updateOfflineAgendaQueueRecord>[1],
       { expectedEpoch: offlineEpoch },
     );
     expect(conflict.expectedVersion).toBe(
@@ -576,9 +576,9 @@ describe('participant offline IndexedDB', () => {
     await syncOfflineAgendaQueue(scope, api, offlineEpoch);
     expect(postCount).toBe(1);
 
-    expect(
-      await discardFailedOfflineAgendaQueue(scope, offlineEpoch),
-    ).toEqual(EMPTY_OFFLINE_AGENDA_QUEUE);
+    expect(await discardFailedOfflineAgendaQueue(scope, offlineEpoch)).toEqual(
+      EMPTY_OFFLINE_AGENDA_QUEUE,
+    );
     await queueApprovedOfflineAgendaMutation(
       scope,
       {
