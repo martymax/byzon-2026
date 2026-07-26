@@ -25,6 +25,10 @@ export default defineConfig({
     include: ['axe-core', 'zod'],
   },
   test: {
+    // Chromium component files are intentionally integration-heavy. Capping
+    // workers keeps CI scheduling latency below the per-test timeout without
+    // weakening timeout-based deadlock detection.
+    maxWorkers: 3,
     include: ['src/**/*.component.tsx'],
     setupFiles: ['./src/test/component/setup.ts'],
     browser: {
