@@ -28,7 +28,15 @@ export const eventPermissions = [
   'reservation:any:read',
   'session:assigned:answer',
   'session:assigned:moderate',
+  'announcement:own:read',
   'announcement:send',
+  'ticket:any:manage',
+  'participant:operational:read',
+  'role:manage',
+  'operations:read',
+  'audit:read',
+  'event:settings:manage',
+  'attendance:assigned:write',
   'personal-data:own:export',
   'personal-data:operational:export',
 ] as const;
@@ -39,6 +47,7 @@ export interface PermissionContext {
   ownsResource?: boolean;
   networkingOptedIn?: boolean;
   acceptedConnection?: boolean;
+  announcementRecipient?: boolean;
   assignedSession?: boolean;
   assignedRoom?: boolean;
   moderatorCanAnnounce?: boolean;
@@ -53,6 +62,7 @@ const rolePermissions = {
     'networking:connection:message',
     'checkin:own-code:read',
     'reservation:own:read',
+    'announcement:own:read',
     'personal-data:own:export',
   ],
   speaker: [
@@ -75,6 +85,13 @@ const rolePermissions = {
     'session:assigned:answer',
     'session:assigned:moderate',
     'announcement:send',
+    'ticket:any:manage',
+    'participant:operational:read',
+    'role:manage',
+    'operations:read',
+    'audit:read',
+    'event:settings:manage',
+    'attendance:assigned:write',
     'personal-data:operational:export',
   ],
   checkin_operator: [
@@ -88,7 +105,11 @@ const rolePermissions = {
     'session:assigned:moderate',
     'announcement:send',
   ],
-  room_operator: ['program:published:read', 'reservation:assigned:read'],
+  room_operator: [
+    'program:published:read',
+    'reservation:assigned:read',
+    'attendance:assigned:write',
+  ],
   system_worker: [],
 } as const satisfies Record<EventRole, readonly EventPermission[]>;
 
@@ -98,6 +119,8 @@ const contextAllows = (
   context: PermissionContext,
 ): boolean => {
   switch (permission) {
+    case 'announcement:own:read':
+      return context.announcementRecipient === true;
     case 'agenda:own:write':
     case 'checkin:own-code:read':
     case 'reservation:own:read':
@@ -118,6 +141,7 @@ const contextAllows = (
       return context.assignedRoom === true || context.assignedSession === true;
     case 'session:assigned:answer':
     case 'session:assigned:moderate':
+    case 'attendance:assigned:write':
       return role === 'organizer_admin' || context.assignedSession === true;
     case 'announcement:send':
       return (

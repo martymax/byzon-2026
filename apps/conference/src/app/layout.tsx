@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Khand } from 'next/font/google';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { AppMain } from '@/components/app-main';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 import './styles.css';
 
@@ -27,6 +28,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: '#f5218e',
   colorScheme: 'light',
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -49,9 +51,7 @@ export default function RootLayout({
           </Link>
           <span className="shell-badge">Konferenční aplikace</span>
         </header>
-        <main id="main" tabIndex={-1}>
-          {children}
-        </main>
+        <AppMain>{children}</AppMain>
         <ServiceWorkerRegistration />
       </body>
     </html>

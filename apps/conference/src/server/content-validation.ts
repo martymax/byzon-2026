@@ -18,6 +18,41 @@ const localDateIn = (instant: Date, timezone: string): string =>
     day: '2-digit',
   }).format(instant);
 
+export const dayContentConflictIssues = (
+  rows: readonly {
+    readonly id: string;
+    readonly localDate: string;
+    readonly sortOrder: number;
+  }[],
+  input: {
+    readonly data: Readonly<Record<string, unknown>>;
+    readonly id?: string | null;
+  },
+): string[] => {
+  const current = input.id
+    ? rows.find((candidate) => candidate.id === input.id)
+    : undefined;
+  const localDate =
+    typeof input.data.localDate === 'string'
+      ? input.data.localDate
+      : current?.localDate;
+  const sortOrder =
+    typeof input.data.sortOrder === 'number'
+      ? input.data.sortOrder
+      : current?.sortOrder;
+  const others = rows.filter((candidate) => candidate.id !== input.id);
+  return [
+    ...(localDate &&
+    others.some((candidate) => candidate.localDate === localDate)
+      ? ['day:duplicate_local_date']
+      : []),
+    ...(sortOrder !== undefined &&
+    others.some((candidate) => candidate.sortOrder === sortOrder)
+      ? ['day:duplicate_sort_order']
+      : []),
+  ];
+};
+
 export const validateContentMutation = async (
   db: Database,
   input: {
@@ -33,6 +68,19 @@ export const validateContentMutation = async (
     columns: { timezone: true, startsAt: true, endsAt: true },
   });
   if (!event) throw new ContentValidationError(['event:not_found']);
+
+  if (input.resource === 'days') {
+    const days = await db.query.eventDays.findMany({
+      where: eq(schema.eventDays.eventId, input.eventId),
+      columns: { id: true, localDate: true, sortOrder: true },
+    });
+    issues.push(
+      ...dayContentConflictIssues(days, {
+        data: input.data,
+        ...(input.id ? { id: input.id } : {}),
+      }),
+    );
+  }
 
   if (input.resource === 'rooms' && typeof input.data.venueId === 'string') {
     const venue = await db.query.venues.findFirst({

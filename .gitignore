@@ -6,6 +6,8 @@ __pycache__/
 *.pyc
 playwright-report/
 test-results/
+apps/conference/public/mockServiceWorker.js
+apps/conference/public/sw-shell-manifest.js
 .env
 .env.local
 .env.*.local

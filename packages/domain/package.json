@@ -7,6 +7,30 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./contracts": {
+      "types": "./src/contracts/index.ts",
+      "default": "./dist/contracts/index.js"
+    },
+    "./contracts/check-in": {
+      "types": "./src/contracts/check-in.ts",
+      "default": "./dist/contracts/check-in.js"
+    },
+    "./contracts/offline": {
+      "types": "./src/contracts/offline.ts",
+      "default": "./dist/contracts/offline.js"
+    },
+    "./contracts/admin": {
+      "types": "./src/contracts/admin.ts",
+      "default": "./dist/contracts/admin.js"
+    },
+    "./contracts/support": {
+      "types": "./src/contracts/support.ts",
+      "default": "./dist/contracts/support.js"
+    },
+    "./contracts/ticket-import": {
+      "types": "./src/contracts/ticket-import.ts",
+      "default": "./dist/contracts/ticket-import.js"
     }
   },
   "scripts": {
@@ -14,5 +38,8 @@
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "catalog:"
   }
 }

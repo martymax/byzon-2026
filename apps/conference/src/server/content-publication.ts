@@ -10,6 +10,12 @@ import {
   type Database,
   type DatabaseTransaction,
 } from '@byzon/database';
+import {
+  publishedContentSnapshotSchema,
+  publishedProgramSnapshotSchema,
+} from '@byzon/domain/contracts';
+
+import { requireWritableAdminEvent } from './admin-event-writability';
 
 export class ContentPublicationError extends Error {
   constructor(
@@ -18,7 +24,8 @@ export class ContentPublicationError extends Error {
       | 'STALE_VERSION'
       | 'STALE_DRAFT'
       | 'INVALID_DRAFT'
-      | 'NO_CONTENT',
+      | 'NO_CONTENT'
+      | 'NO_CHANGES',
     readonly issues: string[] = [],
   ) {
     super('Content publication failed');
@@ -47,6 +54,30 @@ const UUID_PATTERN =
 
 export const checksumSnapshot = (snapshot: unknown): string =>
   createHash('sha256').update(canonicalJson(snapshot)).digest('hex');
+
+export const requirePublicationChanges = (
+  previousChecksum: string | null | undefined,
+  currentChecksum: string,
+): void => {
+  if (previousChecksum === currentChecksum)
+    throw new ContentPublicationError('NO_CHANGES');
+};
+
+export const parseContentPublicationSnapshot = (
+  snapshot: unknown,
+): Record<string, unknown> => {
+  const parsed = publishedProgramSnapshotSchema
+    .and(publishedContentSnapshotSchema)
+    .safeParse(snapshot);
+  if (!parsed.success)
+    throw new ContentPublicationError(
+      'INVALID_DRAFT',
+      parsed.error.issues.map(
+        ({ path, message }) => `${path.join('.')}: ${message}`,
+      ),
+    );
+  return parsed.data;
+};
 
 const withoutKeys = (
   value: Record<string, unknown>,
@@ -172,7 +203,7 @@ export const buildContentSnapshot = async (
   }
   if (issues.length) throw new ContentPublicationError('INVALID_DRAFT', issues);
 
-  return {
+  const snapshot = {
     event: {
       ...event,
       startsAt: event.startsAt.toISOString(),
@@ -221,6 +252,7 @@ export const buildContentSnapshot = async (
       })),
     },
   };
+  return parseContentPublicationSnapshot(snapshot);
 };
 
 export interface PublicationPreview {
@@ -298,12 +330,14 @@ export const previewContentPublication = async (
     db.query.contentPublications.findFirst({
       where: eq(schema.contentPublications.eventId, eventId),
       orderBy: [desc(schema.contentPublications.version)],
-      columns: { version: true, snapshot: true },
+      columns: { checksumSha256: true, version: true, snapshot: true },
     }),
   ]);
+  const checksumSha256 = checksumSnapshot(snapshot);
+  requirePublicationChanges(previous?.checksumSha256, checksumSha256);
   return {
     version: (previous?.version ?? 0) + 1,
-    checksumSha256: checksumSnapshot(snapshot),
+    checksumSha256,
     snapshot,
     significantSessionIds: detectSignificantProgramChanges(
       previous?.snapshot ?? null,
@@ -327,6 +361,7 @@ export const publishContent = async (
       transaction,
       `content-publish:${input.eventId}`,
     );
+    await requireWritableAdminEvent(transaction, input.eventId);
     const previous = await transaction.query.contentPublications.findFirst({
       where: eq(schema.contentPublications.eventId, input.eventId),
       orderBy: [desc(schema.contentPublications.version)],
@@ -335,6 +370,7 @@ export const publishContent = async (
       throw new ContentPublicationError('STALE_VERSION');
     const snapshot = await buildContentSnapshot(transaction, input.eventId);
     const snapshotChecksum = checksumSnapshot(snapshot);
+    requirePublicationChanges(previous?.checksumSha256, snapshotChecksum);
     if (snapshotChecksum !== input.expectedChecksumSha256)
       throw new ContentPublicationError('STALE_DRAFT');
     const result: PublicationPreview = {

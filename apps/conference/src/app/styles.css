@@ -32,7 +32,7 @@ h5,
 .brand,
 .eyebrow,
 .button,
-.participant-nav {
+.ui-participant-nav {
   font-family: var(--byzon-font-display);
 }
 .skip-link {
@@ -62,6 +62,7 @@ h5,
   display: flex;
   align-items: center;
   gap: 0.7rem;
+  min-height: var(--byzon-touch-target);
   color: var(--ink);
   font-size: 1.25rem;
   font-weight: 700;
@@ -163,41 +164,561 @@ h1 span {
   max-width: 34rem;
 }
 .button {
-  display: inline-block;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
   margin-top: 1.75rem;
   padding: 0.7rem 1.4rem;
   border-radius: 999px;
-  background: var(--pink);
+  background: var(--pink-dark);
   color: white;
   font-weight: 600;
   text-decoration: none;
 }
-.participant-nav {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  gap: 0.3rem;
-  overflow-x: auto;
-  padding: 0.65rem max(1rem, calc((100vw - 72rem) / 2));
-  border-block: 1px solid var(--line);
-  background: var(--byzon-surface-soft-translucent);
-  backdrop-filter: blur(12px);
+.button:hover {
+  background: var(--byzon-brand-active);
 }
-.participant-nav a {
-  flex: none;
-  min-height: 2.75rem;
-  padding: 0.55rem 0.8rem;
-  border-radius: 999px;
-  color: var(--ink);
-  font-weight: 600;
+.preview-journeys {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.preview-journeys a {
+  min-width: 0;
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  align-content: center;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-ink);
+  background: var(--byzon-surface);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.preview-journeys a:hover {
+  border-color: var(--byzon-brand-active);
+  box-shadow: var(--byzon-shadow-sm);
+}
+.preview-journeys a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.preview-journeys span,
+.preview-disclaimer {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+}
+.preview-disclaimer {
+  max-width: 68ch;
+  margin-top: 1rem;
+}
+.participant-shell-content {
+  min-width: 0;
+  padding-bottom: calc(4.5rem + var(--byzon-safe-bottom));
+}
+main > .ui-participant-nav-spacer {
+  display: none;
+}
+.home-page {
+  display: grid;
+  gap: clamp(2rem, 5vw, 3.5rem);
+}
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1.4rem, 5vw, 2.75rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background:
+    radial-gradient(
+      circle at 90% 10%,
+      var(--byzon-brand-glow),
+      transparent 18rem
+    ),
+    var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.home-hero h1 {
+  max-width: 13ch;
+  margin: 0.3rem 0 1rem;
+  font-size: clamp(3rem, 10vw, 6.5rem);
+  line-height: 0.88;
+}
+.home-hero .lead {
+  max-width: 42rem;
+}
+.home-event-window {
+  margin-top: 0.9rem;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.home-primary-action {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1.5rem;
+  padding: 0.65rem 1.2rem;
+  border: 1px solid var(--pink-dark);
+  border-radius: var(--byzon-radius-pill);
+  color: white;
+  background: var(--pink-dark);
+  font: 700 1rem/1.2 var(--byzon-font-display);
   text-decoration: none;
 }
-.participant-nav a:hover,
-.participant-nav a:focus-visible {
-  background: white;
-  outline: 2px solid var(--pink);
-  outline-offset: 1px;
+.home-primary-action:hover {
+  background: var(--byzon-brand-active);
+}
+.home-section {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.home-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+.home-section-heading h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+}
+.home-section-kicker,
+.home-card-kicker {
+  color: var(--pink-dark);
+  font-family: var(--byzon-font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.home-section-link,
+.home-card-link {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.home-card-grid {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.home-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.home-card h3 {
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+.home-card address {
+  font-style: normal;
+}
+.home-card-empty {
+  display: grid;
+  gap: 0.5rem;
+}
+.home-session-list {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  list-style: none;
+}
+.home-session-list a {
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-sm);
+  color: var(--slate);
+  background: var(--byzon-surface-soft);
+  text-decoration: none;
+}
+.home-session-list strong {
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+.home-session-time {
+  color: var(--pink-dark);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.home-timing-label {
+  width: fit-content;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.home-practical-card {
+  overflow-wrap: anywhere;
+}
+.home-primary-action:focus-visible,
+.home-section-link:focus-visible,
+.home-card-link:focus-visible,
+.home-session-list a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
+}
+.ticket-page {
+  display: grid;
+  gap: clamp(1.25rem, 4vw, 2rem);
+  max-width: 54rem;
+}
+.ticket-heading h1 {
+  margin-block: 0.35rem 0.85rem;
+  font-size: clamp(3.5rem, 11vw, 7rem);
+  line-height: 0.85;
+}
+.ticket-heading .lead {
+  max-width: 44rem;
+}
+.ticket-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: var(--byzon-space-6);
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  border-width: 2px;
+  border-color: var(--byzon-border-strong);
+  border-radius: var(--byzon-radius-lg);
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      var(--byzon-brand-glow),
+      transparent 17rem
+    ),
+    var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.ticket-card--valid {
+  border-color: var(--byzon-success);
+}
+.ticket-card--cancelled,
+.ticket-card--blocked {
+  border-color: var(--byzon-danger);
+}
+.ticket-card--refunded {
+  border-color: var(--byzon-warning);
+}
+.ticket-card-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--byzon-space-4);
+}
+.ticket-mark,
+.ticket-presentation-mark {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-success);
+  background: var(--byzon-success-soft);
+}
+.ticket-card:not(.ticket-card--valid) .ticket-mark {
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.ticket-mark svg,
+.ticket-presentation-mark svg {
+  width: 2rem;
+  height: 2rem;
+}
+.ticket-card-kicker {
+  color: var(--pink-dark);
+  font-family: var(--byzon-font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ticket-card h2,
+.ticket-presentation h2 {
+  margin-block: 0.2rem 0.45rem;
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  line-height: 1;
+}
+.ticket-status-label {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-success);
+  background: var(--byzon-success-soft);
+  font-family: var(--byzon-font-display);
+  font-weight: 700;
+}
+.ticket-card:not(.ticket-card--valid) .ticket-status-label {
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.ticket-card--refunded .ticket-status-label {
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+}
+.ticket-details {
+  display: grid;
+  gap: var(--byzon-space-4);
+  padding-top: var(--byzon-space-5);
+  border-top: 1px solid var(--byzon-border);
+}
+.ticket-details div {
+  min-width: 0;
+}
+.ticket-details dt {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.ticket-details dd {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+.ticket-reference {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+.ticket-presentation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--byzon-space-4);
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border-style: dashed;
+  border-color: var(--byzon-border-strong);
+}
+.ticket-presentation-mark {
+  color: var(--byzon-info);
+  background: var(--byzon-info-soft);
+}
+.ticket-privacy-note {
+  margin-top: var(--byzon-space-4);
+  padding-top: var(--byzon-space-4);
+  border-top: 1px solid var(--byzon-border);
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+}
+.announcement-page {
+  display: grid;
+  gap: clamp(1.25rem, 4vw, 2rem);
+  max-width: 58rem;
+}
+.announcement-heading {
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.announcement-heading h1 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: clamp(3.5rem, 11vw, 7rem);
+  line-height: 0.85;
+}
+.announcement-heading .lead {
+  max-width: 44rem;
+}
+.announcement-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--byzon-space-2);
+  padding: var(--byzon-space-1);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-pill);
+  background: var(--byzon-surface);
+  width: fit-content;
+  max-width: 100%;
+}
+.announcement-filter button {
+  min-width: 7rem;
+  min-height: var(--byzon-touch-target);
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-text);
+  background: transparent;
+  font: 700 1rem/1.2 var(--byzon-font-display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.announcement-filter button[aria-pressed='true'] {
+  color: var(--byzon-surface);
+  background: var(--byzon-brand-hover);
+}
+.announcement-filter button:focus-visible,
+.announcement-card:focus-visible,
+.announcement-back-link:focus-visible,
+.announcement-context-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.announcement-result-count {
+  color: var(--byzon-text-muted);
+  font-weight: 650;
+}
+.announcement-list {
+  display: grid;
+  gap: var(--byzon-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.announcement-list li {
+  min-width: 0;
+}
+.announcement-card {
+  min-width: 0;
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: var(--byzon-space-3);
+  padding: clamp(1rem, 4vw, 1.5rem);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-text);
+  background: var(--byzon-surface);
+  text-decoration: none;
+  box-shadow: var(--byzon-shadow-sm);
+  overflow-wrap: anywhere;
+}
+.announcement-card:hover {
+  border-color: var(--byzon-brand);
+}
+.announcement-card--unread {
+  border-inline-start: 0.35rem solid var(--byzon-brand-hover);
+  background: linear-gradient(
+    90deg,
+    var(--byzon-brand-subtle),
+    var(--byzon-surface) 38%
+  );
+}
+.announcement-card-topline,
+.announcement-detail-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-2) var(--byzon-space-4);
+}
+.announcement-card time,
+.announcement-detail time {
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+.announcement-read-label,
+.announcement-severity {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--byzon-space-2);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-text-muted);
+  background: var(--byzon-surface-soft);
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+.announcement-read-label svg {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+.announcement-read-label--unread {
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+}
+.announcement-severity--important {
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+}
+.announcement-severity--critical {
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.announcement-card h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.35rem, 4vw, 1.75rem);
+  line-height: 1.15;
+}
+.announcement-card-summary {
+  max-width: 70ch;
+}
+.announcement-detail {
+  min-width: 0;
+  display: grid;
+  gap: clamp(1rem, 4vw, 1.5rem);
+  padding: clamp(1.1rem, 5vw, 2rem);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+  overflow-wrap: anywhere;
+}
+.announcement-detail h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  line-height: 1;
+}
+.announcement-detail-body {
+  display: grid;
+  gap: var(--byzon-space-3);
+  max-width: 72ch;
+  white-space: pre-line;
+}
+.announcement-context {
+  display: grid;
+  gap: var(--byzon-space-2);
+  padding-top: var(--byzon-space-4);
+  border-top: 1px solid var(--byzon-border);
+}
+.announcement-context strong {
+  color: var(--byzon-ink);
+}
+.announcement-context-link,
+.announcement-back-link {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+}
+.announcement-read-status {
+  display: grid;
+  gap: var(--byzon-space-2);
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface-soft);
+}
+.announcement-read-status strong {
+  color: var(--byzon-ink);
+}
+.announcement-read-status--error {
+  border-color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+}
+.announcement-read-status:focus {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
 }
 .app-page {
   width: min(100% - 2rem, 72rem);
@@ -210,11 +731,17 @@ h1 span {
   font-size: clamp(3rem, 10vw, 6rem);
   line-height: 0.9;
 }
+[data-route-heading]:focus {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 0.35rem;
+}
 .filter-bar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 15rem));
   gap: 1rem;
   margin-block: 1.5rem;
+  padding: 0;
+  border: 0;
 }
 .filter-bar label {
   display: grid;
@@ -256,17 +783,36 @@ h1 span {
   color: var(--pink-dark);
   font-weight: 700;
 }
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  flex-wrap: wrap;
+}
+.session-meta > span:not(.status-label) {
+  color: var(--byzon-text-muted);
+}
+.status-label {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+  font-weight: 700;
+}
 .session-list strong,
 .card-grid strong {
   color: var(--ink);
   font-size: 1.25rem;
 }
 .session-list a:hover,
+.card-grid a:hover {
+  border-color: var(--pink);
+}
 .session-list a:focus-visible,
-.card-grid a:hover,
 .card-grid a:focus-visible {
   border-color: var(--pink);
-  outline: 2px solid transparent;
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
 }
 .card-grid {
   display: grid;
@@ -304,15 +850,27 @@ h1 span {
 .prose {
   display: grid;
   gap: 0.8rem;
+  max-width: 72ch;
   margin-block: 1.2rem;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 .text-link,
 .link-row a {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--byzon-touch-target);
   margin-top: 1rem;
   color: var(--pink-dark);
   font-weight: 700;
+}
+.text-link:focus-visible,
+.link-row a:focus-visible,
+.card-grid article a:focus-visible,
+.content-stack summary:focus-visible,
+.resource-action:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
 }
 .link-row {
   display: flex;
@@ -324,20 +882,330 @@ h1 span {
   gap: 1.2rem;
 }
 .content-stack details {
-  padding: 0.8rem 1rem;
+  padding-inline: 1rem;
   border-block: 1px solid var(--line);
   background: white;
 }
 .content-stack summary {
+  display: list-item;
+  min-height: var(--byzon-touch-target);
+  padding-block: 0.7rem;
   cursor: pointer;
   color: var(--ink);
   font-weight: 700;
 }
 .resource-status {
+  display: grid;
+  gap: 0.7rem;
+  max-width: 42rem;
   padding: 1.2rem;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: white;
+}
+.resource-status strong {
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: 1.25rem;
+}
+.resource-empty {
+  border-style: dashed;
+}
+.resource-action {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--pink);
+  border-radius: 999px;
+  color: white;
+  background: var(--pink-dark);
+  font: 700 1rem/1.2 var(--byzon-font-display);
+  cursor: pointer;
+}
+.resource-action:hover {
+  border-color: var(--byzon-brand-active);
+  background: var(--byzon-brand-active);
+}
+.request-reference {
+  color: var(--byzon-text-muted);
+  overflow-wrap: anywhere;
+}
+.agenda-page {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+}
+.agenda-heading {
+  max-width: 54rem;
+}
+.agenda-heading h1 {
+  max-width: 11ch;
+  margin-block: 0.35rem 0.9rem;
+}
+.agenda-loading {
+  max-width: 48rem;
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+}
+.agenda-days {
+  display: grid;
+  gap: clamp(2rem, 6vw, 3.5rem);
+}
+.agenda-day {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.agenda-day-heading {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 2px solid var(--byzon-border-strong);
+  overflow-wrap: anywhere;
+}
+.agenda-day-heading p,
+.agenda-section-kicker,
+.agenda-dialog-kicker {
+  color: var(--byzon-brand-active);
+  font-family: var(--byzon-font-display);
+  font-size: 0.875rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.agenda-day-heading h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.65rem, 5vw, 2.4rem);
+  line-height: 1.05;
+}
+.agenda-item-list,
+.agenda-conflict-list {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0;
+  list-style: none;
+}
+.agenda-item {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 4vw, 1.4rem);
+  border: 1px solid var(--byzon-border);
+  border-inline-start: 0.35rem solid var(--byzon-info);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-sm);
+}
+.agenda-item--success {
+  border-inline-start-color: var(--byzon-success);
+}
+.agenda-item--warning {
+  border-inline-start-color: var(--byzon-warning);
+}
+.agenda-item--danger {
+  border-inline-start-color: var(--byzon-danger);
+}
+.agenda-item--cancelled {
+  border-style: dashed;
+  box-shadow: none;
+}
+.agenda-item-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+  overflow-wrap: anywhere;
+}
+.agenda-item-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  flex-wrap: wrap;
+}
+.agenda-item-time {
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.agenda-item h3 {
+  font-size: clamp(1.35rem, 4vw, 1.75rem);
+  line-height: 1.15;
+}
+.agenda-item h3 a {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--byzon-ink);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+.agenda-item h3 a:hover {
+  color: var(--byzon-brand-active);
+}
+.agenda-item h3 a:focus-visible,
+.agenda-session-action a:focus-visible,
+.agenda-conflict-list a:focus-visible {
+  border-radius: var(--byzon-radius-sm);
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.agenda-item-meta {
+  display: flex;
+  gap: 0.3rem 1rem;
+  flex-wrap: wrap;
+  color: var(--byzon-text-muted);
+}
+.agenda-item-meta span:first-child:not(:last-child) {
+  color: var(--byzon-text);
+  font-weight: 650;
+}
+.agenda-capacity {
+  max-width: 68ch;
+  padding: 0.75rem;
+  border-radius: var(--byzon-radius-sm);
+  background: var(--byzon-surface-soft);
+}
+.agenda-item-actions,
+.agenda-dialog-actions,
+.agenda-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.agenda-item-actions {
+  padding-top: 1rem;
+  border-top: 1px solid var(--byzon-border);
+}
+.agenda-read-only-item {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--byzon-border);
+  color: var(--byzon-text-muted);
+  font-weight: 650;
+}
+.agenda-calendar-export {
+  display: grid;
+  align-items: center;
+  gap: 1.25rem;
+  padding: clamp(1rem, 4vw, 1.5rem);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface-soft);
+}
+.agenda-calendar-export > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.agenda-calendar-export h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  line-height: 1.1;
+}
+.agenda-session-action {
+  display: grid;
+  align-items: center;
+  gap: 1rem;
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--byzon-border-strong);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-brand-subtle);
+}
+.agenda-session-action > div {
+  display: grid;
+  gap: 0.45rem;
+}
+.agenda-session-action a {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+}
+.agenda-dialog-content {
+  display: grid;
+  gap: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.agenda-dialog-content h3 {
+  margin-top: 0.25rem;
+  color: var(--byzon-ink);
+  font-size: 1.45rem;
+}
+.agenda-dialog-actions {
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+}
+.agenda-offer-countdown {
+  padding: 1rem;
+  border: 2px solid var(--byzon-warning);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+}
+.agenda-offer-countdown strong {
+  font-variant-numeric: tabular-nums;
+}
+.agenda-conflict-target {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-inline-start: 0.3rem solid var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+}
+.agenda-conflict-target > span:first-child {
+  color: var(--byzon-warning);
+  font-size: 0.875rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.agenda-conflict-list a {
+  min-width: 0;
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-sm);
+  background: var(--byzon-surface-soft);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.agenda-conflict-list a strong {
+  color: var(--byzon-ink);
+}
+.agenda-conflict-list a span {
+  color: var(--byzon-text-muted);
+}
+.resource-progress {
+  width: min(100%, 14rem);
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--byzon-brand-soft),
+    var(--pink),
+    var(--byzon-brand-soft)
+  );
+  background-size: 200% 100%;
+}
+.status-notice {
+  margin-block: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--byzon-danger);
+  border-radius: 0.8rem;
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+  font-weight: 700;
+}
+.faq-section {
+  display: grid;
+  gap: 0.5rem;
 }
 .admin-console {
   display: grid;
@@ -455,15 +1323,748 @@ h1 span {
     width: min(100% - 1.25rem, 72rem);
     padding-top: 1.5rem;
   }
+  .home-section-heading h2 {
+    font-size: 1.85rem;
+  }
+  .home-program-link {
+    display: none;
+  }
+  .agenda-item-actions,
+  .agenda-dialog-actions,
+  .agenda-feedback-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .agenda-item-actions .ui-action,
+  .agenda-dialog-actions .ui-action,
+  .agenda-feedback-actions .ui-action {
+    width: 100%;
+  }
   .admin-form {
     grid-template-columns: 1fr;
   }
 }
+@media (min-width: 48rem) {
+  .participant-shell-content {
+    padding-bottom: 0;
+  }
+  .home-card-grid,
+  .home-practical-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ticket-card-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .ticket-status-label {
+    grid-column: auto;
+  }
+  .ticket-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .announcement-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .announcement-card-topline,
+  .announcement-card h2,
+  .announcement-card-summary {
+    grid-column: 1;
+  }
+  .announcement-card .announcement-severity {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+  .agenda-calendar-export,
+  .agenda-session-action {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
+  @keyframes content-progress {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+  .resource-progress {
+    animation: content-progress 1.2s var(--byzon-ease) infinite;
+  }
+  .resource-action {
+    transition:
+      background-color var(--byzon-motion-fast) var(--byzon-ease),
+      border-color var(--byzon-motion-fast) var(--byzon-ease);
+  }
+  .home-primary-action,
+  .home-session-list a,
+  .announcement-card {
+    transition:
+      background-color var(--byzon-motion-fast) var(--byzon-ease),
+      border-color var(--byzon-motion-fast) var(--byzon-ease);
+  }
   .brand-mark {
     transition: transform 0.2s;
   }
   .brand:hover .brand-mark {
     transform: rotate(2deg) scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agenda-loading .ui-skeleton__line {
+    animation: none;
+  }
+}
+
+.activation-page {
+  width: min(100% - 1.5rem, 68rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.activation-hero {
+  max-width: 52rem;
+}
+.activation-hero h1 {
+  max-width: 12ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 7rem);
+  line-height: 0.86;
+}
+.activation-loading,
+.activation-panel,
+.activation-page > .ui-state-panel {
+  margin-top: clamp(1.5rem, 5vw, 3rem);
+}
+.activation-panel {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-event-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--byzon-text-muted);
+}
+.activation-event-summary div {
+  display: grid;
+  gap: 0.1rem;
+}
+.activation-event-summary strong {
+  color: var(--ink);
+  font: 700 1.35rem/1.1 var(--byzon-font-display);
+}
+.activation-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+.activation-section-heading h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  line-height: 1;
+}
+.activation-kicker {
+  color: var(--pink-dark);
+  font: 700 0.875rem/1.3 var(--byzon-font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.activation-method-grid {
+  display: grid;
+  gap: 1rem;
+}
+.activation-method-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.activation-method-card h3 {
+  color: var(--ink);
+  font-size: 1.65rem;
+  line-height: 1.05;
+}
+.activation-method-icon {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--byzon-radius-sm);
+  color: var(--pink-dark);
+  background: var(--byzon-brand-soft);
+}
+.activation-method-icon svg {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+.activation-recovery {
+  color: var(--byzon-text-muted);
+}
+.activation-recovery a {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--pink-dark);
+  font-weight: 700;
+}
+.preview-disclaimer {
+  padding: 1rem;
+  border: 1px dashed var(--byzon-warning);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-warning);
+  background: var(--byzon-warning-soft);
+  font-size: 0.925rem;
+  font-weight: 600;
+}
+
+@media (min-width: 48rem) {
+  .activation-method-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.activation-form-page {
+  width: min(100% - 1.5rem, 46rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.activation-form-page > header h1,
+.activation-form-page > h1 {
+  max-width: 11ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 6rem);
+  line-height: 0.86;
+}
+.activation-form-page > .ui-state-panel,
+.activation-form-page > .ui-alert,
+.activation-form-page > div + .ui-alert {
+  margin-top: 1.25rem;
+}
+.activation-code-card {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-code-card .ui-control {
+  min-height: 3.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+.activation-form-actions {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.activation-form-actions > * {
+  flex: 1 1 9rem;
+}
+.activation-camera-explainer {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-camera-explainer h2 {
+  color: var(--ink);
+  font-size: 1.75rem;
+  line-height: 1.05;
+}
+.activation-camera-explainer ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  color: var(--byzon-text-muted);
+}
+.activation-camera-stage {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+}
+.activation-camera-stage video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 2px solid var(--ink);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--ink);
+  box-shadow: var(--byzon-shadow-md);
+}
+.activation-camera-stage p {
+  min-height: 1.5rem;
+  margin: 0;
+  color: var(--byzon-text-muted);
+  font-weight: 650;
+}
+.activation-camera-reticle {
+  position: absolute;
+  top: clamp(1rem, 8vw, 3rem);
+  left: 50%;
+  width: min(58%, 16rem);
+  aspect-ratio: 1;
+  translate: -50% 0;
+  border: 3px solid var(--byzon-surface);
+  border-radius: var(--byzon-radius-md);
+  box-shadow:
+    0 0 0 999px rgb(14 24 34 / 28%),
+    0 0 0 2px rgb(14 24 34 / 75%);
+  pointer-events: none;
+}
+.activation-scanner-actions {
+  margin-top: 1.25rem;
+}
+.activation-scanner > .preview-disclaimer {
+  margin-top: 1.25rem;
+}
+
+@media (min-width: 36rem) {
+  .activation-form-actions > * {
+    flex: 0 0 auto;
+  }
+}
+
+.onboarding-page {
+  width: min(100% - 1.5rem, 52rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.onboarding-heading {
+  max-width: 46rem;
+}
+.onboarding-heading h1,
+.onboarding-page > h1 {
+  max-width: 11ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 6.5rem);
+  line-height: 0.86;
+}
+.onboarding-context {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-top: 1.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-text-muted);
+  background: var(--byzon-surface);
+  overflow-wrap: anywhere;
+}
+.onboarding-context strong {
+  color: var(--ink);
+  font-family: var(--byzon-font-display);
+  font-size: 1.15rem;
+}
+.onboarding-page > .ui-alert,
+.onboarding-page > .ui-state-panel,
+.onboarding-page > .ui-skeleton {
+  margin-top: 1.25rem;
+}
+.onboarding-progress {
+  margin-block: clamp(1.5rem, 4vw, 2.25rem);
+}
+.onboarding-progress ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0;
+  list-style: none;
+}
+.onboarding-progress li {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.2rem;
+  border-bottom: 3px solid var(--line);
+  color: var(--byzon-text-muted);
+  font-size: clamp(0.75rem, 2.8vw, 0.9rem);
+  font-weight: 700;
+  text-align: center;
+}
+.onboarding-progress li > span {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+.onboarding-progress .onboarding-progress-current {
+  border-color: var(--pink-dark);
+  color: var(--pink-dark);
+}
+.onboarding-progress .onboarding-progress-complete {
+  border-color: var(--byzon-success);
+  color: var(--byzon-success);
+}
+.onboarding-card {
+  display: grid;
+  gap: clamp(1.25rem, 4vw, 2rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.onboarding-card > header {
+  display: grid;
+  gap: 0.45rem;
+}
+.onboarding-card > header h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1;
+}
+.onboarding-fields,
+.onboarding-legal-list,
+.onboarding-networking-consent {
+  display: grid;
+  gap: 1rem;
+}
+.onboarding-legal-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+.onboarding-legal-card h3 {
+  margin-top: 0.65rem;
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+.onboarding-legal-card details {
+  border-top: 1px solid var(--line);
+}
+.onboarding-legal-card summary {
+  min-height: var(--byzon-touch-target);
+  display: flex;
+  align-items: center;
+  color: var(--pink-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+.onboarding-legal-card details p {
+  padding-block: 0.25rem 0.75rem;
+  color: var(--byzon-text-muted);
+}
+.onboarding-choice-group {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  border: 0;
+}
+.onboarding-choice-group legend {
+  margin-bottom: 0.65rem;
+  color: var(--ink);
+  font-weight: 700;
+}
+.onboarding-choice-group .ui-choice,
+.onboarding-networking-consent > .ui-choice,
+.onboarding-legal-list > .ui-choice {
+  border: 1px solid var(--line);
+  background: var(--byzon-surface-soft);
+}
+.onboarding-choice-group .ui-choice:has(input:checked),
+.onboarding-networking-consent > .ui-choice:has(input:checked),
+.onboarding-legal-list > .ui-choice:has(input:checked) {
+  border-color: var(--pink-dark);
+  background: var(--byzon-brand-soft);
+}
+.onboarding-submit-note {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+}
+
+@media (min-width: 42rem) {
+  .onboarding-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .onboarding-fields .ui-field:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.access-problem-page {
+  width: min(100% - 1.5rem, 52rem);
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 4rem) 0 clamp(5rem, 10vw, 8rem);
+}
+.access-problem-page > header h1 {
+  max-width: 12ch;
+  margin-block: 0.35rem 1rem;
+  font-size: clamp(3.2rem, 10vw, 6.5rem);
+  line-height: 0.86;
+}
+.access-problem-page > .ui-state-panel,
+.access-problem-page > .preview-disclaimer,
+.access-problem-page > .session-controls {
+  margin-top: 1.25rem;
+}
+.session-controls {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: clamp(1rem, 4vw, 1.75rem);
+  border: 1px solid var(--line);
+  border-radius: var(--byzon-radius-lg);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+.session-controls > header {
+  display: grid;
+  gap: 0.4rem;
+}
+.session-controls h2 {
+  color: var(--ink);
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  line-height: 1;
+}
+.session-controls-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+.session-controls-actions .ui-button {
+  width: 100%;
+}
+.account-settings-page > .session-controls {
+  margin-top: clamp(1.5rem, 5vw, 2.5rem);
+}
+
+@media (min-width: 40rem) {
+  .session-controls-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.participant-account-page {
+  display: grid;
+  gap: clamp(1.5rem, 5vw, 2.75rem);
+  max-width: 62rem;
+}
+.participant-account-heading {
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.participant-account-heading h1 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: clamp(3.5rem, 11vw, 7rem);
+  line-height: 0.85;
+}
+.participant-account-heading .lead {
+  max-width: 48rem;
+}
+.participant-account-stack,
+.participant-account-section,
+.participant-legal-list,
+.participant-account-form {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-5);
+}
+.participant-account-section > header {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.participant-account-section > header h2,
+.participant-account-card h2,
+.participant-account-summary h2,
+.participant-support-card h2,
+.participant-privacy-request-card h3 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.65rem, 5vw, 2.5rem);
+  line-height: 1.05;
+}
+.participant-account-card,
+.participant-account-summary,
+.participant-support-card,
+.participant-privacy-request-card,
+.participant-legal-card {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-4);
+  overflow-wrap: anywhere;
+}
+.participant-account-summary {
+  border-inline-start: 0.35rem solid var(--byzon-brand);
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      var(--byzon-brand-glow),
+      transparent 16rem
+    ),
+    var(--byzon-surface);
+}
+.participant-account-secondary {
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+}
+.participant-more-grid {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.participant-more-grid .ui-action {
+  min-width: 0;
+  min-height: 3.5rem;
+  justify-content: space-between;
+  text-align: start;
+}
+.participant-more-grid .ui-action::after {
+  content: '→';
+  flex: none;
+  margin-inline-start: var(--byzon-space-3);
+}
+.participant-support-card {
+  border-style: dashed;
+  background: var(--byzon-surface-soft);
+}
+.participant-account-details {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-4);
+  margin: 0;
+}
+.participant-account-details div {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-1);
+  padding-block-end: var(--byzon-space-3);
+  border-block-end: 1px solid var(--byzon-border);
+}
+.participant-account-details dt {
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.participant-account-details dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--byzon-ink);
+  font-size: 1.0625rem;
+  font-weight: 750;
+}
+.participant-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--byzon-space-3);
+}
+.participant-account-actions .ui-action {
+  flex: 1 1 12rem;
+}
+.participant-account-loading,
+.participant-account-page > .ui-state-panel {
+  max-width: 46rem;
+}
+.participant-legal-heading {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--byzon-space-3);
+}
+.participant-legal-heading > div {
+  min-width: 0;
+}
+.participant-legal-heading h3 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.4rem, 4vw, 1.85rem);
+  line-height: 1.1;
+}
+.participant-legal-card details {
+  border-block-start: 1px solid var(--byzon-border);
+}
+.participant-legal-card summary {
+  min-height: var(--byzon-touch-target);
+  display: flex;
+  align-items: center;
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+  cursor: pointer;
+}
+.participant-legal-card summary:focus-visible,
+.participant-account-page .text-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.participant-legal-content {
+  display: grid;
+  gap: var(--byzon-space-3);
+  max-height: 28rem;
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-sm);
+  background: var(--byzon-surface-soft);
+  overflow: auto;
+}
+.participant-legal-acknowledgement {
+  padding-block-start: var(--byzon-space-3);
+  border-block-start: 1px solid var(--byzon-border);
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+}
+.participant-privacy-request-grid {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-4);
+}
+.participant-privacy-request-card {
+  align-content: start;
+}
+.participant-privacy-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-2);
+  padding-block: var(--byzon-space-3);
+  border-block: 1px solid var(--byzon-border);
+}
+.participant-privacy-confirmation {
+  display: grid;
+  gap: var(--byzon-space-5);
+}
+.participant-privacy-confirmation .ui-choice {
+  margin-block-start: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  background: var(--byzon-surface-soft);
+}
+
+@media (min-width: 40rem) {
+  .participant-account-actions .ui-action {
+    flex: 0 0 auto;
+  }
+  .participant-account-details,
+  .participant-more-grid,
+  .participant-privacy-request-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

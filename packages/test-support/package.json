@@ -4,12 +4,41 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./fixtures": {
+      "types": "./src/fixtures/index.ts",
+      "default": "./dist/fixtures/index.js"
+    },
+    "./fixtures/check-in": {
+      "types": "./src/fixtures/check-in.ts",
+      "default": "./dist/fixtures/check-in.js"
+    },
+    "./fixtures/admin": {
+      "types": "./src/fixtures/admin.ts",
+      "default": "./dist/fixtures/admin.js"
+    },
+    "./fixtures/support": {
+      "types": "./src/fixtures/support.ts",
+      "default": "./dist/fixtures/support.js"
+    },
+    "./fixtures/ticket-import": {
+      "types": "./src/fixtures/ticket-import.ts",
+      "default": "./dist/fixtures/ticket-import.js"
+    },
+    "./viewports": "./src/viewports.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
+    "pretest": "pnpm --filter @byzon/domain build && pnpm run build",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@byzon/domain": "workspace:*",
+    "zod": "catalog:"
   }
 }

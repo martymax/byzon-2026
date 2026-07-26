@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 23. července 2026
+> Poslední aktualizace: 26. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,8 +20,581 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Celý frontendový track `F0` až `F6-05` je dokončený ve stavu
+  `UI ready (mocked)` na `track/frontend-complete` a předává se přes
+  [PR #17](https://github.com/martymax/byzon-2026/pull/17). Syntetické preview
+  se spouští jediným příkazem `pnpm dev:mock`; root nabízí vstupy do
+  účastnické aplikace, organizačního provozu, check-inu a offline centra.
+- Propojené průchody pokrývají aktivaci, identity/onboarding/recovery,
+  participant home/program/agendu/oznámení/vstupenku/účet, kompletní admin
+  provoz a obsah, check-in confirm/undo i PWA/offline lifecycle. Přesné vstupy,
+  routes a scénáře jsou v `docs/frontend-implementation-report.md`.
+- Security a code review všech etap i pozdní post-review oprav skončily
+  `PASS`. Finální hardening uzavřel agenda owner/epoch race, stale auto-sync,
+  mock dependency boundary, E2E preview parity, React keyed-children warning a
+  novou high-severity `brace-expansion` advisory. Následný PR rereview navíc
+  oddělil mock-only participant a archivní navigaci/agendu od produkčního
+  režimu; oba P1 thready jsou opravené, otestované a uzavřené.
+- Kompletní lokální gate je zelený: 747 unit/integration testů, publication
+  4/4 proti PostgreSQL 17, browser komponenty 840/840, Playwright E2E 15/15,
+  Prettier, ESLint, sedm typechecků, static smoke, produkční Next/worker build,
+  source/post-build mock boundary a standalone runtime smoke.
+- Produkční build obsahuje 25 statických app stránek a 26 digestovaných
+  offline assetů. Service worker má 24 057 B, standalone server vrátil `200`
+  pro root/offline/PWA assety/ikony/health a mock runtime v produkčních
+  chunkech není.
+- `pnpm audit --audit-level high` je zelený. Kompatibilní větve používají
+  `brace-expansion 5.0.8`; legacy `minimatch 3.1.5` má malý reprodukovatelný
+  API adapter patch. Zůstává jedna `moderate` transitivní položka starého
+  `esbuild` pouze v dev-toolingu.
+- Produkční auth, autorizované endpointy, skutečný ticket credential,
+  SimpleShop synchronizace, offline lease/replay, staging UAT a fyzická
+  zařízení zůstávají správně backend/provozními handoffy. Nejde o chybějící
+  mockované frontendové obrazovky.
+
+## Historický průběh frontendové větve
+
+Následující body zachovávají etapový stav v okamžiku jednotlivých commitů.
+Aktuální souhrn a konečné počty jsou výše.
+
+- `F3-01` až `F3-05` jsou na `track/frontend-complete` po závěrečném security
+  a code review ve stavu `UI ready (mocked)`; oba review skončily `PASS` bez
+  nevyřešeného actionable nálezu. `F3-06` zůstává správně blokovaný přes
+  `BLOCKER-RES-02`.
+- `/app/agenda` nabízí kompletní syntetický průchod přes uložené body,
+  rezervace, kapacitní stavy, čekací listinu, časově omezenou nabídku místa,
+  odhad účasti, konflikty a `.ics` export. Agenda je napojená na detail
+  programu i domovský přehled a pátý cíl primární navigace; návrat z detailu
+  zachová přesný bezpečný origin a owner-scoped scroll.
+- `CS-AGENDA-01` je strict event/user-scoped private/no-store kontrakt.
+  Mutace korelují action, session, offer, version a canonical postcondition,
+  rozlišují ponechaný saved zdroj od odstraněné projekce a při neurčitém
+  výsledku opakují stejný idempotency key. 401/403, revokace a změna účtu
+  okamžitě skryjí osobní data; rezervace se nikdy lokálně neslibuje.
+- Finální `F3` gate je zelený: 124 domain testů, 28 fixture testů, 273
+  conference unit testů, 36 očekávaně přeskočených DB scénářů a 618 Chromium
+  component/axe/responsive scénářů ve třech viewports. Prošly Prettier,
+  ESLint, relevantní typechecky, produkční Next build a source/post-build
+  mock boundary.
+- Celá etapa `F2` je na `track/frontend-complete` po závěrečném security a code
+  review ve stavu `UI ready (mocked)`; oba review skončily `PASS` bez
+  nevyřešeného actionable nálezu. Rozšířený `CS-BOOT-01` nese event/user
+  scope, verzovanou správu profilového minima, úplný právní obsah nebo HTTPS
+  odkaz, přesnou evidenci acknowledgement, privacy stavy a support e-mail.
+- `/app/vice` je nový funkční hub pro profil, soukromí, nastavení, vstupenku,
+  praktické informace, řečníky a partnery. Primární navigace má nyní pět cílů
+  `Přehled / Program / Agenda / Oznámení / Více`.
+  `/app/profil` podporuje canonical save, stale-version reload, lokální
+  validaci a ochranu rozepsaných změn. `/app/soukromi` zobrazuje aktuální
+  právní verze/evidenci pouze pro čtení a export/smazání odesílá až po
+  explicitním potvrzení.
+- Account resource načítá private/no-store bootstrap až na účetních routách,
+  PII drží jen v paměti a failne zavřeně při pending, suspended, revoked,
+  neparticipant roli nebo neshodě canonical event/user/version. Logout,
+  switch-account a autoritativní revokace provádějí wipe. Stateful mock přejde
+  do `synthetic_preview` active participant stavu až po úspěšném onboardingu,
+  nic nepersistuje přes reload a nevytváří skutečnou Better Auth session ani
+  membership.
+- Finální `F2` gate je zelený: 113 domain testů, 27 fixture testů, 229
+  conference unit testů, 36 korektně přeskočených DB scénářů a 510 Chromium
+  component/axe/responsive scénářů ve třech viewports. Prošly Prettier,
+  ESLint, všechny workspace typechecky, produkční Next build a source i
+  post-build mock boundary.
+- Etapové hardening regrese vážou všechny privátní resource na event,
+  uživatele a session; 401/403, revokace i switch-account synchronně mažou
+  PII. Archiv používá pouze domain-separated SHA-256 scope fingerprint,
+  nikoli serializované event ID. Profil, privacy a session mutace odmítají
+  stale nebo nekorelovaný canonical výsledek.
+- Recovery odkazy nyní zachovají přesnou bezpečnou participant úlohu přes
+  uzavřený allowlist statických tras, UUID detailů a bounded slugů. Mock token
+  používá canonical base64url, fatal UTF-8 decode, opakovanou schema validaci
+  a fingerprint-bound replay; jde výhradně o development transport, nikoli
+  produkční autentizační důkaz.
+- `F2-05` je na `track/frontend-complete` dokončený ve stavu
+  `UI ready (mocked)`. Nový participant subset `CS-ANN-01` pokrývá privátní
+  inbox, detail a online-only read včetně přesných problem kódů,
+  idempotency, recipient oprávnění a validovaných syntetických fixtures.
+  Produkční participant endpoint zůstává v `P8-06`, admin draft/audience/send
+  v `P8-05`/`F4-06`; e-mail provider tento mocked řez neblokuje.
+- `/app/oznameni` je dostupné z pěticestné participant navigace. Inbox má URL
+  all/unread filtr reagující na Back/Forward, cursorové načítání se zachováním
+  globálního newest-first pořadí, bezpečné prázdné/offline/auth/permission/
+  disabled/error stavy a nebarevné read cues. Detail zachová filtr, načtenou
+  hloubku a číselný scroll bez uložení announcement ID, obsahu nebo cursoru;
+  read se spouští až po validovaném renderu a neurčitý retry drží stejný key.
+- Závěrečný security i code review `F2-05` skončil `PASS`. Zapracované regrese
+  failnou zavřeně při neshodě eventu/route ID, synchronně skryjí P1/P2 data
+  při autoritativní revokaci, odříznou stale resource/filter race a v mocku
+  vracejí bitově shodnou 404 pro neexistující i cizí recipient snapshot.
+  Bounded return context se nejprve strict-validuje, po auth/revokaci maže a
+  crafted URL nemůže spustit cursor request amplification.
+- Finální `F2-05` gate prošel jako 144 conference unit testů a 36 korektně
+  přeskočených DB scénářů, 68 domain testů, 22 fixture testů a 369 Chromium
+  component/axe/responsive scénářů ve třech viewports. Prošly všechny
+  workspace typechecky, ESLint, Prettier, produkční Next build a source/
+  post-build mock boundary. Skutečný Next server nad izolovanou migrovanou a
+  seednutou PostgreSQL vrátil `200` pro inbox i detail a použil stejný
+  kanonický event ID jako mock DTO.
+- Celá etapa `F1` je po závěrečném security a code review ve stavu
+  `UI ready (mocked)`. Review opravil race při camera permission/claim/cancel,
+  stabilní idempotency pro neurčité výsledky a přesné serverové
+  `IDEMPOTENCY_*` kódy, autoritativní login gate, ochranu rozepsaného
+  onboardingu, focus po stavovém přechodu a redigované mock diagnostiky.
+- Jednorázové aktivační a recovery tokeny jsou jen v URL fragmentu, který se
+  před explicitním consume okamžitě odstraní. Query token je odmítnutý a
+  scrubbed; mock replay ukládá pouze SHA-256 fingerprint, rozlišuje stejný
+  key/payload, key collision i dříve spotřebovaný token.
+- Závěrečný gate prošel: 133 conference unit/contract testů a 36 korektně
+  přeskočených DB scénářů, 87 domain testů, 18 fixture testů a 252 Chromium
+  component/axe/responsive scénářů na třech viewports. Prošel ESLint,
+  Prettier, typecheck, produkční Next build i source/post-build mock boundary.
+- `F1-06` je dokončený na `track/frontend-complete`. Přesný syntetický
+  already-active kód `TST-RECOVERY-2026` vrátí `recovery_required` a vede na
+  samostatný neenumerující recovery formulář. E-mail se netrimuje ani
+  nepersistuje a po neutral accepted odpovědi není zobrazený; syntetický
+  recovery token se na `/aktivace/odkaz` okamžitě odstraní z URL a končí
+  kontraktním `active → /app`.
+- Mock replay jednorázového odkazu je vázaný na přesný token i idempotency key
+  a vrací původní větev; jiný token nebo key je obecně odmítnutý.
+  `/chyba-pristupu` zobrazuje pouze syntetický bezpečný access stav a opaque
+  support referenci bez PII. `/app/nastaveni` zpřístupňuje logout current,
+  logout all a switch account bez seznamu cizích účtů.
+- Všechny session akce vyžadují potvrzení, korelují response action a až po
+  canonical úspěchu spouštějí injektovatelný lokální wipe seam. Mock invaliduje
+  syntetický owner/bootstrap kontext, ale výslovně přiznává, že skutečná Better
+  Auth session nebyla změněná. `CS-BOOT-01` nově odmítá role u pending,
+  suspended i revoked membership.
+- Cílené výsledky jednotlivých F1 kroků zůstávají níže jako historická
+  evidence; autoritativní závěrečné počty jsou uvedené v úvodu tohoto stavu.
+- `F1-05` je dokončený na `track/frontend-complete`. Nový `CS-BOOT-01`
+  striktně popisuje private/no-store `/me/bootstrap` a idempotentní
+  `/me/onboarding`: event, minimální identitu, pending/active access bez
+  důvěry v klientskou roli, profil, feature flags, privacy minimum, onboarding
+  stav a právě aktuální právní dokumenty. Pending aktivace nenese role a live
+  data nesmí přijmout syntetické právní preview.
+- Development-only `/onboarding` vede kroky profil → podmínky/privacy →
+  dobrovolný networking. Jméno a e-mail kanonizuje podle domény, povinné
+  dokumenty potvrzuje přes exact ID/verzi a networking začíná bez předvolby;
+  opt-out neposílá networking consent ID, opt-in má samostatné potvrzení.
+  Back zachová jen in-memory draft, opuštění je chráněné a URL, local/session
+  storage, cache ani offline mutace P2 data nedostanou.
+- Chybějící/nepublikované či stale právní verze zastaví submit a zruší staré
+  checkboxy. Syntetické texty jsou výslovně označené jako neschválený draft.
+  Same-tick lock propustí jeden submit a neurčitý retry znovu použije stejnou
+  idempotency key; deterministický problem ji zahodí. Mock nikdy nevytvoří
+  skutečnou Better Auth session, membership nebo consent record.
+- Ověření `F1-05` prošlo jako 109 conference testů (36 DB scénářů korektně
+  přeskočeno), 118 domain/UI/test-support testů a 27 onboarding komponentových
+  scénářů na třech viewports včetně axe, overflow a `44 px`. Prošly také
+  cílený ESLint, Prettier, typecheck, produkční Next build a source/post-build
+  mock boundary. Produkční právní UAT zůstává za `BLOCKER-LEGAL-01` a skutečný
+  autorizovaný zápis za `P4-13`.
+- `F1-04` je dokončený na `track/frontend-complete`. Po manual/camera claimu
+  používá CTA klientskou Next navigaci, aby dev/test MSW zachoval syntetický
+  serverový pending stav. `/prihlaseni` vždy znovu čte landing
+  `claim_in_progress`; flow ID, e-mail ani ticket kód neukládá do URL,
+  history, cookie, local/session storage, IndexedDB ani Cache API.
+- Identity form přesně validuje e-mail a allowlisted `returnTo` (`/app` nebo
+  `/onboarding`), koreluje response `flowId`, má focusovatelný error summary,
+  same-tick submit lock a pro neurčitý offline/transport retry znovu použije
+  stejnou idempotency key. `link_sent` zůstává neenumerující a výslovně
+  potvrzuje, že mock nevytvořil session ani membership.
+- `/aktivace/odkaz` nečte token v RSC. Client effect vezme právě jednu hodnotu
+  z URL fragmentu pouze do ref a před akcí nahradí URL čistou route se
+  zachováním `history.state`; query token odmítne. Route má `noindex`,
+  route-specific
+  `Referrer-Policy: no-referrer` a `Cache-Control: private, no-store`.
+  Explicitní consume je zamčený, při neurčitém retry drží stejný token/key jen
+  v paměti a terminální stav pokračuje pouze na kontraktem povolený
+  `/onboarding`.
+- Dev MSW modeluje claim → landing pending → identity → one-time link v paměti,
+  validuje každý body/idempotency key a stejnou link key replayne; jiná key po
+  spotřebování dostane generické odmítnutí. Skutečný Better Auth endpoint,
+  user, session ani membership se nepoužije; produkční handoff zůstává za
+  `BLOCKER-AUTH-01`/`P4`.
+- Ověření `F1-04` prošlo jako 105 conference testů (36 DB scénářů korektně
+  přeskočeno), 81 domain testů a 84 cílených komponentových scénářů na třech
+  viewports včetně axe, overflow a `44 px`. Prošly také ESLint, Prettier,
+  typecheck, produkční Next build a source/post-build mock boundary.
+- `F1-03` je dokončený na `track/frontend-complete`. Development-only
+  `/aktivace/skenovat` nejprve přes landing kontrakt ověří otevřenou fázi,
+  anonymní flow a serverem povolené `camera_scan`; teprve potom po explicitním
+  kliknutí žádá o browser camera permission. Global response header omezuje
+  kameru na `Permissions-Policy: camera=(self)`.
+- Scanner drží stream pouze v paměti, neukládá obraz ani QR a odpojí video i
+  zastaví všechny tracks při cancel, unmountu, Back/pagehide, skrytí tabu a
+  pozdním doběhnutí permission promise. Claim lock propustí nejvýše jeden
+  idempotentní `camera_scan`; default mock generuje jednorázovou validní
+  hodnotu za běhu, takže v produkčním bundle není fixture secret.
+- `CS-ACT-01` nově odmítá nabídku kamery bez `manual_code` fallbacku a
+  aktivační landing vykresluje pouze serverem povolené metody. Scanner má
+  explicitní requesting/scanning/cancelled/denied/unsupported/unavailable/
+  offline/rate-limit/rejected/session-expired/error/success stavy a v každém
+  nedokončeném průchodu bezpečný návrat nebo ruční zadání.
+- Ověření `F1-03` prošlo jako 81 domain a 92 conference unit/contract testů
+  (36 DB scénářů korektně přeskočeno), 42 cílených browser scénářů na třech
+  viewports, axe/overflow/`44 px`, lint, Prettier, typecheck a produkční Next
+  build včetně source/post-build mock boundary. Build obsahuje
+  `/aktivace/skenovat`, ale žádný test-support/MSW runtime.
+- `F1-02` je dokončený na `track/frontend-complete`. Development-only
+  `/aktivace/kod` zachovává opaque kód přesně bez trim/case transformace,
+  neukládá jej do URL ani draftu, používá no-store typed request s
+  idempotency key a odmítnutí mapuje na jedinou neenumerující zprávu.
+  Kanonický dev/test kód je `TST-OPAQUE-2026`; po jeho přijetí UI výslovně
+  sděluje, že nevznikl skutečný účet, membership ani session.
+- Mock handler validuje body i idempotency key a přijme jen kanonický
+  syntetický kód. Regrese odhalená React Strict Mode testem opravila mounted
+  guard asynchronního submitu. Cílené contract/MSW testy a 12 browser
+  komponentových scénářů na třech viewports procházejí; route má lokální
+  validaci, focus na error summary, obecný rejected stav, axe, `44 px` input
+  a kontrolu overflow.
+- `F1-01` je implementovaný na `track/frontend-complete`. Nový
+  `CS-ACT-01` striktně popisuje landing, opaque claim, identity handoff,
+  one-time link a neenumerující recovery včetně no-store, secrets a
+  same-origin `returnTo` hranic. Validované fixtures vždy uvádějí
+  `membershipCreated: false` a `sessionCreated: false`, dokud skutečný
+  handshake neodemkne `BLOCKER-AUTH-01`.
+- Development-only `/aktivace` pokrývá anonymní, rozpracovaný, aktivovaný,
+  suspended, před/po/archivně uzavřený, loading, offline, error a
+  session-expired stav. Root v developmentu odkazuje do mock průchodu;
+  `pnpm dev:mock` jej spustí s viditelným syntetickým režimem. Cíleně prošlo
+  21 unit/contract/fixture testů, 18 browser komponentových scénářů ve třech
+  viewports, axe, overflow, `44 px`, ESLint, Prettier a typecheck.
+- Kompletační práce pokračuje lineárně na
+  `track/frontend-complete`. Foundation security/code audit před `F1`
+  zpevnil mock runtime: neobsloužené same-origin `/api/**` požadavky včetně
+  Better Auth selžou zavřeně, zatímco Next RSC, dokumenty a assety mohou
+  normálně projít. Při selhání workeru platí stejná `/api/**` hranice.
+- Syntetický participant program a obsah jsou dostupné pouze pro jediný
+  kanonický event fixture; cizí event ID vrací bezpečné `404`.
+  `participantContentResponseSchema` navíc odmítne rozdíl top-level event
+  scope a `content.event.id`. Mock odpovědi nesou explicitní `no-store`,
+  privátní varianty také `Vary: authorization, cookie`.
+- Neintegrovaná `/app/vstupenka` je od foundation review v produkci tvrdě
+  skrytá přes `404`; funkční data v development preview vyžadují explicitní
+  `NEXT_PUBLIC_BYZON_API_MOCKS=enabled`. Test mock indikátor už na telefonu
+  nepřekrývá spodní participant navigaci.
+  Regresní výběr prošel 18/18 testů, cíleným ESLintem, Prettierem a
+  domain/conference typecheckem.
+- Dílčí řez `F2-06` je commitnutý jako `e387c3b` a pushnutý na
+  `origin/track/frontend-b/F2-06-content-a11y`. Shell/program gate přidává
+  redigovaný browser-side `axe-core` WCAG A/AA helper, skutečný participant
+  layout nad validovanou syntetickou fixture, focus/touch/overflow/responsive
+  geometrické kontroly, CDP reduced-motion kontrolu a jeden visual baseline
+  pro každý schválený viewport. Ticketová část je nově pokrytá v `F2-04`;
+  inboxová část je pokrytá v `F2-05` a celý `F2-06` zůstává otevřený už jen
+  pro účet po `F2-07`.
+- `F2-01` je commitnutý jako `8c4d1cc` a pushnutý na
+  `origin/track/frontend-b/F2-01-participant-shell`. Participant layout používá sdílený
+  `ParticipantNavigation` pro čtyři existující funkční cíle, každý s
+  konzistentní ikonou a labelem. Segmentově bezpečné mapování udržuje
+  `aria-current` i na detailu; telefon má fixed spodní navigaci se
+  safe-area/content clearance, tablet a desktop sticky variantu. Root viewport
+  má `viewport-fit=cover`; stávající skip link zůstává prvním focusovatelným
+  prvkem.
+- `F2-02` je commitnutý jako `ad6b5cf` a pushnutý na
+  `origin/track/frontend-b/F2-02-home-overview`. `/app` už nepřesměrovává na
+  program: používá serverový stav
+  eventu, z publikovaného `CS-CONTENT-01` skládá phase-aware dnešní minimum,
+  praktické informace a bezpečný před/po/archivní stav. Navigace má pátý
+  funkční cíl `Přehled`; mobilní hierarchie drží jedinou dominantní CTA a
+  konkrétní program nad spodní navigací.
+- Produkce zatím nepředstírá osobní agendu. `ParticipantHome` umí přijmout
+  budoucí `nextSavedSessionId`, ale zobrazí jej jen jako neukončený,
+  nezrušený bod nalezený v publikovaném programu. Dokud není hotový
+  `CS-AGENDA-01`, stránka místo syntetického personalizovaného stavu otevřeně
+  vysvětluje, že uložené body v přehledu nejsou dostupné. `F2-02` proto
+  zůstává otevřený také pro `CS-BOOT-01`, skutečnou agendu a phase-aware
+  omezení navigace v archivním stavu.
+- `F2-04` je commitnutý jako `73ef595` a pushnutý na
+  `origin/track/frontend-b/F2-04-ticket-screen`. `/app/vstupenka` zobrazuje validovaný stav
+  `valid/cancelled/refunded/blocked`, minimálního držitele a nejvýše
+  čtyřznakový maskovaný suffix. Prezentační plocha má jediný povolený stav
+  `unavailable`; žádná fixture, response schema ani DOM neobsahují QR,
+  barcode, source ticket kód nebo presentation value.
+- Nový status-only [`CS-TICKET-01`](packages/domain/src/contracts/ticket.ts)
+  je privátní a `no-store`, odmítá unknown pole, nebezpečné control/bidi
+  znaky, nekonzistentní status/reason i pokus dodat credential před
+  `BLOCKER-TKT-05`. Typed klient `/api/v1/me/ticket` má bezpečné loading,
+  offline, authentication, session-expired, not-found a invalid-response
+  stavy; skutečný server endpoint zatím neexistuje a produkční integrace
+  zůstává vlastnictvím `P4-12`.
+- Security a code review `F2-04` zapracovaly limit suffixu na čtyři znaky,
+  single-line holder allowlist, stavové invarianty a formulaci, která
+  neslibuje budoucí credential. UI používá text i ikonu, nikoli samotnou
+  barvu, a drží BYZON tokeny, focus, `44 px`, safe-area clearance a
+  mobile-first hierarchii. Nezůstává otevřený actionable nález mocked řezu.
+- Ověření `F2-04` prošlo cíleným ESLintem/Prettierem, domain, test-support a
+  conference typecheckem, 74 domain testy, 17 test-support testy a 78
+  conference unit/architecture testy; 36 DB scénářů se bez PostgreSQL
+  korektně přeskočilo. Chromium component suite prošla 72/72 scénářů v 15
+  souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`, včetně všech
+  čtyř ticket stavů, privátní failure taxonomy, loading/offline, axe,
+  overflow, `44 px` retry a tří visual baseline. Produkční Next build i
+  source/post-build mock boundary prošly a obsahují `/app/vstupenka`, nikoli
+  MSW ani test fixtures.
+- Dílčí `F2-02` ověření prošlo cíleným ESLintem a Prettierem, conference
+  typecheckem, 76 unit/architecture testy a 42 browser component testy ve 12
+  souborech napříč `375 × 667`, `768 × 1024` a `1280 × 800`. Nový home řez
+  kontroluje focus, nejméně `44 px` viditelné targety, overflow, axe,
+  poctivý unavailable agenda stav, uzavřenou fázi bez content requestu a tři
+  deterministické visual baseline. Produkční Next build i source/post-build
+  mock boundary prošly.
+- Focus management nyní omezeně sleduje asynchronně vykreslený route heading a
+  zvládne i výměnu starého nadpisu za nový při klientské navigaci. Observer se
+  odpojí po pěti sekundách a nikdy nevezme focus uživateli, který mezitím
+  začal stránku ovládat. Detail řečníka aktivuje rodičovské `Řečníci` a
+  zachovává kanonický návrat `/app/recnici`; programový detail dál zachovává
+  query filtry a scroll.
+- `F2-01` ověření prošlo jako 71 conference unit/architecture testů a 30
+  browser component testů v 9 souborech napříč `375 × 667`, `768 × 1024` a
+  `1280 × 800`; prošel cílený ESLint, Prettier, conference typecheck,
+  `git diff --check`, produkční Next build a source/post-build mock boundary.
+  Visual baselines byly zkontrolované, včetně čtyř plně čitelných mobilních
+  cílů bez překryvu obsahu.
+- E2E `conference-shell.spec.ts` byl rozšířen o ikony, aktivní stav, 44px
+  geometrii, mobilní content clearance a `viewport-fit=cover`. Deep-link
+  návrat zůstává v browser component testu nad validovanou fixture, protože
+  základní CI DB seed záměrně neobsahuje syntetický profil řečníka. Lokálně
+  proběhly pouze tři DB-independent reduced-motion scénáře; dev server pak
+  správně vracel `/health/ready` 503 a participant server routy skončily před
+  renderem na `ECONNREFUSED`, protože neběží PostgreSQL. Úplný scénář zůstává
+  pro DB-backed GitHub CI.
+- Security a code review úplného `F2-01` diffu proběhly. Zapracované nálezy
+  doplnily chybějící iOS `viewport-fit=cover` a zpevněný focus při výměně
+  asynchronního nadpisu. Navigační konfigurace je statická, nevykresluje data
+  uživatele, observer je bounded a safe-area rezervuje prostor i pro obsah.
+  Nezůstává otevřený actionable security ani code-review nález.
+- Security a code review dílčího `F2-02` diffu proběhly. Zapracované nálezy
+  odmítají skončenou session jako „další uložený bod“, odlišují po-akční copy
+  od pokynů před cestou a správně označují oba konce vícedenního rozsahu
+  samostatnými `<time>` prvky. Fázi dodává serverový event status, živý stav se
+  neodhaduje, dynamické ID se přijme jen proti publikovanému allowlistu a
+  draft/archiv nevyvolává content request. Nezůstává otevřený actionable nález
+  tohoto dílčího řezu.
+- Frontendový řez `F2-03` je commitnutý jako `ece9c10` a pushnutý na
+  `origin/track/frontend-b/F2-03-content-contract`. `CS-CONTENT-01` v
+  [`packages/domain/src/contracts/content.ts`](packages/domain/src/contracts/content.ts)
+  nyní definuje striktní publikovaný program, directory/practical DTO, query a
+  přesné problem uniony i cache/offline/PII hranici. Serverové P3 snapshot
+  extraktory, response validace, typed browser `ApiPort`, dev MSW handlery a
+  syntetické fixtures používají stejný runtime kontrakt.
+- Security a code review dílčího `F2-06` diffu proběhly. Zapracovaný nález
+  přesunul `axe-core` k conference jako explicitní dev dependency a rozšířil
+  architecture i production source/build guard, aby se browserový audit
+  runtime nemohl dostat do produkce. Axe chyba vypisuje pouze rule metadata a
+  počty uzlů, baseline obsahují výhradně validované syntetické fixtures a CDP
+  media emulace se po testu úplně resetuje. Nezůstává otevřený actionable
+  security ani code-review nález tohoto dílčího řezu.
+- Participant program, detail, řečníci, partneři a praktické informace mají
+  bezpečné loading/empty/offline/authentication/session-expired/permission/
+  invalid-response stavy s retry, pouze validovanou request referencí a bez
+  vykreslení serverového `detail`. Filtry programu se zachovávají v URL a
+  session-scoped continuity storage, návrat z detailu je nese dál a scroll se
+  obnovuje bez smooth motion. Route change přesouvá focus, dlouhý český obsah
+  se bezpečně zalamuje a interakce dodržují `44 px`, viditelný focus a
+  `prefers-reduced-motion`.
+- Security a code review `F2-03` proběhly. Zapracované nálezy: browser přestal
+  importovat serverový typ a všechny odpovědi odmítají unknown fields;
+  snapshot parser striktně allowlistuje publikovaná pole a odstraní private
+  metadata; klient nerozhoduje podle lokalizovaného textu; externí URL jsou
+  pouze HTTP(S), map query je encoded; storage/history selhání je fail-soft;
+  `304` bez lokálního ETag nesmí ponechat nekonečný loading; Zod textová
+  validace netrimuje a tudíž tiše nemění existující P3 wire hodnoty. A11y
+  smoke navíc odhalil, že první skutečné content handlery přivedly source-only
+  test-support exporty s `.js` specifiery do Turbopack dev grafu; package nyní
+  publikuje buildnuté ESM runtime exporty a conference dev/test/component
+  skripty je deterministicky sestaví před startem.
+- Ověření `F2-03` prošlo pro celý workspace ESLint, Prettier, typecheck a 237
+  unit/architecture/contract testů; 51 DB integračních testů se bez běžícího
+  PostgreSQL korektně přeskočilo. Prošlo také 18 Chromium component scénářů
+  a 6 axe/keyboard/overflow smoke scénářů napříč `375 × 667`, `768 × 1024` a
+  `1280 × 800`. Kompletní web/worker production build prošel i se záměrně
+  nastaveným `NEXT_PUBLIC_BYZON_API_MOCKS=enabled`; source/post-build boundary
+  v deployment grafu nenašla MSW ani fixtures. High dependency audit je čistý
+  a eviduje jediný známý moderate vývojový `esbuild` přes `drizzle-kit`.
+  Docker CLI je dostupné, ale lokální daemon neběží, proto skutečné P3 DB
+  integrační testy zůstávají na PostgreSQL-backed GitHub CI.
+- Capability Program a informace zůstává `contract ready`. `F2-01` je hotový
+  pro současné funkční participant routy, první řez `F2-02` přidal
+  nepersonalizovaný phase-aware přehled a shell/program část `F2-06` je
+  pokrytá, ale `F2-02` čeká na `CS-BOOT-01`/`CS-AGENDA-01` a celý `F2-06`
+  zůstává otevřený pro správu účtu/soukromí, která vznikne v `F2-07`; teprve
+  potom lze participant quality capability uzavřít. `BLOCKER-CONTENT-01`
+  blokuje až obsahové UAT, ne další contract-first práci. `F6-02` může
+  paralelně začít nad public částí `CS-CONTENT-01`.
+- V pracovním stromu zůstávají cizí nestagované soubory
+  `apps/conference/src/components/content-state 2.tsx` a
+  `apps/conference/src/components/content-state 3.tsx`. Při produkčních
+  kontrolách byly pouze dočasně přesunuty mimo
+  `src` a vráceny; nejsou součástí `F2-01` až `F2-06` a nesmí být
+  commitnuté.
+- Frontendový řez `F0-06` je implementovaný v commitu `f14c6d5` a pushnutý na
+  `origin/track/frontend-a/F0-06-component-a11y`.
+  Samostatný Vitest Browser/Playwright component runner vykresluje React 19
+  komponenty ve skutečném headless Chromiu ve všech třech schválených
+  viewports `375 × 667`, `768 × 1024` a `1280 × 800`. Stabilní interní
+  `renderComponent` hranice používá accessible locators a skutečné keyboard/
+  pointer události; CI ji spouští po instalaci přesně připnutého Chromia.
+- `@byzon/test-support` poskytuje validované a hluboce zmrazené
+  `targetViewports`, deterministický `selectFixtureContexts` a stabilní
+  `fixtureContextName` pro role/phase matice. Page-level
+  `@axe-core/playwright` helper kontroluje WCAG A/AA a do CI chyby vypíše pouze
+  rule metadata a počet uzlů, nikdy raw DOM/HTML nebo text s možnou PII.
+  Playwright projekty i component instances čtou jediný sdílený viewport
+  registr.
+- Security a code review celého `F0-06` diffu proběhly. Zapracované nálezy:
+  component test runtime má architektonický zákaz DB/server importů;
+  produkční source/post-build skener nově odmítá Vitest Browser, axe Playwright
+  a `test/component` importy; testovací live-start override je explicitní a
+  výchozí full E2E dál čeká na DB-backed `/health/ready`; axe report rediguje
+  DOM obsah. Reálný browser smoke odhalil a opravil brand link menší než
+  minimální dotykový cíl přidáním sdíleného `44 px` tokenu.
+- Ověření `F0-06` prošlo pro frozen offline instalaci, celý workspace ESLint,
+  Prettier, typecheck, unit/integration testy a web/worker build. Bez lokální DB
+  prošlo 227 testů a 51 DB integračních scénářů bylo korektně přeskočeno.
+  Navíc prošly 3 Chromium component testy, 6 axe/keyboard/overflow smoke testů
+  a 3 reduced-motion smoke testy napříč třemi viewporty. Produkční build se
+  záměrně zapnutým mock flagem neobsahuje mock ani component/axe test runtime;
+  high dependency audit je čistý a zůstává jen známý moderate vývojový
+  `esbuild` přes `drizzle-kit`.
+- Úplný `pnpm test:e2e` lokálně nemohl doběhnout, protože výchozí
+  `/health/ready` správně hlásil chybějící PostgreSQL. Veřejná DB-independent
+  axe/responsive sada proto běžela přes explicitní live-start režim; GitHub CI
+  instaluje Chromium, migruje a seeduje PostgreSQL a poté spouští component i
+  úplnou E2E sadu. `F1-01` zatím čeká na společný kontrakt s nedokončenými
+  `P4-04`/`P4-07`.
+- Frontendový řez `F0-05` je implementovaný v commitu `bce2a46`, pushnutém na
+  `origin/track/frontend-a/F0-05-msw-mocks`. Přesně
+  připnutý MSW `2.15.0` v dev/test používá stejný produkční `ApiPort` nad
+  nativním `fetch`; Node harness i browser worker sdílejí kontraktem validované
+  response helpers a feature handlers zůstávají u vlastníka příslušného
+  `CS-*` slice. Lokální browser mock se zapíná pouze build-time hodnotou
+  `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` v development compile a zobrazuje
+  trvalý textový indikátor „Mock data · pouze vývoj/test“.
+- Mock režim je fail-closed: neobsloužený request nesmí propadnout do skutečného
+  API a při selhání workeru se blokují same-origin `/api/v1` požadavky.
+  Vygenerovaný `public/mockServiceWorker.js` je ignorovaný a produkční build ho
+  před kompilací odstraní. Zdrojový i post-build skener odmítá MSW,
+  `@byzon/test-support`, fixture cestu, veřejný přepínač, worker asset a
+  runtime marker v produkčním grafu. Existující `/sw.js` se neregistruje přes
+  cizí root-scope worker a po vypnutí mocku se MSW klient okamžitě zastaví,
+  jeho registrace odstraní a aplikační worker může scope znovu převzít.
+- Security a code review celého `F0-05` diffu proběhly. Zapracované nálezy:
+  fallback `fetch` guard je HMR-safe, nevrství se a při obnově vrací původní
+  implementaci; vypnutí funguje i bez Service Worker API; aktivní MSW klient
+  se před odregistrováním explicitně zastaví; fixture validační chyba
+  neobsahuje raw tajnou hodnotu; aplikační worker nikdy nepřepíše neznámou
+  registraci stejného scope; indikátor bezpečně počká na dostupné DOM.
+  Dependency audit navíc odhalil nové high advisories v `next 16.2.10` a
+  `sharp 0.34.x`, proto byly minimálně aktualizovány Next i
+  `eslint-config-next` na `16.2.11` a transitive Sharp na `0.35.0`.
+- Ověření `F0-05` prošlo pro frozen offline instalaci na pnpm `11.15.1`,
+  conference typecheck, 60 unit/architecture/transport testů ve 12 souborech,
+  cílený ESLint, Prettier a `git diff --check`. Negativní boundary test správně
+  odmítl přítomný vygenerovaný worker. Produkční Next build prošel i se záměrně
+  nastaveným `NEXT_PUBLIC_BYZON_API_MOCKS=enabled` a následná kontrola
+  deployment artefaktů nenašla mock runtime ani syntetická data. Audit
+  `--audit-level high` je čistý; zůstává pouze dříve evidovaný moderate
+  vývojový `esbuild 0.18.20` přes `drizzle-kit/@esbuild-kit`.
+- Dev server s mock přepínačem vrátil aplikaci i oficiální vygenerovaný worker;
+  marker a indikátor byly přítomné pouze v dev chunku. Vizuální kontrola
+  skutečné registrace a indikátoru nemohla proběhnout, protože v relaci nebyl
+  dostupný in-app browser.
+- Frontendový řez `F0-04` je implementovaný na stacked větvi
+  `track/frontend-a/F0-04-api-client` v commitu `19cb6e2`, pushnutém na
+  `origin/track/frontend-a/F0-04-api-client` nad pushnutým `F0-03`. Nový
+  [`apps/conference/src/lib/api/README.md`](apps/conference/src/lib/api/README.md)
+  popisuje tenký typovaný `ApiPort` a klienta nad nativním `fetch`. Endpointy
+  deklarují přesná request/success/problem schémata, allowlist problem kódů,
+  response, retry a idempotency policy; klient používá pouze same-origin
+  `/api/v1`, validuje request i response, rozlišuje abort, timeout, offline,
+  transport, neplatnou odpověď, expirovanou session a doménový problem.
+- Security a code review celého `F0-04` diffu proběhly. Zapracované nálezy:
+  URL se normalizuje a odmítá traversal, externí i chybně kódované cesty;
+  explicitní base URL je povolená jen proti známému browser originu; request
+  a response mají byte limity a response se čte omezeným streamem; timeout a
+  caller abort fungují i při injektovaném fetchi ignorujícím signál; `304`
+  vyžaduje shodný ETag; problem status i request ID se musí shodovat s hlavičkou
+  a endpointem; runtime klient znovu ověřuje endpoint policy, takže ji nelze
+  obejít ručně sestaveným objektem. Raw výjimky, request payloady ani nevalidní
+  response bodies se nevracejí do UI.
+- Ověření `F0-04` prošlo pro domain i conference typecheck, domain build,
+  42 unit/architecture testů v 5 souborech, Prettier, `git diff --check` a
+  produkční Next build. Mutace se v regresních testech nikdy automaticky
+  neopakují, zatímco pouze explicitní safe reads mají nejvýše dva bounded
+  retry pokusy. ESLint se i nad přesně omezenými změněnými soubory zasekl bez
+  výstupu déle než minutu a byl ukončen; žádný lint nález nevypsal.
+- Při typechecku bylo nalezeno šest ignorovaných `.next/types` souborů se
+  suffixem ` 2`/` 3`. Všechny byly byte-identické s kanonickými protějšky a
+  byly recoverably přesunuty do `/tmp/byzon-next-types.UXYN5d`; žádná unikátní
+  změna se neztratila.
+- Frontendový řez `F0-03` je implementovaný na větvi
+  `track/frontend-a/F0-03-fixtures` v commitu `ea78775`, pushnutém na
+  `origin/track/frontend-a/F0-03-fixtures`.
+  `@byzon/test-support` nyní poskytuje deterministickou fixture factory,
+  validační harness nad skutečným Zod schématem, validované a hluboce zmrazené
+  base/session-expired problem fixtures a úplnou matici 7 eventových rolí × 5
+  fází. Feature fixtures zůstávají vlastnictvím příslušného `CS-*` slice.
+- Security a code review celého `F0-03` diffu proběhly. Zapracované nálezy:
+  vstup i výstup fixture musí být JSON-safe, validační chyba neobsahuje raw
+  payload, issue metadata i výstupy jsou zmrazené, role/fáze procházejí
+  validací a dependency test zakazuje database/framework/server importy i
+  runtime závislost produkčních aplikací na `@byzon/test-support`.
+- Ověření `F0-03` prošlo pro frozen offline lockfile, test-support typecheck,
+  12 unit/architecture/export testů ve 4 souborech, build, veřejný
+  `@byzon/test-support/fixtures` subpath, Prettier a `git diff --check`. ESLint
+  se opět zasekl bez výstupu déle než minutu ve známém lokálním problému a byl
+  ukončen; žádný lint nález nevypsal.
+- Frontendový řez `F0-02` je implementovaný na větvi
+  `track/frontend-a/F0-02-contracts` v commitu `bd69221`, pushnutém na
+  `origin/track/frontend-a/F0-02-contracts`. Nový veřejný subpath
+  `@byzon/domain/contracts` poskytuje striktní `CS-BASE-01`: bezpečně
+  omezenou `application/problem+json` obálku a factory pro endpointové kódy,
+  přesný `AUTH_SESSION_EXPIRED`, cursor pagination metadata, request ID/ETag
+  metadata a transport-neutral error taxonomy bez raw výjimek či payloadů.
+  Exportní a ownership konvence jsou v
+  `packages/domain/src/contracts/README.md`; feature DTO zůstávají mimo tento
+  řez.
+- Security a code review celého `F0-02` diffu proběhly. Zapracované nálezy:
+  cursor má transport-safe allowlist, ETag musí mít bezpečný quoted tvar,
+  `fieldErrors` odmítají prototype-pollution segmenty a import-boundary test
+  rekurzivně dovoluje jen Zod a relativní importy, které zůstávají uvnitř
+  `src/contracts`.
+- Ověření `F0-02` prošlo pro frozen offline lockfile, domain typecheck, 37
+  unit/architecture testů ve 4 souborech, domain build, veřejný
+  `@byzon/domain/contracts` subpath, Prettier a `git diff --check`. Běžný
+  `pnpm` shim postrádá spravovanou binárku, proto byl použit funkční
+  `corepack pnpm 11.15.1` a přímé lokální binárky. ESLint se znovu zasekl bez
+  výstupu déle než minutu ve známém lokálním problému a byl ukončen; žádný
+  lint nález nevypsal.
+- Frontendový řez `F0-01` je implementovaný na větvi
+  `track/frontend-a/F0-01-route-map` v commitu `ec6115f`, pushnutém na
+  `origin/track/frontend-a/F0-01-route-map`.
+  [`docs/frontend-route-map.md`](docs/frontend-route-map.md) eviduje 39
+  Priority A routes: role/minimální permission, fázi a flag/gate, jediný
+  primární úkol/CTA, deep link/Back/state preservation, data/offline/PII a
+  povinné UX profily. Participant shell má závazných pět top-level cílů a
+  admin jednu adaptivní hierarchii. Devět chybějících jemnozrnných serverových
+  permission významů je explicitně zapsaných; UI je nesmí nahrazovat širším
+  role guardem.
+- Security a code review celého `F0-01` diffu proběhly. Dokumentace zakazuje
+  secret/PII v URL, historii, analytice a obecných cache, vyžaduje same-origin
+  allowlist pro `returnTo`, online-only zacházení s provozními PII a serverové
+  ověření event scope i oprávnění. Zapracovaný review nález sjednotil skip
+  link, focus management, jediný `h1`, viditelný focus, minimální touch target
+  a bezpečné zacházení s dynamickými identifikátory pro všechny shelly.
+- Ověření `F0-01` prošlo: Prettier, `git diff --check`, lokální Markdown
+  odkazy, úplnost 39 rout, tvar všech route řádků a shoda použitých
+  existujících permission názvů s doménovým registrem. Runtime testy se
+  nespouštěly, protože změna je pouze dokumentační.
+- Před `F0-01` se znovu objevilo 11 neversionovaných UI kopií se suffixem
+  ` 2`. Deset bylo byte-identických s kanonickými soubory a `index 2.ts`
+  odpovídal starému pre-`F0-07` exportu; žádná kopie neobsahovala unikátní
+  změnu. Kopie byly recoverably přesunuty mimo repozitář do
+  `/tmp/byzon-ui-duplicates.vyCfpv`; kanonické soubory zůstaly beze změny.
 - Frontendový řez `F0-07` je implementovaný a lokálně sloučený do větve
-  `main`; push nebyl proveden.
+  `main` a pushnutý na `origin/main` v merge commitu `d30c823`.
   `packages/ui` nyní obsahuje sémantické BYZON tokeny a přístupné primitives
   pro akce, formuláře, feedback/stavy, karty, taby, dialog/sheet, live region,
   potvrzení destruktivní akce, participant/admin navigaci, tabulku, seznam a
@@ -44,9 +617,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   taby mají klávesovou obsluhu, fixed navigace rezervuje prostor a toast
   respektuje safe area, admin navigace má mobilní alternativu a všechny
   interakce mají focus/pressed/reduced-motion stavy.
-- Revize plánu v3.1 proběhla v pracovním stromu větve `main`; změněny jsou
-  pouze plán a handover. Bez explicitního schválení nebyl vytvořen commit ani
-  push.
+- Revize plánu v3.1 je v commitu `cbefb74`; spolu s `F0-07` byla sloučena a
+  pushnuta do `origin/main` merge commitem `d30c823`.
 - `AI_IMPLEMENTATION_PLAN.md` je přepracovaný na v3.1. Priority A má
   dependency-driven frontendový track `F0`–`F6`, lifecycle
   `not started → contract ready → UI ready (mocked) → integrated → UAT`,

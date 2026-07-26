@@ -126,7 +126,10 @@ export const ChoiceField = ({
   const descriptionId = description ? `${controlId}-description` : undefined;
 
   return (
-    <div className={joinClassNames('ui-choice', className)}>
+    <label
+      className={joinClassNames('ui-choice', className)}
+      htmlFor={controlId}
+    >
       <input
         {...props}
         aria-describedby={descriptionId}
@@ -134,17 +137,15 @@ export const ChoiceField = ({
         id={controlId}
         type={type}
       />
-      <div>
-        <label className="ui-choice__label" htmlFor={controlId}>
-          {label}
-        </label>
+      <span className="ui-choice__content">
+        <span className="ui-choice__label">{label}</span>
         {description && (
-          <p className="ui-choice__description" id={descriptionId}>
+          <span className="ui-choice__description" id={descriptionId}>
             {description}
-          </p>
+          </span>
         )}
-      </div>
-    </div>
+      </span>
+    </label>
   );
 };
 

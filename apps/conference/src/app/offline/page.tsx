@@ -1,18 +1,22 @@
+import Link from 'next/link';
+
+import { OfflineExperience } from '@/components/offline-experience';
+
 export const metadata = { title: 'Jste offline' };
 
 export default function OfflinePage() {
   return (
-    <section className="message-page">
-      <p className="eyebrow">Bez připojení</p>
-      <h1>Teď jste offline.</h1>
-      <p>
-        Tato část ještě není uložená v zařízení. Zkontrolujte připojení a zkuste
-        stránku načíst znovu.
-      </p>
-      <Link className="button" href="/">
-        Zkusit znovu
-      </Link>
-    </section>
+    <>
+      <OfflineExperience />
+      <noscript>
+        <section className="message-page">
+          <p className="eyebrow">Bez připojení</p>
+          <h1>Pro offline přehled je potřeba JavaScript.</h1>
+          <Link className="button" href="/">
+            Zpět na úvod
+          </Link>
+        </section>
+      </noscript>
+    </>
   );
 }
-import Link from 'next/link';

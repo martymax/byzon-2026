@@ -6,7 +6,9 @@ export default async function ProgramPage() {
   return (
     <section className="app-page">
       <p className="eyebrow">BYZON 2026</p>
-      <h1>Program</h1>
+      <h1 data-route-heading tabIndex={-1}>
+        Program
+      </h1>
       {eventId ? (
         <ProgramView eventId={eventId} />
       ) : (

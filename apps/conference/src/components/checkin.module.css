@@ -1,0 +1,955 @@
+.page,
+.bootstrapPage {
+  --checkin-surface-white: #fff;
+  --checkin-brand-on-dark: #ff8bc3;
+  --checkin-camera-surface: #170d14;
+  --checkin-camera-scrim-soft: rgb(0 0 0 / 30%);
+  --checkin-camera-scrim-strong: rgb(0 0 0 / 78%);
+  --checkin-camera-target: #fff;
+  --checkin-camera-target-shadow: rgb(0 0 0 / 70%);
+  --checkin-camera-label-surface: rgb(0 0 0 / 72%);
+  --checkin-footer-text: #eee6eb;
+  --checkin-layer: 40;
+  --checkin-skip-layer: 300;
+
+  position: fixed;
+  z-index: var(--checkin-layer);
+  inset: 0;
+  min-height: 100dvh;
+  color: var(--byzon-ink);
+  background:
+    radial-gradient(
+      circle at 8% 0%,
+      var(--byzon-brand-glow),
+      transparent 28rem
+    ),
+    linear-gradient(
+      180deg,
+      var(--checkin-surface-white) 0%,
+      var(--byzon-surface-soft) 100%
+    );
+  font-family: var(--byzon-font-body);
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+.routeBoundary {
+  min-height: 100dvh;
+}
+
+:global(body:has([data-checkin-route])) {
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+:global(body:has([data-checkin-route]) > .app-header),
+:global(body:has([data-checkin-route]) > .skip-link) {
+  display: none;
+}
+
+.skipLink {
+  position: fixed;
+  z-index: var(--checkin-skip-layer);
+  inset-block-start: 0.5rem;
+  inset-inline-start: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--byzon-surface);
+  background: var(--byzon-ink);
+  border-radius: var(--byzon-radius-sm);
+  transform: translateY(-150%);
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
+
+.topbar {
+  min-height: 4.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-4);
+  padding: max(var(--byzon-space-3), env(safe-area-inset-top, 0px))
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-right, 0px))
+    var(--byzon-space-3)
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-left, 0px));
+  color: var(--byzon-surface);
+  background: var(--byzon-ink);
+  border-block-end: 4px solid var(--byzon-brand);
+}
+
+.brandBlock,
+.topbarActions,
+.cardHeading,
+.cameraActions,
+.resultActions {
+  display: flex;
+  align-items: center;
+  gap: var(--byzon-space-3);
+}
+
+.brandBlock {
+  min-width: 0;
+}
+
+.brandMark {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--byzon-ink);
+  background: var(--byzon-brand);
+  border-radius: 50%;
+  font: 800 1.75rem/1 var(--byzon-font-display);
+}
+
+.overline {
+  margin: 0;
+  color: var(--byzon-brand-active);
+  font: 700 0.75rem/1.2 var(--byzon-font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.topbar .overline {
+  color: var(--checkin-brand-on-dark);
+}
+
+.eventName {
+  margin: 0.2rem 0 0;
+  overflow: hidden;
+  font: 600 clamp(1rem, 2vw, 1.25rem)/1.15 var(--byzon-font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbarActions {
+  flex: none;
+}
+
+.contextBar {
+  padding: var(--byzon-space-3)
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-right, 0px))
+    var(--byzon-space-3)
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-left, 0px));
+  background: var(--byzon-surface);
+  border-block-end: 1px solid var(--byzon-border);
+  box-shadow: var(--byzon-shadow-sm);
+}
+
+.contextGrid,
+.personSummary,
+.canonicalRecord {
+  display: grid;
+  margin: 0;
+}
+
+.contextGrid {
+  max-width: 90rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--byzon-space-2);
+  margin-inline: auto;
+}
+
+.contextGrid > div {
+  min-width: 0;
+  padding: var(--byzon-space-2) var(--byzon-space-3);
+  border-inline-start: 3px solid var(--byzon-brand);
+}
+
+.contextGrid dt {
+  display: flex;
+  align-items: center;
+  gap: var(--byzon-space-2);
+  color: var(--byzon-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.contextGrid dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.contextIcon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
+.contextState {
+  display: block;
+  margin-block-start: 0.1rem;
+  color: var(--byzon-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.workspace {
+  width: min(100%, 90rem);
+  min-height: calc(100dvh - 14rem);
+  margin-inline: auto;
+  padding: clamp(1rem, 3vw, 2.5rem)
+    max(clamp(1rem, 3vw, 2.5rem), env(safe-area-inset-right, 0px))
+    clamp(1rem, 3vw, 2.5rem)
+    max(clamp(1rem, 3vw, 2.5rem), env(safe-area-inset-left, 0px));
+  outline: none;
+}
+
+.offlineBanner,
+.deviceBlock {
+  display: grid;
+  gap: var(--byzon-space-1);
+  margin-block-end: var(--byzon-space-5);
+  padding: var(--byzon-space-4);
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+  border: 2px solid currentColor;
+  border-radius: var(--byzon-radius-md);
+}
+
+.scannerSection {
+  display: grid;
+  gap: var(--byzon-space-5);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--byzon-space-4);
+}
+
+.sectionHeading h1,
+.resultBody h1,
+.bootstrapCard h1 {
+  margin: var(--byzon-space-2) 0 0;
+  font: 700 clamp(2rem, 5vw, 4rem)/0.98 var(--byzon-font-display);
+  letter-spacing: -0.025em;
+}
+
+.sectionHeading h1:focus,
+.resultBody h1:focus,
+.bootstrapCard h1:focus {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 5px;
+}
+
+.lookupOnlyBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.8rem;
+  color: var(--byzon-info);
+  background: var(--byzon-info-soft);
+  border: 1px solid currentColor;
+  border-radius: var(--byzon-radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lead {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--byzon-text);
+  font-size: clamp(1rem, 2vw, 1.18rem);
+  line-height: 1.6;
+}
+
+.scannerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(19rem, 0.9fr);
+  gap: var(--byzon-space-5);
+  align-items: stretch;
+}
+
+.cameraCard,
+.manualCard,
+.search,
+.bootstrapCard {
+  min-width: 0;
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  background: var(--byzon-surface);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-lg);
+  box-shadow: var(--byzon-shadow-sm);
+}
+
+.cameraCard,
+.manualCard {
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeading {
+  align-items: flex-start;
+  margin-block-end: var(--byzon-space-5);
+}
+
+.cardHeading h2,
+.cardHeading h3,
+.undoForm h2 {
+  margin: 0;
+  font: 700 1.35rem/1.15 var(--byzon-font-display);
+}
+
+.cardHeading p,
+.undoForm p {
+  margin: 0.25rem 0 0;
+  color: var(--byzon-text-muted);
+  line-height: 1.5;
+}
+
+.numberMark {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--byzon-surface);
+  background: var(--byzon-ink);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.cameraIntro {
+  min-height: 19rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--byzon-space-4);
+  padding: var(--byzon-space-6);
+  text-align: center;
+  background: var(--byzon-surface-soft);
+  border: 2px dashed var(--byzon-border-strong);
+  border-radius: var(--byzon-radius-md);
+}
+
+.cameraIntro h3,
+.cameraIntro p {
+  max-width: 38ch;
+  margin: 0;
+}
+
+.cameraIntro h3 {
+  font: 700 1.25rem/1.2 var(--byzon-font-display);
+}
+
+.cameraIntro p {
+  color: var(--byzon-text-muted);
+  line-height: 1.5;
+}
+
+.largeIcon {
+  width: 4rem;
+  height: 4rem;
+  color: var(--byzon-brand-active);
+}
+
+.cameraStage {
+  position: relative;
+  min-height: 19rem;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background: var(--checkin-camera-surface);
+  border-radius: var(--byzon-radius-md);
+  isolation: isolate;
+}
+
+.cameraStage video {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.76;
+}
+
+.cameraStage::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background:
+    linear-gradient(180deg, var(--checkin-camera-scrim-soft), transparent 35%),
+    linear-gradient(0deg, var(--checkin-camera-scrim-strong), transparent 45%);
+}
+
+.target {
+  position: relative;
+  width: min(58%, 14rem);
+  aspect-ratio: 1;
+}
+
+.target span {
+  position: absolute;
+  width: 30%;
+  height: 30%;
+  border-color: var(--checkin-camera-target);
+  border-style: solid;
+  filter: drop-shadow(0 2px 3px var(--checkin-camera-target-shadow));
+}
+
+.target span:nth-child(1) {
+  inset: 0 auto auto 0;
+  border-width: 4px 0 0 4px;
+}
+
+.target span:nth-child(2) {
+  inset: 0 0 auto auto;
+  border-width: 4px 4px 0 0;
+}
+
+.target span:nth-child(3) {
+  inset: auto auto 0 0;
+  border-width: 0 0 4px 4px;
+}
+
+.target span:nth-child(4) {
+  inset: auto 0 0 auto;
+  border-width: 0 4px 4px 0;
+}
+
+.cameraInstruction {
+  position: absolute;
+  inset-block-start: var(--byzon-space-4);
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  color: var(--checkin-camera-target);
+  background: var(--checkin-camera-label-surface);
+  border-radius: var(--byzon-radius-pill);
+  font-weight: 700;
+}
+
+.cameraActions {
+  position: absolute;
+  inset-block-end: var(--byzon-space-4);
+  inset-inline: var(--byzon-space-4);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.manualForm {
+  display: grid;
+  gap: var(--byzon-space-4);
+}
+
+.manualForm :global(.ui-control),
+.search :global(.ui-control),
+.reasonControl {
+  min-height: 3rem;
+  font-size: 1rem;
+}
+
+.demoScenarios {
+  margin-block-start: var(--byzon-space-6);
+  padding-block-start: var(--byzon-space-4);
+  border-block-start: 1px solid var(--byzon-border);
+}
+
+.demoScenarios summary {
+  min-height: var(--byzon-touch-target);
+  display: flex;
+  align-items: center;
+  color: var(--byzon-ink);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.demoScenarios > p {
+  margin: 0 0 var(--byzon-space-3);
+  color: var(--byzon-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.scenarioGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--byzon-space-2);
+}
+
+.scenarioGrid button {
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: 0.15rem;
+  padding: var(--byzon-space-2) var(--byzon-space-3);
+  color: var(--byzon-ink);
+  text-align: start;
+  background: var(--byzon-surface-soft);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-sm);
+  cursor: pointer;
+}
+
+.scenarioGrid button:hover {
+  background: var(--byzon-brand-soft);
+  border-color: var(--byzon-brand);
+}
+
+.scenarioGrid button:focus-visible,
+.demoScenarios summary:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
+}
+
+.scenarioGrid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.scenarioGrid span {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.scenarioGrid code {
+  color: var(--byzon-text-muted);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.search {
+  margin-block-start: var(--byzon-space-5);
+}
+
+.searchLayout {
+  display: grid;
+  grid-template-columns: minmax(16rem, 0.75fr) minmax(0, 1.25fr);
+  gap: var(--byzon-space-6);
+  align-items: start;
+}
+
+.searchResults {
+  min-height: 6rem;
+}
+
+.searchHint,
+.resultCount {
+  margin: 0;
+  color: var(--byzon-text-muted);
+  line-height: 1.5;
+}
+
+.resultCount {
+  margin-block-end: var(--byzon-space-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.personList {
+  display: grid;
+  gap: var(--byzon-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.personList li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-4);
+  padding: var(--byzon-space-3);
+  background: var(--byzon-surface-soft);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-sm);
+}
+
+.personList li > div {
+  min-width: 0;
+  display: grid;
+}
+
+.personList strong {
+  overflow-wrap: anywhere;
+}
+
+.personList span {
+  color: var(--byzon-text-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.inlineError {
+  display: grid;
+  gap: var(--byzon-space-1);
+  padding: var(--byzon-space-3);
+  color: var(--byzon-danger);
+  background: var(--byzon-danger-soft);
+  border-inline-start: 4px solid currentColor;
+}
+
+.spinner,
+.inlineSpinner {
+  display: inline-block;
+  border: 3px solid var(--byzon-border);
+  border-block-start-color: var(--byzon-brand-active);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+.spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.inlineSpinner {
+  width: 1rem;
+  height: 1rem;
+  margin-inline-end: var(--byzon-space-2);
+  vertical-align: -0.15rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.resultScreen {
+  min-height: clamp(30rem, calc(100dvh - 17rem), 55rem);
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.32fr) minmax(0, 0.68fr);
+  overflow: hidden;
+  background: var(--byzon-surface);
+  border: 2px solid currentColor;
+  border-radius: var(--byzon-radius-lg);
+  box-shadow: var(--byzon-shadow-md);
+}
+
+.resultSymbol {
+  display: grid;
+  place-items: center;
+  color: inherit;
+  background: color-mix(
+    in srgb,
+    currentColor 12%,
+    var(--checkin-surface-white)
+  );
+}
+
+.resultIcon {
+  width: clamp(5rem, 11vw, 9rem);
+  height: clamp(5rem, 11vw, 9rem);
+}
+
+.resultBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 5rem);
+  color: var(--byzon-ink);
+}
+
+.resultLabel {
+  margin: 0;
+  color: inherit;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.resultLead {
+  max-width: 60ch;
+  margin: var(--byzon-space-4) 0 0;
+  color: var(--byzon-text);
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.6;
+}
+
+.resultSuccess {
+  color: var(--byzon-success);
+}
+
+.resultWarning {
+  color: var(--byzon-warning);
+}
+
+.resultDanger {
+  color: var(--byzon-danger);
+}
+
+.resultNeutral {
+  color: var(--byzon-info);
+}
+
+.personSummary,
+.canonicalRecord {
+  width: min(100%, 48rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-block: var(--byzon-space-6);
+  overflow: hidden;
+  background: var(--byzon-border);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+}
+
+.personSummary > div,
+.canonicalRecord > div {
+  min-width: 0;
+  padding: var(--byzon-space-4);
+  background: var(--byzon-surface-soft);
+}
+
+.personSummary dt,
+.canonicalRecord dt {
+  color: var(--byzon-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.personSummary dd,
+.canonicalRecord dd {
+  margin: var(--byzon-space-1) 0 0;
+  color: var(--byzon-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.monospace,
+.requestId {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.performance,
+.requestId,
+.safetyNote {
+  max-width: 62ch;
+  margin: var(--byzon-space-4) 0 0;
+  color: var(--byzon-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.performance {
+  padding: 0.35rem 0.65rem;
+  background: var(--byzon-surface-soft);
+  border-radius: var(--byzon-radius-pill);
+  font-variant-numeric: tabular-nums;
+}
+
+.resultActions {
+  flex-wrap: wrap;
+  margin-block-start: var(--byzon-space-6);
+}
+
+.undoForm {
+  width: min(100%, 42rem);
+  display: grid;
+  gap: var(--byzon-space-4);
+  margin-block-start: var(--byzon-space-6);
+  padding: var(--byzon-space-5);
+  background: var(--byzon-warning-soft);
+  border: 2px solid var(--byzon-warning);
+  border-radius: var(--byzon-radius-md);
+}
+
+.reasonControl {
+  width: 100%;
+  resize: vertical;
+}
+
+.safetyFooter {
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-4);
+  padding: var(--byzon-space-3)
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-right, 0px))
+    max(var(--byzon-space-3), env(safe-area-inset-bottom, 0px))
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-left, 0px));
+  color: var(--checkin-footer-text);
+  background: var(--byzon-ink);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.bootstrapPage {
+  display: grid;
+  padding: max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-top, 0px))
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-right, 0px))
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-bottom, 0px))
+    max(clamp(1rem, 4vw, 3rem), env(safe-area-inset-left, 0px));
+  place-items: center;
+}
+
+.bootstrapCard {
+  width: min(100%, 42rem);
+}
+
+.bootstrapLoading {
+  min-height: 10rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--byzon-space-4);
+  margin-block-start: var(--byzon-space-6);
+  color: var(--byzon-text-muted);
+}
+
+@media (max-width: 56rem) {
+  .contextGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scannerGrid,
+  .searchLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .resultScreen {
+    min-height: calc(100dvh - 18rem);
+    grid-template-columns: 1fr;
+  }
+
+  .resultSymbol {
+    min-height: 8rem;
+  }
+
+  .resultBody {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 35rem) {
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .brandMark {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.35rem;
+  }
+
+  .eventName {
+    max-width: 9rem;
+  }
+
+  .topbarActions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
+  .contextGrid,
+  .personSummary,
+  .canonicalRecord,
+  .scenarioGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cameraIntro {
+    min-height: 16rem;
+    padding: var(--byzon-space-4);
+  }
+
+  .personList li,
+  .safetyFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resultActions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resultActions > * {
+    width: 100%;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 43rem) {
+  .topbar {
+    min-height: 3.5rem;
+    padding-block: var(--byzon-space-2);
+  }
+
+  .brandMark {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1.4rem;
+  }
+
+  .contextBar {
+    padding-block: var(--byzon-space-1);
+  }
+
+  .contextGrid > div {
+    padding-block: var(--byzon-space-1);
+  }
+
+  .workspace {
+    padding-block: var(--byzon-space-3);
+  }
+
+  .scannerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cameraIntro,
+  .cameraStage {
+    min-height: 14rem;
+  }
+
+  .resultScreen {
+    min-height: calc(100dvh - 10rem);
+    grid-template-columns: minmax(7rem, 0.25fr) minmax(0, 0.75fr);
+  }
+
+  .resultBody {
+    padding-block: var(--byzon-space-6);
+  }
+
+  .resultBody h1 {
+    font-size: clamp(2rem, 7vh, 3.25rem);
+  }
+
+  .personSummary,
+  .canonicalRecord {
+    margin-block: var(--byzon-space-3);
+  }
+
+  .resultActions {
+    margin-block-start: var(--byzon-space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .inlineSpinner {
+    animation: none;
+    border-block-start-color: var(--byzon-border);
+    outline: 3px dotted var(--byzon-brand-active);
+  }
+
+  .skipLink {
+    transition: none;
+  }
+}
