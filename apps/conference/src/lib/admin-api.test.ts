@@ -308,15 +308,20 @@ describe('admin API contract policies', () => {
       },
     };
     const fetch = vi.fn(
-      async () =>
-        new Response(JSON.stringify(preview), {
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const uploaded = (init?.body as FormData | undefined)?.get('file');
+        expect(uploaded).toBeInstanceOf(Blob);
+        expect((uploaded as File).name).toBe(file.name);
+        expect((uploaded as Blob).type).toBe('text/csv');
+        return new Response(JSON.stringify(preview), {
           status: 200,
           headers: {
             'content-type': 'application/json',
             'x-request-id': metadata.requestId,
             'cache-control': 'private, no-store',
           },
-        }),
+        });
+      },
     );
 
     await expect(

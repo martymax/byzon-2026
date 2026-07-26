@@ -57,6 +57,7 @@ import {
 } from '../../lib/identity-api.js';
 import {
   adminContextEndpoint,
+  createAdminTicketImportUploadPort,
   requestAdminContext,
   requestAdminOperationsOverview,
   requestAdminReservationMutation,
@@ -150,6 +151,30 @@ describe('MSW through the production API port', () => {
         eventId: adminFixtureIds.event,
         metrics: expect.any(Array),
         queues: expect.any(Array),
+      },
+    });
+  });
+
+  it('normalizes a safely sniffed empty-MIME CSV before the real multipart mock boundary', async () => {
+    const file = new File(
+      ['reference,state\nT001,active'],
+      'empty-browser-mime.csv',
+    );
+
+    const result = await createAdminTicketImportUploadPort(
+      fetchWithOrigin,
+    ).preview(adminFixtureIds.event, file);
+
+    expect(result).toMatchObject({
+      ok: true,
+      kind: 'success',
+      data: {
+        eventId: adminFixtureIds.event,
+        source: {
+          fileName: file.name,
+          mediaType: 'text/csv',
+          byteSize: file.size,
+        },
       },
     });
   });

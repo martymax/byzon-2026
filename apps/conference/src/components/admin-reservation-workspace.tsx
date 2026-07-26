@@ -730,6 +730,7 @@ export const AdminReservationWorkspace = () => {
                     .value as AdminEventSettings['registrationMode'],
                 })
               }
+              disabled={pending !== null}
               value={settingsDraft.registrationMode}
             >
               <option value="open">Otevřená</option>

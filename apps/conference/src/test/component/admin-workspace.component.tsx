@@ -14,7 +14,10 @@ import {
 import {
   adminAnnouncementPreviewFixtures,
   adminAnnouncementSendFixtures,
+  adminAuditFixtures,
   adminContextFixtures,
+  adminEventSettingsFixtures,
+  adminEventSettingsUpdateFixtures,
   adminFixtureIds,
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
@@ -34,7 +37,10 @@ import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
 import {
   adminAnnouncementPreviewEndpoint,
   adminAnnouncementSendEndpoint,
+  adminAuditEndpoint,
   adminContextEndpoint,
+  adminEventSettingsEndpoint,
+  adminEventSettingsUpdateEndpoint,
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
   adminReservationMutationEndpoint,
@@ -580,6 +586,69 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByText(/Rezervace byla změněna/))
       .toBeVisible();
     await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('freezes every visible settings field while an ambiguous exact retry is pending', async () => {
+    window.history.replaceState({}, '', '/admin/nastaveni');
+    const updateCalls: unknown[] = [];
+    let updateCount = 0;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminAuditEndpoint) {
+        return success(adminAuditFixtures.page!);
+      }
+      if (endpoint === adminEventSettingsEndpoint) {
+        return success(adminEventSettingsFixtures.open!);
+      }
+      if (endpoint === adminEventSettingsUpdateEndpoint) {
+        const { signal, ...request } = options as Record<string, unknown>;
+        expect(signal).toBeInstanceOf(AbortSignal);
+        updateCalls.push(structuredClone(request));
+        updateCount += 1;
+        return updateCount === 1
+          ? failure('timeout')
+          : success(adminEventSettingsUpdateFixtures.updated!);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminReservationWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    const mode = screen.getByRole('combobox', { name: 'Režim registrace' });
+    await mode.selectOptions('invite_only');
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod změny' })
+      .fill('Bezpečné ověření neměnného nastavení.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat změnu nastavení' })
+      .click();
+    await screen
+      .getByRole('checkbox', {
+        name: /Ověřil\/a jsem aktuální snapshot/,
+      })
+      .click();
+    await screen.getByRole('button', { name: 'Uložit nastavení' }).click();
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: 'Zopakovat přesně stejný pokus',
+        }),
+      )
+      .toBeVisible();
+    await expect.element(mode).toBeDisabled();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
+    await expect
+      .element(screen.getByText(/Nastavení bylo změněno/))
+      .toBeVisible();
+    expect(updateCalls).toHaveLength(2);
+    expect(updateCalls[1]).toEqual(updateCalls[0]);
   });
 
   it('renders the aggregate operations snapshot without exposing queue payloads', async () => {

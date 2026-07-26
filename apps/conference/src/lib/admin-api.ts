@@ -784,7 +784,11 @@ export const createAdminTicketImportUploadPort = (
       byteSize: file.size,
     });
     const multipart = new FormData();
-    multipart.append('file', file, source.fileName);
+    const uploadPart =
+      file.type === source.mediaType
+        ? file
+        : new Blob([file], { type: source.mediaType });
+    multipart.append('file', uploadPart, source.fileName);
     const multipartApi = createFetchApiClient({
       maxRetries: 0,
       fetch: (input, init) => {
