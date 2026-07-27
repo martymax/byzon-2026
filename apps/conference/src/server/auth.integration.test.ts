@@ -1,13 +1,24 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createAuth, SESSION_EXPIRES_IN_SECONDS } from './auth';
+import {
+  createAuth,
+  SESSION_EXPIRES_IN_SECONDS,
+  SESSION_UPDATE_AGE_SECONDS,
+} from './auth';
 import { logoutAllSessions } from './logout-all';
 import { FakeAuthMailProvider } from './mail';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
 const email = 'magic-link-integration@example.com';
+
+describe('authentication session policy', () => {
+  it('keeps an inactive login valid for 48 hours and refreshes active sessions sooner', () => {
+    expect(SESSION_EXPIRES_IN_SECONDS).toBe(48 * 60 * 60);
+    expect(SESSION_UPDATE_AGE_SECONDS).toBeLessThan(SESSION_EXPIRES_IN_SECONDS);
+  });
+});
 
 integration('magic-link authentication integration', () => {
   const client = createDatabaseClient({

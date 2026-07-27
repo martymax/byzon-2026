@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 26. července 2026
+> Poslední aktualizace: 27. července 2026
 
 ## Pokyny pro pokračování
 
@@ -20,6 +20,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Better Auth session má nově 48hodinovou expiraci a zachovaný 24hodinový
+  refresh aktivní relace. Aplikace nemá samostatný idle logout, takže neaktivní
+  uživatel zůstane přihlášený po celé dvoudenní konferenční okno a aktivní
+  relace se před jeho koncem průběžně prodlouží. Regresní test připíná přesných
+  48 hodin a PostgreSQL integrační test dál ověřuje skutečné databázové
+  `expires_at`.
 - Celý frontendový track `F0` až `F6-05` je dokončený ve stavu
   `UI ready (mocked)` na `track/frontend-complete` a předává se přes
   [PR #17](https://github.com/martymax/byzon-2026/pull/17). Syntetické preview

@@ -8,7 +8,7 @@ import { database } from './database';
 import { authMailProvider, type AuthMailProvider } from './mail';
 
 export const MAGIC_LINK_EXPIRES_IN_SECONDS = 5 * 60;
-export const SESSION_EXPIRES_IN_SECONDS = 7 * 24 * 60 * 60;
+export const SESSION_EXPIRES_IN_SECONDS = 48 * 60 * 60;
 export const SESSION_UPDATE_AGE_SECONDS = 24 * 60 * 60;
 export const SESSION_FRESH_AGE_SECONDS = 24 * 60 * 60;
 
