@@ -249,7 +249,11 @@ def is_registration_event(ev):
 
 
 def is_condensed_calendar_event(ev):
-    return str(ev.get("type", "")).lower() in {"break", "meal"} or is_registration_event(ev)
+    return (
+        bool(ev.get("compact"))
+        or str(ev.get("type", "")).lower() in {"break", "meal"}
+        or is_registration_event(ev)
+    )
 
 
 def _slot_overlaps(stage_items, slot_start):
