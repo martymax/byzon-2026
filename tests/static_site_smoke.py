@@ -88,14 +88,6 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     required_markers = {
         "homepage skip link": (home, 'href="#main"'),
         "homepage Czech language": (home, '<html lang="cs">'),
-        "conference app desktop link": (
-            home,
-            '<a href="https://app.byzon.cz/">Konferenční aplikace</a>',
-        ),
-        "conference app mobile link": (
-            home,
-            '<a class="nav-link" href="https://app.byzon.cz/" data-drawer-close>Konferenční aplikace</a>',
-        ),
         "program heading": (program, content["program"]["title"]),  # type: ignore[index]
         "SimpleShop form id": (
             checkout,
@@ -107,6 +99,14 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
     if absent:
         fail("Missing critical output markers: " + ", ".join(absent))
+
+    hidden_markers = {
+        "conference app desktop link": '<a href="https://app.byzon.cz/">Konferenční aplikace</a>',
+        "conference app mobile link": '<a class="nav-link" href="https://app.byzon.cz/" data-drawer-close>Konferenční aplikace</a>',
+    }
+    visible = [name for name, marker in hidden_markers.items() if marker in home]
+    if visible:
+        fail("Unexpected visible navigation markers: " + ", ".join(visible))
 
 
 def main() -> int:
