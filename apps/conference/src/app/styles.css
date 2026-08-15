@@ -1635,8 +1635,7 @@ main > .ui-participant-nav-spacer {
   line-height: 1;
 }
 .onboarding-fields,
-.onboarding-legal-list,
-.onboarding-networking-consent {
+.onboarding-legal-list {
   display: grid;
   gap: 1rem;
 }
@@ -1678,13 +1677,11 @@ main > .ui-participant-nav-spacer {
   font-weight: 700;
 }
 .onboarding-choice-group .ui-choice,
-.onboarding-networking-consent > .ui-choice,
 .onboarding-legal-list > .ui-choice {
   border: 1px solid var(--line);
   background: var(--byzon-surface-soft);
 }
 .onboarding-choice-group .ui-choice:has(input:checked),
-.onboarding-networking-consent > .ui-choice:has(input:checked),
 .onboarding-legal-list > .ui-choice:has(input:checked) {
   border-color: var(--pink-dark);
   background: var(--byzon-brand-soft);

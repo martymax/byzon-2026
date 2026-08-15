@@ -1,7 +1,6 @@
 export const onboardingLegalDocumentTypes = [
   'terms',
   'privacy_notice',
-  'networking_consent',
 ] as const;
 
 export type OnboardingLegalDocumentType =
@@ -14,7 +13,6 @@ export interface OnboardingProfile {
   firstName: string;
   lastName: string;
   contactEmail: string;
-  networkingEnabled: boolean | null;
 }
 
 export interface OnboardingSnapshot {
@@ -22,7 +20,6 @@ export interface OnboardingSnapshot {
   currentDocuments: {
     terms: string | null;
     privacyNotice: string | null;
-    networkingConsent: string | null;
   };
   decisions: readonly {
     legalDocumentId: string;
@@ -40,7 +37,6 @@ export type OnboardingState =
       status: 'legal_acknowledgement_required';
       documentIds: readonly string[];
     }
-  | { status: 'networking_choice_required' }
   | { status: 'complete' };
 
 const hasDecision = (
@@ -63,11 +59,6 @@ export const deriveOnboardingState = (
   if (!snapshot.currentDocuments.terms) missingTypes.push('terms');
   if (!snapshot.currentDocuments.privacyNotice)
     missingTypes.push('privacy_notice');
-  if (
-    snapshot.profile.networkingEnabled &&
-    !snapshot.currentDocuments.networkingConsent
-  )
-    missingTypes.push('networking_consent');
   if (missingTypes.length > 0) {
     return { status: 'blocked_missing_legal_documents', missingTypes };
   }
@@ -85,22 +76,6 @@ export const deriveOnboardingState = (
     return {
       status: 'legal_acknowledgement_required',
       documentIds: missingDocumentIds,
-    };
-  }
-
-  if (snapshot.profile.networkingEnabled === null) {
-    return { status: 'networking_choice_required' };
-  }
-
-  const networkingConsent = snapshot.currentDocuments.networkingConsent;
-  if (
-    snapshot.profile.networkingEnabled &&
-    networkingConsent &&
-    !hasDecision(snapshot, networkingConsent, 'accepted')
-  ) {
-    return {
-      status: 'legal_acknowledgement_required',
-      documentIds: [networkingConsent],
     };
   }
 

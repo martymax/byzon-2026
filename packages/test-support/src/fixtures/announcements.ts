@@ -46,9 +46,9 @@ const criticalSummary = {
 
 const importantSummary = {
   id: announcementFixtureIds.important,
-  title: 'Registrace je otevřená',
-  summary: 'Registrační pult je připravený u hlavního vstupu.',
-  severity: 'important' as const,
+  title: 'Hlavní vstup dočasně uzavřen',
+  summary: 'Z bezpečnostních důvodů použijte označený boční vstup.',
+  severity: 'critical' as const,
   publishedAt: '2026-09-18T06:30:00.000Z',
   readAt: null,
   context: {
@@ -58,9 +58,9 @@ const importantSummary = {
 
 const informationSummary = {
   id: announcementFixtureIds.information,
-  title: 'Praktické informace k příjezdu',
-  summary: 'Přijeďte s časovou rezervou a sledujte značení u vstupu.',
-  severity: 'info' as const,
+  title: 'Bezpečnostní omezení příjezdu',
+  summary: 'Příjezdová cesta je uzavřená; sledujte nouzové značení.',
+  severity: 'critical' as const,
   publishedAt: '2026-09-17T12:00:00.000Z',
   readAt: '2026-09-17T12:15:00.000Z',
   context: {
@@ -76,7 +76,7 @@ const longSummary = {
     'Organizační tým zveřejnil podrobnou změnu programu, která zůstává plně syntetická a slouží k ověření bezpečného zalamování českého textu bez odhalení údajů příjemců. '
       .repeat(3)
       .trim(),
-  severity: 'important' as const,
+  severity: 'critical' as const,
   publishedAt: '2026-09-16T12:00:00.000Z',
   readAt: null,
   context: {
@@ -150,7 +150,7 @@ export const participantAnnouncementDetailFixtures = defineFixtureSet({
       announcement: {
         ...importantSummary,
         bodyText:
-          'Registrační pult je otevřený u hlavního vstupu. Připravte si aplikaci a pokračujte podle pokynů označeného týmu.',
+          'Hlavní vstup je z bezpečnostních důvodů dočasně uzavřený. Použijte označený boční vstup a řiďte se pokyny týmu.',
       },
     },
     read: {
@@ -158,7 +158,7 @@ export const participantAnnouncementDetailFixtures = defineFixtureSet({
       announcement: {
         ...informationSummary,
         bodyText:
-          'Přijeďte s časovou rezervou. Od hlavního vstupu vás ke konferenčnímu sálu navedou viditelné směrovky.',
+          'Příjezdová cesta je kvůli bezpečnostnímu incidentu uzavřená. Použijte vyznačenou objížďku a nouzové značení.',
       },
     },
     critical: {
@@ -204,7 +204,7 @@ const adminDraft = {
   title: 'Změna sálu workshopu',
   bodyText:
     'Workshop Růst bez zkratek se přesouvá do sálu Vltava. Čas začátku zůstává beze změny.',
-  severity: 'important' as const,
+  severity: 'critical' as const,
   audience: {
     kind: 'session' as const,
     sessionId: announcementFixtureIds.session,

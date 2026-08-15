@@ -12,12 +12,10 @@ const configuredSnapshot = (): OnboardingSnapshot => ({
     firstName: 'Anna',
     lastName: 'Nováková',
     contactEmail: 'anna@example.com',
-    networkingEnabled: false,
   },
   currentDocuments: {
     terms: '00000000-0000-7000-8000-000000000001',
     privacyNotice: '00000000-0000-7000-8000-000000000002',
-    networkingConsent: null,
   },
   decisions: [
     {
@@ -48,7 +46,6 @@ describe('onboarding state machine', () => {
         currentDocuments: {
           terms: null,
           privacyNotice: null,
-          networkingConsent: null,
         },
       }),
     ).toEqual({
@@ -67,34 +64,6 @@ describe('onboarding state machine', () => {
     ).toEqual({
       status: 'legal_acknowledgement_required',
       documentIds: [snapshot.currentDocuments.privacyNotice],
-    });
-  });
-
-  it('requires a separate, explicit networking choice', () => {
-    const snapshot = configuredSnapshot();
-    expect(
-      deriveOnboardingState({
-        ...snapshot,
-        profile: { ...snapshot.profile!, networkingEnabled: null },
-      }),
-    ).toEqual({ status: 'networking_choice_required' });
-  });
-
-  it('requires the current networking consent only for opt-in', () => {
-    const snapshot = configuredSnapshot();
-    const networkingConsent = '00000000-0000-7000-8000-000000000003';
-    expect(
-      deriveOnboardingState({
-        ...snapshot,
-        profile: { ...snapshot.profile!, networkingEnabled: true },
-        currentDocuments: {
-          ...snapshot.currentDocuments,
-          networkingConsent,
-        },
-      }),
-    ).toEqual({
-      status: 'legal_acknowledgement_required',
-      documentIds: [networkingConsent],
     });
   });
 
@@ -131,7 +100,7 @@ describe('onboarding state machine', () => {
     });
   });
 
-  it('completes with an explicit opt-out and versioned decisions', () => {
+  it('completes with the profile minimum and versioned decisions', () => {
     expect(deriveOnboardingState(configuredSnapshot())).toEqual({
       status: 'complete',
     });

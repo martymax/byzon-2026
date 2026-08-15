@@ -37,8 +37,6 @@ type PendingSend = Readonly<{
 }>;
 
 const severityLabels: Record<AnnouncementSeverity, string> = {
-  info: 'Informace',
-  important: 'Důležité',
   critical: 'Kritické',
 };
 
@@ -49,7 +47,7 @@ export const AdminAnnouncementWorkspace = () => {
   const sendErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [title, setTitle] = useState('');
   const [bodyText, setBodyText] = useState('');
-  const [severity, setSeverity] = useState<AnnouncementSeverity>('info');
+  const severity: AnnouncementSeverity = 'critical';
   const [audienceKind, setAudienceKind] = useState<'event' | 'session'>(
     'event',
   );
@@ -269,23 +267,13 @@ export const AdminAnnouncementWorkspace = () => {
               value={title}
             />
           </label>
-          <label className={styles.field}>
+          <div className={styles.field}>
             <span>Závažnost</span>
-            <select
-              disabled={pending !== null}
-              onChange={(event) => {
-                setSeverity(event.target.value as AnnouncementSeverity);
-                resetImmutablePreview();
-              }}
-              value={severity}
-            >
-              {Object.entries(severityLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+            <strong>{severityLabels.critical}</strong>
+            <small>
+              Ročník 2026 povoluje pouze kritická provozní oznámení.
+            </small>
+          </div>
         </div>
         <label className={styles.field}>
           <span>Text oznámení</span>

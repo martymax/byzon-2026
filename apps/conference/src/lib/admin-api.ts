@@ -409,10 +409,6 @@ const matchesReservationMutation = (
   switch (body.action) {
     case 'capacity_override':
       return data.record.capacity === body.capacity;
-    case 'mark_attended':
-      return data.record.state === 'attended';
-    case 'undo_attendance':
-      return data.record.state === 'reserved';
     case 'cancel_reservation':
       return data.record.state === 'cancelled';
   }

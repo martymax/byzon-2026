@@ -540,7 +540,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_export' },
+        { kind: 'data_deletion' },
         'privacy-pending-principal-0001',
       ),
     ).resolves.toMatchObject({
@@ -1898,7 +1898,6 @@ describe('MSW through the production API port', () => {
         privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
         privacyAcknowledged: true,
       },
-      networking: { enabled: false },
     } as const;
 
     await expect(
@@ -1907,7 +1906,6 @@ describe('MSW through the production API port', () => {
       ok: true,
       data: {
         state: 'complete',
-        networkingEnabled: false,
       },
     });
     await expect(
@@ -1922,7 +1920,6 @@ describe('MSW through the production API port', () => {
           roles: ['participant'],
         },
         onboarding: { status: 'complete' },
-        networking: { enabled: false },
       },
     });
 
@@ -2026,50 +2023,6 @@ describe('MSW through the production API port', () => {
     }
   });
 
-  it('publishes the synthetic networking acknowledgement after opt-in onboarding', async () => {
-    await expect(
-      submitIdentityOnboarding(
-        client,
-        {
-          profile: identityFixtureProfile,
-          legal: {
-            termsDocumentId: identityFixtureIds.terms,
-            termsAccepted: true,
-            privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
-            privacyAcknowledged: true,
-          },
-          networking: {
-            enabled: true,
-            consentDocumentId: identityFixtureIds.networkingConsent,
-            consentAccepted: true,
-          },
-        },
-        'onboarding-opt-in-0001',
-      ),
-    ).resolves.toMatchObject({
-      ok: true,
-      data: { networkingEnabled: true },
-    });
-    await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
-      ok: true,
-      data: {
-        dataMode: 'synthetic_preview',
-        membership: {
-          access: { state: 'active' },
-          roles: ['participant'],
-        },
-        networking: { enabled: true },
-        legalAcknowledgements: expect.arrayContaining([
-          expect.objectContaining({
-            documentId: identityFixtureIds.networkingConsent,
-            type: 'networking_consent',
-            decision: 'accepted',
-          }),
-        ]),
-      },
-    });
-  });
-
   it('updates only the current profile version and returns canonical state', async () => {
     const onboarding = {
       profile: identityFixtureProfile,
@@ -2079,7 +2032,6 @@ describe('MSW through the production API port', () => {
         privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
         privacyAcknowledged: true,
       },
-      networking: { enabled: false },
     } as const;
     await expect(
       submitIdentityOnboarding(client, onboarding, 'profile-onboarding-0001'),
@@ -2146,22 +2098,22 @@ describe('MSW through the production API port', () => {
 
   it('keeps privacy request replay exact and rejects collisions or duplicates', async () => {
     configureMockParticipantPrincipal({ active: true });
-    const exportRequest = { kind: 'data_export' } as const;
+    const deletionRequest = { kind: 'data_deletion' } as const;
     const first = await submitIdentityPrivacyRequest(
       client,
-      exportRequest,
+      deletionRequest,
       'privacy-mock-port-0001',
     );
     expect(first).toMatchObject({
       ok: true,
       status: 202,
       data: {
-        request: { kind: 'data_export', state: 'pending' },
+        request: { kind: 'data_deletion', state: 'pending' },
       },
     });
     const replay = await submitIdentityPrivacyRequest(
       client,
-      exportRequest,
+      deletionRequest,
       'privacy-mock-port-0001',
     );
     expect(replay).toEqual(first);
@@ -2169,20 +2121,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_deletion' },
-        'privacy-mock-port-0001',
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      failure: {
-        kind: 'problem',
-        problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
-      },
-    });
-    await expect(
-      submitIdentityPrivacyRequest(
-        client,
-        exportRequest,
+        deletionRequest,
         'privacy-mock-port-0002',
       ),
     ).resolves.toMatchObject({
@@ -2192,23 +2131,10 @@ describe('MSW through the production API port', () => {
         problem: { code: 'PRIVACY_REQUEST_UNAVAILABLE' },
       },
     });
-    await expect(
-      submitIdentityPrivacyRequest(
-        client,
-        { kind: 'data_deletion' },
-        'privacy-mock-port-0003',
-      ),
-    ).resolves.toMatchObject({
-      ok: true,
-      data: {
-        request: { kind: 'data_deletion', state: 'pending' },
-      },
-    });
     await expect(requestIdentityBootstrap(client)).resolves.toMatchObject({
       ok: true,
       data: {
         privacy: {
-          exportRequest: 'pending',
           deletionRequest: 'pending',
         },
       },
@@ -2257,7 +2183,6 @@ describe('MSW through the production API port', () => {
             privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
             privacyAcknowledged: true,
           },
-          networking: { enabled: false },
         },
         'onboarding-before-revocation-0001',
       ),
@@ -2271,7 +2196,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_export' },
+        { kind: 'data_deletion' },
         'privacy-before-revocation-0001',
       ),
     ).resolves.toMatchObject({ ok: true });
@@ -2292,7 +2217,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_export' },
+        { kind: 'data_deletion' },
         'privacy-before-revocation-0001',
       ),
     ).resolves.toMatchObject({
@@ -2311,7 +2236,7 @@ describe('MSW through the production API port', () => {
           firstName: 'Soukromá změna',
         },
         profileManagement: { state: 'editable', version: 2 },
-        privacy: { exportRequest: 'pending' },
+        privacy: { deletionRequest: 'pending' },
       },
     });
     await expect(
@@ -2323,7 +2248,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_export' },
+        { kind: 'data_deletion' },
         'privacy-before-revocation-0001',
       ),
     ).resolves.toMatchObject({
@@ -2389,7 +2314,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_export' },
+        { kind: 'data_deletion' },
         'privacy-signed-out-0001',
       ),
     ).resolves.toMatchObject({
@@ -2425,7 +2350,7 @@ describe('MSW through the production API port', () => {
     await expect(
       submitIdentityPrivacyRequest(
         client,
-        { kind: 'data_export' },
+        { kind: 'data_deletion' },
         'privacy-primary-principal-0001',
       ),
     ).resolves.toMatchObject({ ok: true });
@@ -2478,7 +2403,7 @@ describe('MSW through the production API port', () => {
           firstName: 'Beáta',
           contactEmail: 'beata@example.test',
         },
-        privacy: { exportRequest: 'available' },
+        privacy: { deletionRequest: 'available' },
       },
     });
     expect(JSON.stringify(alternateBootstrap)).not.toContain('Soukromá A');
@@ -2542,7 +2467,7 @@ describe('MSW through the production API port', () => {
       data: {
         user: { email: identityFixtureProfile.contactEmail },
         profile: { firstName: 'Soukromá A' },
-        privacy: { exportRequest: 'pending' },
+        privacy: { deletionRequest: 'pending' },
       },
     });
     await expect(requestParticipantTicket(client)).resolves.toMatchObject({

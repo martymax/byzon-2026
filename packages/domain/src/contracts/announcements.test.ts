@@ -37,9 +37,9 @@ const firstSummary = {
 
 const secondSummary = {
   id: ids.second,
-  title: 'Registrace je otevřená',
+  title: 'Hlavní vstup dočasně uzavřen',
   summary: 'Pokračujte k hlavnímu vstupu.',
-  severity: 'info' as const,
+  severity: 'critical' as const,
   publishedAt: '2026-09-18T08:00:00.000Z',
   readAt: '2026-09-18T08:05:00.000Z',
   context: { kind: 'event' as const },
@@ -131,6 +131,17 @@ describe('CS-ANN-01 participant contracts', () => {
         items: [{ ...firstSummary, severity: 'urgent' }, secondSummary],
       }).success,
     ).toBe(false);
+    for (const removedSeverity of ['info', 'important']) {
+      expect(
+        participantAnnouncementInboxResponseSchema.safeParse({
+          ...inbox,
+          items: [
+            { ...firstSummary, severity: removedSeverity },
+            secondSummary,
+          ],
+        }).success,
+      ).toBe(false);
+    }
     expect(
       participantAnnouncementInboxResponseSchema.safeParse({
         ...inbox,

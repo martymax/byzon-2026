@@ -35,9 +35,9 @@ describe('test-support public exports', () => {
       fixtures.identityProfileUpdateFixtures.updated?.profileManagement.version,
     ).toBe(2);
     expect(
-      fixtures.identityPrivacyRequestFixtures.export_pending?.request,
+      fixtures.identityPrivacyRequestFixtures.deletion_pending?.request,
     ).toMatchObject({
-      kind: 'data_export',
+      kind: 'data_deletion',
       state: 'pending',
     });
     expect(

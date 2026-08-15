@@ -48,7 +48,6 @@ export const identityOnboardingEndpoint = defineApiEndpoint({
     'EVENT_ACCESS_DENIED',
     'LEGAL_CONFIGURATION_MISSING',
     'STALE_LEGAL_DOCUMENT',
-    'NETWORKING_DISABLED',
     'REQUEST_ID_REUSED',
     'IDEMPOTENCY_KEY_REUSED',
     'IDEMPOTENCY_IN_PROGRESS',

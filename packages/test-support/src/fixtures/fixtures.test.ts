@@ -189,25 +189,12 @@ describe('participant agenda fixtures', () => {
       session: { status: 'cancelled' },
       action: { state: 'cancelled' },
     });
-    expect(
-      participantAgendaFixtures.cancelled_registration_estimate?.items[0],
-    ).toMatchObject({
-      session: { status: 'cancelled' },
-      capacity: { mode: 'registration_estimate' },
-      action: { state: 'cancelled' },
-    });
     expect(participantAgendaFixtures.full?.items[0]?.action.state).toBe(
       'capacity_full',
     );
     expect(participantAgendaFixtures.closed?.items[0]?.action.state).toBe(
       'closed',
     );
-    expect(
-      participantAgendaFixtures.registration_estimate?.items[0],
-    ).toMatchObject({
-      capacity: { mode: 'registration_estimate' },
-      action: { state: 'registration_estimate', registered: true },
-    });
   });
 
   it('returns complete canonical mutation snapshots and explicit problems', () => {
@@ -283,14 +270,13 @@ describe('identity account fixtures', () => {
     ).toEqual(identityProfileUpdateFixtures.updated);
     expect(
       identityPrivacyRequestResponseSchema.parse(
-        identityPrivacyRequestFixtures.export_pending,
+        identityPrivacyRequestFixtures.deletion_pending,
       ),
-    ).toEqual(identityPrivacyRequestFixtures.export_pending);
-    expect(identityPrivacyRequestFixtures.export_pending).toEqual(
-      identityPrivacyRequestFixtures.export_pending,
+    ).toEqual(identityPrivacyRequestFixtures.deletion_pending);
+    expect(identityPrivacyRequestFixtures.deletion_pending).toEqual(
+      identityPrivacyRequestFixtures.deletion_pending,
     );
     expect(identityBootstrapFixtures.read_only?.privacy).toEqual({
-      exportRequest: 'completed',
       deletionRequest: 'unavailable',
     });
     expect(identityProfileUpdateProblemFixtures.stale).toMatchObject({

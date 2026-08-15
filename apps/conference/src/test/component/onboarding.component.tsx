@@ -1,7 +1,6 @@
 import type {
   IdentityBootstrapProblem,
   IdentityBootstrapResponse,
-  IdentityOnboardingProblem,
   IdentityOnboardingResponse,
 } from '@byzon/domain/contracts';
 import {
@@ -26,7 +25,7 @@ type RecordedRequest = ApiRequestCommonOptions & { body?: unknown };
 const apiForOnboarding = ({
   bootstrap = identityBootstrapFixtures.profile_required!,
   onSubmit,
-  outcome = identityOnboardingFixtures.opted_out!,
+  outcome = identityOnboardingFixtures.complete!,
   submitResults,
 }: {
   readonly bootstrap?: IdentityBootstrapResponse;
@@ -71,34 +70,6 @@ const apiForOnboarding = ({
     },
   };
 };
-
-const apiForOnboardingProblem = (
-  problem: IdentityOnboardingProblem,
-): ApiPort => ({
-  request: async (endpoint, options) => {
-    if (options.path === '/api/v1/me/bootstrap') {
-      return {
-        ok: true,
-        kind: 'success',
-        status: 200,
-        data: endpoint.successSchema.parse(
-          identityBootstrapFixtures.networking_choice!,
-        ),
-        metadata,
-      };
-    }
-    return {
-      ok: false,
-      kind: 'failure',
-      status: problem.status,
-      failure: {
-        kind: 'problem',
-        problem: endpoint.problemSchema.parse(problem),
-      },
-      metadata: { requestId: problem.requestId },
-    };
-  },
-});
 
 const apiForBootstrapProblem = (
   problem: IdentityBootstrapProblem,
@@ -155,7 +126,6 @@ const completeLegalStep = async (
       'Potvrzuji seznámení s informacemi o soukromí, verze synthetic-v1',
     )
     .click();
-  await screen.getByRole('button', { name: 'Pokračovat' }).click();
 };
 
 beforeEach(() => {
@@ -164,8 +134,8 @@ beforeEach(() => {
   window.sessionStorage.clear();
 });
 
-describe('F1-05 onboarding and legal acknowledgement', () => {
-  it('completes opt-out once with canonical profile and no networking consent', async () => {
+describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
+  it('completes once with canonical profile and legal minimum only', async () => {
     const calls: RecordedRequest[] = [];
     const screen = await renderComponent(
       <OnboardingProbe
@@ -180,16 +150,6 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
       .element(screen.getByText('Podmínky používání – syntetický náhled'))
       .toBeVisible();
     await completeLegalStep(screen);
-    await expect
-      .element(screen.getByText('Dobrovolný networking'))
-      .toBeVisible();
-    expect(
-      screen.getByLabelText('Ano, chci networking').element(),
-    ).not.toBeChecked();
-    expect(
-      screen.getByLabelText('Ne, pokračovat bez networkingu').element(),
-    ).not.toBeChecked();
-    await screen.getByLabelText('Ne, pokračovat bez networkingu').click();
     const submit = screen
       .getByRole('button', { name: 'Dokončit onboarding' })
       .element();
@@ -216,6 +176,7 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
         firstName: 'Alex',
         lastName: 'Novák',
         contactEmail: 'alex@example.test',
+        phone: null,
       },
       legal: {
         termsDocumentId: identityFixtureIds.terms,
@@ -223,7 +184,6 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
         privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
         privacyAcknowledged: true,
       },
-      networking: { enabled: false },
     });
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
@@ -232,40 +192,6 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
       expect(window.history.state.__byzonOnboardingDraftGuard).not.toBe(true);
     });
   }, 30_000);
-
-  it('keeps opt-in separate and submits its exact consent version', async () => {
-    const calls: RecordedRequest[] = [];
-    const screen = await renderComponent(
-      <OnboardingProbe
-        api={apiForOnboarding({
-          onSubmit: (options) => calls.push(options),
-          outcome: identityOnboardingFixtures.opted_in!,
-        })}
-      />,
-    );
-
-    await completeProfileStep(screen);
-    await completeLegalStep(screen);
-    await screen.getByLabelText('Ano, chci networking').click();
-    await expect
-      .element(screen.getByText('Networking – syntetický náhled'))
-      .toBeVisible();
-    await screen
-      .getByLabelText('Samostatně souhlasím s networkingem, verze synthetic-v1')
-      .click();
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
-
-    await expect
-      .element(screen.getByText('Nastavení je dokončené'))
-      .toBeVisible();
-    expect(calls[0]?.body).toMatchObject({
-      networking: {
-        enabled: true,
-        consentDocumentId: identityFixtureIds.networkingConsent,
-        consentAccepted: true,
-      },
-    });
-  });
 
   it('focuses validation summary and preserves in-memory values when going back', async () => {
     const screen = await renderComponent(<OnboardingProbe />);
@@ -339,13 +265,13 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     const screen = await renderComponent(
       <OnboardingProbe
         api={apiForOnboarding({
-          bootstrap: identityBootstrapFixtures.networking_choice!,
+          bootstrap: identityBootstrapFixtures.legal_required!,
           onSubmit: (options) => {
             if (options.idempotencyKey) keys.push(options.idempotencyKey);
           },
           submitResults: [
             { kind: 'offline' },
-            identityOnboardingFixtures.opted_out!,
+            identityOnboardingFixtures.complete!,
           ],
         })}
         createKey={() => {
@@ -355,7 +281,7 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
       />,
     );
 
-    await screen.getByLabelText('Ne, pokračovat bez networkingu').click();
+    await completeLegalStep(screen);
     await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
     await expect
       .element(
@@ -363,9 +289,6 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
       )
       .toBeVisible();
     expect(document.querySelector('[data-form-failure]')).toHaveFocus();
-    expect(
-      screen.getByLabelText('Ne, pokračovat bez networkingu').element(),
-    ).not.toHaveAttribute('aria-invalid', 'true');
     await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
 
     await expect
@@ -376,11 +299,11 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
   });
 
   it('rejects a completion that acknowledges a different legal document', async () => {
-    const outcome = identityOnboardingFixtures.opted_out!;
+    const outcome = identityOnboardingFixtures.complete!;
     const screen = await renderComponent(
       <OnboardingProbe
         api={apiForOnboarding({
-          bootstrap: identityBootstrapFixtures.networking_choice!,
+          bootstrap: identityBootstrapFixtures.legal_required!,
           outcome: {
             ...outcome,
             acknowledgements: outcome.acknowledgements.map((record) =>
@@ -396,7 +319,7 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
       />,
     );
 
-    await screen.getByLabelText('Ne, pokračovat bez networkingu').click();
+    await completeLegalStep(screen);
     await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
 
     await expect
@@ -455,7 +378,6 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     await screen.getByLabelText('Kontaktní e-mail').fill('mila@example.test');
     await screen.getByRole('button', { name: 'Pokračovat' }).click();
     await completeLegalStep(screen);
-    await screen.getByLabelText('Ne, pokračovat bez networkingu').click();
     await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
 
     await expect
@@ -513,23 +435,6 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     expect(document.body.textContent).toContain('MOCK-SUSPENDED-2026');
   });
 
-  it('maps a deterministic networking rejection without leaking server detail', async () => {
-    const problem = identityOnboardingProblemFixtures.networking_disabled!;
-    const screen = await renderComponent(
-      <OnboardingProbe api={apiForOnboardingProblem(problem)} />,
-    );
-
-    await screen.getByLabelText('Ne, pokračovat bez networkingu').click();
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
-
-    await expect
-      .element(
-        screen.getByText('Networking už pro tuto událost není dostupný.'),
-      )
-      .toBeVisible();
-    expect(document.body.textContent).not.toContain(problem.detail);
-  });
-
   it('offers a safe login recovery for an expired bootstrap session', async () => {
     const screen = await renderComponent(
       <OnboardingProbe
@@ -548,11 +453,11 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
     ).toBe('/prihlaseni?mode=recovery&returnTo=%2Fonboarding');
   });
 
-  it('is accessible, overflow-safe and keeps full choice rows touch-sized', async () => {
+  it('is accessible, overflow-safe and keeps legal choice rows touch-sized', async () => {
     const screen = await renderComponent(
       <OnboardingProbe
         api={apiForOnboarding({
-          bootstrap: identityBootstrapFixtures.networking_choice!,
+          bootstrap: identityBootstrapFixtures.legal_required!,
         })}
       />,
     );
@@ -561,11 +466,11 @@ describe('F1-05 onboarding and legal acknowledgement', () => {
       throw new TypeError('Onboarding probe must render main.');
     }
     const choice = screen
-      .getByLabelText('Ne, pokračovat bez networkingu')
+      .getByLabelText('Souhlasím s podmínkami, verze synthetic-v1')
       .element()
       .closest('label');
     if (!(choice instanceof HTMLLabelElement)) {
-      throw new TypeError('Networking choice must use a full-row label.');
+      throw new TypeError('Legal choice must use a full-row label.');
     }
 
     expect(choice.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

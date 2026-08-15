@@ -7,7 +7,6 @@ import {
 import {
   identityBootstrapFixtures,
   identityBootstrapProblemFixtures,
-  identityPrivacyRequestProblemFixtures,
   identityPrivacyRequestFixtures,
   identityProfileUpdateFixtures,
   identityProfileUpdateProblemFixtures,
@@ -92,7 +91,7 @@ const accountApi = ({
   bootstrapGates = [],
   bootstrapProblems = [],
   onRequest,
-  privacyResponse = identityPrivacyRequestFixtures.export_pending!,
+  privacyResponse = identityPrivacyRequestFixtures.deletion_pending!,
   privacyGate,
   privacyProblem,
   profileGate,
@@ -245,15 +244,6 @@ const AccountResourceProbe = () => {
         Zahodit účet
       </button>
     </section>
-  );
-};
-
-const AccountRetryProbe = () => {
-  const resource = useParticipantAccountResource();
-  return (
-    <button onClick={resource.retry} type="button">
-      Znovu ověřit účet
-    </button>
   );
 };
 
@@ -774,10 +764,56 @@ describe('F2-07 participant account, profile and privacy', () => {
         firstName: 'Alexandr',
         lastName: 'Novák',
         contactEmail: 'alex@example.test',
+        phone: null,
       },
     });
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it('validates and saves the optional phone only in canonical E.164 form', async () => {
+    window.history.replaceState({}, '', '/app/profil');
+    const requests: RecordedRequest[] = [];
+    const canonicalPhone = '+420774835456';
+    const api = accountApi({
+      onRequest: (request) => requests.push(request),
+      profileResponse: {
+        ...identityProfileUpdateFixtures.updated!,
+        profile: { ...activeIdentity.profile!, phone: canonicalPhone },
+      },
+    });
+    const screen = await renderComponent(
+      <AccountProbe api={api}>
+        <ParticipantProfile api={api} />
+      </AccountProbe>,
+    );
+
+    const phone = screen.getByLabelText('Telefon');
+    await phone.fill('774 835 456');
+    await screen.getByRole('button', { name: 'Uložit profil' }).click();
+    await expect
+      .element(
+        screen
+          .getByText(
+            'Zadejte telefon v mezinárodním formátu, například +420774835456.',
+          )
+          .last(),
+      )
+      .toBeVisible();
+    expect(
+      requests.filter(({ path }) => path === '/api/v1/me/profile'),
+    ).toHaveLength(0);
+
+    await phone.fill(canonicalPhone);
+    await screen.getByRole('button', { name: 'Uložit profil' }).click();
+
+    await expect.element(screen.getByText('Profil je uložený')).toBeVisible();
+    expect(
+      requests.find(({ path }) => path === '/api/v1/me/profile')?.body,
+    ).toEqual({
+      expectedVersion: 1,
+      profile: { ...activeIdentity.profile, phone: canonicalPhone },
+    });
   });
 
   it.each([
@@ -959,7 +995,7 @@ describe('F2-07 participant account, profile and privacy', () => {
     expect(screen.container.textContent).not.toContain('Alex Novák');
   });
 
-  it('shows current legal acknowledgements and submits an explicitly confirmed export once', async () => {
+  it('shows legal acknowledgements and routes access requests to published support', async () => {
     window.history.replaceState({}, '', '/app/soukromi');
     const requests: RecordedRequest[] = [];
     const api = accountApi({
@@ -969,7 +1005,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       <AccountProbe api={api}>
         <ParticipantPrivacy
           api={api}
-          createIdempotencyKey={() => 'privacy-export-0001'}
+          createIdempotencyKey={() => 'privacy-deletion-0001'}
         />
       </AccountProbe>,
     );
@@ -978,105 +1014,26 @@ describe('F2-07 participant account, profile and privacy', () => {
       .element(screen.getByText('Podmínky používání – syntetický náhled'))
       .toBeVisible();
     expect(screen.getByText('Souhlas potvrzen').elements()).not.toHaveLength(0);
-    await screen.getByRole('button', { name: 'Požádat o export' }).click();
     await expect
       .element(
         screen.getByRole('heading', {
-          level: 2,
-          name: 'Odeslat žádost o export?',
+          name: 'Potřebujete kopii nebo přehled osobních údajů?',
         }),
       )
       .toBeVisible();
-    await screen.getByRole('button', { name: 'Odeslat žádost' }).click();
-
-    await expect.element(screen.getByText('Žádost byla přijata')).toBeVisible();
-    await expect
-      .element(screen.getByText('Žádost se zpracovává'))
-      .toBeVisible();
-    const mutation = requests.find(
-      ({ path }) => path === '/api/v1/me/privacy-requests',
+    const supportLink = screen.getByRole('link', {
+      name: `Napsat na ${activeIdentity.supportEmail}`,
+    });
+    expect(supportLink.element().getAttribute('href')).toBe(
+      `mailto:${activeIdentity.supportEmail}`,
     );
-    expect(mutation?.body).toEqual({ kind: 'data_export' });
-    expect(mutation?.idempotencyKey).toBe('privacy-export-0001');
+    expect(
+      screen.getByRole('button', { name: 'Požádat o export' }).elements(),
+    ).toHaveLength(0);
     expect(
       requests.filter(({ path }) => path === '/api/v1/me/privacy-requests'),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     await expectComponentToPassAxe(screen.container);
-  });
-
-  it('locks an unavailable privacy request after the canonical server rejection', async () => {
-    window.history.replaceState({}, '', '/app/soukromi');
-    const api = accountApi({
-      privacyProblem: identityPrivacyRequestProblemFixtures.unavailable!,
-    });
-    const screen = await renderComponent(
-      <AccountProbe api={api}>
-        <ParticipantPrivacy
-          api={api}
-          createIdempotencyKey={() => 'privacy-unavailable-0001'}
-        />
-      </AccountProbe>,
-    );
-
-    await screen.getByRole('button', { name: 'Požádat o export' }).click();
-    await screen.getByRole('button', { name: 'Odeslat žádost' }).click();
-
-    await expect
-      .element(screen.getByText('Žádost už není dostupná'))
-      .toBeVisible();
-    await expect
-      .element(screen.getByText('Žádost teď není dostupná'))
-      .toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Požádat o export' }).elements(),
-    ).toHaveLength(0);
-  });
-
-  it('does not let a late pending privacy response overwrite a revalidated terminal state', async () => {
-    window.history.replaceState({}, '', '/app/soukromi');
-    let releasePrivacy: (() => void) | undefined;
-    const privacyGate = new Promise<void>((resolve) => {
-      releasePrivacy = resolve;
-    });
-    const completedExportIdentity = identityBootstrapResponseSchema.parse({
-      ...activeIdentity,
-      privacy: {
-        ...activeIdentity.privacy,
-        exportRequest: 'completed',
-      },
-    });
-    const api = accountApi({
-      bootstrap: [activeIdentity, completedExportIdentity],
-      privacyGate,
-    });
-    const screen = await renderComponent(
-      <AccountProbe api={api}>
-        <AccountRetryProbe />
-        <ParticipantPrivacy
-          api={api}
-          createIdempotencyKey={() => 'privacy-late-pending-0001'}
-        />
-      </AccountProbe>,
-    );
-
-    await screen.getByRole('button', { name: 'Požádat o export' }).click();
-    await screen.getByRole('button', { name: 'Odeslat žádost' }).click();
-    const retryAccount = screen
-      .getByRole('button', { name: 'Znovu ověřit účet' })
-      .element();
-    if (!(retryAccount instanceof HTMLButtonElement)) {
-      throw new TypeError('Expected account retry button.');
-    }
-    retryAccount.click();
-    await expect.element(screen.getByText('Žádost je dokončená')).toBeVisible();
-
-    releasePrivacy?.();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    await expect.element(screen.getByText('Žádost je dokončená')).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Požádat o export' }).elements(),
-    ).toHaveLength(0);
   });
 
   it('requires a separate deletion confirmation and keeps removed profiles private', async () => {

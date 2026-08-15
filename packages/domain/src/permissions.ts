@@ -15,18 +15,16 @@ export const eventPermissions = [
   'agenda:own:write',
   'agenda:any:override',
   'networking:directory:read',
-  'networking:reports:moderate',
-  'networking:connection:message',
   'networking:reported-content:moderate',
-  'program:own-materials:write',
   'program:manage',
+  'profile:own:write',
+  'privacy:own:write',
   'checkin:own-code:read',
   'checkin:perform',
   'checkin:undo',
   'reservation:own:read',
   'reservation:assigned:read',
   'reservation:any:read',
-  'session:assigned:answer',
   'session:assigned:moderate',
   'announcement:own:read',
   'announcement:send',
@@ -36,8 +34,6 @@ export const eventPermissions = [
   'operations:read',
   'audit:read',
   'event:settings:manage',
-  'attendance:assigned:write',
-  'personal-data:own:export',
   'personal-data:operational:export',
 ] as const;
 
@@ -46,11 +42,9 @@ export type EventPermission = (typeof eventPermissions)[number];
 export interface PermissionContext {
   ownsResource?: boolean;
   networkingOptedIn?: boolean;
-  acceptedConnection?: boolean;
   announcementRecipient?: boolean;
   assignedSession?: boolean;
   assignedRoom?: boolean;
-  moderatorCanAnnounce?: boolean;
   auditedException?: boolean;
 }
 
@@ -59,30 +53,30 @@ const rolePermissions = {
     'program:published:read',
     'agenda:own:write',
     'networking:directory:read',
-    'networking:connection:message',
+    'profile:own:write',
+    'privacy:own:write',
     'checkin:own-code:read',
     'reservation:own:read',
     'announcement:own:read',
-    'personal-data:own:export',
   ],
   speaker: [
     'program:published:read',
-    'program:own-materials:write',
+    'agenda:own:write',
+    'networking:directory:read',
+    'profile:own:write',
+    'privacy:own:write',
     'checkin:own-code:read',
     'reservation:own:read',
-    'session:assigned:answer',
-    'personal-data:own:export',
+    'announcement:own:read',
   ],
   organizer_admin: [
     'program:published:read',
     'agenda:any:override',
-    'networking:reports:moderate',
     'networking:reported-content:moderate',
     'program:manage',
     'checkin:perform',
     'checkin:undo',
     'reservation:any:read',
-    'session:assigned:answer',
     'session:assigned:moderate',
     'announcement:send',
     'ticket:any:manage',
@@ -91,7 +85,6 @@ const rolePermissions = {
     'operations:read',
     'audit:read',
     'event:settings:manage',
-    'attendance:assigned:write',
     'personal-data:operational:export',
   ],
   checkin_operator: [
@@ -99,17 +92,8 @@ const rolePermissions = {
     'checkin:perform',
     'checkin:undo',
   ],
-  moderator: [
-    'program:published:read',
-    'networking:reports:moderate',
-    'session:assigned:moderate',
-    'announcement:send',
-  ],
-  room_operator: [
-    'program:published:read',
-    'reservation:assigned:read',
-    'attendance:assigned:write',
-  ],
+  moderator: ['program:published:read', 'session:assigned:moderate'],
+  room_operator: ['program:published:read', 'reservation:assigned:read'],
   system_worker: [],
 } as const satisfies Record<EventRole, readonly EventPermission[]>;
 
@@ -124,29 +108,20 @@ const contextAllows = (
     case 'agenda:own:write':
     case 'checkin:own-code:read':
     case 'reservation:own:read':
-    case 'personal-data:own:export':
-    case 'program:own-materials:write':
+    case 'profile:own:write':
+    case 'privacy:own:write':
       return context.ownsResource === true;
     case 'agenda:any:override':
     case 'personal-data:operational:export':
       return context.auditedException === true;
     case 'networking:directory:read':
       return context.networkingOptedIn === true;
-    case 'networking:connection:message':
-      return (
-        context.networkingOptedIn === true &&
-        context.acceptedConnection === true
-      );
     case 'reservation:assigned:read':
       return context.assignedRoom === true || context.assignedSession === true;
-    case 'session:assigned:answer':
     case 'session:assigned:moderate':
-    case 'attendance:assigned:write':
       return role === 'organizer_admin' || context.assignedSession === true;
     case 'announcement:send':
-      return (
-        role === 'organizer_admin' || context.moderatorCanAnnounce === true
-      );
+      return role === 'organizer_admin';
     default:
       return true;
   }

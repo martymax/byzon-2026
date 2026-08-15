@@ -66,7 +66,7 @@ export interface ParticipantAccountResourceValue {
   ) => boolean;
   readonly commitPrivacyRequest: (
     response: IdentityPrivacyRequestResponse,
-    expectedKind: 'data_export' | 'data_deletion',
+    expectedKind: 'data_deletion',
   ) => boolean;
 }
 
@@ -382,11 +382,10 @@ export const ParticipantAccountResourceProvider = ({
   const commitPrivacyRequest = useCallback(
     (
       response: IdentityPrivacyRequestResponse,
-      expectedKind: 'data_export' | 'data_deletion',
+      expectedKind: 'data_deletion',
     ): boolean => {
       const current = stateRef.current;
-      const key =
-        expectedKind === 'data_export' ? 'exportRequest' : 'deletionRequest';
+      const key = 'deletionRequest';
       if (
         current.status !== 'ready' ||
         current.scopeKey !== scopeKey ||

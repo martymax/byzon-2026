@@ -97,21 +97,22 @@ aktivace nesmí nést eventové role; live odpověď nesmí obsahovat syntetick�
 právní preview.
 
 Povinné podmínky (`accepted`) a informace o soukromí (`acknowledged`) používají
-přesná ID a verze. Dobrovolný networking je samostatná nepředvolená
-discriminated volba; při opt-out se networking document ID vůbec neposílá.
-Chybějící nebo zastaralá právní verze failne zavřeně a staré volby se nesmí
-znovu použít. Každý právní dokument nese buď úplný bezpečný plain text, nebo
+přesná ID a verze. Priority A onboarding má jen profil a tyto dva právní
+kroky; networking patří do oddělené Priority B capability. Chybějící nebo
+zastaralá právní verze failne zavřeně. Každý právní dokument nese buď úplný
+bezpečný plain text, nebo
 credential-free HTTPS URL; HTML, řídicí/bidi znaky a nebezpečná URL schémata
 kontrakt odmítá.
 
 Správa profilu rozlišuje `missing`, verzované `editable`, `read_only` a
-`removed`; PATCH vyžaduje `expectedVersion` a stale zápis vrací striktní
-`STALE_VERSION` s aktuální verzí. Privacy žádost dovoluje jen
-`data_export`/`data_deletion`, její kanonická odpověď je korelovaná s eventem a
-uživatelem a idempotency collision/in-progress mají samostatné problem kódy.
-Bootstrap stavy `available`, `pending`, `completed`, `rejected` a `unavailable`
-jsou explicitní pro export i výmaz. Profil i volby jsou P2 data: žádná P2 data
-v URL, browser persistence, offline mutace ani sdílená cache.
+`removed`; profil obsahuje volitelný E.164 telefon. PATCH vyžaduje
+`expectedVersion` a stale zápis vrací striktní `STALE_VERSION` s aktuální
+verzí. Privacy mutace dovoluje jen `data_deletion`; žádost o přístup nebo kopii
+vede přes zveřejněný support kontakt, nikoli participant export job. Kanonická
+odpověď výmazu je korelovaná s eventem a uživatelem a idempotency
+collision/in-progress mají samostatné problem kódy. Profil i privacy stav jsou
+P2 data: žádná P2 data v URL, browser persistence, offline mutace ani sdílená
+cache.
 
 Development fixtures nesou explicitní `dataMode: synthetic_preview` a právní
 texty jsou označené jako neschválený syntetický draft. Produkční texty,
@@ -121,7 +122,8 @@ souhlasy a UAT zůstávají za `BLOCKER-LEGAL-01`; skutečná autorizace a zápi
 ## Personal agenda (`CS-AGENDA-01`)
 
 `agenda.ts` defines the strict event/user-scoped boundary for the personal
-agenda, reservations, waitlist offers and generic registration estimates.
+agenda, reservations and waitlist offers. Registration estimates are not a v6
+capacity mode and the parser rejects the historical branch.
 Every response carries canonical `serverNow`, the IANA `eventTimezone`, agenda
 and publication versions, and the complete ordered item list. Event-local days
 are validated from the instant and timezone, including UTC-midnight

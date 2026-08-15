@@ -1,12 +1,12 @@
 # ADR-007: Soukromé objektové úložiště Railway
 
 - Stav: Přijato
-- Datum: 20. července 2026
+- Datum: 20. července 2026; scope amendment 15. srpna 2026
 
 ## Kontext
 
-Podklady řečníků, neveřejné obrázky, exporty a zálohy mohou obsahovat osobní nebo
-provozně citlivá data. Veřejné a trvalé bucket URL by obcházely serverovou
+Importy, schválené neveřejné obrázky, dočasné organizační exporty a zálohy
+mohou obsahovat osobní nebo provozně citlivá data. Veřejné a trvalé bucket URL by obcházely serverovou
 autorizaci a retenční pravidla.
 
 ## Rozhodnutí
@@ -24,8 +24,8 @@ checksumu, skutečného MIME a schválené bezpečnostní kontroly.
 - Bucket není veřejný CDN ani autorizační databáze.
 - Každé prostředí má oddělený bucket a credentials.
 - Download a exporty podléhají serverové autorizaci, expiraci a auditu.
-- Podklad řečníka zůstává neveřejný, dokud řečník výslovně nepovolí publikaci a
-  organizátor ji neschválí; partner z úložiště nezíská kontakty účastníků.
+- Speaker portál ani podklady řečníků se pro ročník 2026 neukládají. Partner z
+  úložiště nezíská kontakty účastníků ani zvláštní přístup.
 - Lokální vývoj používá adapter za stejným `ObjectStorage` rozhraním.
 - Retenci provádí idempotentní aplikační job, který objekty explicitně smaže;
   bucket lifecycle nelze předpokládat.
@@ -43,5 +43,5 @@ Citlivé exporty a zálohy se proto šifrují před uploadem.
 
 ## Vazby
 
-- [Implementační plán](../../AI_IMPLEMENTATION_PLAN.md): §15.3, §16.2, §19.2, `P10-03` a `BLOCKER-INFRA-01`.
+- [Implementační plán](../../AI_IMPLEMENTATION_PLAN.md): `SCOPE-2026-03`, §15.3, §16.2, §19.2 a `BLOCKER-INFRA-01`.
 - [Railway – Storage Buckets](https://docs.railway.com/storage-buckets).

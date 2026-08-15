@@ -96,10 +96,7 @@ export const mutateParticipantAgenda = (
         (request.action === 'accept_offer' || request.action === 'decline_offer'
           ? mutation.action === request.action &&
             mutation.offerId === request.offerId
-          : request.action === 'registration_estimate'
-            ? mutation.action === request.action &&
-              mutation.registered === request.registered
-            : true);
+          : true);
       if (correlated) return result;
       return {
         ok: false as const,

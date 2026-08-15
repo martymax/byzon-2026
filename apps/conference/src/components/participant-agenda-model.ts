@@ -21,7 +21,7 @@ export interface AgendaItemStatusCopy {
 export type AgendaSimpleMutationIntent = {
   readonly action: Exclude<
     AgendaMutationAction,
-    'accept_offer' | 'decline_offer' | 'registration_estimate'
+    'accept_offer' | 'decline_offer'
   >;
   readonly sessionId: string;
 };
@@ -32,16 +32,8 @@ export type AgendaOfferMutationIntent = {
   readonly sessionId: string;
 };
 
-export type AgendaEstimateMutationIntent = {
-  readonly action: 'registration_estimate';
-  readonly registered: boolean;
-  readonly sessionId: string;
-};
-
 export type AgendaMutationIntent =
-  | AgendaEstimateMutationIntent
-  | AgendaOfferMutationIntent
-  | AgendaSimpleMutationIntent;
+  AgendaOfferMutationIntent | AgendaSimpleMutationIntent;
 
 export interface AgendaItemAction {
   readonly intent: AgendaMutationIntent;
@@ -143,21 +135,6 @@ export const participantAgendaItemStatus = (
     }
   }
 
-  if (item.action.state === 'registration_estimate') {
-    return item.action.registered
-      ? {
-          label: 'Zájem potvrzen',
-          detail:
-            'Jde o nezávazný odhad účasti, nikoli o rezervaci konkrétního místa.',
-          tone: 'info',
-        }
-      : {
-          label: 'Uloženo',
-          detail: 'Bod je v osobní agendě bez potvrzeného odhadu účasti.',
-          tone: 'info',
-        };
-  }
-
   return {
     label: 'Uloženo',
     detail:
@@ -173,9 +150,6 @@ export const participantAgendaCapacityCopy = (
 ): string | null => {
   if (item.session.status === 'cancelled') return null;
   if (item.capacity.mode === 'none') return null;
-  if (item.capacity.mode === 'registration_estimate') {
-    return `${item.capacity.registrations} lidí aktuálně uvedlo předběžný zájem. Nejde o rezervaci místa.`;
-  }
   if (item.state === 'reserved') {
     const held =
       item.capacity.held > 0
@@ -291,18 +265,6 @@ export const participantAgendaActions = (
       label: 'Přidat se na čekací listinu',
       intent: { action: 'join_waitlist', sessionId },
       variant: 'primary',
-    });
-  } else if (item.action.state === 'registration_estimate') {
-    actions.push({
-      label: item.action.registered
-        ? 'Zrušit předběžný zájem'
-        : 'Potvrdit předběžný zájem',
-      intent: {
-        action: 'registration_estimate',
-        registered: !item.action.registered,
-        sessionId,
-      },
-      variant: item.action.registered ? 'secondary' : 'primary',
     });
   }
   actions.push({

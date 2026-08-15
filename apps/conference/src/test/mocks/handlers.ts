@@ -152,22 +152,22 @@ interface MockActivationState {
     string,
     {
       fingerprint: string;
-      networkingEnabled: boolean;
       principal: 'primary' | 'alternate';
       profile: {
         firstName: string;
         lastName: string;
         contactEmail: string;
+        phone?: string | null;
       };
       sessionGeneration: number;
     }
   >;
   onboarding?: {
-    networkingEnabled: boolean;
     profile: {
       firstName: string;
       lastName: string;
       contactEmail: string;
+      phone?: string | null;
     };
   };
 }
@@ -191,12 +191,13 @@ type MockIdentityProfile = {
   firstName: string;
   lastName: string;
   contactEmail: string;
+  phone?: string | null;
 };
 
-type MockPrivacyRequestKind = 'data_export' | 'data_deletion';
-type MockPrivacyRequestResponse =
-  | NonNullable<(typeof identityPrivacyRequestFixtures)['export_pending']>
-  | NonNullable<(typeof identityPrivacyRequestFixtures)['deletion_pending']>;
+type MockPrivacyRequestKind = 'data_deletion';
+type MockPrivacyRequestResponse = NonNullable<
+  (typeof identityPrivacyRequestFixtures)['deletion_pending']
+>;
 
 interface MockIdentityState {
   eventAccess: boolean;
@@ -303,7 +304,6 @@ const initialAgendaItems = (): ParticipantAgendaItem[] => {
     participantAgendaFixtures.waitlist_cancelled,
     participantAgendaFixtures.full,
     participantAgendaFixtures.closed,
-    participantAgendaFixtures.registration_estimate,
     participantAgendaFixtures.cancelled,
   ];
   return fixtures.flatMap((fixture) =>
@@ -608,7 +608,6 @@ const captureMockPrincipal = (): MockPrincipalSnapshot => ({
   ...(mockActivationState.onboarding
     ? {
         onboarding: {
-          networkingEnabled: mockActivationState.onboarding.networkingEnabled,
           profile: { ...mockActivationState.onboarding.profile },
         },
       }
@@ -629,6 +628,7 @@ const createFreshMockPrincipal = (
             firstName: 'Beáta',
             lastName: 'Svobodová',
             contactEmail: alternateMockUser.email,
+            phone: null,
           }
         : { ...identityFixtureProfile },
     profileManagementState: 'editable',
@@ -723,7 +723,6 @@ const activateMockPrincipal = (
   mockAgendaState.version = next.agenda.version;
   if (next.onboarding) {
     mockActivationState.onboarding = {
-      networkingEnabled: next.onboarding.networkingEnabled,
       profile: { ...next.onboarding.profile },
     };
   } else {
@@ -1086,32 +1085,6 @@ const applyMockAgendaAction = (
       }
       break;
     }
-    case 'registration_estimate':
-      if (
-        current?.capacity.mode !== 'registration_estimate' ||
-        current.action.state !== 'registration_estimate'
-      ) {
-        return { kind: 'failure', failure: 'validation' };
-      }
-      if (current.action.registered === request.registered) {
-        outcome = 'already_applied';
-        break;
-      }
-      next = savedAgendaItem(
-        current,
-        {
-          ...current.capacity,
-          registrations: Math.max(
-            0,
-            current.capacity.registrations + (request.registered ? 1 : -1),
-          ),
-        },
-        {
-          state: 'registration_estimate',
-          registered: request.registered,
-        },
-      );
-      break;
   }
 
   if (outcome === 'already_applied') {
@@ -1543,9 +1516,6 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       mockIdentityState.profileManagementState === 'removed'
         ? null
         : (mockIdentityState.profile ?? completion?.profile ?? null);
-    const networkingEnabled =
-      completion?.networkingEnabled ??
-      identityBootstrapFixtures.complete!.networking.enabled;
     const fixture = mockActivationState.principalActive
       ? {
           ...identityBootstrapFixtures.complete!,
@@ -1555,22 +1525,8 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
           },
           profile: retainedProfile,
           profileManagement,
-          legalAcknowledgements: networkingEnabled
-            ? [
-                ...identityBootstrapFixtures.complete!.legalAcknowledgements,
-                {
-                  documentId: identityFixtureIds.networkingConsent,
-                  type: 'networking_consent' as const,
-                  decision: 'accepted' as const,
-                  version: 'synthetic-v1',
-                  acknowledgedAt: '2026-07-25T12:00:02.000Z',
-                },
-              ]
-            : identityBootstrapFixtures.complete!.legalAcknowledgements,
-          networking: {
-            ...identityBootstrapFixtures.complete!.networking,
-            enabled: networkingEnabled,
-          },
+          legalAcknowledgements:
+            identityBootstrapFixtures.complete!.legalAcknowledgements,
         }
       : identityBootstrapFixtures.profile_required!;
     return mockJsonResponse(
@@ -1584,9 +1540,6 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         },
         privacy: mockActivationState.principalActive
           ? {
-              exportRequest:
-                mockIdentityState.privacyRequestByKind.get('data_export')
-                  ?.request.state ?? fixture.privacy.exportRequest,
               deletionRequest:
                 mockIdentityState.profileManagementState === 'removed'
                   ? 'completed'
@@ -1632,10 +1585,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     const exactDocuments =
       parsed.data.legal.termsDocumentId === identityFixtureIds.terms &&
       parsed.data.legal.privacyNoticeDocumentId ===
-        identityFixtureIds.privacyNotice &&
-      (!parsed.data.networking.enabled ||
-        parsed.data.networking.consentDocumentId ===
-          identityFixtureIds.networkingConsent);
+        identityFixtureIds.privacyNotice;
     if (!exactDocuments) {
       return mockProblemResponse(
         identityOnboardingProblemSchema,
@@ -1667,17 +1617,19 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'identity.mock.onboarding-phase' },
       );
     }
+    const normalizedProfile: MockIdentityProfile = {
+      ...parsed.data.profile,
+      phone: parsed.data.profile.phone ?? null,
+    };
     const record = previous ?? {
       fingerprint,
-      networkingEnabled: parsed.data.networking.enabled,
       principal: mockActivationState.currentPrincipal,
-      profile: parsed.data.profile,
+      profile: normalizedProfile,
       sessionGeneration: mockActivationState.sessionGeneration,
     };
     if (!previous) {
       mockActivationState.onboardingRequests.set(idempotencyKey.data, record);
       mockActivationState.onboarding = {
-        networkingEnabled: record.networkingEnabled,
         profile: record.profile,
       };
       mockActivationState.principalActive = true;
@@ -1690,9 +1642,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       mockIdentityState.privacyRequests.clear();
       mockIdentityState.privacyRequestByKind.clear();
     }
-    const completion = record.networkingEnabled
-      ? identityOnboardingFixtures.opted_in
-      : identityOnboardingFixtures.opted_out;
+    const completion = identityOnboardingFixtures.complete;
     return mockJsonResponse(
       identityOnboardingResponseSchema,
       {
@@ -1769,7 +1719,10 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       );
     }
 
-    mockIdentityState.profile = { ...parsed.data.profile };
+    mockIdentityState.profile = {
+      ...parsed.data.profile,
+      phone: parsed.data.profile.phone ?? null,
+    };
     mockIdentityState.profileVersion += 1;
     const fixtureUpdatedAt = Date.parse(
       identityProfileUpdateFixtures.updated!.updatedAt,
@@ -1863,9 +1816,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     }
 
     const response = {
-      ...(parsed.data.kind === 'data_export'
-        ? identityPrivacyRequestFixtures.export_pending!
-        : identityPrivacyRequestFixtures.deletion_pending!),
+      ...identityPrivacyRequestFixtures.deletion_pending!,
       userId: mockCurrentUser.id,
     };
     mockIdentityState.privacyRequests.set(idempotencyKey.data, {
@@ -2269,16 +2220,10 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
               action: parsed.data.action,
               offerId: parsed.data.offerId,
             }
-          : parsed.data.action === 'registration_estimate'
-            ? {
-                sessionId: parsed.data.sessionId,
-                action: parsed.data.action,
-                registered: parsed.data.registered,
-              }
-            : {
-                sessionId: parsed.data.sessionId,
-                action: parsed.data.action,
-              };
+          : {
+              sessionId: parsed.data.sessionId,
+              action: parsed.data.action,
+            };
       const successAgenda = canonicalAgendaForCurrentPrincipal();
       const targetSession = successAgenda.items.find(
         ({ session }) => session.id === parsed.data.sessionId,

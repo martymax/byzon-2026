@@ -180,13 +180,6 @@ const mutationInput = (
         offerId: intent.offerId,
         sessionId: intent.sessionId,
       };
-    case 'registration_estimate':
-      return {
-        action: intent.action,
-        expectedVersion,
-        registered: intent.registered,
-        sessionId: intent.sessionId,
-      };
     default:
       return {
         action: intent.action,
@@ -210,12 +203,6 @@ const mutationMatchesIntent = (
     return (
       response.mutation.action === intent.action &&
       response.mutation.offerId === intent.offerId
-    );
-  }
-  if (intent.action === 'registration_estimate') {
-    return (
-      response.mutation.action === 'registration_estimate' &&
-      response.mutation.registered === intent.registered
     );
   }
   return true;

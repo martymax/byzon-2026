@@ -16,6 +16,10 @@ const mockRoot = resolve(sourceRoot, 'test/mocks');
 const componentTestRoot = resolve(sourceRoot, 'test/component');
 const instrumentationPath = resolve(sourceRoot, 'instrumentation-client.ts');
 const checkinPreviewPagePath = resolve(sourceRoot, 'app/check-in/page.tsx');
+const activityRosterPreviewPagePath = resolve(
+  sourceRoot,
+  'app/host/aktivity/page.tsx',
+);
 const adminContentPreviewPagePath = resolve(
   sourceRoot,
   'app/admin/obsah/page.tsx',
@@ -261,6 +265,7 @@ const checkSourceBoundary = () => {
     if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
     const patterns =
       file === checkinPreviewPagePath ||
+      file === activityRosterPreviewPagePath ||
       file === participantCurrentEventPath ||
       guardedRecoveryPreviewPaths.has(file)
         ? forbiddenRuntimePatterns.filter(
@@ -305,6 +310,21 @@ const checkSourceBoundary = () => {
   ) {
     failures.push(
       'check-in preview scenarios must stay inside the positive build-time environment guard and dynamic import',
+    );
+  }
+
+  const activityRosterPreviewPage = readFileSync(
+    activityRosterPreviewPagePath,
+    'utf8',
+  );
+  if (
+    !hasSingleGuardedPreviewImport(
+      activityRosterPreviewPage,
+      '../../../test/mocks/activity-roster-preview',
+    )
+  ) {
+    failures.push(
+      'activity roster preview must stay inside the positive build-time environment guard and dynamic import',
     );
   }
 
