@@ -75,6 +75,9 @@ integration('content import integration', () => {
     const secondSessions = await client.db
       .select({
         id: schema.programSessions.id,
+        title: schema.programSessions.title,
+        startsAt: schema.programSessions.startsAt,
+        endsAt: schema.programSessions.endsAt,
         status: schema.programSessions.status,
         roomId: schema.programSessions.roomId,
         capacityMode: schema.programSessions.capacityMode,
@@ -98,13 +101,23 @@ integration('content import integration', () => {
     expect(secondSessions.map(({ id }) => id).sort()).toEqual(
       firstSessions.map(({ id }) => id).sort(),
     );
-    expect(secondSessions).toHaveLength(65);
+    expect(secondSessions).toHaveLength(67);
     expect(secondSessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           status: 'draft',
           roomId: null,
           capacityMode: 'none',
+        }),
+        expect.objectContaining({
+          title: 'Řízený networking',
+          startsAt: new Date('2026-09-18T17:00:00.000Z'),
+          endsAt: new Date('2026-09-18T19:00:00.000Z'),
+        }),
+        expect.objectContaining({
+          title: 'Volný program',
+          startsAt: new Date('2026-09-19T11:00:00.000Z'),
+          endsAt: new Date('2026-09-19T13:15:00.000Z'),
         }),
       ]),
     );

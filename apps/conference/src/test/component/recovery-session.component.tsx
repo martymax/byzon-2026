@@ -13,7 +13,6 @@ import { RecoveryForm } from '../../components/recovery-form';
 import { SessionExitControls } from '../../components/session-exit-controls';
 import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
 import type { ActivationReturnTo } from '../../lib/activation-return';
-import { createMockRecoveryLinkToken } from '../../lib/mock-recovery-link';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
@@ -38,13 +37,10 @@ const successApi = (
 
 const RecoveryProbe = ({
   api,
-  createMockLinkToken = () =>
-    'recovery-app:00000000-0000-4000-8000-000000000001',
   presentation = 'recovery',
   returnTo = '/app',
 }: {
   readonly api: ApiPort;
-  readonly createMockLinkToken?: (destination: ActivationReturnTo) => string;
   readonly presentation?: 'login' | 'recovery';
   readonly returnTo?: ActivationReturnTo;
 }) => (
@@ -53,7 +49,6 @@ const RecoveryProbe = ({
       <RecoveryForm
         api={api}
         createIdempotencyKey={() => 'recovery-component-0001'}
-        createMockLinkToken={createMockLinkToken}
         presentation={presentation}
         returnTo={returnTo}
       />
@@ -216,20 +211,16 @@ describe('F1-06 recovery and safe session exit', () => {
         .getByRole('link', { name: 'Otevřít syntetický odkaz pro obnovu' })
         .element()
         .getAttribute('href'),
-    ).toBe(
-      '/aktivace/odkaz#token=recovery-app%3A00000000-0000-4000-8000-000000000001',
-    );
+    ).toMatch(/^\/aktivace\/odkaz#token=recovery-app%3A/u);
   });
 
-  it('preserves a safe onboarding return through the synthetic recovery link', async () => {
-    let destination: ActivationReturnTo | undefined;
+  it('preserves a safe onboarding return in the recovery request', async () => {
+    const calls: RecordedRequest[] = [];
     const screen = await renderComponent(
       <RecoveryProbe
-        api={successApi(activationRecoveryFixtures.accepted)}
-        createMockLinkToken={(returnTo) => {
-          destination = returnTo;
-          return 'recovery-onboarding:00000000-0000-4000-8000-000000000001';
-        }}
+        api={successApi(activationRecoveryFixtures.accepted, (request) =>
+          calls.push(request),
+        )}
         returnTo="/onboarding"
       />,
     );
@@ -239,34 +230,28 @@ describe('F1-06 recovery and safe session exit', () => {
       .getByRole('button', { name: 'Poslat jednorázový odkaz' })
       .click();
 
-    expect(destination).toBe('/onboarding');
-    expect(
-      screen
-        .getByRole('link', { name: 'Otevřít syntetický odkaz pro obnovu' })
-        .element()
-        .getAttribute('href'),
-    ).toBe(
-      '/aktivace/odkaz#token=recovery-onboarding%3A00000000-0000-4000-8000-000000000001',
+    expect(calls[0]?.body).toEqual({
+      email: 'unknown@example.test',
+      returnTo: '/onboarding',
+    });
+    const recoveryLink = screen.getByRole('link', {
+      name: 'Otevřít syntetický odkaz pro obnovu',
+    });
+    await expect.element(recoveryLink).toBeVisible();
+    expect(recoveryLink.element().getAttribute('href')).toMatch(
+      /^\/aktivace\/odkaz#token=recovery-onboarding%3A/u,
     );
   });
 
-  it('preserves an exact participant detail route in the recovery request and mock token handoff', async () => {
+  it('preserves an exact participant detail route in the recovery request', async () => {
     const returnTo =
       '/app/program/550e8400-e29b-41d4-a716-446655440000' as const;
     const calls: RecordedRequest[] = [];
-    let tokenDestination: ActivationReturnTo | undefined;
     const screen = await renderComponent(
       <RecoveryProbe
         api={successApi(activationRecoveryFixtures.accepted, (request) =>
           calls.push(request),
         )}
-        createMockLinkToken={(destination) => {
-          tokenDestination = destination;
-          return createMockRecoveryLinkToken(
-            destination,
-            '00000000-0000-4000-8000-000000000001',
-          );
-        }}
         returnTo={returnTo}
       />,
     );
@@ -280,13 +265,13 @@ describe('F1-06 recovery and safe session exit', () => {
       email: 'alex@example.test',
       returnTo,
     });
-    expect(tokenDestination).toBe(returnTo);
-    expect(
-      screen
-        .getByRole('link', { name: 'Otevřít syntetický odkaz pro obnovu' })
-        .element()
-        .getAttribute('href'),
-    ).toContain('recovery-route%3A');
+    const recoveryLink = screen.getByRole('link', {
+      name: 'Otevřít syntetický odkaz pro obnovu',
+    });
+    await expect.element(recoveryLink).toBeVisible();
+    expect(recoveryLink.element().getAttribute('href')).toMatch(
+      /^\/aktivace\/odkaz#token=recovery-route%3A/u,
+    );
   });
 
   it('does not let a recovery query bypass a server-confirmed claim', async () => {

@@ -48,11 +48,7 @@ const encodeCanonicalBase64Url = (value: string): string => {
     .replace(/=+$/u, '');
 };
 
-/**
- * Builds development-only recovery tokens. The opaque UUID keeps legacy mock
- * links working; a canonical base64url payload carries only a contract-valid
- * nested route and is revalidated by the mock API handler before use.
- */
+/** Builds development-only recovery tokens for the mock API handler. */
 export const createMockRecoveryLinkToken = (
   destination: ActivationReturnTo,
   nonce = createMockLinkNonce(),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveActivationReturnTo } from './activation-return.js';
-import { createMockRecoveryLinkToken } from './mock-recovery-link.js';
+import { createMockRecoveryLinkToken } from '../test/mocks/mock-recovery-link.js';
 
 describe('activation return destination', () => {
   it.each([

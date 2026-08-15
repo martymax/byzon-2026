@@ -24,6 +24,16 @@ const participantCurrentEventPath = resolve(
   sourceRoot,
   'server/current-event.ts',
 );
+const guardedRecoveryPreviewPaths = new Map([
+  [
+    resolve(sourceRoot, 'components/recovery-form.tsx'),
+    '../test/mocks/recovery-preview',
+  ],
+  [
+    resolve(sourceRoot, 'components/activation-identity.tsx'),
+    '../test/mocks/recovery-preview',
+  ],
+]);
 const generatedWorkerPath = resolve(appRoot, 'public/mockServiceWorker.js');
 const buildRoot = resolve(appRoot, '.next');
 const mode = process.argv[2];
@@ -57,6 +67,7 @@ const forbiddenRuntimePatterns = [
   ['mock environment switch', /NEXT_PUBLIC_BYZON_API_MOCKS/],
   ['mock worker asset', /mockServiceWorker\.js/],
   ['mock source path', /(?:\/|\\)test(?:\/|\\)mocks/],
+  ['mock recovery helper', /mock-recovery-link/],
   ['Vitest browser runtime', /vitest-browser-react|vitest\/browser/],
   ['axe Playwright runtime', /@axe-core\/playwright/],
   ['axe browser runtime', /(?:^|["'/])axe-core(?:["'/]|$)/m],
@@ -68,6 +79,7 @@ const forbiddenRuntimePatterns = [
 ];
 const forbiddenBuildPatterns = [
   ...forbiddenRuntimePatterns,
+  ['synthetic recovery action', /Otevřít syntetický (?:jednorázový )?odkaz/],
   ['admin content preview marker', /BYZON_ADMIN_CONTENT_PREVIEW_F4/],
   ['check-in preview scenario marker', /BYZON_CHECKIN_PREVIEW_SCENARIOS_F5/],
   [
@@ -248,7 +260,9 @@ const checkSourceBoundary = () => {
     }
     if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
     const patterns =
-      file === checkinPreviewPagePath || file === participantCurrentEventPath
+      file === checkinPreviewPagePath ||
+      file === participantCurrentEventPath ||
+      guardedRecoveryPreviewPaths.has(file)
         ? forbiddenRuntimePatterns.filter(
             ([label]) => label !== 'mock source path',
           )
@@ -292,6 +306,18 @@ const checkSourceBoundary = () => {
     failures.push(
       'check-in preview scenarios must stay inside the positive build-time environment guard and dynamic import',
     );
+  }
+
+  for (const [
+    previewConsumerPath,
+    moduleSpecifier,
+  ] of guardedRecoveryPreviewPaths) {
+    const source = readFileSync(previewConsumerPath, 'utf8');
+    if (!hasSingleGuardedPreviewImport(source, moduleSpecifier)) {
+      failures.push(
+        `${relative(appRoot, previewConsumerPath)} recovery preview must stay behind the positive build-time environment guard and one dynamic mock import`,
+      );
+    }
   }
 
   const participantCurrentEvent = readFileSync(

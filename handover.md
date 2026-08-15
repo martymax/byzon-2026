@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 27. července 2026
+> Poslední aktualizace: 15. srpna 2026
 
 ## Pokyny pro pokračování
 
@@ -19,6 +19,32 @@ Etapu neuzavírej ani nemerguj, dokud nejsou nálezy opravené a ověřené; úp
 kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
+
+- Důvěryhodný zelený baseline je k 15. 8. 2026 obnovený v necommitnutém
+  pracovním stromu. `static-site/data/content.json` nyní deterministicky
+  importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
+  i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
+  a nepřevedené `span`/`compact` atributy. `P3-11` zůstává otevřený pro finální
+  loga, FAQ, praktické kontakty a obsahové UAT k 31. 8.
+- Recovery a identity potvrzení v produkčním buildu negenerují ani nezobrazují
+  syntetický odkaz. Development helper i preview copy jsou v `src/test/mocks`
+  a načítají se jen za pozitivním build-time dev/test guardem; production
+  source/build boundary explicitně odmítá jejich nehlídaný import i výsledný
+  text syntetické recovery akce. `pnpm dev:mock` si tak zachovává celý průchod.
+- Bezpečnostní overrides připínají `brace-expansion 5.0.9`, `js-yaml 4.3.1`,
+  `nanoid 3.3.18`, `postcss 8.5.23` a starou tranzitivní větev esbuild na první
+  dostupnou opravenou řadu `0.25.0`. `pnpm audit` i `pnpm audit --prod` hlásí
+  nula známých zranitelností.
+- Check-in browser regrese odděluje klávesové měření a landscape geometrii;
+  před Enterem explicitně ověřuje focus inputu. Dotčený soubor prošel třikrát
+  po sobě (3×75 scénářů) a následné úplné běhy skončily 852/852.
+- Finální lokální CI ekvivalent prošel nad izolovanou PostgreSQL 14 databází:
+  frozen install, migrate/seed, Prettier, ESLint, sedm typechecků, 801/801
+  unit+integration testů bez skipů, produkční Next/worker build (25 stránek,
+  27 offline assetů), source/build mock boundary, 852/852 komponentových testů,
+  15/15 E2E, static smoke (25 HTML/58 assetů) a oba dependency audity. Testovací
+  databáze i generovaný MSW worker byly po ověření odstraněny; CI na PostgreSQL
+  17 se spustí až po případném pushi.
 
 - Better Auth session má nově 48hodinovou expiraci a zachovaný 24hodinový
   refresh aktivní relace. Aplikace nemá samostatný idle logout, takže neaktivní
@@ -56,10 +82,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   loga, manifest
   `ec4b7f4743633482876c658d157532327303ae529da2b1613f5198871a475556`
   a service worker 24 142 B.
-- `pnpm audit --audit-level high` je zelený. Kompatibilní větve používají
-  `brace-expansion 5.0.8`; legacy `minimatch 3.1.5` má malý reprodukovatelný
-  API adapter patch. Zůstává jedna `moderate` transitivní položka starého
-  `esbuild` pouze v dev-toolingu.
+- Legacy `minimatch 3.1.5` si zachovává malý reprodukovatelný API adapter
+  patch pro moderní `brace-expansion`; aktuální přesné bezpečné verze a nulový
+  audit jsou uvedené v baseline bodu výše.
 - Produkční auth, autorizované endpointy, skutečný ticket credential,
   SimpleShop synchronizace, offline lease/replay, staging UAT a fyzická
   zařízení zůstávají správně backend/provozními handoffy. Nejde o chybějící

@@ -42,9 +42,15 @@ type IdentityFailure =
   | { readonly kind: 'error'; readonly requestId?: RequestId };
 
 type SentState = {
-  readonly mockLink: string;
   readonly resendAfterSeconds: number;
+  readonly preview?: ActivationIdentitySentPreview;
 };
+
+export interface ActivationIdentitySentPreview {
+  readonly href: string;
+  readonly actionLabel: string;
+  readonly description: string;
+}
 
 const mapIdentityFailure = (
   failure: ApiFailure<ActivationIdentityProblem>,
@@ -106,13 +112,11 @@ export const ActivationIdentity = ({
   returnTo = '/onboarding',
   now,
   createIdempotencyKey = () => runtimeSecret('identity'),
-  createMockLinkToken = () => runtimeSecret('link'),
 }: {
   readonly api?: ApiPort;
   readonly returnTo?: ActivationReturnTo;
   readonly now?: (() => number) | undefined;
   readonly createIdempotencyKey?: () => string;
-  readonly createMockLinkToken?: () => string;
 }) => {
   const landing = useActivationEntry(api);
   const [email, setEmail] = useState('');
@@ -194,11 +198,18 @@ export const ActivationIdentity = ({
         }
         setEmail('');
         requestAttempt.current = undefined;
+        let preview: ActivationIdentitySentPreview | undefined;
+        if (
+          process.env.NODE_ENV === 'development' ||
+          process.env.NODE_ENV === 'test'
+        ) {
+          const { createActivationIdentitySentPreview } =
+            await import('../test/mocks/recovery-preview');
+          preview = createActivationIdentitySentPreview();
+        }
         setSent({
-          mockLink: `/aktivace/odkaz#token=${encodeURIComponent(
-            createMockLinkToken(),
-          )}`,
           resendAfterSeconds: result.data.resendAfterSeconds,
+          ...(preview ? { preview } : {}),
         });
         return;
       }
@@ -228,17 +239,18 @@ export const ActivationIdentity = ({
       <IdentityGate headingRef={sentHeading} title="Zkontrolujte e-mail">
         <StatePanel
           action={
-            <ActionLink href={sent.mockLink}>
-              Otevřít syntetický jednorázový odkaz
-            </ActionLink>
+            sent.preview ? (
+              <ActionLink href={sent.preview.href}>
+                {sent.preview.actionLabel}
+              </ActionLink>
+            ) : undefined
           }
           kind="empty"
           title="Pokud lze průchod dokončit, odkaz byl odeslán"
         >
           <p>
-            Stejnou zprávu ukazujeme bez ohledu na existenci účtu. V mock režimu
-            můžete použít syntetický odkaz výše; nevzniklo skutečné přihlášení
-            ani účast na akci.
+            {sent.preview?.description ??
+              'Stejnou zprávu ukazujeme bez ohledu na existenci účtu. Pokud účet existuje, pokračujte podle jednorázového odkazu doručeného e-mailem.'}
           </p>
           <p>
             Další odeslání je dostupné nejdříve za {sent.resendAfterSeconds}{' '}

@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.0 – rozsah po vypořádání komentářů
+> Stav: implementační plán v6.1 – rozsah po vypořádání komentářů a obnovení baseline
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1868,7 +1868,10 @@ fixtures.
 - [ ] `P3-11` Do 31. 8. 2026 načíst a UAT ověřit aktuální program z webu,
   finální loga partnerů, FAQ a praktické kontakty z `SCOPE-2026-12`; odstranit
   samostatný plánek a materiály z participant DTO/UI. Lokace scén a koučovací
-  zóny musí být textem u programu.
+  zóny musí být textem u programu. Průběžný baseline z 15. 8. 2026 importuje
+  67 validních sessions, jednu neplatnou položku `24:00 - ?` bezpečně přeskočí
+  a reportuje nepřevedené prezentační atributy včetně `span` a `compact`;
+  finální obsahové UAT a uzávěrka tím nejsou splněné.
 - [ ] `P3-12` Implementovat `CS-SESSION-QR-01`: stabilní programový deep link,
   jednotlivé SVG a dávkový balík pro každý publikovaný bod programu. QR vede na
   `/app/program/[sessionId]`, neobsahuje credential a funguje i bez Priority B;
@@ -1934,6 +1937,9 @@ capability slices, takže jeden nedokončený kontrakt nezastaví ostatní balí
   jednoznačný indikátor mock režimu a build check proti importu mocků do
   produkčního grafu. Implementováno a popsáno v
   [`apps/conference/src/test/mocks/README.md`](apps/conference/src/test/mocks/README.md).
+  Baseline hardening z 15. 8. 2026 přesunul recovery token helper výhradně pod
+  `src/test/mocks`, izoloval syntetický recovery link za build-time dev/test
+  guard a source/build boundary nyní obě regrese v produkci explicitně odmítá.
 - [x] `F0-06` Přidat component/axe harness, helpers pro role/fáze a cílové
   viewporty `375 × 667`, `768 × 1024` a `1280 × 800`. Implementováno v
   [`apps/conference/src/test/component/README.md`](apps/conference/src/test/component/README.md)
@@ -2980,6 +2986,12 @@ rozhodnutí.
 Původní F0–F6 foundation je hotová jako širší v5 mock. Po revizi v6 je bezpečné
 pokračovat v tomto pořadí:
 
+Zelený baseline byl 15. 8. 2026 obnoven: frozen install, formát, lint, sedm
+typechecků, 801 unit/integration testů nad izolovaným PostgreSQL, produkční
+Next/worker build, source/build mock boundary, 852 browser component testů,
+15 E2E, statický smoke test a úplný production/development dependency audit
+prošly bez nálezu. Následující pořadí se tím nemění.
+
 1. `P0-10` jako samostatný scope-audit commit: inventář konkrétních route,
    endpointů, kontraktových větví, fixtures a feature flags pro všechny
    `SCOPE-2026-*`. Zatím nic destruktivně nemigrovat.
@@ -3069,3 +3081,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 5.0 | 25. 7. 2026 | Frontendový track F0–F6 tvoří úplné syntetické preview uživatelských průchodů. Aktualizovány contract registry, capability matrix, route/permission evidence a závěrečný implementační report; stav zůstává poctivě `UI ready (mocked)`, nikoli produkční integrace nebo UAT. |
 | 5.1 | 26. 7. 2026 | Uzavřeny opakované finální review smyčky: `b6abbb3` failne zavřeně při poškození aktuálního offline shellu a `e429119`/`13e7749`/`cf63bb4` dokončují osmizdrojový admin editor, immutable publikaci, browser stavové regrese, přesnou Markdown DTO paritu a oboustranné limitní testy. Cílené unit/contract/server, Chromium viewport, lint a source-boundary gates jsou zelené. |
 | 6.0 | 15. 8. 2026 | Vypořádáno všech 40 vláken zadávacího dokumentu (39 věcných/otevřených + 1 testovací) a ověřen coaching sheet. Scope je zúžen na launch Priority A a volitelnou B: odstraněny connections/messages, speaker portal, polls/projection, social wall, plánek, materiály, reminders a self-data export; přidán session-scoped roster vedoucích aktivit, fixed „Dnes lovím“, potvrzené kapacity/coaching, QR pro každý bod programu, kritická oznámení a scope-negative UAT. Chybějící kapacita networkingu, session kontinuita a právní retence zůstávají explicitní blockery. Historické changelog řádky popisují tehdejší v5 mock a neopravňují vyřazené části integrovat. |
+| 6.1 | 15. 8. 2026 | Obnoven důvěryhodný zelený baseline: programový import a oba jeho regresní testy odpovídají 67 validním sessions a reportují `compact`; recovery token helper i syntetické odkazy byly izolovány do guarded dev/test grafu a production boundary je nyní explicitně blokuje; tranzitivní security overrides odstranily všechny známé auditní nálezy; flaky check-in browser test dostal deterministický focus a oddělené odpovědnosti. Celý CI ekvivalent prošel nad izolovaným PostgreSQL bez přeskočených integračních testů. |

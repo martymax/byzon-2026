@@ -47,7 +47,7 @@ import {
   submitActivationIdentity,
   submitActivationRecovery,
 } from '../../lib/activation-api.js';
-import { createMockRecoveryLinkToken } from '../../lib/mock-recovery-link.js';
+import { createMockRecoveryLinkToken } from './mock-recovery-link.js';
 import {
   requestIdentityBootstrap,
   submitIdentityPrivacyRequest,

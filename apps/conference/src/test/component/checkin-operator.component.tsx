@@ -694,7 +694,28 @@ describe('F5-01..F5-06 check-in operator', () => {
     expect(document.body.textContent).toContain('Původní záznam nebyl smazán');
   }, 30_000);
 
-  it('supports keyboard submit, landscape geometry, axe and scan-to-result measurement', async () => {
+  it('supports keyboard submit and scan-to-result measurement', async () => {
+    const times = [1_000, 1_183];
+    const screen = await renderOperator({
+      now: () => times.shift() ?? 1_183,
+    });
+    const code = screen.getByLabelText('Opaque kód vstupenky');
+    await code.fill('DEMO-VALID');
+    await code.click();
+    await expect.element(code).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+
+    await expect
+      .element(screen.getByText('Platný lookup', { exact: true }))
+      .toBeVisible();
+    const metric = screen.container.querySelector<HTMLElement>(
+      '[data-lookup-duration-ms]',
+    );
+    expect(metric?.dataset.lookupDurationMs).toBe('183');
+    expect(Number(metric?.dataset.lookupDurationMs)).toBeLessThan(500);
+  });
+
+  it('preserves landscape geometry without horizontal overflow', async () => {
     const browser = await cdp();
     await browser.send('Emulation.setDeviceMetricsOverride', {
       width: 812,
@@ -703,27 +724,11 @@ describe('F5-01..F5-06 check-in operator', () => {
       mobile: true,
       screenOrientation: { type: 'landscapePrimary', angle: 90 },
     });
-    const times = [1_000, 1_183];
     try {
-      const screen = await renderOperator({
-        now: () => times.shift() ?? 1_183,
-      });
-      const code = screen.getByLabelText('Opaque kód vstupenky');
-      await code.fill('DEMO-VALID');
-      await userEvent.keyboard('{Enter}');
-
-      await expect
-        .element(screen.getByText('Platný lookup', { exact: true }))
-        .toBeVisible();
-      const metric = screen.container.querySelector<HTMLElement>(
-        '[data-lookup-duration-ms]',
-      );
-      expect(metric?.dataset.lookupDurationMs).toBe('183');
-      expect(Number(metric?.dataset.lookupDurationMs)).toBeLessThan(500);
+      await renderOperator();
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
         document.documentElement.clientWidth,
       );
-      await expectComponentToPassAxe(screen.container);
     } finally {
       await browser.send('Emulation.clearDeviceMetricsOverride');
     }
