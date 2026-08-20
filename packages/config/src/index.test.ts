@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { readConferenceEnv, readWorkerEnv } from './index';
 
+const stagingBase = {
+  NODE_ENV: 'production',
+  APP_ENV: 'staging',
+  APP_BASE_URL: 'https://staging-app.byzon.cz',
+  PUBLIC_SITE_URL: 'https://byzon.cz',
+  DATABASE_URL: 'postgresql://example.invalid/byzon',
+  REDIS_URL: 'redis://redis.internal:6379',
+  BETTER_AUTH_SECRET: 'staging-test-secret-at-least-32-characters',
+  RATE_LIMIT_SUBJECT_SECRET: 'staging-rate-limit-secret-at-least-32-characters',
+} as const;
+
 describe('worker environment', () => {
   it('validates positive concurrency', () =>
     expect(() => readWorkerEnv({ WORKER_CONCURRENCY_DEFAULT: 0 })).toThrow());
@@ -16,24 +27,40 @@ describe('database environment', () => {
   it('requires an explicit PostgreSQL URL in staging', () => {
     expect(() =>
       readConferenceEnv({
-        NODE_ENV: 'production',
-        APP_ENV: 'staging',
-        APP_BASE_URL: 'https://staging-app.byzon.cz',
-        PUBLIC_SITE_URL: 'https://byzon.cz',
+        ...stagingBase,
+        DATABASE_URL: undefined,
       }),
+    ).toThrow();
+  });
+
+  it('requires an explicit Redis URL in staging', () => {
+    expect(() =>
+      readConferenceEnv({ ...stagingBase, REDIS_URL: undefined }),
+    ).toThrow();
+    expect(() =>
+      readConferenceEnv({ ...stagingBase, REDIS_URL: 'redis://' }),
+    ).toThrow();
+    expect(() =>
+      readConferenceEnv({
+        ...stagingBase,
+        REDIS_URL: 'https://redis.internal',
+      }),
+    ).toThrow();
+  });
+
+  it('supports Railway dual-stack and explicit IP-family overrides', () => {
+    expect(readConferenceEnv(stagingBase).REDIS_FAMILY).toBe(0);
+    expect(
+      readConferenceEnv({ ...stagingBase, REDIS_FAMILY: '6' }).REDIS_FAMILY,
+    ).toBe(6);
+    expect(() =>
+      readConferenceEnv({ ...stagingBase, REDIS_FAMILY: '5' }),
     ).toThrow();
   });
 });
 
 describe('release environment', () => {
-  const staging = {
-    NODE_ENV: 'production',
-    APP_ENV: 'staging',
-    APP_BASE_URL: 'https://staging-app.byzon.cz',
-    PUBLIC_SITE_URL: 'https://byzon.cz',
-    DATABASE_URL: 'postgresql://example.invalid/byzon',
-    BETTER_AUTH_SECRET: 'staging-test-secret-at-least-32-characters',
-  } as const;
+  const staging = stagingBase;
 
   it('uses the Railway-provided commit for GitHub deployments', () => {
     expect(
@@ -73,11 +100,18 @@ describe('conference authentication environment', () => {
   it('requires an explicit sufficiently long secret in staging', () => {
     expect(() =>
       readConferenceEnv({
-        NODE_ENV: 'production',
-        APP_ENV: 'staging',
-        APP_BASE_URL: 'https://staging-app.byzon.cz',
-        PUBLIC_SITE_URL: 'https://byzon.cz',
-        DATABASE_URL: 'postgresql://example.invalid/byzon',
+        ...stagingBase,
+        BETTER_AUTH_SECRET: undefined,
+      }),
+    ).toThrow();
+  });
+
+  it('keeps the rate-limit subject key separate and server-only', () => {
+    expect(readConferenceEnv({}).RATE_LIMIT_SUBJECT_SECRET).toHaveLength(46);
+    expect(() =>
+      readConferenceEnv({
+        ...stagingBase,
+        RATE_LIMIT_SUBJECT_SECRET: undefined,
       }),
     ).toThrow();
   });

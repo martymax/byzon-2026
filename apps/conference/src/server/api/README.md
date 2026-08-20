@@ -25,6 +25,12 @@ emails, user IDs and device values are forbidden as store keys. An in-process
 store is suitable only for isolated tests; staging and production require an
 atomic shared provider before a protected endpoint is enabled.
 
+`P8-01` provides that shared provider as `rateLimitStore` backed by one atomic
+Redis Lua fixed window. Route owners must still define and test their explicit
+scope, limit, window, subject parts and outage policy. Protected mutations fail
+closed when Redis is unavailable; read availability may degrade only when its
+route contract explicitly allows and logs that behavior.
+
 ## Session revocation
 
 `POST /api/v1/auth/logout-all` requires a valid Better Auth session and an

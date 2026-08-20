@@ -114,6 +114,50 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   zůstávají správně backend/provozními handoffy. Účet, profil, onboarding,
   privacy minimum a session controls už mají autorizované produkční endpointy.
 
+## Dokončená práce (`P8-01`)
+
+- Samostatná větev `agent/p8-01-redis-foundation` vznikla z aktuálního
+  `origin/main`; agenda PR `#22` do tohoto infrastrukturního diffu nevstupuje.
+- Nový `@byzon/redis` připíná ioredis `6.0.0` a nabízí lazy connection pro web
+  i BullMQ worker. Web má bounded connect/command timeout,
+  `maxRetriesPerRequest=1`, vypnutou offline queue a žádné pozdní resend;
+  worker používá pro blocking commandy `maxRetriesPerRequest=null`, neomezený
+  request retry a bounded exponential reconnect. `family=0` zachovává Railway
+  dual-stack DNS; `4`/`6` jsou pouze explicitní provozní override.
+- Sdílený Redis rate-limit provider používá jeden atomický Lua fixed window.
+  Přijme jen přesný `byzon:rate-limit:<scope>:<64hex HMAC>` bucket, takže raw
+  IP, e-mail, user ID ani device hodnota se do Redis nedostane. Samostatný
+  `RATE_LIMIT_SUBJECT_SECRET` a length-prefixed HMAC helper oddělují prostředí
+  i význam jednotlivých subject částí.
+- `/health/ready` kontroluje DB a Redis paralelně. Nedostupná DB vrací `503`,
+  samotný výpadek Redis vrací `200` se stavem `degraded`; DTO obsahuje pouze
+  stav a `redisPingMs`. Connection error log neobsahuje URL/provider detail, je
+  omezený na jeden warning za minutu a po obnově vydá jediný recovery log.
+  Worker před startem ověří DB i Redis, zaloguje jejich stav/latenci a při
+  `SIGTERM`/`SIGINT` obě spojení uzavře.
+- Staging/production nově vyžadují explicitní `REDIS_URL` a samostatný HMAC
+  secret. Přibyly `REDIS_FAMILY`, Redis timeouty, versionovaný `compose.yaml`,
+  root `dev:infra`/`dev:infra:down`, Redis 8.2 CI service a staging runbook.
+  Redis/BullMQ používá `maxmemory-policy=noeviction`; native optional
+  `msgpackr-extract` build je supply-chain politikou explicitně zakázaný a
+  ověřený JS fallback funguje. Databázové schéma ani migrace se nemění.
+- Plný lokální gate proti izolovanému PostgreSQL 17 a Redis 8.2 prošel bez
+  skipů: config 11/11, Redis 8/8, database 89/89, domain 174/174, UI 7/7,
+  test-support 37/37 a conference 519/519, tedy 845 workspace testů. Následný
+  self-review doplnil bounded listener cleanup a counter cap; finální Redis
+  sada prošla 9/9, takže aktuální agregát je 846 testů. Redis integrace ověřila
+  50 souběžných inkrementů ze dvou spojení, odmítnutí raw subjectu, bounded
+  zamítnutý counter a reálnou kompatibilitu BullMQ `6.1.2`.
+- Prošly Prettier, všechny linty a osm typechecků, produkční Next/worker build,
+  source/build mock boundary, static smoke 25 HTML/58 assetů, browser
+  komponenty 846/846, Playwright E2E 15/15 a oba dependency audity bez známé
+  zranitelnosti. Standalone runtime smoke ověřil `ready → degraded → ready`,
+  jednu throttled warning zprávu, recovery log a worker startup/shutdown.
+- P8-01 se publikuje samostatným draft PR do `main`. Po jeho integraci se PR
+  `#22` rebasuje a agenda route dostanou malý
+  explicitní read/mutation bucket patch; samotné P8-01 žádný endpoint potichu
+  nelimituje.
+
 ## Dokončená práce (`P5-08`, PR #21)
 
 - Přidány read-only endpointy `GET /api/v1/activity-roster` a

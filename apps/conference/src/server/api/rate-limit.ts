@@ -1,8 +1,34 @@
+import { createHmac } from 'node:crypto';
+
 import { ApiProblemError } from './problem';
 
 const SCOPE_PATTERN = /^[a-z][a-z0-9_.-]{0,127}$/;
 const SUBJECT_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1_000;
+
+export const hashRateLimitSubject = (
+  secret: string,
+  parts: readonly string[],
+): string => {
+  if (
+    Buffer.byteLength(secret, 'utf8') < 32 ||
+    parts.length === 0 ||
+    parts.some(
+      (part) => part.length === 0 || Buffer.byteLength(part, 'utf8') > 1_024,
+    )
+  ) {
+    throw new TypeError('Invalid rate limit subject');
+  }
+  const hmac = createHmac('sha256', secret);
+  for (const part of parts) {
+    const encoded = Buffer.from(part, 'utf8');
+    const length = Buffer.allocUnsafe(4);
+    length.writeUInt32BE(encoded.length);
+    hmac.update(length);
+    hmac.update(encoded);
+  }
+  return hmac.digest('hex');
+};
 
 export interface AtomicRateLimitStoreInput {
   bucket: string;
