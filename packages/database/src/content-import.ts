@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, like, or } from 'drizzle-orm';
 
 import {
   acquireTransactionLock,
@@ -10,6 +10,7 @@ import {
   type DatabaseTransaction,
   withTransaction,
 } from './client.js';
+import { loadCoachingSchedule } from './coaching-schedule.js';
 import { generateUuidV7 } from './ids.js';
 import * as schema from './schema/index.js';
 
@@ -82,6 +83,8 @@ interface PreparedAsset {
 }
 
 interface PreparedSession {
+  sourceName: string;
+  sourceSha256: string;
   sourcePath: string;
   dayPath: string;
   slug: string;
@@ -89,7 +92,7 @@ interface PreparedSession {
   summary: string | null;
   startsAt: Date;
   endsAt: Date;
-  type: 'break' | 'mastermind' | 'meal' | 'other' | 'workshop';
+  type: 'break' | 'coaching' | 'mastermind' | 'meal' | 'other' | 'workshop';
   capacityMode: 'none' | 'reservation';
   capacity: number | null;
   sortOrder: number;
@@ -97,6 +100,9 @@ interface PreparedSession {
 }
 
 const SOURCE_NAME = 'static-site/data/content.json';
+const LEGACY_COACHING_STAGE = 'Koučovací zóna';
+const LEGACY_COACHING_TITLE = 'Koučovací sloty';
+const EXPECTED_LEGACY_COACHING_SESSIONS = 11;
 const PRAGUE_OFFSET = '+02:00';
 const knownDates: Record<string, string> = {
   '18. září 2026': '2026-09-18',
@@ -262,13 +268,14 @@ async function upsertProvenance(
   sourceSha256: string,
   targetType: string,
   targetId: string,
+  sourceName = SOURCE_NAME,
 ) {
   await transaction
     .insert(schema.contentImportProvenance)
     .values({
       id: generateUuidV7(),
       eventId,
-      sourceName: SOURCE_NAME,
+      sourceName,
       sourcePath,
       sourceSha256,
       targetType,
@@ -358,6 +365,107 @@ function addFinding(
   });
 }
 
+async function archiveLegacyCoachingSessions(
+  transaction: DatabaseTransaction,
+  eventId: string,
+  sourcePaths: readonly string[],
+): Promise<void> {
+  const provenance = await transaction.query.contentImportProvenance.findMany({
+    columns: { sourcePath: true, targetId: true },
+    where: and(
+      eq(schema.contentImportProvenance.eventId, eventId),
+      eq(schema.contentImportProvenance.sourceName, SOURCE_NAME),
+      eq(schema.contentImportProvenance.targetType, 'session'),
+      inArray(schema.contentImportProvenance.sourcePath, sourcePaths),
+    ),
+  });
+  if (provenance.length === 0) {
+    const unreconciledLegacySession =
+      await transaction.query.programSessions.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(schema.programSessions.eventId, eventId),
+          or(
+            eq(schema.programSessions.title, LEGACY_COACHING_TITLE),
+            like(
+              schema.programSessions.slug,
+              'koucovaci-zona-koucovaci-sloty-%',
+            ),
+          ),
+        ),
+      });
+    if (unreconciledLegacySession) {
+      throw new Error(
+        'legacy coaching source paths require reconciliation before replacement',
+      );
+    }
+    return;
+  }
+  if (provenance.length !== sourcePaths.length) {
+    throw new Error(
+      'legacy coaching import is incomplete and requires reconciliation',
+    );
+  }
+  for (const row of provenance) {
+    const session = await transaction.query.programSessions.findFirst({
+      where: and(
+        eq(schema.programSessions.eventId, eventId),
+        eq(schema.programSessions.id, row.targetId),
+      ),
+    });
+    if (
+      !session ||
+      session.title !== LEGACY_COACHING_TITLE ||
+      session.type !== 'other' ||
+      session.capacityMode !== 'none' ||
+      session.capacity !== null ||
+      !['draft', 'archived'].includes(session.status)
+    ) {
+      throw new Error(
+        `legacy coaching session requires reconciliation: ${row.sourcePath}`,
+      );
+    }
+    const agendaItem = await transaction.query.agendaItems.findFirst({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.agendaItems.eventId, eventId),
+        eq(schema.agendaItems.sessionId, session.id),
+      ),
+    });
+    const reservation = await transaction.query.reservations.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.sessionId, session.id),
+      ),
+    });
+    const waitlist = await transaction.query.waitlistEntries.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.waitlistEntries.eventId, eventId),
+        eq(schema.waitlistEntries.sessionId, session.id),
+      ),
+    });
+    if (agendaItem || reservation || waitlist) {
+      throw new Error(
+        `legacy coaching session has participant state: ${row.sourcePath}`,
+      );
+    }
+    if (session.status === 'draft') {
+      await transaction
+        .update(schema.programSessions)
+        .set({ status: 'archived', updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.programSessions.eventId, eventId),
+            eq(schema.programSessions.id, session.id),
+            eq(schema.programSessions.status, 'draft'),
+          ),
+        );
+    }
+  }
+}
+
 export async function importContentJson(options: {
   db: Database;
   eventSlug: string;
@@ -368,6 +476,7 @@ export async function importContentJson(options: {
   const bytes = await readFile(options.sourceFile);
   const sourceSha256 = sha256(bytes);
   const source = requireSource(JSON.parse(bytes.toString('utf8')));
+  const coachingSchedule = await loadCoachingSchedule(options.repositoryRoot);
   const findings: ContentImportFinding[] = [];
   const assetsByPath = new Map<string, PreparedAsset>();
   const assetPaths = [
@@ -379,11 +488,12 @@ export async function importContentJson(options: {
     assetsByPath.set(path, await prepareAsset(options.repositoryRoot, path));
 
   const preparedSessions: PreparedSession[] = [];
+  const replacedCoachingSourcePaths = new Set<string>();
   const matchedReservationPolicies = new Set<string>();
   const speakerSlugByName = new Map(
     source.speakers.list.map((speaker) => [speaker.name, speaker.slug]),
   );
-  let sourceSessionCount = 0;
+  let skippedSessionCount = 0;
   source.program.days.forEach((day, dayIndex) => {
     const localDate = knownDates[day.date];
     if (!localDate)
@@ -399,10 +509,18 @@ export async function importContentJson(options: {
         stage.name,
       );
       stage.events.forEach((event, eventIndex) => {
-        sourceSessionCount += 1;
         const path = `program.days[${dayIndex}].stages[${stageIndex}].events[${eventIndex}]`;
+        if (
+          dayIndex === 0 &&
+          stage.name === LEGACY_COACHING_STAGE &&
+          event.title === LEGACY_COACHING_TITLE
+        ) {
+          replacedCoachingSourcePaths.add(path);
+          return;
+        }
         const range = parseTimeRange(localDate, event.time);
         if (!range) {
+          skippedSessionCount += 1;
           addFinding(
             findings,
             'invalid_time',
@@ -462,6 +580,8 @@ export async function importContentJson(options: {
           if (slug) speakerSlugs.add(slug);
         }
         preparedSessions.push({
+          sourceName: SOURCE_NAME,
+          sourceSha256,
           sourcePath: path,
           dayPath: `program.days[${dayIndex}]`,
           slug: `${slugify(stage.name)}-${slugify(event.title)}-${event.time.replace(/\D/g, '')}`,
@@ -478,10 +598,44 @@ export async function importContentJson(options: {
       });
     });
   });
+  if (replacedCoachingSourcePaths.size !== EXPECTED_LEGACY_COACHING_SESSIONS) {
+    throw new Error(
+      'legacy coaching source requires reconciliation before replacement',
+    );
+  }
   if (matchedReservationPolicies.size !== confirmedReservationPolicies.size) {
     throw new Error(
       'confirmed reservation policies require source reconciliation',
     );
+  }
+
+  const coachingDayIndex = source.program.days.findIndex(
+    (day) => knownDates[day.date] === coachingSchedule.localDate,
+  );
+  if (coachingDayIndex < 0) {
+    throw new Error('coaching schedule day is missing from the content source');
+  }
+  for (const slot of coachingSchedule.slots) {
+    const range = parseTimeRange(coachingSchedule.localDate, slot.time);
+    if (!range) {
+      throw new Error(`invalid reconciled coaching slot: ${slot.time}`);
+    }
+    preparedSessions.push({
+      sourceName: coachingSchedule.sourceName,
+      sourceSha256: coachingSchedule.sourceSha256,
+      sourcePath: slot.sourcePath,
+      dayPath: `program.days[${coachingDayIndex}]`,
+      slug: slot.slug,
+      title: slot.title,
+      summary: 'Koučovací zóna · Individuální 30minutový koučink',
+      startsAt: range.startsAt,
+      endsAt: range.endsAt,
+      type: 'coaching',
+      capacityMode: 'reservation',
+      capacity: coachingSchedule.capacity,
+      sortOrder: slot.sortOrder,
+      speakerSlugs: [],
+    });
   }
 
   const speakerNames = new Set(
@@ -494,6 +648,7 @@ export async function importContentJson(options: {
     ];
     for (const candidate of candidates) {
       if (
+        session.type !== 'coaching' &&
         /^[\p{Lu}][\p{L}-]+\s+[\p{Lu}][\p{L}-]+/u.test(candidate) &&
         !speakerNames.has(candidate) &&
         ![...speakerNames].some((name) => candidate.includes(name))
@@ -550,7 +705,9 @@ export async function importContentJson(options: {
     contentPages: 1,
     eventDays: source.program.days.length,
     sessions: preparedSessions.length,
-    skippedSessions: sourceSessionCount - preparedSessions.length,
+    coachingSessions: coachingSchedule.slots.length,
+    replacedSessions: replacedCoachingSourcePaths.size,
+    skippedSessions: skippedSessionCount,
   };
   if (options.dryRun)
     return {
@@ -580,7 +737,28 @@ export async function importContentJson(options: {
           eq(schema.contentImportProvenance.sourceSha256, sourceSha256),
         ),
       });
-    if (unchangedImport) return;
+    const unchangedCoachingImport =
+      await transaction.query.contentImportProvenance.findFirst({
+        where: and(
+          eq(schema.contentImportProvenance.eventId, eventId),
+          eq(
+            schema.contentImportProvenance.sourceName,
+            coachingSchedule.sourceName,
+          ),
+          eq(
+            schema.contentImportProvenance.sourceSha256,
+            coachingSchedule.sourceSha256,
+          ),
+        ),
+      });
+    if (unchangedImport && unchangedCoachingImport) return;
+    await acquireTransactionLock(transaction, `content-publish:${eventId}`);
+
+    await archiveLegacyCoachingSessions(
+      transaction,
+      eventId,
+      [...replacedCoachingSourcePaths].sort(),
+    );
     const assetIds = new Map<string, string>();
     const speakerIds = new Map<string, string>();
     for (const asset of assetsByPath.values())
@@ -863,9 +1041,10 @@ export async function importContentJson(options: {
         transaction,
         eventId,
         session.sourcePath,
-        sourceSha256,
+        session.sourceSha256,
         'session',
         id,
+        session.sourceName,
       );
       await transaction
         .delete(schema.sessionSpeakers)

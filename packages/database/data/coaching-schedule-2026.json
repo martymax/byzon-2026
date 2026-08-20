@@ -1,0 +1,41 @@
+{
+  "source": {
+    "spreadsheetId": "1SgNPggOliwIz-TZghhQuxcs1Qv3hqzRNAOWXcAhz0zw",
+    "sheet": "Pátek",
+    "range": "G1:I18",
+    "verifiedAt": "2026-08-21"
+  },
+  "localDate": "2026-09-18",
+  "timezone": "Europe/Prague",
+  "durationMinutes": 30,
+  "capacity": 1,
+  "coaches": [
+    {
+      "key": "radim",
+      "sourceHeader": "Radim",
+      "displayName": "Radim Roček"
+    },
+    {
+      "key": "stana",
+      "sourceHeader": "Stáňa",
+      "displayName": "Stanislava Maunová"
+    }
+  ],
+  "slots": [
+    { "time": "9:15 - 9:45", "radim": true, "stana": true },
+    { "time": "9:45 - 10:15", "radim": true, "stana": true },
+    { "time": "10:15 - 10:45", "radim": true, "stana": true },
+    { "time": "10:45 - 11:15", "radim": true, "stana": true },
+    { "time": "11:15 - 11:45", "radim": true, "stana": true },
+    { "time": "11:45 - 12:15", "radim": true, "stana": true },
+    { "time": "12:15 - 12:45", "radim": true, "stana": true },
+    { "time": "12:45 - 13:15", "radim": false, "stana": false },
+    { "time": "13:15 - 13:45", "radim": true, "stana": true },
+    { "time": "13:45 - 14:15", "radim": true, "stana": true },
+    { "time": "14:15 - 14:45", "radim": true, "stana": true },
+    { "time": "14:45 - 15:15", "radim": true, "stana": true },
+    { "time": "15:15 - 15:45", "radim": true, "stana": true },
+    { "time": "15:45 - 16:15", "radim": false, "stana": true },
+    { "time": "16:15 - 16:45", "radim": false, "stana": true }
+  ]
+}

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import { and, count, eq } from 'drizzle-orm';
+import { and, count, eq, ne } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createDatabaseClient } from './client.js';
@@ -59,23 +59,92 @@ integration('content import integration', () => {
   });
 
   it('imports only drafts and repeats without duplicate domain records', async () => {
+    const legacyDayId = generateUuidV7();
+    const legacyTimes = [
+      '9:15 - 9:45',
+      '9:45 - 10:15',
+      '10:45 - 11:15',
+      '11:15 - 11:45',
+      '11:45 - 12:15',
+      '13:15 - 13:45',
+      '13:45 - 14:15',
+      '14:15 - 14:45',
+      '15:15 - 15:45',
+      '15:45 - 16:15',
+      '16:15 - 16:45',
+    ];
+    const legacyEventIndexes = [0, 1, 3, 4, 5, 7, 8, 9, 11, 12, 13];
+    await client.db.insert(schema.eventDays).values({
+      id: legacyDayId,
+      eventId,
+      localDate: '2026-09-18',
+      title: 'Pátek',
+      sortOrder: 0,
+    });
+    const legacySessions = legacyTimes.map((time, index) => {
+      const [startsAt, endsAt] = time.split(' - ');
+      const id = generateUuidV7();
+      return {
+        id,
+        eventId,
+        dayId: legacyDayId,
+        slug: `koucovaci-zona-koucovaci-sloty-${time.replace(/\D/g, '')}`,
+        title: 'Koučovací sloty',
+        startsAt: new Date(`2026-09-18T${startsAt!.padStart(5, '0')}:00+02:00`),
+        endsAt: new Date(`2026-09-18T${endsAt!.padStart(5, '0')}:00+02:00`),
+        sortOrder: 200 + index,
+      };
+    });
+    await client.db.insert(schema.programSessions).values(legacySessions);
+    const legacyProvenance = legacySessions.map(({ id }, index) => ({
+      id: generateUuidV7(),
+      eventId,
+      sourceName: 'static-site/data/content.json',
+      sourcePath: `legacy-shifted-coaching[${index}]`,
+      sourceSha256: 'e'.repeat(64),
+      targetType: 'session',
+      targetId: id,
+    }));
+    await client.db
+      .insert(schema.contentImportProvenance)
+      .values(legacyProvenance);
+
     const options = {
       db: client.db,
       eventSlug,
       sourceFile: resolve(repositoryRoot, 'static-site/data/content.json'),
       repositoryRoot,
     };
+    await expect(importContentJson(options)).rejects.toThrow(
+      'legacy coaching source paths require reconciliation before replacement',
+    );
+    for (const [index, provenance] of legacyProvenance.entries()) {
+      await client.db
+        .update(schema.contentImportProvenance)
+        .set({
+          sourcePath: `program.days[0].stages[2].events[${legacyEventIndexes[index]}]`,
+        })
+        .where(eq(schema.contentImportProvenance.id, provenance.id));
+    }
+
     const first = await importContentJson(options);
     const firstSessions = await client.db
       .select({ id: schema.programSessions.id })
       .from(schema.programSessions)
-      .where(eq(schema.programSessions.eventId, eventId));
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          ne(schema.programSessions.status, 'archived'),
+        ),
+      );
 
     const second = await importContentJson(options);
     const secondSessions = await client.db
       .select({
         id: schema.programSessions.id,
+        slug: schema.programSessions.slug,
         title: schema.programSessions.title,
+        summary: schema.programSessions.summary,
         startsAt: schema.programSessions.startsAt,
         endsAt: schema.programSessions.endsAt,
         status: schema.programSessions.status,
@@ -83,10 +152,25 @@ integration('content import integration', () => {
         capacityMode: schema.programSessions.capacityMode,
         capacity: schema.programSessions.capacity,
         reservationClosesAt: schema.programSessions.reservationClosesAt,
+        waitlistMode: schema.programSessions.waitlistMode,
         type: schema.programSessions.type,
       })
       .from(schema.programSessions)
-      .where(eq(schema.programSessions.eventId, eventId));
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          ne(schema.programSessions.status, 'archived'),
+        ),
+      );
+    const archivedCoaching = await client.db
+      .select({ id: schema.programSessions.id })
+      .from(schema.programSessions)
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.status, 'archived'),
+        ),
+      );
     const [publicationCount] = await client.db
       .select({ value: count() })
       .from(schema.contentPublications)
@@ -104,7 +188,8 @@ integration('content import integration', () => {
     expect(secondSessions.map(({ id }) => id).sort()).toEqual(
       firstSessions.map(({ id }) => id).sort(),
     );
-    expect(secondSessions).toHaveLength(67);
+    expect(secondSessions).toHaveLength(82);
+    expect(archivedCoaching).toHaveLength(11);
     expect(secondSessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -145,6 +230,41 @@ integration('content import integration', () => {
         }),
       ]),
     );
+    const coachingSessions = secondSessions.filter(
+      ({ type }) => type === 'coaching',
+    );
+    expect(coachingSessions).toHaveLength(26);
+    expect(
+      coachingSessions.filter(({ slug }) => slug.startsWith('koucink-radim-')),
+    ).toHaveLength(12);
+    expect(
+      coachingSessions.filter(({ slug }) => slug.startsWith('koucink-stana-')),
+    ).toHaveLength(14);
+    expect(
+      coachingSessions.every(
+        ({
+          capacity,
+          capacityMode,
+          endsAt,
+          reservationClosesAt,
+          startsAt,
+          waitlistMode,
+        }) =>
+          capacity === 1 &&
+          capacityMode === 'reservation' &&
+          endsAt.getTime() - startsAt.getTime() === 30 * 60 * 1_000 &&
+          reservationClosesAt?.getTime() === startsAt.getTime() &&
+          waitlistMode === 'disabled',
+      ),
+    ).toBe(true);
+    expect(
+      secondSessions.some(({ title }) => title === 'Koučovací sloty'),
+    ).toBe(false);
+    expect(
+      coachingSessions.every(({ summary }) =>
+        summary?.startsWith('Koučovací zóna'),
+      ),
+    ).toBe(true);
     expect(publicationCount!.value).toBe(0);
     expect(provenanceCount!.value).toBeGreaterThan(100);
     expect(linkedSpeakers.length).toBeGreaterThan(0);

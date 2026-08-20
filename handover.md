@@ -42,15 +42,21 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   [PR #22](https://github.com/martymax/byzon-2026/pull/22) merge commitem
   `501fa55`; přesný rozsah a otevřené produktové hranice jsou v samostatné
   sekci níže.
-- Na větvi `agent/p5-05-cancellation-override` je implementované `P5-05`:
-  participant cancel do začátku session, reasoned admin cancel/capacity
-  override a produkční reservation-only admin UI. Implementace i globální
-  gate jsou dokončené; merge do `main` zůstává otevřený. Waitlist promotion
-  je vypnutá do `P5-04`.
-- `static-site/data/content.json` nyní deterministicky
-  importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
-  i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
-  a nepřevedené `span`/`compact` atributy. `P3-11` zůstává otevřený pro finální
+- `P5-05` je sloučené do `main` přes
+  [PR #24](https://github.com/martymax/byzon-2026/pull/24) merge commitem
+  `140ae8c`: participant cancel do začátku session, reasoned admin
+  cancel/capacity override a produkční reservation-only admin UI. Waitlist
+  promotion je vypnutá do `P5-04`.
+- `P5-06`/`F3-06` jsou implementované jako dvě source-verified řady nad
+  snapshotem `Pátek!G1:I18`: Radim Roček 12 slotů a Stanislava Maunová 14
+  slotů, vždy 30 minut, kapacita 1, cutoff v začátku a bez waitlistu. Import i
+  migrace nahrazují 11 legacy placeholderů fail-closed a canonical agenda
+  nezveřejňuje identitu rezervujícího.
+- `static-site/data/content.json` nyní deterministicky připraví 67 validních
+  sessions a jednu položku `24:00 - ?` odmítá; coaching snapshot nahradí 11
+  obecných placeholderů 26 přesnými slots, takže výsledný aktivní import má 82
+  sessions. Dry-run i PostgreSQL regrese ověřují idempotenci a nepřevedené
+  `span`/`compact` atributy. `P3-11` zůstává otevřený pro finální
   loga, FAQ, praktické kontakty a obsahové UAT k 31. 8.
 - Recovery a identity potvrzení v produkčním buildu negenerují ani nezobrazují
   syntetický odkaz. Development helper i preview copy jsou v `src/test/mocks`
@@ -187,8 +193,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   audit; replay/no-op nový audit nevytváří.
 - Živý Harmonogram BYZON 2026 byl znovu přečten: import/migrační backfill
   bezpečně nastavuje EB21 na 12 a dva sobotní workshopy na 20, s cutoffem v
-  začátku session a vypnutým waitlistem. Koučink jsou dvě paralelní řady a
-  zůstává v `P5-06`; není zploštěn do chybného společného slotu.
+  začátku session a vypnutým waitlistem. `P5-06` doplnilo dvě paralelní
+  coaching řady; nejsou zploštěné do chybného společného slotu.
   Dvoudílný sobotní mastermind s kapacitou 6 čeká na nový
   `BLOCKER-RES-05`, zda jedna rezervace pokrývá obě části.
 - Stav sloučeného PR záměrně odmítal cancel/waitlist/offer akce a pro
@@ -1157,13 +1163,12 @@ Aktuální souhrn a konečné počty jsou výše.
   a environment-keyed HMAC subjecty; výpadek store je fail-closed.
 ## Doporučený další krok
 
-Nejprve dokončit review a merge `P5-05`. Následující nejlepší samostatný
-řez je `P5-06`: dvě source-verified coaching řady Radima Ročka a Stanislavy
-Maunové. Paralelně lze dokončit `.ics` v `P5-09`. `P5-04` nezačínat bez
-jediného potvrzeného promotion režimu v `BLOCKER-RES-04`; dvoudílný sobotní
-mastermind zůstává za `BLOCKER-RES-05`. Ticket transfer/storno consumer
-rozhodnutého cancel pravidla doplní `P4-09`, až vznikne skutečná ticket
-transition.
+Dokončit `.ics` v `P5-09`. `P5-07` zůstává fail-closed za chybějící číselnou
+kapacitou a waitlist/storno detailem `BLOCKER-RES-01`; nevytvářet místo něj
+`registration_estimate`. `P5-04` nezačínat bez jediného potvrzeného promotion
+režimu v `BLOCKER-RES-04`; dvoudílný sobotní mastermind zůstává za
+`BLOCKER-RES-05`. Ticket transfer/storno consumer rozhodnutého cancel pravidla
+doplní `P4-09`, až vznikne skutečná ticket transition.
 
 ## Dokončená oprava review PR `#16`
 

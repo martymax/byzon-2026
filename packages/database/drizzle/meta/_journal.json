@@ -71,6 +71,13 @@
       "when": 1787259985500,
       "tag": "0009_legacy_reservation_windows",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787268460886,
+      "tag": "0010_coaching_slots",
+      "breakpoints": true
     }
   ]
 }

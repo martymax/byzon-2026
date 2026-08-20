@@ -61,6 +61,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const participantCancelUserId = crypto.randomUUID();
   const participantCancelRaceUserId = crypto.randomUUID();
   const participantCancelCutoffUserId = crypto.randomUUID();
+  const coachingContenderOneId = crypto.randomUUID();
+  const coachingContenderTwoId = crypto.randomUUID();
+  const contentMutationRaceUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -74,6 +77,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const cancelledPublicationSessionId = crypto.randomUUID();
   const archivedOperationalSessionId = crypto.randomUUID();
   const participantCancelSessionId = crypto.randomUUID();
+  const coachingSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
 
@@ -118,7 +122,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     title: string,
     startsAt: string,
     endsAt: string,
-    type: 'mastermind' | 'networking' | 'talk' | 'workshop',
+    type: 'coaching' | 'mastermind' | 'networking' | 'talk' | 'workshop',
   ) => ({
     id,
     dayId,
@@ -177,6 +181,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       participantCancelUserId,
       participantCancelRaceUserId,
       participantCancelCutoffUserId,
+      coachingContenderOneId,
+      coachingContenderTwoId,
+      contentMutationRaceUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -207,6 +214,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelUserId,
         participantCancelRaceUserId,
         participantCancelCutoffUserId,
+        coachingContenderOneId,
+        coachingContenderTwoId,
+        contentMutationRaceUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -235,6 +245,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelUserId,
         participantCancelRaceUserId,
         participantCancelCutoffUserId,
+        coachingContenderOneId,
+        coachingContenderTwoId,
+        contentMutationRaceUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -261,6 +274,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelUserId,
         participantCancelRaceUserId,
         participantCancelCutoffUserId,
+        coachingContenderOneId,
+        coachingContenderTwoId,
+        contentMutationRaceUserId,
       ].map((userId, index) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -434,6 +450,16 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'workshop' as const,
         capacityMode: 'reservation' as const,
         capacity: 3,
+      },
+      {
+        id: coachingSessionId,
+        slug: `coaching-${coachingSessionId}`,
+        title: 'Koučink – Radim Roček',
+        startsAt: new Date('2026-09-18T08:00:00Z'),
+        endsAt: new Date('2026-09-18T08:30:00Z'),
+        type: 'coaching' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
       },
     ];
     await client.db.insert(schema.programSessions).values(
@@ -1913,6 +1939,133 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ),
       );
     expect(confirmedRows[0]?.confirmed).toBe(1);
+  });
+
+  it('serializes a capacity-one coaching slot without disclosing its holder', async () => {
+    const addResponses = await Promise.all([
+      mutate(
+        coachingContenderOneId,
+        { action: 'add', sessionId: coachingSessionId, expectedVersion: 1 },
+        'agenda-coaching-one-add-0001',
+      ),
+      mutate(
+        coachingContenderTwoId,
+        { action: 'add', sessionId: coachingSessionId, expectedVersion: 1 },
+        'agenda-coaching-two-add-0001',
+      ),
+    ]);
+    expect(addResponses.map(({ status }) => status)).toEqual([200, 200]);
+
+    const responses = await Promise.all([
+      mutate(
+        coachingContenderOneId,
+        { action: 'reserve', sessionId: coachingSessionId, expectedVersion: 2 },
+        'agenda-coaching-one-reserve-0001',
+      ),
+      mutate(
+        coachingContenderTwoId,
+        { action: 'reserve', sessionId: coachingSessionId, expectedVersion: 2 },
+        'agenda-coaching-two-reserve-0001',
+      ),
+    ]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+
+    const winnerIndex = responses.findIndex(({ status }) => status === 200);
+    const winnerId = [coachingContenderOneId, coachingContenderTwoId][
+      winnerIndex
+    ]!;
+    const loser = responses.find(({ status }) => status === 409)!;
+    const loserPayload = await loser.clone().json();
+    expect(
+      participantAgendaMutationProblemSchema.parse(loserPayload),
+    ).toMatchObject({
+      code: 'CAPACITY_FULL',
+      sessionId: coachingSessionId,
+      agenda: {
+        items: [
+          {
+            session: { title: 'Koučink – Radim Roček' },
+            state: 'saved',
+            capacity: { capacity: 1, confirmed: 1, remaining: 0 },
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(loserPayload)).not.toContain(winnerId);
+
+    const reservations = await client.db.query.reservations.findMany({
+      columns: { userId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.sessionId, coachingSessionId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(reservations).toEqual([{ userId: winnerId }]);
+  });
+
+  it('serializes add with content replacement and revalidates the operational session', async () => {
+    let signalContentLocked!: () => void;
+    const contentLocked = new Promise<void>((resolve) => {
+      signalContentLocked = resolve;
+    });
+    let releaseContent!: () => void;
+    const contentRelease = new Promise<void>((resolve) => {
+      releaseContent = resolve;
+    });
+    const contentReplacement = withTransaction(
+      client.db,
+      async (transaction) => {
+        await acquireTransactionLock(transaction, `content-publish:${eventId}`);
+        await transaction
+          .update(schema.programSessions)
+          .set({ status: 'archived' })
+          .where(eq(schema.programSessions.id, savedSessionId));
+        signalContentLocked();
+        await contentRelease;
+      },
+    );
+    await contentLocked;
+
+    const addition = mutate(
+      contentMutationRaceUserId,
+      { action: 'add', sessionId: savedSessionId, expectedVersion: 1 },
+      'agenda-content-replacement-add-0001',
+    );
+    try {
+      const stateBeforeContentCommit = await Promise.race([
+        addition.then(() => 'settled' as const),
+        new Promise<'blocked'>((resolve) => {
+          setTimeout(() => resolve('blocked'), 100);
+        }),
+      ]);
+      expect(stateBeforeContentCommit).toBe('blocked');
+    } finally {
+      releaseContent();
+      await contentReplacement;
+    }
+
+    try {
+      const response = await addition;
+      expect(response.status).toBe(404);
+      expect(
+        participantAgendaMutationProblemSchema.parse(await response.json()),
+      ).toMatchObject({ code: 'SESSION_NOT_FOUND' });
+      const rows = await client.db.query.agendaItems.findMany({
+        columns: { sessionId: true },
+        where: and(
+          eq(schema.agendaItems.eventId, eventId),
+          eq(schema.agendaItems.userId, contentMutationRaceUserId),
+          eq(schema.agendaItems.sessionId, savedSessionId),
+        ),
+      });
+      expect(rows).toEqual([]);
+    } finally {
+      await client.db
+        .update(schema.programSessions)
+        .set({ status: 'draft' })
+        .where(eq(schema.programSessions.id, savedSessionId));
+    }
   });
 
   it('reclassifies a reservation failure against the post-rollback canonical snapshot', async () => {
