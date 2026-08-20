@@ -801,6 +801,24 @@ const loadParticipantAgendaSnapshotUnlocked = async (
   });
 };
 
+const requireOperationalDataAvailable = async (
+  db: AgendaDatabase,
+  eventId: string,
+  now: Date,
+): Promise<void> => {
+  const event = await db.query.events.findFirst({
+    columns: { operationalDataAnonymizesAt: true },
+    where: eq(schema.events.id, eventId),
+  });
+  if (
+    !event ||
+    (event.operationalDataAnonymizesAt !== null &&
+      event.operationalDataAnonymizesAt.getTime() <= now.getTime())
+  ) {
+    throw eventAccessDenied();
+  }
+};
+
 export const loadParticipantAgendaSnapshot = async (
   db: Database,
   context: AgendaContext,
@@ -814,6 +832,7 @@ export const loadParticipantAgendaSnapshot = async (
       participantAgendaLockKey(context.event.id, userId),
     );
     const now = getNow();
+    await requireOperationalDataAvailable(transaction, context.event.id, now);
     return loadParticipantAgendaSnapshotUnlocked(
       transaction,
       context,
@@ -1130,15 +1149,6 @@ export const mutateParticipantAgenda = async (
           transaction,
           participantAgendaLockKey(context.event.id, session.user.id),
         );
-        const currentVersion = await ensureAgendaRoot(
-          transaction,
-          context.event.id,
-          session.user.id,
-        );
-        if (currentVersion !== parsed.data.expectedVersion) {
-          throw new StaleAgendaVersionError();
-        }
-
         if (parsed.data.action === 'reserve') {
           await acquireTransactionLock(
             transaction,
@@ -1148,6 +1158,21 @@ export const mutateParticipantAgenda = async (
             transaction,
             `participant-reservation:${context.event.id}:${parsed.data.sessionId}`,
           );
+        }
+        const mutationNow = getNow();
+        responseNow = mutationNow;
+        await requireOperationalDataAvailable(
+          transaction,
+          context.event.id,
+          mutationNow,
+        );
+        const currentVersion = await ensureAgendaRoot(
+          transaction,
+          context.event.id,
+          session.user.id,
+        );
+        if (currentVersion !== parsed.data.expectedVersion) {
+          throw new StaleAgendaVersionError();
         }
 
         const operationalTarget =
@@ -1206,8 +1231,8 @@ export const mutateParticipantAgenda = async (
                 userId: session.user.id,
                 sessionId: parsed.data.sessionId,
                 source: 'manual',
-                createdAt: now,
-                updatedAt: now,
+                createdAt: mutationNow,
+                updatedAt: mutationNow,
               })
               .onConflictDoNothing()
               .returning({ sessionId: schema.agendaItems.sessionId });
@@ -1283,8 +1308,6 @@ export const mutateParticipantAgenda = async (
           ) {
             throw sessionNotFound();
           }
-          const reservationNow = getNow();
-          responseNow = reservationNow;
           const opensAt =
             operationalTarget.reservationOpensAt?.getTime() ??
             Number.NEGATIVE_INFINITY;
@@ -1292,8 +1315,8 @@ export const mutateParticipantAgenda = async (
             operationalTarget.reservationClosesAt?.getTime() ??
             operationalTarget.startsAt.getTime();
           if (
-            reservationNow.getTime() < opensAt ||
-            reservationNow.getTime() >= closesAt
+            mutationNow.getTime() < opensAt ||
+            mutationNow.getTime() >= closesAt
           ) {
             throw new AgendaReservationClosedError(parsed.data.sessionId);
           }
@@ -1346,7 +1369,7 @@ export const mutateParticipantAgenda = async (
               source: 'participant',
               status: 'confirmed',
               version: 1,
-              createdAt: reservationNow,
+              createdAt: mutationNow,
             });
             outcome = 'applied';
           }
@@ -1437,12 +1460,9 @@ export const mutateParticipantAgenda = async (
           canonicalProblemResponse(error, snapshot, requestId),
           rateLimitDecision,
         );
-      } catch {
+      } catch (canonicalError) {
         return withRateLimitHeaders(
-          privateProblemResponse(
-            new Error('Canonical agenda failed'),
-            requestId,
-          ),
+          privateProblemResponse(canonicalError, requestId),
           rateLimitDecision,
         );
       }

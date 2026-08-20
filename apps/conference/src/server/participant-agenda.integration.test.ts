@@ -585,6 +585,148 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     });
   });
 
+  it('rechecks the retention cutoff after acquiring the read lock', async () => {
+    const retentionCutoff = new Date(fixedNow.getTime() + 500);
+    const afterCutoff = new Date(fixedNow.getTime() + 1_000);
+    await client.db
+      .update(schema.events)
+      .set({ operationalDataAnonymizesAt: retentionCutoff })
+      .where(eq(schema.events.id, eventId));
+
+    let signalLocked!: () => void;
+    const locked = new Promise<void>((resolve) => {
+      signalLocked = resolve;
+    });
+    let releaseLock!: () => void;
+    const lockRelease = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const holder = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `participant-agenda:${eventId}:${consistentReadUserId}`,
+      );
+      signalLocked();
+      await lockRelease;
+    });
+    await locked;
+
+    try {
+      const authoritativeNow = vi
+        .fn<() => Date>()
+        .mockReturnValueOnce(fixedNow)
+        .mockReturnValue(afterCutoff);
+      const reading = readParticipantAgenda(readRequest(), {
+        ...dependencies(consistentReadUserId),
+        now: authoritativeNow,
+      });
+      const stateBeforeRelease = await Promise.race([
+        reading.then(() => 'settled' as const),
+        new Promise<'blocked'>((resolve) => {
+          setTimeout(() => resolve('blocked'), 100);
+        }),
+      ]);
+      expect(stateBeforeRelease).toBe('blocked');
+      releaseLock();
+      await holder;
+
+      const response = await reading;
+      expect(authoritativeNow).toHaveBeenCalledTimes(2);
+      expect(response.status).toBe(403);
+      expect(
+        participantAgendaProblemSchema.parse(await response.json()),
+      ).toMatchObject({ code: 'EVENT_ACCESS_DENIED' });
+    } finally {
+      releaseLock();
+      await holder;
+      await client.db
+        .update(schema.events)
+        .set({ operationalDataAnonymizesAt: null })
+        .where(eq(schema.events.id, eventId));
+    }
+  });
+
+  it('rechecks the retention cutoff before writing participant state', async () => {
+    const retentionCutoff = new Date(fixedNow.getTime() + 500);
+    const afterCutoff = new Date(fixedNow.getTime() + 1_000);
+    await client.db
+      .update(schema.events)
+      .set({ operationalDataAnonymizesAt: retentionCutoff })
+      .where(eq(schema.events.id, eventId));
+
+    let signalLocked!: () => void;
+    const locked = new Promise<void>((resolve) => {
+      signalLocked = resolve;
+    });
+    let releaseLock!: () => void;
+    const lockRelease = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const holder = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `participant-agenda:${eventId}:${driftUserId}`,
+      );
+      signalLocked();
+      await lockRelease;
+    });
+    await locked;
+
+    try {
+      const authoritativeNow = vi
+        .fn<() => Date>()
+        .mockReturnValueOnce(fixedNow)
+        .mockReturnValue(afterCutoff);
+      const mutation = mutateParticipantAgenda(
+        mutationRequest(
+          { action: 'add', sessionId: savedSessionId, expectedVersion: 1 },
+          'agenda-retention-race-add-0001',
+        ),
+        { ...dependencies(driftUserId), now: authoritativeNow },
+      );
+      const stateBeforeRelease = await Promise.race([
+        mutation.then(() => 'settled' as const),
+        new Promise<'blocked'>((resolve) => {
+          setTimeout(() => resolve('blocked'), 100);
+        }),
+      ]);
+      expect(stateBeforeRelease).toBe('blocked');
+      releaseLock();
+      await holder;
+
+      const response = await mutation;
+      expect(authoritativeNow).toHaveBeenCalledTimes(2);
+      expect(response.status).toBe(403);
+      expect(
+        participantAgendaProblemSchema.parse(await response.json()),
+      ).toMatchObject({ code: 'EVENT_ACCESS_DENIED' });
+      expect(
+        await client.db.query.participantAgendas.findFirst({
+          where: and(
+            eq(schema.participantAgendas.eventId, eventId),
+            eq(schema.participantAgendas.userId, driftUserId),
+          ),
+        }),
+      ).toBeUndefined();
+      expect(
+        await client.db.query.idempotencyKeys.findFirst({
+          where: and(
+            eq(schema.idempotencyKeys.eventId, eventId),
+            eq(schema.idempotencyKeys.actorId, driftUserId),
+            eq(schema.idempotencyKeys.scope, 'participant.agenda-action'),
+          ),
+        }),
+      ).toBeUndefined();
+    } finally {
+      releaseLock();
+      await holder;
+      await client.db
+        .update(schema.events)
+        .set({ operationalDataAnonymizesAt: null })
+        .where(eq(schema.events.id, eventId));
+    }
+  });
+
   it('allows removing a saved session cancelled in the latest publication', async () => {
     const before = await readParticipantAgenda(
       readRequest(),
