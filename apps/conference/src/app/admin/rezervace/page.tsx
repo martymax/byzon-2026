@@ -1,7 +1,10 @@
 import { AdminReservationWorkspace } from '@/components/admin-reservation-workspace';
-import { requireAdminFrontendPreview } from '@/lib/admin-frontend-preview';
+import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 
 export default function AdminReservationsPage() {
-  requireAdminFrontendPreview();
-  return <AdminReservationWorkspace />;
+  return (
+    <AdminReservationWorkspace
+      mode={isFrontendPreviewAvailable() ? 'full' : 'reservations'}
+    />
+  );
 }

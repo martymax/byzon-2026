@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const gateMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
+const previewMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/admin-frontend-preview', () => ({
   requireAdminFrontendPreview: gateMock,
+}));
+vi.mock('@/lib/frontend-preview', () => ({
+  isFrontendPreviewAvailable: previewMock,
 }));
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
@@ -42,12 +46,10 @@ import AdminParticipantsPage from './ucastnici/page';
 import AdminTicketsPage from './vstupenky/page';
 
 const mockRoutes = [
-  ['overview', AdminOverviewPage],
   ['import', AdminImportPage],
   ['support', AdminSupportPage],
   ['announcements', AdminAnnouncementsPage],
   ['operations', AdminOperationsPage],
-  ['reservations', AdminReservationsPage],
   ['canonical tickets', AdminTicketsPage],
   ['canonical participants', AdminParticipantsPage],
   ['canonical roles', AdminRolesPage],
@@ -60,9 +62,29 @@ describe('F4 direct mock admin route boundary', () => {
   beforeEach(() => {
     gateMock.mockReset();
     redirectMock.mockReset();
+    previewMock.mockReset();
+    previewMock.mockReturnValue(false);
     gateMock.mockImplementation(() => {
       throw new Error('ADMIN_PREVIEW_NOT_FOUND');
     });
+  });
+
+  it.each([['overview', AdminOverviewPage]] as const)(
+    'keeps the integrated %s route available in production',
+    (_name, page) => {
+      expect(() => page()).not.toThrow();
+      expect(gateMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('selects the live-only reservation workspace in production', () => {
+    const page = AdminReservationsPage();
+
+    expect(page.props.mode).toBe('reservations');
+    expect(gateMock).not.toHaveBeenCalled();
+
+    previewMock.mockReturnValue(true);
+    expect(AdminReservationsPage().props.mode).toBe('full');
   });
 
   it.each(mockRoutes)('keeps the %s route production-hidden', (_name, page) => {

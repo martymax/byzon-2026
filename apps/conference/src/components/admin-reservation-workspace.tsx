@@ -71,7 +71,11 @@ const formatTimestamp = (value: string, timeZone: string): string => {
   }
 };
 
-export const AdminReservationWorkspace = () => {
+export const AdminReservationWorkspace = ({
+  mode = 'full',
+}: {
+  readonly mode?: 'full' | 'reservations';
+}) => {
   const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
     useAdminWorkspace();
   const requestFence = useAdminRequestFence();
@@ -109,8 +113,9 @@ export const AdminReservationWorkspace = () => {
 
   const canReadReservations = permissions.includes('reservation:any:read');
   const canOverride = permissions.includes('agenda:any:override');
-  const canReadAudit = permissions.includes('audit:read');
-  const canManageSettings = permissions.includes('event:settings:manage');
+  const canReadAudit = mode === 'full' && permissions.includes('audit:read');
+  const canManageSettings =
+    mode === 'full' && permissions.includes('event:settings:manage');
   const canPerformReservationAction = (
     candidate?: AdminReservationAction,
   ): boolean =>
@@ -413,7 +418,11 @@ export const AdminReservationWorkspace = () => {
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>F4 · řízené provozní změny</p>
-        <h1>Rezervace, audit a nastavení</h1>
+        <h1>
+          {mode === 'full'
+            ? 'Rezervace, audit a nastavení'
+            : 'Rezervace a kapacitní výjimky'}
+        </h1>
         <p>
           Viditelnost i mutace respektují autoritativní event scope. Stale
           snapshot se nejprve obnoví a vyžádá nové potvrzení.
