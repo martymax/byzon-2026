@@ -38,10 +38,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   session-scoped `room_operator` assignment. List/detail vrací jen bounded
   reservation reference, stav, jméno a firmu; networking, attendance,
   kontakty, ticket data a export nejsou součástí řezu.
-- Na větvi `agent/p5-01-03-integrate-agenda` je lokálně implementovaný
-  následující řez `P5-01`/`P5-02` a transakční jádro `P5-03`. Změny
-  zatím nejsou commitnuté ani publikované; přesný rozsah a otevřené produktové
-  hranice jsou v samostatné sekci níže.
+- Na větvi `agent/p5-01-03-integrate-agenda` a v PR `#22` je implementovaný
+  následující řez `P5-01`/`P5-02` a transakční jádro `P5-03`; přesný rozsah a
+  otevřené produktové hranice jsou v samostatné sekci níže.
 - `static-site/data/content.json` nyní deterministicky
   importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
   i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
@@ -201,10 +200,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   canonical výsledek `superseded` bez ukládání privátního snapshotu. Další
   review rozšířilo stejnou ochranu i na první odpověď po commitu a změnilo add
   nad existující rezervací nebo viditelným waitlistem na čistý no-op bez nové
-  verze, auditu či duplicitní uložené vrstvy. Po rebase a rate-limit zapojení
+  verze, auditu či duplicitní uložené vrstvy. Finální review navíc serializuje
+  GET snapshot participant lockem, hlídá 512 unikátních položek přes sjednocení
+  save/reservation/waitlist ještě před add a dovolí odstranit uloženou session
+  zrušenou v poslední publikaci. Po rebase a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
-  9/9, agenda HTTP 15/15 a conference 543/543 bez skipů. Globální
-  gate prošel bez lint chyb včetně 877 workspace testů, všech
+  9/9, agenda HTTP 17/17 a conference 545/545 bez skipů. Globální
+  gate prošel bez lint chyb včetně 879 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a
   static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency

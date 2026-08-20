@@ -38,6 +38,8 @@ const MAX_BODY_BYTES = 16_384;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 const CALENDAR_UID_DOMAIN = 'agenda.byzon.cz';
 const uuidSchema = z.string().uuid();
+const participantAgendaLockKey = (eventId: string, userId: string): string =>
+  `participant-agenda:${eventId}:${userId}`;
 const agendaMutationReceiptSchema = z.strictObject({
   action: z.enum(['add', 'remove', 'reserve']),
   sessionId: uuidSchema,
@@ -462,7 +464,7 @@ const capacityProjection = (
   };
 };
 
-export const loadParticipantAgendaSnapshot = async (
+const loadParticipantAgendaSnapshotUnlocked = async (
   db: AgendaDatabase,
   context: AgendaContext,
   userId: string,
@@ -546,6 +548,9 @@ export const loadParticipantAgendaSnapshot = async (
       ...waitingBySession.keys(),
     ]),
   ];
+  if (requestedSessionIds.length > MAX_AGENDA_ITEMS) {
+    throw new Error('Participant agenda item limit exceeded');
+  }
   const publishedById = new Map(
     context.program.sessions.map((session) => [session.id, session]),
   );
@@ -604,7 +609,21 @@ export const loadParticipantAgendaSnapshot = async (
     const day = context.program.days.find(({ id }) => id === published.dayId);
     if (!day) continue;
     const confirmed = confirmedBySession.get(sessionId) ?? 0;
-    const state = capacityProjection(operational, confirmed, now);
+    const operationalState = capacityProjection(operational, confirmed, now);
+    const state =
+      published.status === 'cancelled'
+        ? {
+            ...operationalState,
+            capacity:
+              operationalState.capacity.mode === 'reservation'
+                ? {
+                    ...operationalState.capacity,
+                    actorAvailability: { state: 'unavailable' as const },
+                  }
+                : operationalState.capacity,
+            action: { state: 'cancelled' as const },
+          }
+        : operationalState;
     const common = {
       day: { localDate: day.localDate, title: day.title },
       session: sessionSnapshot(
@@ -635,7 +654,10 @@ export const loadParticipantAgendaSnapshot = async (
             waitlistAvailable: false,
             actorAvailability: { state: 'unavailable' },
           },
-          action: { state: 'closed' },
+          action:
+            common.session.status === 'cancelled'
+              ? { state: 'cancelled' }
+              : { state: 'closed' },
           state: 'reserved',
           reservation: {
             id: reservation.id,
@@ -715,6 +737,69 @@ export const loadParticipantAgendaSnapshot = async (
   });
 };
 
+export const loadParticipantAgendaSnapshot = async (
+  db: Database,
+  context: AgendaContext,
+  userId: string,
+  now: Date,
+  onOperationalDrift?: (drift: ParticipantAgendaOperationalDrift) => void,
+): Promise<ParticipantAgendaResponse> =>
+  db.transaction(async (transaction) => {
+    await acquireTransactionLock(
+      transaction,
+      participantAgendaLockKey(context.event.id, userId),
+    );
+    return loadParticipantAgendaSnapshotUnlocked(
+      transaction,
+      context,
+      userId,
+      now,
+      onOperationalDrift,
+    );
+  });
+
+const loadProjectedAgendaSessionIds = async (
+  transaction: DatabaseTransaction,
+  eventId: string,
+  userId: string,
+): Promise<string[]> => {
+  const rows = await transaction
+    .select({ sessionId: schema.agendaItems.sessionId })
+    .from(schema.agendaItems)
+    .where(
+      and(
+        eq(schema.agendaItems.eventId, eventId),
+        eq(schema.agendaItems.userId, userId),
+      ),
+    )
+    .union(
+      transaction
+        .select({ sessionId: schema.reservations.sessionId })
+        .from(schema.reservations)
+        .where(
+          and(
+            eq(schema.reservations.eventId, eventId),
+            eq(schema.reservations.userId, userId),
+            eq(schema.reservations.status, 'confirmed'),
+          ),
+        ),
+    )
+    .union(
+      transaction
+        .select({ sessionId: schema.waitlistEntries.sessionId })
+        .from(schema.waitlistEntries)
+        .where(
+          and(
+            eq(schema.waitlistEntries.eventId, eventId),
+            eq(schema.waitlistEntries.userId, userId),
+            eq(schema.waitlistEntries.status, 'waiting'),
+          ),
+        ),
+    )
+    .limit(MAX_AGENDA_ITEMS + 1);
+  return rows.map(({ sessionId }) => sessionId);
+};
+
 const ensureAgendaRoot = async (
   transaction: DatabaseTransaction,
   eventId: string,
@@ -758,9 +843,12 @@ const bumpAgendaVersion = async (
 const targetPublishedSession = (
   context: AgendaContext,
   sessionId: string,
+  action: AgendaMutationReceipt['action'],
 ): PublishedProgram['sessions'][number] => {
   const session = context.program.sessions.find(({ id }) => id === sessionId);
-  if (!session || session.status === 'cancelled') throw sessionNotFound();
+  if (!session || (action !== 'remove' && session.status === 'cancelled')) {
+    throw sessionNotFound();
+  }
   return session;
 };
 
@@ -940,12 +1028,16 @@ export const mutateParticipantAgenda = async (
     const json = await readBoundedJson(request);
     const parsed = participantAgendaMutationRequestSchema.safeParse(json.value);
     if (!parsed.success) throw validationFailed(zodFieldErrors(parsed.error));
-    if (!['add', 'remove', 'reserve'].includes(parsed.data.action)) {
+    if (
+      parsed.data.action !== 'add' &&
+      parsed.data.action !== 'remove' &&
+      parsed.data.action !== 'reserve'
+    ) {
       throw validationFailed({
         action: ['This agenda action is not enabled in the current rollout.'],
       });
     }
-    targetPublishedSession(context, parsed.data.sessionId);
+    targetPublishedSession(context, parsed.data.sessionId, parsed.data.action);
     const generateId = dependencies.generateId ?? generateUuidV7;
     const result = await executeIdempotentMutation(
       dependencies.db,
@@ -966,7 +1058,7 @@ export const mutateParticipantAgenda = async (
       async (transaction) => {
         await acquireTransactionLock(
           transaction,
-          `participant-agenda:${context.event.id}:${session.user.id}`,
+          participantAgendaLockKey(context.event.id, session.user.id),
         );
         const currentVersion = await ensureAgendaRoot(
           transaction,
@@ -1015,28 +1107,25 @@ export const mutateParticipantAgenda = async (
 
         let outcome: 'applied' | 'already_applied' = 'already_applied';
         if (parsed.data.action === 'add') {
-          const existingReservation =
-            await transaction.query.reservations.findFirst({
-              columns: { id: true },
-              where: and(
-                eq(schema.reservations.eventId, context.event.id),
-                eq(schema.reservations.userId, session.user.id),
-                eq(schema.reservations.sessionId, parsed.data.sessionId),
-                eq(schema.reservations.status, 'confirmed'),
-              ),
+          const projectedSessionIds = await loadProjectedAgendaSessionIds(
+            transaction,
+            context.event.id,
+            session.user.id,
+          );
+          const targetAlreadyProjected = projectedSessionIds.includes(
+            parsed.data.sessionId,
+          );
+          if (
+            !targetAlreadyProjected &&
+            projectedSessionIds.length >= MAX_AGENDA_ITEMS
+          ) {
+            throw validationFailed({
+              sessionId: [
+                'The agenda has reached the maximum number of items.',
+              ],
             });
-          const existingWaiting = existingReservation
-            ? undefined
-            : await transaction.query.waitlistEntries.findFirst({
-                columns: { id: true },
-                where: and(
-                  eq(schema.waitlistEntries.eventId, context.event.id),
-                  eq(schema.waitlistEntries.userId, session.user.id),
-                  eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
-                  eq(schema.waitlistEntries.status, 'waiting'),
-                ),
-              });
-          if (!existingReservation && !existingWaiting) {
+          }
+          if (!targetAlreadyProjected) {
             const inserted = await transaction
               .insert(schema.agendaItems)
               .values({
@@ -1049,25 +1138,7 @@ export const mutateParticipantAgenda = async (
               })
               .onConflictDoNothing()
               .returning({ sessionId: schema.agendaItems.sessionId });
-            if (inserted.length === 1) {
-              const savedCount = await transaction
-                .select({ value: count() })
-                .from(schema.agendaItems)
-                .where(
-                  and(
-                    eq(schema.agendaItems.eventId, context.event.id),
-                    eq(schema.agendaItems.userId, session.user.id),
-                  ),
-                );
-              if ((savedCount[0]?.value ?? 0) > MAX_AGENDA_ITEMS) {
-                throw validationFailed({
-                  sessionId: [
-                    'The agenda has reached the maximum number of items.',
-                  ],
-                });
-              }
-              outcome = 'applied';
-            }
+            if (inserted.length === 1) outcome = 'applied';
           }
         } else if (parsed.data.action === 'remove') {
           const reservation = await transaction.query.reservations.findFirst({
