@@ -2512,7 +2512,10 @@ souběžně.
   společně s `F3-01` uzavřít `CS-AGENDA-01` a integrovat agenda UI. Hotový
   produkční subset používá Better Auth, canonical event/publication,
   private/no-store snapshot, optimistic version, idempotentní add/remove,
-  audit, canonical konflikt a live agenda/program/home UI. Sdílené Redis
+  audit, canonical konflikt a live agenda/program/home UI. Add nad existující
+  reservation/waitlist projekcí je no-op a post-commit první odpověď i replay
+  vracejí `superseded`, pokud mezitím novější mutace nahradila cílový stav.
+  Sdílené Redis
   buckety používají event/user HMAC subject: read 120/min s explicitním
   logovaným fail-open a mutation 30/min s fail-closed před DB/idempotency prací.
 - [!] `P5-03` Rezervační transakce s lockem a concurrency testem posledního
@@ -3181,3 +3184,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.6 | 20. 8. 2026 | Review PR `#22` opravilo publication/operational status invariant, minimalizovalo idempotency receipt, omezilo add na 512 položek, zachovalo čitelnost potvrzené rezervace při capacity driftu s operator warningem, skrylo zakázané offer akce a atomicky validuje všechny tři migrační backfill targety. Redis provider z `P8-01` už je integrovaný; explicitní agenda route wiring zůstává posledním produkčním rollout gate. |
 | 6.7 | 20. 8. 2026 | PR `#22` byl rebasován na integrované `P8-01` a agenda route dostaly atomické shared Redis limity s event/user HMAC subjectem: read 120/min fail-open s throttled PII-free warningem, mutation 30/min fail-closed před DB/idempotency prací a kanonické `429 RATE_LIMITED` hlavičky/kontrakty. Tím je odstraněn rate-limit rollout gate; otevřené zůstávají pouze výslovně uvedené waitlist/cancel/ICS/networking/coaching blockery. |
 | 6.8 | 20. 8. 2026 | Aktuální Codex review PR `#22` odstranilo tři další race/replay vady: rezervace sdílí content lock s provozním stornem a teprve potom session lock, cutoff používá čerstvý autoritativní čas po locku a exact-key replay po pozdější opačné mutaci vrací canonical `superseded` místo HTTP 500 bez rozšíření uloženého receiptu. PostgreSQL regrese kryjí storno race, čekání přes cutoff i oba směry inverse replaye; plný service-backed gate má 876/876 workspace testů, conference 542/542 a browser komponenty 849/849. |
+| 6.9 | 20. 8. 2026 | Další review PR `#22` uzavřelo poslední dvě postcondition mezery: add nad předexistující potvrzenou rezervací nebo viditelným waitlistem je no-op bez verze, auditu a duplicitní agenda vrstvy; `superseded` se vyhodnotí také pro první odpověď, pokud jiná mutace změní cílový stav mezi commitem a načtením canonical snapshotu. Agenda HTTP regrese mají 15/15 a service-backed workspace gate 877/877 testů. |

@@ -198,11 +198,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   všechny tři provenance/title/time targety. Následné Codex review navíc
   serializovalo rezervaci s provozním stornem, přesunulo cutoff kontrolu za
   locky a pro replay překonaný pozdější opačnou mutací zavedlo explicitní
-  canonical výsledek `superseded` bez ukládání privátního snapshotu. Po rebase
-  a rate-limit zapojení
+  canonical výsledek `superseded` bez ukládání privátního snapshotu. Další
+  review rozšířilo stejnou ochranu i na první odpověď po commitu a změnilo add
+  nad existující rezervací nebo viditelným waitlistem na čistý no-op bez nové
+  verze, auditu či duplicitní uložené vrstvy. Po rebase a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
-  9/9, agenda HTTP 14/14 a conference 542/542 bez skipů. Globální
-  gate prošel bez lint chyb včetně 876 workspace testů, všech
+  9/9, agenda HTTP 15/15 a conference 543/543 bez skipů. Globální
+  gate prošel bez lint chyb včetně 877 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a
   static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency

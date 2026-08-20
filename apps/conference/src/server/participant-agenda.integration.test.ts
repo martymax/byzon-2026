@@ -49,6 +49,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const cancellationRaceUserId = crypto.randomUUID();
   const cutoffRaceUserId = crypto.randomUUID();
   const replayUserId = crypto.randomUUID();
+  const projectedReservationUserId = crypto.randomUUID();
+  const projectedWaitlistUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -57,6 +59,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const networkingSessionId = crypto.randomUUID();
   const cancellationRaceSessionId = crypto.randomUUID();
   const cutoffRaceSessionId = crypto.randomUUID();
+  const projectedSessionId = crypto.randomUUID();
   const archivedOperationalSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
@@ -150,6 +153,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       cancellationRaceUserId,
       cutoffRaceUserId,
       replayUserId,
+      projectedReservationUserId,
+      projectedWaitlistUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -169,6 +174,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         cancellationRaceUserId,
         cutoffRaceUserId,
         replayUserId,
+        projectedReservationUserId,
+        projectedWaitlistUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -186,6 +193,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         cancellationRaceUserId,
         cutoffRaceUserId,
         replayUserId,
+        projectedReservationUserId,
+        projectedWaitlistUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -331,6 +340,16 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         reservationClosesAt: new Date('2026-09-18T07:00:30Z'),
       },
       {
+        id: projectedSessionId,
+        slug: `projected-${projectedSessionId}`,
+        title: 'Předexistující rezervace a waitlist',
+        startsAt: new Date('2026-09-18T16:00:00Z'),
+        endsAt: new Date('2026-09-18T17:00:00Z'),
+        type: 'workshop' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
+      },
+      {
         id: archivedOperationalSessionId,
         slug: `archived-operational-${archivedOperationalSessionId}`,
         title: 'Only present in the immutable publication',
@@ -392,6 +411,24 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       checksumSha256: 'a'.repeat(64),
       publishedBy: publisherId,
       publishedAt: new Date('2026-08-20T08:00:00Z'),
+    });
+    await client.db.insert(schema.reservations).values({
+      id: crypto.randomUUID(),
+      eventId,
+      sessionId: projectedSessionId,
+      userId: projectedReservationUserId,
+      status: 'confirmed',
+      source: 'participant',
+      createdAt: fixedNow,
+    });
+    await client.db.insert(schema.waitlistEntries).values({
+      id: crypto.randomUUID(),
+      eventId,
+      sessionId: projectedSessionId,
+      userId: projectedWaitlistUserId,
+      status: 'waiting',
+      positionSequence: 1,
+      createdAt: fixedNow,
     });
   });
 
@@ -499,6 +536,62 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ),
       }),
     ).toBeUndefined();
+  });
+
+  it('treats existing reservation and waitlist projections as add no-ops', async () => {
+    const cases = [
+      {
+        userId: projectedReservationUserId,
+        state: 'reserved' as const,
+        key: 'agenda-existing-reservation-add-0001',
+      },
+      {
+        userId: projectedWaitlistUserId,
+        state: 'waitlisted' as const,
+        key: 'agenda-existing-waitlist-add-0001',
+      },
+    ];
+    for (const scenario of cases) {
+      const response = await mutate(
+        scenario.userId,
+        {
+          action: 'add',
+          sessionId: projectedSessionId,
+          expectedVersion: 1,
+        },
+        scenario.key,
+      );
+      expect(response.status).toBe(200);
+      expect(
+        participantAgendaMutationResponseSchema.parse(await response.json()),
+      ).toMatchObject({
+        version: 1,
+        items: [{ state: scenario.state, session: { id: projectedSessionId } }],
+        mutation: { action: 'add', outcome: 'already_applied' },
+      });
+    }
+
+    const savedRows = await client.db
+      .select({ value: count() })
+      .from(schema.agendaItems)
+      .where(
+        and(
+          eq(schema.agendaItems.eventId, eventId),
+          eq(schema.agendaItems.sessionId, projectedSessionId),
+        ),
+      );
+    expect(savedRows[0]?.value).toBe(0);
+    const auditRows = await client.db
+      .select({ value: count() })
+      .from(schema.auditLogs)
+      .where(
+        and(
+          eq(schema.auditLogs.eventId, eventId),
+          eq(schema.auditLogs.action, 'agenda.add'),
+          eq(schema.auditLogs.targetId, projectedSessionId),
+        ),
+      );
+    expect(auditRows[0]?.value).toBe(0);
   });
 
   it('applies add/remove idempotently and returns a canonical non-blocking conflict', async () => {

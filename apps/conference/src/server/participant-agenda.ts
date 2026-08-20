@@ -1015,36 +1015,59 @@ export const mutateParticipantAgenda = async (
 
         let outcome: 'applied' | 'already_applied' = 'already_applied';
         if (parsed.data.action === 'add') {
-          const inserted = await transaction
-            .insert(schema.agendaItems)
-            .values({
-              eventId: context.event.id,
-              userId: session.user.id,
-              sessionId: parsed.data.sessionId,
-              source: 'manual',
-              createdAt: now,
-              updatedAt: now,
-            })
-            .onConflictDoNothing()
-            .returning({ sessionId: schema.agendaItems.sessionId });
-          if (inserted.length === 1) {
-            const savedCount = await transaction
-              .select({ value: count() })
-              .from(schema.agendaItems)
-              .where(
-                and(
-                  eq(schema.agendaItems.eventId, context.event.id),
-                  eq(schema.agendaItems.userId, session.user.id),
+          const existingReservation =
+            await transaction.query.reservations.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.reservations.eventId, context.event.id),
+                eq(schema.reservations.userId, session.user.id),
+                eq(schema.reservations.sessionId, parsed.data.sessionId),
+                eq(schema.reservations.status, 'confirmed'),
+              ),
+            });
+          const existingWaiting = existingReservation
+            ? undefined
+            : await transaction.query.waitlistEntries.findFirst({
+                columns: { id: true },
+                where: and(
+                  eq(schema.waitlistEntries.eventId, context.event.id),
+                  eq(schema.waitlistEntries.userId, session.user.id),
+                  eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                  eq(schema.waitlistEntries.status, 'waiting'),
                 ),
-              );
-            if ((savedCount[0]?.value ?? 0) > MAX_AGENDA_ITEMS) {
-              throw validationFailed({
-                sessionId: [
-                  'The agenda has reached the maximum number of items.',
-                ],
               });
+          if (!existingReservation && !existingWaiting) {
+            const inserted = await transaction
+              .insert(schema.agendaItems)
+              .values({
+                eventId: context.event.id,
+                userId: session.user.id,
+                sessionId: parsed.data.sessionId,
+                source: 'manual',
+                createdAt: now,
+                updatedAt: now,
+              })
+              .onConflictDoNothing()
+              .returning({ sessionId: schema.agendaItems.sessionId });
+            if (inserted.length === 1) {
+              const savedCount = await transaction
+                .select({ value: count() })
+                .from(schema.agendaItems)
+                .where(
+                  and(
+                    eq(schema.agendaItems.eventId, context.event.id),
+                    eq(schema.agendaItems.userId, session.user.id),
+                  ),
+                );
+              if ((savedCount[0]?.value ?? 0) > MAX_AGENDA_ITEMS) {
+                throw validationFailed({
+                  sessionId: [
+                    'The agenda has reached the maximum number of items.',
+                  ],
+                });
+              }
+              outcome = 'applied';
             }
-            outcome = 'applied';
           }
         } else if (parsed.data.action === 'remove') {
           const reservation = await transaction.query.reservations.findFirst({
@@ -1230,17 +1253,16 @@ export const mutateParticipantAgenda = async (
       responseNow,
       dependencies.onOperationalDrift,
     );
-    const replaySuperseded =
-      result.replayed && !receiptPostconditionHolds(snapshot, receipt);
+    const responseSuperseded = !receiptPostconditionHolds(snapshot, receipt);
     const body = participantAgendaMutationResponseSchema.parse({
       ...snapshot,
       mutation: {
         action: receipt.action,
         sessionId: receipt.sessionId,
-        outcome: replaySuperseded ? 'superseded' : receipt.outcome,
+        outcome: responseSuperseded ? 'superseded' : receipt.outcome,
       },
       timeConflict:
-        !replaySuperseded &&
+        !responseSuperseded &&
         (receipt.action === 'add' || receipt.action === 'reserve')
           ? conflictFor(snapshot, receipt.sessionId)
           : null,

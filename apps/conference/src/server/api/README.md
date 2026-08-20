@@ -110,9 +110,11 @@ transaction; no-op and replay do not create another audit row. Idempotency
 storage contains only action, session reference, outcome and resulting version;
 the private canonical response is rebuilt through the current access and
 anonymization gates on both the first response and replay. If a later inverse
-mutation has replaced the stored receipt's target postcondition, an exact-key
-replay returns the current canonical snapshot with outcome `superseded` and no
-stale conflict warning instead of failing response validation.
+mutation replaces the stored receipt's target postcondition before either
+response is assembled, the current canonical snapshot uses outcome
+`superseded` and no stale conflict warning instead of failing response
+validation. Add is a no-op when an existing confirmed reservation or waiting
+entry already projects the target into the agenda.
 
 The read model joins manual/organizer agenda items with confirmed reservations
 and any pre-existing waiting rows. Cancellation and waitlist controls remain
