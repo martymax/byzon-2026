@@ -336,6 +336,70 @@ export const publishedProgramSnapshotSchema = z.object({
     .superRefine(validateProgram),
 });
 
+/**
+ * Server publication writes retain the reservation window beside the public
+ * session projection. Public readers continue to use
+ * `publishedProgramSnapshotSchema`, which strips these operational fields.
+ */
+export const publishedProgramAgendaSnapshotSchema = z.object({
+  program: z
+    .object({
+      days: z.array(z.object(programDayShape)).max(MAX_DAYS),
+      rooms: z.array(z.object(programRoomShape)).max(MAX_ROOMS),
+      sessions: z
+        .array(
+          z
+            .object({
+              ...programSessionShape,
+              reservationOpensAt: z
+                .string()
+                .datetime({ offset: true })
+                .nullable()
+                .optional(),
+              reservationClosesAt: z
+                .string()
+                .datetime({ offset: true })
+                .nullable()
+                .optional(),
+            })
+            .superRefine((session, context) => {
+              const hasWindow =
+                session.reservationOpensAt !== undefined ||
+                session.reservationClosesAt !== undefined;
+              if (
+                hasWindow &&
+                (session.reservationOpensAt === undefined ||
+                  session.reservationClosesAt === undefined)
+              ) {
+                context.addIssue({
+                  code: 'custom',
+                  path: ['reservationClosesAt'],
+                  message: 'Snapshot reservation window must be complete',
+                });
+              }
+              if (
+                session.reservationOpensAt &&
+                session.reservationClosesAt &&
+                Date.parse(session.reservationClosesAt) <=
+                  Date.parse(session.reservationOpensAt)
+              ) {
+                context.addIssue({
+                  code: 'custom',
+                  path: ['reservationClosesAt'],
+                  message: 'Snapshot reservation window must be ordered',
+                });
+              }
+            }),
+        )
+        .max(MAX_SESSIONS),
+    })
+    .superRefine(validateProgram),
+});
+
+export type PublishedProgramAgendaSnapshot = z.infer<
+  typeof publishedProgramAgendaSnapshotSchema
+>['program'];
+
 export const publishedContentSnapshotSchema = z.object({
   event: z
     .object(eventShape)

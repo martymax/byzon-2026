@@ -9,7 +9,7 @@ import {
   participantAgendaMutationResponseSchema,
   participantAgendaProblemSchema,
   participantAgendaResponseSchema,
-  publishedProgramSnapshotSchema,
+  publishedProgramAgendaSnapshotSchema,
 } from '@byzon/domain/contracts';
 import { and, count, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -51,6 +51,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const cutoffRaceUserId = crypto.randomUUID();
   const replayUserId = crypto.randomUUID();
   const endedReplayUserId = crypto.randomUUID();
+  const publicationPolicyUserId = crypto.randomUUID();
+  const canonicalFailureUserId = crypto.randomUUID();
   const projectedReservationUserId = crypto.randomUUID();
   const projectedWaitlistUserId = crypto.randomUUID();
   const cancelledPublicationUserId = crypto.randomUUID();
@@ -161,6 +163,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       cutoffRaceUserId,
       replayUserId,
       endedReplayUserId,
+      publicationPolicyUserId,
+      canonicalFailureUserId,
       projectedReservationUserId,
       projectedWaitlistUserId,
       cancelledPublicationUserId,
@@ -186,6 +190,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         cutoffRaceUserId,
         replayUserId,
         endedReplayUserId,
+        publicationPolicyUserId,
+        canonicalFailureUserId,
         projectedReservationUserId,
         projectedWaitlistUserId,
         cancelledPublicationUserId,
@@ -209,6 +215,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         cutoffRaceUserId,
         replayUserId,
         endedReplayUserId,
+        publicationPolicyUserId,
+        canonicalFailureUserId,
         projectedReservationUserId,
         projectedWaitlistUserId,
         cancelledPublicationUserId,
@@ -235,6 +243,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         inactiveTicketUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
+        publicationPolicyUserId,
+        canonicalFailureUserId,
       ].map((userId, index) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -444,6 +454,15 @@ integration('CS-AGENDA-01 HTTP integration', () => {
                 session.endsAt.toISOString(),
                 session.type,
               ),
+              capacityMode: session.capacityMode,
+              capacity: session.capacity,
+              reservationOpensAt: null,
+              reservationClosesAt:
+                session.capacityMode === 'reservation'
+                  ? 'reservationClosesAt' in session
+                    ? session.reservationClosesAt.toISOString()
+                    : session.startsAt.toISOString()
+                  : null,
               ...(session.id === cancelledPublicationSessionId
                 ? { status: 'cancelled' as const }
                 : {}),
@@ -622,7 +641,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
           orderBy: [desc(schema.contentPublications.version)],
         },
       );
-      const published = publishedProgramSnapshotSchema.parse(
+      const published = publishedProgramAgendaSnapshotSchema.parse(
         publication?.snapshot,
       );
       await transaction.insert(schema.contentPublications).values({
@@ -1646,6 +1665,88 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(confirmedRows[0]?.confirmed).toBe(1);
   });
 
+  it('reclassifies a reservation failure against the post-rollback canonical snapshot', async () => {
+    const added = await mutate(
+      canonicalFailureUserId,
+      {
+        action: 'add',
+        sessionId: lastSeatSessionId,
+        expectedVersion: 1,
+      },
+      'agenda-canonical-failure-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    let signalContentLocked!: () => void;
+    const contentLocked = new Promise<void>((resolve) => {
+      signalContentLocked = resolve;
+    });
+    let releaseContent!: () => void;
+    const contentRelease = new Promise<void>((resolve) => {
+      releaseContent = resolve;
+    });
+    const contentHolder = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(transaction, `content-publish:${eventId}`);
+      signalContentLocked();
+      await contentRelease;
+    });
+    await contentLocked;
+
+    const reservation = mutate(
+      canonicalFailureUserId,
+      {
+        action: 'reserve',
+        sessionId: lastSeatSessionId,
+        expectedVersion: 2,
+      },
+      'agenda-canonical-failure-reserve-0001',
+    );
+    const stateBeforeContentRelease = await Promise.race([
+      reservation.then(() => 'settled' as const),
+      new Promise<'blocked'>((resolve) => {
+        setTimeout(() => resolve('blocked'), 100);
+      }),
+    ]);
+    expect(stateBeforeContentRelease).toBe('blocked');
+
+    const cancellation = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `participant-agenda:${eventId}:${canonicalFailureUserId}`,
+      );
+      await transaction
+        .update(schema.programSessions)
+        .set({ status: 'cancelled' })
+        .where(eq(schema.programSessions.id, lastSeatSessionId));
+    });
+    const cancellationState = await Promise.race([
+      cancellation.then(() => 'settled' as const),
+      new Promise<'blocked'>((resolve) => {
+        setTimeout(() => resolve('blocked'), 100);
+      }),
+    ]);
+    expect(cancellationState).toBe('blocked');
+
+    try {
+      releaseContent();
+      await contentHolder;
+      await cancellation;
+      const response = await reservation;
+      expect(response.status).toBe(404);
+      expect(
+        participantAgendaMutationProblemSchema.parse(await response.json()),
+      ).toMatchObject({ code: 'SESSION_NOT_FOUND' });
+    } finally {
+      releaseContent();
+      await contentHolder;
+      await cancellation;
+      await client.db
+        .update(schema.programSessions)
+        .set({ status: 'draft' })
+        .where(eq(schema.programSessions.id, lastSeatSessionId));
+    }
+  });
+
   it('serializes reservation creation with an operational cancellation', async () => {
     const added = await mutate(
       cancellationRaceUserId,
@@ -1762,6 +1863,80 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ],
       },
     });
+  });
+
+  it('keeps the published reservation cutoff across unpublished operational timing changes', async () => {
+    const added = await mutate(
+      publicationPolicyUserId,
+      {
+        action: 'add',
+        sessionId: cutoffRaceSessionId,
+        expectedVersion: 1,
+      },
+      'agenda-publication-cutoff-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    const unpublishedStartsAt = new Date('2026-09-18T17:00:00Z');
+    const unpublishedEndsAt = new Date('2026-09-18T18:00:00Z');
+    await client.db
+      .update(schema.programSessions)
+      .set({
+        startsAt: unpublishedStartsAt,
+        endsAt: unpublishedEndsAt,
+        reservationClosesAt: unpublishedStartsAt,
+      })
+      .where(eq(schema.programSessions.id, cutoffRaceSessionId));
+
+    const afterPublishedCutoff = new Date('2026-09-18T07:00:31.000Z');
+    try {
+      const read = await readParticipantAgenda(readRequest(), {
+        ...dependencies(publicationPolicyUserId),
+        now: () => afterPublishedCutoff,
+      });
+      expect(read.status).toBe(200);
+      expect(
+        participantAgendaResponseSchema.parse(await read.json()),
+      ).toMatchObject({
+        items: [
+          {
+            session: {
+              id: cutoffRaceSessionId,
+              startsAt: '2026-09-18T15:00:00.000Z',
+            },
+            action: { state: 'closed' },
+          },
+        ],
+      });
+
+      const reserved = await mutateParticipantAgenda(
+        mutationRequest(
+          {
+            action: 'reserve',
+            sessionId: cutoffRaceSessionId,
+            expectedVersion: 2,
+          },
+          'agenda-publication-cutoff-reserve-0001',
+        ),
+        {
+          ...dependencies(publicationPolicyUserId),
+          now: () => afterPublishedCutoff,
+        },
+      );
+      expect(reserved.status).toBe(409);
+      expect(
+        participantAgendaMutationProblemSchema.parse(await reserved.json()),
+      ).toMatchObject({ code: 'RESERVATION_CLOSED' });
+    } finally {
+      await client.db
+        .update(schema.programSessions)
+        .set({
+          startsAt: new Date('2026-09-18T15:00:00Z'),
+          endsAt: new Date('2026-09-18T16:00:00Z'),
+          reservationClosesAt: new Date('2026-09-18T07:00:30Z'),
+        })
+        .where(eq(schema.programSessions.id, cutoffRaceSessionId));
+    }
   });
 
   it('returns canonical stale and closed problems and rejects networking reservation', async () => {
@@ -2009,7 +2184,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         where: eq(schema.contentPublications.eventId, eventId),
         orderBy: [desc(schema.contentPublications.version)],
       });
-    const currentPublishedProgram = publishedProgramSnapshotSchema.parse(
+    const currentPublishedProgram = publishedProgramAgendaSnapshotSchema.parse(
       currentPublication?.snapshot,
     );
     await client.db.insert(schema.contentPublications).values({
@@ -2087,7 +2262,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       where: eq(schema.contentPublications.eventId, eventId),
       orderBy: [desc(schema.contentPublications.version)],
     });
-    const published = publishedProgramSnapshotSchema.parse(
+    const published = publishedProgramAgendaSnapshotSchema.parse(
       publication?.snapshot,
     );
     await client.db.insert(schema.contentPublications).values({

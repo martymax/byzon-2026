@@ -53,6 +53,9 @@ integration('content publication integration', () => {
       type: 'talk',
       startsAt: new Date('2026-09-18T08:00:00Z'),
       endsAt: new Date('2026-09-18T09:00:00Z'),
+      capacityMode: 'reservation',
+      capacity: 10,
+      reservationClosesAt: new Date('2026-09-18T07:45:00Z'),
       sortOrder: 0,
     });
   });
@@ -83,7 +86,12 @@ integration('content publication integration', () => {
         sessions: Array<Record<string, unknown>>;
       }
     ).sessions[0]!;
-    expect(session).toMatchObject({ id: sessionId, status: 'published' });
+    expect(session).toMatchObject({
+      id: sessionId,
+      status: 'published',
+      reservationClosesAt: '2026-09-18T07:45:00.000Z',
+    });
+    expect(session).not.toHaveProperty('capacityMode');
     const [audit] = await client.db
       .select({ value: count() })
       .from(schema.auditLogs)

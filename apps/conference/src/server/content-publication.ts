@@ -12,7 +12,7 @@ import {
 } from '@byzon/database';
 import {
   publishedContentSnapshotSchema,
-  publishedProgramSnapshotSchema,
+  publishedProgramAgendaSnapshotSchema,
 } from '@byzon/domain/contracts';
 
 import { requireWritableAdminEvent } from './admin-event-writability';
@@ -66,7 +66,7 @@ export const requirePublicationChanges = (
 export const parseContentPublicationSnapshot = (
   snapshot: unknown,
 ): Record<string, unknown> => {
-  const parsed = publishedProgramSnapshotSchema
+  const parsed = publishedProgramAgendaSnapshotSchema
     .and(publishedContentSnapshotSchema)
     .safeParse(snapshot);
   if (!parsed.success)

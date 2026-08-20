@@ -13,12 +13,12 @@ import {
   participantAgendaMutationResponseSchema,
   participantAgendaResponseSchema,
   problemTypeForCode,
-  publishedProgramSnapshotSchema,
+  publishedProgramAgendaSnapshotSchema,
   type AgendaSessionSnapshot,
   type ParticipantAgendaItem,
   type ParticipantAgendaMutationResponse,
   type ParticipantAgendaResponse,
-  type PublishedProgram,
+  type PublishedProgramAgendaSnapshot,
 } from '@byzon/domain/contracts';
 import { and, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -79,7 +79,7 @@ type AgendaEvent = Pick<
 
 interface AgendaContext {
   event: AgendaEvent;
-  program: PublishedProgram;
+  program: PublishedProgramAgendaSnapshot;
   publicationVersion: number;
 }
 
@@ -323,7 +323,7 @@ const loadAgendaPublication = async (
     where: eq(schema.contentPublications.eventId, event.id),
     orderBy: [desc(schema.contentPublications.version)],
   });
-  const parsed = publishedProgramSnapshotSchema.safeParse(
+  const parsed = publishedProgramAgendaSnapshotSchema.safeParse(
     publication?.snapshot,
   );
   if (!publication || !parsed.success) throw agendaDisabled();
@@ -392,7 +392,7 @@ const requireAgendaEventAvailable = (
 
 const sessionSnapshot = (
   context: AgendaContext,
-  session: PublishedProgram['sessions'][number],
+  session: PublishedProgramAgendaSnapshot['sessions'][number],
   operationalStatus: 'cancelled' | 'published',
 ): AgendaSessionSnapshot => {
   const room = session.roomId
@@ -420,9 +420,7 @@ const capacityProjection = (
   session: {
     capacity: number | null;
     capacityMode: 'none' | 'registration_estimate' | 'reservation';
-    reservationClosesAt: Date | null;
     reservationOpensAt: Date | null;
-    startsAt: Date;
     status: 'archived' | 'cancelled' | 'draft' | 'published';
     type:
       | 'break'
@@ -436,6 +434,7 @@ const capacityProjection = (
       | 'talk'
       | 'workshop';
   },
+  published: PublishedProgramAgendaSnapshot['sessions'][number],
   confirmed: number,
   now: Date,
 ): Pick<ParticipantAgendaItem, 'action' | 'capacity'> => {
@@ -454,9 +453,16 @@ const capacityProjection = (
   }
   const remaining = Math.max(0, session.capacity - confirmed);
   const opensAt =
-    session.reservationOpensAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+    published.reservationOpensAt === undefined
+      ? (session.reservationOpensAt?.getTime() ?? Number.NEGATIVE_INFINITY)
+      : published.reservationOpensAt === null
+        ? Number.NEGATIVE_INFINITY
+        : Date.parse(published.reservationOpensAt);
   const closesAt =
-    session.reservationClosesAt?.getTime() ?? session.startsAt.getTime();
+    published.reservationClosesAt === undefined ||
+    published.reservationClosesAt === null
+      ? Date.parse(published.startsAt)
+      : Date.parse(published.reservationClosesAt);
   const closed = now.getTime() < opensAt || now.getTime() >= closesAt;
   return {
     capacity: {
@@ -614,9 +620,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
             id: schema.programSessions.id,
             capacity: schema.programSessions.capacity,
             capacityMode: schema.programSessions.capacityMode,
-            reservationClosesAt: schema.programSessions.reservationClosesAt,
             reservationOpensAt: schema.programSessions.reservationOpensAt,
-            startsAt: schema.programSessions.startsAt,
             status: schema.programSessions.status,
             type: schema.programSessions.type,
           })
@@ -658,7 +662,12 @@ const loadParticipantAgendaSnapshotUnlocked = async (
     const day = context.program.days.find(({ id }) => id === published.dayId);
     if (!day) continue;
     const confirmed = confirmedBySession.get(sessionId) ?? 0;
-    const operationalState = capacityProjection(operational, confirmed, now);
+    const operationalState = capacityProjection(
+      operational,
+      published,
+      confirmed,
+      now,
+    );
     const state =
       published.status === 'cancelled'
         ? {
@@ -958,11 +967,12 @@ const targetPublishedSession = (
   context: AgendaContext,
   sessionId: string,
   action: AgendaMutationReceipt['action'],
-): void => {
+): PublishedProgramAgendaSnapshot['sessions'][number] | undefined => {
   const session = context.program.sessions.find(({ id }) => id === sessionId);
   if (action !== 'remove' && (!session || session.status === 'cancelled')) {
     throw sessionNotFound();
   }
+  return session;
 };
 
 const conflictFor = (
@@ -1026,8 +1036,31 @@ const canonicalProblemResponse = (
   snapshot: ParticipantAgendaResponse,
   requestId: string,
 ): Response => {
+  let classified = error;
+  if (!(error instanceof StaleAgendaVersionError)) {
+    const item = snapshot.items.find(
+      ({ session }) => session.id === error.sessionId,
+    );
+    if (
+      !item ||
+      item.session.status !== 'published' ||
+      item.capacity.mode !== 'reservation'
+    ) {
+      return privateProblemResponse(sessionNotFound(), requestId);
+    }
+    if (item.action.state === 'capacity_full') {
+      classified = new AgendaCapacityFullError(error.sessionId);
+    } else if (item.action.state === 'closed') {
+      classified = new AgendaReservationClosedError(error.sessionId);
+    } else if (
+      !(error instanceof AgendaTicketInactiveError) ||
+      item.state !== 'saved'
+    ) {
+      classified = new StaleAgendaVersionError();
+    }
+  }
   const candidate =
-    error instanceof StaleAgendaVersionError
+    classified instanceof StaleAgendaVersionError
       ? {
           type: problemTypeForCode('STALE_VERSION'),
           title: 'Agenda version changed',
@@ -1038,7 +1071,7 @@ const canonicalProblemResponse = (
           currentVersion: snapshot.version,
           agenda: snapshot,
         }
-      : error instanceof AgendaTicketInactiveError
+      : classified instanceof AgendaTicketInactiveError
         ? {
             type: problemTypeForCode('TICKET_INACTIVE'),
             title: 'Active ticket required',
@@ -1046,10 +1079,10 @@ const canonicalProblemResponse = (
             code: 'TICKET_INACTIVE',
             detail: 'An active ticket is required to reserve this session.',
             requestId,
-            sessionId: error.sessionId,
+            sessionId: classified.sessionId,
             agenda: snapshot,
           }
-        : error instanceof AgendaCapacityFullError
+        : classified instanceof AgendaCapacityFullError
           ? {
               type: problemTypeForCode('CAPACITY_FULL'),
               title: 'Session capacity is full',
@@ -1058,7 +1091,7 @@ const canonicalProblemResponse = (
               detail:
                 'The final available place was reserved by another request.',
               requestId,
-              sessionId: error.sessionId,
+              sessionId: classified.sessionId,
               agenda: snapshot,
             }
           : {
@@ -1068,7 +1101,7 @@ const canonicalProblemResponse = (
               code: 'RESERVATION_CLOSED',
               detail: 'Reservations are not open for this session.',
               requestId,
-              sessionId: error.sessionId,
+              sessionId: classified.sessionId,
               agenda: snapshot,
             };
   const problem = participantAgendaMutationProblemSchema.parse(candidate);
@@ -1200,7 +1233,11 @@ export const mutateParticipantAgenda = async (
           transaction,
           lockedEvent,
         );
-        targetPublishedSession(lockedContext, parsed.data.sessionId, action);
+        const publishedTarget = targetPublishedSession(
+          lockedContext,
+          parsed.data.sessionId,
+          action,
+        );
         const currentVersion = await ensureAgendaRoot(
           transaction,
           context.event.id,
@@ -1217,9 +1254,7 @@ export const mutateParticipantAgenda = async (
                 columns: {
                   capacity: true,
                   capacityMode: true,
-                  reservationClosesAt: true,
                   reservationOpensAt: true,
-                  startsAt: true,
                   status: true,
                   type: true,
                 },
@@ -1311,7 +1346,7 @@ export const mutateParticipantAgenda = async (
             .returning({ sessionId: schema.agendaItems.sessionId });
           if (deleted.length === 1) outcome = 'applied';
         } else {
-          if (!operationalTarget) throw sessionNotFound();
+          if (!operationalTarget || !publishedTarget) throw sessionNotFound();
           const saved = await transaction.query.agendaItems.findFirst({
             columns: { sessionId: true },
             where: and(
@@ -1344,11 +1379,17 @@ export const mutateParticipantAgenda = async (
             throw sessionNotFound();
           }
           const opensAt =
-            operationalTarget.reservationOpensAt?.getTime() ??
-            Number.NEGATIVE_INFINITY;
+            publishedTarget.reservationOpensAt === undefined
+              ? (operationalTarget.reservationOpensAt?.getTime() ??
+                Number.NEGATIVE_INFINITY)
+              : publishedTarget.reservationOpensAt === null
+                ? Number.NEGATIVE_INFINITY
+                : Date.parse(publishedTarget.reservationOpensAt);
           const closesAt =
-            operationalTarget.reservationClosesAt?.getTime() ??
-            operationalTarget.startsAt.getTime();
+            publishedTarget.reservationClosesAt === undefined ||
+            publishedTarget.reservationClosesAt === null
+              ? Date.parse(publishedTarget.startsAt)
+              : Date.parse(publishedTarget.reservationClosesAt);
           if (
             mutationNow.getTime() < opensAt ||
             mutationNow.getTime() >= closesAt
