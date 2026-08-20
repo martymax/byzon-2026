@@ -11,9 +11,15 @@ vi.mock('@/lib/frontend-preview', () => ({
 vi.mock('@/components/admin-workspace-shell', () => ({
   AdminWorkspaceShell: ({
     children,
+    environment,
   }: {
     readonly children: React.ReactNode;
-  }) => <div data-testid="mock-admin-shell">{children}</div>,
+    readonly environment?: string;
+  }) => (
+    <div data-environment={environment} data-testid="admin-shell">
+      {children}
+    </div>
+  ),
 }));
 
 import AdminLayout from './layout';
@@ -23,7 +29,7 @@ describe('admin layout preview isolation', () => {
     previewMocks.available.mockReset();
   });
 
-  it('keeps the integrated /admin/obsah child unwrapped in production', () => {
+  it('uses the authoritative production shell for integrated admin routes', () => {
     previewMocks.available.mockReturnValue(false);
 
     const markup = renderToStaticMarkup(
@@ -33,10 +39,11 @@ describe('admin layout preview isolation', () => {
     );
 
     expect(markup).toContain('integrated-admin-content');
-    expect(markup).not.toContain('mock-admin-shell');
+    expect(markup).toContain('admin-shell');
+    expect(markup).toContain('data-environment="production"');
   });
 
-  it('unifies admin journeys under the mock shell only in preview', () => {
+  it('keeps synthetic journeys explicitly marked as mocked in preview', () => {
     previewMocks.available.mockReturnValue(true);
 
     const markup = renderToStaticMarkup(
@@ -45,6 +52,7 @@ describe('admin layout preview isolation', () => {
       </AdminLayout>,
     );
 
-    expect(markup).toContain('mock-admin-shell');
+    expect(markup).toContain('admin-shell');
+    expect(markup).toContain('data-environment="mocked"');
   });
 });

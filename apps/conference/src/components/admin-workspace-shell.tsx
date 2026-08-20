@@ -43,18 +43,64 @@ type AdminWorkspaceSection =
   | 'content';
 
 const navigation = [
-  { href: '/admin', label: 'Přehled', section: 'overview' },
-  { href: '/admin/vstupenky', label: 'Import vstupenek', section: 'import' },
-  { href: '/admin/ucastnici', label: 'Podpora', section: 'support' },
-  { href: '/admin/oznameni', label: 'Oznámení', section: 'announcements' },
-  { href: '/admin/role', label: 'Role operátorů', section: 'operations' },
-  { href: '/admin/reporty', label: 'Reporty', section: 'operations' },
-  { href: '/admin/rezervace', label: 'Rezervace', section: 'reservations' },
-  { href: '/admin/audit', label: 'Audit', section: 'reservations' },
-  { href: '/admin/nastaveni', label: 'Nastavení', section: 'reservations' },
-  { href: '/admin/obsah', label: 'Obsah akce', section: 'content' },
+  { href: '/admin', integrated: true, label: 'Přehled', section: 'overview' },
+  {
+    href: '/admin/vstupenky',
+    integrated: false,
+    label: 'Import vstupenek',
+    section: 'import',
+  },
+  {
+    href: '/admin/ucastnici',
+    integrated: false,
+    label: 'Podpora',
+    section: 'support',
+  },
+  {
+    href: '/admin/oznameni',
+    integrated: false,
+    label: 'Oznámení',
+    section: 'announcements',
+  },
+  {
+    href: '/admin/role',
+    integrated: false,
+    label: 'Role operátorů',
+    section: 'operations',
+  },
+  {
+    href: '/admin/reporty',
+    integrated: false,
+    label: 'Reporty',
+    section: 'operations',
+  },
+  {
+    href: '/admin/rezervace',
+    integrated: true,
+    label: 'Rezervace',
+    section: 'reservations',
+  },
+  {
+    href: '/admin/audit',
+    integrated: false,
+    label: 'Audit',
+    section: 'reservations',
+  },
+  {
+    href: '/admin/nastaveni',
+    integrated: false,
+    label: 'Nastavení',
+    section: 'reservations',
+  },
+  {
+    href: '/admin/obsah',
+    integrated: true,
+    label: 'Obsah akce',
+    section: 'content',
+  },
 ] as const satisfies readonly {
   readonly href: string;
+  readonly integrated: boolean;
   readonly label: string;
   readonly section: AdminWorkspaceSection;
 }[];
@@ -150,13 +196,15 @@ const mayAccess = (
 
 const AdminNavigation = ({
   activeHref,
+  items,
   label,
 }: {
   readonly activeHref: string;
+  readonly items: readonly (typeof navigation)[number][];
   readonly label: string;
 }) => (
   <nav className={styles.navigation} aria-label={label}>
-    {navigation.map((item) => (
+    {items.map((item) => (
       <Link
         aria-current={item.href === activeHref ? 'page' : undefined}
         href={item.href}
@@ -317,6 +365,13 @@ export const AdminWorkspaceShell = ({
     () => (environment === 'mocked' ? personaApi(api, previewPersona) : api),
     [api, environment, previewPersona],
   );
+  const visibleNavigation = useMemo(
+    () =>
+      environment === 'mocked'
+        ? navigation
+        : navigation.filter(({ integrated }) => integrated),
+    [environment],
+  );
 
   const invalidateSensitive = useCallback((message?: string) => {
     setSecurityEpoch((current) => current + 1);
@@ -449,6 +504,7 @@ export const AdminWorkspaceShell = ({
           <div className={styles.desktopNavigation}>
             <AdminNavigation
               activeHref={activeNavigation.href}
+              items={visibleNavigation}
               label="Hlavní administrace"
             />
           </div>
@@ -456,6 +512,7 @@ export const AdminWorkspaceShell = ({
             <summary>Navigace administrace</summary>
             <AdminNavigation
               activeHref={activeNavigation.href}
+              items={visibleNavigation}
               label="Mobilní administrace"
             />
           </details>

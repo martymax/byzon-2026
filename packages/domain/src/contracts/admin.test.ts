@@ -150,6 +150,15 @@ describe('CS-ADMIN-01 contracts', () => {
         assignedSessionIds: [ids.session],
       }).success,
     ).toBe(false);
+    expect(
+      adminReservationMutationRequestSchema.safeParse({
+        action: 'capacity_override',
+        reservationId: ids.reservation,
+        expectedVersion: 4,
+        reason: 'Extrémní kapacita musí být odmítnutá kontraktem.',
+        capacity: 100_001,
+      }).success,
+    ).toBe(false);
   });
 
   it('validates available reservation actions against canonical state', () => {
@@ -183,6 +192,12 @@ describe('CS-ADMIN-01 contracts', () => {
             state: 'attended',
           },
         ],
+      }).success,
+    ).toBe(false);
+    expect(
+      adminReservationListResponseSchema.safeParse({
+        ...response,
+        items: [{ ...record, capacity: 100_001 }],
       }).success,
     ).toBe(false);
   });

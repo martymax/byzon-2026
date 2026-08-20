@@ -99,7 +99,8 @@ participant-owned agenda permission, reject draft/archived events and stop
 serving operational data at the event anonymization deadline. Responses are
 bounded, `private, no-store` and vary by Cookie and Authorization.
 
-The current production mutation allowlist is `add`, `remove` and `reserve`.
+The current production mutation allowlist is `add`, `remove`, `reserve` and
+`cancel`.
 Every mutation requires exact same-origin JSON, an idempotency key and the
 canonical agenda version. Owner-scoped advisory locking serializes agenda
 changes; reservation adds a second event/session lock before counting confirmed
@@ -117,8 +118,11 @@ validation. Add is a no-op when an existing confirmed reservation or waiting
 entry already projects the target into the agenda.
 
 The read model joins manual/organizer agenda items with confirmed reservations
-and any pre-existing waiting rows. Cancellation and waitlist controls remain
-server-disabled until `P5-04`/`P5-05`, networking remains behind
+and any pre-existing waiting rows. A participant may cancel a confirmed
+reservation before the immutable published session start; at or after that
+instant only the separately authorized and audited admin override is available.
+Cancellation releases capacity but does not promote a waiting row before
+`P5-04`. Waitlist controls remain server-disabled, networking remains behind
 `BLOCKER-RES-01`, coaching source reconciliation belongs to `P5-06`, and the
 calendar representation remains unavailable until `P5-09`. The immutable
 publication is the visibility allowlist while non-archived operational rows
@@ -136,6 +140,36 @@ a throttled PII-free warning when Redis is unavailable. The
 `participant_agenda.mutation` bucket allows 30 requests and fails closed before
 database or idempotency work when Redis is unavailable. Both return the
 standard rate-limit headers; exhausted buckets return `429 RATE_LIMITED`.
+
+## Admin reservation overrides
+
+`GET /api/v1/admin/context`,
+`GET /api/v1/admin/events/:eventId/reservations` and
+`POST /api/v1/admin/events/:eventId/reservations/actions` derive the actor from
+Better Auth and constrain the requested event to the canonical server event.
+Reads require an active membership and `reservation:any:read`; mutations require
+the audited-exception form of `agenda:any:override`, exact same-origin JSON, an
+idempotency key, the current reservation version and a bounded reason.
+
+Participant, content and session advisory locks serialize admin cancellation or
+capacity changes with participant reservation changes. Capacity cannot be
+lowered below the confirmed count or raised above the shared participant
+contract maximum of 100,000. A capacity change versions every reservation
+snapshot for the affected session; a cancellation also versions the owner's
+agenda. Both actions write one reasoned audit row in the business transaction,
+and exact replay returns the stored minimal response without another write.
+Operational records stop at the event anonymization deadline and archived events
+are read-only. The DTO exposes only a masked participant reference, never contact
+or ticket data. Released capacity does not promote a waitlist row before
+`P5-04`.
+
+Admin reservation routes use shared one-minute Redis buckets keyed by an
+environment-keyed HMAC of canonical event slug and authenticated user ID.
+`admin_reservation.read` allows 120 requests and
+`admin_reservation.mutation` allows 30. Both fail closed when Redis is
+unavailable; the mutation bucket is consumed before database or idempotency
+work. Allowed responses carry standard rate-limit headers and exhausted buckets
+return `429 RATE_LIMITED`.
 
 ## Published participant program
 

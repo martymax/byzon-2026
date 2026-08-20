@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 20. srpna 2026
+> Poslední aktualizace: 21. srpna 2026
 
 ## Pokyny pro pokračování
 
@@ -38,9 +38,15 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   session-scoped `room_operator` assignment. List/detail vrací jen bounded
   reservation reference, stav, jméno a firmu; networking, attendance,
   kontakty, ticket data a export nejsou součástí řezu.
-- Na větvi `agent/p5-01-03-integrate-agenda` a v PR `#22` je implementovaný
-  následující řez `P5-01`/`P5-02` a transakční jádro `P5-03`; přesný rozsah a
-  otevřené produktové hranice jsou v samostatné sekci níže.
+- `P5-01`/`P5-02` a transakční jádro `P5-03` jsou sloučené do `main` přes
+  [PR #22](https://github.com/martymax/byzon-2026/pull/22) merge commitem
+  `501fa55`; přesný rozsah a otevřené produktové hranice jsou v samostatné
+  sekci níže.
+- Na větvi `agent/p5-05-cancellation-override` je implementované `P5-05`:
+  participant cancel do začátku session, reasoned admin cancel/capacity
+  override a produkční reservation-only admin UI. Implementace i globální
+  gate jsou dokončené; merge do `main` zůstává otevřený. Waitlist promotion
+  je vypnutá do `P5-04`.
 - `static-site/data/content.json` nyní deterministicky
   importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
   i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
@@ -160,7 +166,7 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Agenda PR `#22` nyní provider používá přes explicitní read/mutation scope;
   ostatní API route musí dál samostatně zvolit subject a outage politiku.
 
-## Rozpracovaná práce (`P5-01`, `P5-02`, jádro `P5-03`)
+## Dokončená práce (`P5-01`, `P5-02`, jádro `P5-03`, PR #22)
 
 - Migrace `0008_pretty_firebrand.sql` přidává versioned
   `participant_agendas` a event/user/session-scoped `agenda_items` se složenými
@@ -185,9 +191,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   zůstává v `P5-06`; není zploštěn do chybného společného slotu.
   Dvoudílný sobotní mastermind s kapacitou 6 čeká na nový
   `BLOCKER-RES-05`, zda jedna rezervace pokrývá obě části.
-- Produkční server záměrně odmítá cancel/waitlist/offer akce; UI skryje
-  jejich CTA a pro nehotový `.ics` vrací poctivé `not_ready`. Tyto větve
-  zůstávají v `P5-04`, `P5-05` a `P5-09`; networking za `BLOCKER-RES-01`.
+- Stav sloučeného PR záměrně odmítal cancel/waitlist/offer akce a pro
+  nehotový `.ics` vracel poctivé `not_ready`. Následné `P5-05` zapojuje cancel;
+  waitlist/offer zůstávají v `P5-04`, `.ics` v `P5-09` a networking za
+  `BLOCKER-RES-01`.
 - Security/code review doplnil kontrolu aktivované vstupenky, audit a fail-closed
   ověření provozní session proti publication allowlistu. Review PR `#22`
   navíc opravil běžné snapshot-published zdrojové řádky ve stavu `draft`,
@@ -249,6 +256,41 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   idempotency prací. Subject je environment-keyed HMAC canonical event slugu a
   user UUID; povolené odpovědi nesou rate-limit hlavičky a vyčerpání vrací
   kontraktové `429 RATE_LIMITED`.
+
+## Dokončená implementace (`P5-05`)
+
+- Participant `cancel` používá stejné owner → content → session lock pořadí
+  jako rezervace. Cutoff je immutable publikovaný začátek session; před ním
+  se confirmed reservation atomicky změní na `cancelled`, zvýší agenda
+  version a zapíše minimální audit. V cutoffu a později vrací canonical
+  `RESERVATION_CLOSED`. Exact replay nevytváří druhý audit a starý cancel
+  replay po novější re-reservation vrátí `superseded` snapshot.
+- Produkční admin endpointy `GET /api/v1/admin/context`,
+  `GET /api/v1/admin/events/:eventId/reservations` a
+  `POST /api/v1/admin/events/:eventId/reservations/actions` jsou Better Auth,
+  current-event a permission scoped, bounded a `private, no-store`. Organizer
+  může po povinném reason a novém potvrzení snapshotu zrušit rezervaci i po
+  participant cutoffu nebo změnit kapacitu; snížení pod confirmed count je
+  odmítnuté a obě akce jsou idempotentní a auditované.
+- Admin reservation read a mutation mají samostatné one-minute shared Redis
+  buckety 120/30, environment-keyed HMAC subject canonical event slugu a user
+  UUID a fail-closed outage politiku. Mutace spotřebuje bucket před databází a
+  idempotency prací; raw identifikátor se do Redis klíče nedostane.
+- `/admin/rezervace` je v produkci live v omezeném reservation-only režimu.
+  Audit browser a event settings se nenačítají ani nezobrazují, dokud je
+  nedokončí `P9-04`/`P9-09`; development preview si zachovává plný mock.
+  Produkční admin navigace ukazuje jen skutečně integrovaný přehled,
+  rezervace a obsah.
+- Uvolněná kapacita sama nepromuje FIFO waitlist; to patří výhradně do
+  `P5-04` po rozhodnutí `BLOCKER-RES-04`. `BLOCKER-RES-03` je rozhodnutý:
+  transfer/storno má zrušit aktivní rezervace a uvolnit kapacitu. Samotné
+  napojení na budoucí ticket transition zůstává v `P4-09`.
+- Service-backed workspace gate prošel 905/905 bez skipů: database 94/94,
+  Redis 9/9 a conference 571/571; cílená PostgreSQL 17 sada
+  participant/admin rezervací má 37/37. Browser komponenty prošly 852/852 a
+  Playwright E2E 15/15 ve třech viewports. Zelené jsou Prettier, všechny linty
+  a typechecky, production web/worker build, source/build mock boundary,
+  statický smoke 25 HTML/58 assetů a oba dependency audity.
 
 ## Dokončená práce (`P5-08`, PR #21)
 
@@ -1115,9 +1157,13 @@ Aktuální souhrn a konečné počty jsou výše.
   a environment-keyed HMAC subjecty; výpadek store je fail-closed.
 ## Doporučený další krok
 
-Po potvrzení úspěšného CI na `origin/stage/03-content` samostatně schválit
-vytvoření PR etapy 3 do `staging`. PR ani merge nejsou součástí dosavadního
-schválení a nesmějí se provést automaticky.
+Nejprve dokončit review a merge `P5-05`. Následující nejlepší samostatný
+řez je `P5-06`: dvě source-verified coaching řady Radima Ročka a Stanislavy
+Maunové. Paralelně lze dokončit `.ics` v `P5-09`. `P5-04` nezačínat bez
+jediného potvrzeného promotion režimu v `BLOCKER-RES-04`; dvoudílný sobotní
+mastermind zůstává za `BLOCKER-RES-05`. Ticket transfer/storno consumer
+rozhodnutého cancel pravidla doplní `P4-09`, až vznikne skutečná ticket
+transition.
 
 ## Dokončená oprava review PR `#16`
 

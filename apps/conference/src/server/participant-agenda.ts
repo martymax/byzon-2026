@@ -42,7 +42,7 @@ const uuidSchema = z.string().uuid();
 const participantAgendaLockKey = (eventId: string, userId: string): string =>
   `participant-agenda:${eventId}:${userId}`;
 const agendaMutationReceiptSchema = z.strictObject({
-  action: z.enum(['add', 'remove', 'reserve']),
+  action: z.enum(['add', 'remove', 'reserve', 'cancel']),
   sessionId: uuidSchema,
   outcome: z.enum(['applied', 'already_applied']),
   version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -749,11 +749,11 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           id: reservation.id,
           version: reservation.version,
           confirmedAt: reservation.createdAt.toISOString(),
-          cancellation: {
-            state: 'unavailable',
-            reason:
-              state.action.state === 'closed' ? 'closed' : 'policy_pending',
-          },
+          cancellation:
+            common.session.status === 'published' &&
+            now.getTime() < Date.parse(published.startsAt)
+              ? { state: 'available' }
+              : { state: 'unavailable', reason: 'closed' },
         },
       });
       continue;
@@ -1040,6 +1040,8 @@ const receiptPostconditionHolds = (
       return item === undefined;
     case 'reserve':
       return item?.state === 'reserved';
+    case 'cancel':
+      return item === undefined || item.state === 'saved';
   }
 };
 
@@ -1193,7 +1195,8 @@ export const mutateParticipantAgenda = async (
     if (
       parsed.data.action !== 'add' &&
       parsed.data.action !== 'remove' &&
-      parsed.data.action !== 'reserve'
+      parsed.data.action !== 'reserve' &&
+      parsed.data.action !== 'cancel'
     ) {
       throw validationFailed({
         action: ['This agenda action is not enabled in the current rollout.'],
@@ -1222,7 +1225,10 @@ export const mutateParticipantAgenda = async (
           transaction,
           participantAgendaLockKey(context.event.id, session.user.id),
         );
-        if (parsed.data.action === 'reserve') {
+        if (
+          parsed.data.action === 'reserve' ||
+          parsed.data.action === 'cancel'
+        ) {
           await acquireTransactionLock(
             transaction,
             `content-publish:${context.event.id}`,
@@ -1363,6 +1369,38 @@ export const mutateParticipantAgenda = async (
             )
             .returning({ sessionId: schema.agendaItems.sessionId });
           if (deleted.length === 1) outcome = 'applied';
+        } else if (parsed.data.action === 'cancel') {
+          if (!operationalTarget || !publishedTarget) throw sessionNotFound();
+          if (mutationNow.getTime() >= Date.parse(publishedTarget.startsAt)) {
+            throw new AgendaReservationClosedError(parsed.data.sessionId);
+          }
+          const existing = await transaction.query.reservations.findFirst({
+            columns: { id: true },
+            where: and(
+              eq(schema.reservations.eventId, context.event.id),
+              eq(schema.reservations.userId, session.user.id),
+              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.status, 'confirmed'),
+            ),
+          });
+          if (existing) {
+            const cancelled = await transaction
+              .update(schema.reservations)
+              .set({
+                status: 'cancelled',
+                cancelledAt: mutationNow,
+                version: sql`${schema.reservations.version} + 1`,
+              })
+              .where(
+                and(
+                  eq(schema.reservations.eventId, context.event.id),
+                  eq(schema.reservations.id, existing.id),
+                  eq(schema.reservations.status, 'confirmed'),
+                ),
+              )
+              .returning({ id: schema.reservations.id });
+            if (cancelled.length === 1) outcome = 'applied';
+          }
         } else {
           if (!operationalTarget || !publishedTarget) throw sessionNotFound();
           const saved = await transaction.query.agendaItems.findFirst({
@@ -1484,7 +1522,9 @@ export const mutateParticipantAgenda = async (
             action:
               parsed.data.action === 'reserve'
                 ? 'reservation.created'
-                : `agenda.${parsed.data.action}`,
+                : parsed.data.action === 'cancel'
+                  ? 'reservation.cancelled'
+                  : `agenda.${parsed.data.action}`,
             targetType: 'program_session',
             targetId: parsed.data.sessionId,
             requestId: uuidSchema.safeParse(requestId).success

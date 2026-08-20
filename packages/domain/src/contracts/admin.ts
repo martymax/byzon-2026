@@ -375,6 +375,8 @@ export type AdminReservationAction = z.infer<
   typeof adminReservationActionSchema
 >;
 
+const adminReservationCapacitySchema = z.number().int().positive().max(100_000);
+
 export const adminReservationRecordSchema = z
   .strictObject({
     reservationId: uuidSchema,
@@ -383,8 +385,8 @@ export const adminReservationRecordSchema = z
     sessionTitle: safeInlineTextSchema(160),
     participantReference: safeInlineTextSchema(80),
     state: z.enum(['reserved', 'cancelled']),
-    capacity: z.number().int().positive(),
-    reservedCount: z.number().int().nonnegative(),
+    capacity: adminReservationCapacitySchema,
+    reservedCount: z.number().int().nonnegative().max(100_000),
     version: versionSchema,
     availableActions: z.array(adminReservationActionSchema).max(4),
   })
@@ -452,7 +454,7 @@ export const adminReservationMutationRequestSchema = z.discriminatedUnion(
     z.strictObject({
       ...reservationMutationBase,
       action: z.literal('capacity_override'),
-      capacity: z.number().int().positive(),
+      capacity: adminReservationCapacitySchema,
     }),
     z.strictObject({
       ...reservationMutationBase,

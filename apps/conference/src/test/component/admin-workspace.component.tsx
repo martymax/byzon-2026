@@ -467,6 +467,36 @@ describe('F4 contract-first admin journeys', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('uses only integrated reservation endpoints in the production workspace', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      throw new Error('The live reservation page requested a mocked endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationWorkspace mode="reservations" />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          level: 1,
+          name: 'Rezervace a kapacitní výjimky',
+        }),
+      )
+      .toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Auditní stopa' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Nastavení akce' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('invalidates edited announcement preview and sends only a reconfirmed canonical version', async () => {
     window.history.replaceState({}, '', '/admin/oznameni');
     let previewVersion = 1;
