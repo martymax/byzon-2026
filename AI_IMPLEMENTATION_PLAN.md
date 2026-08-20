@@ -1,10 +1,10 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.2 – vypořádaný rozsah a ověřený scope-aligned baseline
+> Stav: implementační plán v6.4 – sdílený Redis/BullMQ základ a rate-limit provider
 >
 > Datum sestavení: 20. července 2026
 >
-> Poslední revize: 16. srpna 2026
+> Poslední revize: 20. srpna 2026
 >
 > Cílový repozitář: `martymax/byzon-2026`
 >
@@ -600,8 +600,12 @@ Názvy se mohou upravit pouze konzistentně ve schema, `.env.example`, Railway a
 | `PUBLIC_SITE_URL` | ano | ano | ne | Kanonická URL `byzon.cz`. |
 | `DATABASE_URL` | ano | ano | ano | Railway PostgreSQL private URL. |
 | `REDIS_URL` | ano | ano | ano | Railway Redis private URL. |
+| `REDIS_FAMILY` | ano | ano | ne | `0` pro dual-stack DNS; explicitně `4` nebo `6` jen při provozní potřebě. |
+| `REDIS_CONNECT_TIMEOUT_MS` | ano | ano | ne | Bounded timeout navázání Redis spojení. |
+| `REDIS_COMMAND_TIMEOUT_MS` | ano | ne | ne | Bounded web command timeout; BullMQ worker blocking commandy jej nepoužívají. |
 | `BETTER_AUTH_SECRET` | ano | ne | ano | Podpis/šifrování auth; minimální délka dle knihovny. |
 | `BETTER_AUTH_URL` | ano | ne | ne | Kanonický auth origin, bez wildcardu. |
+| `RATE_LIMIT_SUBJECT_SECRET` | ano | ne | ano | Samostatný environment-scoped HMAC key pro opaque rate-limit subjecty. |
 | `TICKET_CODE_PEPPER_ACTIVE` | ano | ne | ano | Aktivní HMAC key. |
 | `TICKET_CODE_PEPPER_PREVIOUS` | ano | ne | ano | Volitelné rotační přechodné čtení; odstranit po rehash migraci. |
 | `MAIL_PROVIDER` | ano | ano | ne | `sink` v dev/test, schválený provider v prod. |
@@ -2597,7 +2601,15 @@ rozšířené segmentování jsou v `P8B` výslovně vyřazené.
 
 #### P8A – Priority A provozní in-app minimum
 
-- [ ] `P8-01` Redis/BullMQ connection s Railway IPv6/family konfigurací a health metrikami.
+- [x] `P8-01` Redis/BullMQ connection s Railway IPv6/family konfigurací a
+  health metrikami. Sdílený `@byzon/redis` používá lazy ioredis spojení s
+  `family=0`, bounded web profilem a BullMQ worker profilem s
+  `maxRetriesPerRequest=null`; atomický Lua fixed-window store je společný pro
+  více instancí. Web readiness reportuje Redis degradaci a ping latency
+  odděleně od autoritativní DB, worker ověřuje Redis při startu a obě spojení
+  korektně zavírá. Versionovaný Compose a CI používají skutečný Redis s
+  `noeviction`; integrační test kryje souběh i BullMQ kompatibilitu. Produkční
+  provisioning, EU region a credentials dál vyžadují provozní schválení.
 - [ ] `P8-02` Transactional outbox dispatcher a deduplication.
 - [ ] `P8-05` Implementovat serverový in-app announcement
   draft/audience-preview/immutable-confirm/send kontrakt pro bezpečné
@@ -3124,3 +3136,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.1 | 15. 8. 2026 | Obnoven důvěryhodný zelený baseline: programový import a oba jeho regresní testy odpovídají 67 validním sessions a reportují `compact`; recovery token helper i syntetické odkazy byly izolovány do guarded dev/test grafu a production boundary je nyní explicitně blokuje; tranzitivní security overrides odstranily všechny známé auditní nálezy; flaky check-in browser test dostal deterministický focus a oddělené odpovědnosti. Celý CI ekvivalent prošel nad izolovaným PostgreSQL bez přeskočených integračních testů. |
 | 6.2 | 16. 8. 2026 | Dokončeny `P0-10`, `P0-11`, `P0-12`, `F1-07`, `F2-08` a `F4-10`: přidán v6 scope inventář, synchronizované ADR/route/permission/handover dokumenty a ADR-013 bez plošné migrace stacku; onboarding je bez networkingu, profil má dobrovolný telefon, privacy nemá self-export, oznámení jsou critical-only, attendance write je odstraněn a vzniklo read-only `/host/aktivity` preview nad `CS-ROSTER-01`. Nezablokovaná část `F3-07` odstranila registration estimate; networking a jediný promotion režim zůstávají explicitně blokované `RES-01`/`RES-04`. Žádná capability tím nepřešla na `integrated` ani `UAT`. |
 | 6.3 | 20. 8. 2026 | Dokončen `P5-08`: `CS-ROSTER-01` a `/host/aktivity` jsou napojené na Better Auth, canonical event a aktivní session-scoped `room_operator` assignment. List/detail vydávají bounded private/no-store jméno, firmu a reservation/waitlist stav bez kontaktů, ticketů, attendance nebo exportu; unknown/unassigned session mají stejný 404. Migrace přidává pouze potřebný read-model základ a nevolí blokovaný promotion režim ani networkingovou kapacitu. |
+| 6.4 | 20. 8. 2026 | Dokončen `P8-01`: přidán sdílený ioredis 6 základ pro web a BullMQ worker s Railway dual-stack family konfigurací, bounded web selháním, worker retry profilem, bezpečným lifecycle, Redis health latencí a atomickým víceinstančním fixed-window rate-limit storem. Compose a CI spouštějí skutečný Redis 8.2 s `noeviction`; samostatný HMAC secret udržuje PII mimo bucket keys. |

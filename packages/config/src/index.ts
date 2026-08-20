@@ -1,5 +1,23 @@
 import { z } from 'zod';
 
+const redisFamilySchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' && value.length > 0 ? Number(value) : value,
+  z.union([z.literal(0), z.literal(4), z.literal(6)]),
+);
+
+const redisUrlSchema = z.string().refine((value) => {
+  try {
+    const parsed = new URL(value);
+    return (
+      (parsed.protocol === 'redis:' || parsed.protocol === 'rediss:') &&
+      parsed.hostname.length > 0
+    );
+  } catch {
+    return false;
+  }
+}, 'REDIS_URL must be a Redis URL');
+
 const baseEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   APP_ENV: z.enum(['development', 'test', 'staging', 'production']),
@@ -19,6 +37,20 @@ const baseEnvSchema = z.object({
     .int()
     .positive()
     .default(5_000),
+  REDIS_URL: redisUrlSchema,
+  REDIS_FAMILY: redisFamilySchema.default(0),
+  REDIS_CONNECT_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(30_000)
+    .default(3_000),
+  REDIS_COMMAND_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(30_000)
+    .default(2_000),
 });
 
 const workerEnvSchema = baseEnvSchema.extend({
@@ -28,6 +60,7 @@ const workerEnvSchema = baseEnvSchema.extend({
 
 const conferenceEnvSchema = baseEnvSchema.extend({
   BETTER_AUTH_SECRET: z.string().min(32),
+  RATE_LIMIT_SUBJECT_SECRET: z.string().min(32),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;
@@ -37,7 +70,9 @@ const developmentDefaults = {
   APP_BASE_URL: 'http://localhost:3000',
   PUBLIC_SITE_URL: 'http://localhost:8000',
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/byzon',
+  REDIS_URL: 'redis://127.0.0.1:6379',
   BETTER_AUTH_SECRET: 'local-only-better-auth-secret-change-me',
+  RATE_LIMIT_SUBJECT_SECRET: 'local-only-rate-limit-subject-secret-change-me',
 } as const;
 
 const withDevelopmentDefaults = (

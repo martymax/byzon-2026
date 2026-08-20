@@ -1,0 +1,24 @@
+{
+  "name": "@byzon/redis",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ioredis": "6.0.0"
+  },
+  "devDependencies": {
+    "bullmq": "6.1.2"
+  }
+}
