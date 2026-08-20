@@ -534,6 +534,7 @@ interface AgendaProblemStatus {
   readonly STALE_VERSION: 409;
   readonly OFFER_EXPIRED: 409;
   readonly VALIDATION_FAILED: 422;
+  readonly RATE_LIMITED: 429;
   readonly IDEMPOTENCY_KEY_REUSED: 409;
   readonly IDEMPOTENCY_IN_PROGRESS: 409;
   readonly INTERNAL_ERROR: 500;
@@ -557,6 +558,7 @@ const readProblems = {
   permission: problem('EVENT_ACCESS_DENIED', 403),
   disabled: problem('AGENDA_DISABLED', 409),
   validation: problem('VALIDATION_FAILED', 422),
+  rate_limited: problem('RATE_LIMITED', 429),
   internal_error: problem('INTERNAL_ERROR', 500),
 } as const;
 

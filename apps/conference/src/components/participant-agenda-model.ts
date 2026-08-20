@@ -161,7 +161,9 @@ export const participantAgendaCapacityCopy = (
     return 'Rezervace jsou uzavřené.';
   }
   if (item.state === 'waitlisted' && item.waitlist.state === 'waiting') {
-    return `K okamžité rezervaci zbývá 0 míst. V čekací listině už jste na ${item.waitlist.position}. místě; není potřeba žádat znovu.`;
+    return item.capacity.remaining === 0
+      ? `K okamžité rezervaci zbývá 0 míst. V čekací listině už jste na ${item.waitlist.position}. místě; není potřeba žádat znovu.`
+      : `Volná kapacita: ${item.capacity.remaining}. V čekací listině zůstáváte na ${item.waitlist.position}. místě a čekáte na zpracování serverem; není potřeba žádat znovu.`;
   }
   if (item.action.state === 'capacity_full') {
     const held =
@@ -202,6 +204,7 @@ export const participantAgendaActions = (
   }
 
   if (item.state === 'reserved') {
+    if (item.reservation.cancellation?.state === 'unavailable') return [];
     return [
       {
         label: 'Zrušit rezervaci',
@@ -212,6 +215,7 @@ export const participantAgendaActions = (
   }
 
   if (item.state === 'waitlisted') {
+    if (item.waitlist.actionsAvailable === false) return [];
     if (item.waitlist.state === 'waiting') {
       return [
         {
@@ -281,7 +285,11 @@ export const agendaOfferIntents = (
   readonly accept: AgendaOfferMutationIntent;
   readonly decline: AgendaOfferMutationIntent;
 } | null => {
-  if (item.state !== 'waitlisted' || item.waitlist.state !== 'offered') {
+  if (
+    item.state !== 'waitlisted' ||
+    item.waitlist.state !== 'offered' ||
+    item.waitlist.actionsAvailable === false
+  ) {
     return null;
   }
   return {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   accounts,
+  agendaItems,
   auditLogs,
   consentRecords,
   eventFeatures,
@@ -13,9 +14,13 @@ import {
   legalDocuments,
   outboxEvents,
   participantProfiles,
+  participantAgendas,
+  privacyRequests,
+  reservations,
   sessions,
   users,
   verifications,
+  waitlistEntries,
 } from './index.js';
 
 const tables = [
@@ -33,6 +38,11 @@ const tables = [
   outboxEvents,
   idempotencyKeys,
   participantProfiles,
+  participantAgendas,
+  agendaItems,
+  privacyRequests,
+  reservations,
+  waitlistEntries,
 ];
 
 describe('stage 2 database schema', () => {
@@ -60,6 +70,11 @@ describe('stage 2 database schema', () => {
     outboxEvents,
     idempotencyKeys,
     participantProfiles,
+    participantAgendas,
+    agendaItems,
+    privacyRequests,
+    reservations,
+    waitlistEntries,
   ])('$0 is explicitly event-scoped', (table) => {
     expect(
       getTableConfig(table).columns.map((column) => column.name),
@@ -76,11 +91,97 @@ describe('stage 2 database schema', () => {
         'user_id',
         'first_name',
         'last_name',
+        'company',
         'contact_email',
         'networking_enabled',
         'onboarding_completed_at',
+        'version',
       ]),
     );
+  });
+
+  it('keeps active roster sources unique and event-scoped', () => {
+    const reservationConfig = getTableConfig(reservations);
+    const waitlistConfig = getTableConfig(waitlistEntries);
+
+    expect(
+      reservationConfig.indexes.some(
+        (index) =>
+          index.config.name === 'reservations_active_user_session_unique' &&
+          index.config.unique &&
+          index.config.where,
+      ),
+    ).toBeTruthy();
+    expect(
+      waitlistConfig.indexes.some(
+        (index) =>
+          index.config.name ===
+            'waitlist_entries_waiting_user_session_unique' &&
+          index.config.unique &&
+          index.config.where,
+      ),
+    ).toBeTruthy();
+    expect(
+      reservationConfig.foreignKeys.some(
+        (key) =>
+          key
+            .reference()
+            .columns.map((column) => column.name)
+            .join(',') === 'event_id,session_id',
+      ),
+    ).toBe(true);
+    expect(
+      waitlistConfig.foreignKeys.some(
+        (key) =>
+          key
+            .reference()
+            .columns.map((column) => column.name)
+            .join(',') === 'event_id,user_id',
+      ),
+    ).toBe(true);
+  });
+
+  it('stores one versioned agenda root and one projection per participant session', () => {
+    const agendaConfig = getTableConfig(participantAgendas);
+    const itemConfig = getTableConfig(agendaItems);
+
+    expect(
+      agendaConfig.primaryKeys[0]?.columns.map(({ name }) => name),
+    ).toEqual(['event_id', 'user_id']);
+    expect(itemConfig.primaryKeys[0]?.columns.map(({ name }) => name)).toEqual([
+      'event_id',
+      'user_id',
+      'session_id',
+    ]);
+    expect(
+      itemConfig.foreignKeys.some(
+        (key) =>
+          key.reference().foreignTable === participantAgendas &&
+          key
+            .reference()
+            .columns.map(({ name }) => name)
+            .join(',') === 'event_id,user_id',
+      ),
+    ).toBe(true);
+    expect(
+      itemConfig.foreignKeys.some(
+        (key) =>
+          key
+            .reference()
+            .columns.map(({ name }) => name)
+            .join(',') === 'event_id,session_id',
+      ),
+    ).toBe(true);
+  });
+
+  it('stores one event-scoped privacy request per user and kind', () => {
+    expect(
+      getTableConfig(privacyRequests).indexes.some(
+        (index) =>
+          index.config.name === 'privacy_requests_event_user_kind_unique' &&
+          index.config.unique,
+      ),
+    ).toBe(true);
   });
 
   it('deduplicates consent records for a retried onboarding request', () => {

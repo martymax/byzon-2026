@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const pageMocks = vi.hoisted(() => ({
-  frontendPreviewAvailable: vi.fn(),
   loadCurrentEventId: vi.fn(),
   sessionView: vi.fn(),
 }));
@@ -14,30 +13,24 @@ vi.mock('@/components/program-view', () => ({
   },
 }));
 
-vi.mock('@/lib/frontend-preview', () => ({
-  isFrontendPreviewAvailable: pageMocks.frontendPreviewAvailable,
-}));
-
 vi.mock('@/server/current-event', () => ({
   loadCurrentEventId: pageMocks.loadCurrentEventId,
 }));
 
 import SessionPage from './page';
 
-describe('participant session agenda preview boundary', () => {
+describe('participant session agenda boundary', () => {
   beforeEach(() => {
-    pageMocks.frontendPreviewAvailable.mockReset();
     pageMocks.loadCurrentEventId.mockReset();
     pageMocks.sessionView.mockReset();
   });
 
   it.each([
-    [false, false, 'program'],
-    [true, true, 'agenda'],
+    [undefined, 'program'],
+    ['agenda', 'agenda'],
   ] as const)(
-    'maps preview availability %s to agenda action %s and %s return',
-    async (previewAvailable, showAgendaAction, returnOrigin) => {
-      pageMocks.frontendPreviewAvailable.mockReturnValueOnce(previewAvailable);
+    'shows the live agenda action and maps return origin %s to %s',
+    async (from, returnOrigin) => {
       pageMocks.loadCurrentEventId.mockResolvedValueOnce(
         '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
       );
@@ -47,7 +40,7 @@ describe('participant session agenda preview boundary', () => {
           params: Promise.resolve({ sessionId: 'session-1' }),
           searchParams: Promise.resolve({
             day: '2026-09-18',
-            from: 'agenda',
+            ...(from ? { from } : {}),
           }),
         }),
       );
@@ -55,7 +48,7 @@ describe('participant session agenda preview boundary', () => {
       expect(pageMocks.sessionView).toHaveBeenCalledWith(
         expect.objectContaining({
           returnOrigin,
-          showAgendaAction,
+          showAgendaAction: true,
         }),
       );
     },

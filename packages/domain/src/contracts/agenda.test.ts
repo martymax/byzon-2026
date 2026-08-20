@@ -105,6 +105,22 @@ const offeredItem = {
   },
 };
 
+const promotionPendingItem = {
+  ...offeredItem,
+  capacity: {
+    ...reservationCapacity,
+    actorAvailability: { state: 'unavailable' as const },
+  },
+  action: { state: 'available' as const },
+  waitlist: {
+    id: ids.waitlist,
+    state: 'waiting' as const,
+    joinedAt: '2026-09-18T05:00:00.000Z',
+    position: 1,
+    actionsAvailable: false,
+  },
+};
+
 const response = {
   eventId: ids.event,
   userId: ids.user,
@@ -240,6 +256,25 @@ describe('CS-AGENDA-01 participant contracts', () => {
     expect(
       participantAgendaResponseSchema.parse({
         ...response,
+        items: [
+          {
+            ...reservedItem,
+            reservation: {
+              ...reservedItem.reservation,
+              cancellation: {
+                state: 'unavailable',
+                reason: 'policy_pending',
+              },
+            },
+          },
+        ],
+      }).items[0],
+    ).toMatchObject({
+      reservation: { cancellation: { state: 'unavailable' } },
+    });
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
         items: [offeredItem],
       }).items[0],
     ).toMatchObject({
@@ -250,10 +285,99 @@ describe('CS-AGENDA-01 participant contracts', () => {
     expect(
       participantAgendaResponseSchema.parse({
         ...response,
+        items: [
+          {
+            ...offeredItem,
+            waitlist: { ...offeredItem.waitlist, actionsAvailable: false },
+          },
+        ],
+      }).items[0],
+    ).toMatchObject({ waitlist: { actionsAvailable: false } });
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
+        items: [promotionPendingItem],
+      }).items[0],
+    ).toMatchObject({
+      state: 'waitlisted',
+      action: { state: 'available' },
+      capacity: {
+        remaining: 1,
+        actorAvailability: { state: 'unavailable' },
+      },
+      waitlist: { state: 'waiting', position: 1, actionsAvailable: false },
+    });
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...promotionPendingItem,
+            waitlist: {
+              ...promotionPendingItem.waitlist,
+              actionsAvailable: true,
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...promotionPendingItem,
+            capacity: {
+              ...promotionPendingItem.capacity,
+              actorAvailability: { state: 'available' },
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...reservedItem,
+            reservation: {
+              ...reservedItem.reservation,
+              cancellation: { state: 'unavailable', reason: 'unknown' },
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
         items: [],
         calendarExport: { state: 'unavailable', reason: 'empty' },
       }),
     ).toMatchObject({ items: [], calendarExport: { reason: 'empty' } });
+  });
+
+  it('keeps a non-empty agenda honest while calendar export is not integrated', () => {
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
+        calendarExport: { state: 'unavailable', reason: 'not_ready' },
+      }).calendarExport,
+    ).toEqual({ state: 'unavailable', reason: 'not_ready' });
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        calendarExport: { state: 'unavailable', reason: 'empty' },
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [],
+        calendarExport: { state: 'unavailable', reason: 'not_ready' },
+      }).success,
+    ).toBe(false);
   });
 
   it('derives agenda days from the event timezone across UTC midnight', () => {
@@ -609,6 +733,42 @@ describe('CS-AGENDA-01 participant contracts', () => {
         }).success,
       ).toBe(false);
     }
+  });
+
+  it('accepts an explicit superseded replay against the current canonical snapshot', () => {
+    const supersededAdd = {
+      ...response,
+      version: 8,
+      items: [],
+      calendarExport: {
+        state: 'unavailable' as const,
+        reason: 'empty' as const,
+      },
+      mutation: {
+        sessionId: ids.session,
+        action: 'add' as const,
+        outcome: 'superseded' as const,
+      },
+      timeConflict: null,
+    };
+    expect(
+      participantAgendaMutationResponseSchema.parse(supersededAdd),
+    ).toEqual(supersededAdd);
+
+    const supersededRemove = {
+      ...response,
+      version: 9,
+      items: [savedItem],
+      mutation: {
+        sessionId: ids.session,
+        action: 'remove' as const,
+        outcome: 'superseded' as const,
+      },
+      timeConflict: null,
+    };
+    expect(
+      participantAgendaMutationResponseSchema.parse(supersededRemove),
+    ).toEqual(supersededRemove);
   });
 
   it('accepts canonical removal of source-less reservation and waitlist projections', () => {

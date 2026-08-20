@@ -1,4 +1,5 @@
 import { createDatabaseClient, schema } from '@byzon/database';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,6 +8,7 @@ import {
   SESSION_UPDATE_AGE_SECONDS,
 } from './auth';
 import { logoutAllSessions } from './logout-all';
+import { performIdentitySessionAction } from './identity';
 import { FakeAuthMailProvider } from './mail';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -114,7 +116,9 @@ integration('magic-link authentication integration', () => {
         createdAt: schema.sessions.createdAt,
         expiresAt: schema.sessions.expiresAt,
       })
-      .from(schema.sessions);
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.users.email, email));
 
     expect(stored).toHaveLength(1);
     expect(
@@ -141,7 +145,11 @@ integration('magic-link authentication integration', () => {
   it('revokes every session and expires the caller cookie', async () => {
     const firstCookie = await createSession();
     const secondCookie = await createSession();
-    const before = await client.db.select().from(schema.sessions);
+    const before = await client.db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.users.email, email));
     expect(before).toHaveLength(2);
 
     const response = await logoutAllSessions(
@@ -174,7 +182,11 @@ integration('magic-link authentication integration', () => {
       requestId: 'logout-all-test-request',
     });
 
-    const remaining = await client.db.select().from(schema.sessions);
+    const remaining = await client.db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.users.email, email));
     expect(remaining).toHaveLength(0);
 
     for (const cookie of [firstCookie, secondCookie]) {
@@ -184,6 +196,76 @@ integration('magic-link authentication integration', () => {
         }),
       );
       expect(await session.json()).toBeNull();
+    }
+  });
+
+  it('executes the integrated current-session account action with Better Auth cookies', async () => {
+    const cookie = await createSession();
+    const before = await auth.api.getSession({
+      headers: new Headers({ cookie }),
+    });
+    expect(before?.session.id).toBeTruthy();
+
+    const actionRequest = () =>
+      new Request('http://localhost:3000/api/v1/me/session-action', {
+        method: 'POST',
+        headers: {
+          cookie,
+          origin: 'http://localhost:3000',
+          'content-type': 'application/json',
+          'idempotency-key': 'auth-session-action-key',
+          'x-request-id': 'auth-session-action-request',
+        },
+        body: JSON.stringify({ action: 'logout_current' }),
+      });
+    const actionDependencies = {
+      auth,
+      db: client.db,
+      allowedOrigin: 'http://localhost:3000',
+      getSession: (headers: Headers) => auth.api.getSession({ headers }),
+    };
+    const response = await performIdentitySessionAction(
+      actionRequest(),
+      actionDependencies,
+    );
+
+    expect(response.status).toBe(200);
+    const firstBody = await response.json();
+    expect(response.headers.getSetCookie()).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /^better-auth\.session_token=;.*Max-Age=0.*HttpOnly.*SameSite=Lax/,
+        ),
+      ]),
+    );
+    expect(firstBody).toMatchObject({
+      action: 'logout_current',
+      effect: 'completed',
+      state: 'signed_out',
+    });
+    await expect(
+      auth.api.getSession({ headers: new Headers({ cookie }) }),
+    ).resolves.toBeNull();
+
+    const replay = await performIdentitySessionAction(
+      actionRequest(),
+      actionDependencies,
+    );
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(await replay.json()).toEqual(firstBody);
+
+    const event = await client.db.query.events.findFirst({
+      columns: { id: true },
+      where: eq(schema.events.slug, 'byzon-2026'),
+    });
+    if (event) {
+      await client.db
+        .delete(schema.idempotencyKeys)
+        .where(eq(schema.idempotencyKeys.eventId, event.id));
+      await client.db
+        .delete(schema.auditLogs)
+        .where(eq(schema.auditLogs.targetId, before!.session.id));
     }
   });
 

@@ -3,7 +3,10 @@
 import type { ParticipantAgendaItem } from '@byzon/domain/contracts';
 import { Button } from '@byzon/ui';
 
-import { participantAgendaActions } from './participant-agenda-model';
+import {
+  agendaOfferIntents,
+  participantAgendaActions,
+} from './participant-agenda-model';
 import type { ParticipantAgendaResource } from './participant-agenda-resource';
 
 export const ParticipantAgendaItemActions = ({
@@ -15,8 +18,7 @@ export const ParticipantAgendaItemActions = ({
   readonly onOpenOffer: (item: ParticipantAgendaItem) => void;
   readonly resource: ParticipantAgendaResource;
 }) => {
-  const offered =
-    item.state === 'waitlisted' && item.waitlist.state === 'offered';
+  const offered = agendaOfferIntents(item) !== null;
   const actions = participantAgendaActions(item);
   const offline = resource.offline.cached;
   const visibleActions = offline

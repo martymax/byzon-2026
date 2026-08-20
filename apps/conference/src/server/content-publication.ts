@@ -11,8 +11,9 @@ import {
   type DatabaseTransaction,
 } from '@byzon/database';
 import {
+  publishedAgendaReservationWindowsSchema,
   publishedContentSnapshotSchema,
-  publishedProgramSnapshotSchema,
+  publishedProgramAgendaSnapshotSchema,
 } from '@byzon/domain/contracts';
 
 import { requireWritableAdminEvent } from './admin-event-writability';
@@ -66,7 +67,7 @@ export const requirePublicationChanges = (
 export const parseContentPublicationSnapshot = (
   snapshot: unknown,
 ): Record<string, unknown> => {
-  const parsed = publishedProgramSnapshotSchema
+  const parsed = publishedProgramAgendaSnapshotSchema
     .and(publishedContentSnapshotSchema)
     .safeParse(snapshot);
   if (!parsed.success)
@@ -77,6 +78,21 @@ export const parseContentPublicationSnapshot = (
       ),
     );
   return parsed.data;
+};
+
+const reservationWindowsForSnapshot = (snapshot: unknown) => {
+  const program = publishedProgramAgendaSnapshotSchema.parse(snapshot).program;
+  return publishedAgendaReservationWindowsSchema.parse(
+    Object.fromEntries(
+      program.sessions.map((session) => [
+        session.id,
+        {
+          reservationOpensAt: session.reservationOpensAt ?? null,
+          reservationClosesAt: session.reservationClosesAt ?? null,
+        },
+      ]),
+    ),
+  );
 };
 
 const withoutKeys = (
@@ -388,6 +404,7 @@ export const publishContent = async (
       eventId: input.eventId,
       version: result.version,
       snapshot,
+      reservationWindows: reservationWindowsForSnapshot(snapshot),
       checksumSha256: result.checksumSha256,
       publishedBy: input.actorId,
     });

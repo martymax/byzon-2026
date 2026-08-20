@@ -523,6 +523,31 @@ describe('F3-01..F3-05 participant agenda', () => {
     ).toHaveLength(0);
   });
 
+  it('does not expose an offered-place flow when server actions are disabled', async () => {
+    const offered = participantAgendaFixtures.offered!;
+    const item = offered.items[0];
+    if (!item || item.state !== 'waitlisted') {
+      throw new TypeError('Offered fixture must expose a waitlist entry.');
+    }
+    const disabledOffer = participantAgendaResponseSchema.parse({
+      ...offered,
+      items: [
+        {
+          ...item,
+          waitlist: { ...item.waitlist, actionsAvailable: false },
+        },
+      ],
+    });
+    const { api } = agendaApiFor({ onRead: disabledOffer });
+    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+
+    await expect.element(screen.getByText('Nabídnuté místo')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Otevřít nabídku místa' }).elements(),
+    ).toHaveLength(0);
+    expect(screen.getByRole('dialog').elements()).toHaveLength(0);
+  });
+
   it('adds a session from its detail and adopts only the canonical saved response', async () => {
     const { api, fetch } = agendaApiFor({
       onRead: participantAgendaFixtures.empty!,

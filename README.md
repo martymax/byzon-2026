@@ -92,8 +92,13 @@ Nová aplikace žije vedle veřejného webu v pnpm monorepu. Vyžaduje Node verz
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
+pnpm dev:infra
 pnpm dev
 ```
+
+`dev:infra` spustí verzovaný PostgreSQL 17 a Redis 8.2 pouze na lokálním
+loopbacku. Redis používá AOF a `noeviction`, stejně jako vyžaduje BullMQ; služby
+lze zastavit přes `pnpm dev:infra:down` bez smazání jejich volumes.
 
 Kontroly aplikace spustíte přes `pnpm run ci`, browser smoke přes `pnpm test:e2e`.
 Railway staging postup je v `docs/runbooks/railway-staging.md`.

@@ -5,12 +5,46 @@ import { ApiProblemError } from './problem';
 import {
   consumeRateLimit,
   enforceRateLimit,
+  hashRateLimitSubject,
   type AtomicRateLimitStore,
 } from './rate-limit';
 
 const subjectHash = createHash('sha256').update('test-subject').digest('hex');
 
 describe('rate limit abstraction', () => {
+  it('creates environment-keyed opaque subjects with unambiguous parts', () => {
+    const secret = 'test-rate-limit-secret-at-least-32-characters';
+    const digest = hashRateLimitSubject(secret, [
+      'staging',
+      'event-id',
+      'user-id',
+    ]);
+
+    expect(digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(digest).not.toContain('user-id');
+    expect(hashRateLimitSubject(secret, ['ab', 'c'])).not.toBe(
+      hashRateLimitSubject(secret, ['a', 'bc']),
+    );
+    expect(
+      hashRateLimitSubject('another-rate-limit-secret-at-least-32-characters', [
+        'staging',
+        'event-id',
+        'user-id',
+      ]),
+    ).not.toBe(digest);
+  });
+
+  it('rejects weak keys and empty subject parts', () => {
+    expect(() => hashRateLimitSubject('too-short', ['user-id'])).toThrow(
+      'Invalid rate limit subject',
+    );
+    expect(() =>
+      hashRateLimitSubject('test-rate-limit-secret-at-least-32-characters', [
+        '',
+      ]),
+    ).toThrow('Invalid rate limit subject');
+  });
+
   it('passes only an opaque bucket to the atomic store', async () => {
     const consume = vi.fn(async () => ({
       count: 2,

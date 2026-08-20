@@ -284,6 +284,7 @@ describe('CS-AGENDA-01 participant browser adapter', () => {
       'EVENT_ACCESS_DENIED',
       'AGENDA_DISABLED',
       'VALIDATION_FAILED',
+      'RATE_LIMITED',
       'INTERNAL_ERROR',
     ]);
     expect(participantAgendaMutationEndpoint.problemCodes).toEqual([
@@ -291,6 +292,7 @@ describe('CS-AGENDA-01 participant browser adapter', () => {
       'AUTH_SESSION_EXPIRED',
       'EVENT_ACCESS_DENIED',
       'AGENDA_DISABLED',
+      'RATE_LIMITED',
       'INTERNAL_ERROR',
       'SESSION_NOT_FOUND',
       'TICKET_INACTIVE',

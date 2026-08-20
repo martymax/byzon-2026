@@ -9,7 +9,9 @@ const valid = {
   LOG_LEVEL: 'info',
   RELEASE_SHA: 'abc123',
   DATABASE_URL: 'postgresql://postgres.internal:5432/railway',
+  REDIS_URL: 'redis://redis.internal:6379',
   BETTER_AUTH_SECRET: 'staging-test-secret-at-least-32-characters',
+  RATE_LIMIT_SUBJECT_SECRET: 'staging-rate-limit-secret-at-least-32-characters',
 };
 
 describe('environment schema', () => {
