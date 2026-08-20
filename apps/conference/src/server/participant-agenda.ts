@@ -741,7 +741,7 @@ export const loadParticipantAgendaSnapshot = async (
   db: Database,
   context: AgendaContext,
   userId: string,
-  now: Date,
+  getNow: () => Date,
   onOperationalDrift?: (drift: ParticipantAgendaOperationalDrift) => void,
 ): Promise<ParticipantAgendaResponse> =>
   db.transaction(async (transaction) => {
@@ -749,6 +749,7 @@ export const loadParticipantAgendaSnapshot = async (
       transaction,
       participantAgendaLockKey(context.event.id, userId),
     );
+    const now = getNow();
     return loadParticipantAgendaSnapshotUnlocked(
       transaction,
       context,
@@ -976,7 +977,8 @@ export const readParticipantAgenda = async (
     const session = await requireSession(request, dependencies);
     rateLimitDecision =
       (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
-    const now = dependencies.now?.() ?? new Date();
+    const getNow = dependencies.now ?? (() => new Date());
+    const now = getNow();
     const context = await loadAgendaContext(
       dependencies,
       session.user.id,
@@ -987,7 +989,7 @@ export const readParticipantAgenda = async (
       dependencies.db,
       context,
       session.user.id,
-      now,
+      getNow,
       dependencies.onOperationalDrift,
     );
     return withRateLimitHeaders(
@@ -1007,15 +1009,15 @@ export const mutateParticipantAgenda = async (
   dependencies: ParticipantAgendaDependencies,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
+  const getNow = dependencies.now ?? (() => new Date());
   let rateLimitDecision: RateLimitDecision | null = null;
-  let canonical:
-    { context: AgendaContext; now: Date; userId: string } | undefined;
+  let canonical: { context: AgendaContext; userId: string } | undefined;
   try {
     const key = requireMutationTransport(request, dependencies.allowedOrigin);
     const session = await requireSession(request, dependencies);
     rateLimitDecision =
       (await dependencies.rateLimit?.('mutation', session.user.id)) ?? null;
-    const now = dependencies.now?.() ?? new Date();
+    const now = getNow();
     let responseNow = now;
     const context = await loadAgendaContext(
       dependencies,
@@ -1023,8 +1025,7 @@ export const mutateParticipantAgenda = async (
       now,
       true,
     );
-    const canonicalState = { context, now, userId: session.user.id };
-    canonical = canonicalState;
+    canonical = { context, userId: session.user.id };
     const json = await readBoundedJson(request);
     const parsed = participantAgendaMutationRequestSchema.safeParse(json.value);
     if (!parsed.success) throw validationFailed(zodFieldErrors(parsed.error));
@@ -1037,7 +1038,7 @@ export const mutateParticipantAgenda = async (
         action: ['This agenda action is not enabled in the current rollout.'],
       });
     }
-    targetPublishedSession(context, parsed.data.sessionId, parsed.data.action);
+    const action: AgendaMutationReceipt['action'] = parsed.data.action;
     const generateId = dependencies.generateId ?? generateUuidV7;
     const result = await executeIdempotentMutation(
       dependencies.db,
@@ -1056,6 +1057,7 @@ export const mutateParticipantAgenda = async (
         generateId,
       },
       async (transaction) => {
+        targetPublishedSession(context, parsed.data.sessionId, action);
         await acquireTransactionLock(
           transaction,
           participantAgendaLockKey(context.event.id, session.user.id),
@@ -1209,9 +1211,8 @@ export const mutateParticipantAgenda = async (
           ) {
             throw sessionNotFound();
           }
-          const reservationNow = dependencies.now?.() ?? new Date();
+          const reservationNow = getNow();
           responseNow = reservationNow;
-          canonicalState.now = reservationNow;
           const opensAt =
             operationalTarget.reservationOpensAt?.getTime() ??
             Number.NEGATIVE_INFINITY;
@@ -1321,7 +1322,7 @@ export const mutateParticipantAgenda = async (
       dependencies.db,
       context,
       session.user.id,
-      responseNow,
+      getNow,
       dependencies.onOperationalDrift,
     );
     const responseSuperseded = !receiptPostconditionHolds(snapshot, receipt);
@@ -1357,7 +1358,7 @@ export const mutateParticipantAgenda = async (
           dependencies.db,
           canonical.context,
           canonical.userId,
-          canonical.now,
+          getNow,
           dependencies.onOperationalDrift,
         );
         return withRateLimitHeaders(

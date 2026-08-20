@@ -203,10 +203,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   verze, auditu či duplicitní uložené vrstvy. Finální review navíc serializuje
   GET snapshot participant lockem, hlídá 512 unikátních položek přes sjednocení
   save/reservation/waitlist ještě před add a dovolí odstranit uloženou session
-  zrušenou v poslední publikaci. Po rebase a rate-limit zapojení
+  zrušenou v poslední publikaci. Následná kontrola přesunula snapshotový
+  `serverNow` až za participant lock a zachovala exact-key replay i po novější
+  publikaci, která cílovou session odstranila. Po rebase a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
-  9/9, agenda HTTP 17/17 a conference 545/545 bez skipů. Globální
-  gate prošel bez lint chyb včetně 879 workspace testů, všech
+  9/9, agenda HTTP 18/18 a conference 546/546 bez skipů. Globální
+  gate prošel bez lint chyb včetně 880 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a
   static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency

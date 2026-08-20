@@ -9,8 +9,9 @@ import {
   participantAgendaMutationResponseSchema,
   participantAgendaProblemSchema,
   participantAgendaResponseSchema,
+  publishedProgramSnapshotSchema,
 } from '@byzon/domain/contracts';
-import { and, count, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -53,6 +54,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const projectedWaitlistUserId = crypto.randomUUID();
   const cancelledPublicationUserId = crypto.randomUUID();
   const consistentReadUserId = crypto.randomUUID();
+  const publicationReplayUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -160,6 +162,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       projectedWaitlistUserId,
       cancelledPublicationUserId,
       consistentReadUserId,
+      publicationReplayUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -183,6 +186,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         projectedWaitlistUserId,
         cancelledPublicationUserId,
         consistentReadUserId,
+        publicationReplayUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -204,6 +208,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         projectedWaitlistUserId,
         cancelledPublicationUserId,
         consistentReadUserId,
+        publicationReplayUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -530,16 +535,22 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         userId: consistentReadUserId,
         sessionId: savedSessionId,
         source: 'manual',
+        createdAt: new Date(fixedNow.getTime() + 1_000),
       });
       signalWriterLocked();
       await writerRelease;
     });
     await writerLocked;
 
-    const reading = readParticipantAgenda(
-      readRequest(),
-      dependencies(consistentReadUserId),
-    );
+    const snapshotNow = new Date(fixedNow.getTime() + 1_000);
+    const authoritativeNow = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(fixedNow)
+      .mockReturnValue(snapshotNow);
+    const reading = readParticipantAgenda(readRequest(), {
+      ...dependencies(consistentReadUserId),
+      now: authoritativeNow,
+    });
     const stateBeforeWriterCommit = await Promise.race([
       reading.then(() => 'settled' as const),
       new Promise<'blocked'>((resolve) => {
@@ -551,11 +562,13 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     const response = await reading;
 
     expect(stateBeforeWriterCommit).toBe('blocked');
+    expect(authoritativeNow).toHaveBeenCalledTimes(2);
     expect(response.status).toBe(200);
     expect(
       participantAgendaResponseSchema.parse(await response.json()),
     ).toMatchObject({
       version: 2,
+      serverNow: snapshotNow.toISOString(),
       items: [{ state: 'saved', session: { id: savedSessionId } }],
     });
   });
@@ -1098,7 +1111,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       },
     );
 
-    expect(authoritativeNow).toHaveBeenCalledTimes(2);
+    expect(authoritativeNow).toHaveBeenCalledTimes(3);
     expect(response.status).toBe(409);
     expect(
       participantAgendaMutationProblemSchema.parse(await response.json()),
@@ -1356,6 +1369,55 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     ).toMatchObject({
       version: 1,
       items: [{ state: 'reserved', session: { id: closedSessionId } }],
+    });
+  });
+
+  it('replays a successful mutation after a newer publication removes its target', async () => {
+    const body = {
+      action: 'add' as const,
+      sessionId: savedSessionId,
+      expectedVersion: 1,
+    };
+    const key = 'agenda-replay-after-publication-0001';
+    const added = await mutate(publicationReplayUserId, body, key);
+    expect(added.status).toBe(200);
+
+    const publication = await client.db.query.contentPublications.findFirst({
+      columns: { snapshot: true, version: true },
+      where: eq(schema.contentPublications.eventId, eventId),
+      orderBy: [desc(schema.contentPublications.version)],
+    });
+    const published = publishedProgramSnapshotSchema.parse(
+      publication?.snapshot,
+    );
+    await client.db.insert(schema.contentPublications).values({
+      id: crypto.randomUUID(),
+      eventId,
+      version: (publication?.version ?? 0) + 1,
+      snapshot: {
+        program: {
+          ...published.program,
+          sessions: published.program.sessions.filter(
+            ({ id }) => id !== savedSessionId,
+          ),
+        },
+      },
+      checksumSha256: 'b'.repeat(64),
+      publishedBy: publisherId,
+      publishedAt: new Date(fixedNow.getTime() + 2_000),
+    });
+
+    const replay = await mutate(publicationReplayUserId, body, key);
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      participantAgendaMutationResponseSchema.parse(await replay.json()),
+    ).toMatchObject({
+      version: 2,
+      publicationVersion: (publication?.version ?? 0) + 1,
+      items: [],
+      mutation: { action: 'add', outcome: 'superseded' },
+      timeConflict: null,
     });
   });
 
