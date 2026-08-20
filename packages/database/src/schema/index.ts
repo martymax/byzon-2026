@@ -4,4 +4,5 @@ export * from './events.js';
 export * from './legal.js';
 export * from './operations.js';
 export * from './profiles.js';
+export * from './privacy.js';
 export * from './tickets.js';

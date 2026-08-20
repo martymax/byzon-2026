@@ -40,6 +40,30 @@ Session expiry, refresh age and freshness are explicitly configured in
 `server/auth.ts`. Keep these values aligned with the cookie lifetime and cover
 changes with the PostgreSQL-backed HTTP integration test.
 
+## Identity and account
+
+`GET /api/v1/me/bootstrap` resolves the canonical event on the server and
+derives the user exclusively from the Better Auth session. It never accepts an
+event or user identifier from the browser. Bootstrap, onboarding, profile,
+privacy and session-action responses are `private, no-store` and vary by Cookie
+and Authorization.
+
+All `/api/v1/me` mutations require the exact `APP_BASE_URL` origin. Onboarding
+uses both a hashed idempotency key with a stored response DTO and a deterministic
+request UUID for append-only consent deduplication. Profile updates use a
+per-owner lock and resource version; privacy and session actions also execute
+their database writes in the idempotency transaction. Current legal documents
+must contain contract-safe plain text or a credential-free HTTPS URL. Missing
+or stale legal configuration fails closed.
+
+`POST /api/v1/me/session-action` asks Better Auth for its canonical cookie
+clearance before atomically revoking the selected session scope. The server DTO
+never claims that browser-local P2 data was cleared; the client performs and
+reports that separate in-memory/offline wipe after the response is correlated.
+After revocation, a bounded exact-fingerprint replay may use the unexpired
+idempotency key as a bearer capability; it returns only the stored non-PII DTO
+and fails closed if the key is absent, ambiguous or paired with different bytes.
+
 ## Published participant program
 
 `GET /api/v1/events/:eventId/program` requires an active event membership with

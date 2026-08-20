@@ -58,7 +58,7 @@ export const hashIdempotencyRequest = (
     .update(input.body)
     .digest('hex');
 
-const hashKey = (key: string): string =>
+export const hashIdempotencyKey = (key: string): string =>
   createHash('sha256').update(key).digest('hex');
 
 export interface IdempotentMutationInput {
@@ -144,7 +144,7 @@ export const executeIdempotentMutation = async <
   validateInput(input);
   const now = input.now ?? new Date();
   if (!Number.isFinite(now.getTime())) throw keyInvalid();
-  const storedKey = hashKey(input.key);
+  const storedKey = hashIdempotencyKey(input.key);
   const generateId = input.generateId ?? generateUuidV7;
 
   return withTransaction(db, async (transaction) => {

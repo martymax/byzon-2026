@@ -13,6 +13,7 @@ import {
   legalDocuments,
   outboxEvents,
   participantProfiles,
+  privacyRequests,
   sessions,
   users,
   verifications,
@@ -33,6 +34,7 @@ const tables = [
   outboxEvents,
   idempotencyKeys,
   participantProfiles,
+  privacyRequests,
 ];
 
 describe('stage 2 database schema', () => {
@@ -60,6 +62,7 @@ describe('stage 2 database schema', () => {
     outboxEvents,
     idempotencyKeys,
     participantProfiles,
+    privacyRequests,
   ])('$0 is explicitly event-scoped', (table) => {
     expect(
       getTableConfig(table).columns.map((column) => column.name),
@@ -79,8 +82,19 @@ describe('stage 2 database schema', () => {
         'contact_email',
         'networking_enabled',
         'onboarding_completed_at',
+        'version',
       ]),
     );
+  });
+
+  it('stores one event-scoped privacy request per user and kind', () => {
+    expect(
+      getTableConfig(privacyRequests).indexes.some(
+        (index) =>
+          index.config.name === 'privacy_requests_event_user_kind_unique' &&
+          index.config.unique,
+      ),
+    ).toBe(true);
   });
 
   it('deduplicates consent records for a retried onboarding request', () => {

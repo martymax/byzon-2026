@@ -116,8 +116,9 @@ cache.
 
 Development fixtures nesou explicitní `dataMode: synthetic_preview` a právní
 texty jsou označené jako neschválený syntetický draft. Produkční texty,
-souhlasy a UAT zůstávají za `BLOCKER-LEGAL-01`; skutečná autorizace a zápis
-`P4-13` nejsou mockovaným dokončením předstírané.
+souhlasy a UAT zůstávají za `BLOCKER-LEGAL-01`. Produkční `/api/v1/me/*`
+autorizace a zápisy implementuje `P4-13`; syntetický preview transport zůstává
+oddělený a v produkčním buildu se nepoužívá.
 
 ## Personal agenda (`CS-AGENDA-01`)
 

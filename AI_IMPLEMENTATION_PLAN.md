@@ -665,7 +665,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | --- | --- | --- | --- | --- | --- |
 | `CS-BASE-01` | problem, session-expired, pagination a transport metadata | `packages/domain/src/contracts/base.ts` | `F0-02` | všechny `F*` | `contract ready` |
 | `CS-ACT-01` | claim outcomes, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-04`, `P4-07` | `F1` | `contract ready`; striktní landing/claim/identity/link/recovery kontrakt a validované syntetické fixtures |
-| `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil, session actions a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F1-06`, `F2-07` | `F1`, `F2`, `F6` | v6 `contract ready` a `UI ready (mocked)`: dvoukrokový onboarding, dobrovolný telefon, kontaktní privacy cesta a deletion bez self-exportu |
+| `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil, session actions a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F1-06`, `F2-07` | `F1`, `F2`, `F6` | `integrated`: Better Auth session, serverově zvolený event, private/no-store bootstrap, atomický onboarding, verzovaný profil, deletion request a session actions; právní UAT dál blokuje `BLOCKER-LEGAL-01` |
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started`; hotový je pouze bezpečný status-only subset bez credentialu |
 | `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-05`, `F3` | `F3`, `F6` | v6 `contract ready` bez registration estimate; networkingová rezervace a jediný promotion režim zůstávají blokované `RES-01`/`RES-04` |
@@ -1325,9 +1325,9 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
-| Aktivace a identita v6 | `UI ready (mocked)` | `F1-07` zúžil `CS-BOOT-01` a onboarding na profil + terms/privacy; networking choice, document a problem větev jsou odstraněné. Claim/recovery/session baseline zůstává contract-validovaný. | `P4-13`, `BLOCKER-AUTH-01`, `BLOCKER-TKT-04` pro integraci a `BLOCKER-LEGAL-01` pro právní UAT |
+| Aktivace a identita v6 | `UI ready (mocked)` | `P4-13` integroval celý `CS-BOOT-01` včetně autorizovaného onboardingu a session actions; agregovaná capability zůstává na nižším stavu kvůli dosud mockovanému claim/recovery handshaku. | `BLOCKER-AUTH-01` a `BLOCKER-TKT-04` pro claim/recovery integraci; `BLOCKER-LEGAL-01` pouze pro právní UAT |
 | Program a informace | `UI ready (mocked)` | `F2-01`: sdílený participant navigation primitive, pět funkčních cílů, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; `F2-02`: serverovým event statusem řízený home nad publikovaným `CS-CONTENT-01` i kanonickou osobní agendou a bezpečné pre/live/post/archivní stavy; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-05` přidal discoverable inbox; `F2-07` sjednotil sekundární cíle pod funkční `Více`; `F2-06` kryje shell, program, ticket, inbox i účet component/axe/responsive scénáři. Etapový review doplnil přesný recovery návrat přes striktní allowlist. | `BLOCKER-CONTENT-01` až pro obsahové UAT |
-| Účet, profil a soukromí Priority A v6 | `UI ready (mocked)` | `F2-08` doplnil dobrovolný E.164 telefon, `profile:own:write`/`privacy:own:write`, kontaktní cestu pro access/copy a ponechal jen deletion mutation; self-export CTA/fixture/contract branch je odstraněná. | `P4-13`, `BLOCKER-LEGAL-01` |
+| Účet, profil a soukromí Priority A v6 | `integrated` | `P4-13` napojil existující UI na Better Auth `/api/v1/me/*`, event-scoped profil s optimistic verzí, aktuální legal acknowledgement, idempotentní deletion request a auditované session controls; anonymní, cross-origin a cross-event testy failují zavřeně. | `BLOCKER-LEGAL-01` pouze pro právní obsah a UAT |
 | Agenda a rezervace v6 | `contract ready` | Agenda, rezervace, waitlist, konflikty a `.ics` zůstávají; `F3-07` odstranil registration estimate z kontraktu, fixtures, mocku a UI. Networking a výběr jediné promotion větve nelze dokončit bez produktových rozhodnutí. | `P5`; `BLOCKER-RES-01` pro networking a `BLOCKER-RES-04` pro jedinou produkční promotion větev |
 | Vstupenka účastníka | `UI ready (mocked)` | `F2-04`: dokončený status-only mocked UI řez nad striktním privátním/no-store kontraktem, validovanými fixtures a typed API portem; prezentační union přijímá pouze bezpečný unavailable stav a `F2-07` jej zpřístupnil z hubu `Více` | úplný `CS-TICKET-01`, skutečný `/me/ticket`, `P4-12` a available credential blokuje `BLOCKER-TKT-05` |
 | Offline čtení | `UI ready (mocked)` | `F6-01` až `F6-05`: versionovaný service worker, atomický public cache/rollback, last-updated/stale UX a owner/event-scoped osobní IndexedDB/queue s wipe, lease, epoch a fail-closed replay. Veřejný slice je použitelný; osobní cache/replay jsou v produkčním režimu vypnuté bez autoritativního owner lease. | `P7` a skutečný owner-lease/replay server pro integraci; fyzické PWA/UAT zůstává v `F6-06` až `F6-08` |
@@ -2029,8 +2029,9 @@ dark mode ani plošný redesign nejsou podmínkou.
   nepředvolený networking opt-in/opt-out, nic nepersistuje, failne zavřeně při
   chybějící/stale verzi a drží idempotency key pouze pro neurčitý retry.
   Syntetické drafty jsou viditelně neplatné pro produkci; mock nevytváří
-  session, membership ani consent record a integrovaný zápis zůstává v
-  `P4-13`/`BLOCKER-LEGAL-01`.
+  session, membership ani consent record. Produkční autorizovaný zápis
+  implementuje `P4-13`; právní obsah a UAT zůstávají za
+  `BLOCKER-LEGAL-01`.
 - [x] `F1-06` Implementovat již aktivovaný kód, recovery/magic-link,
   pozastavený přístup, logout a switch-account UI bez náznaku existence cizího
   účtu. Přesný syntetický already-active kód vede na neenumerující
@@ -2454,10 +2455,14 @@ fixtures a `F1`/`F4` mockované UI mohou pokračovat.
   pravidla ani udělit zvláštní roli.
 - [ ] `P4-12` Serverový kontrakt a rotovatelný prezentační credential pro
   `/me/ticket` podle `BLOCKER-TKT-05`; z HMAC/suffixu negenerovat zdrojový QR.
-- [ ] `P4-13` Implementovat `CS-BOOT-01`: autorizované `GET /me/bootstrap`,
+- [x] `P4-13` Implementovat `CS-BOOT-01`: autorizované `GET /me/bootstrap`,
   `POST /me/onboarding` a Priority A account/profile/privacy minimum nad
   doménou `P2-06`, včetně negativních event-scope testů; integrovat `F1-05`,
   `F1-06`, `F1-07`, `F2-07` a `F2-08`. Tento úkol nečeká na SimpleShop.
+  Implementace přidává také `PATCH /me/profile`, idempotentní
+  `POST /me/privacy-requests` a `POST /me/session-action`, migraci profilové
+  verze/deletion requestu, přesný Origin gate, audit bez PII a PostgreSQL
+  regrese pro anonymous/cross-event/CSRF, replay, collision a stale version.
 - [ ] `P4-14` Vygenerovat a otestovat obecný QR pouze pro
   `https://app.byzon.cz` na badge/obrazovky. Vizuálně i datově jej odlišit od
   session deep link QR a ticket/check-in credentialu.
@@ -3018,19 +3023,17 @@ web smoke zůstávají zelené. Nižší počet scénářů proti historickému 
 očekávaný důsledek odstranění vyřazených v5 větví, nikoli ztráta pokrytí
 Priority A.
 
-1. `P4-13` integruje nyní scope-aligned `CS-BOOT-01`: autorizovaný bootstrap,
-   dvoukrokový onboarding, profil s telefonem a Priority A privacy minimum.
-2. `P5-08` doplní skutečný read-only roster endpoint, assignment autorizaci a
+1. `P5-08` doplní skutečný read-only roster endpoint, assignment autorizaci a
    negativní cross-session testy pro připravené `/host/aktivity`.
-3. Mimo stejné hotspoty otevřít `P4-02` a s předaným přístupem do
+2. Mimo stejné hotspoty otevřít `P4-02` a s předaným přístupem do
    SimpleShopu získat vzorový export; produkční mapping/apply až po uzavření
    `TKT-01` až `TKT-04`.
-4. `P5-01` až `P5-06` integrují potvrzené kapacity a coaching. Zbytek
+3. `P5-01` až `P5-06` integrují potvrzené kapacity a coaching. Zbytek
    `F3-07` čeká na kapacitu/detail networkingu `BLOCKER-RES-01` a jediný
    promotion režim `BLOCKER-RES-04`; do té doby se nic nevymýšlí.
-5. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
+4. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
    ekvivalentní e-mailový kanál.
-6. `P3-11` připraví content reconciliation a 31. 8. provede finální import/UAT;
+5. `P3-11` připraví content reconciliation a 31. 8. provede finální import/UAT;
    aktuální web je vstup, publikovaná DB zůstává autoritou.
 
 Před spuštěním souběžných worktree určit jediného vlastníka kontraktů,

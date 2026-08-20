@@ -20,10 +20,16 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
-- Scope alignment v6.2 je na větvi `agent/update-ai-implementation-plan` v
-  draftu [PR #19](https://github.com/martymax/byzon-2026/pull/19). Změny jsou
-  commitnuté; navazující lokální security/code review před uzavřením PR
-  opravuje pouze potvrzené actionable nálezy a dokumentační nesoulady.
+- Scope alignment v6.2 z [PR #19](https://github.com/martymax/byzon-2026/pull/19)
+  je sloučený do `main` merge commitem `277ec06`; CI bez skipů prošlo a
+  následný security/code review nemá otevřený actionable nález.
+- `P4-13` je implementovaný, zatím necommitnutý na
+  `agent/p4-13-integrate-bootstrap`. Produkční Better Auth `/api/v1/me/*`
+  zahrnuje private/no-store bootstrap, atomický onboarding, optimistic profil,
+  event-scoped deletion request a session actions. Migrace
+  `0006_woozy_the_professor.sql` přidává profilovou verzi a tabulku
+  `privacy_requests`; nevznikla nová env proměnná. `BLOCKER-LEGAL-01` dál
+  blokuje pouze finální právní obsah/UAT, ne tuto integraci.
 - `static-site/data/content.json` nyní deterministicky
   importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
   i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
@@ -96,10 +102,49 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Legacy `minimatch 3.1.5` si zachovává malý reprodukovatelný API adapter
   patch pro moderní `brace-expansion`; aktuální přesné bezpečné verze a nulový
   audit jsou uvedené v baseline bodu výše.
-- Produkční auth, autorizované endpointy, skutečný ticket credential,
-  SimpleShop synchronizace, offline lease/replay, staging UAT a fyzická
-  zařízení zůstávají správně backend/provozními handoffy. Nejde o chybějící
-  mockované frontendové obrazovky.
+- Produkční claim/recovery handshake, skutečný ticket credential, SimpleShop
+  synchronizace, offline lease/replay, staging UAT a fyzická zařízení
+  zůstávají správně backend/provozními handoffy. Účet, profil, onboarding,
+  privacy minimum a session controls už mají autorizované produkční endpointy.
+
+## Dokončená práce (`P4-13`, před commitem)
+
+- Přidány autorizované endpointy `GET /api/v1/me/bootstrap`,
+  `POST /api/v1/me/onboarding`, `PATCH /api/v1/me/profile`,
+  `POST /api/v1/me/privacy-requests` a `POST /api/v1/me/session-action`.
+  Identita i event vznikají jen z Better Auth session a serverového canonical
+  event slugu; klient neposílá vlastní user/event scope.
+- Bootstrap vrací pouze contract-validní live data, aktuální publikované právní
+  dokumenty jako bezpečný plain text nebo credential-free HTTPS URL, efektivní
+  acknowledgement, eventové role, feature flags a privacy stav. Všechny
+  odpovědi jsou `private, no-store` a `Vary: Authorization, Cookie`.
+- Onboarding, privacy a session mutace používají hashované idempotency keys,
+  uložené response DTO a transakční business zápis. Onboarding navíc používá
+  deterministický UUID pro append-only consent deduplikaci; po dokončení už
+  nemůže novým klíčem obejít optimistic profil. Session action umí přesný
+  bounded replay i po revokaci původní cookie bez vrácení PII.
+- Migrace `0006_woozy_the_professor.sql` přidává `participant_profiles.version`
+  s minimem 1 a event/user/kind unikátní `privacy_requests` s konzistentními
+  pending/completed/rejected stavy. Je dopředně kompatibilní se starší aplikací;
+  rollback aplikace může nové sloupce/tabulku bezpečně ignorovat. Nová env
+  proměnná nevznikla.
+- Security review ověřil auth, CSRF Origin, IDOR/event scope, PII/audit,
+  bounded JSON/legal obsah, souběh a replay. Code review opravil dva actionable
+  nálezy: zákaz profilového bypassu přes nový onboarding key a atomický přesný
+  replay onboardingu/session action po změně právní verze nebo revokaci cookie.
+  Po opravách nezůstává otevřený severity 1/2 ani jiný actionable nález.
+- Izolovaný PostgreSQL průchod po všech šesti migracích a seedu prošel:
+  database 83/83 a conference 502/502 bez skipů. Cílené identity/onboarding/
+  Better Auth/idempotency regrese prošly 33/33 a relevantní browser component
+  sady onboarding/account/session 183/183 ve třech viewports. Playwright E2E
+  prošlo 15/15 nad připravenou PostgreSQL ve phone/tablet/desktop viewportu. Globální
+  `pnpm run ci` prošlo včetně formátu, lintů, typů, workspace testů,
+  produkčního Next/worker buildu, source/build mock boundary a statického smoke
+  25 HTML/58 assetů; oba dependency audity hlásí nula známých zranitelností.
+- `BLOCKER-LEGAL-01` dál blokuje jen finální právní obsah a UAT. Agregovaná
+  aktivace zůstává `UI ready (mocked)` kvůli claim/recovery handshaku, ale
+  `CS-BOOT-01` a Priority A účet/profil/soukromí jsou `integrated`. Doporučený
+  další neblokovaný krok je `P5-08`.
 
 ## Historický průběh frontendové větve
 

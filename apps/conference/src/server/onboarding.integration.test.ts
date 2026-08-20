@@ -267,7 +267,32 @@ integration('onboarding integration', () => {
         status: 'legal_acknowledgement_required',
         documentIds: [replacementTerms],
       });
+      await expect(
+        completeOnboarding(
+          client.db,
+          input({ termsDocumentId: replacementTerms }),
+        ),
+      ).resolves.toEqual({ status: 'complete' });
+      await expect(
+        loadOnboardingState(client.db, primaryEventId, userId),
+      ).resolves.toEqual({ status: 'complete' });
+      const profile = await client.db.query.participantProfiles.findFirst({
+        columns: { firstName: true, version: true },
+        where: and(
+          eq(schema.participantProfiles.eventId, primaryEventId),
+          eq(schema.participantProfiles.userId, userId),
+        ),
+      });
+      expect(profile).toEqual({ firstName: 'Anna', version: 1 });
     } finally {
+      await client.db
+        .delete(schema.consentRecords)
+        .where(
+          and(
+            eq(schema.consentRecords.eventId, primaryEventId),
+            eq(schema.consentRecords.legalDocumentId, replacementTerms),
+          ),
+        );
       await client.db
         .delete(schema.legalDocuments)
         .where(eq(schema.legalDocuments.id, replacementTerms));

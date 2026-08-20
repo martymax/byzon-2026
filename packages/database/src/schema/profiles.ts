@@ -1,12 +1,15 @@
 import {
   boolean,
+  check,
   index,
+  integer,
   pgTable,
   primaryKey,
   timestamp,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 import { users } from './auth.js';
 import { events } from './events.js';
@@ -24,6 +27,7 @@ export const participantProfiles = pgTable(
     lastName: varchar('last_name', { length: 128 }).notNull(),
     contactEmail: varchar('contact_email', { length: 320 }).notNull(),
     phone: varchar('phone', { length: 16 }),
+    version: integer('version').default(1).notNull(),
     networkingEnabled: boolean('networking_enabled'),
     onboardingCompletedAt: timestamp('onboarding_completed_at', {
       withTimezone: true,
@@ -42,5 +46,6 @@ export const participantProfiles = pgTable(
     }),
     index('participant_profiles_event_id_idx').on(table.eventId),
     index('participant_profiles_user_id_idx').on(table.userId),
+    check('participant_profiles_version_check', sql`${table.version} >= 1`),
   ],
 );

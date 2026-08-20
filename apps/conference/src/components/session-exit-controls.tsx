@@ -26,6 +26,7 @@ import {
   invalidateParticipantPrivateResources,
   privateResourceInvalidationReason,
 } from '@/lib/private-resource-events';
+import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import { useTransitionFocus } from '@/components/use-transition-focus';
 
 type SessionActionFailure =
@@ -48,14 +49,13 @@ const actionCopy: Record<
     button: 'Odhlásit tento účet',
     title: 'Odhlásit tento účet?',
     confirm: 'Odhlásit',
-    description:
-      'V produkci by skončilo pouze aktuální přihlášení na tomto zařízení.',
+    description: 'Skončí pouze aktuální přihlášení na tomto zařízení.',
   },
   logout_all: {
     button: 'Odhlásit všechna zařízení',
     title: 'Odhlásit všechna zařízení?',
     confirm: 'Odhlásit všechna',
-    description: 'V produkci by byla ukončena všechna přihlášení tohoto účtu.',
+    description: 'Budou ukončena všechna přihlášení tohoto účtu.',
   },
   switch_account: {
     button: 'Použít jiný účet',
@@ -140,6 +140,7 @@ export const SessionExitControls = ({
   readonly createIdempotencyKey?: () => string;
   readonly loginReturnTo?: '/app' | '/app/nastaveni';
 }) => {
+  const previewAvailable = isFrontendPreviewAvailable();
   const [pendingAction, setPendingAction] = useState<IdentitySessionAction>();
   const [outcome, setOutcome] = useState<{
     readonly response: IdentitySessionActionResponse;
@@ -262,10 +263,16 @@ export const SessionExitControls = ({
           kind="empty"
           title={
             response.action === 'logout_all'
-              ? 'Všechna přihlášení byla v náhledu ukončena'
+              ? response.effect === 'synthetic_preview'
+                ? 'Všechna přihlášení byla v náhledu ukončena'
+                : 'Všechna přihlášení byla ukončena'
               : response.action === 'switch_account'
-                ? 'Náhled je připravený pro jiný účet'
-                : 'Aktuální přihlášení bylo v náhledu ukončeno'
+                ? response.effect === 'synthetic_preview'
+                  ? 'Náhled je připravený pro jiný účet'
+                  : 'Můžete použít jiný účet'
+                : response.effect === 'synthetic_preview'
+                  ? 'Aktuální přihlášení bylo v náhledu ukončeno'
+                  : 'Aktuální přihlášení bylo ukončeno'
           }
         >
           <p>
@@ -290,8 +297,10 @@ export const SessionExitControls = ({
         <p className="activation-kicker">Přihlášení a účet</p>
         <h2 id="session-controls-title">Bezpečně změnit účet</h2>
         <p>
-          Žádná akce nehledá ani nepotvrzuje cizí účet. V mock režimu pouze
-          ověříte uživatelský průchod.
+          Žádná akce nehledá ani nepotvrzuje cizí účet.{' '}
+          {previewAvailable
+            ? 'V mock režimu pouze ověříte uživatelský průchod.'
+            : 'Zvolená akce změní pouze vaše ověřené přihlášení.'}
         </p>
       </header>
 
@@ -369,8 +378,9 @@ export const SessionExitControls = ({
             : 'Nejdřív vyberte konkrétní akci.'}
         </p>
         <p className="preview-disclaimer">
-          V této ukázce nevzniklo skutečné přihlášení, proto pouze ověřujeme
-          bezpečný uživatelský průchod.
+          {previewAvailable
+            ? 'V této ukázce nevzniklo skutečné přihlášení, proto pouze ověřujeme bezpečný uživatelský průchod.'
+            : 'Po potvrzení server bezpečně ukončí zvolený rozsah přihlášení a zařízení odstraní načtená osobní data.'}
         </p>
       </DestructiveConfirmation>
     </section>
