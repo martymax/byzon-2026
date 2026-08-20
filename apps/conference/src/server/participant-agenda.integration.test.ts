@@ -1314,6 +1314,35 @@ integration('CS-AGENDA-01 HTTP integration', () => {
 
     await client.db
       .update(schema.programSessions)
+      .set({ capacityMode: 'none', capacity: null })
+      .where(eq(schema.programSessions.id, projectedSessionId));
+    const waitlistDrift = await readParticipantAgenda(
+      readRequest(),
+      dependencies(projectedWaitlistUserId),
+    );
+    expect(waitlistDrift.status).toBe(200);
+    expect(
+      participantAgendaResponseSchema
+        .parse(await waitlistDrift.json())
+        .items.find(({ session }) => session.id === projectedSessionId),
+    ).toMatchObject({
+      state: 'waitlisted',
+      action: { state: 'closed' },
+      capacity: {
+        mode: 'reservation',
+        remaining: 0,
+        actorAvailability: { state: 'unavailable' },
+      },
+      waitlist: { state: 'waiting', position: 1, actionsAvailable: false },
+    });
+    expect(onOperationalDrift).toHaveBeenCalledWith({
+      code: 'active_waitlist_without_capacity',
+      eventId,
+      sessionId: projectedSessionId,
+    });
+
+    await client.db
+      .update(schema.programSessions)
       .set({ status: 'cancelled' })
       .where(eq(schema.programSessions.id, reservedSessionId));
     const cancelled = await readParticipantAgenda(

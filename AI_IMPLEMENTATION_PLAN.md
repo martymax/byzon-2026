@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.13 – kanonická agenda při změně kapacity a publikace
+> Stav: implementační plán v6.14 – fail-safe kapacita a waiting drift
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2508,6 +2508,8 @@ souběžně.
   migrace `0008_pretty_firebrand.sql` doplnila versioned
   `participant_agendas`, event-scoped `agenda_items`, složené membership/session
   FK a oddělení mazatelné uložené projekce od provozní historie rezervací.
+  Capacity backfill zamyká rezervační zápisy a failne před změnou, pokud by
+  provenance-verified kapacita klesla pod počet již potvrzených rezervací.
 - [x] `P5-02` Implementovat agenda add/remove API a conflict detector;
   společně s `F3-01` uzavřít `CS-AGENDA-01` a integrovat agenda UI. Hotový
   produkční subset používá Better Auth, canonical event/publication,
@@ -2523,7 +2525,9 @@ souběžně.
   položku lze idempotentně odstranit i po jejím stornu nebo úplném odebrání z
   nové publikace. Existující waiting projekce zůstává viditelná i po uvolnění
   kapacity, používá živé pořadí pouze mezi aktivními waiting řádky a má vypnuté
-  akce, takže participant neobejde FIFO před zpracováním `P5-04` workerem.
+  akce, takže participant neobejde FIFO před zpracováním `P5-04` workerem. Při
+  operational driftu kapacity nebo typu se waiting stav zachová jako bezpečně
+  uzavřená reservation projekce a vyšle operator warning místo zmizení/500.
   Sdílené Redis
   buckety používají event/user HMAC subject: read 120/min s explicitním
   logovaným fail-open a mutation 30/min s fail-closed před DB/idempotency prací.
@@ -3210,3 +3214,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.11 | 20. 8. 2026 | Následné Codex review PR `#22` přesunulo snapshot `serverNow` za participant lock, aby nemohl předcházet právě zviditelněnému zápisu, a odložilo mutable publication target validaci až do non-replay idempotency callbacku. Exact-key retry po novější publikaci, která session odstranila, tak vrací canonical `superseded` místo 404. Agenda HTTP sada má 18/18, conference 546/546 a celý service-backed workspace gate 880/880 testů. |
 | 6.12 | 20. 8. 2026 | Další Codex review PR `#22` sjednotilo downstream `CS-ROSTER-01` s agenda publication invariantem: roster bere viditelnost a metadata z posledního immutable snapshotu a provozní řádek používá jen pro podporovanou rezervační kapacitu. Běžně importovaná session ve stavu `draft` se po publikaci zobrazí v přiřazeném listu/detailu i s participant rezervací, zatímco nepublikovaná `draft`, networking a nekapacitní session zůstávají skryté. Cílené agenda+roster PostgreSQL testy prošly 28/28 a service-backed workspace gate zůstává 880/880. |
 | 6.13 | 20. 8. 2026 | Poslední review PR `#22` zpevnilo tři hrany canonical agendy: waiting záznam zůstává viditelný i po uvolnění kapacity, ale s vypnutými akcemi až do FIFO promotion; pozice se počítá živě pouze mezi aktivně čekajícími řádky; sessions odebrané z poslední publikace nejsou viditelné ani nezabírají limit 512, přesto lze jejich uloženou vrstvu idempotentně odstranit. Cílené conference testy prošly 38/38, domain kontrakty 15/15, celý service-backed workspace 880/880 a browser komponenty 849/849. |
+| 6.14 | 20. 8. 2026 | Následné Codex review PR `#22` uzavřelo capacity-drift hrany: migrace `0008` drží rezervační tabulkový lock a odmítne backfill, který by nastavil kapacitu pod již potvrzené rezervace; aktivní waiting zůstává v canonical agendě jako bezpečně uzavřená reservation projekce i při odstraněné kapacitě nebo networking driftu a hlásí operator warning. Čerstvá PostgreSQL databáze potvrdila odmítnutí 13 rezervací pro kapacitu 12; cílené migration/agenda/roster/model testy i typecheck jsou zelené. |

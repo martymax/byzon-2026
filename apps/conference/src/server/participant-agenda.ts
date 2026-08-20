@@ -49,7 +49,9 @@ const agendaMutationReceiptSchema = z.strictObject({
 type AgendaMutationReceipt = z.infer<typeof agendaMutationReceiptSchema>;
 
 export interface ParticipantAgendaOperationalDrift {
-  code: 'confirmed_reservation_without_capacity';
+  code:
+    | 'active_waitlist_without_capacity'
+    | 'confirmed_reservation_without_capacity';
   eventId: string;
   sessionId: string;
 }
@@ -714,7 +716,41 @@ const loadParticipantAgendaSnapshotUnlocked = async (
       continue;
     }
     const waiting = waitingBySession.get(sessionId);
-    if (waiting && state.capacity.mode === 'reservation') {
+    if (waiting) {
+      if (state.capacity.mode !== 'reservation') {
+        onOperationalDrift?.({
+          code: 'active_waitlist_without_capacity',
+          eventId: context.event.id,
+          sessionId,
+        });
+        const safeCapacity = Math.max(1, confirmed);
+        items.push({
+          day: common.day,
+          session: common.session,
+          capacity: {
+            mode: 'reservation',
+            capacity: safeCapacity,
+            confirmed: safeCapacity,
+            held: 0,
+            remaining: 0,
+            waitlistAvailable: false,
+            actorAvailability: { state: 'unavailable' },
+          },
+          action:
+            common.session.status === 'cancelled'
+              ? { state: 'cancelled' }
+              : { state: 'closed' },
+          state: 'waitlisted',
+          waitlist: {
+            id: waiting.id,
+            state: 'waiting',
+            joinedAt: waiting.joinedAt.toISOString(),
+            position: waiting.position,
+            actionsAvailable: false,
+          },
+        });
+        continue;
+      }
       items.push({
         ...common,
         capacity: {

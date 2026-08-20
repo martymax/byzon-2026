@@ -212,7 +212,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   vypnutými akcemi až do canonical FIFO promotion, a její pořadí počítá živě
   pouze mezi aktivními waiting řádky. Session odebrané z poslední publikace se
   nezobrazují ani neblokují limit 512, jejich vlastní uloženou agenda vrstvu
-  však lze idempotentně uklidit. Po rebase a rate-limit zapojení
+  však lze idempotentně uklidit. Následný review hardening zachovává waiting
+  projekci jako bezpečně uzavřenou a operator-visible i při ztrátě provozní
+  kapacity/type policy. Migrační backfill navíc drží rezervační tabulkový lock
+  a odmítne nastavit kapacitu pod počet již potvrzených rezervací; čerstvá
+  PostgreSQL regrese ověřila odmítnutí 13 rezervací pro kapacitu 12. Po rebase
+  a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
   9/9, agenda HTTP 18/18 a conference 546/546 bez skipů. Globální
   gate prošel bez lint chyb včetně 880 workspace testů, všech

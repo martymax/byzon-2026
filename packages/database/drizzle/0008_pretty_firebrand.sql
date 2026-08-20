@@ -29,7 +29,10 @@ DECLARE
 	"candidate" record;
 	"provenance_count" integer;
 	"matching_count" integer;
+	"over_capacity_count" integer;
 BEGIN
+	LOCK TABLE "reservations" IN SHARE MODE;
+
 	FOR "candidate" IN
 		SELECT DISTINCT "provenance"."event_id"
 		FROM "content_import_provenance" AS "provenance"
@@ -55,8 +58,22 @@ BEGIN
 				'program.days[1].stages[0].events[4]'
 			);
 
-		SELECT count(*)
-		INTO "matching_count"
+		SELECT
+			count(*),
+			count(*) FILTER (
+				WHERE (
+					SELECT count(*)
+					FROM "reservations" AS "reservation"
+					WHERE
+						"reservation"."event_id" = "session"."event_id"
+						AND "reservation"."session_id" = "session"."id"
+						AND "reservation"."status" = 'confirmed'
+				) > CASE
+					WHEN "provenance"."source_path" = 'program.days[0].stages[1].events[10]' THEN 12
+					ELSE 20
+				END
+			)
+		INTO "matching_count", "over_capacity_count"
 		FROM "content_import_provenance" AS "provenance"
 		INNER JOIN "sessions" AS "session"
 			ON "session"."event_id" = "provenance"."event_id"
@@ -86,6 +103,11 @@ BEGIN
 
 		IF "provenance_count" <> 3 OR "matching_count" <> 3 THEN
 			RAISE EXCEPTION 'Reservation policy backfill validation failed for event %', "candidate"."event_id"
+				USING ERRCODE = 'check_violation';
+		END IF;
+
+		IF "over_capacity_count" <> 0 THEN
+			RAISE EXCEPTION 'Reservation policy backfill would reduce capacity below confirmed reservations for event %', "candidate"."event_id"
 				USING ERRCODE = 'check_violation';
 		END IF;
 	END LOOP;

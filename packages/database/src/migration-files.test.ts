@@ -113,6 +113,12 @@ describe('versioned database artifacts', () => {
       'Reservation policy backfill validation failed for event %',
     );
     expect(agendaWriteMigration).toContain(
+      'LOCK TABLE "reservations" IN SHARE MODE',
+    );
+    expect(agendaWriteMigration).toContain(
+      'Reservation policy backfill would reduce capacity below confirmed reservations for event %',
+    );
+    expect(agendaWriteMigration).toContain(
       "'2026-09-18T15:15:00+02:00'::timestamptz",
     );
     expect(agendaWriteMigration).toContain("'Workshop: Blanka Mrázková'");
