@@ -1,6 +1,6 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import { activityRosterResponseSchema } from '@byzon/domain/contracts';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -223,7 +223,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         type: 'mastermind',
         startsAt: new Date('2026-09-18T08:00:00Z'),
         endsAt: new Date('2026-09-18T09:00:00Z'),
-        status: 'published',
+        status: 'draft',
         capacityMode: 'reservation',
         capacity: 2,
         sortOrder: 0,
@@ -299,6 +299,77 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         sortOrder: 0,
       },
     ]);
+    await client.db.insert(schema.contentPublications).values({
+      id: crypto.randomUUID(),
+      eventId,
+      version: 1,
+      snapshot: {
+        program: {
+          days: [
+            {
+              id: eventDayId,
+              localDate: '2026-09-18',
+              title: 'Roster day',
+              sortOrder: 0,
+            },
+          ],
+          rooms: [],
+          sessions: [
+            {
+              id: assignedSessionId,
+              dayId: eventDayId,
+              roomId: null,
+              slug: `assigned-${assignedSessionId}`,
+              title: 'Přiřazený mastermind',
+              type: 'mastermind',
+              status: 'published',
+              startsAt: '2026-09-18T08:00:00.000Z',
+              endsAt: '2026-09-18T09:00:00.000Z',
+              sortOrder: 0,
+            },
+            {
+              id: unassignedSessionId,
+              dayId: eventDayId,
+              roomId: null,
+              slug: `unassigned-${unassignedSessionId}`,
+              title: 'Cizí workshop',
+              type: 'workshop',
+              status: 'published',
+              startsAt: '2026-09-18T09:00:00.000Z',
+              endsAt: '2026-09-18T10:00:00.000Z',
+              sortOrder: 1,
+            },
+            {
+              id: networkingSessionId,
+              dayId: eventDayId,
+              roomId: null,
+              slug: `networking-${networkingSessionId}`,
+              title: 'Blokovaný networking',
+              type: 'networking',
+              status: 'published',
+              startsAt: '2026-09-18T10:00:00.000Z',
+              endsAt: '2026-09-18T11:00:00.000Z',
+              sortOrder: 2,
+            },
+            {
+              id: nonCapacitySessionId,
+              dayId: eventDayId,
+              roomId: null,
+              slug: `talk-${nonCapacitySessionId}`,
+              title: 'Nekapacitní přednáška',
+              type: 'talk',
+              status: 'published',
+              startsAt: '2026-09-18T11:00:00.000Z',
+              endsAt: '2026-09-18T12:00:00.000Z',
+              sortOrder: 3,
+            },
+          ],
+        },
+      },
+      checksumSha256: 'c'.repeat(64),
+      publishedBy: operatorId,
+      publishedAt: new Date('2026-08-20T08:00:00Z'),
+    });
     await client.db.insert(schema.reservations).values([
       {
         id: reservationId,
@@ -358,48 +429,10 @@ integration('CS-ROSTER-01 HTTP integration', () => {
   });
 
   afterAll(async () => {
-    await client.db
-      .delete(schema.waitlistEntries)
-      .where(
-        inArray(schema.waitlistEntries.eventId, [eventId, isolationEventId]),
-      );
-    await client.db
-      .delete(schema.reservations)
-      .where(inArray(schema.reservations.eventId, [eventId, isolationEventId]));
-    await client.db
-      .delete(schema.participantProfiles)
-      .where(
-        inArray(schema.participantProfiles.eventId, [
-          eventId,
-          isolationEventId,
-        ]),
-      );
-    await client.db
-      .delete(schema.eventRoles)
-      .where(inArray(schema.eventRoles.eventId, [eventId, isolationEventId]));
-    await client.db
-      .delete(schema.programSessions)
-      .where(
-        inArray(schema.programSessions.eventId, [eventId, isolationEventId]),
-      );
-    await client.db
-      .delete(schema.eventDays)
-      .where(inArray(schema.eventDays.eventId, [eventId, isolationEventId]));
-    await client.db
-      .delete(schema.eventMemberships)
-      .where(
-        inArray(schema.eventMemberships.eventId, [eventId, isolationEventId]),
-      );
-    await client.db
-      .delete(schema.users)
-      .where(inArray(schema.users.id, allUserIds));
-    await client.db
-      .delete(schema.events)
-      .where(inArray(schema.events.id, [eventId, isolationEventId]));
     await client.close();
   });
 
-  it('returns only assigned supported sessions and minimal active roster PII', async () => {
+  it('returns publication-allowed imported draft sessions and minimal active roster PII', async () => {
     const response = await readActivityRoster(
       request(),
       dependencies(operatorId),
@@ -457,6 +490,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
 
     for (const sessionId of [
       unassignedSessionId,
+      draftSessionId,
       isolationSessionId,
       crypto.randomUUID(),
       'not-a-uuid',

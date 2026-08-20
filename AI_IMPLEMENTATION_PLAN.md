@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.11 – souběžně konzistentní osobní agenda
+> Stav: implementační plán v6.12 – agenda a roster nad společnou publikací
 >
 > Datum sestavení: 20. července 2026
 >
@@ -679,7 +679,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
 | `CS-ADMIN-01` | dashboard, role, reservation override, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | v6 `contract ready` a `UI ready (mocked)` bez attendance write |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
-| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
+| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
 | `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `not started` |
 | `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
@@ -2554,7 +2554,8 @@ souběžně.
   sessions; integrovat `/host/aktivity` z `F4-10`. Bez attendance write,
   telefonu, e-mailu a globálního exportu. Hotovo přes Better Auth a canonical
   event, aktivní event/session assignment, list/detail API, live server page,
-  bounded DB projekci a PostgreSQL testy anonymního, role, revokovaného,
+  latest-publication allowlist nad běžnými importovanými `draft` provozními
+  řádky, bounded DB projekci a PostgreSQL testy anonymního, role, revokovaného,
   cross-session i cross-event přístupu a retenčního deadline. Networking se
   nevydává před `RES-01`.
 - [!] `P5-09` JSON část osobní agenda API a UI `F3-01` je dodaná v `P5-02`;
@@ -3192,3 +3193,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.9 | 20. 8. 2026 | Další review PR `#22` uzavřelo poslední dvě postcondition mezery: add nad předexistující potvrzenou rezervací nebo viditelným waitlistem je no-op bez verze, auditu a duplicitní agenda vrstvy; `superseded` se vyhodnotí také pro první odpověď, pokud jiná mutace změní cílový stav mezi commitem a načtením canonical snapshotu. Agenda HTTP regrese mají 15/15 a service-backed workspace gate 877/877 testů. |
 | 6.10 | 20. 8. 2026 | Finální Codex review PR `#22` sjednotilo GET version a položky pod participant advisory lockem, přesunulo limit 512 nad množinu unikátních save/reservation/waitlist session před zápis a povolilo odstranit uloženou položku zrušenou v poslední publikaci. PostgreSQL regrese pro všechny tři invarianty rozšířily agenda HTTP sadu na 17/17; celý service-backed gate prošel 879/879 workspace a 545/545 conference testy, browser komponenty zůstávají zelené 849/849. |
 | 6.11 | 20. 8. 2026 | Následné Codex review PR `#22` přesunulo snapshot `serverNow` za participant lock, aby nemohl předcházet právě zviditelněnému zápisu, a odložilo mutable publication target validaci až do non-replay idempotency callbacku. Exact-key retry po novější publikaci, která session odstranila, tak vrací canonical `superseded` místo 404. Agenda HTTP sada má 18/18, conference 546/546 a celý service-backed workspace gate 880/880 testů. |
+| 6.12 | 20. 8. 2026 | Další Codex review PR `#22` sjednotilo downstream `CS-ROSTER-01` s agenda publication invariantem: roster bere viditelnost a metadata z posledního immutable snapshotu a provozní řádek používá jen pro podporovanou rezervační kapacitu. Běžně importovaná session ve stavu `draft` se po publikaci zobrazí v přiřazeném listu/detailu i s participant rezervací, zatímco nepublikovaná `draft`, networking a nekapacitní session zůstávají skryté. Cílené agenda+roster PostgreSQL testy prošly 28/28 a service-backed workspace gate zůstává 880/880. |

@@ -205,7 +205,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   save/reservation/waitlist ještě před add a dovolí odstranit uloženou session
   zrušenou v poslední publikaci. Následná kontrola přesunula snapshotový
   `serverNow` až za participant lock a zachovala exact-key replay i po novější
-  publikaci, která cílovou session odstranila. Po rebase a rate-limit zapojení
+  publikaci, která cílovou session odstranila. Downstream roster nyní používá
+  stejný latest-publication allowlist, takže nová rezervace nad běžným
+  importovaným `draft` řádkem je viditelná přiřazenému operátorovi. Po rebase a
+  rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
   9/9, agenda HTTP 18/18 a conference 546/546 bez skipů. Globální
   gate prošel bez lint chyb včetně 880 workspace testů, všech
@@ -235,10 +238,14 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   event FK, partial unique aktivními stavy a stabilní unikátní FIFO pozicí.
   Nevytváří agenda write flow, nevolí `RES-04` promotion režim a nepřidává
   blokovanou networkingovou kapacitu.
-- Server promítá pouze publikované nenetworkingové sessions s
-  `capacity_mode=reservation`, aktivní membership a confirmed/waiting řádky.
-  SQL dotazy i DTO jsou bounded; response je `private, no-store`, vary Cookie +
-  Authorization a DTO nevrací user ID, telefon, e-mail, ticket ani attendance.
+- Server promítá pouze sessions z poslední validní immutable publication,
+  které mají aktivní provozní řádek `draft`/`published` s
+  `capacity_mode=reservation` a nejsou networking. Tím podporuje běžný
+  importovaný stav `draft` bez
+  zpřístupnění nepublikovaných sessions. Membership musí být aktivní a do
+  rosteru vstupují jen confirmed/waiting řádky. SQL dotazy i DTO jsou bounded;
+  response je `private, no-store`, vary Cookie + Authorization a DTO nevrací
+  user ID, telefon, e-mail, ticket ani attendance.
 - Security review doplnil SQL limit před kontraktovou projekcí. Code review
   ověřil fail-closed malformed/revoked/cross-event scope, nerozlišující detail
   404, retenční stop na `operationalDataAnonymizesAt`, deterministické pořadí,

@@ -1,9 +1,10 @@
 import { schema, type Database } from '@byzon/database';
 import {
   activityRosterResponseSchema,
+  publishedProgramSnapshotSchema,
   type ActivityRosterResponse,
 } from '@byzon/domain/contracts';
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -182,26 +183,75 @@ export const loadActivityRoster = async (
     });
   }
 
-  const assignedSessions = await dependencies.db
-    .select({
-      sessionId: schema.programSessions.id,
-      title: schema.programSessions.title,
-      startsAt: schema.programSessions.startsAt,
-      capacity: schema.programSessions.capacity,
+  const publication = await dependencies.db.query.contentPublications.findFirst(
+    {
+      columns: { snapshot: true },
+      where: eq(schema.contentPublications.eventId, event.id),
+      orderBy: [desc(schema.contentPublications.version)],
+    },
+  );
+  const published = publishedProgramSnapshotSchema.safeParse(
+    publication?.snapshot,
+  );
+  const publishedById = new Map(
+    (published.success ? published.data.program.sessions : [])
+      .filter(({ status }) => status !== 'cancelled')
+      .map((programSession) => [programSession.id, programSession]),
+  );
+  const publishedSessionIds = selectedSessionIds.filter((sessionId) =>
+    publishedById.has(sessionId),
+  );
+
+  const operationalSessions =
+    publishedSessionIds.length === 0
+      ? []
+      : await dependencies.db
+          .select({
+            sessionId: schema.programSessions.id,
+            capacity: schema.programSessions.capacity,
+          })
+          .from(schema.programSessions)
+          .where(
+            and(
+              eq(schema.programSessions.eventId, event.id),
+              inArray(schema.programSessions.id, publishedSessionIds),
+              inArray(schema.programSessions.status, ['draft', 'published']),
+              eq(schema.programSessions.capacityMode, 'reservation'),
+              ne(schema.programSessions.type, 'networking'),
+            ),
+          )
+          .orderBy(asc(schema.programSessions.id));
+
+  const operationalById = new Map(
+    operationalSessions.map((programSession) => [
+      programSession.sessionId,
+      programSession,
+    ]),
+  );
+  const assignedSessions = publishedSessionIds
+    .flatMap((sessionId) => {
+      const publishedSession = publishedById.get(sessionId);
+      const operationalSession = operationalById.get(sessionId);
+      if (
+        !publishedSession ||
+        !operationalSession ||
+        operationalSession.capacity === null
+      ) {
+        return [];
+      }
+      return [
+        {
+          sessionId,
+          title: publishedSession.title,
+          startsAt: new Date(publishedSession.startsAt),
+          capacity: operationalSession.capacity,
+        },
+      ];
     })
-    .from(schema.programSessions)
-    .where(
-      and(
-        eq(schema.programSessions.eventId, event.id),
-        inArray(schema.programSessions.id, selectedSessionIds),
-        eq(schema.programSessions.status, 'published'),
-        eq(schema.programSessions.capacityMode, 'reservation'),
-        ne(schema.programSessions.type, 'networking'),
-      ),
-    )
-    .orderBy(
-      asc(schema.programSessions.startsAt),
-      asc(schema.programSessions.id),
+    .sort(
+      (left, right) =>
+        left.startsAt.getTime() - right.startsAt.getTime() ||
+        left.sessionId.localeCompare(right.sessionId),
     );
 
   if (requestedSessionId && assignedSessions.length !== 1) {
