@@ -20,7 +20,7 @@ import {
   type ParticipantAgendaResponse,
   type PublishedProgram,
 } from '@byzon/domain/contracts';
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -36,6 +36,18 @@ const MAX_BODY_BYTES = 16_384;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 const CALENDAR_UID_DOMAIN = 'agenda.byzon.cz';
 const uuidSchema = z.string().uuid();
+const agendaMutationReceiptSchema = z.strictObject({
+  action: z.enum(['add', 'remove', 'reserve']),
+  sessionId: uuidSchema,
+  outcome: z.enum(['applied', 'already_applied']),
+  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+});
+
+export interface ParticipantAgendaOperationalDrift {
+  code: 'confirmed_reservation_without_capacity';
+  eventId: string;
+  sessionId: string;
+}
 
 interface AgendaSessionIdentity {
   user: { id: string };
@@ -48,6 +60,7 @@ export interface ParticipantAgendaDependencies {
   currentEventSlug?: string;
   now?: () => Date;
   generateId?: () => string;
+  onOperationalDrift?: (drift: ParticipantAgendaOperationalDrift) => void;
 }
 
 type AgendaDatabase = Database | DatabaseTransaction;
@@ -439,6 +452,7 @@ export const loadParticipantAgendaSnapshot = async (
   context: AgendaContext,
   userId: string,
   now: Date,
+  onOperationalDrift?: (drift: ParticipantAgendaOperationalDrift) => void,
 ): Promise<ParticipantAgendaResponse> => {
   // These reads also run inside mutations on one transaction client. Keep them
   // sequential so node-postgres never receives concurrent queries on a client.
@@ -542,23 +556,12 @@ export const loadParticipantAgendaSnapshot = async (
             and(
               eq(schema.programSessions.eventId, context.event.id),
               inArray(schema.programSessions.id, visibleSessionIds),
-              inArray(schema.programSessions.status, [
-                'published',
-                'cancelled',
-              ]),
+              ne(schema.programSessions.status, 'archived'),
             ),
           );
   const operationalById = new Map(operationalRows.map((row) => [row.id, row]));
-  const reservableSessionIds = operationalRows
-    .filter(
-      (row) =>
-        row.capacityMode === 'reservation' &&
-        row.capacity !== null &&
-        row.type !== 'networking',
-    )
-    .map(({ id }) => id);
   const capacityRows =
-    reservableSessionIds.length === 0
+    visibleSessionIds.length === 0
       ? []
       : await db
           .select({
@@ -570,7 +573,7 @@ export const loadParticipantAgendaSnapshot = async (
             and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.status, 'confirmed'),
-              inArray(schema.reservations.sessionId, reservableSessionIds),
+              inArray(schema.reservations.sessionId, visibleSessionIds),
             ),
           )
           .groupBy(schema.reservations.sessionId);
@@ -585,11 +588,8 @@ export const loadParticipantAgendaSnapshot = async (
     if (!published || !operational) continue;
     const day = context.program.days.find(({ id }) => id === published.dayId);
     if (!day) continue;
-    const state = capacityProjection(
-      operational,
-      confirmedBySession.get(sessionId) ?? 0,
-      now,
-    );
+    const confirmed = confirmedBySession.get(sessionId) ?? 0;
+    const state = capacityProjection(operational, confirmed, now);
     const common = {
       day: { localDate: day.localDate, title: day.title },
       session: sessionSnapshot(
@@ -602,7 +602,34 @@ export const loadParticipantAgendaSnapshot = async (
     const reservation = reservationBySession.get(sessionId);
     if (reservation) {
       if (state.capacity.mode !== 'reservation') {
-        throw new Error('Confirmed reservation has no reservation capacity');
+        onOperationalDrift?.({
+          code: 'confirmed_reservation_without_capacity',
+          eventId: context.event.id,
+          sessionId,
+        });
+        const safeCapacity = Math.max(1, confirmed);
+        items.push({
+          day: common.day,
+          session: common.session,
+          capacity: {
+            mode: 'reservation',
+            capacity: safeCapacity,
+            confirmed: safeCapacity,
+            held: 0,
+            remaining: 0,
+            waitlistAvailable: false,
+            actorAvailability: { state: 'unavailable' },
+          },
+          action: { state: 'closed' },
+          state: 'reserved',
+          reservation: {
+            id: reservation.id,
+            version: reservation.version,
+            confirmedAt: reservation.createdAt.toISOString(),
+            cancellation: { state: 'unavailable', reason: 'closed' },
+          },
+        });
+        continue;
       }
       items.push({
         ...common,
@@ -835,6 +862,7 @@ export const readParticipantAgenda = async (
       context,
       session.user.id,
       now,
+      dependencies.onOperationalDrift,
     );
     return successResponse(body, requestId);
   } catch (error) {
@@ -918,9 +946,9 @@ export const mutateParticipantAgenda = async (
           });
         if (
           !operationalTarget ||
-          !['published', 'cancelled'].includes(operationalTarget.status) ||
+          operationalTarget.status === 'archived' ||
           (parsed.data.action !== 'remove' &&
-            operationalTarget.status !== 'published')
+            operationalTarget.status === 'cancelled')
         ) {
           throw sessionNotFound();
         }
@@ -939,7 +967,25 @@ export const mutateParticipantAgenda = async (
             })
             .onConflictDoNothing()
             .returning({ sessionId: schema.agendaItems.sessionId });
-          if (inserted.length === 1) outcome = 'applied';
+          if (inserted.length === 1) {
+            const savedCount = await transaction
+              .select({ value: count() })
+              .from(schema.agendaItems)
+              .where(
+                and(
+                  eq(schema.agendaItems.eventId, context.event.id),
+                  eq(schema.agendaItems.userId, session.user.id),
+                ),
+              );
+            if ((savedCount[0]?.value ?? 0) > MAX_AGENDA_ITEMS) {
+              throw validationFailed({
+                sessionId: [
+                  'The agenda has reached the maximum number of items.',
+                ],
+              });
+            }
+            outcome = 'applied';
+          }
         } else if (parsed.data.action === 'remove') {
           const reservation = await transaction.query.reservations.findFirst({
             columns: { id: true },
@@ -1007,7 +1053,6 @@ export const mutateParticipantAgenda = async (
             throw new AgendaTicketInactiveError(parsed.data.sessionId);
           }
           if (
-            operationalTarget.status !== 'published' ||
             operationalTarget.capacityMode !== 'reservation' ||
             operationalTarget.capacity === null ||
             operationalTarget.type === 'networking'
@@ -1100,32 +1145,41 @@ export const mutateParticipantAgenda = async (
             after: { agendaVersion: currentVersion + 1 },
           });
         }
-        const snapshot = await loadParticipantAgendaSnapshot(
-          transaction,
-          context,
-          session.user.id,
-          now,
-        );
-        const response = participantAgendaMutationResponseSchema.parse({
-          ...snapshot,
-          mutation: {
-            action: parsed.data.action,
-            sessionId: parsed.data.sessionId,
-            outcome,
-          },
-          timeConflict:
-            parsed.data.action === 'add' || parsed.data.action === 'reserve'
-              ? conflictFor(snapshot, parsed.data.sessionId)
-              : null,
+        const version =
+          outcome === 'applied' ? currentVersion + 1 : currentVersion;
+        const receipt = agendaMutationReceiptSchema.parse({
+          action: parsed.data.action,
+          sessionId: parsed.data.sessionId,
+          outcome,
+          version,
         });
         return {
           status: 200,
-          body: response,
+          body: receipt,
           resultReference: parsed.data.sessionId,
         };
       },
     );
-    const body = participantAgendaMutationResponseSchema.parse(result.body);
+    const receipt = agendaMutationReceiptSchema.parse(result.body);
+    const snapshot = await loadParticipantAgendaSnapshot(
+      dependencies.db,
+      context,
+      session.user.id,
+      now,
+      dependencies.onOperationalDrift,
+    );
+    const body = participantAgendaMutationResponseSchema.parse({
+      ...snapshot,
+      mutation: {
+        action: receipt.action,
+        sessionId: receipt.sessionId,
+        outcome: receipt.outcome,
+      },
+      timeConflict:
+        receipt.action === 'add' || receipt.action === 'reserve'
+          ? conflictFor(snapshot, receipt.sessionId)
+          : null,
+    });
     return successResponse(body, requestId, {
       'idempotency-replayed': result.replayed ? 'true' : 'false',
     });
@@ -1143,6 +1197,7 @@ export const mutateParticipantAgenda = async (
           canonical.context,
           canonical.userId,
           canonical.now,
+          dependencies.onOperationalDrift,
         );
         return canonicalProblemResponse(error, snapshot, requestId);
       } catch {

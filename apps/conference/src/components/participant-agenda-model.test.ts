@@ -153,6 +153,17 @@ describe('participant agenda view model', () => {
         waitlist: { ...waiting.waitlist, actionsAvailable: false },
       }),
     ).toEqual([]);
+
+    const offered = onlyItem(participantAgendaFixtures.offered!);
+    if (offered.state !== 'waitlisted') {
+      throw new TypeError('Offered fixture must expose a waitlist entry.');
+    }
+    expect(
+      agendaOfferIntents({
+        ...offered,
+        waitlist: { ...offered.waitlist, actionsAvailable: false },
+      }),
+    ).toBeNull();
   });
 
   it('does not describe held capacity as a generally free place', () => {

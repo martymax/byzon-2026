@@ -24,6 +24,72 @@ ALTER TABLE "agenda_items" ADD CONSTRAINT "agenda_items_session_event_fk" FOREIG
 ALTER TABLE "participant_agendas" ADD CONSTRAINT "participant_agendas_membership_event_fk" FOREIGN KEY ("event_id","user_id") REFERENCES "public"."event_memberships"("event_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agenda_items_event_session_idx" ON "agenda_items" USING btree ("event_id","session_id");--> statement-breakpoint
 CREATE INDEX "participant_agendas_user_id_idx" ON "participant_agendas" USING btree ("user_id");--> statement-breakpoint
+DO $$
+DECLARE
+	"candidate" record;
+	"provenance_count" integer;
+	"matching_count" integer;
+BEGIN
+	FOR "candidate" IN
+		SELECT DISTINCT "provenance"."event_id"
+		FROM "content_import_provenance" AS "provenance"
+		WHERE
+			"provenance"."source_name" = 'static-site/data/content.json'
+			AND "provenance"."target_type" = 'session'
+			AND "provenance"."source_path" IN (
+				'program.days[0].stages[1].events[10]',
+				'program.days[1].stages[0].events[2]',
+				'program.days[1].stages[0].events[4]'
+			)
+	LOOP
+		SELECT count(*)
+		INTO "provenance_count"
+		FROM "content_import_provenance" AS "provenance"
+		WHERE
+			"provenance"."event_id" = "candidate"."event_id"
+			AND "provenance"."source_name" = 'static-site/data/content.json'
+			AND "provenance"."target_type" = 'session'
+			AND "provenance"."source_path" IN (
+				'program.days[0].stages[1].events[10]',
+				'program.days[1].stages[0].events[2]',
+				'program.days[1].stages[0].events[4]'
+			);
+
+		SELECT count(*)
+		INTO "matching_count"
+		FROM "content_import_provenance" AS "provenance"
+		INNER JOIN "sessions" AS "session"
+			ON "session"."event_id" = "provenance"."event_id"
+			AND "session"."id" = "provenance"."target_id"
+		WHERE
+			"provenance"."event_id" = "candidate"."event_id"
+			AND "provenance"."source_name" = 'static-site/data/content.json'
+			AND "provenance"."target_type" = 'session'
+			AND "session"."status" = 'draft'
+			AND (
+				(
+					"provenance"."source_path" = 'program.days[0].stages[1].events[10]'
+					AND "session"."title" = 'Expertní Board 21 - mastermind session'
+					AND "session"."starts_at" = '2026-09-18T15:15:00+02:00'::timestamptz
+				)
+				OR (
+					"provenance"."source_path" = 'program.days[1].stages[0].events[2]'
+					AND "session"."title" = 'Workshop: Leonid Kushnir'
+					AND "session"."starts_at" = '2026-09-19T09:30:00+02:00'::timestamptz
+				)
+				OR (
+					"provenance"."source_path" = 'program.days[1].stages[0].events[4]'
+					AND "session"."title" = 'Workshop: Blanka Mrázková'
+					AND "session"."starts_at" = '2026-09-19T11:15:00+02:00'::timestamptz
+				)
+			);
+
+		IF "provenance_count" <> 3 OR "matching_count" <> 3 THEN
+			RAISE EXCEPTION 'Reservation policy backfill validation failed for event %', "candidate"."event_id"
+				USING ERRCODE = 'check_violation';
+		END IF;
+	END LOOP;
+END $$;--> statement-breakpoint
 UPDATE "sessions" AS "session"
 SET
 	"type" = CASE
@@ -49,4 +115,21 @@ WHERE
 		'program.days[1].stages[0].events[2]',
 		'program.days[1].stages[0].events[4]'
 	)
-	AND "session"."status" = 'draft';
+	AND "session"."status" = 'draft'
+	AND (
+		(
+			"provenance"."source_path" = 'program.days[0].stages[1].events[10]'
+			AND "session"."title" = 'Expertní Board 21 - mastermind session'
+			AND "session"."starts_at" = '2026-09-18T15:15:00+02:00'::timestamptz
+		)
+		OR (
+			"provenance"."source_path" = 'program.days[1].stages[0].events[2]'
+			AND "session"."title" = 'Workshop: Leonid Kushnir'
+			AND "session"."starts_at" = '2026-09-19T09:30:00+02:00'::timestamptz
+		)
+		OR (
+			"provenance"."source_path" = 'program.days[1].stages[0].events[4]'
+			AND "session"."title" = 'Workshop: Blanka Mrázková'
+			AND "session"."starts_at" = '2026-09-19T11:15:00+02:00'::timestamptz
+		)
+	);

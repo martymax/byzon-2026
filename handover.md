@@ -188,15 +188,27 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   jejich CTA a pro nehotový `.ics` vrací poctivé `not_ready`. Tyto větve
   zůstávají v `P5-04`, `P5-05` a `P5-09`; networking za `BLOCKER-RES-01`.
 - Security/code review doplnil kontrolu aktivované vstupenky, audit a fail-closed
-  ověření provozní session proti publication allowlistu. Izolovaný PostgreSQL
-  po všech devíti migracích prošel database 94/94 a conference 524/524 bez
-  skipů; agenda HTTP 8/8 kryje auth, cross-event, CSRF, idempotency,
+  ověření provozní session proti publication allowlistu. Review PR `#22`
+  navíc opravil běžné snapshot-published zdrojové řádky ve stavu `draft`,
+  minimalizoval uložený idempotency receipt, vynutil limit 512 položek, zachoval
+  konzervativně zavřenou potvrzenou rezervaci při capacity driftu s operator
+  warningem, skryl server-disabled offer akce a před backfillem atomicky ověřuje
+  všechny tři provenance/title/time targety. Izolovaný PostgreSQL po všech
+  devíti migracích prošel database 94/94 a conference 526/526 bez skipů;
+  agenda HTTP 10/10 kryje auth, cross-event, CSRF, idempotency,
   stale/cutoff, ticket, audit, publication drift a souběh o poslední místo.
-  Globální `pnpm run ci` prošlo bez lint warningů včetně 845 workspace testů,
+  Původní globální `pnpm run ci` prošlo bez lint warningů včetně 845 workspace testů,
   všech typechecků, produkčního Next/worker buildu, source/build mock boundary
-  a static smoke 25 HTML/58 assetů. Browser komponenty prošly 846/846,
+  a static smoke 25 HTML/58 assetů. Aktuální browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a oba dependency audity hlásí nula
   známých zranitelností.
+- Jediný potvrzený review bod bez lokální implementace je rate limiting agenda
+  route. `P2-09` záměrně dodalo jen provider-neutral kontrakt a repozitář nemá
+  atomický shared production store ani runtime `REDIS_URL`; procesový store by
+  porušil multi-instance invariant. Před production rolloutem agenda route je
+  proto nutné předtáhnout `P8-01`, zapojit environment-keyed HMAC subjecty a
+  otestovat fail-closed výpadek provideru. PR `#22` se do té doby nemá mergeovat
+  jako production-ready.
 
 ## Dokončená práce (`P5-08`, PR #21)
 

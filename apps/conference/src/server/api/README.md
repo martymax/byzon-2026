@@ -106,13 +106,24 @@ changes; reservation adds a second event/session lock before counting confirmed
 places and inserting the final seat. A reservation also requires a saved agenda
 item, an activated ticket and a published non-networking session with explicit
 reservation capacity. Successful writes and their minimal audit entry share one
-transaction; no-op and replay do not create another audit row.
+transaction; no-op and replay do not create another audit row. Idempotency
+storage contains only action, session reference, outcome and resulting version;
+the private canonical response is rebuilt through the current access and
+anonymization gates on both the first response and replay.
 
 The read model joins manual/organizer agenda items with confirmed reservations
 and any pre-existing waiting rows. Cancellation and waitlist controls remain
 server-disabled until `P5-04`/`P5-05`, networking remains behind
 `BLOCKER-RES-01`, coaching source reconciliation belongs to `P5-06`, and the
-calendar representation remains unavailable until `P5-09`.
+calendar representation remains unavailable until `P5-09`. The immutable
+publication is the visibility allowlist while non-archived operational rows
+provide capacity and immediate cancellation state. Capacity drift degrades only
+the affected confirmed reservation to a conservative closed projection and
+emits an operator warning instead of failing the entire agenda.
+
+The provider-neutral rate-limit primitive from `P2-09` has no shared production
+store yet. Agenda-specific read/mutation buckets therefore remain a production
+rollout gate on `P8-01`; an in-process fallback must not be substituted.
 
 ## Published participant program
 

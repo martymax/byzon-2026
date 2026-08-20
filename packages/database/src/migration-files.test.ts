@@ -109,6 +109,13 @@ describe('versioned database artifacts', () => {
     expect(agendaWriteMigration).toContain(
       '"reservation_closes_at" = "session"."starts_at"',
     );
+    expect(agendaWriteMigration).toContain(
+      'Reservation policy backfill validation failed for event %',
+    );
+    expect(agendaWriteMigration).toContain(
+      "'2026-09-18T15:15:00+02:00'::timestamptz",
+    );
+    expect(agendaWriteMigration).toContain("'Workshop: Blanka Mrázková'");
   });
 
   it('does not introduce UUIDv4 database defaults', () => {

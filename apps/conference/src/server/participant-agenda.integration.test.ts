@@ -45,8 +45,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const lastSeatSessionId = crypto.randomUUID();
   const closedSessionId = crypto.randomUUID();
   const networkingSessionId = crypto.randomUUID();
-  const draftOperationalSessionId = crypto.randomUUID();
+  const archivedOperationalSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
+  const onOperationalDrift = vi.fn();
 
   const dependencies = (
     userId: string | null,
@@ -56,6 +57,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     currentEventSlug: eventSlug,
     getSession: vi.fn(async () => (userId ? { user: { id: userId } } : null)),
     now: () => fixedNow,
+    onOperationalDrift,
   });
   const readRequest = () =>
     new Request(`${appOrigin}/api/v1/me/agenda`, {
@@ -282,15 +284,15 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         capacity: 10,
       },
       {
-        id: draftOperationalSessionId,
-        slug: `draft-operational-${draftOperationalSessionId}`,
+        id: archivedOperationalSessionId,
+        slug: `archived-operational-${archivedOperationalSessionId}`,
         title: 'Only present in the immutable publication',
         startsAt: new Date('2026-09-18T15:00:00Z'),
         endsAt: new Date('2026-09-18T16:00:00Z'),
         type: 'talk' as const,
         capacityMode: 'none' as const,
         capacity: null,
-        status: 'draft' as const,
+        status: 'archived' as const,
       },
     ];
     await client.db.insert(schema.programSessions).values(
@@ -299,7 +301,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         eventId,
         dayId,
         roomId,
-        status: 'status' in session ? session.status : ('published' as const),
+        status: 'status' in session ? session.status : ('draft' as const),
         waitlistMode: 'disabled' as const,
         sortOrder: index,
       })),
@@ -503,6 +505,23 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ),
       );
     expect(reservationAudits[0]?.value).toBe(1);
+    const storedReceipts = await client.db.query.idempotencyKeys.findMany({
+      columns: { responseBody: true },
+      where: and(
+        eq(schema.idempotencyKeys.eventId, eventId),
+        eq(schema.idempotencyKeys.actorId, primaryUserId),
+        eq(schema.idempotencyKeys.scope, 'participant.agenda-action'),
+      ),
+    });
+    const storedReceipt = storedReceipts.find(
+      ({ responseBody }) => responseBody?.action === 'reserve',
+    );
+    expect(storedReceipt?.responseBody).toEqual({
+      action: 'reserve',
+      sessionId: reservedSessionId,
+      outcome: 'applied',
+      version: 6,
+    });
 
     const blockedRemove = await mutate(
       primaryUserId,
@@ -684,12 +703,42 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     });
   });
 
+  it('keeps the remaining agenda readable and reports reservation capacity drift', async () => {
+    onOperationalDrift.mockClear();
+    await client.db
+      .update(schema.programSessions)
+      .set({ capacityMode: 'none', capacity: null })
+      .where(eq(schema.programSessions.id, reservedSessionId));
+
+    const response = await readParticipantAgenda(
+      readRequest(),
+      dependencies(primaryUserId),
+    );
+    expect(response.status).toBe(200);
+    const body = participantAgendaResponseSchema.parse(await response.json());
+    expect(
+      body.items.find(({ session }) => session.id === reservedSessionId),
+    ).toMatchObject({
+      state: 'reserved',
+      action: { state: 'closed' },
+      capacity: { mode: 'reservation', remaining: 0 },
+    });
+    expect(
+      body.items.some(({ session }) => session.id === savedSessionId),
+    ).toBe(true);
+    expect(onOperationalDrift).toHaveBeenCalledWith({
+      code: 'confirmed_reservation_without_capacity',
+      eventId,
+      sessionId: reservedSessionId,
+    });
+  });
+
   it('fails closed when immutable publication and operational status drift', async () => {
     const response = await mutate(
       driftUserId,
       {
         action: 'add',
-        sessionId: draftOperationalSessionId,
+        sessionId: archivedOperationalSessionId,
         expectedVersion: 1,
       },
       'agenda-operational-drift-add-0001',
@@ -703,6 +752,68 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ),
       }),
     ).toBeUndefined();
+  });
+
+  it('rejects a new saved item at the bounded agenda limit without making reads fail', async () => {
+    const cappedSessionIds = Array.from({ length: 512 }, () =>
+      crypto.randomUUID(),
+    );
+    await client.db.insert(schema.participantAgendas).values({
+      eventId,
+      userId: driftUserId,
+    });
+    await client.db.insert(schema.programSessions).values(
+      cappedSessionIds.map((id, index) => ({
+        id,
+        eventId,
+        dayId,
+        roomId: null,
+        slug: `agenda-cap-${index}-${id}`,
+        title: `Agenda cap ${index}`,
+        type: 'other' as const,
+        startsAt: new Date('2026-09-19T08:00:00Z'),
+        endsAt: new Date('2026-09-19T09:00:00Z'),
+        status: 'archived' as const,
+        capacityMode: 'none' as const,
+        capacity: null,
+        waitlistMode: 'disabled' as const,
+        sortOrder: index,
+      })),
+    );
+    await client.db.insert(schema.agendaItems).values(
+      cappedSessionIds.map((sessionId) => ({
+        eventId,
+        userId: driftUserId,
+        sessionId,
+        source: 'manual' as const,
+      })),
+    );
+
+    const response = await mutate(
+      driftUserId,
+      { action: 'add', sessionId: savedSessionId, expectedVersion: 1 },
+      'agenda-item-cap-add-0001',
+    );
+    expect(response.status).toBe(422);
+    const [savedCount] = await client.db
+      .select({ value: count() })
+      .from(schema.agendaItems)
+      .where(
+        and(
+          eq(schema.agendaItems.eventId, eventId),
+          eq(schema.agendaItems.userId, driftUserId),
+        ),
+      );
+    expect(savedCount?.value).toBe(512);
+
+    const read = await readParticipantAgenda(
+      readRequest(),
+      dependencies(driftUserId),
+    );
+    expect(read.status).toBe(200);
+    expect(
+      participantAgendaResponseSchema.parse(await read.json()),
+    ).toMatchObject({ version: 1, items: [] });
   });
 
   it('rejects a cross-origin mutation before creating participant state', async () => {

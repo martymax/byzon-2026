@@ -283,7 +283,11 @@ export const agendaOfferIntents = (
   readonly accept: AgendaOfferMutationIntent;
   readonly decline: AgendaOfferMutationIntent;
 } | null => {
-  if (item.state !== 'waitlisted' || item.waitlist.state !== 'offered') {
+  if (
+    item.state !== 'waitlisted' ||
+    item.waitlist.state !== 'offered' ||
+    item.waitlist.actionsAvailable === false
+  ) {
     return null;
   }
   return {

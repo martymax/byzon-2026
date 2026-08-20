@@ -1,5 +1,6 @@
 import { auth, getAuthAppOrigin } from '@/server/auth';
 import { database } from '@/server/database';
+import { logger } from '@/server/logger';
 import { readParticipantAgenda } from '@/server/participant-agenda';
 
 export const GET = (request: Request): Promise<Response> =>
@@ -7,4 +8,6 @@ export const GET = (request: Request): Promise<Response> =>
     db: database.db,
     allowedOrigin: getAuthAppOrigin(),
     getSession: (headers) => auth.api.getSession({ headers }),
+    onOperationalDrift: (drift) =>
+      logger.warn(drift, 'Participant agenda operational drift'),
   });
