@@ -20,7 +20,9 @@ export type OnboardingErrorCode =
   | 'EVENT_ACCESS_DENIED'
   | 'LEGAL_CONFIGURATION_MISSING'
   | 'STALE_LEGAL_DOCUMENT'
-  | 'REQUEST_ID_REUSED';
+  | 'REQUEST_ID_REUSED'
+  | 'ONBOARDING_NOT_REQUIRED'
+  | 'PROFILE_CHANGE_NOT_ALLOWED';
 
 export class OnboardingError extends Error {
   constructor(readonly code: OnboardingErrorCode) {
@@ -191,8 +193,8 @@ export interface CompleteOnboardingOptions {
   generateId?: () => string;
 }
 
-export const completeOnboarding = async (
-  db: Database,
+export const completeOnboardingInTransaction = async (
+  transaction: DatabaseTransaction,
   input: CompleteOnboardingInput,
   options: CompleteOnboardingOptions = {},
 ): Promise<{ status: 'complete' }> => {
@@ -200,108 +202,140 @@ export const completeOnboarding = async (
   const now = options.now ?? (() => new Date());
   const generateId = options.generateId ?? generateUuidV7;
 
-  return withTransaction(db, async (transaction) => {
-    await acquireTransactionLock(
-      transaction,
-      `onboarding:${input.eventId}:${input.userId}`,
+  await acquireTransactionLock(
+    transaction,
+    `onboarding:${input.eventId}:${input.userId}`,
+  );
+  if (!(await hasActiveMembership(transaction, input.eventId, input.userId))) {
+    throw new OnboardingError('EVENT_ACCESS_DENIED');
+  }
+
+  const documents = await loadCurrentLegalDocuments(transaction, input.eventId);
+  const decisions = expectedDecisions(input, documents);
+  const retriedRecords = await transaction.query.consentRecords.findMany({
+    columns: { legalDocumentId: true, decision: true },
+    where: and(
+      eq(schema.consentRecords.eventId, input.eventId),
+      eq(schema.consentRecords.userId, input.userId),
+      eq(schema.consentRecords.requestId, input.requestId),
+    ),
+  });
+  if (retriedRecords.length > 0) {
+    const storedProfile = await transaction.query.participantProfiles.findFirst(
+      {
+        columns: {
+          firstName: true,
+          lastName: true,
+          contactEmail: true,
+          phone: true,
+        },
+        where: and(
+          eq(schema.participantProfiles.eventId, input.eventId),
+          eq(schema.participantProfiles.userId, input.userId),
+        ),
+      },
     );
     if (
-      !(await hasActiveMembership(transaction, input.eventId, input.userId))
+      !sameDecisions(retriedRecords, decisions) ||
+      !storedProfile ||
+      storedProfile.firstName !== profile.firstName ||
+      storedProfile.lastName !== profile.lastName ||
+      storedProfile.contactEmail !== profile.contactEmail ||
+      storedProfile.phone !== profile.phone
     ) {
-      throw new OnboardingError('EVENT_ACCESS_DENIED');
+      throw new OnboardingError('REQUEST_ID_REUSED');
     }
+    return { status: 'complete' };
+  }
 
-    const documents = await loadCurrentLegalDocuments(
-      transaction,
-      input.eventId,
-    );
-    const decisions = expectedDecisions(input, documents);
-    const retriedRecords = await transaction.query.consentRecords.findMany({
-      columns: { legalDocumentId: true, decision: true },
+  const completedAt = now();
+  const [storedProfile, effectiveDecisions] = await Promise.all([
+    transaction.query.participantProfiles.findFirst({
+      columns: {
+        firstName: true,
+        lastName: true,
+        contactEmail: true,
+        phone: true,
+        onboardingCompletedAt: true,
+      },
       where: and(
-        eq(schema.consentRecords.eventId, input.eventId),
-        eq(schema.consentRecords.userId, input.userId),
-        eq(schema.consentRecords.requestId, input.requestId),
+        eq(schema.participantProfiles.eventId, input.eventId),
+        eq(schema.participantProfiles.userId, input.userId),
       ),
-    });
-    if (retriedRecords.length > 0) {
-      const storedProfile =
-        await transaction.query.participantProfiles.findFirst({
-          columns: {
-            firstName: true,
-            lastName: true,
-            contactEmail: true,
-            phone: true,
-          },
-          where: and(
+    }),
+    loadEffectiveDecisions(transaction, input.eventId, input.userId),
+  ]);
+  if (sameDecisions(effectiveDecisions, decisions)) {
+    throw new OnboardingError('ONBOARDING_NOT_REQUIRED');
+  }
+  if (
+    storedProfile &&
+    (storedProfile.firstName !== profile.firstName ||
+      storedProfile.lastName !== profile.lastName ||
+      storedProfile.contactEmail !== profile.contactEmail ||
+      storedProfile.phone !== profile.phone)
+  ) {
+    throw new OnboardingError('PROFILE_CHANGE_NOT_ALLOWED');
+  }
+  if (storedProfile) {
+    if (!storedProfile.onboardingCompletedAt) {
+      await transaction
+        .update(schema.participantProfiles)
+        .set({ onboardingCompletedAt: completedAt, updatedAt: completedAt })
+        .where(
+          and(
             eq(schema.participantProfiles.eventId, input.eventId),
             eq(schema.participantProfiles.userId, input.userId),
           ),
-        });
-      if (
-        !sameDecisions(retriedRecords, decisions) ||
-        !storedProfile ||
-        storedProfile.firstName !== profile.firstName ||
-        storedProfile.lastName !== profile.lastName ||
-        storedProfile.contactEmail !== profile.contactEmail ||
-        storedProfile.phone !== profile.phone
-      ) {
-        throw new OnboardingError('REQUEST_ID_REUSED');
-      }
-      return { status: 'complete' };
+        );
     }
-
-    const completedAt = now();
-    await transaction
-      .insert(schema.participantProfiles)
-      .values({
-        eventId: input.eventId,
-        userId: input.userId,
-        ...profile,
-        onboardingCompletedAt: completedAt,
-        updatedAt: completedAt,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.participantProfiles.eventId,
-          schema.participantProfiles.userId,
-        ],
-        set: {
-          ...profile,
-          onboardingCompletedAt: completedAt,
-          updatedAt: completedAt,
-        },
-      });
-    await transaction.insert(schema.consentRecords).values(
-      decisions.map((decision) => ({
-        id: generateId(),
-        eventId: input.eventId,
-        userId: input.userId,
-        requestId: input.requestId,
-        source: 'onboarding',
-        ...decision,
-      })),
-    );
-    await writeAuditLog(
-      transaction,
-      {
-        eventId: input.eventId,
-        actorId: input.userId,
-        actorType: 'user',
-        action: 'onboarding.completed',
-        targetType: 'event_membership',
-        targetId: input.userId,
-        requestId: input.requestId,
-        after: {
-          state: 'complete',
-          legalDocumentIds: decisions.map(
-            ({ legalDocumentId }) => legalDocumentId,
-          ),
-        },
+  } else {
+    await transaction.insert(schema.participantProfiles).values({
+      eventId: input.eventId,
+      userId: input.userId,
+      ...profile,
+      onboardingCompletedAt: completedAt,
+      updatedAt: completedAt,
+    });
+  }
+  await transaction.insert(schema.consentRecords).values(
+    decisions.map((decision) => ({
+      id: generateId(),
+      eventId: input.eventId,
+      userId: input.userId,
+      requestId: input.requestId,
+      source: 'onboarding',
+      ...decision,
+    })),
+  );
+  await writeAuditLog(
+    transaction,
+    {
+      eventId: input.eventId,
+      actorId: input.userId,
+      actorType: 'user',
+      action: 'onboarding.completed',
+      targetType: 'event_membership',
+      targetId: input.userId,
+      requestId: input.requestId,
+      after: {
+        state: 'complete',
+        legalDocumentIds: decisions.map(
+          ({ legalDocumentId }) => legalDocumentId,
+        ),
       },
-      { generateId },
-    );
+    },
+    { generateId },
+  );
 
-    return { status: 'complete' };
-  });
+  return { status: 'complete' };
 };
+
+export const completeOnboarding = async (
+  db: Database,
+  input: CompleteOnboardingInput,
+  options: CompleteOnboardingOptions = {},
+): Promise<{ status: 'complete' }> =>
+  withTransaction(db, (transaction) =>
+    completeOnboardingInTransaction(transaction, input, options),
+  );

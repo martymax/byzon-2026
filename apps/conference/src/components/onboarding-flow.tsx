@@ -668,10 +668,17 @@ export const OnboardingFlow = ({
           kind="empty"
           title="Nastavení je dokončené"
         >
-          <p>
-            V syntetickém režimu byl pouze nasimulován výsledek. Nevzniklo
-            skutečné přihlášení, účast na akci ani právní záznam.
-          </p>
+          {data.dataMode === 'synthetic_preview' ? (
+            <p>
+              V syntetickém režimu byl pouze nasimulován výsledek. Nevzniklo
+              skutečné přihlášení, účast na akci ani právní záznam.
+            </p>
+          ) : (
+            <p>
+              Profil i potvrzení aktuálních právních dokumentů jsou uložené.
+              Můžete pokračovat do aplikace.
+            </p>
+          )}
         </StatePanel>
       </BootstrapFrame>
     );
