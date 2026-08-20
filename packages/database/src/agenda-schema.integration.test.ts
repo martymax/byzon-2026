@@ -131,6 +131,70 @@ integration('agenda roster-source schema integration', () => {
     });
   });
 
+  it('keeps one versioned agenda root and one item per participant session', async () => {
+    await expect(
+      withTransaction(client.db, async (transaction) => {
+        const graph = await insertEventGraph(transaction);
+        await transaction.insert(schema.participantAgendas).values({
+          eventId: graph.eventId,
+          userId: graph.userId,
+        });
+        await transaction.insert(schema.agendaItems).values([
+          {
+            eventId: graph.eventId,
+            userId: graph.userId,
+            sessionId: graph.sessionId,
+          },
+          {
+            eventId: graph.eventId,
+            userId: graph.userId,
+            sessionId: graph.sessionId,
+            source: 'organizer',
+          },
+        ]);
+      }),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ constraint: 'agenda_items_pk' }),
+    });
+  });
+
+  it('rejects cross-event agenda items and agenda roots without membership', async () => {
+    await expect(
+      withTransaction(client.db, async (transaction) => {
+        const graph = await insertEventGraph(transaction, {
+          secondEvent: true,
+        });
+        await transaction.insert(schema.participantAgendas).values({
+          eventId: graph.isolationEventId,
+          userId: graph.userId,
+        });
+        await transaction.insert(schema.agendaItems).values({
+          eventId: graph.isolationEventId,
+          userId: graph.userId,
+          sessionId: graph.sessionId,
+        });
+      }),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({
+        constraint: 'agenda_items_session_event_fk',
+      }),
+    });
+
+    await expect(
+      withTransaction(client.db, async (transaction) => {
+        const graph = await insertEventGraph(transaction);
+        await transaction.insert(schema.participantAgendas).values({
+          eventId: graph.eventId,
+          userId: graph.secondUserId,
+        });
+      }),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({
+        constraint: 'participant_agendas_membership_event_fk',
+      }),
+    });
+  });
+
   it('allows at most one active reservation per event, session and user', async () => {
     await expect(
       withTransaction(client.db, async (transaction) => {

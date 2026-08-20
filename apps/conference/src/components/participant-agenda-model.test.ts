@@ -128,6 +128,33 @@ describe('participant agenda view model', () => {
     });
   });
 
+  it('hides server-disabled cancellation and waitlist actions', () => {
+    const reserved = onlyItem(participantAgendaFixtures.reserved!);
+    if (reserved.state !== 'reserved') {
+      throw new TypeError('Reserved fixture must expose a reservation.');
+    }
+    expect(
+      participantAgendaActions({
+        ...reserved,
+        reservation: {
+          ...reserved.reservation,
+          cancellation: { state: 'unavailable', reason: 'policy_pending' },
+        },
+      }),
+    ).toEqual([]);
+
+    const waiting = onlyItem(participantAgendaFixtures.waiting!);
+    if (waiting.state !== 'waitlisted') {
+      throw new TypeError('Waiting fixture must expose a waitlist entry.');
+    }
+    expect(
+      participantAgendaActions({
+        ...waiting,
+        waitlist: { ...waiting.waitlist, actionsAvailable: false },
+      }),
+    ).toEqual([]);
+  });
+
   it('does not describe held capacity as a generally free place', () => {
     const copy = participantAgendaCapacityCopy(
       onlyItem(participantAgendaFixtures.offered!),

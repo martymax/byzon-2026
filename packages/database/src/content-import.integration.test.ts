@@ -81,6 +81,9 @@ integration('content import integration', () => {
         status: schema.programSessions.status,
         roomId: schema.programSessions.roomId,
         capacityMode: schema.programSessions.capacityMode,
+        capacity: schema.programSessions.capacity,
+        reservationClosesAt: schema.programSessions.reservationClosesAt,
+        type: schema.programSessions.type,
       })
       .from(schema.programSessions)
       .where(eq(schema.programSessions.eventId, eventId));
@@ -113,6 +116,27 @@ integration('content import integration', () => {
           title: 'Řízený networking',
           startsAt: new Date('2026-09-18T17:00:00.000Z'),
           endsAt: new Date('2026-09-18T19:00:00.000Z'),
+        }),
+        expect.objectContaining({
+          title: 'Expertní Board 21 - mastermind session',
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 12,
+          reservationClosesAt: new Date('2026-09-18T13:15:00.000Z'),
+        }),
+        expect.objectContaining({
+          title: 'Workshop: Leonid Kushnir',
+          type: 'workshop',
+          capacityMode: 'reservation',
+          capacity: 20,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+        }),
+        expect.objectContaining({
+          title: 'Workshop: Blanka Mrázková',
+          type: 'workshop',
+          capacityMode: 'reservation',
+          capacity: 20,
+          reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
         expect.objectContaining({
           title: 'Volný program',

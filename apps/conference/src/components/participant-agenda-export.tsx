@@ -26,7 +26,9 @@ export const ParticipantAgendaCalendarExport = ({
       </ActionLink>
     ) : (
       <p role="status">
-        Export bude dostupný, jakmile si do osobní agendy přidáte první bod.
+        {calendarExport.reason === 'empty'
+          ? 'Export bude dostupný, jakmile si do osobní agendy přidáte první bod.'
+          : 'Export osobní agendy bude zpřístupněný v dalším kroku.'}
       </p>
     )}
   </section>

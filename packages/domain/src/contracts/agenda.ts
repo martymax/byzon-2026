@@ -225,6 +225,7 @@ export type AgendaSessionActionState = z.infer<
 const waitlistBaseShape = {
   id: uuidSchema,
   joinedAt: dateTimeSchema,
+  actionsAvailable: z.boolean().optional(),
 } as const;
 
 export const agendaWaitlistStateSchema = z
@@ -324,6 +325,15 @@ export const participantAgendaItemSchema = z
         id: uuidSchema,
         version: safePositiveVersionSchema,
         confirmedAt: dateTimeSchema,
+        cancellation: z
+          .discriminatedUnion('state', [
+            z.strictObject({ state: z.literal('available') }),
+            z.strictObject({
+              state: z.literal('unavailable'),
+              reason: z.enum(['policy_pending', 'closed']),
+            }),
+          ])
+          .optional(),
       }),
     }),
     z.strictObject({
@@ -442,7 +452,7 @@ export const agendaCalendarExportSchema = z.discriminatedUnion('state', [
   }),
   z.strictObject({
     state: z.literal('unavailable'),
-    reason: z.literal('empty'),
+    reason: z.enum(['empty', 'not_ready']),
   }),
 ]);
 
@@ -603,13 +613,17 @@ const validateAgendaSnapshot = (
   });
 
   if (
-    (snapshot.items.length === 0) !==
-    (snapshot.calendarExport.state === 'unavailable')
+    (snapshot.items.length === 0 &&
+      (snapshot.calendarExport.state !== 'unavailable' ||
+        snapshot.calendarExport.reason !== 'empty')) ||
+    (snapshot.items.length > 0 &&
+      snapshot.calendarExport.state === 'unavailable' &&
+      snapshot.calendarExport.reason !== 'not_ready')
   ) {
     context.addIssue({
       code: 'custom',
       path: ['calendarExport'],
-      message: 'Calendar export availability must match agenda contents',
+      message: 'Calendar export state must match agenda contents and rollout',
     });
   }
 };

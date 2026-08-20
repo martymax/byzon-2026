@@ -91,6 +91,29 @@ ID, e-mail, phone, ticket data or attendance evidence. Responses
 are `private, no-store`, vary by Cookie and Authorization and must not be
 persisted in the browser. There is no roster mutation or export endpoint.
 
+## Participant agenda
+
+`GET /api/v1/me/agenda` and `POST /api/v1/me/agenda/actions` derive both the
+actor and canonical event on the server. They require an active membership and
+participant-owned agenda permission, reject draft/archived events and stop
+serving operational data at the event anonymization deadline. Responses are
+bounded, `private, no-store` and vary by Cookie and Authorization.
+
+The current production mutation allowlist is `add`, `remove` and `reserve`.
+Every mutation requires exact same-origin JSON, an idempotency key and the
+canonical agenda version. Owner-scoped advisory locking serializes agenda
+changes; reservation adds a second event/session lock before counting confirmed
+places and inserting the final seat. A reservation also requires a saved agenda
+item, an activated ticket and a published non-networking session with explicit
+reservation capacity. Successful writes and their minimal audit entry share one
+transaction; no-op and replay do not create another audit row.
+
+The read model joins manual/organizer agenda items with confirmed reservations
+and any pre-existing waiting rows. Cancellation and waitlist controls remain
+server-disabled until `P5-04`/`P5-05`, networking remains behind
+`BLOCKER-RES-01`, coaching source reconciliation belongs to `P5-06`, and the
+calendar representation remains unavailable until `P5-09`.
+
 ## Published participant program
 
 `GET /api/v1/events/:eventId/program` requires an active event membership with

@@ -23,6 +23,10 @@ const rosterMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0007_living_magik.sql'),
   'utf8',
 );
+const agendaWriteMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0008_pretty_firebrand.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -47,6 +51,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0007_living_magik',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0008_pretty_firebrand',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -83,6 +90,25 @@ describe('versioned database artifacts', () => {
     expect(rosterMigration).toContain(
       'ALTER TABLE "participant_profiles" ADD COLUMN "company"',
     );
+    expect(agendaWriteMigration).toContain(
+      'CREATE TABLE "participant_agendas"',
+    );
+    expect(agendaWriteMigration).toContain('CREATE TABLE "agenda_items"');
+    expect(agendaWriteMigration).toContain(
+      'agenda_items_participant_agenda_fk',
+    );
+    expect(agendaWriteMigration).toContain(
+      'participant_agendas_membership_event_fk',
+    );
+    expect(agendaWriteMigration).toContain(
+      "'program.days[0].stages[1].events[10]'",
+    );
+    expect(agendaWriteMigration).toContain(
+      "'program.days[1].stages[0].events[2]'",
+    );
+    expect(agendaWriteMigration).toContain(
+      '"reservation_closes_at" = "session"."starts_at"',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -91,6 +117,7 @@ describe('versioned database artifacts', () => {
     expect(contentMigration).not.toContain('gen_random_uuid()');
     expect(identityMigration).not.toContain('gen_random_uuid()');
     expect(rosterMigration).not.toContain('gen_random_uuid()');
+    expect(agendaWriteMigration).not.toContain('gen_random_uuid()');
   });
 
   it('seeds both event scopes idempotently and keeps the test event archived', () => {

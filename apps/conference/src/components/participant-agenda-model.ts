@@ -202,6 +202,7 @@ export const participantAgendaActions = (
   }
 
   if (item.state === 'reserved') {
+    if (item.reservation.cancellation?.state === 'unavailable') return [];
     return [
       {
         label: 'Zrušit rezervaci',
@@ -212,6 +213,7 @@ export const participantAgendaActions = (
   }
 
   if (item.state === 'waitlisted') {
+    if (item.waitlist.actionsAvailable === false) return [];
     if (item.waitlist.state === 'waiting') {
       return [
         {

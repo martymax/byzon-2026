@@ -1,13 +1,9 @@
-import { notFound } from 'next/navigation';
-
 import { ParticipantAgenda } from '@/components/participant-agenda';
-import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import { loadCurrentEventId } from '@/server/current-event';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ParticipantAgendaPage() {
-  if (!isFrontendPreviewAvailable()) notFound();
   const eventId = await loadCurrentEventId();
   if (!eventId) {
     return (

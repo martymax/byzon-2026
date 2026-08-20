@@ -31,12 +31,17 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `0006_woozy_the_professor.sql` přidává profilovou verzi a tabulku
   `privacy_requests`; nevznikla nová env proměnná. `BLOCKER-LEGAL-01` dál
   blokuje pouze finální právní obsah/UAT, ne tuto integraci.
-- `P5-08` je implementovaný přes
-  [PR #21](https://github.com/martymax/byzon-2026/pull/21). `CS-ROSTER-01` a produkční
+- `P5-08` je sloučený do `main` přes
+  [PR #21](https://github.com/martymax/byzon-2026/pull/21) merge commitem
+  `5433cbb`. `CS-ROSTER-01` a produkční
   `/host/aktivity` používají Better Auth, canonical event a aktivní
   session-scoped `room_operator` assignment. List/detail vrací jen bounded
   reservation reference, stav, jméno a firmu; networking, attendance,
   kontakty, ticket data a export nejsou součástí řezu.
+- Na větvi `agent/p5-01-03-integrate-agenda` je lokálně implementovaný
+  následující řez `P5-01`/`P5-02` a transakční jádro `P5-03`. Změny
+  zatím nejsou commitnuté ani publikované; přesný rozsah a otevřené produktové
+  hranice jsou v samostatné sekci níže.
 - `static-site/data/content.json` nyní deterministicky
   importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
   i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
@@ -114,10 +119,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   zůstávají správně backend/provozními handoffy. Účet, profil, onboarding,
   privacy minimum a session controls už mají autorizované produkční endpointy.
 
-## Dokončená práce (`P8-01`)
+## Dokončená práce (`P8-01`, PR #23)
 
-- Samostatná větev `agent/p8-01-redis-foundation` vznikla z aktuálního
-  `origin/main`; agenda PR `#22` do tohoto infrastrukturního diffu nevstupuje.
+- Samostatný infrastrukturní PR `#23` byl integrován do `main`; agenda PR `#22`
+  na něj navazuje až po rebase, takže Redis základ zůstal oddělený.
 - Nový `@byzon/redis` připíná ioredis `6.0.0` a nabízí lazy connection pro web
   i BullMQ worker. Web má bounded connect/command timeout,
   `maxRetriesPerRequest=1`, vypnutou offline queue a žádné pozdní resend;
@@ -153,10 +158,45 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   komponenty 846/846, Playwright E2E 15/15 a oba dependency audity bez známé
   zranitelnosti. Standalone runtime smoke ověřil `ready → degraded → ready`,
   jednu throttled warning zprávu, recovery log a worker startup/shutdown.
-- P8-01 se publikuje samostatným draft PR do `main`. Po jeho integraci se PR
-  `#22` rebasuje a agenda route dostanou malý
-  explicitní read/mutation bucket patch; samotné P8-01 žádný endpoint potichu
-  nelimituje.
+- Samotné P8-01 žádný endpoint potichu nelimituje; konkrétní API route musí
+  explicitně zvolit scope, subject a fail-open/fail-closed politiku.
+
+## Rozpracovaná práce (`P5-01`, `P5-02`, jádro `P5-03`)
+
+- Migrace `0008_pretty_firebrand.sql` přidává versioned
+  `participant_agendas` a event/user/session-scoped `agenda_items` se složenými
+  membership/session FK. Rezervace zůstávají samostatnou provozní autoritou a
+  do agendy se promítají při čtení; session attendance/no-show nevzniká.
+- Produkční `GET /api/v1/me/agenda` a
+  `POST /api/v1/me/agenda/actions` používají Better Auth, canonical event a
+  poslední immutable publication snapshot. DTO jsou bounded,
+  `private, no-store`; add/remove/reserve vyžadují optimistic version,
+  idempotency a exact same-origin JSON. Live `/app/agenda`, home a detail
+  programu už nejsou omezené na development preview.
+- Rezervace vyžaduje uloženou položku, aktivovanou vstupenku, publikovanou
+  nenetworkingovou session a explicitní kapacitu. Owner a event/session
+  advisory lock, count+insert v jedné transakci a PostgreSQL race test zaručují
+  jediného vítěze posledního místa. Aplikované add/remove/reserve zapisují ve
+  stejné transakci minimální audit; replay/no-op nový audit nevytváří.
+- Živý Harmonogram BYZON 2026 byl znovu přečten: import/migrační backfill
+  bezpečně nastavuje EB21 na 12 a dva sobotní workshopy na 20, s cutoffem v
+  začátku session a vypnutým waitlistem. Koučink jsou dvě paralelní řady a
+  zůstává v `P5-06`; není zploštěn do chybného společného slotu.
+  Dvoudílný sobotní mastermind s kapacitou 6 čeká na nový
+  `BLOCKER-RES-05`, zda jedna rezervace pokrývá obě části.
+- Produkční server záměrně odmítá cancel/waitlist/offer akce; UI skryje
+  jejich CTA a pro nehotový `.ics` vrací poctivé `not_ready`. Tyto větve
+  zůstávají v `P5-04`, `P5-05` a `P5-09`; networking za `BLOCKER-RES-01`.
+- Security/code review doplnil kontrolu aktivované vstupenky, audit a fail-closed
+  ověření provozní session proti publication allowlistu. Izolovaný PostgreSQL
+  po všech devíti migracích prošel database 94/94 a conference 524/524 bez
+  skipů; agenda HTTP 8/8 kryje auth, cross-event, CSRF, idempotency,
+  stale/cutoff, ticket, audit, publication drift a souběh o poslední místo.
+  Globální `pnpm run ci` prošlo bez lint warningů včetně 845 workspace testů,
+  všech typechecků, produkčního Next/worker buildu, source/build mock boundary
+  a static smoke 25 HTML/58 assetů. Browser komponenty prošly 846/846,
+  Playwright E2E 15/15 ve třech viewports a oba dependency audity hlásí nula
+  známých zranitelností.
 
 ## Dokončená práce (`P5-08`, PR #21)
 
@@ -191,9 +231,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   source/build mock boundary a statického smoke 25 HTML/58 assetů; production
   i úplný dependency audit hlásí nula známých zranitelností.
 - `CS-ROSTER-01` a capability Roster vedoucího aktivity jsou `integrated`.
-  `P5-01` zůstává otevřený pro agenda items a write transakce; další lokálně
-  neblokovaný krok je `P5-01` až `P5-03`, zatímco `P5-04` čeká na
-  `BLOCKER-RES-04`.
+  Následný agenda write řez je popsán v aktuální sekci výše; `P5-04` dál
+  čeká na `BLOCKER-RES-04`.
 
 ## Dokončená práce (`P4-13`, sloučeno přes PR #20)
 

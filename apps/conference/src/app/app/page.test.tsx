@@ -98,10 +98,10 @@ describe('participant home server boundary', () => {
   });
 
   it.each([
-    [false, false],
+    [false, true],
     [true, true],
   ])(
-    'passes agenda availability %s through the server preview boundary',
+    'keeps the live agenda available when preview availability is %s',
     async (previewAvailable, expected) => {
       pageMocks.frontendPreviewAvailable.mockReturnValueOnce(previewAvailable);
       pageMocks.loadParticipantCurrentEvent.mockResolvedValueOnce({

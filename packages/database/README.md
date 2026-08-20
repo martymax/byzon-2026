@@ -23,6 +23,19 @@ PostgreSQL. Only synchronization progress may be updated; publication rows
 cannot be deleted. Public delivery must use a publication snapshot rather than
 reading draft rows directly.
 
+Migration `0008_pretty_firebrand.sql` adds one versioned
+`participant_agendas` root per event/member and one event-scoped `agenda_items`
+row per saved session. Confirmed reservations remain canonical in the separate
+`reservations` table and are projected into the participant agenda at read
+time, so deleting a saved item cannot erase operational history. Composite
+foreign keys prevent cross-event membership or session references.
+
+The same migration backfills only three source-provenance-verified draft
+activities with confirmed reservation policies: EB21 (12) and the two Saturday
+workshops (20 each), all closing at session start with waitlist disabled.
+Coaching, Friday networking and the two-part Saturday mastermind are
+intentionally not inferred by this migration.
+
 ## Apply migrations and seed
 
 Both commands require an explicit `DATABASE_URL`. Never point local commands at

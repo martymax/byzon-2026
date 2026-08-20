@@ -57,6 +57,13 @@
       "when": 1787238559755,
       "tag": "0007_living_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787241826765,
+      "tag": "0008_pretty_firebrand",
+      "breakpoints": true
     }
   ]
 }

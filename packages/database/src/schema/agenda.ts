@@ -6,6 +6,7 @@ import {
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   timestamp,
   unique,
   uniqueIndex,
@@ -15,6 +16,72 @@ import {
 
 import { programSessions } from './content.js';
 import { eventMemberships } from './events.js';
+
+export const agendaItemSource = pgEnum('agenda_item_source', [
+  'manual',
+  'organizer',
+]);
+
+export const participantAgendas = pgTable(
+  'participant_agendas',
+  {
+    eventId: uuid('event_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    version: integer('version').default(1).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.eventId, table.userId],
+      name: 'participant_agendas_pk',
+    }),
+    foreignKey({
+      columns: [table.eventId, table.userId],
+      foreignColumns: [eventMemberships.eventId, eventMemberships.userId],
+      name: 'participant_agendas_membership_event_fk',
+    }).onDelete('cascade'),
+    index('participant_agendas_user_id_idx').on(table.userId),
+    check('participant_agendas_version_check', sql`${table.version} >= 1`),
+  ],
+);
+
+export const agendaItems = pgTable(
+  'agenda_items',
+  {
+    eventId: uuid('event_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    sessionId: uuid('session_id').notNull(),
+    source: agendaItemSource('source').default('manual').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.eventId, table.userId, table.sessionId],
+      name: 'agenda_items_pk',
+    }),
+    foreignKey({
+      columns: [table.eventId, table.userId],
+      foreignColumns: [participantAgendas.eventId, participantAgendas.userId],
+      name: 'agenda_items_participant_agenda_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.eventId, table.sessionId],
+      foreignColumns: [programSessions.eventId, programSessions.id],
+      name: 'agenda_items_session_event_fk',
+    }).onDelete('restrict'),
+    index('agenda_items_event_session_idx').on(table.eventId, table.sessionId),
+  ],
+);
 
 export const reservationStatus = pgEnum('reservation_status', [
   'confirmed',

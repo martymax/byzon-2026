@@ -240,6 +240,25 @@ describe('CS-AGENDA-01 participant contracts', () => {
     expect(
       participantAgendaResponseSchema.parse({
         ...response,
+        items: [
+          {
+            ...reservedItem,
+            reservation: {
+              ...reservedItem.reservation,
+              cancellation: {
+                state: 'unavailable',
+                reason: 'policy_pending',
+              },
+            },
+          },
+        ],
+      }).items[0],
+    ).toMatchObject({
+      reservation: { cancellation: { state: 'unavailable' } },
+    });
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
         items: [offeredItem],
       }).items[0],
     ).toMatchObject({
@@ -250,10 +269,57 @@ describe('CS-AGENDA-01 participant contracts', () => {
     expect(
       participantAgendaResponseSchema.parse({
         ...response,
+        items: [
+          {
+            ...offeredItem,
+            waitlist: { ...offeredItem.waitlist, actionsAvailable: false },
+          },
+        ],
+      }).items[0],
+    ).toMatchObject({ waitlist: { actionsAvailable: false } });
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...reservedItem,
+            reservation: {
+              ...reservedItem.reservation,
+              cancellation: { state: 'unavailable', reason: 'unknown' },
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
         items: [],
         calendarExport: { state: 'unavailable', reason: 'empty' },
       }),
     ).toMatchObject({ items: [], calendarExport: { reason: 'empty' } });
+  });
+
+  it('keeps a non-empty agenda honest while calendar export is not integrated', () => {
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
+        calendarExport: { state: 'unavailable', reason: 'not_ready' },
+      }).calendarExport,
+    ).toEqual({ state: 'unavailable', reason: 'not_ready' });
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        calendarExport: { state: 'unavailable', reason: 'empty' },
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [],
+        calendarExport: { state: 'unavailable', reason: 'not_ready' },
+      }).success,
+    ).toBe(false);
   });
 
   it('derives agenda days from the event timezone across UTC midnight', () => {

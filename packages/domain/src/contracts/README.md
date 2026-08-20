@@ -159,6 +159,15 @@ clock. The calendar metadata exposes only the same-origin
 by `P5-09`, while the `F3-05` synthetic adapter uses the same RFC 5545
 UID/sequence, UTC, cancellation, escaping and folding invariants.
 
+The integrated `P5-01`/`P5-02` slice serves the complete private snapshot and
+enables only add, remove and atomic reserve. A reserved item may explicitly
+disable participant cancellation and an existing waitlist item may disable its
+controls, so the production UI never exposes a later milestone's mutation.
+Non-empty live agendas report calendar export as `not_ready` until `P5-09`;
+empty agendas keep the distinct `empty` state. Waitlist promotion,
+cancellation, coaching and networking reservation remain outside this
+integrated subset.
+
 ## Assigned activity roster (`CS-ROSTER-01`)
 
 `activity-roster.ts` is the read-only, private boundary for a Vedoucí aktivity.
