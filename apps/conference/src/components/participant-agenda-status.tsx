@@ -288,6 +288,12 @@ const feedbackCopy: Record<
       'Neodesíláme novou změnu s jiným klíčem. Bezpečně zkontrolujte stejný požadavek znovu.',
     tone: 'info',
   },
+  rate_limited: {
+    title: 'Příliš mnoho změn v krátkém čase',
+    detail:
+      'Požadavek se neprovedl. Chvíli počkejte a potom bezpečně zopakujte stejnou změnu.',
+    tone: 'warning',
+  },
   rejected: {
     title: 'Změnu nelze bezpečně zopakovat',
     detail:

@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.6 – review-hardened agenda nad Redis/BullMQ základem
+> Stav: implementační plán v6.7 – produkčně limitovaná osobní agenda
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2512,10 +2512,9 @@ souběžně.
   společně s `F3-01` uzavřít `CS-AGENDA-01` a integrovat agenda UI. Hotový
   produkční subset používá Better Auth, canonical event/publication,
   private/no-store snapshot, optimistic version, idempotentní add/remove,
-  audit, canonical konflikt a live agenda/program/home UI. Produkční rollout
-  chráněných agenda route zůstává gated předtažením `P8-01`: repozitář má
-  pouze provider-neutral rate-limit kontrakt, nikoli atomický sdílený store;
-  procesový fallback je zakázaný.
+  audit, canonical konflikt a live agenda/program/home UI. Sdílené Redis
+  buckety používají event/user HMAC subject: read 120/min s explicitním
+  logovaným fail-open a mutation 30/min s fail-closed před DB/idempotency prací.
 - [!] `P5-03` Rezervační transakce s lockem a concurrency testem posledního
   místa je hotová včetně aktivované vstupenky, cutoffu v začátku session,
   canonical capacity/stale chyb a auditovaného zápisu. Source-provenance policy
@@ -3175,3 +3174,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.4 | 20. 8. 2026 | Dokončen `P8-01`: přidán sdílený ioredis 6 základ pro web a BullMQ worker s Railway dual-stack family konfigurací, bounded web selháním, worker retry profilem, bezpečným lifecycle, Redis health latencí a atomickým víceinstančním fixed-window rate-limit storem. Compose a CI spouštějí skutečný Redis 8.2 s `noeviction`; samostatný HMAC secret udržuje PII mimo bucket keys. |
 | 6.5 | 20. 8. 2026 | Dokončeny `P5-01` a `P5-02` a transakční jádro `P5-03`: versioned agenda schema, Better Auth/canonical event private API, live UI, idempotentní add/remove, konflikt a auditovaná rezervace s aktivovanou vstupenkou a event/session lockem. Concurrency regrese potvrzuje jediného vítěze posledního místa. Provenance-verified kapacity nastavují EB21 12 a oba sobotní workshopy 20; coaching zůstává v `P5-06` a dvoudílný sobotní mastermind nově za `BLOCKER-RES-05`. Waitlist, cancel, networking a ICS nejsou předstíraně aktivované. |
 | 6.6 | 20. 8. 2026 | Review PR `#22` opravilo publication/operational status invariant, minimalizovalo idempotency receipt, omezilo add na 512 položek, zachovalo čitelnost potvrzené rezervace při capacity driftu s operator warningem, skrylo zakázané offer akce a atomicky validuje všechny tři migrační backfill targety. Redis provider z `P8-01` už je integrovaný; explicitní agenda route wiring zůstává posledním produkčním rollout gate. |
+| 6.7 | 20. 8. 2026 | PR `#22` byl rebasován na integrované `P8-01` a agenda route dostaly atomické shared Redis limity s event/user HMAC subjectem: read 120/min fail-open s throttled PII-free warningem, mutation 30/min fail-closed před DB/idempotency prací a kanonické `429 RATE_LIMITED` hlavičky/kontrakty. Tím je odstraněn rate-limit rollout gate; otevřené zůstávají pouze výslovně uvedené waitlist/cancel/ICS/networking/coaching blockery. |

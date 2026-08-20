@@ -28,7 +28,9 @@ import {
   hashIdempotencyRequest,
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
+import type { ParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const MAX_AGENDA_ITEMS = 512;
@@ -61,6 +63,7 @@ export interface ParticipantAgendaDependencies {
   now?: () => Date;
   generateId?: () => string;
   onOperationalDrift?: (drift: ParticipantAgendaOperationalDrift) => void;
+  rateLimit?: ParticipantAgendaRateLimiter;
 }
 
 type AgendaDatabase = Database | DatabaseTransaction;
@@ -196,6 +199,17 @@ const successResponse = (
     status: 200,
     headers: privateHeaders(requestId, 'application/json', extra),
   });
+
+const withRateLimitHeaders = (
+  response: Response,
+  decision: RateLimitDecision | null,
+): Response => {
+  if (!decision) return response;
+  for (const [name, value] of Object.entries(rateLimitHeaders(decision))) {
+    response.headers.set(name, value);
+  }
+  return response;
+};
 
 const zodFieldErrors = (error: z.ZodError): Record<string, string[]> => {
   const result: Record<string, string[]> = {};
@@ -847,9 +861,12 @@ export const readParticipantAgenda = async (
   dependencies: ParticipantAgendaDependencies,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
   try {
     requireReadTransport(request);
     const session = await requireSession(request, dependencies);
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
     const now = dependencies.now?.() ?? new Date();
     const context = await loadAgendaContext(
       dependencies,
@@ -864,9 +881,15 @@ export const readParticipantAgenda = async (
       now,
       dependencies.onOperationalDrift,
     );
-    return successResponse(body, requestId);
+    return withRateLimitHeaders(
+      successResponse(body, requestId),
+      rateLimitDecision,
+    );
   } catch (error) {
-    return privateProblemResponse(error, requestId);
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
   }
 };
 
@@ -875,11 +898,14 @@ export const mutateParticipantAgenda = async (
   dependencies: ParticipantAgendaDependencies,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
   let canonical:
     { context: AgendaContext; now: Date; userId: string } | undefined;
   try {
     const key = requireMutationTransport(request, dependencies.allowedOrigin);
     const session = await requireSession(request, dependencies);
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', session.user.id)) ?? null;
     const now = dependencies.now?.() ?? new Date();
     const context = await loadAgendaContext(
       dependencies,
@@ -1180,9 +1206,12 @@ export const mutateParticipantAgenda = async (
           ? conflictFor(snapshot, receipt.sessionId)
           : null,
     });
-    return successResponse(body, requestId, {
-      'idempotency-replayed': result.replayed ? 'true' : 'false',
-    });
+    return withRateLimitHeaders(
+      successResponse(body, requestId, {
+        'idempotency-replayed': result.replayed ? 'true' : 'false',
+      }),
+      rateLimitDecision,
+    );
   } catch (error) {
     if (
       canonical &&
@@ -1199,14 +1228,23 @@ export const mutateParticipantAgenda = async (
           canonical.now,
           dependencies.onOperationalDrift,
         );
-        return canonicalProblemResponse(error, snapshot, requestId);
+        return withRateLimitHeaders(
+          canonicalProblemResponse(error, snapshot, requestId),
+          rateLimitDecision,
+        );
       } catch {
-        return privateProblemResponse(
-          new Error('Canonical agenda failed'),
-          requestId,
+        return withRateLimitHeaders(
+          privateProblemResponse(
+            new Error('Canonical agenda failed'),
+            requestId,
+          ),
+          rateLimitDecision,
         );
       }
     }
-    return privateProblemResponse(error, requestId);
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
   }
 };

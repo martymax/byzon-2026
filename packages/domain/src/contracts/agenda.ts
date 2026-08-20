@@ -1080,6 +1080,10 @@ export const agendaValidationProblemSchema = defineApiProblemSchema(
   'VALIDATION_FAILED',
   422,
 );
+export const agendaRateLimitedProblemSchema = defineApiProblemSchema(
+  'RATE_LIMITED',
+  429,
+);
 export const agendaInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
@@ -1091,6 +1095,7 @@ const participantAgendaReadProblems = [
   agendaEventAccessDeniedProblemSchema,
   agendaDisabledProblemSchema,
   agendaValidationProblemSchema,
+  agendaRateLimitedProblemSchema,
   agendaInternalErrorProblemSchema,
 ] as const;
 

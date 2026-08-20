@@ -121,9 +121,13 @@ provide capacity and immediate cancellation state. Capacity drift degrades only
 the affected confirmed reservation to a conservative closed projection and
 emits an operator warning instead of failing the entire agenda.
 
-The provider-neutral rate-limit primitive from `P2-09` has no shared production
-store yet. Agenda-specific read/mutation buckets therefore remain a production
-rollout gate on `P8-01`; an in-process fallback must not be substituted.
+Agenda routes use two explicit one-minute shared Redis buckets keyed by an
+environment-keyed HMAC of the canonical event slug and authenticated user ID.
+`participant_agenda.read` allows 120 requests and deliberately fails open with
+a throttled PII-free warning when Redis is unavailable. The
+`participant_agenda.mutation` bucket allows 30 requests and fails closed before
+database or idempotency work when Redis is unavailable. Both return the
+standard rate-limit headers; exhausted buckets return `429 RATE_LIMITED`.
 
 ## Published participant program
 

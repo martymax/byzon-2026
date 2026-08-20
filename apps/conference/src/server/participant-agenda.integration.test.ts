@@ -2,6 +2,7 @@ import { createDatabaseClient, schema } from '@byzon/database';
 import {
   participantAgendaMutationProblemSchema,
   participantAgendaMutationResponseSchema,
+  participantAgendaProblemSchema,
   participantAgendaResponseSchema,
 } from '@byzon/domain/contracts';
 import { and, count, eq } from 'drizzle-orm';
@@ -12,6 +13,7 @@ import {
   readParticipantAgenda,
   type ParticipantAgendaDependencies,
 } from './participant-agenda';
+import { createParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe.sequential : describe.skip;
@@ -388,6 +390,70 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       items: [],
       calendarExport: { state: 'unavailable', reason: 'empty' },
     });
+  });
+
+  it('applies the authenticated rate-limit gate and fails mutations closed', async () => {
+    const readRateLimit = vi.fn(async () => ({
+      allowed: true,
+      limit: 120,
+      remaining: 119,
+      resetAt: new Date(fixedNow.getTime() + 60_000),
+      retryAfterSeconds: 60,
+    }));
+    const read = await readParticipantAgenda(readRequest(), {
+      ...dependencies(primaryUserId),
+      rateLimit: readRateLimit,
+    });
+    expect(read.status).toBe(200);
+    expect(read.headers.get('ratelimit-limit')).toBe('120');
+    expect(read.headers.get('ratelimit-remaining')).toBe('119');
+    expect(readRateLimit).toHaveBeenCalledWith('read', primaryUserId);
+
+    const exhaustedReadRateLimit = createParticipantAgendaRateLimiter({
+      store: {
+        consume: vi.fn(async () => ({
+          count: 121,
+          resetAt: new Date(fixedNow.getTime() + 42_000),
+        })),
+      },
+      subjectSecret: 'test-agenda-rate-limit-secret-at-least-32-chars',
+      eventSlug,
+      now: () => fixedNow,
+    });
+    const limitedRead = await readParticipantAgenda(readRequest(), {
+      ...dependencies(primaryUserId),
+      rateLimit: exhaustedReadRateLimit,
+    });
+    expect(limitedRead.status).toBe(429);
+    expect(limitedRead.headers.get('retry-after')).toBe('42');
+    expect(
+      participantAgendaProblemSchema.parse(await limitedRead.json()),
+    ).toMatchObject({ code: 'RATE_LIMITED' });
+
+    const mutationRateLimit = vi.fn(async () => {
+      throw new Error('shared rate-limit store unavailable');
+    });
+    const mutation = await mutateParticipantAgenda(
+      mutationRequest(
+        { action: 'add', sessionId: savedSessionId, expectedVersion: 1 },
+        'agenda-rate-limit-unavailable-0001',
+      ),
+      {
+        ...dependencies(primaryUserId),
+        rateLimit: mutationRateLimit,
+      },
+    );
+    expect(mutation.status).toBe(500);
+    expect(await mutation.json()).toMatchObject({ code: 'INTERNAL_ERROR' });
+    expect(mutationRateLimit).toHaveBeenCalledWith('mutation', primaryUserId);
+    expect(
+      await client.db.query.participantAgendas.findFirst({
+        where: and(
+          eq(schema.participantAgendas.eventId, eventId),
+          eq(schema.participantAgendas.userId, primaryUserId),
+        ),
+      }),
+    ).toBeUndefined();
   });
 
   it('applies add/remove idempotently and returns a canonical non-blocking conflict', async () => {

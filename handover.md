@@ -158,8 +158,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   komponenty 846/846, Playwright E2E 15/15 a oba dependency audity bez známé
   zranitelnosti. Standalone runtime smoke ověřil `ready → degraded → ready`,
   jednu throttled warning zprávu, recovery log a worker startup/shutdown.
-- Samotné P8-01 žádný endpoint potichu nelimituje; konkrétní API route musí
-  explicitně zvolit scope, subject a fail-open/fail-closed politiku.
+- Agenda PR `#22` nyní provider používá přes explicitní read/mutation scope;
+  ostatní API route musí dál samostatně zvolit subject a outage politiku.
 
 ## Rozpracovaná práce (`P5-01`, `P5-02`, jádro `P5-03`)
 
@@ -193,22 +193,21 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   minimalizoval uložený idempotency receipt, vynutil limit 512 položek, zachoval
   konzervativně zavřenou potvrzenou rezervaci při capacity driftu s operator
   warningem, skryl server-disabled offer akce a před backfillem atomicky ověřuje
-  všechny tři provenance/title/time targety. Izolovaný PostgreSQL po všech
-  devíti migracích prošel database 94/94 a conference 526/526 bez skipů;
-  agenda HTTP 10/10 kryje auth, cross-event, CSRF, idempotency,
-  stale/cutoff, ticket, audit, publication drift a souběh o poslední místo.
-  Původní globální `pnpm run ci` prošlo bez lint warningů včetně 845 workspace testů,
-  všech typechecků, produkčního Next/worker buildu, source/build mock boundary
-  a static smoke 25 HTML/58 assetů. Aktuální browser komponenty prošly 849/849,
-  Playwright E2E 15/15 ve třech viewports a oba dependency audity hlásí nula
-  známých zranitelností.
-- Jediný potvrzený review bod bez lokální implementace je rate limiting agenda
-  route. `P2-09` záměrně dodalo jen provider-neutral kontrakt a repozitář nemá
-  atomický shared production store ani runtime `REDIS_URL`; procesový store by
-  porušil multi-instance invariant. Před production rolloutem agenda route je
-  proto nutné předtáhnout `P8-01`, zapojit environment-keyed HMAC subjecty a
-  otestovat fail-closed výpadek provideru. PR `#22` se do té doby nemá mergeovat
-  jako production-ready.
+  všechny tři provenance/title/time targety. Po rebase a rate-limit zapojení
+  prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
+  9/9, agenda HTTP 11/11 a conference 539/539 bez skipů. Globální
+  `pnpm run ci` prošlo bez lint warningů včetně 872 workspace testů, všech
+  typechecků, produkčního Next/worker buildu, source/build mock boundary a
+  static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
+  Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency
+  audit hlásí nula známých zranitelností.
+- Po rebase na integrované `P8-01` používá GET atomický
+  `participant_agenda.read` bucket 120/min a při nedostupném Redis explicitně
+  failne otevřeně s throttled PII-free warningem. POST používá
+  `participant_agenda.mutation` 30/min a failne zavřeně ještě před DB a
+  idempotency prací. Subject je environment-keyed HMAC canonical event slugu a
+  user UUID; povolené odpovědi nesou rate-limit hlavičky a vyčerpání vrací
+  kontraktové `429 RATE_LIMITED`.
 
 ## Dokončená práce (`P5-08`, PR #21)
 
