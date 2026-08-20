@@ -31,8 +31,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `0006_woozy_the_professor.sql` přidává profilovou verzi a tabulku
   `privacy_requests`; nevznikla nová env proměnná. `BLOCKER-LEGAL-01` dál
   blokuje pouze finální právní obsah/UAT, ne tuto integraci.
-- `P5-08` je implementovaný, zatím necommitnutý na
-  `agent/p5-08-integrate-activity-roster`. `CS-ROSTER-01` a produkční
+- `P5-08` je implementovaný přes
+  [PR #21](https://github.com/martymax/byzon-2026/pull/21). `CS-ROSTER-01` a produkční
   `/host/aktivity` používají Better Auth, canonical event a aktivní
   session-scoped `room_operator` assignment. List/detail vrací jen bounded
   reservation reference, stav, jméno a firmu; networking, attendance,
@@ -114,7 +114,7 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   zůstávají správně backend/provozními handoffy. Účet, profil, onboarding,
   privacy minimum a session controls už mají autorizované produkční endpointy.
 
-## Dokončená práce (`P5-08`, před commitem)
+## Dokončená práce (`P5-08`, PR #21)
 
 - Přidány read-only endpointy `GET /api/v1/activity-roster` a
   `GET /api/v1/activity-roster/:sessionId`. Identitu odvozují výhradně z Better
