@@ -50,6 +50,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const cancellationRaceUserId = crypto.randomUUID();
   const cutoffRaceUserId = crypto.randomUUID();
   const replayUserId = crypto.randomUUID();
+  const endedReplayUserId = crypto.randomUUID();
   const projectedReservationUserId = crypto.randomUUID();
   const projectedWaitlistUserId = crypto.randomUUID();
   const cancelledPublicationUserId = crypto.randomUUID();
@@ -159,6 +160,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       cancellationRaceUserId,
       cutoffRaceUserId,
       replayUserId,
+      endedReplayUserId,
       projectedReservationUserId,
       projectedWaitlistUserId,
       cancelledPublicationUserId,
@@ -183,6 +185,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         cancellationRaceUserId,
         cutoffRaceUserId,
         replayUserId,
+        endedReplayUserId,
         projectedReservationUserId,
         projectedWaitlistUserId,
         cancelledPublicationUserId,
@@ -205,6 +208,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         cancellationRaceUserId,
         cutoffRaceUserId,
         replayUserId,
+        endedReplayUserId,
         projectedReservationUserId,
         projectedWaitlistUserId,
         cancelledPublicationUserId,
@@ -983,6 +987,152 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     }
   });
 
+  it('rechecks authorization after acquiring the read lock', async () => {
+    let signalLocked!: () => void;
+    const locked = new Promise<void>((resolve) => {
+      signalLocked = resolve;
+    });
+    let releaseLock!: () => void;
+    const lockRelease = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const holder = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `participant-agenda:${eventId}:${consistentReadUserId}`,
+      );
+      signalLocked();
+      await lockRelease;
+    });
+    await locked;
+
+    try {
+      const reading = readParticipantAgenda(
+        readRequest(),
+        dependencies(consistentReadUserId),
+      );
+      const stateBeforeRevocation = await Promise.race([
+        reading.then(() => 'settled' as const),
+        new Promise<'blocked'>((resolve) => {
+          setTimeout(() => resolve('blocked'), 100);
+        }),
+      ]);
+      expect(stateBeforeRevocation).toBe('blocked');
+      await client.db
+        .update(schema.eventMemberships)
+        .set({ status: 'suspended' })
+        .where(
+          and(
+            eq(schema.eventMemberships.eventId, eventId),
+            eq(schema.eventMemberships.userId, consistentReadUserId),
+          ),
+        );
+      releaseLock();
+      await holder;
+
+      const response = await reading;
+      expect(response.status).toBe(403);
+      expect(
+        participantAgendaProblemSchema.parse(await response.json()),
+      ).toMatchObject({ code: 'EVENT_ACCESS_DENIED' });
+    } finally {
+      releaseLock();
+      await holder;
+      await client.db
+        .update(schema.eventMemberships)
+        .set({ status: 'active' })
+        .where(
+          and(
+            eq(schema.eventMemberships.eventId, eventId),
+            eq(schema.eventMemberships.userId, consistentReadUserId),
+          ),
+        );
+    }
+  });
+
+  it('rechecks authorization before writing participant state', async () => {
+    let signalLocked!: () => void;
+    const locked = new Promise<void>((resolve) => {
+      signalLocked = resolve;
+    });
+    let releaseLock!: () => void;
+    const lockRelease = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const holder = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `participant-agenda:${eventId}:${driftUserId}`,
+      );
+      signalLocked();
+      await lockRelease;
+    });
+    await locked;
+
+    try {
+      const mutation = mutateParticipantAgenda(
+        mutationRequest(
+          { action: 'add', sessionId: savedSessionId, expectedVersion: 1 },
+          'agenda-authorization-race-add-0001',
+        ),
+        dependencies(driftUserId),
+      );
+      const stateBeforeRevocation = await Promise.race([
+        mutation.then(() => 'settled' as const),
+        new Promise<'blocked'>((resolve) => {
+          setTimeout(() => resolve('blocked'), 100);
+        }),
+      ]);
+      expect(stateBeforeRevocation).toBe('blocked');
+      await client.db
+        .update(schema.eventMemberships)
+        .set({ status: 'suspended' })
+        .where(
+          and(
+            eq(schema.eventMemberships.eventId, eventId),
+            eq(schema.eventMemberships.userId, driftUserId),
+          ),
+        );
+      releaseLock();
+      await holder;
+
+      const response = await mutation;
+      expect(response.status).toBe(403);
+      expect(
+        participantAgendaMutationProblemSchema.parse(await response.json()),
+      ).toMatchObject({ code: 'EVENT_ACCESS_DENIED' });
+      expect(
+        await client.db.query.participantAgendas.findFirst({
+          where: and(
+            eq(schema.participantAgendas.eventId, eventId),
+            eq(schema.participantAgendas.userId, driftUserId),
+          ),
+        }),
+      ).toBeUndefined();
+      expect(
+        await client.db.query.idempotencyKeys.findFirst({
+          where: and(
+            eq(schema.idempotencyKeys.eventId, eventId),
+            eq(schema.idempotencyKeys.actorId, driftUserId),
+            eq(schema.idempotencyKeys.scope, 'participant.agenda-action'),
+          ),
+        }),
+      ).toBeUndefined();
+    } finally {
+      releaseLock();
+      await holder;
+      await client.db
+        .update(schema.eventMemberships)
+        .set({ status: 'active' })
+        .where(
+          and(
+            eq(schema.eventMemberships.eventId, eventId),
+            eq(schema.eventMemberships.userId, driftUserId),
+          ),
+        );
+    }
+  });
+
   it('allows removing a saved session cancelled in the latest publication', async () => {
     const before = await readParticipantAgenda(
       readRequest(),
@@ -1406,6 +1556,36 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       mutation: { action: 'remove', outcome: 'superseded' },
       timeConflict: null,
     });
+  });
+
+  it('preserves an exact-key replay after the event ends', async () => {
+    const body = {
+      action: 'add' as const,
+      sessionId: savedSessionId,
+      expectedVersion: 1,
+    };
+    const key = 'agenda-replay-after-event-ended-0001';
+    const added = await mutate(endedReplayUserId, body, key);
+    expect(added.status).toBe(200);
+    const addedBody = participantAgendaMutationResponseSchema.parse(
+      await added.clone().json(),
+    );
+
+    await client.db
+      .update(schema.events)
+      .set({ status: 'ended' })
+      .where(eq(schema.events.id, eventId));
+    try {
+      const replay = await mutate(endedReplayUserId, body, key);
+      expect(replay.status).toBe(200);
+      expect(replay.headers.get('idempotency-replayed')).toBe('true');
+      expect(await replay.json()).toEqual(addedBody);
+    } finally {
+      await client.db
+        .update(schema.events)
+        .set({ status: 'live' })
+        .where(eq(schema.events.id, eventId));
+    }
   });
 
   it('allows exactly one of two contenders to reserve the final place', async () => {

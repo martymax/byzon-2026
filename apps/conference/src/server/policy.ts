@@ -1,5 +1,9 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import { schema, type Database } from '@byzon/database';
+import {
+  schema,
+  type Database,
+  type DatabaseTransaction,
+} from '@byzon/database';
 import {
   hasEventPermission,
   type EventPermission,
@@ -25,8 +29,10 @@ export class EventAccessDeniedError extends Error {
   }
 }
 
+type EventPolicyDatabase = Database | DatabaseTransaction;
+
 export const loadEventPolicy = async (
-  db: Database,
+  db: EventPolicyDatabase,
   actor: EventActor,
   eventId: string,
 ): Promise<EventPolicy | null> => {
@@ -63,7 +69,7 @@ export const loadEventPolicy = async (
 };
 
 export const requireEventPermission = async (
-  db: Database,
+  db: EventPolicyDatabase,
   actor: EventActor,
   eventId: string,
   permission: EventPermission,

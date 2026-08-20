@@ -221,14 +221,17 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   deadline i eventovou fázi po participant a případných content/session
   locích: pozdní read nevrátí P2 snapshot ani po souběžné archivaci a
   pozdní mutation rollbackne agenda i idempotency zápis po cutoffu nebo
-  souběžném ukončení eventu.
+  souběžném ukončení eventu. Stejný post-lock gate znovu ověřuje aktivní
+  membership a participant roli, takže souběžná revokace nepropustí privátní
+  GET ani zápis. Exact-key replay po `ended` zůstává dostupný přes read-only
+  canonical snapshot; nová mutace je nadále odmítnuta uvnitř non-replay callbacku.
   Latest immutable publication se po participant locku rovněž znovu načte pro
   GET i non-replay mutation callback, takže agenda version, položky a
   publication version tvoří jeden canonical bod i při souběžném publish/add.
-  PostgreSQL race sada má 23/23 agenda HTTP scénářů. Po rebase a rate-limit zapojení
+  PostgreSQL race sada má 26/26 agenda HTTP scénářů. Po rebase a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
-  9/9, agenda HTTP 23/23 a conference 551/551 bez skipů. Globální
-  gate prošel bez lint chyb včetně 885 workspace testů, všech
+  9/9, agenda HTTP 26/26 a conference 554/554 bez skipů. Globální
+  gate prošel bez lint chyb včetně 888 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a
   static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency

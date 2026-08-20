@@ -353,19 +353,23 @@ const loadAgendaContext = async (
     ),
   });
   const event = requireAgendaEventAvailable(loadedEvent, now, mutation);
+  await requireAgendaPermission(dependencies.db, userId, event.id);
+  return loadAgendaPublication(dependencies.db, event);
+};
+
+const requireAgendaPermission = async (
+  db: AgendaDatabase,
+  userId: string,
+  eventId: string,
+): Promise<void> => {
   try {
-    await requireEventPermission(
-      dependencies.db,
-      { userId },
-      event.id,
-      'agenda:own:write',
-      { ownsResource: true },
-    );
+    await requireEventPermission(db, { userId }, eventId, 'agenda:own:write', {
+      ownsResource: true,
+    });
   } catch (error) {
     if (!(error instanceof EventAccessDeniedError)) throw error;
     throw eventAccessDenied();
   }
-  return loadAgendaPublication(dependencies.db, event);
 };
 
 const requireAgendaEventAvailable = (
@@ -852,6 +856,7 @@ export const loadParticipantAgendaSnapshot = async (
       now,
       false,
     );
+    await requireAgendaPermission(transaction, userId, context.event.id);
     const lockedContext = await loadAgendaPublication(transaction, lockedEvent);
     return loadParticipantAgendaSnapshotUnlocked(
       transaction,
@@ -1130,7 +1135,7 @@ export const mutateParticipantAgenda = async (
       dependencies,
       session.user.id,
       now,
-      true,
+      false,
     );
     canonical = { context, userId: session.user.id };
     const json = await readBoundedJson(request);
@@ -1185,6 +1190,11 @@ export const mutateParticipantAgenda = async (
           context.event.id,
           mutationNow,
           true,
+        );
+        await requireAgendaPermission(
+          transaction,
+          session.user.id,
+          context.event.id,
         );
         const lockedContext = await loadAgendaPublication(
           transaction,
