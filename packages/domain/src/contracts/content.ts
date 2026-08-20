@@ -336,6 +336,94 @@ export const publishedProgramSnapshotSchema = z.object({
     .superRefine(validateProgram),
 });
 
+const reservationWindowShape = {
+  reservationOpensAt: z.string().datetime({ offset: true }).nullable(),
+  reservationClosesAt: z.string().datetime({ offset: true }).nullable(),
+};
+
+const validateReservationWindow = (
+  window: {
+    reservationOpensAt: string | null;
+    reservationClosesAt: string | null;
+  },
+  context: z.RefinementCtx,
+): void => {
+  if (
+    window.reservationOpensAt &&
+    window.reservationClosesAt &&
+    Date.parse(window.reservationClosesAt) <=
+      Date.parse(window.reservationOpensAt)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['reservationClosesAt'],
+      message: 'Snapshot reservation window must be ordered',
+    });
+  }
+};
+
+export const publishedAgendaReservationWindowsSchema = z.record(
+  uuidSchema,
+  z.strictObject(reservationWindowShape).superRefine(validateReservationWindow),
+);
+
+export type PublishedAgendaReservationWindows = z.infer<
+  typeof publishedAgendaReservationWindowsSchema
+>;
+
+/**
+ * Server publication writes retain the reservation window beside the public
+ * session projection. Public readers continue to use
+ * `publishedProgramSnapshotSchema`, which strips these operational fields.
+ */
+export const publishedProgramAgendaSnapshotSchema = z.object({
+  program: z
+    .object({
+      days: z.array(z.object(programDayShape)).max(MAX_DAYS),
+      rooms: z.array(z.object(programRoomShape)).max(MAX_ROOMS),
+      sessions: z
+        .array(
+          z
+            .object({
+              ...programSessionShape,
+              reservationOpensAt:
+                reservationWindowShape.reservationOpensAt.optional(),
+              reservationClosesAt:
+                reservationWindowShape.reservationClosesAt.optional(),
+            })
+            .superRefine((session, context) => {
+              const hasWindow =
+                session.reservationOpensAt !== undefined ||
+                session.reservationClosesAt !== undefined;
+              if (
+                hasWindow &&
+                (session.reservationOpensAt === undefined ||
+                  session.reservationClosesAt === undefined)
+              ) {
+                context.addIssue({
+                  code: 'custom',
+                  path: ['reservationClosesAt'],
+                  message: 'Snapshot reservation window must be complete',
+                });
+              }
+              validateReservationWindow(
+                {
+                  reservationOpensAt: session.reservationOpensAt ?? null,
+                  reservationClosesAt: session.reservationClosesAt ?? null,
+                },
+                context,
+              );
+            }),
+        )
+        .max(MAX_SESSIONS),
+    })
+    .superRefine(validateProgram),
+});
+
+export type PublishedProgramAgendaSnapshot = z.infer<
+  typeof publishedProgramAgendaSnapshotSchema
+>['program'];
+
 export const publishedContentSnapshotSchema = z.object({
   event: z
     .object(eventShape)

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   accounts,
+  agendaItems,
   auditLogs,
   consentRecords,
   eventFeatures,
@@ -13,6 +14,7 @@ import {
   legalDocuments,
   outboxEvents,
   participantProfiles,
+  participantAgendas,
   privacyRequests,
   reservations,
   sessions,
@@ -36,6 +38,8 @@ const tables = [
   outboxEvents,
   idempotencyKeys,
   participantProfiles,
+  participantAgendas,
+  agendaItems,
   privacyRequests,
   reservations,
   waitlistEntries,
@@ -66,6 +70,8 @@ describe('stage 2 database schema', () => {
     outboxEvents,
     idempotencyKeys,
     participantProfiles,
+    participantAgendas,
+    agendaItems,
     privacyRequests,
     reservations,
     waitlistEntries,
@@ -131,6 +137,39 @@ describe('stage 2 database schema', () => {
             .reference()
             .columns.map((column) => column.name)
             .join(',') === 'event_id,user_id',
+      ),
+    ).toBe(true);
+  });
+
+  it('stores one versioned agenda root and one projection per participant session', () => {
+    const agendaConfig = getTableConfig(participantAgendas);
+    const itemConfig = getTableConfig(agendaItems);
+
+    expect(
+      agendaConfig.primaryKeys[0]?.columns.map(({ name }) => name),
+    ).toEqual(['event_id', 'user_id']);
+    expect(itemConfig.primaryKeys[0]?.columns.map(({ name }) => name)).toEqual([
+      'event_id',
+      'user_id',
+      'session_id',
+    ]);
+    expect(
+      itemConfig.foreignKeys.some(
+        (key) =>
+          key.reference().foreignTable === participantAgendas &&
+          key
+            .reference()
+            .columns.map(({ name }) => name)
+            .join(',') === 'event_id,user_id',
+      ),
+    ).toBe(true);
+    expect(
+      itemConfig.foreignKeys.some(
+        (key) =>
+          key
+            .reference()
+            .columns.map(({ name }) => name)
+            .join(',') === 'event_id,session_id',
       ),
     ).toBe(true);
   });

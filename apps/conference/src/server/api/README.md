@@ -91,6 +91,52 @@ ID, e-mail, phone, ticket data or attendance evidence. Responses
 are `private, no-store`, vary by Cookie and Authorization and must not be
 persisted in the browser. There is no roster mutation or export endpoint.
 
+## Participant agenda
+
+`GET /api/v1/me/agenda` and `POST /api/v1/me/agenda/actions` derive both the
+actor and canonical event on the server. They require an active membership and
+participant-owned agenda permission, reject draft/archived events and stop
+serving operational data at the event anonymization deadline. Responses are
+bounded, `private, no-store` and vary by Cookie and Authorization.
+
+The current production mutation allowlist is `add`, `remove` and `reserve`.
+Every mutation requires exact same-origin JSON, an idempotency key and the
+canonical agenda version. Owner-scoped advisory locking serializes agenda
+changes; reservation adds a second event/session lock before counting confirmed
+places and inserting the final seat. A reservation also requires a saved agenda
+item, an activated ticket and a published non-networking session with explicit
+reservation capacity. Successful writes and their minimal audit entry share one
+transaction; no-op and replay do not create another audit row. Idempotency
+storage contains only action, session reference, outcome and resulting version;
+the private canonical response is rebuilt through the current access and
+anonymization gates on both the first response and replay. If a later inverse
+mutation replaces the stored receipt's target postcondition before either
+response is assembled, the current canonical snapshot uses outcome
+`superseded` and no stale conflict warning instead of failing response
+validation. Add is a no-op when an existing confirmed reservation or waiting
+entry already projects the target into the agenda.
+
+The read model joins manual/organizer agenda items with confirmed reservations
+and any pre-existing waiting rows. Cancellation and waitlist controls remain
+server-disabled until `P5-04`/`P5-05`, networking remains behind
+`BLOCKER-RES-01`, coaching source reconciliation belongs to `P5-06`, and the
+calendar representation remains unavailable until `P5-09`. The immutable
+publication is the visibility allowlist while non-archived operational rows
+provide capacity and immediate cancellation state. Capacity drift degrades only
+the affected confirmed reservation to a conservative closed projection and
+emits an operator warning instead of failing the entire agenda.
+Reservation creation shares the event content lock with organizer mutations,
+then acquires the session reservation lock, reloads operational status and
+re-evaluates the reservation window from a fresh authoritative clock value.
+
+Agenda routes use two explicit one-minute shared Redis buckets keyed by an
+environment-keyed HMAC of the canonical event slug and authenticated user ID.
+`participant_agenda.read` allows 120 requests and deliberately fails open with
+a throttled PII-free warning when Redis is unavailable. The
+`participant_agenda.mutation` bucket allows 30 requests and fails closed before
+database or idempotency work when Redis is unavailable. Both return the
+standard rate-limit headers; exhausted buckets return `429 RATE_LIMITED`.
+
 ## Published participant program
 
 `GET /api/v1/events/:eventId/program` requires an active event membership with

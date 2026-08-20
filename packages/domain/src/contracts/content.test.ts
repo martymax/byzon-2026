@@ -7,6 +7,8 @@ import {
   participantProgramResponseSchema,
   problemTypeForCode,
   publishedContentSnapshotSchema,
+  publishedProgramAgendaSnapshotSchema,
+  publishedProgramSnapshotSchema,
   publicContentResponseSchema,
 } from './index.js';
 
@@ -164,6 +166,45 @@ describe('CS-CONTENT-01 contracts', () => {
 
     expect(parsed).not.toHaveProperty('privateAdminNote');
     expect(parsed.speakers[0]).not.toHaveProperty('privateNote');
+
+    const programWithWindow = {
+      program: {
+        ...program,
+        sessions: [
+          {
+            ...program.sessions[0],
+            capacityMode: 'reservation',
+            capacity: 10,
+            reservationOpensAt: null,
+            reservationClosesAt: '2026-09-18T06:45:00.000Z',
+          },
+        ],
+      },
+    };
+    expect(
+      publishedProgramAgendaSnapshotSchema.parse(programWithWindow).program
+        .sessions[0],
+    ).toMatchObject({
+      reservationOpensAt: null,
+      reservationClosesAt: '2026-09-18T06:45:00.000Z',
+    });
+    expect(
+      publishedProgramSnapshotSchema.parse(programWithWindow).program
+        .sessions[0],
+    ).not.toHaveProperty('reservationClosesAt');
+    expect(
+      publishedProgramAgendaSnapshotSchema.safeParse({
+        program: {
+          ...program,
+          sessions: [
+            {
+              ...program.sessions[0],
+              reservationClosesAt: '2026-09-18T06:45:00.000Z',
+            },
+          ],
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it('accepts only credential-free HTTPS links in published directories', () => {

@@ -228,7 +228,14 @@ integration('content schema integration', () => {
         });
         await transaction
           .update(schema.contentPublications)
-          .set({ snapshot: { eventId: primaryEventId, sessions: ['changed'] } })
+          .set({
+            reservationWindows: {
+              [generateUuidV7()]: {
+                reservationOpensAt: null,
+                reservationClosesAt: null,
+              },
+            },
+          })
           .where(eq(schema.contentPublications.id, publicationId));
       }),
     ).rejects.toMatchObject({

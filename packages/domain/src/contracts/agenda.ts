@@ -225,6 +225,7 @@ export type AgendaSessionActionState = z.infer<
 const waitlistBaseShape = {
   id: uuidSchema,
   joinedAt: dateTimeSchema,
+  actionsAvailable: z.boolean().optional(),
 } as const;
 
 export const agendaWaitlistStateSchema = z
@@ -324,6 +325,15 @@ export const participantAgendaItemSchema = z
         id: uuidSchema,
         version: safePositiveVersionSchema,
         confirmedAt: dateTimeSchema,
+        cancellation: z
+          .discriminatedUnion('state', [
+            z.strictObject({ state: z.literal('available') }),
+            z.strictObject({
+              state: z.literal('unavailable'),
+              reason: z.enum(['policy_pending', 'closed']),
+            }),
+          ])
+          .optional(),
       }),
     }),
     z.strictObject({
@@ -333,6 +343,10 @@ export const participantAgendaItemSchema = z
     }),
   ])
   .superRefine((item, context) => {
+    const disabledWaitingEntry =
+      item.state === 'waitlisted' &&
+      item.waitlist.state === 'waiting' &&
+      item.waitlist.actionsAvailable === false;
     if (
       item.session.status === 'cancelled' &&
       item.action.state !== 'cancelled'
@@ -369,7 +383,8 @@ export const participantAgendaItemSchema = z
     if (
       item.action.state === 'available' &&
       item.capacity.mode === 'reservation' &&
-      item.capacity.actorAvailability.state === 'unavailable'
+      item.capacity.actorAvailability.state === 'unavailable' &&
+      !disabledWaitingEntry
     ) {
       context.addIssue({
         code: 'custom',
@@ -397,12 +412,24 @@ export const participantAgendaItemSchema = z
     if (
       item.state === 'waitlisted' &&
       item.waitlist.state === 'waiting' &&
-      item.action.state !== 'capacity_full'
+      item.action.state !== 'capacity_full' &&
+      !disabledWaitingEntry
     ) {
       context.addIssue({
         code: 'custom',
         path: ['action', 'state'],
         message: 'A waiting entry requires a full session',
+      });
+    }
+    if (
+      disabledWaitingEntry &&
+      (item.capacity.mode !== 'reservation' ||
+        item.capacity.actorAvailability.state !== 'unavailable')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['capacity', 'actorAvailability'],
+        message: 'A disabled waiting entry cannot bypass FIFO promotion',
       });
     }
     if (
@@ -442,7 +469,7 @@ export const agendaCalendarExportSchema = z.discriminatedUnion('state', [
   }),
   z.strictObject({
     state: z.literal('unavailable'),
-    reason: z.literal('empty'),
+    reason: z.enum(['empty', 'not_ready']),
   }),
 ]);
 
@@ -603,13 +630,17 @@ const validateAgendaSnapshot = (
   });
 
   if (
-    (snapshot.items.length === 0) !==
-    (snapshot.calendarExport.state === 'unavailable')
+    (snapshot.items.length === 0 &&
+      (snapshot.calendarExport.state !== 'unavailable' ||
+        snapshot.calendarExport.reason !== 'empty')) ||
+    (snapshot.items.length > 0 &&
+      snapshot.calendarExport.state === 'unavailable' &&
+      snapshot.calendarExport.reason !== 'not_ready')
   ) {
     context.addIssue({
       code: 'custom',
       path: ['calendarExport'],
-      message: 'Calendar export availability must match agenda contents',
+      message: 'Calendar export state must match agenda contents and rollout',
     });
   }
 };
@@ -687,7 +718,7 @@ export type ParticipantAgendaMutationHeaders = z.infer<
 
 const agendaMutationResultBaseShape = {
   sessionId: uuidSchema,
-  outcome: z.enum(['applied', 'already_applied']),
+  outcome: z.enum(['applied', 'already_applied', 'superseded']),
 } as const;
 
 const agendaMutationResultSchema = z.discriminatedUnion('action', [
@@ -820,6 +851,13 @@ const validateAgendaMutationPostcondition = (
       path: ['mutation'],
       message,
     });
+
+  if (mutation.outcome === 'superseded') {
+    if (timeConflict !== null) {
+      issue('A superseded replay cannot carry a time conflict');
+    }
+    return;
+  }
 
   if (timeConflict !== null) {
     if (
@@ -1066,6 +1104,10 @@ export const agendaValidationProblemSchema = defineApiProblemSchema(
   'VALIDATION_FAILED',
   422,
 );
+export const agendaRateLimitedProblemSchema = defineApiProblemSchema(
+  'RATE_LIMITED',
+  429,
+);
 export const agendaInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
@@ -1077,6 +1119,7 @@ const participantAgendaReadProblems = [
   agendaEventAccessDeniedProblemSchema,
   agendaDisabledProblemSchema,
   agendaValidationProblemSchema,
+  agendaRateLimitedProblemSchema,
   agendaInternalErrorProblemSchema,
 ] as const;
 

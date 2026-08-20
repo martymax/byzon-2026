@@ -31,12 +31,16 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `0006_woozy_the_professor.sql` přidává profilovou verzi a tabulku
   `privacy_requests`; nevznikla nová env proměnná. `BLOCKER-LEGAL-01` dál
   blokuje pouze finální právní obsah/UAT, ne tuto integraci.
-- `P5-08` je implementovaný přes
-  [PR #21](https://github.com/martymax/byzon-2026/pull/21). `CS-ROSTER-01` a produkční
+- `P5-08` je sloučený do `main` přes
+  [PR #21](https://github.com/martymax/byzon-2026/pull/21) merge commitem
+  `5433cbb`. `CS-ROSTER-01` a produkční
   `/host/aktivity` používají Better Auth, canonical event a aktivní
   session-scoped `room_operator` assignment. List/detail vrací jen bounded
   reservation reference, stav, jméno a firmu; networking, attendance,
   kontakty, ticket data a export nejsou součástí řezu.
+- Na větvi `agent/p5-01-03-integrate-agenda` a v PR `#22` je implementovaný
+  následující řez `P5-01`/`P5-02` a transakční jádro `P5-03`; přesný rozsah a
+  otevřené produktové hranice jsou v samostatné sekci níže.
 - `static-site/data/content.json` nyní deterministicky
   importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
   i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
@@ -114,10 +118,10 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   zůstávají správně backend/provozními handoffy. Účet, profil, onboarding,
   privacy minimum a session controls už mají autorizované produkční endpointy.
 
-## Dokončená práce (`P8-01`)
+## Dokončená práce (`P8-01`, PR #23)
 
-- Samostatná větev `agent/p8-01-redis-foundation` vznikla z aktuálního
-  `origin/main`; agenda PR `#22` do tohoto infrastrukturního diffu nevstupuje.
+- Samostatný infrastrukturní PR `#23` byl integrován do `main`; agenda PR `#22`
+  na něj navazuje až po rebase, takže Redis základ zůstal oddělený.
 - Nový `@byzon/redis` připíná ioredis `6.0.0` a nabízí lazy connection pro web
   i BullMQ worker. Web má bounded connect/command timeout,
   `maxRetriesPerRequest=1`, vypnutou offline queue a žádné pozdní resend;
@@ -153,10 +157,98 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   komponenty 846/846, Playwright E2E 15/15 a oba dependency audity bez známé
   zranitelnosti. Standalone runtime smoke ověřil `ready → degraded → ready`,
   jednu throttled warning zprávu, recovery log a worker startup/shutdown.
-- P8-01 se publikuje samostatným draft PR do `main`. Po jeho integraci se PR
-  `#22` rebasuje a agenda route dostanou malý
-  explicitní read/mutation bucket patch; samotné P8-01 žádný endpoint potichu
-  nelimituje.
+- Agenda PR `#22` nyní provider používá přes explicitní read/mutation scope;
+  ostatní API route musí dál samostatně zvolit subject a outage politiku.
+
+## Rozpracovaná práce (`P5-01`, `P5-02`, jádro `P5-03`)
+
+- Migrace `0008_pretty_firebrand.sql` přidává versioned
+  `participant_agendas` a event/user/session-scoped `agenda_items` se složenými
+  membership/session FK. Rezervace zůstávají samostatnou provozní autoritou a
+  do agendy se promítají při čtení; session attendance/no-show nevzniká.
+- Produkční `GET /api/v1/me/agenda` a
+  `POST /api/v1/me/agenda/actions` používají Better Auth, canonical event a
+  poslední immutable publication snapshot. DTO jsou bounded,
+  `private, no-store`; add/remove/reserve vyžadují optimistic version,
+  idempotency a exact same-origin JSON. Live `/app/agenda`, home a detail
+  programu už nejsou omezené na development preview.
+- Rezervace vyžaduje uloženou položku, aktivovanou vstupenku, publikovanou
+  nenetworkingovou session a explicitní kapacitu. Owner, sdílený content a
+  event/session advisory lock, nový autoritativní čas po získání locků,
+  count+insert v jedné transakci a PostgreSQL race testy zaručují jediného
+  vítěze posledního místa a nepovolí rezervaci souběžnou se stornem nebo po
+  cutoffu. Aplikované add/remove/reserve zapisují ve stejné transakci minimální
+  audit; replay/no-op nový audit nevytváří.
+- Živý Harmonogram BYZON 2026 byl znovu přečten: import/migrační backfill
+  bezpečně nastavuje EB21 na 12 a dva sobotní workshopy na 20, s cutoffem v
+  začátku session a vypnutým waitlistem. Koučink jsou dvě paralelní řady a
+  zůstává v `P5-06`; není zploštěn do chybného společného slotu.
+  Dvoudílný sobotní mastermind s kapacitou 6 čeká na nový
+  `BLOCKER-RES-05`, zda jedna rezervace pokrývá obě části.
+- Produkční server záměrně odmítá cancel/waitlist/offer akce; UI skryje
+  jejich CTA a pro nehotový `.ics` vrací poctivé `not_ready`. Tyto větve
+  zůstávají v `P5-04`, `P5-05` a `P5-09`; networking za `BLOCKER-RES-01`.
+- Security/code review doplnil kontrolu aktivované vstupenky, audit a fail-closed
+  ověření provozní session proti publication allowlistu. Review PR `#22`
+  navíc opravil běžné snapshot-published zdrojové řádky ve stavu `draft`,
+  minimalizoval uložený idempotency receipt, vynutil limit 512 položek, zachoval
+  konzervativně zavřenou potvrzenou rezervaci při capacity driftu s operator
+  warningem, skryl server-disabled offer akce a před backfillem atomicky ověřuje
+  všechny tři provenance/title/time targety. Následné Codex review navíc
+  serializovalo rezervaci s provozním stornem, přesunulo cutoff kontrolu za
+  locky a pro replay překonaný pozdější opačnou mutací zavedlo explicitní
+  canonical výsledek `superseded` bez ukládání privátního snapshotu. Další
+  review rozšířilo stejnou ochranu i na první odpověď po commitu a změnilo add
+  nad existující rezervací nebo viditelným waitlistem na čistý no-op bez nové
+  verze, auditu či duplicitní uložené vrstvy. Finální review navíc serializuje
+  GET snapshot participant lockem, hlídá 512 unikátních položek přes sjednocení
+  save/reservation/waitlist ještě před add a dovolí odstranit uloženou session
+  zrušenou v poslední publikaci. Následná kontrola přesunula snapshotový
+  `serverNow` až za participant lock a zachovala exact-key replay i po novější
+  publikaci, která cílovou session odstranila. Downstream roster nyní používá
+  stejný latest-publication allowlist, takže nová rezervace nad běžným
+  importovaným `draft` řádkem je viditelná přiřazenému operátorovi. Poslední
+  review navíc zachovává aktivní waiting projekci i po uvolnění místa, ale s
+  vypnutými akcemi až do canonical FIFO promotion, a její pořadí počítá živě
+  pouze mezi aktivními waiting řádky. Session odebrané z poslední publikace se
+  nezobrazují ani neblokují limit 512, jejich vlastní uloženou agenda vrstvu
+  však lze idempotentně uklidit. Následný review hardening zachovává waiting
+  projekci jako bezpečně uzavřenou a operator-visible i při ztrátě provozní
+  kapacity/type policy. Migrační backfill navíc drží rezervační tabulkový lock
+  a odmítne nastavit kapacitu pod počet již potvrzených rezervací; čerstvá
+  PostgreSQL regrese ověřila odmítnutí 13 rezervací pro kapacitu 12. Poslední
+  retention review navíc revaliduje aktuální eventový anonymizační
+  deadline i eventovou fázi po participant a případných content/session
+  locích: pozdní read nevrátí P2 snapshot ani po souběžné archivaci a
+  pozdní mutation rollbackne agenda i idempotency zápis po cutoffu nebo
+  souběžném ukončení eventu. Stejný post-lock gate znovu ověřuje aktivní
+  membership a participant roli, takže souběžná revokace nepropustí privátní
+  GET ani zápis. Exact-key replay po `ended` zůstává dostupný přes read-only
+  canonical snapshot; nová mutace je nadále odmítnuta uvnitř non-replay callbacku.
+  Immutable publication nyní uchovává server-only rezervační okno, které
+  public/participant program DTO odstraňují, ale agenda používá jako živý cutoff
+  až do další publikace; migrace `0009` ho z dosavadní autoritativní hodnoty
+  backfilluje i legacy publikacím, takže ho nepublikovaný import časů nezmění.
+  Conflict odpovědi se po rollbacku překlasifikují podle čerstvé canonical
+  projekce a souběžné storno/změna kapacity již nevede na schema `500`.
+  Latest immutable publication se po participant locku rovněž znovu načte pro
+  GET i non-replay mutation callback, takže agenda version, položky a
+  publication version tvoří jeden canonical bod i při souběžném publish/add.
+  PostgreSQL race sada má 28/28 agenda HTTP scénářů. Po rebase a rate-limit zapojení
+  prošel izolovaný PostgreSQL po všech deseti migracích, Redis integrační sada
+  9/9, agenda HTTP 28/28 a conference 556/556 bez skipů. Globální
+  gate prošel bez lint chyb včetně 890 workspace testů, všech
+  typechecků, produkčního Next/worker buildu, source/build mock boundary a
+  static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
+  Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency
+  audit hlásí nula známých zranitelností.
+- Po rebase na integrované `P8-01` používá GET atomický
+  `participant_agenda.read` bucket 120/min a při nedostupném Redis explicitně
+  failne otevřeně s throttled PII-free warningem. POST používá
+  `participant_agenda.mutation` 30/min a failne zavřeně ještě před DB a
+  idempotency prací. Subject je environment-keyed HMAC canonical event slugu a
+  user UUID; povolené odpovědi nesou rate-limit hlavičky a vyčerpání vrací
+  kontraktové `429 RATE_LIMITED`.
 
 ## Dokončená práce (`P5-08`, PR #21)
 
@@ -172,10 +264,14 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   event FK, partial unique aktivními stavy a stabilní unikátní FIFO pozicí.
   Nevytváří agenda write flow, nevolí `RES-04` promotion režim a nepřidává
   blokovanou networkingovou kapacitu.
-- Server promítá pouze publikované nenetworkingové sessions s
-  `capacity_mode=reservation`, aktivní membership a confirmed/waiting řádky.
-  SQL dotazy i DTO jsou bounded; response je `private, no-store`, vary Cookie +
-  Authorization a DTO nevrací user ID, telefon, e-mail, ticket ani attendance.
+- Server promítá pouze sessions z poslední validní immutable publication,
+  které mají aktivní provozní řádek `draft`/`published` s
+  `capacity_mode=reservation` a nejsou networking. Tím podporuje běžný
+  importovaný stav `draft` bez
+  zpřístupnění nepublikovaných sessions. Membership musí být aktivní a do
+  rosteru vstupují jen confirmed/waiting řádky. SQL dotazy i DTO jsou bounded;
+  response je `private, no-store`, vary Cookie + Authorization a DTO nevrací
+  user ID, telefon, e-mail, ticket ani attendance.
 - Security review doplnil SQL limit před kontraktovou projekcí. Code review
   ověřil fail-closed malformed/revoked/cross-event scope, nerozlišující detail
   404, retenční stop na `operationalDataAnonymizesAt`, deterministické pořadí,
@@ -191,9 +287,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   source/build mock boundary a statického smoke 25 HTML/58 assetů; production
   i úplný dependency audit hlásí nula známých zranitelností.
 - `CS-ROSTER-01` a capability Roster vedoucího aktivity jsou `integrated`.
-  `P5-01` zůstává otevřený pro agenda items a write transakce; další lokálně
-  neblokovaný krok je `P5-01` až `P5-03`, zatímco `P5-04` čeká na
-  `BLOCKER-RES-04`.
+  Následný agenda write řez je popsán v aktuální sekci výše; `P5-04` dál
+  čeká na `BLOCKER-RES-04`.
 
 ## Dokončená práce (`P4-13`, sloučeno přes PR #20)
 

@@ -130,6 +130,7 @@ describe('stage 3 content schema', () => {
       expect.arrayContaining([
         'version',
         'snapshot',
+        'reservation_windows',
         'checksum_sha256',
         'published_by',
         'published_at',

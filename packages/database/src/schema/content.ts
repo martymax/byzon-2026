@@ -593,6 +593,18 @@ export const contentPublications = pgTable(
       .references(() => events.id, { onDelete: 'restrict' }),
     version: integer('version').notNull(),
     snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    reservationWindows: jsonb('reservation_windows')
+      .$type<
+        Record<
+          string,
+          {
+            reservationOpensAt: string | null;
+            reservationClosesAt: string | null;
+          }
+        >
+      >()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     checksumSha256: varchar('checksum_sha256', { length: 64 }).notNull(),
     publishedBy: uuid('published_by').notNull(),
     publishedAt: timestamp('published_at', { withTimezone: true })
@@ -633,6 +645,10 @@ export const contentPublications = pgTable(
     check(
       'content_publications_snapshot_object_check',
       sql`jsonb_typeof(${table.snapshot}) = 'object'`,
+    ),
+    check(
+      'content_publications_reservation_windows_object_check',
+      sql`jsonb_typeof(${table.reservationWindows}) = 'object'`,
     ),
     check(
       'content_publications_sync_attempts_check',

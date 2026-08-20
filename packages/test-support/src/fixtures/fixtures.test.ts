@@ -210,6 +210,7 @@ describe('participant agenda fixtures', () => {
     expect(participantAgendaProblemFixtures.permission?.code).toBe(
       'EVENT_ACCESS_DENIED',
     );
+    expect(participantAgendaProblemFixtures.rate_limited?.status).toBe(429);
     expect(
       participantAgendaMutationFixtures.reserved_with_conflict?.timeConflict,
     ).toMatchObject({

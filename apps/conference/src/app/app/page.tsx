@@ -53,7 +53,7 @@ export default async function ParticipantHomePage() {
   const { event } = currentEvent;
   return (
     <ParticipantHome
-      enableAgendaJourney={previewAvailable}
+      enableAgendaJourney
       event={{
         endsAt: event.endsAt.toISOString(),
         id: event.id,

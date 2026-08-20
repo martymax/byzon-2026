@@ -28,6 +28,7 @@ export type AgendaMutationFeedbackKind =
   | 'queue_discarded'
   | 'queue_failed'
   | 'queued'
+  | 'rate_limited'
   | 'rejected'
   | 'stale'
   | 'synced'
@@ -59,6 +60,7 @@ export const mapParticipantAgendaReadFailure = (
           return { status: 'permission' };
         case 'AGENDA_DISABLED':
           return { status: 'disabled' };
+        case 'RATE_LIMITED':
         case 'VALIDATION_FAILED':
         case 'INTERNAL_ERROR':
           return {
@@ -155,6 +157,12 @@ export const mapParticipantAgendaMutationFailure = (
         case 'INTERNAL_ERROR':
           return {
             kind: 'error',
+            requestId: failure.problem.requestId,
+            retry: 'mutation',
+          };
+        case 'RATE_LIMITED':
+          return {
+            kind: 'rate_limited',
             requestId: failure.problem.requestId,
             retry: 'mutation',
           };

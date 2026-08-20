@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.4 – sdílený Redis/BullMQ základ a rate-limit provider
+> Stav: implementační plán v6.16 – publication refresh pod agenda lockem
 >
 > Datum sestavení: 20. července 2026
 >
@@ -672,14 +672,14 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil, session actions a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F1-06`, `F2-07` | `F1`, `F2`, `F6` | `integrated`: Better Auth session, serverově zvolený event, private/no-store bootstrap, atomický onboarding, verzovaný profil, deletion request a session actions; právní UAT dál blokuje `BLOCKER-LEGAL-01` |
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started`; hotový je pouze bezpečný status-only subset bez credentialu |
-| `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-05`, `F3` | `F3`, `F6` | v6 `contract ready` bez registration estimate; networkingová rezervace a jediný promotion režim zůstávají blokované `RES-01`/`RES-04` |
+| `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-05`, `F3` | `F3`, `F6` | `partially integrated`: private live read, add/remove, conflict a atomická nenetworkingová rezervace jsou produkčně napojené; waitlist/cancel/ICS zůstávají v `P5-04`/`05`/`09`, networking a promotion režim za `RES-01`/`04` |
 | `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `contract ready`; vendor-neutral multipart staging, diff, immutable apply a report |
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `contract ready`; maskované hledání a verzované reasoned/idempotentní akce s auditem |
 | `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | `P6-01` až `P6-06`, `F5` | `F5` | `contract ready`; online-only bootstrap, lookup/search, confirm, undo a stats |
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
 | `CS-ADMIN-01` | dashboard, role, reservation override, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | v6 `contract ready` a `UI ready (mocked)` bez attendance write |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
-| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
+| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
 | `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `not started` |
 | `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
@@ -894,11 +894,18 @@ Admin může profil jako celek skrýt přes `moderation_status`; aplikace neprov
 
 ### 9.6 Agenda, rezervace a roster
 
+#### `participant_agendas`
+
+- jeden kořen `(event_id, user_id)` s optimistic `version` a timestamps
+- složený FK na event membership; neexistuje agenda bez eventového vztahu
+
 #### `agenda_items`
 
-- `event_id`, `user_id`, `session_id`, `source`: `manual | reservation | organizer`
+- `event_id`, `user_id`, `session_id`, `source`: `manual | organizer`
 - unique `(event_id, user_id, session_id)`
-- odstranění ruční položky nesmí obejít zrušení aktivní rezervace
+- potvrzená rezervace zůstává autoritou v `reservations` a do agendy se
+  promítá při čtení; odstranění ruční položky nesmí obejít zrušení
+  aktivní rezervace ani mazat její provozní historii
 
 #### `reservations`
 
@@ -2250,6 +2257,13 @@ produkční Next build a source/post-build mock boundary. Produktové vstupy pro
 `F3-06` jsou nově uzavřené v `SCOPE-2026-09`; implementace a v6 scope alignment
 zůstávají nehotové.
 
+Produkční integrační řez z 20. 8. 2026 posunul `CS-AGENDA-01` do stavu
+`partially integrated`: Better Auth a canonical event nyní napájejí live
+`/app/agenda`, add/remove, neblokující conflict a atomickou rezervaci s kontrolou
+aktivované vstupenky, version/idempotency, event/session lockem, auditem a
+canonical race chybou. Produkční server záměrně odmítá historické waitlist,
+cancel, offer a ICS větve, dokud nebudou dokončeny `P5-04`, `P5-05` a `P5-09`.
+
 #### F4 – admin, import a support
 
 - `depends_on`: `F0`, existující admin patterns `P3-05` až `P3-07`; každý
@@ -2484,23 +2498,63 @@ odmítají anonymní i cross-event přístup.
 
 **Závislost:** sessions, cutoff, koučové, většina kapacit a FIFO pořadí jsou
 potvrzené v `SCOPE-2026-08`/`09`. `BLOCKER-RES-01` blokuje pouze finální
-networkingovou rezervaci/roster, `BLOCKER-RES-03` transfer/storno a
-`BLOCKER-RES-04` promotion režim. Ostatní kontrakty a generický `F3` flow mohou
-vznikat souběžně.
+networkingovou rezervaci/roster, `BLOCKER-RES-03` transfer/storno,
+`BLOCKER-RES-04` promotion režim a nový `BLOCKER-RES-05` seskupení dvou částí
+sobotního mastermindu. Ostatní kontrakty a generický `F3` flow mohou vznikat
+souběžně.
 
-- [ ] `P5-01` Agenda/reservation/waitlist schema a constraints bez session
-  attendance/no-show evidence. `P5-08` už přidal pouze potřebný dopředně
-  kompatibilní read-model základ `reservations`, společné FIFO
-  `waitlist_entries` a profilovou firmu; agenda items, write transakce a zbytek
-  tohoto úkolu zůstávají otevřené.
-- [ ] `P5-02` Implementovat agenda add/remove API a conflict detector;
-  společně s `F3-01` uzavřít `CS-AGENDA-01` a integrovat agenda UI.
-- [ ] `P5-03` Rezervační transakce s lockem a concurrency testem posledního
-  místa; nakonfigurovat coaching 1/slot, EB21 12, sobotní workshop 20 a sobotní
-  mastermind 6. Páteční networking přidat až po `BLOCKER-RES-01`.
+- [x] `P5-01` Agenda/reservation/waitlist schema a constraints bez session
+  attendance/no-show evidence. `P5-08` dodal `reservations`/`waitlist_entries`;
+  migrace `0008_pretty_firebrand.sql` doplnila versioned
+  `participant_agendas`, event-scoped `agenda_items`, složené membership/session
+  FK a oddělení mazatelné uložené projekce od provozní historie rezervací.
+  Capacity backfill zamyká rezervační zápisy a failne před změnou, pokud by
+  provenance-verified kapacita klesla pod počet již potvrzených rezervací.
+- [x] `P5-02` Implementovat agenda add/remove API a conflict detector;
+  společně s `F3-01` uzavřít `CS-AGENDA-01` a integrovat agenda UI. Hotový
+  produkční subset používá Better Auth, canonical event/publication,
+  private/no-store snapshot, optimistic version, idempotentní add/remove,
+  audit, canonical konflikt a live agenda/program/home UI. Add nad existující
+  reservation/waitlist projekcí je no-op a post-commit první odpověď i replay
+  vracejí `superseded`, pokud mezitím novější mutace nebo publikace nahradila
+  cílový stav.
+  GET serializuje version a sjednocenou save/reservation/waitlist projekci
+  stejným participant lockem jako mutace, serverový čas získá až po locku a
+  latest immutable publication pod lockem znovu načte. Mutation callback dělá
+  stejný refresh před target validací a zápisem, takže položky, agenda version
+  a publication version nevznikají z různých canonical bodů;
+  read i mutation po získání všech svých locků znovu načtou eventový
+  `operational_data_anonymizes_at`, takže po retention cutoffu nevydají ani
+  nezapíšou P2 stav a rozpracovaný idempotency záznam se rollbackne.
+  Společný limit 512 se ověřuje před add pouze nad sessions viditelnými v
+  poslední publikaci. Skryté historické řádky limit neblokují a uloženou
+  položku lze idempotentně odstranit i po jejím stornu nebo úplném odebrání z
+  nové publikace. Existující waiting projekce zůstává viditelná i po uvolnění
+  kapacity, používá živé pořadí pouze mezi aktivními waiting řádky a má vypnuté
+  akce, takže participant neobejde FIFO před zpracováním `P5-04` workerem. Při
+  operational driftu kapacity nebo typu se waiting stav zachová jako bezpečně
+  uzavřená reservation projekce a vyšle operator warning místo zmizení/500.
+  Sdílené Redis
+  buckety používají event/user HMAC subject: read 120/min s explicitním
+  logovaným fail-open a mutation 30/min s fail-closed před DB/idempotency prací.
+- [!] `P5-03` Rezervační transakce s lockem a concurrency testem posledního
+  místa je hotová včetně aktivované vstupenky, cutoffu v začátku session,
+  canonical capacity/stale chyb a auditovaného zápisu. Lock pořadí owner →
+  shared content → event/session serializuje vznik rezervace s provozním
+  stornem a cutoff se znovu vyhodnotí z autoritativního času až po získání
+  locků. Exact-key replay překonaný pozdější opačnou mutací vrací aktuální
+  canonical snapshot s výsledkem `superseded`, zatímco v databázi zůstává jen
+  minimální receipt. Source-provenance policy
+  bezpečně nastavuje EB21 na 12 a oba sobotní workshopy na 20. Coaching
+  1/slot zůstává v `P5-06`, protože živý list potvrzuje dvě paralelní řady;
+  sobotní mastermind 6 čeká na group-booking rozhodnutí v `BLOCKER-RES-05`.
+  Páteční networking zůstává za `BLOCKER-RES-01`.
 - [ ] `P5-04` Implementovat serverový waitlist se stabilním FIFO a pouze
   promotion režimem zvoleným v `BLOCKER-RES-04`; nepoužitou větev odstranit z
-  kontraktu a integrovat odpovídající stav `F3-03`/`F3-04`.
+  kontraktu a integrovat odpovídající stav `F3-03`/`F3-04`. Read projekce z
+  `P5-02` už bezpečně zachovává importovaný aktivní waiting stav a počítá jeho
+  živé FIFO pořadí; vznik, promotion, nabídka/storno a worker orchestrace dál
+  patří výhradně sem.
 - [ ] `P5-05` Implementovat serverové zrušení, uzávěrky a admin override s
   reason; registrace se uzavírá začátkem session, pravidlo participant cancel
   potvrdit v UAT; integrovat participant `F3` a admin `F4-08`.
@@ -2517,11 +2571,13 @@ vznikat souběžně.
   sessions; integrovat `/host/aktivity` z `F4-10`. Bez attendance write,
   telefonu, e-mailu a globálního exportu. Hotovo přes Better Auth a canonical
   event, aktivní event/session assignment, list/detail API, live server page,
-  bounded DB projekci a PostgreSQL testy anonymního, role, revokovaného,
+  latest-publication allowlist nad běžnými importovanými `draft` provozními
+  řádky, bounded DB projekci a PostgreSQL testy anonymního, role, revokovaného,
   cross-session i cross-event přístupu a retenčního deadline. Networking se
   nevydává před `RES-01`.
-- [ ] `P5-09` Osobní agenda API a `.ics` export se stabilním UID; integrovat
-  UI `F3-01`/`F3-05`.
+- [!] `P5-09` JSON část osobní agenda API a UI `F3-01` je dodaná v `P5-02`;
+  `.ics` reprezentace se stabilním UID a integrační ověření `F3-05` zůstává
+  otevřené. Live kontrakt/UI do té doby vrací poctivé `not_ready`.
 - [–] `P5-10` Agenda/session reminders – vyřazeno rozhodnutím
   `SCOPE-2026-06`; `.ics` je minimum.
 - [ ] `P5-11` E2E/race/timezone/IDOR testy včetně přesných kapacit, FIFO,
@@ -2858,6 +2914,7 @@ rozhodnutí ani souhlas s produkčním nasazením.
 | BLOCKER-RES-01 | Číselná kapacita pátečního řízeného networkingu a zda používá stejný FIFO waitlist/storno pravidlo jako ostatní kapacitní aktivity | `P5-07`, networkingová část `CS-AGENDA-01` a `CS-ROSTER-01` | Produkt + organizace | Před implementací networkingové rezervace | Session je rezervovatelná a má roster; do rozhodnutí ji neimplementovat jako `registration_estimate` ani nevymýšlet kapacitu. |
 | BLOCKER-RES-03 | Co s rezervacemi při transferu/stornu | P4/P5 edge cases | Produkt | P4-09 / P5-05 | Výchozí: rezervace zrušit a uvolnit waitlist, ale nenasazovat bez potvrzení. |
 | BLOCKER-RES-04 | FIFO je potvrzené; zbývá nabídka s expirací versus automatická promotion a případný TTL | Waitlist worker, finální `CS-AGENDA-01`/UI větev | Produkt | Před `P5-04` implementací | Historický kontrakt/mock podporuje obojí; neintegrovat ani neudržovat obě produkční větve po rozhodnutí. |
+| BLOCKER-RES-05 | Zda jedna rezervace sobotního mastermindu Tomáše Ryzy s kapacitou 6 pokrývá obě programové části, nebo se rezervují samostatně | Dokončení konfigurace `P5-03`, agenda projekce a roster | Produkt + organizace | Před publikací sobotního mastermindu jako rezervovatelného | Nevytvářet dvě nezávislé kapacity 6 ani skrytě sdílenou rezervaci; EB21 a oba jednoznačné workshopy mohou běžet nezávisle. |
 | BLOCKER-OPS-01 | Event-day RACI a kapacita: počet vstupů/zařízení/operátorů, špička, vlastník jmenovek, konkrétní moderátoři a osoby oprávněné odeslat kritické oznámení | P6 load/rehearsal, role assignments, P8 send UAT, P12 moderator UAT | Organizace | Před P6-10/P8 send/P12 UAT | Parametrizovaný load profil; send pouze admin seedem, questions feature off a žádné domnělé přiřazení osob. |
 | BLOCKER-OPS-02 | Nouzový check-in a autorita ručních záznamů | P6 gate | Organizace + tech lead | P6-08 runbook | Online autorita + exportní fallback. |
 | BLOCKER-LIVE-01 | Finální ID pátečních sessions na Byzon/Leadership stage a přiřazení moderátorů; ankety/projekce nejsou vstup | Volitelná P12 Priority B | Organizace | Před P12-01/P12-06 | `questions_enabled=false`; lze připravit kontrakt a syntetické fixtures bez publikace feature. Programový QR generátor `P3-12` pokračuje pro všechny body nezávisle. |
@@ -3048,13 +3105,30 @@ components 846/846 a Playwright E2E 15/15. Globální gate obsahuje 829 workspac
 testů, produkční Next/worker build, mock boundary a statický smoke; production
 i úplný dependency audit nehlásí známou zranitelnost.
 
-1. `P5-01` až `P5-03`, `P5-05` a `P5-06` integrují neblokovanou část agendy,
-   potvrzené kapacity a coaching nad read-model základem z dokončeného `P5-08`.
-   `P5-04` čeká na jediný promotion režim v `BLOCKER-RES-04`.
+Následný agenda řez `P5-01`/`P5-02` a jádro `P5-03` prošel 20. 8. 2026 nad
+všemi devíti migracemi: database 94/94, conference 524/524, celkem 845
+workspace testů, browser components 846/846 a Playwright E2E 15/15. Formát,
+lint bez warningů, sedm typechecků, produkční Next/worker build, source/build
+mock boundary, statický smoke 25 HTML/58 assetů a oba dependency audity jsou
+zelené. Samostatný čistý import ověřil právě tři jednoznačné rezervovatelné
+aktivity a cutoff v začátku session.
+
+Aktuální review hardening PR `#22` zachovává waiting projekci při uvolněné
+kapacitě bez možnosti obejít FIFO, počítá pořadí nad aktivními waiting řádky a
+odděluje viditelný publication snapshot od ukliditelné historické agenda
+vrstvy. Service-backed gate prošel 880/880 workspace testy včetně database
+94/94, domain 176/176, Redis 9/9 a conference 546/546; produkční web/worker
+build, source/build mock boundary, static smoke a browser komponenty 849/849
+jsou zelené.
+
+1. Po dokončeném `P5-01`/`P5-02` a transakčním jádru `P5-03`
+   pokračovat `P5-05` a `P5-06`: cancellation/override a dvě source-verified
+   coaching řady. Dokončení sobotní kapacity 6 čeká na
+   `BLOCKER-RES-05`; `P5-04` na jediný promotion režim v `BLOCKER-RES-04`.
 2. Mimo stejné hotspoty otevřít `P4-02` a s předaným přístupem do
    SimpleShopu získat vzorový export; produkční mapping/apply až po uzavření
    `TKT-01` až `TKT-04`.
-3. Zbytek `F3-07` a networkingová část rosteru čekají na kapacitu/detail
+3. Dokončit `.ics` v `P5-09`; zbytek `F3-07` a networkingová část rosteru čekají na kapacitu/detail
    networkingu `BLOCKER-RES-01`; do té doby se nic nevymýšlí.
 4. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
    ekvivalentní e-mailový kanál.
@@ -3137,3 +3211,18 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.2 | 16. 8. 2026 | Dokončeny `P0-10`, `P0-11`, `P0-12`, `F1-07`, `F2-08` a `F4-10`: přidán v6 scope inventář, synchronizované ADR/route/permission/handover dokumenty a ADR-013 bez plošné migrace stacku; onboarding je bez networkingu, profil má dobrovolný telefon, privacy nemá self-export, oznámení jsou critical-only, attendance write je odstraněn a vzniklo read-only `/host/aktivity` preview nad `CS-ROSTER-01`. Nezablokovaná část `F3-07` odstranila registration estimate; networking a jediný promotion režim zůstávají explicitně blokované `RES-01`/`RES-04`. Žádná capability tím nepřešla na `integrated` ani `UAT`. |
 | 6.3 | 20. 8. 2026 | Dokončen `P5-08`: `CS-ROSTER-01` a `/host/aktivity` jsou napojené na Better Auth, canonical event a aktivní session-scoped `room_operator` assignment. List/detail vydávají bounded private/no-store jméno, firmu a reservation/waitlist stav bez kontaktů, ticketů, attendance nebo exportu; unknown/unassigned session mají stejný 404. Migrace přidává pouze potřebný read-model základ a nevolí blokovaný promotion režim ani networkingovou kapacitu. |
 | 6.4 | 20. 8. 2026 | Dokončen `P8-01`: přidán sdílený ioredis 6 základ pro web a BullMQ worker s Railway dual-stack family konfigurací, bounded web selháním, worker retry profilem, bezpečným lifecycle, Redis health latencí a atomickým víceinstančním fixed-window rate-limit storem. Compose a CI spouštějí skutečný Redis 8.2 s `noeviction`; samostatný HMAC secret udržuje PII mimo bucket keys. |
+| 6.5 | 20. 8. 2026 | Dokončeny `P5-01` a `P5-02` a transakční jádro `P5-03`: versioned agenda schema, Better Auth/canonical event private API, live UI, idempotentní add/remove, konflikt a auditovaná rezervace s aktivovanou vstupenkou a event/session lockem. Concurrency regrese potvrzuje jediného vítěze posledního místa. Provenance-verified kapacity nastavují EB21 12 a oba sobotní workshopy 20; coaching zůstává v `P5-06` a dvoudílný sobotní mastermind nově za `BLOCKER-RES-05`. Waitlist, cancel, networking a ICS nejsou předstíraně aktivované. |
+| 6.6 | 20. 8. 2026 | Review PR `#22` opravilo publication/operational status invariant, minimalizovalo idempotency receipt, omezilo add na 512 položek, zachovalo čitelnost potvrzené rezervace při capacity driftu s operator warningem, skrylo zakázané offer akce a atomicky validuje všechny tři migrační backfill targety. Redis provider z `P8-01` už je integrovaný; explicitní agenda route wiring zůstává posledním produkčním rollout gate. |
+| 6.7 | 20. 8. 2026 | PR `#22` byl rebasován na integrované `P8-01` a agenda route dostaly atomické shared Redis limity s event/user HMAC subjectem: read 120/min fail-open s throttled PII-free warningem, mutation 30/min fail-closed před DB/idempotency prací a kanonické `429 RATE_LIMITED` hlavičky/kontrakty. Tím je odstraněn rate-limit rollout gate; otevřené zůstávají pouze výslovně uvedené waitlist/cancel/ICS/networking/coaching blockery. |
+| 6.8 | 20. 8. 2026 | Aktuální Codex review PR `#22` odstranilo tři další race/replay vady: rezervace sdílí content lock s provozním stornem a teprve potom session lock, cutoff používá čerstvý autoritativní čas po locku a exact-key replay po pozdější opačné mutaci vrací canonical `superseded` místo HTTP 500 bez rozšíření uloženého receiptu. PostgreSQL regrese kryjí storno race, čekání přes cutoff i oba směry inverse replaye; plný service-backed gate má 876/876 workspace testů, conference 542/542 a browser komponenty 849/849. |
+| 6.9 | 20. 8. 2026 | Další review PR `#22` uzavřelo poslední dvě postcondition mezery: add nad předexistující potvrzenou rezervací nebo viditelným waitlistem je no-op bez verze, auditu a duplicitní agenda vrstvy; `superseded` se vyhodnotí také pro první odpověď, pokud jiná mutace změní cílový stav mezi commitem a načtením canonical snapshotu. Agenda HTTP regrese mají 15/15 a service-backed workspace gate 877/877 testů. |
+| 6.10 | 20. 8. 2026 | Finální Codex review PR `#22` sjednotilo GET version a položky pod participant advisory lockem, přesunulo limit 512 nad množinu unikátních save/reservation/waitlist session před zápis a povolilo odstranit uloženou položku zrušenou v poslední publikaci. PostgreSQL regrese pro všechny tři invarianty rozšířily agenda HTTP sadu na 17/17; celý service-backed gate prošel 879/879 workspace a 545/545 conference testy, browser komponenty zůstávají zelené 849/849. |
+| 6.11 | 20. 8. 2026 | Následné Codex review PR `#22` přesunulo snapshot `serverNow` za participant lock, aby nemohl předcházet právě zviditelněnému zápisu, a odložilo mutable publication target validaci až do non-replay idempotency callbacku. Exact-key retry po novější publikaci, která session odstranila, tak vrací canonical `superseded` místo 404. Agenda HTTP sada má 18/18, conference 546/546 a celý service-backed workspace gate 880/880 testů. |
+| 6.12 | 20. 8. 2026 | Další Codex review PR `#22` sjednotilo downstream `CS-ROSTER-01` s agenda publication invariantem: roster bere viditelnost a metadata z posledního immutable snapshotu a provozní řádek používá jen pro podporovanou rezervační kapacitu. Běžně importovaná session ve stavu `draft` se po publikaci zobrazí v přiřazeném listu/detailu i s participant rezervací, zatímco nepublikovaná `draft`, networking a nekapacitní session zůstávají skryté. Cílené agenda+roster PostgreSQL testy prošly 28/28 a service-backed workspace gate zůstává 880/880. |
+| 6.13 | 20. 8. 2026 | Poslední review PR `#22` zpevnilo tři hrany canonical agendy: waiting záznam zůstává viditelný i po uvolnění kapacity, ale s vypnutými akcemi až do FIFO promotion; pozice se počítá živě pouze mezi aktivně čekajícími řádky; sessions odebrané z poslední publikace nejsou viditelné ani nezabírají limit 512, přesto lze jejich uloženou vrstvu idempotentně odstranit. Cílené conference testy prošly 38/38, domain kontrakty 15/15, celý service-backed workspace 880/880 a browser komponenty 849/849. |
+| 6.14 | 20. 8. 2026 | Následné Codex review PR `#22` uzavřelo capacity-drift hrany: migrace `0008` drží rezervační tabulkový lock a odmítne backfill, který by nastavil kapacitu pod již potvrzené rezervace; aktivní waiting zůstává v canonical agendě jako bezpečně uzavřená reservation projekce i při odstraněné kapacitě nebo networking driftu a hlásí operator warning. Čerstvá PostgreSQL databáze potvrdila odmítnutí 13 rezervací pro kapacitu 12; cílené migration/agenda/roster/model testy i typecheck jsou zelené. |
+| 6.15 | 20. 8. 2026 | Další Codex review PR `#22` uzavřelo retention race: GET po participant locku znovu čte aktuální eventový anonymizační deadline ještě před privátními řádky; mutation provádí stejný recheck po participant a případných content/session locích ještě před agenda rootem a zápisy. PostgreSQL race regrese potvrzují `403 EVENT_ACCESS_DENIED` bez privátní odpovědi, agenda zápisu i idempotency zbytku, když request vstoupí před cutoffem a lock získá až po něm. Agenda HTTP sada má 20/20. |
+| 6.16 | 20. 8. 2026 | Následné Codex review PR `#22` odstranilo stale publication race: shared loader načte latest immutable publication znovu až po participant locku pro GET i non-replay mutation callback. PostgreSQL regrese načte N před čekáním, pod lockem commitne N+1 s novou agenda položkou a po uvolnění ověřuje jednotný snapshot `agenda version 3 / publication version 4` včetně nové session. Agenda HTTP sada má 21/21 a relevantní typecheck je zelený. |
+| 6.17 | 20. 8. 2026 | Finální Codex review PR `#22` rozšířilo post-lock event revalidaci z retenčního termínu na celou fázi události. GET po přechodu do `archived` už nevydá privátní snapshot a non-replay mutation po přechodu do `ended` rollbackne agenda i idempotency stav s `409 AGENDA_DISABLED`; publication loader současně dostává čerstvý eventový kontext. Dvě PostgreSQL lock-race regrese rozšířily agenda HTTP sadu na 23/23. |
+| 6.18 | 20. 8. 2026 | Další Codex review PR `#22` doplnilo pod participant lockem také nové ověření aktivního membershipu a participant role před privátním čtením nebo zápisem. Exact-key retry po přechodu eventu do `ended` nově projde replay-safe počátečním kontextem, zatímco phase gate uvnitř non-replay callbacku dál odmítá nové mutace. Tři PostgreSQL regrese rozšířily agenda HTTP sadu na 26/26. |
+| 6.19 | 20. 8. 2026 | Následné Codex review PR `#22` verzovalo server-only rezervační okno spolu s immutable content publication, zatímco public/participant program extrakce je nadále odstraňuje. Migrace `0009` zachová dosavadní cutoff i starším publikacím v novém immutable `reservation_windows`; agenda tak používá publikovaný cutoff a nepublikovaný import časů nemůže živou session znovu otevřít ani předčasně zavřít. Canonical conflict se po rollbacku znovu klasifikuje podle právě načteného snapshotu, takže souběžné storno nebo změna kapacity už nemůže způsobit schema `500`. Dvě PostgreSQL regrese rozšířily agenda HTTP sadu na 28/28. |

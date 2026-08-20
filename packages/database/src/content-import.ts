@@ -89,7 +89,9 @@ interface PreparedSession {
   summary: string | null;
   startsAt: Date;
   endsAt: Date;
-  type: 'break' | 'meal' | 'other';
+  type: 'break' | 'mastermind' | 'meal' | 'other' | 'workshop';
+  capacityMode: 'none' | 'reservation';
+  capacity: number | null;
   sortOrder: number;
   speakerSlugs: string[];
 }
@@ -100,6 +102,44 @@ const knownDates: Record<string, string> = {
   '18. září 2026': '2026-09-18',
   '19. září 2026': '2026-09-19',
 };
+
+const confirmedReservationPolicies = new Map<
+  string,
+  {
+    capacity: number;
+    time: string;
+    title: string;
+    type: 'mastermind' | 'workshop';
+  }
+>([
+  [
+    'program.days[0].stages[1].events[10]',
+    {
+      capacity: 12,
+      time: '15:15 - 16:45',
+      title: 'Expertní Board 21 - mastermind session',
+      type: 'mastermind',
+    },
+  ],
+  [
+    'program.days[1].stages[0].events[2]',
+    {
+      capacity: 20,
+      time: '9:30 - 11:00',
+      title: 'Workshop: Leonid Kushnir',
+      type: 'workshop',
+    },
+  ],
+  [
+    'program.days[1].stages[0].events[4]',
+    {
+      capacity: 20,
+      time: '11:15 - 12:45',
+      title: 'Workshop: Blanka Mrázková',
+      type: 'workshop',
+    },
+  ],
+]);
 
 function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -339,6 +379,7 @@ export async function importContentJson(options: {
     assetsByPath.set(path, await prepareAsset(options.repositoryRoot, path));
 
   const preparedSessions: PreparedSession[] = [];
+  const matchedReservationPolicies = new Set<string>();
   const speakerSlugByName = new Map(
     source.speakers.list.map((speaker) => [speaker.name, speaker.slug]),
   );
@@ -381,6 +422,20 @@ export async function importContentJson(options: {
             'Presentation type was not treated as a reservation policy and was imported as other.',
             event.type,
           );
+        const reservationPolicy = confirmedReservationPolicies.get(path);
+        if (
+          reservationPolicy &&
+          (event.title !== reservationPolicy.title ||
+            event.time !== reservationPolicy.time)
+        ) {
+          throw new Error(
+            `confirmed reservation policy requires source reconciliation: ${path}`,
+          );
+        }
+        if (reservationPolicy) {
+          type = reservationPolicy.type;
+          matchedReservationPolicies.add(path);
+        }
         if (event.span !== undefined)
           addFinding(
             findings,
@@ -415,12 +470,19 @@ export async function importContentJson(options: {
           startsAt: range.startsAt,
           endsAt: range.endsAt,
           type,
+          capacityMode: reservationPolicy ? 'reservation' : 'none',
+          capacity: reservationPolicy?.capacity ?? null,
           sortOrder: stageIndex * 100 + eventIndex,
           speakerSlugs: [...speakerSlugs],
         });
       });
     });
   });
+  if (matchedReservationPolicies.size !== confirmedReservationPolicies.size) {
+    throw new Error(
+      'confirmed reservation policies require source reconciliation',
+    );
+  }
 
   const speakerNames = new Set(
     source.speakers.list.map((speaker) => speaker.name),
@@ -771,8 +833,10 @@ export async function importContentJson(options: {
           startsAt: session.startsAt,
           endsAt: session.endsAt,
           status: 'draft',
-          capacityMode: 'none',
-          capacity: null,
+          capacityMode: session.capacityMode,
+          capacity: session.capacity,
+          reservationClosesAt:
+            session.capacityMode === 'reservation' ? session.startsAt : null,
           waitlistMode: 'disabled',
           sortOrder: session.sortOrder,
         })
@@ -786,6 +850,11 @@ export async function importContentJson(options: {
             type: session.type,
             startsAt: session.startsAt,
             endsAt: session.endsAt,
+            capacityMode: session.capacityMode,
+            capacity: session.capacity,
+            reservationClosesAt:
+              session.capacityMode === 'reservation' ? session.startsAt : null,
+            waitlistMode: 'disabled',
             sortOrder: session.sortOrder,
             updatedAt: new Date(),
           },

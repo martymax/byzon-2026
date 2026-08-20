@@ -32,6 +32,12 @@ describe('participant agenda failure mapping', () => {
     expect(mapParticipantAgendaReadFailure({ kind: 'offline' })).toEqual({
       status: 'offline',
     });
+    expect(
+      mapParticipantAgendaReadFailure({
+        kind: 'problem',
+        problem: participantAgendaProblemFixtures.rate_limited!,
+      }),
+    ).toMatchObject({ status: 'error' });
   });
 
   it('only retries an uncertain mutation with the retained idempotency key', () => {
@@ -51,6 +57,12 @@ describe('participant agenda failure mapping', () => {
         problem: participantAgendaMutationProblemFixtures.key_reused!,
       }),
     ).toMatchObject({ kind: 'rejected', retry: 'none' });
+    expect(
+      mapParticipantAgendaMutationFailure({
+        kind: 'problem',
+        problem: participantAgendaMutationProblemFixtures.rate_limited!,
+      }),
+    ).toMatchObject({ kind: 'rate_limited', retry: 'mutation' });
   });
 
   it('treats canonical capacity, closure, offer expiry and stale problems as final feedback', () => {

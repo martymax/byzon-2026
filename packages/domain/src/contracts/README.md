@@ -142,7 +142,11 @@ discriminated by action and always carry `sessionId` plus `expectedVersion`.
 Offer decisions additionally require the exact `offerId`; registration
 estimates carry an explicit target boolean and are never implicit toggles.
 Every success returns the complete new canonical snapshot instead of a locally
-predicted seat.
+predicted seat. If the original target state is replaced by a later mutation
+before the first response or an exact idempotency replay is assembled, the
+explicit `superseded` outcome is returned against the current canonical
+snapshot; the server never fabricates a historical private snapshot or
+attaches a stale time-conflict warning.
 
 Reservation capacity separates confirmed seats, all active holds and genuinely
 remaining seats. `actorAvailability` distinguishes a public seat from a
@@ -158,6 +162,24 @@ clock. The calendar metadata exposes only the same-origin
 `/api/v1/me/agenda.ics` endpoint; the production representation remains owned
 by `P5-09`, while the `F3-05` synthetic adapter uses the same RFC 5545
 UID/sequence, UTC, cancellation, escaping and folding invariants.
+
+The integrated `P5-01`/`P5-02` slice serves the complete private snapshot and
+enables only add, remove and atomic reserve. A reserved item may explicitly
+disable participant cancellation and an existing waitlist item may disable its
+controls, so the production UI never exposes a later milestone's mutation.
+Non-empty live agendas report calendar export as `not_ready` until `P5-09`;
+empty agendas keep the distinct `empty` state. Waitlist promotion,
+cancellation, coaching and networking reservation remain outside this
+integrated subset.
+
+The immutable content-publication record retains the server-only reservation
+window beside each session and in its protected `reservation_windows` policy.
+Migration `0009` backfills that policy for legacy publications from the cutoff
+that was authoritative at rollout. Public and participant program extraction
+strips the policy before strict response validation, while the agenda uses it
+as the live cutoff until a later publication commits changed timing. Draft
+operational imports therefore cannot reopen or prematurely close an already
+published session.
 
 ## Assigned activity roster (`CS-ROSTER-01`)
 
