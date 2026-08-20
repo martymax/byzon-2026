@@ -105,6 +105,22 @@ const offeredItem = {
   },
 };
 
+const promotionPendingItem = {
+  ...offeredItem,
+  capacity: {
+    ...reservationCapacity,
+    actorAvailability: { state: 'unavailable' as const },
+  },
+  action: { state: 'available' as const },
+  waitlist: {
+    id: ids.waitlist,
+    state: 'waiting' as const,
+    joinedAt: '2026-09-18T05:00:00.000Z',
+    position: 1,
+    actionsAvailable: false,
+  },
+};
+
 const response = {
   eventId: ids.event,
   userId: ids.user,
@@ -277,6 +293,48 @@ describe('CS-AGENDA-01 participant contracts', () => {
         ],
       }).items[0],
     ).toMatchObject({ waitlist: { actionsAvailable: false } });
+    expect(
+      participantAgendaResponseSchema.parse({
+        ...response,
+        items: [promotionPendingItem],
+      }).items[0],
+    ).toMatchObject({
+      state: 'waitlisted',
+      action: { state: 'available' },
+      capacity: {
+        remaining: 1,
+        actorAvailability: { state: 'unavailable' },
+      },
+      waitlist: { state: 'waiting', position: 1, actionsAvailable: false },
+    });
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...promotionPendingItem,
+            waitlist: {
+              ...promotionPendingItem.waitlist,
+              actionsAvailable: true,
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      participantAgendaResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...promotionPendingItem,
+            capacity: {
+              ...promotionPendingItem.capacity,
+              actorAvailability: { state: 'available' },
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
     expect(
       participantAgendaResponseSchema.safeParse({
         ...response,

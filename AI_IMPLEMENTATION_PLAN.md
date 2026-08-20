@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.12 – agenda a roster nad společnou publikací
+> Stav: implementační plán v6.13 – kanonická agenda při změně kapacity a publikace
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2518,8 +2518,12 @@ souběžně.
   cílový stav.
   GET serializuje version a sjednocenou save/reservation/waitlist projekci
   stejným participant lockem jako mutace a serverový čas získá až po locku;
-  společný limit 512 se ověřuje před add a uloženou položku lze odstranit i po
-  jejím stornu v nové publikaci.
+  společný limit 512 se ověřuje před add pouze nad sessions viditelnými v
+  poslední publikaci. Skryté historické řádky limit neblokují a uloženou
+  položku lze idempotentně odstranit i po jejím stornu nebo úplném odebrání z
+  nové publikace. Existující waiting projekce zůstává viditelná i po uvolnění
+  kapacity, používá živé pořadí pouze mezi aktivními waiting řádky a má vypnuté
+  akce, takže participant neobejde FIFO před zpracováním `P5-04` workerem.
   Sdílené Redis
   buckety používají event/user HMAC subject: read 120/min s explicitním
   logovaným fail-open a mutation 30/min s fail-closed před DB/idempotency prací.
@@ -2537,7 +2541,10 @@ souběžně.
   Páteční networking zůstává za `BLOCKER-RES-01`.
 - [ ] `P5-04` Implementovat serverový waitlist se stabilním FIFO a pouze
   promotion režimem zvoleným v `BLOCKER-RES-04`; nepoužitou větev odstranit z
-  kontraktu a integrovat odpovídající stav `F3-03`/`F3-04`.
+  kontraktu a integrovat odpovídající stav `F3-03`/`F3-04`. Read projekce z
+  `P5-02` už bezpečně zachovává importovaný aktivní waiting stav a počítá jeho
+  živé FIFO pořadí; vznik, promotion, nabídka/storno a worker orchestrace dál
+  patří výhradně sem.
 - [ ] `P5-05` Implementovat serverové zrušení, uzávěrky a admin override s
   reason; registrace se uzavírá začátkem session, pravidlo participant cancel
   potvrdit v UAT; integrovat participant `F3` a admin `F4-08`.
@@ -3096,6 +3103,14 @@ mock boundary, statický smoke 25 HTML/58 assetů a oba dependency audity jsou
 zelené. Samostatný čistý import ověřil právě tři jednoznačné rezervovatelné
 aktivity a cutoff v začátku session.
 
+Aktuální review hardening PR `#22` zachovává waiting projekci při uvolněné
+kapacitě bez možnosti obejít FIFO, počítá pořadí nad aktivními waiting řádky a
+odděluje viditelný publication snapshot od ukliditelné historické agenda
+vrstvy. Service-backed gate prošel 880/880 workspace testy včetně database
+94/94, domain 176/176, Redis 9/9 a conference 546/546; produkční web/worker
+build, source/build mock boundary, static smoke a browser komponenty 849/849
+jsou zelené.
+
 1. Po dokončeném `P5-01`/`P5-02` a transakčním jádru `P5-03`
    pokračovat `P5-05` a `P5-06`: cancellation/override a dvě source-verified
    coaching řady. Dokončení sobotní kapacity 6 čeká na
@@ -3194,3 +3209,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.10 | 20. 8. 2026 | Finální Codex review PR `#22` sjednotilo GET version a položky pod participant advisory lockem, přesunulo limit 512 nad množinu unikátních save/reservation/waitlist session před zápis a povolilo odstranit uloženou položku zrušenou v poslední publikaci. PostgreSQL regrese pro všechny tři invarianty rozšířily agenda HTTP sadu na 17/17; celý service-backed gate prošel 879/879 workspace a 545/545 conference testy, browser komponenty zůstávají zelené 849/849. |
 | 6.11 | 20. 8. 2026 | Následné Codex review PR `#22` přesunulo snapshot `serverNow` za participant lock, aby nemohl předcházet právě zviditelněnému zápisu, a odložilo mutable publication target validaci až do non-replay idempotency callbacku. Exact-key retry po novější publikaci, která session odstranila, tak vrací canonical `superseded` místo 404. Agenda HTTP sada má 18/18, conference 546/546 a celý service-backed workspace gate 880/880 testů. |
 | 6.12 | 20. 8. 2026 | Další Codex review PR `#22` sjednotilo downstream `CS-ROSTER-01` s agenda publication invariantem: roster bere viditelnost a metadata z posledního immutable snapshotu a provozní řádek používá jen pro podporovanou rezervační kapacitu. Běžně importovaná session ve stavu `draft` se po publikaci zobrazí v přiřazeném listu/detailu i s participant rezervací, zatímco nepublikovaná `draft`, networking a nekapacitní session zůstávají skryté. Cílené agenda+roster PostgreSQL testy prošly 28/28 a service-backed workspace gate zůstává 880/880. |
+| 6.13 | 20. 8. 2026 | Poslední review PR `#22` zpevnilo tři hrany canonical agendy: waiting záznam zůstává viditelný i po uvolnění kapacity, ale s vypnutými akcemi až do FIFO promotion; pozice se počítá živě pouze mezi aktivně čekajícími řádky; sessions odebrané z poslední publikace nejsou viditelné ani nezabírají limit 512, přesto lze jejich uloženou vrstvu idempotentně odstranit. Cílené conference testy prošly 38/38, domain kontrakty 15/15, celý service-backed workspace 880/880 a browser komponenty 849/849. |

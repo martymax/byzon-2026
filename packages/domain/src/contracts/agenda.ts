@@ -343,6 +343,10 @@ export const participantAgendaItemSchema = z
     }),
   ])
   .superRefine((item, context) => {
+    const disabledWaitingEntry =
+      item.state === 'waitlisted' &&
+      item.waitlist.state === 'waiting' &&
+      item.waitlist.actionsAvailable === false;
     if (
       item.session.status === 'cancelled' &&
       item.action.state !== 'cancelled'
@@ -379,7 +383,8 @@ export const participantAgendaItemSchema = z
     if (
       item.action.state === 'available' &&
       item.capacity.mode === 'reservation' &&
-      item.capacity.actorAvailability.state === 'unavailable'
+      item.capacity.actorAvailability.state === 'unavailable' &&
+      !disabledWaitingEntry
     ) {
       context.addIssue({
         code: 'custom',
@@ -407,12 +412,24 @@ export const participantAgendaItemSchema = z
     if (
       item.state === 'waitlisted' &&
       item.waitlist.state === 'waiting' &&
-      item.action.state !== 'capacity_full'
+      item.action.state !== 'capacity_full' &&
+      !disabledWaitingEntry
     ) {
       context.addIssue({
         code: 'custom',
         path: ['action', 'state'],
         message: 'A waiting entry requires a full session',
+      });
+    }
+    if (
+      disabledWaitingEntry &&
+      (item.capacity.mode !== 'reservation' ||
+        item.capacity.actorAvailability.state !== 'unavailable')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['capacity', 'actorAvailability'],
+        message: 'A disabled waiting entry cannot bypass FIFO promotion',
       });
     }
     if (

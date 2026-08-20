@@ -161,7 +161,9 @@ export const participantAgendaCapacityCopy = (
     return 'Rezervace jsou uzavřené.';
   }
   if (item.state === 'waitlisted' && item.waitlist.state === 'waiting') {
-    return `K okamžité rezervaci zbývá 0 míst. V čekací listině už jste na ${item.waitlist.position}. místě; není potřeba žádat znovu.`;
+    return item.capacity.remaining === 0
+      ? `K okamžité rezervaci zbývá 0 míst. V čekací listině už jste na ${item.waitlist.position}. místě; není potřeba žádat znovu.`
+      : `Volná kapacita: ${item.capacity.remaining}. V čekací listině zůstáváte na ${item.waitlist.position}. místě a čekáte na zpracování serverem; není potřeba žádat znovu.`;
   }
   if (item.action.state === 'capacity_full') {
     const held =

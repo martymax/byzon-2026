@@ -448,15 +448,27 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       source: 'participant',
       createdAt: fixedNow,
     });
-    await client.db.insert(schema.waitlistEntries).values({
-      id: crypto.randomUUID(),
-      eventId,
-      sessionId: projectedSessionId,
-      userId: projectedWaitlistUserId,
-      status: 'waiting',
-      positionSequence: 1,
-      createdAt: fixedNow,
-    });
+    await client.db.insert(schema.waitlistEntries).values([
+      {
+        id: crypto.randomUUID(),
+        eventId,
+        sessionId: projectedSessionId,
+        userId: projectedReservationUserId,
+        status: 'cancelled',
+        positionSequence: 1,
+        createdAt: new Date(fixedNow.getTime() - 1_000),
+        cancelledAt: fixedNow,
+      },
+      {
+        id: crypto.randomUUID(),
+        eventId,
+        sessionId: projectedSessionId,
+        userId: projectedWaitlistUserId,
+        status: 'waiting',
+        positionSequence: 2,
+        createdAt: fixedNow,
+      },
+    ]);
     await client.db.insert(schema.participantAgendas).values({
       eventId,
       userId: cancelledPublicationUserId,
@@ -702,10 +714,53 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantAgendaMutationResponseSchema.parse(await response.json()),
       ).toMatchObject({
         version: 1,
-        items: [{ state: scenario.state, session: { id: projectedSessionId } }],
+        items: [
+          {
+            state: scenario.state,
+            session: { id: projectedSessionId },
+            ...(scenario.state === 'waitlisted'
+              ? { waitlist: { position: 1 } }
+              : {}),
+          },
+        ],
         mutation: { action: 'add', outcome: 'already_applied' },
       });
     }
+
+    await client.db
+      .update(schema.reservations)
+      .set({ status: 'cancelled', cancelledAt: fixedNow })
+      .where(
+        and(
+          eq(schema.reservations.eventId, eventId),
+          eq(schema.reservations.sessionId, projectedSessionId),
+          eq(schema.reservations.userId, projectedReservationUserId),
+        ),
+      );
+    const promotionPending = await readParticipantAgenda(
+      readRequest(),
+      dependencies(projectedWaitlistUserId),
+    );
+    expect(promotionPending.status).toBe(200);
+    expect(
+      participantAgendaResponseSchema.parse(await promotionPending.json()),
+    ).toMatchObject({
+      items: [
+        {
+          state: 'waitlisted',
+          action: { state: 'available' },
+          capacity: {
+            remaining: 1,
+            actorAvailability: { state: 'unavailable' },
+          },
+          waitlist: {
+            state: 'waiting',
+            position: 1,
+            actionsAvailable: false,
+          },
+        },
+      ],
+    });
 
     const savedRows = await client.db
       .select({ value: count() })
@@ -1315,9 +1370,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         slug: `agenda-cap-${index}-${id}`,
         title: `Agenda cap ${index}`,
         type: 'other' as const,
-        startsAt: new Date('2026-09-19T08:00:00Z'),
-        endsAt: new Date('2026-09-19T09:00:00Z'),
-        status: 'archived' as const,
+        startsAt: new Date('2026-09-18T18:00:00Z'),
+        endsAt: new Date('2026-09-18T19:00:00Z'),
+        status: 'draft' as const,
         capacityMode: 'none' as const,
         capacity: null,
         waitlistMode: 'disabled' as const,
@@ -1340,6 +1395,44 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       status: 'confirmed',
       source: 'participant',
       createdAt: fixedNow,
+    });
+    const currentPublication =
+      await client.db.query.contentPublications.findFirst({
+        columns: { snapshot: true, version: true },
+        where: eq(schema.contentPublications.eventId, eventId),
+        orderBy: [desc(schema.contentPublications.version)],
+      });
+    const currentPublishedProgram = publishedProgramSnapshotSchema.parse(
+      currentPublication?.snapshot,
+    );
+    await client.db.insert(schema.contentPublications).values({
+      id: crypto.randomUUID(),
+      eventId,
+      version: (currentPublication?.version ?? 0) + 1,
+      snapshot: {
+        program: {
+          ...currentPublishedProgram.program,
+          sessions: [
+            ...currentPublishedProgram.program.sessions,
+            ...cappedSessionIds.map((id, index) => ({
+              id,
+              dayId,
+              roomId: null,
+              slug: `agenda-cap-${index}-${id}`,
+              title: `Agenda cap ${index}`,
+              type: 'other' as const,
+              status: 'published' as const,
+              startsAt: '2026-09-18T18:00:00.000Z',
+              endsAt: '2026-09-18T19:00:00.000Z',
+              sortOrder:
+                currentPublishedProgram.program.sessions.length + index,
+            })),
+          ],
+        },
+      },
+      checksumSha256: 'd'.repeat(64),
+      publishedBy: publisherId,
+      publishedAt: new Date(fixedNow.getTime() + 1_000),
     });
 
     const response = await mutate(
@@ -1364,12 +1457,12 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       dependencies(driftUserId),
     );
     expect(read.status).toBe(200);
+    const readBody = participantAgendaResponseSchema.parse(await read.json());
+    expect(readBody.version).toBe(1);
+    expect(readBody.items).toHaveLength(512);
     expect(
-      participantAgendaResponseSchema.parse(await read.json()),
-    ).toMatchObject({
-      version: 1,
-      items: [{ state: 'reserved', session: { id: closedSessionId } }],
-    });
+      readBody.items.find(({ session }) => session.id === closedSessionId),
+    ).toMatchObject({ state: 'reserved' });
   });
 
   it('replays a successful mutation after a newer publication removes its target', async () => {
@@ -1419,6 +1512,29 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       mutation: { action: 'add', outcome: 'superseded' },
       timeConflict: null,
     });
+
+    const cleanup = await mutate(
+      publicationReplayUserId,
+      { action: 'remove', sessionId: savedSessionId, expectedVersion: 2 },
+      'agenda-remove-after-publication-0001',
+    );
+    expect(cleanup.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema.parse(await cleanup.json()),
+    ).toMatchObject({
+      version: 3,
+      items: [],
+      mutation: { action: 'remove', outcome: 'applied' },
+    });
+    expect(
+      await client.db.query.agendaItems.findFirst({
+        where: and(
+          eq(schema.agendaItems.eventId, eventId),
+          eq(schema.agendaItems.userId, publicationReplayUserId),
+          eq(schema.agendaItems.sessionId, savedSessionId),
+        ),
+      }),
+    ).toBeUndefined();
   });
 
   it('rejects a cross-origin mutation before creating participant state', async () => {

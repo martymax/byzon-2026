@@ -200,13 +200,32 @@ describe('participant agenda view model', () => {
   });
 
   it('does not invite an already-waiting participant to join again', () => {
-    const copy = participantAgendaCapacityCopy(
-      onlyItem(participantAgendaFixtures.waiting!),
-    );
+    const waiting = onlyItem(participantAgendaFixtures.waiting!);
+    const copy = participantAgendaCapacityCopy(waiting);
 
     expect(copy).toContain('V čekací listině už jste');
     expect(copy).toContain('3. místě');
     expect(copy).not.toContain('Můžete požádat');
+
+    if (
+      waiting.state !== 'waitlisted' ||
+      waiting.capacity.mode !== 'reservation'
+    ) {
+      throw new TypeError('Waiting fixture must expose reservation capacity.');
+    }
+    const promotionPending = participantAgendaCapacityCopy({
+      ...waiting,
+      action: { state: 'available' },
+      capacity: {
+        ...waiting.capacity,
+        remaining: 1,
+        actorAvailability: { state: 'unavailable' },
+      },
+      waitlist: { ...waiting.waitlist, actionsAvailable: false },
+    });
+    expect(promotionPending).toContain('Volná kapacita: 1');
+    expect(promotionPending).toContain('čekáte na zpracování serverem');
+    expect(promotionPending).not.toContain('Můžete požádat');
   });
 
   it('derives a stable countdown from server time and monotonic elapsed time', () => {

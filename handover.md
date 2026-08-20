@@ -207,8 +207,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `serverNow` až za participant lock a zachovala exact-key replay i po novější
   publikaci, která cílovou session odstranila. Downstream roster nyní používá
   stejný latest-publication allowlist, takže nová rezervace nad běžným
-  importovaným `draft` řádkem je viditelná přiřazenému operátorovi. Po rebase a
-  rate-limit zapojení
+  importovaným `draft` řádkem je viditelná přiřazenému operátorovi. Poslední
+  review navíc zachovává aktivní waiting projekci i po uvolnění místa, ale s
+  vypnutými akcemi až do canonical FIFO promotion, a její pořadí počítá živě
+  pouze mezi aktivními waiting řádky. Session odebrané z poslední publikace se
+  nezobrazují ani neblokují limit 512, jejich vlastní uloženou agenda vrstvu
+  však lze idempotentně uklidit. Po rebase a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
   9/9, agenda HTTP 18/18 a conference 546/546 bez skipů. Globální
   gate prošel bez lint chyb včetně 880 workspace testů, všech
