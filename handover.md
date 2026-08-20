@@ -49,8 +49,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   source mock boundary a oba audity jsou zelené. Nová databázová regrese pro
   nekonzistentní onboarding replay se na tomto stroji načetla, ale spolu s
   dalšími 34 DB scénáři byla bez `TEST_DATABASE_URL` přeskočená. Pokus o
-  izolovaný PostgreSQL zablokoval sandbox na systémové sdílené paměti; její
-  skutečné provedení bez skipu je proto povinným gate CI po pushi.
+  izolovaný PostgreSQL zablokoval sandbox na systémové sdílené paměti.
+- [CI run 32377970145](https://github.com/martymax/byzon-2026/actions/runs/32377970145)
+  následně prošel na headu `85f6081` bez skipů: database 81/81, domain
+  174/174, conference server/unit 483/483 včetně 4/4 onboarding integrací,
+  browser components 846/846 a Playwright E2E 15/15. Migrace, seed, frozen
+  install, formát, lint, typecheck, produkční Next/worker build, source/build
+  mock boundary, audit i samostatný static-site job jsou zelené.
 
 - Better Auth session má nově 48hodinovou expiraci a zachovaný 24hodinový
   refresh aktivní relace. Aplikace nemá samostatný idle logout, takže neaktivní
