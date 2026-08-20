@@ -44,6 +44,7 @@ const agendaMutationReceiptSchema = z.strictObject({
   outcome: z.enum(['applied', 'already_applied']),
   version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 });
+type AgendaMutationReceipt = z.infer<typeof agendaMutationReceiptSchema>;
 
 export interface ParticipantAgendaOperationalDrift {
   code: 'confirmed_reservation_without_capacity';
@@ -795,6 +796,26 @@ const conflictFor = (
       };
 };
 
+const receiptPostconditionHolds = (
+  snapshot: ParticipantAgendaResponse,
+  receipt: AgendaMutationReceipt,
+): boolean => {
+  const item = snapshot.items.find(
+    ({ session }) => session.id === receipt.sessionId,
+  );
+  switch (receipt.action) {
+    case 'add':
+      return (
+        item !== undefined &&
+        (receipt.outcome !== 'applied' || item.state === 'saved')
+      );
+    case 'remove':
+      return item === undefined;
+    case 'reserve':
+      return item?.state === 'reserved';
+  }
+};
+
 const canonicalProblemResponse = (
   error:
     | StaleAgendaVersionError
@@ -907,13 +928,15 @@ export const mutateParticipantAgenda = async (
     rateLimitDecision =
       (await dependencies.rateLimit?.('mutation', session.user.id)) ?? null;
     const now = dependencies.now?.() ?? new Date();
+    let responseNow = now;
     const context = await loadAgendaContext(
       dependencies,
       session.user.id,
       now,
       true,
     );
-    canonical = { context, now, userId: session.user.id };
+    const canonicalState = { context, now, userId: session.user.id };
+    canonical = canonicalState;
     const json = await readBoundedJson(request);
     const parsed = participantAgendaMutationRequestSchema.safeParse(json.value);
     if (!parsed.success) throw validationFailed(zodFieldErrors(parsed.error));
@@ -952,6 +975,17 @@ export const mutateParticipantAgenda = async (
         );
         if (currentVersion !== parsed.data.expectedVersion) {
           throw new StaleAgendaVersionError();
+        }
+
+        if (parsed.data.action === 'reserve') {
+          await acquireTransactionLock(
+            transaction,
+            `content-publish:${context.event.id}`,
+          );
+          await acquireTransactionLock(
+            transaction,
+            `participant-reservation:${context.event.id}:${parsed.data.sessionId}`,
+          );
         }
 
         const operationalTarget =
@@ -1050,10 +1084,6 @@ export const mutateParticipantAgenda = async (
             .returning({ sessionId: schema.agendaItems.sessionId });
           if (deleted.length === 1) outcome = 'applied';
         } else {
-          await acquireTransactionLock(
-            transaction,
-            `participant-reservation:${context.event.id}:${parsed.data.sessionId}`,
-          );
           const saved = await transaction.query.agendaItems.findFirst({
             columns: { sessionId: true },
             where: and(
@@ -1085,13 +1115,19 @@ export const mutateParticipantAgenda = async (
           ) {
             throw sessionNotFound();
           }
+          const reservationNow = dependencies.now?.() ?? new Date();
+          responseNow = reservationNow;
+          canonicalState.now = reservationNow;
           const opensAt =
             operationalTarget.reservationOpensAt?.getTime() ??
             Number.NEGATIVE_INFINITY;
           const closesAt =
             operationalTarget.reservationClosesAt?.getTime() ??
             operationalTarget.startsAt.getTime();
-          if (now.getTime() < opensAt || now.getTime() >= closesAt) {
+          if (
+            reservationNow.getTime() < opensAt ||
+            reservationNow.getTime() >= closesAt
+          ) {
             throw new AgendaReservationClosedError(parsed.data.sessionId);
           }
           const existing = await transaction.query.reservations.findFirst({
@@ -1143,7 +1179,7 @@ export const mutateParticipantAgenda = async (
               source: 'participant',
               status: 'confirmed',
               version: 1,
-              createdAt: now,
+              createdAt: reservationNow,
             });
             outcome = 'applied';
           }
@@ -1153,7 +1189,7 @@ export const mutateParticipantAgenda = async (
             transaction,
             context.event.id,
             session.user.id,
-            now,
+            responseNow,
           );
           await writeAuditLog(transaction, {
             eventId: context.event.id,
@@ -1191,18 +1227,21 @@ export const mutateParticipantAgenda = async (
       dependencies.db,
       context,
       session.user.id,
-      now,
+      responseNow,
       dependencies.onOperationalDrift,
     );
+    const replaySuperseded =
+      result.replayed && !receiptPostconditionHolds(snapshot, receipt);
     const body = participantAgendaMutationResponseSchema.parse({
       ...snapshot,
       mutation: {
         action: receipt.action,
         sessionId: receipt.sessionId,
-        outcome: receipt.outcome,
+        outcome: replaySuperseded ? 'superseded' : receipt.outcome,
       },
       timeConflict:
-        receipt.action === 'add' || receipt.action === 'reserve'
+        !replaySuperseded &&
+        (receipt.action === 'add' || receipt.action === 'reserve')
           ? conflictFor(snapshot, receipt.sessionId)
           : null,
     });

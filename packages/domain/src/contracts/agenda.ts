@@ -701,7 +701,7 @@ export type ParticipantAgendaMutationHeaders = z.infer<
 
 const agendaMutationResultBaseShape = {
   sessionId: uuidSchema,
-  outcome: z.enum(['applied', 'already_applied']),
+  outcome: z.enum(['applied', 'already_applied', 'superseded']),
 } as const;
 
 const agendaMutationResultSchema = z.discriminatedUnion('action', [
@@ -834,6 +834,13 @@ const validateAgendaMutationPostcondition = (
       path: ['mutation'],
       message,
     });
+
+  if (mutation.outcome === 'superseded') {
+    if (timeConflict !== null) {
+      issue('A superseded replay cannot carry a time conflict');
+    }
+    return;
+  }
 
   if (timeConflict !== null) {
     if (

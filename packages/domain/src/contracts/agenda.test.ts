@@ -677,6 +677,42 @@ describe('CS-AGENDA-01 participant contracts', () => {
     }
   });
 
+  it('accepts an explicit superseded replay against the current canonical snapshot', () => {
+    const supersededAdd = {
+      ...response,
+      version: 8,
+      items: [],
+      calendarExport: {
+        state: 'unavailable' as const,
+        reason: 'empty' as const,
+      },
+      mutation: {
+        sessionId: ids.session,
+        action: 'add' as const,
+        outcome: 'superseded' as const,
+      },
+      timeConflict: null,
+    };
+    expect(
+      participantAgendaMutationResponseSchema.parse(supersededAdd),
+    ).toEqual(supersededAdd);
+
+    const supersededRemove = {
+      ...response,
+      version: 9,
+      items: [savedItem],
+      mutation: {
+        sessionId: ids.session,
+        action: 'remove' as const,
+        outcome: 'superseded' as const,
+      },
+      timeConflict: null,
+    };
+    expect(
+      participantAgendaMutationResponseSchema.parse(supersededRemove),
+    ).toEqual(supersededRemove);
+  });
+
   it('accepts canonical removal of source-less reservation and waitlist projections', () => {
     const releasedSnapshot = {
       ...response,

@@ -109,7 +109,10 @@ reservation capacity. Successful writes and their minimal audit entry share one
 transaction; no-op and replay do not create another audit row. Idempotency
 storage contains only action, session reference, outcome and resulting version;
 the private canonical response is rebuilt through the current access and
-anonymization gates on both the first response and replay.
+anonymization gates on both the first response and replay. If a later inverse
+mutation has replaced the stored receipt's target postcondition, an exact-key
+replay returns the current canonical snapshot with outcome `superseded` and no
+stale conflict warning instead of failing response validation.
 
 The read model joins manual/organizer agenda items with confirmed reservations
 and any pre-existing waiting rows. Cancellation and waitlist controls remain
@@ -120,6 +123,9 @@ publication is the visibility allowlist while non-archived operational rows
 provide capacity and immediate cancellation state. Capacity drift degrades only
 the affected confirmed reservation to a conservative closed projection and
 emits an operator warning instead of failing the entire agenda.
+Reservation creation shares the event content lock with organizer mutations,
+then acquires the session reservation lock, reloads operational status and
+re-evaluates the reservation window from a fresh authoritative clock value.
 
 Agenda routes use two explicit one-minute shared Redis buckets keyed by an
 environment-keyed HMAC of the canonical event slug and authenticated user ID.

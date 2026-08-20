@@ -1,4 +1,9 @@
-import { createDatabaseClient, schema } from '@byzon/database';
+import {
+  acquireTransactionLock,
+  createDatabaseClient,
+  schema,
+  withTransaction,
+} from '@byzon/database';
 import {
   participantAgendaMutationProblemSchema,
   participantAgendaMutationResponseSchema,
@@ -41,12 +46,17 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const isolationUserId = crypto.randomUUID();
   const inactiveTicketUserId = crypto.randomUUID();
   const driftUserId = crypto.randomUUID();
+  const cancellationRaceUserId = crypto.randomUUID();
+  const cutoffRaceUserId = crypto.randomUUID();
+  const replayUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
   const lastSeatSessionId = crypto.randomUUID();
   const closedSessionId = crypto.randomUUID();
   const networkingSessionId = crypto.randomUUID();
+  const cancellationRaceSessionId = crypto.randomUUID();
+  const cutoffRaceSessionId = crypto.randomUUID();
   const archivedOperationalSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
@@ -137,6 +147,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       isolationUserId,
       inactiveTicketUserId,
       driftUserId,
+      cancellationRaceUserId,
+      cutoffRaceUserId,
+      replayUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -153,6 +166,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         contenderTwoId,
         inactiveTicketUserId,
         driftUserId,
+        cancellationRaceUserId,
+        cutoffRaceUserId,
+        replayUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -167,6 +183,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         contenderTwoId,
         inactiveTicketUserId,
         driftUserId,
+        cancellationRaceUserId,
+        cutoffRaceUserId,
+        replayUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -181,20 +200,25 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       role: 'participant',
     });
     await client.db.insert(schema.tickets).values(
-      [primaryUserId, contenderOneId, contenderTwoId, inactiveTicketUserId].map(
-        (userId, index) => ({
-          id: crypto.randomUUID(),
-          eventId,
-          codeHmac: (index + 1).toString(16).padStart(64, '0'),
-          codeSuffix: `agenda-${index + 1}`,
-          status:
-            userId === inactiveTicketUserId
-              ? ('blocked' as const)
-              : ('activated' as const),
-          holderUserId: userId,
-          ...(userId === inactiveTicketUserId ? {} : { claimedAt: fixedNow }),
-        }),
-      ),
+      [
+        primaryUserId,
+        contenderOneId,
+        contenderTwoId,
+        inactiveTicketUserId,
+        cancellationRaceUserId,
+        cutoffRaceUserId,
+      ].map((userId, index) => ({
+        id: crypto.randomUUID(),
+        eventId,
+        codeHmac: (index + 1).toString(16).padStart(64, '0'),
+        codeSuffix: `agenda-${index + 1}`,
+        status:
+          userId === inactiveTicketUserId
+            ? ('blocked' as const)
+            : ('activated' as const),
+        holderUserId: userId,
+        ...(userId === inactiveTicketUserId ? {} : { claimedAt: fixedNow }),
+      })),
     );
     await client.db.insert(schema.eventDays).values({
       id: dayId,
@@ -284,6 +308,27 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'networking' as const,
         capacityMode: 'reservation' as const,
         capacity: 10,
+      },
+      {
+        id: cancellationRaceSessionId,
+        slug: `cancellation-race-${cancellationRaceSessionId}`,
+        title: 'Rezervace souběžná se stornem',
+        startsAt: new Date('2026-09-18T15:00:00Z'),
+        endsAt: new Date('2026-09-18T16:00:00Z'),
+        type: 'workshop' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 2,
+      },
+      {
+        id: cutoffRaceSessionId,
+        slug: `cutoff-race-${cutoffRaceSessionId}`,
+        title: 'Rezervace čekající přes uzávěrku',
+        startsAt: new Date('2026-09-18T15:00:00Z'),
+        endsAt: new Date('2026-09-18T16:00:00Z'),
+        type: 'workshop' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 2,
+        reservationClosesAt: new Date('2026-09-18T07:00:30Z'),
       },
       {
         id: archivedOperationalSessionId,
@@ -614,6 +659,73 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(blockedCancel.status).toBe(422);
   });
 
+  it('returns an explicit superseded replay after a later inverse mutation', async () => {
+    const addBody = {
+      action: 'add' as const,
+      sessionId: savedSessionId,
+      expectedVersion: 1,
+    };
+    const added = await mutate(
+      replayUserId,
+      addBody,
+      'agenda-superseded-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    const removeBody = {
+      action: 'remove' as const,
+      sessionId: savedSessionId,
+      expectedVersion: 2,
+    };
+    const removed = await mutate(
+      replayUserId,
+      removeBody,
+      'agenda-superseded-remove-0001',
+    );
+    expect(removed.status).toBe(200);
+
+    const replayedAdd = await mutate(
+      replayUserId,
+      addBody,
+      'agenda-superseded-add-0001',
+    );
+    expect(replayedAdd.status).toBe(200);
+    expect(replayedAdd.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      participantAgendaMutationResponseSchema.parse(await replayedAdd.json()),
+    ).toMatchObject({
+      version: 3,
+      items: [],
+      mutation: { action: 'add', outcome: 'superseded' },
+      timeConflict: null,
+    });
+
+    const restored = await mutate(
+      replayUserId,
+      { action: 'add', sessionId: savedSessionId, expectedVersion: 3 },
+      'agenda-superseded-add-0002',
+    );
+    expect(restored.status).toBe(200);
+
+    const replayedRemove = await mutate(
+      replayUserId,
+      removeBody,
+      'agenda-superseded-remove-0001',
+    );
+    expect(replayedRemove.status).toBe(200);
+    expect(replayedRemove.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      participantAgendaMutationResponseSchema.parse(
+        await replayedRemove.json(),
+      ),
+    ).toMatchObject({
+      version: 4,
+      items: [{ state: 'saved', session: { id: savedSessionId } }],
+      mutation: { action: 'remove', outcome: 'superseded' },
+      timeConflict: null,
+    });
+  });
+
   it('allows exactly one of two contenders to reserve the final place', async () => {
     const addResponses = await Promise.all([
       mutate(
@@ -670,6 +782,124 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ),
       );
     expect(confirmedRows[0]?.confirmed).toBe(1);
+  });
+
+  it('serializes reservation creation with an operational cancellation', async () => {
+    const added = await mutate(
+      cancellationRaceUserId,
+      {
+        action: 'add',
+        sessionId: cancellationRaceSessionId,
+        expectedVersion: 1,
+      },
+      'agenda-cancellation-race-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    let signalAdminLocked!: () => void;
+    const adminLocked = new Promise<void>((resolve) => {
+      signalAdminLocked = resolve;
+    });
+    let releaseAdminMutation!: () => void;
+    const adminRelease = new Promise<void>((resolve) => {
+      releaseAdminMutation = resolve;
+    });
+    const cancellation = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(transaction, `content-publish:${eventId}`);
+      await transaction
+        .update(schema.programSessions)
+        .set({ status: 'cancelled' })
+        .where(eq(schema.programSessions.id, cancellationRaceSessionId));
+      signalAdminLocked();
+      await adminRelease;
+    });
+    await adminLocked;
+
+    const reservation = mutate(
+      cancellationRaceUserId,
+      {
+        action: 'reserve',
+        sessionId: cancellationRaceSessionId,
+        expectedVersion: 2,
+      },
+      'agenda-cancellation-race-reserve-0001',
+    );
+    const stateBeforeCancellationCommit = await Promise.race([
+      reservation.then(() => 'settled' as const),
+      new Promise<'blocked'>((resolve) => {
+        setTimeout(() => resolve('blocked'), 100);
+      }),
+    ]);
+    releaseAdminMutation();
+    await cancellation;
+    const response = await reservation;
+
+    expect(stateBeforeCancellationCommit).toBe('blocked');
+    expect(response.status).toBe(404);
+    const confirmedRows = await client.db
+      .select({ value: count() })
+      .from(schema.reservations)
+      .where(
+        and(
+          eq(schema.reservations.eventId, eventId),
+          eq(schema.reservations.userId, cancellationRaceUserId),
+          eq(schema.reservations.sessionId, cancellationRaceSessionId),
+          eq(schema.reservations.status, 'confirmed'),
+        ),
+      );
+    expect(confirmedRows[0]?.value).toBe(0);
+  });
+
+  it('re-evaluates the reservation cutoff after acquiring transaction locks', async () => {
+    const added = await mutate(
+      cutoffRaceUserId,
+      {
+        action: 'add',
+        sessionId: cutoffRaceSessionId,
+        expectedVersion: 1,
+      },
+      'agenda-cutoff-race-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    const afterCutoff = new Date('2026-09-18T07:00:31.000Z');
+    const authoritativeNow = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(fixedNow)
+      .mockReturnValue(afterCutoff);
+    const response = await mutateParticipantAgenda(
+      mutationRequest(
+        {
+          action: 'reserve',
+          sessionId: cutoffRaceSessionId,
+          expectedVersion: 2,
+        },
+        'agenda-cutoff-race-reserve-0001',
+      ),
+      {
+        ...dependencies(cutoffRaceUserId),
+        now: authoritativeNow,
+      },
+    );
+
+    expect(authoritativeNow).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(409);
+    expect(
+      participantAgendaMutationProblemSchema.parse(await response.json()),
+    ).toMatchObject({
+      code: 'RESERVATION_CLOSED',
+      sessionId: cutoffRaceSessionId,
+      agenda: {
+        serverNow: afterCutoff.toISOString(),
+        items: [
+          {
+            state: 'saved',
+            session: { id: cutoffRaceSessionId },
+            action: { state: 'closed' },
+          },
+        ],
+      },
+    });
   });
 
   it('returns canonical stale and closed problems and rejects networking reservation', async () => {

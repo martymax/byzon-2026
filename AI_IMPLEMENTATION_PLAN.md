@@ -2517,7 +2517,12 @@ souběžně.
   logovaným fail-open a mutation 30/min s fail-closed před DB/idempotency prací.
 - [!] `P5-03` Rezervační transakce s lockem a concurrency testem posledního
   místa je hotová včetně aktivované vstupenky, cutoffu v začátku session,
-  canonical capacity/stale chyb a auditovaného zápisu. Source-provenance policy
+  canonical capacity/stale chyb a auditovaného zápisu. Lock pořadí owner →
+  shared content → event/session serializuje vznik rezervace s provozním
+  stornem a cutoff se znovu vyhodnotí z autoritativního času až po získání
+  locků. Exact-key replay překonaný pozdější opačnou mutací vrací aktuální
+  canonical snapshot s výsledkem `superseded`, zatímco v databázi zůstává jen
+  minimální receipt. Source-provenance policy
   bezpečně nastavuje EB21 na 12 a oba sobotní workshopy na 20. Coaching
   1/slot zůstává v `P5-06`, protože živý list potvrzuje dvě paralelní řady;
   sobotní mastermind 6 čeká na group-booking rozhodnutí v `BLOCKER-RES-05`.
@@ -3175,3 +3180,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.5 | 20. 8. 2026 | Dokončeny `P5-01` a `P5-02` a transakční jádro `P5-03`: versioned agenda schema, Better Auth/canonical event private API, live UI, idempotentní add/remove, konflikt a auditovaná rezervace s aktivovanou vstupenkou a event/session lockem. Concurrency regrese potvrzuje jediného vítěze posledního místa. Provenance-verified kapacity nastavují EB21 12 a oba sobotní workshopy 20; coaching zůstává v `P5-06` a dvoudílný sobotní mastermind nově za `BLOCKER-RES-05`. Waitlist, cancel, networking a ICS nejsou předstíraně aktivované. |
 | 6.6 | 20. 8. 2026 | Review PR `#22` opravilo publication/operational status invariant, minimalizovalo idempotency receipt, omezilo add na 512 položek, zachovalo čitelnost potvrzené rezervace při capacity driftu s operator warningem, skrylo zakázané offer akce a atomicky validuje všechny tři migrační backfill targety. Redis provider z `P8-01` už je integrovaný; explicitní agenda route wiring zůstává posledním produkčním rollout gate. |
 | 6.7 | 20. 8. 2026 | PR `#22` byl rebasován na integrované `P8-01` a agenda route dostaly atomické shared Redis limity s event/user HMAC subjectem: read 120/min fail-open s throttled PII-free warningem, mutation 30/min fail-closed před DB/idempotency prací a kanonické `429 RATE_LIMITED` hlavičky/kontrakty. Tím je odstraněn rate-limit rollout gate; otevřené zůstávají pouze výslovně uvedené waitlist/cancel/ICS/networking/coaching blockery. |
+| 6.8 | 20. 8. 2026 | Aktuální Codex review PR `#22` odstranilo tři další race/replay vady: rezervace sdílí content lock s provozním stornem a teprve potom session lock, cutoff používá čerstvý autoritativní čas po locku a exact-key replay po pozdější opačné mutaci vrací canonical `superseded` místo HTTP 500 bez rozšíření uloženého receiptu. PostgreSQL regrese kryjí storno race, čekání přes cutoff i oba směry inverse replaye; plný service-backed gate má 876/876 workspace testů, conference 542/542 a browser komponenty 849/849. |

@@ -174,10 +174,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   idempotency a exact same-origin JSON. Live `/app/agenda`, home a detail
   programu už nejsou omezené na development preview.
 - Rezervace vyžaduje uloženou položku, aktivovanou vstupenku, publikovanou
-  nenetworkingovou session a explicitní kapacitu. Owner a event/session
-  advisory lock, count+insert v jedné transakci a PostgreSQL race test zaručují
-  jediného vítěze posledního místa. Aplikované add/remove/reserve zapisují ve
-  stejné transakci minimální audit; replay/no-op nový audit nevytváří.
+  nenetworkingovou session a explicitní kapacitu. Owner, sdílený content a
+  event/session advisory lock, nový autoritativní čas po získání locků,
+  count+insert v jedné transakci a PostgreSQL race testy zaručují jediného
+  vítěze posledního místa a nepovolí rezervaci souběžnou se stornem nebo po
+  cutoffu. Aplikované add/remove/reserve zapisují ve stejné transakci minimální
+  audit; replay/no-op nový audit nevytváří.
 - Živý Harmonogram BYZON 2026 byl znovu přečten: import/migrační backfill
   bezpečně nastavuje EB21 na 12 a dva sobotní workshopy na 20, s cutoffem v
   začátku session a vypnutým waitlistem. Koučink jsou dvě paralelní řady a
@@ -193,10 +195,14 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   minimalizoval uložený idempotency receipt, vynutil limit 512 položek, zachoval
   konzervativně zavřenou potvrzenou rezervaci při capacity driftu s operator
   warningem, skryl server-disabled offer akce a před backfillem atomicky ověřuje
-  všechny tři provenance/title/time targety. Po rebase a rate-limit zapojení
+  všechny tři provenance/title/time targety. Následné Codex review navíc
+  serializovalo rezervaci s provozním stornem, přesunulo cutoff kontrolu za
+  locky a pro replay překonaný pozdější opačnou mutací zavedlo explicitní
+  canonical výsledek `superseded` bez ukládání privátního snapshotu. Po rebase
+  a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
-  9/9, agenda HTTP 11/11 a conference 539/539 bez skipů. Globální
-  `pnpm run ci` prošlo bez lint warningů včetně 872 workspace testů, všech
+  9/9, agenda HTTP 14/14 a conference 542/542 bez skipů. Globální
+  gate prošel bez lint chyb včetně 876 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a
   static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency

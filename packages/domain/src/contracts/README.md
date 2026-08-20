@@ -142,7 +142,10 @@ discriminated by action and always carry `sessionId` plus `expectedVersion`.
 Offer decisions additionally require the exact `offerId`; registration
 estimates carry an explicit target boolean and are never implicit toggles.
 Every success returns the complete new canonical snapshot instead of a locally
-predicted seat.
+predicted seat. An exact idempotency replay whose original target state was
+replaced by a later mutation uses the explicit `superseded` outcome against the
+current canonical snapshot; it never fabricates the historical private
+snapshot or attaches a stale time-conflict warning.
 
 Reservation capacity separates confirmed seats, all active holds and genuinely
 remaining seats. `actorAvailability` distinguishes a public seat from a
