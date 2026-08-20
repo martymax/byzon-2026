@@ -25,6 +25,7 @@ export const participantProfiles = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     firstName: varchar('first_name', { length: 128 }).notNull(),
     lastName: varchar('last_name', { length: 128 }).notNull(),
+    company: varchar('company', { length: 160 }),
     contactEmail: varchar('contact_email', { length: 320 }).notNull(),
     phone: varchar('phone', { length: 16 }),
     version: integer('version').default(1).notNull(),

@@ -18,6 +18,7 @@ const safeTextSchema = (maximum: number) =>
 
 export const activityRosterCachePolicy = Object.freeze({
   cacheControl: 'private, no-store',
+  vary: Object.freeze(['authorization', 'cookie'] as const),
   browserPersistence: 'forbidden',
   mutation: 'none-read-only',
 } as const);

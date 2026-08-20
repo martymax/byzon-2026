@@ -116,7 +116,9 @@ integration('magic-link authentication integration', () => {
         createdAt: schema.sessions.createdAt,
         expiresAt: schema.sessions.expiresAt,
       })
-      .from(schema.sessions);
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.users.email, email));
 
     expect(stored).toHaveLength(1);
     expect(
@@ -143,7 +145,11 @@ integration('magic-link authentication integration', () => {
   it('revokes every session and expires the caller cookie', async () => {
     const firstCookie = await createSession();
     const secondCookie = await createSession();
-    const before = await client.db.select().from(schema.sessions);
+    const before = await client.db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.users.email, email));
     expect(before).toHaveLength(2);
 
     const response = await logoutAllSessions(
@@ -176,7 +182,11 @@ integration('magic-link authentication integration', () => {
       requestId: 'logout-all-test-request',
     });
 
-    const remaining = await client.db.select().from(schema.sessions);
+    const remaining = await client.db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.users.email, email));
     expect(remaining).toHaveLength(0);
 
     for (const cookie of [firstCookie, secondCookie]) {

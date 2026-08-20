@@ -23,13 +23,20 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 - Scope alignment v6.2 z [PR #19](https://github.com/martymax/byzon-2026/pull/19)
   je sloučený do `main` merge commitem `277ec06`; CI bez skipů prošlo a
   následný security/code review nemá otevřený actionable nález.
-- `P4-13` je implementovaný, zatím necommitnutý na
-  `agent/p4-13-integrate-bootstrap`. Produkční Better Auth `/api/v1/me/*`
+- `P4-13` je sloučený do `main` přes
+  [PR #20](https://github.com/martymax/byzon-2026/pull/20) merge commitem
+  `1c52791`. Produkční Better Auth `/api/v1/me/*`
   zahrnuje private/no-store bootstrap, atomický onboarding, optimistic profil,
   event-scoped deletion request a session actions. Migrace
   `0006_woozy_the_professor.sql` přidává profilovou verzi a tabulku
   `privacy_requests`; nevznikla nová env proměnná. `BLOCKER-LEGAL-01` dál
   blokuje pouze finální právní obsah/UAT, ne tuto integraci.
+- `P5-08` je implementovaný, zatím necommitnutý na
+  `agent/p5-08-integrate-activity-roster`. `CS-ROSTER-01` a produkční
+  `/host/aktivity` používají Better Auth, canonical event a aktivní
+  session-scoped `room_operator` assignment. List/detail vrací jen bounded
+  reservation reference, stav, jméno a firmu; networking, attendance,
+  kontakty, ticket data a export nejsou součástí řezu.
 - `static-site/data/content.json` nyní deterministicky
   importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
   i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
@@ -107,7 +114,44 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   zůstávají správně backend/provozními handoffy. Účet, profil, onboarding,
   privacy minimum a session controls už mají autorizované produkční endpointy.
 
-## Dokončená práce (`P4-13`, před commitem)
+## Dokončená práce (`P5-08`, před commitem)
+
+- Přidány read-only endpointy `GET /api/v1/activity-roster` a
+  `GET /api/v1/activity-roster/:sessionId`. Identitu odvozují výhradně z Better
+  Auth, event ze serverového slugu a session scope z aktivní `room_operator`
+  role; unknown a nepřiřazený detail mají stejný `ROSTER_NOT_FOUND`.
+- Produkční `/host/aktivity` už není 404-only preview a vykresluje stejný live
+  serverový loader. Development mock zůstává dostupný jen za pozitivním
+  preview guardem a není součástí production dependency grafu.
+- Migrace `0007_living_magik.sql` doplňuje nullable profilovou firmu a minimální
+  kanonický read-model základ `reservations`/`waitlist_entries` se složenými
+  event FK, partial unique aktivními stavy a stabilní unikátní FIFO pozicí.
+  Nevytváří agenda write flow, nevolí `RES-04` promotion režim a nepřidává
+  blokovanou networkingovou kapacitu.
+- Server promítá pouze publikované nenetworkingové sessions s
+  `capacity_mode=reservation`, aktivní membership a confirmed/waiting řádky.
+  SQL dotazy i DTO jsou bounded; response je `private, no-store`, vary Cookie +
+  Authorization a DTO nevrací user ID, telefon, e-mail, ticket ani attendance.
+- Security review doplnil SQL limit před kontraktovou projekcí. Code review
+  ověřil fail-closed malformed/revoked/cross-event scope, nerozlišující detail
+  404, retenční stop na `operationalDataAnonymizesAt`, deterministické pořadí,
+  composite FK a oddělení blokovaných produktových rozhodnutí. Nezůstává
+  otevřený actionable nález. Opakovaný globální gate navíc odhalil a opravil
+  starší auth integrační test, který počítal cizí paralelní session místo pouze
+  vlastního testovacího uživatele; produkční session logika se nezměnila.
+- Izolovaný PostgreSQL po všech sedmi migracích a seedu prošel: database 89/89,
+  conference 514/514, cílené roster/page scénáře 14/14 a activity-roster
+  browser/axe průchod 6/6 ve třech viewports. Celá browser component sada
+  prošla 846/846 a Playwright E2E 15/15. Globální `pnpm run ci` prošlo včetně
+  829 workspace testů, formátu, lintů, typů, produkčního Next/worker buildu,
+  source/build mock boundary a statického smoke 25 HTML/58 assetů; production
+  i úplný dependency audit hlásí nula známých zranitelností.
+- `CS-ROSTER-01` a capability Roster vedoucího aktivity jsou `integrated`.
+  `P5-01` zůstává otevřený pro agenda items a write transakce; další lokálně
+  neblokovaný krok je `P5-01` až `P5-03`, zatímco `P5-04` čeká na
+  `BLOCKER-RES-04`.
+
+## Dokončená práce (`P4-13`, sloučeno přes PR #20)
 
 - Přidány autorizované endpointy `GET /api/v1/me/bootstrap`,
   `POST /api/v1/me/onboarding`, `PATCH /api/v1/me/profile`,
@@ -143,8 +187,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   25 HTML/58 assetů; oba dependency audity hlásí nula známých zranitelností.
 - `BLOCKER-LEGAL-01` dál blokuje jen finální právní obsah a UAT. Agregovaná
   aktivace zůstává `UI ready (mocked)` kvůli claim/recovery handshaku, ale
-  `CS-BOOT-01` a Priority A účet/profil/soukromí jsou `integrated`. Doporučený
-  další neblokovaný krok je `P5-08`.
+  `CS-BOOT-01` a Priority A účet/profil/soukromí jsou `integrated`. Následující
+  doporučený `P5-08` byl dokončen v samostatném řezu výše.
 
 ## Historický průběh frontendové větve
 

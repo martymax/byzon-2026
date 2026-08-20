@@ -64,6 +64,27 @@ After revocation, a bounded exact-fingerprint replay may use the unexpired
 idempotency key as a bearer capability; it returns only the stored non-PII DTO
 and fails closed if the key is absent, ambiguous or paired with different bytes.
 
+## Assigned activity roster
+
+`GET /api/v1/activity-roster` and
+`GET /api/v1/activity-roster/:sessionId` derive the actor from Better Auth and
+the event from the canonical server event slug. Access requires an active
+membership and active `room_operator` role; the only accepted resource scope
+is the bounded UUID list in that role's `sessionIds`. A missing, revoked,
+cross-event or malformed assignment fails closed. The detail endpoint returns
+the same `ROSTER_NOT_FOUND` response for an unknown and an unassigned session.
+Roster PII also fails closed once the canonical event reaches its operational
+data anonymization deadline.
+
+The roster reads only published, reservation-capacity, non-networking sessions.
+Networking remains excluded behind `BLOCKER-RES-01`. Participants come from
+active confirmed reservations or waiting FIFO entries joined to active event
+memberships and the event profile. The response allowlists only reservation
+reference, reservation state, display name and company; it never returns user
+ID, e-mail, phone, ticket data or attendance evidence. Responses
+are `private, no-store`, vary by Cookie and Authorization and must not be
+persisted in the browser. There is no roster mutation or export endpoint.
+
 ## Published participant program
 
 `GET /api/v1/events/:eventId/program` requires an active event membership with

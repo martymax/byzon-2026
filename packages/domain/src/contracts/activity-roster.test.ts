@@ -31,6 +31,7 @@ describe('CS-ROSTER-01', () => {
     expect(activityRosterResponseSchema.parse(roster)).toEqual(roster);
     expect(activityRosterCachePolicy).toEqual({
       cacheControl: 'private, no-store',
+      vary: ['authorization', 'cookie'],
       browserPersistence: 'forbidden',
       mutation: 'none-read-only',
     });

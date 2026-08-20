@@ -50,6 +50,13 @@
       "when": 1787235983407,
       "tag": "0006_woozy_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787238559755,
+      "tag": "0007_living_magik",
+      "breakpoints": true
     }
   ]
 }

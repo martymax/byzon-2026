@@ -14,9 +14,11 @@ import {
   outboxEvents,
   participantProfiles,
   privacyRequests,
+  reservations,
   sessions,
   users,
   verifications,
+  waitlistEntries,
 } from './index.js';
 
 const tables = [
@@ -35,6 +37,8 @@ const tables = [
   idempotencyKeys,
   participantProfiles,
   privacyRequests,
+  reservations,
+  waitlistEntries,
 ];
 
 describe('stage 2 database schema', () => {
@@ -63,6 +67,8 @@ describe('stage 2 database schema', () => {
     idempotencyKeys,
     participantProfiles,
     privacyRequests,
+    reservations,
+    waitlistEntries,
   ])('$0 is explicitly event-scoped', (table) => {
     expect(
       getTableConfig(table).columns.map((column) => column.name),
@@ -79,12 +85,54 @@ describe('stage 2 database schema', () => {
         'user_id',
         'first_name',
         'last_name',
+        'company',
         'contact_email',
         'networking_enabled',
         'onboarding_completed_at',
         'version',
       ]),
     );
+  });
+
+  it('keeps active roster sources unique and event-scoped', () => {
+    const reservationConfig = getTableConfig(reservations);
+    const waitlistConfig = getTableConfig(waitlistEntries);
+
+    expect(
+      reservationConfig.indexes.some(
+        (index) =>
+          index.config.name === 'reservations_active_user_session_unique' &&
+          index.config.unique &&
+          index.config.where,
+      ),
+    ).toBeTruthy();
+    expect(
+      waitlistConfig.indexes.some(
+        (index) =>
+          index.config.name ===
+            'waitlist_entries_waiting_user_session_unique' &&
+          index.config.unique &&
+          index.config.where,
+      ),
+    ).toBeTruthy();
+    expect(
+      reservationConfig.foreignKeys.some(
+        (key) =>
+          key
+            .reference()
+            .columns.map((column) => column.name)
+            .join(',') === 'event_id,session_id',
+      ),
+    ).toBe(true);
+    expect(
+      waitlistConfig.foreignKeys.some(
+        (key) =>
+          key
+            .reference()
+            .columns.map((column) => column.name)
+            .join(',') === 'event_id,user_id',
+      ),
+    ).toBe(true);
   });
 
   it('stores one event-scoped privacy request per user and kind', () => {
