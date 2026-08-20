@@ -159,6 +159,25 @@ clock. The calendar metadata exposes only the same-origin
 by `P5-09`, while the `F3-05` synthetic adapter uses the same RFC 5545
 UID/sequence, UTC, cancellation, escaping and folding invariants.
 
+## Assigned activity roster (`CS-ROSTER-01`)
+
+`activity-roster.ts` is the read-only, private boundary for a Vedoucí aktivity.
+The response contains only server-assigned reservation-capacity sessions and,
+for each active confirmed reservation or waiting FIFO entry, its opaque record
+ID, `reserved | waitlisted` state, display name and optional company. E-mail,
+phone, user and ticket identifiers, attendance evidence, mutation controls and
+exports are outside the contract. Duplicate session/record IDs and a confirmed
+count above capacity fail validation.
+
+The integrated adapter owns both the list and assigned-session detail routes.
+It derives event and operator scope from the server session, returns private
+`no-store` representations and gives unassigned and unknown detail IDs the same
+not-found outcome. The shared reservation/waitlist tables added with `P5-08`
+are only the known read-model foundation from plan section 9.6; reservation
+writes, capacity locking, cancellation and the single product-approved
+promotion mode remain in `P5-01` through `P5-05`. Networking is not projected
+until `BLOCKER-RES-01` is resolved.
+
 ## Participant ticket (`CS-TICKET-01`, status-only slice)
 
 `ticket.ts` defines the private, no-store participant status DTO used by the

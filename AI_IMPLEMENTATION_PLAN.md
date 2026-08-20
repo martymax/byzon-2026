@@ -675,7 +675,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
 | `CS-ADMIN-01` | dashboard, role, reservation override, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | v6 `contract ready` a `UI ready (mocked)` bez attendance write |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
-| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `contract ready` a `UI ready (mocked)`; produkční endpoint/IDOR testy zůstávají v `P5-08` |
+| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
 | `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `not started` |
 | `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
@@ -1334,7 +1334,7 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 | Import a support | `UI ready (mocked)` | `F4-02` až `F4-05`: canonical vendor-neutral import staging/diff/immutable apply/report a maskované support vyhledání s reasoned/idempotentními akcemi, přesnou korelací a auditem. | `TKT-01`/`TKT-02` prod mapping/apply, `P4`/`P9` autorizované endpointy; `TKT-03` jen prod sync |
 | Check-in | `UI ready (mocked)` | `F5-01` až `F5-06`: samostatný online-only operator shell, camera/manual/search lookup, úplné outcome stavy, confirm, přesný retry, auditované undo a stats nad `CS-CHECKIN-01`. | `P6`, `TKT-04` source kód, `TKT-05` jen app credential a `OPS-*` pro provozní UAT |
 | Admin Priority A v6 | `UI ready (mocked)` | `F4-10` odstranil attendance permission/actions/state/UI, přejmenoval roli, zúžil announcement severity/audience a zachoval rezervace, audit, settings i minimální organizační export. | `P5`/`P8`/`P9` a capability endpointy |
-| Roster vedoucího aktivity | `UI ready (mocked)` | `CS-ROSTER-01`, validované fixtures, komponenta a fail-closed `/host/aktivity` preview vydávají jen přiřazenou session, jméno, firmu a reservation state; bez telefonu/e-mailu/attendance/exportu. | `P5-08` pro endpoint a negativní cross-session testy; finální přiřazení osob v `BLOCKER-OPS-01` |
+| Roster vedoucího aktivity | `integrated` | `P5-08` napojil připravené `/host/aktivity` na autorizovaný `CS-ROSTER-01` list a detail. Server přijímá scope jen z aktivní `room_operator` role, promítá aktivní rezervace/FIFO čekání a profilové jméno/firmu, omezuje dotazy i DTO a nevrací telefon, e-mail, user/ticket ID, attendance ani export. | Finální přiřazení osob v `BLOCKER-OPS-01`; networkingová část až po `BLOCKER-RES-01` |
 | QR deep link každého bodu programu | `not started` | Publikované session a detail programu existují; chybí `CS-SESSION-QR-01`, stabilní QR export a dávkový balík pro všechny body. | `P3-12`; content UAT a decode test |
 | Provozní oznámení minimum v6 | `UI ready (mocked)` | Participant inbox a admin immutable preview/send přijímají jen critical severity a event/dotčené sessions; info/important/reminder větve jsou odstraněné. | `P8-05`/`P8-06` a produkční kritický e-mail `P8G` |
 
@@ -2485,7 +2485,10 @@ networkingovou rezervaci/roster, `BLOCKER-RES-03` transfer/storno a
 vznikat souběžně.
 
 - [ ] `P5-01` Agenda/reservation/waitlist schema a constraints bez session
-  attendance/no-show evidence.
+  attendance/no-show evidence. `P5-08` už přidal pouze potřebný dopředně
+  kompatibilní read-model základ `reservations`, společné FIFO
+  `waitlist_entries` a profilovou firmu; agenda items, write transakce a zbytek
+  tohoto úkolu zůstávají otevřené.
 - [ ] `P5-02` Implementovat agenda add/remove API a conflict detector;
   společně s `F3-01` uzavřít `CS-AGENDA-01` a integrovat agenda UI.
 - [ ] `P5-03` Rezervační transakce s lockem a concurrency testem posledního
@@ -2505,10 +2508,14 @@ vznikat souběžně.
   a zahrnout jej do rosteru až po dodání kapacity a waitlist/storno detailu v
   `BLOCKER-RES-01`; do té doby nevytvářet náhradní `registration_estimate`.
   Networkingový profil/adresář zůstává oddělená Priority B capability.
-- [ ] `P5-08` Implementovat `CS-ROSTER-01` a serverový read-only
+- [x] `P5-08` Implementovat `CS-ROSTER-01` a serverový read-only
   room-operator seznam se stavem rezervace, jménem a firmou pouze pro přiřazené
   sessions; integrovat `/host/aktivity` z `F4-10`. Bez attendance write,
-  telefonu, e-mailu a globálního exportu.
+  telefonu, e-mailu a globálního exportu. Hotovo přes Better Auth a canonical
+  event, aktivní event/session assignment, list/detail API, live server page,
+  bounded DB projekci a PostgreSQL testy anonymního, role, revokovaného,
+  cross-session i cross-event přístupu a retenčního deadline. Networking se
+  nevydává před `RES-01`.
 - [ ] `P5-09` Osobní agenda API a `.ics` export se stabilním UID; integrovat
   UI `F3-01`/`F3-05`.
 - [–] `P5-10` Agenda/session reminders – vyřazeno rozhodnutím
@@ -3023,14 +3030,20 @@ web smoke zůstávají zelené. Nižší počet scénářů proti historickému 
 očekávaný důsledek odstranění vyřazených v5 větví, nikoli ztráta pokrytí
 Priority A.
 
-1. `P5-08` doplní skutečný read-only roster endpoint, assignment autorizaci a
-   negativní cross-session testy pro připravené `/host/aktivity`.
+Integrační řezy `P4-13` a `P5-08` byly 20. 8. 2026 ověřeny nad všemi sedmi
+migracemi a izolovaným PostgreSQL: database 89/89, conference 514/514, browser
+components 846/846 a Playwright E2E 15/15. Globální gate obsahuje 829 workspace
+testů, produkční Next/worker build, mock boundary a statický smoke; production
+i úplný dependency audit nehlásí známou zranitelnost.
+
+1. `P5-01` až `P5-03`, `P5-05` a `P5-06` integrují neblokovanou část agendy,
+   potvrzené kapacity a coaching nad read-model základem z dokončeného `P5-08`.
+   `P5-04` čeká na jediný promotion režim v `BLOCKER-RES-04`.
 2. Mimo stejné hotspoty otevřít `P4-02` a s předaným přístupem do
    SimpleShopu získat vzorový export; produkční mapping/apply až po uzavření
    `TKT-01` až `TKT-04`.
-3. `P5-01` až `P5-06` integrují potvrzené kapacity a coaching. Zbytek
-   `F3-07` čeká na kapacitu/detail networkingu `BLOCKER-RES-01` a jediný
-   promotion režim `BLOCKER-RES-04`; do té doby se nic nevymýšlí.
+3. Zbytek `F3-07` a networkingová část rosteru čekají na kapacitu/detail
+   networkingu `BLOCKER-RES-01`; do té doby se nic nevymýšlí.
 4. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
    ekvivalentní e-mailový kanál.
 5. `P3-11` připraví content reconciliation a 31. 8. provede finální import/UAT;
@@ -3110,3 +3123,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.0 | 15. 8. 2026 | Vypořádáno všech 40 vláken zadávacího dokumentu (39 věcných/otevřených + 1 testovací) a ověřen coaching sheet. Scope je zúžen na launch Priority A a volitelnou B: odstraněny connections/messages, speaker portal, polls/projection, social wall, plánek, materiály, reminders a self-data export; přidán session-scoped roster vedoucích aktivit, fixed „Dnes lovím“, potvrzené kapacity/coaching, QR pro každý bod programu, kritická oznámení a scope-negative UAT. Chybějící kapacita networkingu, session kontinuita a právní retence zůstávají explicitní blockery. Historické changelog řádky popisují tehdejší v5 mock a neopravňují vyřazené části integrovat. |
 | 6.1 | 15. 8. 2026 | Obnoven důvěryhodný zelený baseline: programový import a oba jeho regresní testy odpovídají 67 validním sessions a reportují `compact`; recovery token helper i syntetické odkazy byly izolovány do guarded dev/test grafu a production boundary je nyní explicitně blokuje; tranzitivní security overrides odstranily všechny známé auditní nálezy; flaky check-in browser test dostal deterministický focus a oddělené odpovědnosti. Celý CI ekvivalent prošel nad izolovaným PostgreSQL bez přeskočených integračních testů. |
 | 6.2 | 16. 8. 2026 | Dokončeny `P0-10`, `P0-11`, `P0-12`, `F1-07`, `F2-08` a `F4-10`: přidán v6 scope inventář, synchronizované ADR/route/permission/handover dokumenty a ADR-013 bez plošné migrace stacku; onboarding je bez networkingu, profil má dobrovolný telefon, privacy nemá self-export, oznámení jsou critical-only, attendance write je odstraněn a vzniklo read-only `/host/aktivity` preview nad `CS-ROSTER-01`. Nezablokovaná část `F3-07` odstranila registration estimate; networking a jediný promotion režim zůstávají explicitně blokované `RES-01`/`RES-04`. Žádná capability tím nepřešla na `integrated` ani `UAT`. |
+| 6.3 | 20. 8. 2026 | Dokončen `P5-08`: `CS-ROSTER-01` a `/host/aktivity` jsou napojené na Better Auth, canonical event a aktivní session-scoped `room_operator` assignment. List/detail vydávají bounded private/no-store jméno, firmu a reservation/waitlist stav bez kontaktů, ticketů, attendance nebo exportu; unknown/unassigned session mají stejný 404. Migrace přidává pouze potřebný read-model základ a nevolí blokovaný promotion režim ani networkingovou kapacitu. |
