@@ -201,6 +201,23 @@ integration('onboarding integration', () => {
     expect(JSON.stringify(audit[0]!.after)).not.toContain('Nováková');
   });
 
+  it('rejects a replay whose consent records outlive the stored profile', async () => {
+    const request = input();
+    await completeOnboarding(client.db, request);
+    await client.db
+      .delete(schema.participantProfiles)
+      .where(
+        and(
+          eq(schema.participantProfiles.eventId, primaryEventId),
+          eq(schema.participantProfiles.userId, userId),
+        ),
+      );
+
+    await expect(completeOnboarding(client.db, request)).rejects.toMatchObject({
+      code: 'REQUEST_ID_REUSED',
+    });
+  });
+
   it('rejects stale or cross-event legal document IDs without partial writes', async () => {
     await expect(
       completeOnboarding(

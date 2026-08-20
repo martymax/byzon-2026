@@ -170,8 +170,10 @@ const EditableProfile = ({
   readonly resource: ParticipantAccountResourceValue;
   readonly version: number;
 }) => {
-  const [savedProfile, setSavedProfile] = useState(profile);
-  const [draft, setDraft] = useState(profile);
+  const [savedProfile, setSavedProfile] = useState(() =>
+    canonicalProfile(profile),
+  );
+  const [draft, setDraft] = useState(() => canonicalProfile(profile));
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [failure, setFailure] = useState<ProfileFailure>();
   const [saved, setSaved] = useState(false);
@@ -296,8 +298,8 @@ const EditableProfile = ({
         <p className="activation-kicker">Profilové minimum</p>
         <h2>Kontaktní údaje k akci</h2>
         <p>
-          Spravujeme pouze jméno, příjmení a kontaktní e-mail. Networkingová a
-          marketingová pole sem nepatří.
+          Spravujeme pouze jméno, příjmení, kontaktní e-mail a dobrovolný
+          telefon. Networkingová a marketingová pole sem nepatří.
         </p>
       </header>
 

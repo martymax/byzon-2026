@@ -240,10 +240,11 @@ export const completeOnboarding = async (
         });
       if (
         !sameDecisions(retriedRecords, decisions) ||
-        storedProfile?.firstName !== profile.firstName ||
+        !storedProfile ||
+        storedProfile.firstName !== profile.firstName ||
         storedProfile.lastName !== profile.lastName ||
         storedProfile.contactEmail !== profile.contactEmail ||
-        storedProfile.phone !== (input.phone ?? null)
+        storedProfile.phone !== profile.phone
       ) {
         throw new OnboardingError('REQUEST_ID_REUSED');
       }
@@ -257,7 +258,6 @@ export const completeOnboarding = async (
         eventId: input.eventId,
         userId: input.userId,
         ...profile,
-        phone: input.phone ?? null,
         onboardingCompletedAt: completedAt,
         updatedAt: completedAt,
       })
@@ -268,7 +268,6 @@ export const completeOnboarding = async (
         ],
         set: {
           ...profile,
-          phone: input.phone ?? null,
           onboardingCompletedAt: completedAt,
           updatedAt: completedAt,
         },

@@ -93,25 +93,33 @@ export interface OnboardingProfileInput {
   firstName: string;
   lastName: string;
   contactEmail: string;
+  phone?: string | null;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
+
+export interface NormalizedOnboardingProfile extends OnboardingProfile {
+  phone: string | null;
+}
 
 export const normalizeOnboardingProfile = (
   input: OnboardingProfileInput,
-): OnboardingProfileInput => {
+): NormalizedOnboardingProfile => {
   const firstName = input.firstName.trim();
   const lastName = input.lastName.trim();
   const contactEmail = input.contactEmail.trim().toLowerCase();
+  const phone = input.phone ?? null;
   if (
     firstName.length === 0 ||
     firstName.length > 128 ||
     lastName.length === 0 ||
     lastName.length > 128 ||
     contactEmail.length > 320 ||
-    !EMAIL_PATTERN.test(contactEmail)
+    !EMAIL_PATTERN.test(contactEmail) ||
+    (phone !== null && !PHONE_PATTERN.test(phone))
   ) {
     throw new OnboardingValidationError();
   }
-  return { firstName, lastName, contactEmail };
+  return { firstName, lastName, contactEmail, phone };
 };

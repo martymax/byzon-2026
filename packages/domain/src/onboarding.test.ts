@@ -119,7 +119,37 @@ describe('onboarding profile normalization', () => {
       firstName: 'Anna',
       lastName: 'Nováková',
       contactEmail: 'anna@example.com',
+      phone: null,
     });
+  });
+
+  it('accepts the optional phone only in canonical E.164 form', () => {
+    expect(
+      normalizeOnboardingProfile({
+        firstName: 'Anna',
+        lastName: 'Nováková',
+        contactEmail: 'anna@example.com',
+        phone: '+420774835456',
+      }),
+    ).toMatchObject({ phone: '+420774835456' });
+  });
+
+  it.each([
+    '',
+    '774835456',
+    ' +420774835456 ',
+    '+420 774 835 456',
+    '+1234567',
+    '+1234567890123456',
+  ])('rejects non-canonical phone %j', (phone) => {
+    expect(() =>
+      normalizeOnboardingProfile({
+        firstName: 'Anna',
+        lastName: 'Nováková',
+        contactEmail: 'anna@example.com',
+        phone,
+      }),
+    ).toThrow(OnboardingValidationError);
   });
 
   it.each([

@@ -384,7 +384,7 @@ Tyto body nejsou chybějící mockované FE průchody:
 ## 11. Git předání
 
 Implementace vznikla na `track/frontend-complete` v malých F0–F6 commitech;
-každý krok byl pushnutý. Předání probíhá přes
-[PR #17](https://github.com/martymax/byzon-2026/pull/17) a větev se merguje do
-`main` až po úspěšném kompletním gate. Výsledný merge SHA je součástí
-závěrečného uživatelského reportu.
+každý krok byl pushnutý. [PR #17](https://github.com/martymax/byzon-2026/pull/17)
+prošel kompletním gate a byl sloučen do `main` merge commitem `64f1b84`.
+Následné v6 scope alignment a baseline opravy se předávají samostatně přes
+[PR #19](https://github.com/martymax/byzon-2026/pull/19).

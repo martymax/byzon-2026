@@ -1,10 +1,10 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.1 – rozsah po vypořádání komentářů a obnovení baseline
+> Stav: implementační plán v6.2 – vypořádaný rozsah a ověřený scope-aligned baseline
 >
 > Datum sestavení: 20. července 2026
 >
-> Poslední revize: 15. srpna 2026
+> Poslední revize: 16. srpna 2026
 >
 > Cílový repozitář: `martymax/byzon-2026`
 >

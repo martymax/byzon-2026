@@ -33,6 +33,12 @@ architektury dostane nový ADR a vazbu na nahrazený záznam. Produktové zadán
 při rozporu přednost; dopad se nejprve zaznamená do rozhodovacího logu v
 implementačním plánu.
 
+Výjimkou je scope amendment, který pouze odstraňuje dosud neimplementovaný
+požadavek na základě autoritativního produktového rozhodnutí. Musí zachovat
+původní datum, uvést datum změny a odkázat na stabilní `SCOPE-*` rozhodnutí.
+Nesmí zavést nový architektonický mechanismus ani přepsat realizovaný stav;
+taková změna vždy vyžaduje nový ADR.
+
 ## Zdrojové podklady
 
 - [BYZON 2026 – zadávací dokumentace webové aplikace v1.0](https://docs.google.com/document/d/1xNNuZaluTWvysPVGUeLNRGAZB6JKN7Z0KNIr2RdUp5g/edit), revize `ALtnJHwlTM7HUd2qC1co_s6cz_hQwtjfSgjWmCZUo6W79pbMu4Ko6PiTLZKqIWYoVF50nMCRTqiH-n9leQBGgaXE-AD6uDRScGZ3o91P2P2i`

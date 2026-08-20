@@ -816,6 +816,35 @@ describe('F2-07 participant account, profile and privacy', () => {
     });
   });
 
+  it('treats a cleared omitted phone as the unchanged canonical profile', async () => {
+    const identityWithoutPhone = identityBootstrapResponseSchema.parse({
+      ...activeIdentity,
+      profile: {
+        firstName: activeIdentity.profile!.firstName,
+        lastName: activeIdentity.profile!.lastName,
+        contactEmail: activeIdentity.profile!.contactEmail,
+      },
+    });
+    const api = accountApi({ bootstrap: [identityWithoutPhone] });
+    const screen = await renderComponent(
+      <AccountProbe api={api}>
+        <ParticipantProfile api={api} />
+      </AccountProbe>,
+    );
+    const phone = screen.getByLabelText('Telefon');
+    const save = screen.getByRole('button', { name: 'Uložit profil' });
+
+    await expect.element(save).toBeDisabled();
+    await phone.fill('+420774835456');
+    await expect.element(save).toBeEnabled();
+    await phone.fill('');
+    await expect.element(save).toBeDisabled();
+
+    const beforeUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(false);
+  });
+
   it.each([
     { responseVersion: 2, scenario: 'stejnou' },
     { responseVersion: 1, scenario: 'nižší' },
