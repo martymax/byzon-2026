@@ -220,11 +220,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   retention review navíc revaliduje aktuální eventový anonymizační
   deadline po participant a případných content/session locích: pozdní read
   nevrátí P2 snapshot a pozdní mutation rollbackne agenda i idempotency zápis.
-  PostgreSQL race sada má 20/20 agenda HTTP scénářů. Po rebase a rate-limit
-  zapojení
+  Latest immutable publication se po participant locku rovněž znovu načte pro
+  GET i non-replay mutation callback, takže agenda version, položky a
+  publication version tvoří jeden canonical bod i při souběžném publish/add.
+  PostgreSQL race sada má 21/21 agenda HTTP scénářů. Po rebase a rate-limit zapojení
   prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
-  9/9, agenda HTTP 20/20 a conference 548/548 bez skipů. Globální
-  gate prošel bez lint chyb včetně 882 workspace testů, všech
+  9/9, agenda HTTP 21/21 a conference 549/549 bez skipů. Globální
+  gate prošel bez lint chyb včetně 883 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a
   static smoke 25 HTML/58 assetů. Browser komponenty prošly 849/849,
   Playwright E2E 15/15 ve třech viewports a úplný i production-only dependency

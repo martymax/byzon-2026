@@ -64,6 +64,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const cancellationRaceSessionId = crypto.randomUUID();
   const cutoffRaceSessionId = crypto.randomUUID();
   const projectedSessionId = crypto.randomUUID();
+  const publicationRaceSessionId = crypto.randomUUID();
   const cancelledPublicationSessionId = crypto.randomUUID();
   const archivedOperationalSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
@@ -364,6 +365,16 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         capacity: 1,
       },
       {
+        id: publicationRaceSessionId,
+        slug: `publication-race-${publicationRaceSessionId}`,
+        title: 'Bod publikovaný během čekání na agendu',
+        startsAt: new Date('2026-09-18T17:30:00Z'),
+        endsAt: new Date('2026-09-18T18:30:00Z'),
+        type: 'talk' as const,
+        capacityMode: 'none' as const,
+        capacity: null,
+      },
+      {
         id: cancelledPublicationSessionId,
         slug: `cancelled-publication-${cancelledPublicationSessionId}`,
         title: 'Bod zrušený v publikaci',
@@ -419,6 +430,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
             },
           ],
           sessions: sessions
+            .filter(({ id }) => id !== publicationRaceSessionId)
             .map((session) => ({
               ...publishedSession(
                 session.id,
@@ -582,6 +594,124 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       version: 2,
       serverNow: snapshotNow.toISOString(),
       items: [{ state: 'saved', session: { id: savedSessionId } }],
+    });
+  });
+
+  it('reloads the latest publication after acquiring the participant lock', async () => {
+    let signalWriterLocked!: () => void;
+    const writerLocked = new Promise<void>((resolve) => {
+      signalWriterLocked = resolve;
+    });
+    let releaseWriter!: () => void;
+    const writerRelease = new Promise<void>((resolve) => {
+      releaseWriter = resolve;
+    });
+    const write = withTransaction(client.db, async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `participant-agenda:${eventId}:${consistentReadUserId}`,
+      );
+      const publication = await transaction.query.contentPublications.findFirst(
+        {
+          columns: { snapshot: true, version: true },
+          where: eq(schema.contentPublications.eventId, eventId),
+          orderBy: [desc(schema.contentPublications.version)],
+        },
+      );
+      const published = publishedProgramSnapshotSchema.parse(
+        publication?.snapshot,
+      );
+      await transaction.insert(schema.contentPublications).values({
+        id: crypto.randomUUID(),
+        eventId,
+        version: (publication?.version ?? 0) + 1,
+        snapshot: {
+          program: {
+            ...published.program,
+            sessions: [
+              ...published.program.sessions,
+              {
+                ...publishedSession(
+                  publicationRaceSessionId,
+                  `publication-race-${publicationRaceSessionId}`,
+                  'Bod publikovaný během čekání na agendu',
+                  '2026-09-18T17:30:00.000Z',
+                  '2026-09-18T18:30:00.000Z',
+                  'talk',
+                ),
+                sortOrder: published.program.sessions.length,
+              },
+            ],
+          },
+        },
+        checksumSha256: 'e'.repeat(64),
+        publishedBy: publisherId,
+        publishedAt: fixedNow,
+      });
+      await transaction
+        .insert(schema.participantAgendas)
+        .values({
+          eventId,
+          userId: consistentReadUserId,
+          version: 3,
+          updatedAt: fixedNow,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.participantAgendas.eventId,
+            schema.participantAgendas.userId,
+          ],
+          set: { version: 3, updatedAt: fixedNow },
+        });
+      await transaction
+        .insert(schema.agendaItems)
+        .values([
+          {
+            eventId,
+            userId: consistentReadUserId,
+            sessionId: savedSessionId,
+            source: 'manual',
+            createdAt: fixedNow,
+          },
+          {
+            eventId,
+            userId: consistentReadUserId,
+            sessionId: publicationRaceSessionId,
+            source: 'manual',
+            createdAt: fixedNow,
+          },
+        ])
+        .onConflictDoNothing();
+      signalWriterLocked();
+      await writerRelease;
+    });
+    await writerLocked;
+
+    const reading = readParticipantAgenda(readRequest(), {
+      ...dependencies(consistentReadUserId),
+      now: () => new Date(fixedNow.getTime() + 1_000),
+    });
+    const stateBeforeWriterCommit = await Promise.race([
+      reading.then(() => 'settled' as const),
+      new Promise<'blocked'>((resolve) => {
+        setTimeout(() => resolve('blocked'), 100);
+      }),
+    ]);
+    releaseWriter();
+    await write;
+    const response = await reading;
+
+    expect(stateBeforeWriterCommit).toBe('blocked');
+    expect(response.status).toBe(200);
+    expect(
+      participantAgendaResponseSchema.parse(await response.json()),
+    ).toMatchObject({
+      version: 3,
+      publicationVersion: 4,
+      items: [
+        { state: 'saved', session: { id: savedSessionId } },
+        { state: 'saved', session: { id: publicationRaceSessionId } },
+      ],
     });
   });
 

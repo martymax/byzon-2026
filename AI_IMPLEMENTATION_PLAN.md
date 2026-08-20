@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.15 – retention recheck pod agenda lockem
+> Stav: implementační plán v6.16 – publication refresh pod agenda lockem
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2519,7 +2519,10 @@ souběžně.
   vracejí `superseded`, pokud mezitím novější mutace nebo publikace nahradila
   cílový stav.
   GET serializuje version a sjednocenou save/reservation/waitlist projekci
-  stejným participant lockem jako mutace a serverový čas získá až po locku;
+  stejným participant lockem jako mutace, serverový čas získá až po locku a
+  latest immutable publication pod lockem znovu načte. Mutation callback dělá
+  stejný refresh před target validací a zápisem, takže položky, agenda version
+  a publication version nevznikají z různých canonical bodů;
   read i mutation po získání všech svých locků znovu načtou eventový
   `operational_data_anonymizes_at`, takže po retention cutoffu nevydají ani
   nezapíšou P2 stav a rozpracovaný idempotency záznam se rollbackne.
@@ -3219,3 +3222,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.13 | 20. 8. 2026 | Poslední review PR `#22` zpevnilo tři hrany canonical agendy: waiting záznam zůstává viditelný i po uvolnění kapacity, ale s vypnutými akcemi až do FIFO promotion; pozice se počítá živě pouze mezi aktivně čekajícími řádky; sessions odebrané z poslední publikace nejsou viditelné ani nezabírají limit 512, přesto lze jejich uloženou vrstvu idempotentně odstranit. Cílené conference testy prošly 38/38, domain kontrakty 15/15, celý service-backed workspace 880/880 a browser komponenty 849/849. |
 | 6.14 | 20. 8. 2026 | Následné Codex review PR `#22` uzavřelo capacity-drift hrany: migrace `0008` drží rezervační tabulkový lock a odmítne backfill, který by nastavil kapacitu pod již potvrzené rezervace; aktivní waiting zůstává v canonical agendě jako bezpečně uzavřená reservation projekce i při odstraněné kapacitě nebo networking driftu a hlásí operator warning. Čerstvá PostgreSQL databáze potvrdila odmítnutí 13 rezervací pro kapacitu 12; cílené migration/agenda/roster/model testy i typecheck jsou zelené. |
 | 6.15 | 20. 8. 2026 | Další Codex review PR `#22` uzavřelo retention race: GET po participant locku znovu čte aktuální eventový anonymizační deadline ještě před privátními řádky; mutation provádí stejný recheck po participant a případných content/session locích ještě před agenda rootem a zápisy. PostgreSQL race regrese potvrzují `403 EVENT_ACCESS_DENIED` bez privátní odpovědi, agenda zápisu i idempotency zbytku, když request vstoupí před cutoffem a lock získá až po něm. Agenda HTTP sada má 20/20. |
+| 6.16 | 20. 8. 2026 | Následné Codex review PR `#22` odstranilo stale publication race: shared loader načte latest immutable publication znovu až po participant locku pro GET i non-replay mutation callback. PostgreSQL regrese načte N před čekáním, pod lockem commitne N+1 s novou agenda položkou a po uvolnění ověřuje jednotný snapshot `agenda version 3 / publication version 4` včetně nové session. Agenda HTTP sada má 21/21 a relevantní typecheck je zelený. |

@@ -314,6 +314,26 @@ const readBoundedJson = async (
   }
 };
 
+const loadAgendaPublication = async (
+  db: AgendaDatabase,
+  event: AgendaEvent,
+): Promise<AgendaContext> => {
+  const publication = await db.query.contentPublications.findFirst({
+    columns: { snapshot: true, version: true },
+    where: eq(schema.contentPublications.eventId, event.id),
+    orderBy: [desc(schema.contentPublications.version)],
+  });
+  const parsed = publishedProgramSnapshotSchema.safeParse(
+    publication?.snapshot,
+  );
+  if (!publication || !parsed.success) throw agendaDisabled();
+  return {
+    event,
+    program: parsed.data.program,
+    publicationVersion: publication.version,
+  };
+};
+
 const loadAgendaContext = async (
   dependencies: ParticipantAgendaDependencies,
   userId: string,
@@ -354,22 +374,7 @@ const loadAgendaContext = async (
     if (!(error instanceof EventAccessDeniedError)) throw error;
     throw eventAccessDenied();
   }
-  const publication = await dependencies.db.query.contentPublications.findFirst(
-    {
-      columns: { snapshot: true, version: true },
-      where: eq(schema.contentPublications.eventId, event.id),
-      orderBy: [desc(schema.contentPublications.version)],
-    },
-  );
-  const parsed = publishedProgramSnapshotSchema.safeParse(
-    publication?.snapshot,
-  );
-  if (!publication || !parsed.success) throw agendaDisabled();
-  return {
-    event,
-    program: parsed.data.program,
-    publicationVersion: publication.version,
-  };
+  return loadAgendaPublication(dependencies.db, event);
 };
 
 const sessionSnapshot = (
@@ -833,9 +838,13 @@ export const loadParticipantAgendaSnapshot = async (
     );
     const now = getNow();
     await requireOperationalDataAvailable(transaction, context.event.id, now);
+    const lockedContext = await loadAgendaPublication(
+      transaction,
+      context.event,
+    );
     return loadParticipantAgendaSnapshotUnlocked(
       transaction,
-      context,
+      lockedContext,
       userId,
       now,
       onOperationalDrift,
@@ -1144,7 +1153,6 @@ export const mutateParticipantAgenda = async (
         generateId,
       },
       async (transaction) => {
-        targetPublishedSession(context, parsed.data.sessionId, action);
         await acquireTransactionLock(
           transaction,
           participantAgendaLockKey(context.event.id, session.user.id),
@@ -1166,6 +1174,11 @@ export const mutateParticipantAgenda = async (
           context.event.id,
           mutationNow,
         );
+        const lockedContext = await loadAgendaPublication(
+          transaction,
+          context.event,
+        );
+        targetPublishedSession(lockedContext, parsed.data.sessionId, action);
         const currentVersion = await ensureAgendaRoot(
           transaction,
           context.event.id,
@@ -1208,7 +1221,7 @@ export const mutateParticipantAgenda = async (
             transaction,
             context.event.id,
             session.user.id,
-            context.program.sessions.map(({ id }) => id),
+            lockedContext.program.sessions.map(({ id }) => id),
           );
           const targetAlreadyProjected = projectedSessionIds.includes(
             parsed.data.sessionId,
