@@ -340,7 +340,7 @@ const loadAgendaContext = async (
   now: Date,
   mutation: boolean,
 ): Promise<AgendaContext> => {
-  const event = await dependencies.db.query.events.findFirst({
+  const loadedEvent = await dependencies.db.query.events.findFirst({
     columns: {
       id: true,
       operationalDataAnonymizesAt: true,
@@ -352,16 +352,7 @@ const loadAgendaContext = async (
       dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
     ),
   });
-  if (
-    !event ||
-    event.status === 'draft' ||
-    event.status === 'archived' ||
-    (event.operationalDataAnonymizesAt !== null &&
-      event.operationalDataAnonymizesAt.getTime() <= now.getTime())
-  ) {
-    throw eventAccessDenied();
-  }
-  if (mutation && event.status === 'ended') throw agendaDisabled();
+  const event = requireAgendaEventAvailable(loadedEvent, now, mutation);
   try {
     await requireEventPermission(
       dependencies.db,
@@ -375,6 +366,24 @@ const loadAgendaContext = async (
     throw eventAccessDenied();
   }
   return loadAgendaPublication(dependencies.db, event);
+};
+
+const requireAgendaEventAvailable = (
+  event: AgendaEvent | undefined,
+  now: Date,
+  mutation: boolean,
+): AgendaEvent => {
+  if (
+    !event ||
+    event.status === 'draft' ||
+    event.status === 'archived' ||
+    (event.operationalDataAnonymizesAt !== null &&
+      event.operationalDataAnonymizesAt.getTime() <= now.getTime())
+  ) {
+    throw eventAccessDenied();
+  }
+  if (mutation && event.status === 'ended') throw agendaDisabled();
+  return event;
 };
 
 const sessionSnapshot = (
@@ -806,22 +815,22 @@ const loadParticipantAgendaSnapshotUnlocked = async (
   });
 };
 
-const requireOperationalDataAvailable = async (
+const loadCurrentAgendaEvent = async (
   db: AgendaDatabase,
   eventId: string,
   now: Date,
-): Promise<void> => {
+  mutation: boolean,
+): Promise<AgendaEvent> => {
   const event = await db.query.events.findFirst({
-    columns: { operationalDataAnonymizesAt: true },
+    columns: {
+      id: true,
+      operationalDataAnonymizesAt: true,
+      status: true,
+      timezone: true,
+    },
     where: eq(schema.events.id, eventId),
   });
-  if (
-    !event ||
-    (event.operationalDataAnonymizesAt !== null &&
-      event.operationalDataAnonymizesAt.getTime() <= now.getTime())
-  ) {
-    throw eventAccessDenied();
-  }
+  return requireAgendaEventAvailable(event, now, mutation);
 };
 
 export const loadParticipantAgendaSnapshot = async (
@@ -837,11 +846,13 @@ export const loadParticipantAgendaSnapshot = async (
       participantAgendaLockKey(context.event.id, userId),
     );
     const now = getNow();
-    await requireOperationalDataAvailable(transaction, context.event.id, now);
-    const lockedContext = await loadAgendaPublication(
+    const lockedEvent = await loadCurrentAgendaEvent(
       transaction,
-      context.event,
+      context.event.id,
+      now,
+      false,
     );
+    const lockedContext = await loadAgendaPublication(transaction, lockedEvent);
     return loadParticipantAgendaSnapshotUnlocked(
       transaction,
       lockedContext,
@@ -1169,14 +1180,15 @@ export const mutateParticipantAgenda = async (
         }
         const mutationNow = getNow();
         responseNow = mutationNow;
-        await requireOperationalDataAvailable(
+        const lockedEvent = await loadCurrentAgendaEvent(
           transaction,
           context.event.id,
           mutationNow,
+          true,
         );
         const lockedContext = await loadAgendaPublication(
           transaction,
-          context.event,
+          lockedEvent,
         );
         targetPublishedSession(lockedContext, parsed.data.sessionId, action);
         const currentVersion = await ensureAgendaRoot(
