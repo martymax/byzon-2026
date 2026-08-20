@@ -12,13 +12,14 @@ v úkolech, které je zavádějí.
 | [ADR-003](003-postgresql-drizzle.md) | PostgreSQL a Drizzle ORM | Přijato |
 | [ADR-004](004-better-auth.md) | Better Auth pro identitu a relace | Přijato |
 | [ADR-005](005-redis-bullmq-worker.md) | Redis a BullMQ worker | Přijato |
-| [ADR-006](006-rest-sse.md) | REST JSON API a SSE | Přijato |
+| [ADR-006](006-rest-sse.md) | REST JSON API a bounded polling | Přijato |
 | [ADR-007](007-private-object-storage.md) | Soukromé objektové úložiště Railway | Přijato |
 | [ADR-008](008-database-published-content-source.md) | Databáze jako zdroj publikovaného obsahu | Přijato |
 | [ADR-009](009-service-worker-indexeddb.md) | Service worker a IndexedDB | Přijato |
 | [ADR-010](010-eu-railway-region.md) | EU region pro provoz a data | Přijato |
-| [ADR-011](011-event-feature-flags.md) | Feature flags po jednotlivých akcích | Přijato |
+| [ADR-011](011-event-feature-flags.md) | Feature flags Priority A/B po jednotlivých akcích | Přijato |
 | [ADR-012](012-multi-event-data-model.md) | Multi-event datový model | Přijato |
+| [ADR-013](013-incremental-frontend-architecture.md) | Inkrementální frontendová architektura | Přijato |
 
 ## Životní cyklus
 
@@ -31,6 +32,12 @@ Přijatý záznam se zpětně nepřepisuje tak, aby měnil význam rozhodnutí. 
 architektury dostane nový ADR a vazbu na nahrazený záznam. Produktové zadání má
 při rozporu přednost; dopad se nejprve zaznamená do rozhodovacího logu v
 implementačním plánu.
+
+Výjimkou je scope amendment, který pouze odstraňuje dosud neimplementovaný
+požadavek na základě autoritativního produktového rozhodnutí. Musí zachovat
+původní datum, uvést datum změny a odkázat na stabilní `SCOPE-*` rozhodnutí.
+Nesmí zavést nový architektonický mechanismus ani přepsat realizovaný stav;
+taková změna vždy vyžaduje nový ADR.
 
 ## Zdrojové podklady
 

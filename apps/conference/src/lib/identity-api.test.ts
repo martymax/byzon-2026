@@ -58,9 +58,9 @@ describe('CS-BOOT-01 identity API port', () => {
     ]);
   });
 
-  it('submits exact legal versions and networking opt-out idempotently', async () => {
+  it('submits exact legal versions and profile minimum idempotently', async () => {
     const fetch = vi.fn<TestFetch>(async () =>
-      Response.json(identityOnboardingFixtures.opted_out, {
+      Response.json(identityOnboardingFixtures.complete, {
         headers: {
           'content-type': 'application/json',
           'x-request-id': 'request-onboarding-0001',
@@ -75,7 +75,6 @@ describe('CS-BOOT-01 identity API port', () => {
         privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
         privacyAcknowledged: true,
       },
-      networking: { enabled: false },
     } as const;
     const result = await submitIdentityOnboarding(
       createFetchApiClient({ fetch, maxRetries: 0 }),
@@ -218,8 +217,8 @@ describe('CS-BOOT-01 identity API port', () => {
       eventId: '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
       userId: identityFixtureIds.user,
       request: {
-        id: '01910000-0000-7000-8000-000000000401',
-        kind: 'data_export',
+        id: '01910000-0000-7000-8000-000000000402',
+        kind: 'data_deletion',
         state: 'pending',
         requestedAt: '2026-07-25T13:05:00.000Z',
       },
@@ -232,7 +231,7 @@ describe('CS-BOOT-01 identity API port', () => {
         },
       }),
     );
-    const body = { kind: 'data_export' } as const;
+    const body = { kind: 'data_deletion' } as const;
     const result = await submitIdentityPrivacyRequest(
       createFetchApiClient({ fetch, maxRetries: 0 }),
       body,

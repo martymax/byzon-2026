@@ -20,7 +20,6 @@ export const agendaFixtureIds = Object.freeze({
   cancelledSession: contentFixtureIds.agendaCancelled,
   fullSession: contentFixtureIds.agendaFull,
   closedSession: contentFixtureIds.agendaClosed,
-  estimateSession: contentFixtureIds.agendaEstimate,
   waitlistCancelledSession: contentFixtureIds.agendaWaitlistCancelled,
   reservation: '01930000-0000-7000-8000-00000000000a',
   waitlist: '01930000-0000-7000-8000-00000000000b',
@@ -124,13 +123,6 @@ const closedSession = session(
   'Uzavřená rezervace',
   '2026-09-19T17:30:00.000Z',
   '2026-09-19T18:30:00.000Z',
-);
-const estimateSession = session(
-  agendaFixtureIds.estimateSession,
-  'Řízený networking',
-  '2026-09-19T19:00:00.000Z',
-  '2026-09-19T20:00:00.000Z',
-  mainRoom,
 );
 const cancelledSession = {
   ...session(
@@ -380,22 +372,6 @@ const closedItem = {
   action: { state: 'closed' as const },
 };
 
-const estimateItem = {
-  day: saturday,
-  session: estimateSession,
-  state: 'saved' as const,
-  source: 'manual' as const,
-  savedAt: '2026-09-18T05:00:00.000Z',
-  capacity: {
-    mode: 'registration_estimate' as const,
-    registrations: 24,
-  },
-  action: {
-    state: 'registration_estimate' as const,
-    registered: true,
-  },
-};
-
 const cancelledItem = {
   day: saturday,
   session: cancelledSession,
@@ -404,14 +380,6 @@ const cancelledItem = {
   savedAt: '2026-09-18T04:00:00.000Z',
   capacity: { mode: 'none' as const },
   action: { state: 'cancelled' as const },
-};
-
-const cancelledEstimateItem = {
-  ...cancelledItem,
-  capacity: {
-    mode: 'registration_estimate' as const,
-    registrations: 24,
-  },
 };
 
 export const participantAgendaFixtures = defineFixtureSet({
@@ -468,11 +436,6 @@ export const participantAgendaFixtures = defineFixtureSet({
       items: [cancelledItem],
       calendarExport: availableExport,
     },
-    cancelled_registration_estimate: {
-      ...snapshotBase,
-      items: [cancelledEstimateItem],
-      calendarExport: availableExport,
-    },
     full: {
       ...snapshotBase,
       items: [fullItem],
@@ -481,11 +444,6 @@ export const participantAgendaFixtures = defineFixtureSet({
     closed: {
       ...snapshotBase,
       items: [closedItem],
-      calendarExport: availableExport,
-    },
-    registration_estimate: {
-      ...snapshotBase,
-      items: [estimateItem],
       calendarExport: availableExport,
     },
   },

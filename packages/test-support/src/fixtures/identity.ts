@@ -19,13 +19,13 @@ export const identityFixtureIds = Object.freeze({
   user: '01910000-0000-7000-8000-000000000301',
   terms: '01910000-0000-7000-8000-000000000201',
   privacyNotice: '01910000-0000-7000-8000-000000000202',
-  networkingConsent: '01910000-0000-7000-8000-000000000203',
 } as const);
 
 export const identityFixtureProfile = Object.freeze({
   firstName: 'Alex',
   lastName: 'Novák',
   contactEmail: 'alex@example.test',
+  phone: null,
 } as const);
 
 export const identityLegalDocuments = Object.freeze([
@@ -55,20 +55,6 @@ export const identityLegalDocuments = Object.freeze([
     content: {
       kind: 'inline',
       text: 'Syntetická informace o soukromí popisuje pouze testovací zpracování dat.\n\nNejde o schválený právní dokument BYZON 2026.',
-    },
-  },
-  {
-    id: identityFixtureIds.networkingConsent,
-    type: 'networking_consent',
-    version: 'synthetic-v1',
-    title: 'Networking – syntetický náhled',
-    publication: 'synthetic_preview',
-    publishedAt: null,
-    previewText:
-      'Dobrovolný networking se v náhledu simuluje. Volba je oddělená a lze zvolit pokračování bez networkingu.',
-    content: {
-      kind: 'inline',
-      text: 'Syntetický networkingový souhlas slouží pouze k testování dobrovolné volby.\n\nNejde o schválený právní dokument BYZON 2026.',
     },
   },
 ] as const);
@@ -115,17 +101,11 @@ const bootstrapBase = {
   legalDocuments: [...identityLegalDocuments],
   legalAcknowledgements: [],
   features: {
-    networking: true,
     reservations: true,
     announcements: true,
   },
-  networking: {
-    enabled: null,
-    deletesAt: '2026-10-19T21:59:59.000+02:00',
-  },
   unreadCounts: { announcements: 2 },
   privacy: {
-    exportRequest: 'available' as const,
     deletionRequest: 'available' as const,
   },
   supportEmail: 'podpora@example.test',
@@ -145,13 +125,6 @@ export const identityBootstrapFixtures = defineFixtureSet({
         documentTypes: ['terms', 'privacy_notice'],
       },
     },
-    networking_choice: {
-      ...bootstrapBase,
-      profile: identityFixtureProfile,
-      profileManagement: { state: 'editable', version: 1 },
-      onboarding: { status: 'networking_choice_required' },
-      legalAcknowledgements: [...identityLegalAcknowledgements],
-    },
     complete: {
       ...bootstrapBase,
       profile: identityFixtureProfile,
@@ -159,10 +132,6 @@ export const identityBootstrapFixtures = defineFixtureSet({
       onboarding: {
         status: 'complete',
         completedAt: '2026-07-25T12:00:00.000Z',
-      },
-      networking: {
-        ...bootstrapBase.networking,
-        enabled: false,
       },
       legalAcknowledgements: [...identityLegalAcknowledgements],
     },
@@ -205,12 +174,7 @@ export const identityBootstrapFixtures = defineFixtureSet({
         completedAt: '2026-07-25T12:00:00.000Z',
       },
       legalAcknowledgements: [...identityLegalAcknowledgements],
-      networking: {
-        ...bootstrapBase.networking,
-        enabled: false,
-      },
       privacy: {
-        exportRequest: 'completed',
         deletionRequest: 'unavailable',
       },
     },
@@ -227,12 +191,7 @@ export const identityBootstrapFixtures = defineFixtureSet({
         completedAt: '2026-07-25T12:00:00.000Z',
       },
       legalAcknowledgements: [...identityLegalAcknowledgements],
-      networking: {
-        ...bootstrapBase.networking,
-        enabled: false,
-      },
       privacy: {
-        exportRequest: 'unavailable',
         deletionRequest: 'completed',
       },
     },
@@ -263,16 +222,6 @@ export const identityPrivacyRequestFixtures = defineFixtureSet({
   name: 'identity.privacy-request',
   schema: identityPrivacyRequestResponseSchema,
   fixtures: {
-    export_pending: {
-      eventId: contentFixtureIds.event,
-      userId: identityFixtureIds.user,
-      request: {
-        id: '01910000-0000-7000-8000-000000000401',
-        kind: 'data_export',
-        state: 'pending',
-        requestedAt: '2026-07-25T12:20:00.000Z',
-      },
-    },
     deletion_pending: {
       eventId: contentFixtureIds.event,
       userId: identityFixtureIds.user,
@@ -311,23 +260,7 @@ export const identityOnboardingFixtures = defineFixtureSet({
   name: 'identity.onboarding',
   schema: identityOnboardingResponseSchema,
   fixtures: {
-    opted_out: {
-      ...completionBase,
-      networkingEnabled: false,
-    },
-    opted_in: {
-      ...completionBase,
-      networkingEnabled: true,
-      acknowledgements: [
-        ...completionBase.acknowledgements,
-        {
-          documentId: identityFixtureIds.networkingConsent,
-          type: 'networking_consent',
-          decision: 'accepted',
-          version: 'synthetic-v1',
-        },
-      ],
-    },
+    complete: completionBase,
   },
 });
 
@@ -369,7 +302,6 @@ interface IdentityProblemStatus {
   readonly IDEMPOTENCY_KEY_REUSED: 409;
   readonly INTERNAL_ERROR: 500;
   readonly LEGAL_CONFIGURATION_MISSING: 503;
-  readonly NETWORKING_DISABLED: 409;
   readonly PRIVACY_REQUEST_UNAVAILABLE: 409;
   readonly PROFILE_NOT_EDITABLE: 409;
   readonly PROFILE_NOT_FOUND: 404;
@@ -412,7 +344,6 @@ export const identityOnboardingProblemFixtures = defineFixtureSet({
     permission: problem('EVENT_ACCESS_DENIED', 403),
     missing_legal: problem('LEGAL_CONFIGURATION_MISSING', 503),
     stale_legal: problem('STALE_LEGAL_DOCUMENT', 409),
-    networking_disabled: problem('NETWORKING_DISABLED', 409),
     request_id_reused: problem('REQUEST_ID_REUSED', 409),
     idempotency_key_reused: problem('IDEMPOTENCY_KEY_REUSED', 409),
     idempotency_in_progress: problem('IDEMPOTENCY_IN_PROGRESS', 409),

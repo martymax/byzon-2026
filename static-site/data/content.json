@@ -38,7 +38,8 @@
     },
     {
       "label": "Konferenční aplikace",
-      "href": "https://app.byzon.cz/"
+      "href": "https://app.byzon.cz/",
+      "visible": false
     }
   ],
   "cta": {
@@ -90,11 +91,11 @@
       },
       {
         "label": "Sobotní gala koktejl",
-        "title": "Předávání cen Výjimečný Jihočech 2026",
+        "title": "Ocenění těch, kteří inspirují.",
         "points": [
-          "Slavnostní finále v historické Solnici.",
-          "Předání ocenění Výjimečný Jihočech 2026.",
-          "Inspirativní příběhy a setkání komunity, která věří, že úspěch má lidskou tvář."
+          "Finále JCI Debating 2026.",
+          "JCI Awards - inspirativní příběhy a setkání komunity, která věří, že úspěch má lidskou tvář.",
+          "Slavnostní ukončení dvoudenní konference."
         ]
       }
     ]
@@ -508,11 +509,12 @@
               { "time": "13:45 - 14:15", "title": "Andrea Bílá" },
               { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
               { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 16:45", "title": "Společně na BYZON Stage", "type": "shared" },
+              { "time": "15:15 - 16:45", "title": "Expertní Board 21 - mastermind session" },
               { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
               { "time": "17:00 - 18:15", "title": "Společně na BYZON Stage", "type": "shared" },
-              { "time": "18:15 - 19:15", "title": "Volný program", "type": "shared" },
-              { "time": "19:15 - 24:00", "title": "Řízený networking a afterparty", "type": "social" }
+              { "time": "18:15 - 19:00", "title": "Volný program", "type": "shared" },
+              { "time": "19:00 - 21:00", "title": "Řízený networking", "type": "social" },
+              { "time": "21:00 - 24:00", "title": "DJ & afterparty", "type": "social" }
             ]
           },
           {
@@ -538,9 +540,9 @@
           {
             "name": "Networking a afterparty",
             "events": [
-              { "time": "18:15 - 19:15", "title": "Volný program" },
-              { "time": "19:15 - 20:45", "title": "Tomáš Řezníček", "meta": "řízený networking" },
-              { "time": "20:45 - 24:00", "title": "DJ + program", "type": "social" },
+              { "time": "18:15 - 19:00", "title": "Volný program" },
+              { "time": "19:00 - 21:00", "title": "Řízený networking", "meta": "Tomáš Řezníček" },
+              { "time": "21:00 - 24:00", "title": "DJ & afterparty", "type": "social" },
               { "time": "24:00 - ?", "title": "Ukončení na Clarionu", "meta": "přesun na after-afterparty", "type": "social" }
             ]
           }
@@ -558,7 +560,8 @@
               { "time": "9:30 - 11:00", "title": "Workshop: Leonid Kushnir", "meta": "1,5 hod." },
               { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
               { "time": "11:15 - 12:45", "title": "Workshop: Blanka Mrázková", "meta": "1,5 hod." },
-              { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" }
+              { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" },
+              { "time": "13:00 - 15:15", "title": "Volný program", "type": "shared", "span": "all", "compact": true }
             ]
           },
           {
@@ -575,7 +578,7 @@
             "name": "Solnice",
             "events": [
               { "time": "15:15 - 17:15", "title": "Finále JCI Debating 2026" },
-              { "time": "17:15 - 18:30", "title": "Galakoktejl - Vyhlášení soutěže Výjimečný Jihočech 2026", "meta": "předání cen JCI awards, nejlepší projekty, leader roku", "type": "social" }
+              { "time": "17:15 - 18:30", "title": "Galakoktejl - předání JCI awards (nejlepší projekty, leader roku)", "type": "social" }
             ]
           }
         ]

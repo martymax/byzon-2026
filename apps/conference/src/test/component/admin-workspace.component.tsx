@@ -2,11 +2,7 @@ import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendResponseSchema,
 } from '@byzon/domain/contracts';
-import {
-  adminOperationsOverviewResponseSchema,
-  adminReservationListResponseSchema,
-  adminReservationMutationResponseSchema,
-} from '@byzon/domain/contracts/admin';
+import { adminOperationsOverviewResponseSchema } from '@byzon/domain/contracts/admin';
 import {
   ticketImportApplyResponseSchema,
   ticketImportPreviewResponseSchema,
@@ -21,7 +17,6 @@ import {
   adminFixtureIds,
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
-  adminReservationMutationFixtures,
   supportSearchFixtures,
   ticketImportApplyFixtures,
   ticketImportPreviewFixtures,
@@ -43,7 +38,6 @@ import {
   adminEventSettingsUpdateEndpoint,
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
-  adminReservationMutationEndpoint,
   adminReservationsEndpoint,
   adminSupportMutationEndpoint,
   adminSupportSearchEndpoint,
@@ -536,54 +530,6 @@ describe('F4 contract-first admin journeys', () => {
     await screen.getByRole('button', { name: 'Odeslat oznámení' }).click();
     await expect
       .element(screen.getByRole('heading', { name: 'Oznámení bylo odesláno' }))
-      .toBeVisible();
-    await expectComponentToPassAxe(adminRoot());
-  });
-
-  it('uses assigned-session server scope for room attendance and confirms the exact record version', async () => {
-    window.history.replaceState({}, '', '/admin/rezervace');
-    const scopedList = adminReservationListResponseSchema.parse({
-      ...adminReservationFixtures.assigned_session_only!,
-      eventId: adminFixtureIds.event,
-    });
-    const attended = adminReservationMutationResponseSchema.parse({
-      ...adminReservationMutationFixtures.attended!,
-      eventId: adminFixtureIds.event,
-    });
-    const api = createApi((endpoint) => {
-      if (endpoint === adminContextEndpoint) {
-        return success(adminContextFixtures.room_operator!);
-      }
-      if (endpoint === adminReservationsEndpoint) return success(scopedList);
-      if (endpoint === adminReservationMutationEndpoint) {
-        return success(attended);
-      }
-      throw new Error('Room operator requested an unauthorized endpoint.');
-    });
-    const screen = await renderComponent(
-      <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminReservationWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await expect
-      .element(screen.getByText('Růst bez zkratek', { exact: true }).last())
-      .toBeVisible();
-    expect(document.body.textContent).not.toContain('Panel: firmy v pohybu');
-    expect(
-      screen.getByRole('heading', { name: 'Nastavení akce' }),
-    ).not.toBeInTheDocument();
-    await screen.getByRole('button', { name: 'Připravit změnu' }).click();
-    await screen
-      .getByRole('textbox', { name: 'Auditní důvod' })
-      .fill('Potvrzení fyzické účasti v přidělené místnosti.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat změnu rezervace' })
-      .click();
-    await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Označit účast' }).click();
-    await expect
-      .element(screen.getByText(/Rezervace byla změněna/))
       .toBeVisible();
     await expectComponentToPassAxe(adminRoot());
   });

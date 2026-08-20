@@ -53,7 +53,6 @@ export const adminContextFixtures = defineFixtureSet({
           'operations:read',
           'audit:read',
           'event:settings:manage',
-          'attendance:assigned:write',
           'reservation:any:read',
           'agenda:any:override',
           'announcement:send',
@@ -70,9 +69,9 @@ export const adminContextFixtures = defineFixtureSet({
         phase: 'live',
       },
       actor: {
-        displayLabel: 'Demo operátor místnosti',
+        displayLabel: 'Demo vedoucí aktivity',
         roles: ['room_operator'],
-        permissions: ['attendance:assigned:write'],
+        permissions: ['reservation:assigned:read'],
         assignedSessions: [
           {
             sessionId: adminFixtureIds.session,
@@ -233,24 +232,20 @@ const reservedRecord = {
   capacity: 40,
   reservedCount: 38,
   version: 4,
-  availableActions: [
-    'capacity_override',
-    'mark_attended',
-    'cancel_reservation',
-  ],
+  availableActions: ['capacity_override', 'cancel_reservation'],
 } satisfies AdminReservationRecord;
 
-const attendedRecord = {
+const cancelledRecord = {
   reservationId: adminFixtureIds.secondReservation,
   eventId: adminFixtureIds.event,
   sessionId: adminFixtureIds.secondSession,
   sessionTitle: 'Panel: firmy v pohybu',
   participantReference: 'Účastník •002',
-  state: 'attended' as const,
+  state: 'cancelled' as const,
   capacity: 80,
   reservedCount: 65,
   version: 2,
-  availableActions: ['capacity_override', 'undo_attendance'],
+  availableActions: [],
 } satisfies AdminReservationRecord;
 
 export const adminReservationFixtures = defineFixtureSet({
@@ -260,7 +255,7 @@ export const adminReservationFixtures = defineFixtureSet({
     list: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
-      items: [reservedRecord, attendedRecord],
+      items: [reservedRecord, cancelledRecord],
     },
     empty: {
       eventId: adminFixtureIds.event,
@@ -279,14 +274,14 @@ export const adminReservationMutationFixtures = defineFixtureSet({
   name: 'admin.reservation-mutation',
   schema: adminReservationMutationResponseSchema,
   fixtures: {
-    attended: {
+    cancelled: {
       eventId: adminFixtureIds.event,
       outcome: 'updated',
       record: {
         ...reservedRecord,
-        state: 'attended',
+        state: 'cancelled',
         version: 5,
-        availableActions: ['capacity_override', 'undo_attendance'],
+        availableActions: [],
       },
       changedAt: '2026-07-25T12:20:00.000+02:00',
       audit: { auditId: adminFixtureIds.auditMutation },
@@ -296,9 +291,9 @@ export const adminReservationMutationFixtures = defineFixtureSet({
       outcome: 'already_applied',
       record: {
         ...reservedRecord,
-        state: 'attended',
+        state: 'cancelled',
         version: 5,
-        availableActions: ['capacity_override', 'undo_attendance'],
+        availableActions: [],
       },
       changedAt: '2026-07-25T12:20:00.000+02:00',
       audit: { auditId: adminFixtureIds.auditMutation },
@@ -323,11 +318,11 @@ const newestAudit = {
 const olderAudit = {
   auditId: adminFixtureIds.auditOlder,
   eventId: adminFixtureIds.event,
-  actorLabel: 'Demo operátor',
-  category: 'attendance' as const,
-  action: 'mark_attended',
+  actorLabel: 'Demo administrátor',
+  category: 'reservation' as const,
+  action: 'cancel_reservation',
   targetReference: 'reservation •001',
-  reason: 'Syntetické potvrzení účasti.',
+  reason: 'Syntetické zrušení rezervace.',
   outcome: 'succeeded' as const,
   createdAt: '2026-07-25T11:00:00.000+02:00',
   resultingVersion: 4,

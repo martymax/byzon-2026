@@ -57,11 +57,7 @@ const plainBodyTextSchema = z
     message: 'Body text must not contain HTML markup',
   });
 
-export const announcementSeveritySchema = z.enum([
-  'info',
-  'important',
-  'critical',
-]);
+export const announcementSeveritySchema = z.literal('critical');
 
 export type AnnouncementSeverity = z.infer<typeof announcementSeveritySchema>;
 

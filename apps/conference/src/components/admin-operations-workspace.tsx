@@ -38,7 +38,7 @@ import styles from './admin-workspace.module.css';
 const roleLabels: Record<AdminAssignmentRole, string> = {
   checkin_operator: 'Operátor check-inu',
   moderator: 'Moderátor',
-  room_operator: 'Operátor sálu',
+  room_operator: 'Vedoucí aktivity',
 };
 
 type PendingOperation =

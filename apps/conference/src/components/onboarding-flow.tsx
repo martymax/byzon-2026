@@ -47,18 +47,10 @@ import {
 } from '@/lib/identity-api';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 
-type Step = 'profile' | 'legal' | 'networking';
-type NetworkingChoice = 'enabled' | 'disabled' | undefined;
+type Step = 'profile' | 'legal';
 type FieldErrors = Partial<
   Record<
-    | 'firstName'
-    | 'lastName'
-    | 'contactEmail'
-    | 'terms'
-    | 'privacy'
-    | 'networking'
-    | 'networkingConsent'
-    | 'submit',
+    'firstName' | 'lastName' | 'contactEmail' | 'terms' | 'privacy' | 'submit',
     string
   >
 >;
@@ -66,7 +58,6 @@ type SubmitFailure =
   | { readonly kind: 'offline' }
   | { readonly kind: 'session_expired' }
   | { readonly kind: 'stale_legal' }
-  | { readonly kind: 'networking_disabled' }
   | { readonly kind: 'permission' }
   | { readonly kind: 'validation' }
   | { readonly kind: 'error'; readonly requestId?: RequestId };
@@ -77,8 +68,6 @@ interface Draft {
   readonly contactEmail: string;
   readonly termsAccepted: boolean;
   readonly privacyAcknowledged: boolean;
-  readonly networking: NetworkingChoice;
-  readonly networkingConsentAccepted: boolean;
 }
 
 const emptyDraft: Draft = {
@@ -87,20 +76,16 @@ const emptyDraft: Draft = {
   contactEmail: '',
   termsAccepted: false,
   privacyAcknowledged: false,
-  networking: undefined,
-  networkingConsentAccepted: false,
 };
 
 const stepNumber: Record<Step, number> = {
   profile: 1,
   legal: 2,
-  networking: 3,
 };
 
 const stepLabel: Record<Step, string> = {
   profile: 'Profil',
   legal: 'Právní minimum',
-  networking: 'Networking',
 };
 
 const runtimeKey = (): string => {
@@ -123,9 +108,8 @@ const initialStep = (bootstrap: IdentityBootstrapResponse): Step => {
       return 'profile';
     case 'legal_acknowledgement_required':
       return 'legal';
-    case 'networking_choice_required':
     case 'complete':
-      return 'networking';
+      return 'legal';
     case 'blocked_missing_legal_documents':
       return 'legal';
   }
@@ -140,6 +124,7 @@ const profileErrors = (draft: Draft): FieldErrors => {
     firstName,
     lastName,
     contactEmail,
+    phone: null,
   });
   if (!result.success) {
     result.error.issues.forEach((issue) => {
@@ -164,8 +149,6 @@ const summaryItems = (errors: FieldErrors) =>
       ['contactEmail', 'onboarding-email'],
       ['terms', 'onboarding-terms'],
       ['privacy', 'onboarding-privacy'],
-      ['networking', 'onboarding-networking-enabled'],
-      ['networkingConsent', 'onboarding-networking-consent'],
       ['submit', 'onboarding-submit'],
     ] as const
   ).flatMap(([key, fieldId]) =>
@@ -192,8 +175,6 @@ const mapSubmitFailure = (
         case 'LEGAL_CONFIGURATION_MISSING':
         case 'STALE_LEGAL_DOCUMENT':
           return { kind: 'stale_legal' };
-        case 'NETWORKING_DISABLED':
-          return { kind: 'networking_disabled' };
         case 'VALIDATION_FAILED':
           return { kind: 'validation' };
         case 'REQUEST_ID_REUSED':
@@ -233,7 +214,7 @@ const BootstrapFrame = ({
         Připravte si aplikaci
       </h1>
       <p className="lead">
-        Tři krátké kroky. Údaje zůstávají pouze v paměti formuláře, dokud
+        Dva krátké kroky. Údaje zůstávají pouze v paměti formuláře, dokud
         onboarding výslovně nedokončíte.
       </p>
     </header>
@@ -561,7 +542,6 @@ export const OnboardingFlow = ({
         ...current,
         termsAccepted: false,
         privacyAcknowledged: false,
-        networkingConsentAccepted: false,
       }));
       setStep('legal');
       setErrors({});
@@ -570,23 +550,13 @@ export const OnboardingFlow = ({
       requestAnimationFrame(() => failureAlert.current?.focus());
       return;
     }
-    const alreadyAcknowledged =
-      data.onboarding.status === 'networking_choice_required' ||
-      data.onboarding.status === 'complete';
+    const alreadyAcknowledged = data.onboarding.status === 'complete';
     setDraft({
       firstName: data.profile?.firstName ?? '',
       lastName: data.profile?.lastName ?? '',
       contactEmail: data.profile?.contactEmail ?? data.user.email,
       termsAccepted: alreadyAcknowledged,
       privacyAcknowledged: alreadyAcknowledged,
-      networking:
-        data.networking.enabled === true
-          ? 'enabled'
-          : data.networking.enabled === false
-            ? 'disabled'
-            : undefined,
-      networkingConsentAccepted:
-        alreadyAcknowledged && data.networking.enabled === true,
     });
     setStep(initialStep(data));
     setErrors({});
@@ -666,7 +636,6 @@ export const OnboardingFlow = ({
     const labels: Record<IdentityLegalDocumentType, string> = {
       terms: 'podmínky používání',
       privacy_notice: 'informace o soukromí',
-      networking_consent: 'networking souhlas',
     };
     return (
       <BootstrapFrame bootstrap={data} step="legal">
@@ -692,7 +661,7 @@ export const OnboardingFlow = ({
       <BootstrapFrame
         bootstrap={data}
         headingRef={completionHeading}
-        step="networking"
+        step="legal"
       >
         <StatePanel
           action={<ActionLink href="/app">Otevřít aplikaci</ActionLink>}
@@ -710,7 +679,6 @@ export const OnboardingFlow = ({
 
   const terms = documentByType(data, 'terms');
   const privacy = documentByType(data, 'privacy_notice');
-  const networkingDocument = documentByType(data, 'networking_consent');
   if (!terms || !privacy) {
     return (
       <BootstrapFrame bootstrap={data} step="legal">
@@ -759,18 +727,11 @@ export const OnboardingFlow = ({
       focusErrors();
       return;
     }
-    setErrors({});
-    setStep('networking');
+    void submitOnboarding();
   };
 
   const createRequest = (): IdentityOnboardingRequest | null => {
-    if (
-      !draft.termsAccepted ||
-      !draft.privacyAcknowledged ||
-      !draft.networking ||
-      (draft.networking === 'enabled' &&
-        (!draft.networkingConsentAccepted || !networkingDocument))
-    ) {
+    if (!draft.termsAccepted || !draft.privacyAcknowledged) {
       return null;
     }
     const candidate = {
@@ -778,6 +739,7 @@ export const OnboardingFlow = ({
         firstName: draft.firstName.trim(),
         lastName: draft.lastName.trim(),
         contactEmail: draft.contactEmail.trim().toLowerCase(),
+        phone: null,
       },
       legal: {
         termsDocumentId: terms.id,
@@ -785,36 +747,15 @@ export const OnboardingFlow = ({
         privacyNoticeDocumentId: privacy.id,
         privacyAcknowledged: true,
       },
-      networking:
-        draft.networking === 'enabled'
-          ? {
-              enabled: true as const,
-              consentDocumentId: networkingDocument!.id,
-              consentAccepted: true as const,
-            }
-          : { enabled: false as const },
     };
     const parsed = identityOnboardingRequestSchema.safeParse(candidate);
     return parsed.success ? parsed.data : null;
   };
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitOnboarding = async () => {
     if (submitLocked.current) return;
     const request = createRequest();
     const nextErrors: FieldErrors = {};
-    if (!draft.networking) {
-      nextErrors.networking =
-        'Vyberte, zda chcete dobrovolný networking zapnout.';
-    }
-    if (
-      draft.networking === 'enabled' &&
-      (!networkingDocument || !draft.networkingConsentAccepted)
-    ) {
-      nextErrors.networkingConsent = networkingDocument
-        ? 'Potvrďte samostatný networking souhlas.'
-        : 'Networking nelze zapnout bez aktuálního souhlasu.';
-    }
     if (Object.keys(nextErrors).length > 0 || !request) {
       if (Object.keys(nextErrors).length === 0) {
         nextErrors.submit = 'Zkontrolujte všechny kroky onboardingu.';
@@ -848,25 +789,18 @@ export const OnboardingFlow = ({
         );
         const returnedTerms = acknowledgements.get('terms');
         const returnedPrivacy = acknowledgements.get('privacy_notice');
-        const returnedNetworking = acknowledgements.get('networking_consent');
         const acknowledgementsMatch =
           returnedTerms?.documentId === terms.id &&
           returnedTerms.version === terms.version &&
           returnedTerms.decision === 'accepted' &&
           returnedPrivacy?.documentId === privacy.id &&
           returnedPrivacy.version === privacy.version &&
-          returnedPrivacy.decision === 'acknowledged' &&
-          (request.networking.enabled
-            ? networkingDocument !== undefined &&
-              returnedNetworking?.documentId === networkingDocument.id &&
-              returnedNetworking.version === networkingDocument.version &&
-              returnedNetworking.decision === 'accepted'
-            : returnedNetworking === undefined);
+          returnedPrivacy.decision === 'acknowledged';
         if (
           result.data.profile.firstName !== request.profile.firstName ||
           result.data.profile.lastName !== request.profile.lastName ||
           result.data.profile.contactEmail !== request.profile.contactEmail ||
-          result.data.networkingEnabled !== request.networking.enabled ||
+          result.data.profile.phone !== request.profile.phone ||
           !acknowledgementsMatch
         ) {
           setFailure({
@@ -895,7 +829,6 @@ export const OnboardingFlow = ({
               ...current,
               termsAccepted: false,
               privacyAcknowledged: false,
-              networkingConsentAccepted: false,
             }));
             setStep('legal');
             bootstrap.retry();
@@ -937,7 +870,7 @@ export const OnboardingFlow = ({
   return (
     <BootstrapFrame bootstrap={data} step={step}>
       <LiveRegion>
-        Krok {stepNumber[step]} ze 3: {stepLabel[step]}
+        Krok {stepNumber[step]} ze 2: {stepLabel[step]}
       </LiveRegion>
       {failure?.kind === 'stale_legal' ? (
         <div data-form-failure ref={failureAlert} tabIndex={-1}>
@@ -957,13 +890,11 @@ export const OnboardingFlow = ({
                 ? 'Jste offline'
                 : failure.kind === 'session_expired'
                   ? 'Přihlášení vypršelo'
-                  : failure.kind === 'networking_disabled'
-                    ? 'Networking není dostupný'
-                    : failure.kind === 'permission'
-                      ? 'Přístup už není dostupný'
-                      : failure.kind === 'validation'
-                        ? 'Server údaje odmítl'
-                        : 'Dokončení se nepodařilo'
+                  : failure.kind === 'permission'
+                    ? 'Přístup už není dostupný'
+                    : failure.kind === 'validation'
+                      ? 'Server údaje odmítl'
+                      : 'Dokončení se nepodařilo'
             }
             tone={failure.kind === 'error' ? 'danger' : 'warning'}
           >
@@ -972,15 +903,13 @@ export const OnboardingFlow = ({
                 ? 'Připojte se a odešlete stejný požadavek znovu.'
                 : failure.kind === 'session_expired'
                   ? 'Obnovte přihlášení bezpečným odkazem a potom pokračujte.'
-                  : failure.kind === 'networking_disabled'
-                    ? 'Networking už pro tuto událost není dostupný.'
-                    : failure.kind === 'permission'
-                      ? 'K této události už nemáte oprávnění.'
-                      : failure.kind === 'validation'
-                        ? 'Zkontrolujte formulář a zkuste jej odeslat znovu.'
-                        : failure.requestId
-                          ? `Server vrátil nekonzistentní výsledek. Nic nepředstíráme. Podpoře předejte pouze referenci ${failure.requestId}.`
-                          : 'Zopakujte bezpečně stejný požadavek.'}
+                  : failure.kind === 'permission'
+                    ? 'K této události už nemáte oprávnění.'
+                    : failure.kind === 'validation'
+                      ? 'Zkontrolujte formulář a zkuste jej odeslat znovu.'
+                      : failure.requestId
+                        ? `Server vrátil nekonzistentní výsledek. Nic nepředstíráme. Podpoře předejte pouze referenci ${failure.requestId}.`
+                        : 'Zopakujte bezpečně stejný požadavek.'}
             </p>
             {failure.kind === 'session_expired' ? (
               <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fonboarding">
@@ -994,7 +923,7 @@ export const OnboardingFlow = ({
       {step === 'profile' ? (
         <form className="onboarding-card" noValidate onSubmit={goFromProfile}>
           <header>
-            <p className="activation-kicker">Krok 1 ze 3</p>
+            <p className="activation-kicker">Krok 1 ze 2</p>
             <h2 ref={stepHeading} tabIndex={-1}>
               Základní profil
             </h2>
@@ -1068,14 +997,11 @@ export const OnboardingFlow = ({
       {step === 'legal' ? (
         <form className="onboarding-card" noValidate onSubmit={goFromLegal}>
           <header>
-            <p className="activation-kicker">Krok 2 ze 3</p>
+            <p className="activation-kicker">Krok 2 ze 2</p>
             <h2 ref={stepHeading} tabIndex={-1}>
               Právní minimum
             </h2>
-            <p>
-              Každá volba odkazuje na přesnou verzi. Networking zde
-              nepotvrzujete.
-            </p>
+            <p>Každá volba odkazuje na přesnou verzi.</p>
           </header>
           {errorSummary}
           <div className="onboarding-legal-list">
@@ -1105,84 +1031,6 @@ export const OnboardingFlow = ({
           <div className="activation-form-actions">
             <Button
               onClick={() => setStep('profile')}
-              type="button"
-              variant="secondary"
-            >
-              Zpět
-            </Button>
-            <Button type="submit">Pokračovat</Button>
-          </div>
-        </form>
-      ) : null}
-
-      {step === 'networking' ? (
-        <form className="onboarding-card" noValidate onSubmit={submit}>
-          <header>
-            <p className="activation-kicker">Krok 3 ze 3</p>
-            <h2 ref={stepHeading} tabIndex={-1}>
-              Dobrovolný networking
-            </h2>
-            <p>
-              Volba není předvybraná a nemá vliv na vstup do aplikace. Můžete
-              pokračovat bez networkingu.
-            </p>
-          </header>
-          {errorSummary}
-          <fieldset className="onboarding-choice-group">
-            <legend>Chcete zapnout networking?</legend>
-            <ChoiceField
-              checked={draft.networking === 'enabled'}
-              description="V syntetickém náhledu zpřístupní profil ostatním účastníkům."
-              id="onboarding-networking-enabled"
-              label="Ano, chci networking"
-              name="networking"
-              onChange={() => updateDraft('networking', 'enabled')}
-              type="radio"
-            />
-            <ChoiceField
-              checked={draft.networking === 'disabled'}
-              description="Aplikaci můžete používat bez sdílení networkingového profilu."
-              id="onboarding-networking-disabled"
-              label="Ne, pokračovat bez networkingu"
-              name="networking"
-              onChange={() => {
-                updateDraft('networking', 'disabled');
-                updateDraft('networkingConsentAccepted', false);
-              }}
-              type="radio"
-            />
-          </fieldset>
-          {draft.networking === 'enabled' ? (
-            networkingDocument ? (
-              <div className="onboarding-networking-consent">
-                <LegalDocumentCard document={networkingDocument} />
-                <ChoiceField
-                  checked={draft.networkingConsentAccepted}
-                  id="onboarding-networking-consent"
-                  label={`Samostatně souhlasím s networkingem, verze ${networkingDocument.version}`}
-                  onChange={(event) =>
-                    updateDraft(
-                      'networkingConsentAccepted',
-                      event.currentTarget.checked,
-                    )
-                  }
-                  required
-                  type="checkbox"
-                />
-              </div>
-            ) : (
-              <Alert title="Networking nelze zapnout" tone="warning">
-                <p>
-                  Aktuální networking souhlas není dostupný. Zvolte pokračování
-                  bez networkingu.
-                </p>
-              </Alert>
-            )
-          ) : null}
-          <div className="activation-form-actions">
-            <Button
-              disabled={submitting}
-              onClick={() => setStep('legal')}
               type="button"
               variant="secondary"
             >

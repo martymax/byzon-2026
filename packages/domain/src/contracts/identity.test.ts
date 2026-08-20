@@ -44,19 +44,6 @@ const documents = [
       text: 'Úplný syntetický text informace o soukromí pro testování.',
     },
   },
-  {
-    id: '01910000-0000-7000-8000-000000000203',
-    type: 'networking_consent',
-    version: 'mock-v1',
-    title: 'Syntetický networking souhlas',
-    publication: 'synthetic_preview',
-    publishedAt: null,
-    previewText: 'Syntetický náhled pro testování.',
-    content: {
-      kind: 'inline',
-      text: 'Úplný syntetický text networkingového souhlasu pro testování.',
-    },
-  },
 ] as const;
 
 const bootstrap = {
@@ -84,17 +71,11 @@ const bootstrap = {
   legalDocuments: documents,
   legalAcknowledgements: [],
   features: {
-    networking: true,
     reservations: true,
     announcements: true,
   },
-  networking: {
-    enabled: null,
-    deletesAt: '2026-10-19T21:59:59.000+02:00',
-  },
   unreadCounts: { announcements: 0 },
   privacy: {
-    exportRequest: 'available',
     deletionRequest: 'available',
   },
   supportEmail: 'podpora@example.test',
@@ -104,6 +85,7 @@ const profile = {
   firstName: 'Alex',
   lastName: 'Novák',
   contactEmail: 'alex@example.test',
+  phone: null,
 } as const;
 
 const legalAcknowledgements = [
@@ -167,7 +149,7 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
     }
   });
 
-  it('rejects inconsistent profile, legal and networking states', () => {
+  it('rejects inconsistent profile and legal states', () => {
     expect(
       identityBootstrapResponseSchema.safeParse({
         ...bootstrap,
@@ -182,19 +164,6 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
       identityBootstrapResponseSchema.safeParse({
         ...bootstrap,
         legalDocuments: documents.slice(1),
-      }).success,
-    ).toBe(false);
-    expect(
-      identityBootstrapResponseSchema.safeParse({
-        ...bootstrap,
-        networking: {
-          ...bootstrap.networking,
-          enabled: true,
-        },
-        features: {
-          ...bootstrap.features,
-          networking: false,
-        },
       }).success,
     ).toBe(false);
     expect(
@@ -218,10 +187,6 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
         completedAt: '2026-07-25T12:00:02.000Z',
       },
       legalAcknowledgements,
-      networking: {
-        ...bootstrap.networking,
-        enabled: false,
-      },
     } as const;
     expect(identityBootstrapResponseSchema.parse(complete)).toEqual(complete);
     expect(
@@ -429,13 +394,13 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
   });
 
   it('defines canonical idempotent privacy request outcomes and exact problems', () => {
-    const request = { kind: 'data_export' } as const;
+    const request = { kind: 'data_deletion' } as const;
     const response = {
       eventId: bootstrap.event.id,
       userId: bootstrap.user.id,
       request: {
         id: '01910000-0000-7000-8000-000000000401',
-        kind: 'data_export',
+        kind: 'data_deletion',
         state: 'pending',
         requestedAt: '2026-07-25T12:20:00.000Z',
       },
@@ -466,6 +431,11 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
     expect(
       identityPrivacyRequestRequestSchema.safeParse({
         kind: 'account_copy',
+      }).success,
+    ).toBe(false);
+    expect(
+      identityPrivacyRequestRequestSchema.safeParse({
+        kind: 'data_export',
       }).success,
     ).toBe(false);
     expect(
@@ -510,12 +480,13 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
     ).toBe(false);
   });
 
-  it('requires explicit legal decisions and a separate networking choice', () => {
+  it('requires the profile minimum and exact legal decisions only', () => {
     const request = {
       profile: {
         firstName: 'Alex',
         lastName: 'Novák',
         contactEmail: 'alex@example.test',
+        phone: null,
       },
       legal: {
         termsDocumentId: documents[0].id,
@@ -523,9 +494,14 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
         privacyNoticeDocumentId: documents[1].id,
         privacyAcknowledged: true,
       },
-      networking: { enabled: false },
     } as const;
     expect(identityOnboardingRequestSchema.parse(request)).toEqual(request);
+    expect(
+      identityOnboardingRequestSchema.safeParse({
+        ...request,
+        networking: { enabled: false },
+      }).success,
+    ).toBe(false);
     expect(
       identityOnboardingRequestSchema.safeParse({
         ...request,
@@ -539,30 +515,19 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
       }).success,
     ).toBe(false);
     expect(
-      identityOnboardingRequestSchema.safeParse({
-        ...request,
-        networking: { enabled: true },
-      }).success,
-    ).toBe(false);
-
-    expect(
       identityBootstrapResponseSchema.safeParse({
         ...bootstrap,
         profile,
         profileManagement: { state: 'editable', version: 1 },
         onboarding: {
           status: 'legal_acknowledgement_required',
-          documentTypes: ['networking_consent'],
-        },
-        networking: {
-          ...bootstrap.networking,
-          enabled: true,
+          documentTypes: ['terms'],
         },
       }).success,
     ).toBe(true);
   });
 
-  it('correlates completion acknowledgements with networking choice', () => {
+  it('correlates completion with exactly two legal acknowledgements', () => {
     const completion = {
       state: 'complete',
       continueTo: '/app',
@@ -571,8 +536,8 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
         firstName: 'Alex',
         lastName: 'Novák',
         contactEmail: 'alex@example.test',
+        phone: null,
       },
-      networkingEnabled: false,
       acknowledgements: [
         {
           documentId: documents[0].id,
@@ -591,12 +556,6 @@ describe('CS-BOOT-01 identity and onboarding contract', () => {
     expect(identityOnboardingResponseSchema.parse(completion)).toEqual(
       completion,
     );
-    expect(
-      identityOnboardingResponseSchema.safeParse({
-        ...completion,
-        networkingEnabled: true,
-      }).success,
-    ).toBe(false);
     expect(
       identityOnboardingResponseSchema.safeParse({
         ...completion,

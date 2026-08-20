@@ -25,7 +25,7 @@ describe('content import preparation', () => {
       speakers: 17,
       partners: 7,
       eventDays: 2,
-      sessions: 65,
+      sessions: 67,
       skippedSessions: 1,
     });
     expect(report.findings).toEqual(
@@ -40,6 +40,26 @@ describe('content import preparation', () => {
         }),
         expect.objectContaining({ code: 'unmapped_person' }),
         expect.objectContaining({ code: 'unknown_type', value: 'shared' }),
+        expect.objectContaining({
+          code: 'unknown_type',
+          path: 'program.days[0].stages[1].events[14].type',
+          value: 'social',
+        }),
+        expect.objectContaining({
+          code: 'unknown_type',
+          path: 'program.days[0].stages[1].events[15].type',
+          value: 'social',
+        }),
+        expect.objectContaining({
+          code: 'unmapped_field',
+          path: 'program.days[1].stages[0].events[6].span',
+          value: 'all',
+        }),
+        expect.objectContaining({
+          code: 'unmapped_field',
+          path: 'program.days[1].stages[0].events[6].compact',
+          value: true,
+        }),
       ]),
     );
   });

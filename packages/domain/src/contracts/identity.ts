@@ -110,10 +110,17 @@ const canonicalNameSchema = safeDisplayTextSchema(128).refine(
   'Name must be canonical',
 );
 
+export const identityPhoneSchema = z
+  .string()
+  .min(9)
+  .max(16)
+  .regex(/^\+[1-9]\d{7,14}$/, 'Phone must use international E.164 format');
+
 export const identityProfileSchema = z.strictObject({
   firstName: canonicalNameSchema,
   lastName: canonicalNameSchema,
   contactEmail: canonicalEmailSchema,
+  phone: identityPhoneSchema.nullable().optional(),
 });
 
 export type IdentityProfile = z.infer<typeof identityProfileSchema>;
@@ -121,7 +128,6 @@ export type IdentityProfile = z.infer<typeof identityProfileSchema>;
 export const identityLegalDocumentTypeSchema = z.enum([
   'terms',
   'privacy_notice',
-  'networking_consent',
 ]);
 
 export type IdentityLegalDocumentType = z.infer<
@@ -204,7 +210,7 @@ export const identityOnboardingStateSchema = z.discriminatedUnion('status', [
     missingTypes: z
       .array(identityLegalDocumentTypeSchema)
       .min(1)
-      .max(3)
+      .max(2)
       .refine(
         (types) => new Set(types).size === types.length,
         'Missing legal document types must be unique',
@@ -215,13 +221,12 @@ export const identityOnboardingStateSchema = z.discriminatedUnion('status', [
     documentTypes: z
       .array(identityLegalDocumentTypeSchema)
       .min(1)
-      .max(3)
+      .max(2)
       .refine(
         (types) => new Set(types).size === types.length,
         'Required legal document types must be unique',
       ),
   }),
-  z.strictObject({ status: z.literal('networking_choice_required') }),
   z.strictObject({
     status: z.literal('complete'),
     completedAt: dateTimeSchema,
@@ -278,22 +283,16 @@ export const identityBootstrapResponseSchema = z
     profile: identityProfileSchema.nullable(),
     profileManagement: identityProfileManagementSchema,
     onboarding: identityOnboardingStateSchema,
-    legalDocuments: z.array(identityLegalDocumentSchema).max(3),
-    legalAcknowledgements: z.array(identityLegalAcknowledgementSchema).max(3),
+    legalDocuments: z.array(identityLegalDocumentSchema).max(2),
+    legalAcknowledgements: z.array(identityLegalAcknowledgementSchema).max(2),
     features: z.strictObject({
-      networking: z.boolean(),
       reservations: z.boolean(),
       announcements: z.boolean(),
-    }),
-    networking: z.strictObject({
-      enabled: z.boolean().nullable(),
-      deletesAt: dateTimeSchema.nullable(),
     }),
     unreadCounts: z.strictObject({
       announcements: z.number().int().min(0).max(999),
     }),
     privacy: z.strictObject({
-      exportRequest: identityPrivacyRequestStatusSchema,
       deletionRequest: identityPrivacyRequestStatusSchema,
     }),
     supportEmail: canonicalEmailSchema,
@@ -465,14 +464,6 @@ export const identityBootstrapResponseSchema = z
           message: 'Profile-required onboarding must expose a missing profile',
         });
       }
-      if (response.networking.enabled !== null) {
-        context.addIssue({
-          code: 'custom',
-          path: ['networking', 'enabled'],
-          message:
-            'Profile-required onboarding cannot have a networking choice',
-        });
-      }
     } else if (
       response.profile === null &&
       response.profileManagement.state !== 'removed'
@@ -547,24 +538,9 @@ export const identityBootstrapResponseSchema = z
           });
         }
       });
-      if (
-        onboarding.documentTypes.includes('networking_consent') &&
-        (response.networking.enabled !== true ||
-          response.features.networking !== true)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['onboarding', 'documentTypes'],
-          message:
-            'Networking acknowledgement requires an enabled feature and opt-in',
-        });
-      }
     }
 
-    if (
-      onboarding.status === 'networking_choice_required' ||
-      onboarding.status === 'complete'
-    ) {
+    if (onboarding.status === 'complete') {
       const acknowledgementByType = new Map(
         response.legalAcknowledgements.map((record) => [record.type, record]),
       );
@@ -589,52 +565,6 @@ export const identityBootstrapResponseSchema = z
           });
         }
       }
-    }
-
-    if (
-      (onboarding.status === 'networking_choice_required' ||
-        onboarding.status === 'complete') &&
-      response.networking.enabled === null
-    ) {
-      if (onboarding.status === 'complete') {
-        context.addIssue({
-          code: 'custom',
-          path: ['networking', 'enabled'],
-          message: 'Completed onboarding needs an explicit networking choice',
-        });
-      }
-    }
-    if (
-      onboarding.status === 'networking_choice_required' &&
-      response.networking.enabled !== null
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['networking', 'enabled'],
-        message: 'Networking choice must still be unset',
-      });
-    }
-    if (response.networking.enabled && !response.features.networking) {
-      context.addIssue({
-        code: 'custom',
-        path: ['networking', 'enabled'],
-        message: 'Networking cannot be enabled when the feature is disabled',
-      });
-    }
-    const networkingAcknowledgement = response.legalAcknowledgements.find(
-      ({ type }) => type === 'networking_consent',
-    );
-    if (
-      onboarding.status === 'complete' &&
-      Boolean(networkingAcknowledgement) !==
-        (response.networking.enabled === true)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['legalAcknowledgements'],
-        message:
-          'Networking acknowledgement must match the explicit networking choice',
-      });
     }
   });
 
@@ -666,10 +596,7 @@ export type IdentityProfileUpdateResponse = z.infer<
   typeof identityProfileUpdateResponseSchema
 >;
 
-export const identityPrivacyRequestKindSchema = z.enum([
-  'data_export',
-  'data_deletion',
-]);
+export const identityPrivacyRequestKindSchema = z.literal('data_deletion');
 
 export type IdentityPrivacyRequestKind = z.infer<
   typeof identityPrivacyRequestKindSchema
@@ -736,15 +663,6 @@ export type IdentityPrivacyRequestResponse = z.infer<
   typeof identityPrivacyRequestResponseSchema
 >;
 
-const networkingChoiceSchema = z.discriminatedUnion('enabled', [
-  z.strictObject({ enabled: z.literal(false) }),
-  z.strictObject({
-    enabled: z.literal(true),
-    consentDocumentId: uuidSchema,
-    consentAccepted: z.literal(true),
-  }),
-]);
-
 export const identityOnboardingRequestSchema = z
   .strictObject({
     profile: identityProfileSchema,
@@ -754,15 +672,11 @@ export const identityOnboardingRequestSchema = z
       privacyNoticeDocumentId: uuidSchema,
       privacyAcknowledged: z.literal(true),
     }),
-    networking: networkingChoiceSchema,
   })
   .superRefine((request, context) => {
     const documentIds = [
       request.legal.termsDocumentId,
       request.legal.privacyNoticeDocumentId,
-      ...(request.networking.enabled
-        ? [request.networking.consentDocumentId]
-        : []),
     ];
     if (new Set(documentIds).size !== documentIds.length) {
       context.addIssue({
@@ -783,7 +697,6 @@ export const identityOnboardingResponseSchema = z
     continueTo: z.literal('/app'),
     completedAt: dateTimeSchema,
     profile: identityProfileSchema,
-    networkingEnabled: z.boolean(),
     acknowledgements: z
       .array(
         z.strictObject({
@@ -793,8 +706,7 @@ export const identityOnboardingResponseSchema = z
           version: safeVersionSchema,
         }),
       )
-      .min(2)
-      .max(3),
+      .length(2),
   })
   .superRefine((response, context) => {
     const byType = new Map(
@@ -823,16 +735,11 @@ export const identityOnboardingResponseSchema = z
         });
       }
     });
-    const networking = byType.get('networking_consent');
-    if (
-      response.networkingEnabled !== Boolean(networking) ||
-      (networking && networking.decision !== 'accepted') ||
-      byType.size !== response.acknowledgements.length
-    ) {
+    if (byType.size !== response.acknowledgements.length) {
       context.addIssue({
         code: 'custom',
         path: ['acknowledgements'],
-        message: 'Networking acknowledgement must match the explicit choice',
+        message: 'Acknowledgement types must be unique',
       });
     }
   });
@@ -904,10 +811,6 @@ export const identityStaleLegalDocumentProblemSchema = defineApiProblemSchema(
   'STALE_LEGAL_DOCUMENT',
   409,
 );
-export const identityNetworkingDisabledProblemSchema = defineApiProblemSchema(
-  'NETWORKING_DISABLED',
-  409,
-);
 export const identityValidationProblemSchema = defineApiProblemSchema(
   'VALIDATION_FAILED',
   422,
@@ -952,7 +855,6 @@ export const identityOnboardingProblemSchema = z.discriminatedUnion('code', [
   identityEventAccessDeniedProblemSchema,
   identityLegalConfigurationMissingProblemSchema,
   identityStaleLegalDocumentProblemSchema,
-  identityNetworkingDisabledProblemSchema,
   identityRequestIdReusedProblemSchema,
   idempotencyKeyReusedProblemSchema,
   idempotencyInProgressProblemSchema,

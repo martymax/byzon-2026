@@ -51,6 +51,7 @@ interface SourceEvent {
   type?: string;
   meta?: string;
   span?: string;
+  compact?: boolean;
 }
 
 interface ContentSource {
@@ -387,6 +388,14 @@ export async function importContentJson(options: {
             `${path}.span`,
             'Presentation-only span was not imported.',
             event.span,
+          );
+        if (event.compact !== undefined)
+          addFinding(
+            findings,
+            'unmapped_field',
+            `${path}.compact`,
+            'Presentation-only compact flag was not imported.',
+            event.compact,
           );
         const speakerSlugs = new Set<string>();
         const directSpeaker = speakerSlugByName.get(event.title);

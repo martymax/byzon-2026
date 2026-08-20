@@ -77,7 +77,6 @@ const IdentityProbe = ({
       <ActivationIdentity
         api={api}
         createIdempotencyKey={createKey}
-        createMockLinkToken={() => 'link:00000000-0000-4000-8000-000000000001'}
         now={now}
       />
     </LoginLayout>
@@ -199,7 +198,7 @@ describe('F1-04 identity and one-time-link handoff', () => {
         })
         .element()
         .getAttribute('href'),
-    ).toBe('/aktivace/odkaz#token=link%3A00000000-0000-4000-8000-000000000001');
+    ).toMatch(/^\/aktivace\/odkaz#token=link%3A/u);
   });
 
   it('rejects a response flow mismatch without minting a mock link', async () => {

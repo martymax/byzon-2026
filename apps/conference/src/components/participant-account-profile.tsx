@@ -39,12 +39,14 @@ const fieldLabels: Record<ProfileField, string> = {
   firstName: 'Jméno',
   lastName: 'Příjmení',
   contactEmail: 'Kontaktní e-mail',
+  phone: 'Telefon',
 };
 
 const canonicalProfile = (profile: IdentityProfile): IdentityProfile => ({
   firstName: profile.firstName.trim(),
   lastName: profile.lastName.trim(),
   contactEmail: profile.contactEmail.trim().toLowerCase(),
+  phone: profile.phone?.trim() || null,
 });
 
 const validateProfile = (
@@ -59,12 +61,15 @@ const validateProfile = (
     if (
       (field === 'firstName' ||
         field === 'lastName' ||
-        field === 'contactEmail') &&
+        field === 'contactEmail' ||
+        field === 'phone') &&
       !errors[field]
     ) {
       errors[field] =
-        field === 'contactEmail'
-          ? 'Zadejte platnou kontaktní e-mailovou adresu.'
+        field === 'contactEmail' || field === 'phone'
+          ? field === 'phone'
+            ? 'Zadejte telefon v mezinárodním formátu, například +420774835456.'
+            : 'Zadejte platnou kontaktní e-mailovou adresu.'
           : `${fieldLabels[field]} nesmí být prázdné ani obsahovat nepovolené znaky.`;
     }
   }
@@ -120,6 +125,7 @@ const ReadOnlyProfile = ({
   contactEmail,
   firstName,
   lastName,
+  phone,
   supportEmail,
 }: IdentityProfile & { readonly supportEmail: string }) => (
   <Card className="participant-account-card">
@@ -137,6 +143,10 @@ const ReadOnlyProfile = ({
       <div>
         <dt>Kontaktní e-mail</dt>
         <dd>{contactEmail}</dd>
+      </div>
+      <div>
+        <dt>Telefon</dt>
+        <dd>{phone ?? 'Neuveden'}</dd>
       </div>
     </dl>
     <p>
@@ -160,8 +170,10 @@ const EditableProfile = ({
   readonly resource: ParticipantAccountResourceValue;
   readonly version: number;
 }) => {
-  const [savedProfile, setSavedProfile] = useState(profile);
-  const [draft, setDraft] = useState(profile);
+  const [savedProfile, setSavedProfile] = useState(() =>
+    canonicalProfile(profile),
+  );
+  const [draft, setDraft] = useState(() => canonicalProfile(profile));
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [failure, setFailure] = useState<ProfileFailure>();
   const [saved, setSaved] = useState(false);
@@ -173,7 +185,8 @@ const EditableProfile = ({
   const dirty =
     draft.firstName !== savedProfile.firstName ||
     draft.lastName !== savedProfile.lastName ||
-    draft.contactEmail !== savedProfile.contactEmail;
+    draft.contactEmail !== savedProfile.contactEmail ||
+    draft.phone !== savedProfile.phone;
 
   useParticipantAccountUnsavedGuard(dirty);
 
@@ -187,7 +200,10 @@ const EditableProfile = ({
   const focusFailure = () => {
     requestAnimationFrame(() => failureAlert.current?.focus());
   };
-  const updateField = (field: ProfileField, value: string) => {
+  const updateField = (
+    field: ProfileField,
+    value: IdentityProfile[ProfileField],
+  ) => {
     setDraft((current) => ({ ...current, [field]: value }));
     setErrors((current) => {
       const next = { ...current };
@@ -282,8 +298,8 @@ const EditableProfile = ({
         <p className="activation-kicker">Profilové minimum</p>
         <h2>Kontaktní údaje k akci</h2>
         <p>
-          Spravujeme pouze jméno, příjmení a kontaktní e-mail. Networkingová a
-          marketingová pole sem nepatří.
+          Spravujeme pouze jméno, příjmení, kontaktní e-mail a dobrovolný
+          telefon. Networkingová a marketingová pole sem nepatří.
         </p>
       </header>
 
@@ -389,6 +405,24 @@ const EditableProfile = ({
               value={draft.contactEmail}
             />
           </FormField>
+          <FormField
+            {...(errors.phone ? { error: errors.phone } : {})}
+            helperText="Volitelné. Použijte mezinárodní formát, například +420774835456."
+            label="Telefon"
+          >
+            <Input
+              autoComplete="tel"
+              disabled={working}
+              id="participant-profile-phone"
+              inputMode="tel"
+              maxLength={16}
+              onChange={(event) =>
+                updateField('phone', event.target.value || null)
+              }
+              type="tel"
+              value={draft.phone ?? ''}
+            />
+          </FormField>
         </div>
         <div className="participant-account-actions">
           <Button
@@ -471,6 +505,7 @@ export const ParticipantProfile = ({
               contactEmail={identity.profile.contactEmail}
               firstName={identity.profile.firstName}
               lastName={identity.profile.lastName}
+              phone={identity.profile.phone}
               supportEmail={identity.supportEmail}
             />
           );

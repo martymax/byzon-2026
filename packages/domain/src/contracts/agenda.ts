@@ -76,7 +76,7 @@ const localDateInTimezone = (
 /**
  * CS-AGENDA-01 carries event/user-scoped P2 data. Browser persistence is valid
  * only through the owner lease, revocation epoch and fail-closed feature gate
- * defined by CS-OFFLINE-01. Reservation, waitlist and estimate mutations stay
+ * defined by CS-OFFLINE-01. Reservation and waitlist mutations stay
  * authoritative, idempotent and online-only.
  */
 export const participantAgendaCachePolicy = Object.freeze({
@@ -202,15 +202,9 @@ const reservationCapacitySchema = z
     }
   });
 
-const registrationEstimateCapacitySchema = z.strictObject({
-  mode: z.literal('registration_estimate'),
-  registrations: z.number().int().nonnegative().max(100_000),
-});
-
 export const agendaCapacitySnapshotSchema = z.discriminatedUnion('mode', [
   z.strictObject({ mode: z.literal('none') }),
   reservationCapacitySchema,
-  registrationEstimateCapacitySchema,
 ]);
 
 export type AgendaCapacitySnapshot = z.infer<
@@ -222,10 +216,6 @@ export const agendaSessionActionStateSchema = z.discriminatedUnion('state', [
   z.strictObject({ state: z.literal('capacity_full') }),
   z.strictObject({ state: z.literal('closed') }),
   z.strictObject({ state: z.literal('cancelled') }),
-  z.strictObject({
-    state: z.literal('registration_estimate'),
-    registered: z.boolean(),
-  }),
 ]);
 
 export type AgendaSessionActionState = z.infer<
@@ -397,18 +387,6 @@ export const participantAgendaItemSchema = z
         message: 'Closed is only valid for reservation sessions',
       });
     }
-    if (
-      item.session.status === 'published' &&
-      (item.action.state === 'registration_estimate') !==
-        (item.capacity.mode === 'registration_estimate')
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['action', 'state'],
-        message: 'Registration-estimate action must match its capacity policy',
-      });
-    }
-
     if (item.state !== 'saved' && item.capacity.mode !== 'reservation') {
       context.addIssue({
         code: 'custom',
@@ -653,7 +631,6 @@ export const agendaMutationActionSchema = z.enum([
   'leave_waitlist',
   'accept_offer',
   'decline_offer',
-  'registration_estimate',
 ]);
 
 export type AgendaMutationAction = z.infer<typeof agendaMutationActionSchema>;
@@ -688,11 +665,6 @@ export const participantAgendaMutationRequestSchema = z.discriminatedUnion(
       ...agendaMutationRequestBaseShape,
       action: z.literal('decline_offer'),
       offerId: uuidSchema,
-    }),
-    z.strictObject({
-      ...agendaMutationRequestBaseShape,
-      action: z.literal('registration_estimate'),
-      registered: z.boolean(),
     }),
   ],
 );
@@ -732,11 +704,6 @@ const agendaMutationResultSchema = z.discriminatedUnion('action', [
     ...agendaMutationResultBaseShape,
     action: z.literal('decline_offer'),
     offerId: uuidSchema,
-  }),
-  z.strictObject({
-    ...agendaMutationResultBaseShape,
-    action: z.literal('registration_estimate'),
-    registered: z.boolean(),
   }),
 ]);
 
@@ -948,13 +915,6 @@ const validateAgendaMutationPostcondition = (
         );
       }
       return;
-    case 'registration_estimate':
-      if (
-        item?.action.state !== 'registration_estimate' ||
-        item.action.registered !== mutation.registered
-      ) {
-        issue('Registration estimate must match the explicit target state');
-      }
   }
 };
 

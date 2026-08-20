@@ -438,8 +438,6 @@ export const AnnouncementReadLabel = ({
 
 const severityCopy: Record<ParticipantAnnouncementSummary['severity'], string> =
   {
-    info: 'Informace',
-    important: 'Důležité',
     critical: 'Kritické',
   };
 

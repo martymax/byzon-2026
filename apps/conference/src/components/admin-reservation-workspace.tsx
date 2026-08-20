@@ -39,15 +39,12 @@ import styles from './admin-workspace.module.css';
 
 const reservationActionLabels: Record<AdminReservationAction, string> = {
   capacity_override: 'Změnit kapacitu',
-  mark_attended: 'Označit účast',
-  undo_attendance: 'Vrátit označení účasti',
   cancel_reservation: 'Zrušit rezervaci',
 };
 
 const stateLabels: Record<AdminReservationRecord['state'], string> = {
   reserved: 'Rezervováno',
   cancelled: 'Zrušeno',
-  attended: 'Účast potvrzena',
 };
 
 type PendingChange =
@@ -82,7 +79,8 @@ export const AdminReservationWorkspace = () => {
   const [audits, setAudits] = useState<readonly AdminAuditEntry[]>([]);
   const [settings, setSettings] = useState<AdminEventSettings | null>(null);
   const [selected, setSelected] = useState<AdminReservationRecord | null>(null);
-  const [action, setAction] = useState<AdminReservationAction>('mark_attended');
+  const [action, setAction] =
+    useState<AdminReservationAction>('capacity_override');
   const [capacity, setCapacity] = useState(1);
   const [reason, setReason] = useState('');
   const [settingsDraft, setSettingsDraft] = useState<{
@@ -109,20 +107,16 @@ export const AdminReservationWorkspace = () => {
   const [reloadReservations, setReloadReservations] = useState(0);
   const [reloadSettings, setReloadSettings] = useState(0);
 
-  const canReadReservations =
-    permissions.includes('reservation:any:read') ||
-    permissions.includes('attendance:assigned:write');
+  const canReadReservations = permissions.includes('reservation:any:read');
   const canOverride = permissions.includes('agenda:any:override');
-  const canAttend = permissions.includes('attendance:assigned:write');
   const canReadAudit = permissions.includes('audit:read');
   const canManageSettings = permissions.includes('event:settings:manage');
   const canPerformReservationAction = (
-    candidate: AdminReservationAction,
-  ): boolean => {
-    const isAttendance =
-      candidate === 'mark_attended' || candidate === 'undo_attendance';
-    return isAttendance ? canAttend : canOverride;
-  };
+    candidate?: AdminReservationAction,
+  ): boolean =>
+    canOverride &&
+    (candidate === undefined ||
+      Object.hasOwn(reservationActionLabels, candidate));
 
   const handleReadFailure = (
     result: Readonly<{
@@ -419,7 +413,7 @@ export const AdminReservationWorkspace = () => {
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>F4 · řízené provozní změny</p>
-        <h1>Rezervace, účast, audit a nastavení</h1>
+        <h1>Rezervace, audit a nastavení</h1>
         <p>
           Viditelnost i mutace respektují autoritativní event scope. Stale
           snapshot se nejprve obnoví a vyžádá nové potvrzení.
@@ -458,7 +452,7 @@ export const AdminReservationWorkspace = () => {
         <section className={styles.panel} aria-labelledby="reservation-title">
           <div className={styles.panelHeader}>
             <div>
-              <h2 id="reservation-title">Rezervace a room attendance</h2>
+              <h2 id="reservation-title">Rezervace a kapacitní výjimky</h2>
               <p className={styles.muted}>
                 Server už v odpovědi omezuje záznamy na povolený scope.
               </p>
@@ -495,7 +489,6 @@ export const AdminReservationWorkspace = () => {
               >
                 <option value="all">Všechny stavy</option>
                 <option value="reserved">Rezervováno</option>
-                <option value="attended">Účast potvrzena</option>
                 <option value="cancelled">Zrušeno</option>
               </select>
             </label>
@@ -655,7 +648,6 @@ export const AdminReservationWorkspace = () => {
               <option value="import">Import</option>
               <option value="announcement">Oznámení</option>
               <option value="reservation">Rezervace</option>
-              <option value="attendance">Účast</option>
               <option value="settings">Nastavení</option>
               <option value="export">Export</option>
             </select>

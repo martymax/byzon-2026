@@ -213,19 +213,19 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByText('3 zobrazená oznámení'))
       .toBeVisible();
     await expect
-      .element(screen.getByText('Praktické informace k příjezdu'))
+      .element(screen.getByText('Bezpečnostní omezení příjezdu'))
       .toBeVisible();
     await expect
       .element(
         screen.getByRole('link', {
-          name: /Praktické informace k příjezdu/,
+          name: /Bezpečnostní omezení příjezdu/,
         }),
       )
       .toHaveFocus();
     await expect
       .element(
         screen.getByRole('link', {
-          name: /Praktické informace k příjezdu/,
+          name: /Bezpečnostní omezení příjezdu/,
         }),
       )
       .toHaveAttribute(
@@ -479,7 +479,7 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByText('Seznam oznámení se nepodařilo načíst'))
       .toBeVisible();
     expect(document.body.textContent).not.toContain(
-      'Praktické informace k příjezdu',
+      'Bezpečnostní omezení příjezdu',
     );
   });
 
@@ -514,7 +514,7 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByText('Změna sálu workshopu'))
       .toBeVisible();
     expect(document.body.textContent).not.toContain(
-      'Praktické informace k příjezdu',
+      'Bezpečnostní omezení příjezdu',
     );
   });
 
@@ -548,7 +548,7 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByText('Další oznámení se nepodařilo načíst'))
       .toBeVisible();
     expect(document.body.textContent).not.toContain(
-      'Praktické informace k příjezdu',
+      'Bezpečnostní omezení příjezdu',
     );
   });
 
@@ -576,7 +576,9 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByRole('heading', { level: 1, name: 'Oznámení' }))
       .toHaveFocus();
     expect(document.body.textContent).not.toContain('Změna sálu workshopu');
-    expect(document.body.textContent).not.toContain('Registrace je otevřená');
+    expect(document.body.textContent).not.toContain(
+      'Hlavní vstup dočasně uzavřen',
+    );
     expect(document.body.textContent).not.toContain('Nepřečtená (2)');
   });
 
@@ -617,13 +619,13 @@ describe('F2-05 participant announcement inbox', () => {
 
     await screen.getByRole('button', { name: 'Načíst další oznámení' }).click();
     await expect
-      .element(screen.getByText('Praktické informace k příjezdu'))
+      .element(screen.getByText('Bezpečnostní omezení příjezdu'))
       .toBeVisible();
     await screen.getByRole('button', { name: 'Načíst další oznámení' }).click();
 
     await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
     expect(document.body.textContent).not.toContain(
-      'Praktické informace k příjezdu',
+      'Bezpečnostní omezení příjezdu',
     );
 
     window.history.pushState({}, '', '/app/oznameni?view=unread');
@@ -638,7 +640,7 @@ describe('F2-05 participant announcement inbox', () => {
       .element(screen.getByText('2 zobrazená oznámení'))
       .toBeVisible();
     expect(document.body.textContent).not.toContain(
-      'Praktické informace k příjezdu',
+      'Bezpečnostní omezení příjezdu',
     );
   });
 
@@ -789,7 +791,9 @@ describe('F2-05 participant announcement detail and read receipt', () => {
     const fetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         if (requestMethod(input, init) === 'POST') {
-          expect(document.body.textContent).toContain('Registrace je otevřená');
+          expect(document.body.textContent).toContain(
+            'Hlavní vstup dočasně uzavřen',
+          );
           idempotencyKeys.push(
             new Headers(init?.headers).get('idempotency-key') ?? '',
           );
@@ -950,7 +954,9 @@ describe('F2-05 participant announcement detail and read receipt', () => {
       .toBeVisible();
     await expect.element(screen.getByRole('alert')).toHaveFocus();
     await expect
-      .element(screen.getByRole('heading', { name: 'Registrace je otevřená' }))
+      .element(
+        screen.getByRole('heading', { name: 'Hlavní vstup dočasně uzavřen' }),
+      )
       .toBeVisible();
     expect(document.body.textContent).toContain('Nepřečtené');
     expect(window.localStorage).toHaveLength(0);
@@ -1057,7 +1063,9 @@ describe('F2-05 participant announcement detail and read receipt', () => {
       );
 
       await expect.element(screen.getByText(safeTitle)).toBeVisible();
-      expect(document.body.textContent).not.toContain('Registrace je otevřená');
+      expect(document.body.textContent).not.toContain(
+        'Hlavní vstup dočasně uzavřen',
+      );
       expect(document.body.textContent).not.toContain(
         'Registrační pult je otevřený',
       );
@@ -1113,7 +1121,7 @@ describe('F2-05 participant announcement detail and read receipt', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Praktické informace k příjezdu',
+          name: 'Bezpečnostní omezení příjezdu',
         }),
       )
       .toBeVisible();
@@ -1125,7 +1133,7 @@ describe('F2-05 participant announcement detail and read receipt', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Praktické informace k příjezdu',
+          name: 'Bezpečnostní omezení příjezdu',
         }),
       )
       .toBeVisible();
@@ -1205,7 +1213,7 @@ describe('F2-05 participant announcement detail and read receipt', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Praktické informace k příjezdu',
+          name: 'Bezpečnostní omezení příjezdu',
         }),
       )
       .toBeVisible();
@@ -1219,7 +1227,7 @@ describe('F2-05 participant announcement detail and read receipt', () => {
     );
 
     expect(document.body.textContent).not.toContain(
-      'Praktické informace k příjezdu',
+      'Bezpečnostní omezení příjezdu',
     );
     await expect
       .element(screen.getByLabelText('Načítám oznámení'))

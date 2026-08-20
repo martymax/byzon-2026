@@ -35,7 +35,6 @@ import { privateResourceInvalidationReason } from '@/lib/private-resource-events
 const documentTypeLabels = {
   terms: 'Podmínky používání',
   privacy_notice: 'Informace o soukromí',
-  networking_consent: 'Dobrovolný networking',
 } as const;
 
 const decisionLabels = {
@@ -171,14 +170,6 @@ const mapFailure = (
 };
 
 const requestCopy = {
-  data_export: {
-    title: 'Kopie osobních údajů',
-    description:
-      'Požádejte o export údajů, které se vážou k vašemu účtu a této akci.',
-    action: 'Požádat o export',
-    confirmTitle: 'Odeslat žádost o export?',
-    confirmAction: 'Odeslat žádost',
-  },
   data_deletion: {
     title: 'Smazání osobních údajů',
     description:
@@ -350,7 +341,7 @@ const PrivacyRequestCard = ({
             setOutcome(false);
             setConfirmationOpen(true);
           }}
-          variant={kind === 'data_deletion' ? 'danger' : 'secondary'}
+          variant="danger"
         >
           {copy.action}
         </Button>
@@ -418,9 +409,8 @@ const PrivacyRequestCard = ({
         <div className="ui-confirmation participant-privacy-confirmation">
           <div>
             <p>
-              {kind === 'data_deletion'
-                ? 'Smazání může omezit další používání účtu. Povinné záznamy mohou zůstat po zákonnou nebo smluvní retenční dobu.'
-                : 'Export může obsahovat osobní údaje. Informace o bezpečném předání poskytne podpora po zpracování.'}
+              Smazání může omezit další používání účtu. Povinné záznamy mohou
+              zůstat po zákonnou nebo smluvní retenční dobu.
             </p>
             {kind === 'data_deletion' ? (
               <ChoiceField
@@ -447,7 +437,7 @@ const PrivacyRequestCard = ({
               loading={working}
               loadingLabel="Odesílám žádost…"
               onClick={() => void submit()}
-              variant={kind === 'data_deletion' ? 'danger' : 'primary'}
+              variant="danger"
             >
               {copy.confirmAction}
             </Button>
@@ -557,15 +547,19 @@ export const ParticipantPrivacy = ({
                 vždy korelujeme s aktuální akcí a účtem.
               </p>
             </header>
+            <Card className="participant-support-card">
+              <p className="activation-kicker">Právo na přístup</p>
+              <h3>Potřebujete kopii nebo přehled osobních údajů?</h3>
+              <p>
+                Samoobslužný export není součástí aplikace. Napište na
+                zveřejněný kontakt; podpora bezpečně ověří totožnost a domluví
+                zákonný postup.
+              </p>
+              <a className="text-link" href={`mailto:${identity.supportEmail}`}>
+                Napsat na {identity.supportEmail}
+              </a>
+            </Card>
             <div className="participant-privacy-request-grid">
-              <PrivacyRequestCard
-                api={api}
-                createIdempotencyKey={createIdempotencyKey}
-                identity={identity}
-                kind="data_export"
-                resource={resource}
-                status={identity.privacy.exportRequest}
-              />
               <PrivacyRequestCard
                 api={api}
                 createIdempotencyKey={createIdempotencyKey}

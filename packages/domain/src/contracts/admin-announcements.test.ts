@@ -19,7 +19,7 @@ const ids = {
 const draft = {
   title: 'Změna sálu',
   bodyText: 'Workshop se přesouvá do sálu Vltava.',
-  severity: 'important' as const,
+  severity: 'critical' as const,
   audience: {
     kind: 'session' as const,
     sessionId: ids.session,
@@ -31,6 +31,13 @@ describe('CS-ANN-01 admin contracts', () => {
     expect(adminAnnouncementPreviewRequestSchema.parse({ draft })).toEqual({
       draft,
     });
+    for (const removedSeverity of ['info', 'important']) {
+      expect(
+        adminAnnouncementPreviewRequestSchema.safeParse({
+          draft: { ...draft, severity: removedSeverity },
+        }).success,
+      ).toBe(false);
+    }
     const preview = {
       eventId: ids.event,
       previewId: ids.preview,

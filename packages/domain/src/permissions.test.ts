@@ -12,27 +12,24 @@ const allowed = (role: EventRole, permission: EventPermission): boolean =>
   hasEventPermission([role], permission, {
     ownsResource: true,
     networkingOptedIn: true,
-    acceptedConnection: true,
     announcementRecipient: true,
     assignedSession: true,
     assignedRoom: true,
-    moderatorCanAnnounce: true,
     auditedException: true,
   });
 
 describe('event permission matrix', () => {
   it('keeps the full role and permission matrix explicit', () => {
     expect(eventRoles).toHaveLength(7);
-    expect(eventPermissions).toHaveLength(28);
+    expect(eventPermissions).toHaveLength(24);
     expect(eventRoles).not.toContain('support_operator');
   });
 
   it.each([
     ['participant', 'agenda:own:write', true],
     ['participant', 'announcement:own:read', true],
-    ['speaker', 'announcement:own:read', false],
-    ['speaker', 'agenda:own:write', false],
-    ['speaker', 'program:own-materials:write', true],
+    ['speaker', 'announcement:own:read', true],
+    ['speaker', 'agenda:own:write', true],
     ['checkin_operator', 'checkin:perform', true],
     ['checkin_operator', 'reservation:assigned:read', false],
     ['moderator', 'session:assigned:moderate', true],
@@ -45,8 +42,6 @@ describe('event permission matrix', () => {
     ['organizer_admin', 'operations:read', true],
     ['organizer_admin', 'audit:read', true],
     ['organizer_admin', 'event:settings:manage', true],
-    ['organizer_admin', 'attendance:assigned:write', true],
-    ['room_operator', 'attendance:assigned:write', true],
     ['room_operator', 'ticket:any:manage', false],
     ['checkin_operator', 'participant:operational:read', false],
     ['moderator', 'role:manage', false],
@@ -59,12 +54,12 @@ describe('event permission matrix', () => {
     },
   );
 
-  it('combines roles without implying participant rights for a speaker', () => {
+  it('keeps a legacy speaker role limited to ordinary participant rights', () => {
     expect(
       hasEventPermission(['speaker'], 'agenda:own:write', {
         ownsResource: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       hasEventPermission(['speaker', 'participant'], 'agenda:own:write', {
         ownsResource: true,
@@ -74,7 +69,7 @@ describe('event permission matrix', () => {
       hasEventPermission(['speaker'], 'networking:directory:read', {
         networkingOptedIn: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       hasEventPermission(
         ['speaker', 'participant'],
@@ -98,12 +93,9 @@ describe('event permission matrix', () => {
     expect(
       hasEventPermission(['room_operator'], 'reservation:assigned:read'),
     ).toBe(false);
-    expect(
-      hasEventPermission(['room_operator'], 'attendance:assigned:write'),
-    ).toBe(false);
   });
 
-  it('keeps F4 admin permissions explicit and attendance assignment-scoped', () => {
+  it('keeps F4 admin permissions explicit without attendance writes', () => {
     for (const permission of [
       'ticket:any:manage',
       'participant:operational:read',
@@ -116,20 +108,10 @@ describe('event permission matrix', () => {
       expect(hasEventPermission(['room_operator'], permission)).toBe(false);
       expect(hasEventPermission(['participant'], permission)).toBe(false);
     }
-
-    expect(
-      hasEventPermission(['room_operator'], 'attendance:assigned:write', {
-        assignedSession: true,
-      }),
-    ).toBe(true);
-    expect(
-      hasEventPermission(['room_operator'], 'attendance:assigned:write', {
-        assignedRoom: true,
-      }),
-    ).toBe(false);
-    expect(
-      hasEventPermission(['organizer_admin'], 'attendance:assigned:write'),
-    ).toBe(true);
+    expect(eventPermissions).not.toContain('attendance:assigned:write');
+    expect(eventPermissions).not.toContain('program:own-materials:write');
+    expect(eventPermissions).not.toContain('networking:connection:message');
+    expect(eventPermissions).not.toContain('personal-data:own:export');
   });
 
   it('requires recipient membership for participant announcement reads', () => {
@@ -147,7 +129,7 @@ describe('event permission matrix', () => {
       hasEventPermission(['speaker'], 'announcement:own:read', {
         announcementRecipient: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       hasEventPermission(['speaker', 'participant'], 'announcement:own:read', {
         announcementRecipient: true,

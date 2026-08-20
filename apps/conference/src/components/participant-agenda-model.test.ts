@@ -110,15 +110,6 @@ describe('participant agenda view model', () => {
         variant: 'secondary',
       },
     ]);
-    expect(
-      participantAgendaActions(
-        onlyItem(participantAgendaFixtures.registration_estimate!),
-      )[0]?.intent,
-    ).toMatchObject({
-      action: 'registration_estimate',
-      registered: false,
-    });
-
     const offered = onlyItem(participantAgendaFixtures.offered!);
     const intents = agendaOfferIntents(offered);
     expect(intents?.accept).toMatchObject({

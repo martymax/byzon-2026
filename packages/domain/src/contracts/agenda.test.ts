@@ -174,7 +174,6 @@ describe('CS-AGENDA-01 participant contracts', () => {
       ...simpleActions,
       'accept_offer',
       'decline_offer',
-      'registration_estimate',
     ]);
     simpleActions.forEach((action) => {
       expect(
@@ -199,17 +198,6 @@ describe('CS-AGENDA-01 participant contracts', () => {
         }),
       ).toMatchObject({ action, offerId: ids.offer });
     }
-    expect(
-      participantAgendaMutationRequestSchema.parse({
-        sessionId: ids.session,
-        action: 'registration_estimate',
-        registered: false,
-        expectedVersion: 7,
-      }),
-    ).toMatchObject({
-      action: 'registration_estimate',
-      registered: false,
-    });
     expect(
       participantAgendaMutationRequestSchema.safeParse({
         sessionId: ids.session,
@@ -555,7 +543,7 @@ describe('CS-AGENDA-01 participant contracts', () => {
     ).toBe(true);
   });
 
-  it('represents a cancelled registration-estimate session without contradiction', () => {
+  it('rejects a removed registration-estimate capacity branch', () => {
     expect(
       participantAgendaResponseSchema.safeParse({
         ...response,
@@ -571,7 +559,7 @@ describe('CS-AGENDA-01 participant contracts', () => {
           },
         ],
       }).success,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('returns a complete canonical snapshot after every mutation', () => {

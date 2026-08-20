@@ -38,7 +38,7 @@ describe('CS-ADMIN-01 contracts', () => {
         permissions: [
           'program:manage',
           'operations:read',
-          'attendance:assigned:write',
+          'reservation:any:read',
         ] as const,
         assignedSessions: [
           {
@@ -63,10 +63,7 @@ describe('CS-ADMIN-01 contracts', () => {
         ...context,
         actor: {
           ...context.actor,
-          permissions: [
-            'attendance:assigned:write',
-            'attendance:assigned:write',
-          ],
+          permissions: ['reservation:any:read', 'reservation:any:read'],
         },
       }).success,
     ).toBe(false);
@@ -129,10 +126,10 @@ describe('CS-ADMIN-01 contracts', () => {
       reason: 'Potvrzené přiřazení k jedné syntetické session.',
     };
     const reservationRequest = {
-      action: 'mark_attended' as const,
+      action: 'cancel_reservation' as const,
       reservationId: ids.reservation,
       expectedVersion: 4,
-      reason: 'Potvrzená účast v syntetickém průchodu.',
+      reason: 'Potvrzené zrušení v syntetickém průchodu.',
     };
 
     expect(adminRoleAssignmentMutationRequestSchema.parse(roleRequest)).toEqual(
@@ -166,11 +163,7 @@ describe('CS-ADMIN-01 contracts', () => {
       capacity: 40,
       reservedCount: 38,
       version: 4,
-      availableActions: [
-        'capacity_override',
-        'mark_attended',
-        'cancel_reservation',
-      ] as const,
+      availableActions: ['capacity_override', 'cancel_reservation'] as const,
     };
     const response = {
       eventId: ids.event,

@@ -1,6 +1,6 @@
 # BYZON 2026 – handover
 
-> Poslední aktualizace: 27. července 2026
+> Poslední aktualizace: 20. srpna 2026
 
 ## Pokyny pro pokračování
 
@@ -20,6 +20,43 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
 
 ## Aktuální stav
 
+- Scope alignment v6.2 je na větvi `agent/update-ai-implementation-plan` v
+  draftu [PR #19](https://github.com/martymax/byzon-2026/pull/19). Změny jsou
+  commitnuté; navazující lokální security/code review před uzavřením PR
+  opravuje pouze potvrzené actionable nálezy a dokumentační nesoulady.
+- `static-site/data/content.json` nyní deterministicky
+  importuje 67 validních sessions a jednu položku `24:00 - ?` odmítá; dry-run
+  i PostgreSQL regresní test ověřují nové večerní/sobotní položky, idempotenci
+  a nepřevedené `span`/`compact` atributy. `P3-11` zůstává otevřený pro finální
+  loga, FAQ, praktické kontakty a obsahové UAT k 31. 8.
+- Recovery a identity potvrzení v produkčním buildu negenerují ani nezobrazují
+  syntetický odkaz. Development helper i preview copy jsou v `src/test/mocks`
+  a načítají se jen za pozitivním build-time dev/test guardem; production
+  source/build boundary explicitně odmítá jejich nehlídaný import i výsledný
+  text syntetické recovery akce. `pnpm dev:mock` si tak zachovává celý průchod.
+- Bezpečnostní overrides připínají `brace-expansion 5.0.9`, `js-yaml 4.3.1`,
+  `nanoid 3.3.18`, `postcss 8.5.23` a starou tranzitivní větev esbuild na první
+  dostupnou opravenou řadu `0.25.0`. `pnpm audit` i `pnpm audit --prod` hlásí
+  nula známých zranitelností.
+- V6 gate z 16. 8. 2026 prošel nad všemi pěti migracemi a izolovaným
+  PostgreSQL: database 81/81, conference server/unit 482/482, browser
+  components 843/843 a Playwright E2E 15/15 bez přeskočených integrací.
+  Formát, lint, sedm typechecků, produkční Next/worker build, source/build mock
+  boundary, static smoke a oba dependency audity byly zelené.
+- Lokální post-review gate z 20. 8. 2026 ověřil domain 174/174,
+  nedatabázové conference server/unit testy 448/448 a cílený profilový browser
+  průchod 108/108 ve třech viewports; relevantní typecheck, lint, formát,
+  source mock boundary a oba audity jsou zelené. Nová databázová regrese pro
+  nekonzistentní onboarding replay se na tomto stroji načetla, ale spolu s
+  dalšími 34 DB scénáři byla bez `TEST_DATABASE_URL` přeskočená. Pokus o
+  izolovaný PostgreSQL zablokoval sandbox na systémové sdílené paměti.
+- [CI run 32377970145](https://github.com/martymax/byzon-2026/actions/runs/32377970145)
+  následně prošel na headu `85f6081` bez skipů: database 81/81, domain
+  174/174, conference server/unit 483/483 včetně 4/4 onboarding integrací,
+  browser components 846/846 a Playwright E2E 15/15. Migrace, seed, frozen
+  install, formát, lint, typecheck, produkční Next/worker build, source/build
+  mock boundary, audit i samostatný static-site job jsou zelené.
+
 - Better Auth session má nově 48hodinovou expiraci a zachovaný 24hodinový
   refresh aktivní relace. Aplikace nemá samostatný idle logout, takže neaktivní
   uživatel zůstane přihlášený po celé dvoudenní konferenční okno a aktivní
@@ -27,8 +64,8 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   48 hodin a PostgreSQL integrační test dál ověřuje skutečné databázové
   `expires_at`.
 - Celý frontendový track `F0` až `F6-05` je dokončený ve stavu
-  `UI ready (mocked)` na `track/frontend-complete` a předává se přes
-  [PR #17](https://github.com/martymax/byzon-2026/pull/17). Syntetické preview
+  `UI ready (mocked)` a [PR #17](https://github.com/martymax/byzon-2026/pull/17)
+  byl sloučen do `main` merge commitem `64f1b84`. Syntetické preview
   se spouští jediným příkazem `pnpm dev:mock`; root nabízí rovnou passwordless
   přihlášení a aktivaci vstupenky, ostatní průchody jsou dostupné na přímých
   routes `/app`, `/admin`, `/check-in` a `/offline`.
@@ -56,10 +93,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   loga, manifest
   `ec4b7f4743633482876c658d157532327303ae529da2b1613f5198871a475556`
   a service worker 24 142 B.
-- `pnpm audit --audit-level high` je zelený. Kompatibilní větve používají
-  `brace-expansion 5.0.8`; legacy `minimatch 3.1.5` má malý reprodukovatelný
-  API adapter patch. Zůstává jedna `moderate` transitivní položka starého
-  `esbuild` pouze v dev-toolingu.
+- Legacy `minimatch 3.1.5` si zachovává malý reprodukovatelný API adapter
+  patch pro moderní `brace-expansion`; aktuální přesné bezpečné verze a nulový
+  audit jsou uvedené v baseline bodu výše.
 - Produkční auth, autorizované endpointy, skutečný ticket credential,
   SimpleShop synchronizace, offline lease/replay, staging UAT a fyzická
   zařízení zůstávají správně backend/provozními handoffy. Nejde o chybějící

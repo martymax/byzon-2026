@@ -20,7 +20,6 @@ export type OnboardingErrorCode =
   | 'EVENT_ACCESS_DENIED'
   | 'LEGAL_CONFIGURATION_MISSING'
   | 'STALE_LEGAL_DOCUMENT'
-  | 'NETWORKING_DISABLED'
   | 'REQUEST_ID_REUSED';
 
 export class OnboardingError extends Error {
@@ -37,18 +36,14 @@ export interface CompleteOnboardingInput {
   firstName: string;
   lastName: string;
   contactEmail: string;
+  phone?: string | null;
   termsDocumentId: string;
   privacyNoticeDocumentId: string;
-  networking: {
-    enabled: boolean;
-    consentDocumentId?: string;
-  };
 }
 
 interface CurrentLegalDocuments {
   terms: string | null;
   privacyNotice: string | null;
-  networkingConsent: string | null;
 }
 
 interface ExpectedDecision {
@@ -75,7 +70,6 @@ const loadCurrentLegalDocuments = async (
   return {
     terms: byType.get('terms') ?? null,
     privacyNotice: byType.get('privacy_notice') ?? null,
-    networkingConsent: byType.get('networking_consent') ?? null,
   };
 };
 
@@ -135,7 +129,6 @@ export const loadOnboardingState = async (
         firstName: true,
         lastName: true,
         contactEmail: true,
-        networkingEnabled: true,
       },
       where: and(
         eq(schema.participantProfiles.eventId, eventId),
@@ -157,11 +150,7 @@ const requireDocument = (
   type: OnboardingLegalDocumentType,
 ): string => {
   const documentId =
-    type === 'privacy_notice'
-      ? documents.privacyNotice
-      : type === 'networking_consent'
-        ? documents.networkingConsent
-        : documents.terms;
+    type === 'privacy_notice' ? documents.privacyNotice : documents.terms;
   if (!documentId) throw new OnboardingError('LEGAL_CONFIGURATION_MISSING');
   return documentId;
 };
@@ -178,21 +167,10 @@ const expectedDecisions = (
   ) {
     throw new OnboardingError('STALE_LEGAL_DOCUMENT');
   }
-  const decisions: ExpectedDecision[] = [
+  return [
     { legalDocumentId: terms, decision: 'accepted' },
     { legalDocumentId: privacyNotice, decision: 'acknowledged' },
   ];
-  if (input.networking.enabled) {
-    const networkingConsent = requireDocument(documents, 'networking_consent');
-    if (input.networking.consentDocumentId !== networkingConsent) {
-      throw new OnboardingError('STALE_LEGAL_DOCUMENT');
-    }
-    decisions.push({
-      legalDocumentId: networkingConsent,
-      decision: 'accepted',
-    });
-  }
-  return decisions;
 };
 
 const sameDecisions = (
@@ -233,16 +211,6 @@ export const completeOnboarding = async (
       throw new OnboardingError('EVENT_ACCESS_DENIED');
     }
 
-    if (input.networking.enabled) {
-      const features = await transaction.query.eventFeatures.findFirst({
-        columns: { networkingEnabled: true },
-        where: eq(schema.eventFeatures.eventId, input.eventId),
-      });
-      if (features?.networkingEnabled !== true) {
-        throw new OnboardingError('NETWORKING_DISABLED');
-      }
-    }
-
     const documents = await loadCurrentLegalDocuments(
       transaction,
       input.eventId,
@@ -263,7 +231,7 @@ export const completeOnboarding = async (
             firstName: true,
             lastName: true,
             contactEmail: true,
-            networkingEnabled: true,
+            phone: true,
           },
           where: and(
             eq(schema.participantProfiles.eventId, input.eventId),
@@ -272,10 +240,11 @@ export const completeOnboarding = async (
         });
       if (
         !sameDecisions(retriedRecords, decisions) ||
-        storedProfile?.firstName !== profile.firstName ||
+        !storedProfile ||
+        storedProfile.firstName !== profile.firstName ||
         storedProfile.lastName !== profile.lastName ||
         storedProfile.contactEmail !== profile.contactEmail ||
-        storedProfile.networkingEnabled !== input.networking.enabled
+        storedProfile.phone !== profile.phone
       ) {
         throw new OnboardingError('REQUEST_ID_REUSED');
       }
@@ -289,7 +258,6 @@ export const completeOnboarding = async (
         eventId: input.eventId,
         userId: input.userId,
         ...profile,
-        networkingEnabled: input.networking.enabled,
         onboardingCompletedAt: completedAt,
         updatedAt: completedAt,
       })
@@ -300,7 +268,6 @@ export const completeOnboarding = async (
         ],
         set: {
           ...profile,
-          networkingEnabled: input.networking.enabled,
           onboardingCompletedAt: completedAt,
           updatedAt: completedAt,
         },
@@ -330,7 +297,6 @@ export const completeOnboarding = async (
           legalDocumentIds: decisions.map(
             ({ legalDocumentId }) => legalDocumentId,
           ),
-          networkingEnabled: input.networking.enabled,
         },
       },
       { generateId },

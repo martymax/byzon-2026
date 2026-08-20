@@ -1,7 +1,6 @@
 export const onboardingLegalDocumentTypes = [
   'terms',
   'privacy_notice',
-  'networking_consent',
 ] as const;
 
 export type OnboardingLegalDocumentType =
@@ -14,7 +13,6 @@ export interface OnboardingProfile {
   firstName: string;
   lastName: string;
   contactEmail: string;
-  networkingEnabled: boolean | null;
 }
 
 export interface OnboardingSnapshot {
@@ -22,7 +20,6 @@ export interface OnboardingSnapshot {
   currentDocuments: {
     terms: string | null;
     privacyNotice: string | null;
-    networkingConsent: string | null;
   };
   decisions: readonly {
     legalDocumentId: string;
@@ -40,7 +37,6 @@ export type OnboardingState =
       status: 'legal_acknowledgement_required';
       documentIds: readonly string[];
     }
-  | { status: 'networking_choice_required' }
   | { status: 'complete' };
 
 const hasDecision = (
@@ -63,11 +59,6 @@ export const deriveOnboardingState = (
   if (!snapshot.currentDocuments.terms) missingTypes.push('terms');
   if (!snapshot.currentDocuments.privacyNotice)
     missingTypes.push('privacy_notice');
-  if (
-    snapshot.profile.networkingEnabled &&
-    !snapshot.currentDocuments.networkingConsent
-  )
-    missingTypes.push('networking_consent');
   if (missingTypes.length > 0) {
     return { status: 'blocked_missing_legal_documents', missingTypes };
   }
@@ -88,22 +79,6 @@ export const deriveOnboardingState = (
     };
   }
 
-  if (snapshot.profile.networkingEnabled === null) {
-    return { status: 'networking_choice_required' };
-  }
-
-  const networkingConsent = snapshot.currentDocuments.networkingConsent;
-  if (
-    snapshot.profile.networkingEnabled &&
-    networkingConsent &&
-    !hasDecision(snapshot, networkingConsent, 'accepted')
-  ) {
-    return {
-      status: 'legal_acknowledgement_required',
-      documentIds: [networkingConsent],
-    };
-  }
-
   return { status: 'complete' };
 };
 
@@ -118,25 +93,33 @@ export interface OnboardingProfileInput {
   firstName: string;
   lastName: string;
   contactEmail: string;
+  phone?: string | null;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
+
+export interface NormalizedOnboardingProfile extends OnboardingProfile {
+  phone: string | null;
+}
 
 export const normalizeOnboardingProfile = (
   input: OnboardingProfileInput,
-): OnboardingProfileInput => {
+): NormalizedOnboardingProfile => {
   const firstName = input.firstName.trim();
   const lastName = input.lastName.trim();
   const contactEmail = input.contactEmail.trim().toLowerCase();
+  const phone = input.phone ?? null;
   if (
     firstName.length === 0 ||
     firstName.length > 128 ||
     lastName.length === 0 ||
     lastName.length > 128 ||
     contactEmail.length > 320 ||
-    !EMAIL_PATTERN.test(contactEmail)
+    !EMAIL_PATTERN.test(contactEmail) ||
+    (phone !== null && !PHONE_PATTERN.test(phone))
   ) {
     throw new OnboardingValidationError();
   }
-  return { firstName, lastName, contactEmail };
+  return { firstName, lastName, contactEmail, phone };
 };

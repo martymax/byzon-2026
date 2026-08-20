@@ -23,6 +23,7 @@ export const participantProfiles = pgTable(
     firstName: varchar('first_name', { length: 128 }).notNull(),
     lastName: varchar('last_name', { length: 128 }).notNull(),
     contactEmail: varchar('contact_email', { length: 320 }).notNull(),
+    phone: varchar('phone', { length: 16 }),
     networkingEnabled: boolean('networking_enabled'),
     onboardingCompletedAt: timestamp('onboarding_completed_at', {
       withTimezone: true,

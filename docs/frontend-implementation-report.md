@@ -1,6 +1,6 @@
 # BYZON 2026 – report dokončení frontendu
 
-> Stav k 26. červenci 2026: kompletní frontendové preview nad syntetickými daty
+> Stav k 16. srpnu 2026: v6 scope-aligned frontendové preview nad syntetickými daty
 >
 > Lifecycle: `UI ready (mocked)`
 >
@@ -10,7 +10,7 @@
 ## 1. Výsledek
 
 Frontend nyní nabízí propojené uživatelské průchody pro účastníka,
-administrátora, operátora sálu, check-in operátora a PWA/offline režim.
+administrátora, vedoucího aktivity, check-in operátora a PWA/offline režim.
 Vývojový mock běží přes stejné typované API porty a stejné striktní Zod
 kontrakty jako budoucí serverová integrace. Mock handlery, přímo injektované
 preview porty a syntetické fixtures smějí být pouze v development/test grafu;
@@ -53,7 +53,7 @@ Všechny mockované obrazovky jsou viditelně označené jako syntetické previe
 
 ### Admin
 
-V levém panelu lze přepnout personu `Administrátor`, `Operátor sálu` nebo
+V levém panelu lze přepnout personu `Administrátor`, `Vedoucí aktivity` nebo
 `Účet bez přístupu`. Přepnutí okamžitě invaliduje předchozí event/permission
 scope.
 
@@ -63,7 +63,7 @@ scope.
 - support hledání: `single`, `ambiguous`, `none`, `error`;
 - oznámení umožňuje scénáře stale/expired/timeout podle nápovědy přímo ve
   formuláři;
-- role, export, rezervace, attendance a settings mají canonical success,
+- role, export, rezervace a settings mají canonical success,
   stale, permission, idempotency a audit varianty.
 - `/admin/obsah` nabízí přepínač běžného stateful, empty, archived, stale,
   conflict, offline, permission a session-expired scénáře pro všech osm
@@ -103,7 +103,8 @@ na aktivaci. Před zobrazením formuláře respektuje serverem potvrzený
 rozpracovaný claim, takže neobchází bezpečný aktivační handoff. Aktivační kód
 zůstává opaque, neukládá se do URL ani draftu a všechny neplatné varianty mají
 neenumerující odpověď. Navazující identita, jednorázový fragment link,
-login/recovery, onboarding, právní acknowledgement, session expiry, logout,
+login/recovery, dvoukrokový onboarding profilu a právního acknowledgement,
+session expiry, logout,
 logout-all a switch-account používají bezpečný návrat a synchronní vymazání
 privátního stavu.
 
@@ -118,19 +119,22 @@ nejbližší kanonický bod osobní agendy bez vymyšlených live dat.
 
 Program má filtr, detail session, řečníky, partnery a praktický obsah. Agenda
 podporuje save/remove, rezervaci/cancel, waitlist, nabídku s expirací,
-kapacitní stavy, časový konflikt, registration estimate a `.ics` export.
+kapacitní stavy, časový konflikt a `.ics` export. Historická
+`registration_estimate` větev byla z kontraktu, fixtures a UI odstraněna;
+networkingová rezervace čeká na `BLOCKER-RES-01`/`04`.
 Oznámení obsahují all/unread filtr, stránkování, detail, online read a bezpečný
 návrat s filtrem/scroll pozicí.
 
 Vstupenka je záměrně status-only: valid/cancelled/refunded/blocked a maskovaný
 suffix, bez vymyšleného skenovatelného credentialu. Profil, soukromí,
-nastavení, právní dokumenty, privacy request a session controls jsou dostupné
-z hubu `Více`.
+nastavení, právní dokumenty, kontaktní privacy cesta, deletion request a
+session controls jsou dostupné z hubu `Více`. Profil obsahuje dobrovolný
+telefon v E.164; participant self-service export není součástí v6.
 
-### Organizátor a operátor sálu
+### Organizátor a vedoucí aktivity
 
 Jeden adaptivní admin shell obsahuje overview, import vstupenek, participant
-support, oznámení, role, report/export, rezervace a attendance, audit, event
+support, kritická oznámení, role, report/export, rezervace, audit, event
 settings a správu obsahu. Desktop používá sidebar, úzký viewport jednu
 ekvivalentní navigaci; breadcrumbs nevytvářejí paralelní systém.
 
@@ -140,10 +144,10 @@ explicitní impact confirmation a report. Support pracuje s maskovanými PII,
 POST search body, odděleným read/write oprávněním, reason, potvrzením,
 idempotencí a výsledným auditem.
 
-Oznámení používají draft, audience preview a immutable send. Role jsou
-event/session/room scoped; exporty jsou asynchronní. Rezervační override,
-attendance, audit a settings vyžadují přesné oprávnění, expected version a
-canonical odpověď. Každý request je fenced podle eventu a security epoch;
+Oznámení používají critical-only draft, event/affected-session audience preview
+a immutable send. Role jsou event/session/room scoped; exporty jsou
+asynchronní. Rezervační override, audit a settings vyžadují přesné oprávnění,
+expected version a canonical odpověď. Každý request je fenced podle eventu a security epoch;
 permission loss nebo 401/403 skryje P3 data a přeruší stale práci.
 
 Správa obsahu na `/admin/obsah` používá jedno typed port rozhraní pro dny,
@@ -155,6 +159,11 @@ publication snapshotu; celý archivovaný event uzamkne workspace. Neuložené
 změny mají dirty guard a změna scope, permission loss nebo session expiry
 formulář bezpečně vymaže. Publikace vždy vzniká z immutable preview, vyžaduje
 potvrzení a koreluje verzi i request.
+
+Samostatné development/test preview `/host/aktivity` používá minimální
+`CS-ROSTER-01`: vedoucí aktivity vidí pouze přiřazené sessions, jméno, firmu a
+stav rezervace. Nemá attendance mutaci, telefon, e-mail ani globální export.
+Produkční endpoint a cross-session autorizaci doplní `P5-08`.
 
 ### Check-in operátor
 
@@ -188,7 +197,7 @@ serverové potvrzení rezervace nebo check-inu.
 
 ## 5. Implementované routes
 
-Frontend má 35 kanonických routes, tři kompatibilní admin redirecty a jednu
+Frontend má 36 kanonických routes, tři kompatibilní admin redirecty a jednu
 dynamickou variantu obecné chyby přístupu. Rezervace zůstávají součástí
 `/app/agenda`, veškerý editovatelný eventový obsah vlastní `/admin/obsah` a
 operátorský check-in má jedinou route `/check-in`.
@@ -211,7 +220,7 @@ operátorský check-in má jedinou route `/check-in`.
 - `/app/recnici`, `/app/recnici/[slug]`, `/app/partneri`
 - `/app/vice`, `/app/profil`, `/app/soukromi`, `/app/nastaveni`
 
-### Admin a operátor
+### Admin, vedoucí aktivity a operátor
 
 - `/admin`
 - `/admin/vstupenky`, `/admin/ucastnici`, `/admin/oznameni`
@@ -220,14 +229,15 @@ operátorský check-in má jedinou route `/check-in`.
 - `/admin/obsah`
 - legacy `/admin/import`, `/admin/support`, `/admin/provoz` po preview gate
   přesměrují na kanonického vlastníka obrazovky;
-- `/check-in`.
+- `/check-in`;
+- `/host/aktivity` (development/test preview; produkčně fail-closed do `P5-08`).
 
 ## 6. Kontrakty a bezpečnostní hranice
 
 Stav `contract ready` mají `CS-BASE-01`, `CS-ACT-01`, `CS-BOOT-01`,
 `CS-CONTENT-01`, `CS-AGENDA-01`, `CS-IMPORT-01`, `CS-SUPPORT-01`,
-`CS-CHECKIN-01`, participant i admin část `CS-ANN-01`, `CS-ADMIN-01` a
-`CS-OFFLINE-01`.
+`CS-CHECKIN-01`, participant i admin část `CS-ANN-01`, `CS-ADMIN-01`,
+`CS-ROSTER-01` a `CS-OFFLINE-01`.
 
 Úplný `CS-TICKET-01` zůstává otevřený. Hotový status-only subset schválně
 neobsahuje presentation value; formát, expirace, rotace a verifier skutečného
@@ -331,12 +341,32 @@ PR #17 gate spouštěl stejný formát, lint, typecheck, PostgreSQL integrace, u
 produkční build, 840 browser scénářů, 15 E2E scénářů a audit. Merge je povolen
 až na zeleném finálním headu.
 
+V6 scope-alignment gate z 16. 8. 2026 ověřil aktuální pracovní větev znovu:
+
+- všech pět Drizzle migrací a idempotentní seed prošly nad izolovaným
+  PostgreSQL; databázový balíček má 81/81 a conference server/unit balíček
+  482/482 testů bez přeskočených integrací;
+- 63 browser component souborů a 843/843 scénářů prošlo v cílových phone,
+  tablet a desktop viewports;
+- Playwright prošel 15/15 E2E scénářů proti skutečnému database readiness,
+  včetně axe, klávesnice a reduced-motion kontrol;
+- formát, lint, typecheck, produkční Next/worker build, source/build mock
+  boundary a static-site smoke jsou zelené; build obsahuje 26 statických app
+  stránek včetně development/test preview `/host/aktivity`, offline shell 27
+  assetů a veřejný web 25 HTML dokumentů se 58 assety.
+
+Tento gate potvrzuje scope-aligned kontrakty a preview; neposouvá žádnou
+capability na `integrated` ani `UAT`.
+
 ## 10. Otevřené blokátory a backend handoff
 
 Tyto body nejsou chybějící mockované FE průchody:
 
-- `F3-06` coaching/registration estimate rozšíření čeká na
-  `BLOCKER-RES-02`;
+- `F3-06`/`P5-06` mají doplnit potvrzené coaching sloty z autoritativního
+  harmonogramu; `F3-07` zůstává částečně blokované na networkingové kapacitě
+  `BLOCKER-RES-01` a jediném promotion režimu `BLOCKER-RES-04`;
+- produkční read-only roster endpoint a negativní cross-session autorizace
+  zůstávají v `P5-08`;
 - skutečný auth/session/membership a autorizované backend endpointy pro celý
   F1–F6 rozsah;
 - produkční ticket import mapping/apply a SimpleShop synchronizace;
@@ -354,7 +384,7 @@ Tyto body nejsou chybějící mockované FE průchody:
 ## 11. Git předání
 
 Implementace vznikla na `track/frontend-complete` v malých F0–F6 commitech;
-každý krok byl pushnutý. Předání probíhá přes
-[PR #17](https://github.com/martymax/byzon-2026/pull/17) a větev se merguje do
-`main` až po úspěšném kompletním gate. Výsledný merge SHA je součástí
-závěrečného uživatelského reportu.
+každý krok byl pushnutý. [PR #17](https://github.com/martymax/byzon-2026/pull/17)
+prošel kompletním gate a byl sloučen do `main` merge commitem `64f1b84`.
+Následné v6 scope alignment a baseline opravy se předávají samostatně přes
+[PR #19](https://github.com/martymax/byzon-2026/pull/19).

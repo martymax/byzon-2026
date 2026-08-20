@@ -249,7 +249,11 @@ def is_registration_event(ev):
 
 
 def is_condensed_calendar_event(ev):
-    return str(ev.get("type", "")).lower() in {"break", "meal"} or is_registration_event(ev)
+    return (
+        bool(ev.get("compact"))
+        or str(ev.get("type", "")).lower() in {"break", "meal"}
+        or is_registration_event(ev)
+    )
 
 
 def _slot_overlaps(stage_items, slot_start):
@@ -593,6 +597,8 @@ def header(active, solid=False):
     cls = "site-header" + (" is-solid" if solid else "")
     nav_links = ""
     for item in C["nav"]:
+        if not item.get("visible", True):
+            continue
         cur = ' aria-current="page"' if item["href"] == active else ""
         nav_links += f'<a href="{att(item["href"])}"{cur}>{esc(item["label"])}</a>'
     cta = C["cta"]
@@ -616,6 +622,8 @@ def drawer(active):
     s = C["site"]
     links = ""
     for item in C["nav"]:
+        if not item.get("visible", True):
+            continue
         cur = ' aria-current="page"' if item["href"] == active else ""
         links += f'<a class="nav-link" href="{att(item["href"])}"{cur} data-drawer-close>{esc(item["label"])}</a>'
     cta = C["cta"]

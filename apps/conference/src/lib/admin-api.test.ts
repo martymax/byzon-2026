@@ -153,14 +153,14 @@ describe('admin API contract policies', () => {
     const reservation = adminReservationFixtures.list!.items[0]!;
     const reservationBody = {
       reservationId: reservation.reservationId,
-      action: 'mark_attended' as const,
+      action: 'cancel_reservation' as const,
       expectedVersion: reservation.version,
       reason: 'Bezpečný test přesné korelace rezervace.',
     };
     const reservationApi = apiReturning({
-      ...adminReservationMutationFixtures.attended!,
+      ...adminReservationMutationFixtures.cancelled!,
       record: {
-        ...adminReservationMutationFixtures.attended!.record,
+        ...adminReservationMutationFixtures.cancelled!.record,
         version: reservation.version + 2,
       },
     });

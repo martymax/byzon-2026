@@ -366,27 +366,11 @@ const reservationAfter = (
   switch (body.action) {
     case 'capacity_override':
       return { ...common, capacity: body.capacity };
-    case 'mark_attended':
-      return {
-        ...common,
-        state: 'attended',
-        availableActions: ['capacity_override', 'undo_attendance'],
-      };
-    case 'undo_attendance':
-      return {
-        ...common,
-        state: 'reserved',
-        availableActions: [
-          'capacity_override',
-          'mark_attended',
-          'cancel_reservation',
-        ],
-      };
     case 'cancel_reservation':
       return {
         ...common,
         state: 'cancelled',
-        availableActions: ['capacity_override'],
+        availableActions: [],
       };
   }
 };
@@ -1107,7 +1091,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
   http.get('*/api/v1/admin/events/:eventId/reservations', ({ params }) => {
     const denied = authorize(
       adminReadProblemSchema,
-      ['reservation:any:read', 'attendance:assigned:write'],
+      ['reservation:any:read'],
       'admin.mock.reservations',
     );
     if (denied) return denied;
@@ -1118,12 +1102,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'admin.mock.reservations-not-found' },
       );
     }
-    const items =
-      state.persona === 'room_operator'
-        ? state.reservations.filter(
-            ({ sessionId }) => sessionId === adminFixtureIds.session,
-          )
-        : state.reservations;
+    const items = state.reservations;
     return mockJsonResponse(
       adminReservationListResponseSchema,
       {
@@ -1140,7 +1119,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     async ({ params, request }) => {
       const denied = authorize(
         adminMutationProblemSchema,
-        ['agenda:any:override', 'attendance:assigned:write'],
+        ['agenda:any:override'],
         'admin.mock.reservation-mutation',
       );
       if (denied) return denied;
@@ -1185,25 +1164,12 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.reservation-not-found' },
         );
       }
-      const attendance =
-        body.data.action === 'mark_attended' ||
-        body.data.action === 'undo_attendance';
       const actionDenied = authorize(
         adminMutationProblemSchema,
-        attendance ? ['attendance:assigned:write'] : ['agenda:any:override'],
+        ['agenda:any:override'],
         'admin.mock.reservation-mutation-action',
       );
       if (actionDenied) return actionDenied;
-      if (
-        state.persona === 'room_operator' &&
-        (!attendance || record.sessionId !== adminFixtureIds.session)
-      ) {
-        return mockProblemResponse(
-          adminMutationProblemSchema,
-          adminMutationProblemFixtures.permission,
-          { fixtureName: 'admin.mock.reservation-scope' },
-        );
-      }
       if (
         scenario(body.data.reason).includes('stale') &&
         !state.staleScenarios.has('reservation')
@@ -1237,7 +1203,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       const next = reservationAfter(record, body.data);
       state.reservations[index] = next;
       const response = adminReservationMutationResponseSchema.parse({
-        ...clone(adminReservationMutationFixtures.attended!),
+        ...clone(adminReservationMutationFixtures.cancelled!),
         eventId: adminFixtureIds.event,
         record: next,
       });

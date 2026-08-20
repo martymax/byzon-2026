@@ -83,12 +83,7 @@ const sectionPermissions: Readonly<
     'role:manage',
     'personal-data:operational:export',
   ],
-  reservations: [
-    'reservation:any:read',
-    'attendance:assigned:write',
-    'audit:read',
-    'event:settings:manage',
-  ],
+  reservations: ['reservation:any:read', 'audit:read', 'event:settings:manage'],
   content: ['program:manage'],
 };
 
@@ -96,12 +91,12 @@ const roleLabels = {
   organizer_admin: 'Administrátor',
   checkin_operator: 'Operátor check-inu',
   moderator: 'Moderátor',
-  room_operator: 'Operátor sálu',
+  room_operator: 'Vedoucí aktivity',
 } as const;
 
 const previewPersonas = {
   organizer: 'Administrátor',
-  room_operator: 'Operátor sálu',
+  room_operator: 'Vedoucí aktivity',
   denied: 'Účet bez přístupu',
 } as const;
 

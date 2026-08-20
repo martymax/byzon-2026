@@ -31,12 +31,10 @@ integration('onboarding integration', () => {
   const primaryDocuments = {
     terms: crypto.randomUUID(),
     privacyNotice: crypto.randomUUID(),
-    networkingConsent: crypto.randomUUID(),
   };
   const isolationDocuments = {
     terms: crypto.randomUUID(),
     privacyNotice: crypto.randomUUID(),
-    networkingConsent: crypto.randomUUID(),
   };
   beforeAll(async () => {
     await client.db.insert(schema.events).values([
@@ -86,16 +84,6 @@ integration('onboarding integration', () => {
         isCurrent: true,
       },
       {
-        id: primaryDocuments.networkingConsent,
-        eventId: primaryEventId,
-        type: 'networking_consent',
-        version: `test-${primaryDocuments.networkingConsent}`,
-        title: '[TEST DRAFT] Networking',
-        content: 'Testovací verze.',
-        publishedAt,
-        isCurrent: true,
-      },
-      {
         id: isolationDocuments.terms,
         eventId: isolationEventId,
         type: 'terms',
@@ -111,16 +99,6 @@ integration('onboarding integration', () => {
         type: 'privacy_notice',
         version: `test-${isolationDocuments.privacyNotice}`,
         title: '[TEST DRAFT] Izolační privacy notice',
-        content: 'Testovací verze.',
-        publishedAt,
-        isCurrent: true,
-      },
-      {
-        id: isolationDocuments.networkingConsent,
-        eventId: isolationEventId,
-        type: 'networking_consent',
-        version: `test-${isolationDocuments.networkingConsent}`,
-        title: '[TEST DRAFT] Izolační networking',
         content: 'Testovací verze.',
         publishedAt,
         isCurrent: true,
@@ -164,13 +142,13 @@ integration('onboarding integration', () => {
     firstName: '  Anna ',
     lastName: ' Nováková ',
     contactEmail: ' ANNA@Example.COM ',
+    phone: '+420777123456',
     termsDocumentId: primaryDocuments.terms,
     privacyNoticeDocumentId: primaryDocuments.privacyNotice,
-    networking: { enabled: false },
     ...overrides,
   });
 
-  it('atomically completes opt-out onboarding and is idempotent by request ID', async () => {
+  it('atomically completes scope-aligned onboarding and is idempotent by request ID', async () => {
     const request = input();
     await expect(
       Promise.all([
@@ -189,7 +167,8 @@ integration('onboarding integration', () => {
       firstName: 'Anna',
       lastName: 'Nováková',
       contactEmail: 'anna@example.com',
-      networkingEnabled: false,
+      phone: '+420777123456',
+      networkingEnabled: null,
     });
     expect(profile?.onboardingCompletedAt).toBeInstanceOf(Date);
 
@@ -222,29 +201,21 @@ integration('onboarding integration', () => {
     expect(JSON.stringify(audit[0]!.after)).not.toContain('Nováková');
   });
 
-  it('records a separate networking consent only for explicit opt-in', async () => {
-    await expect(
-      completeOnboarding(
-        client.db,
-        input({
-          networking: {
-            enabled: true,
-            consentDocumentId: primaryDocuments.networkingConsent,
-          },
-        }),
-      ),
-    ).resolves.toEqual({ status: 'complete' });
+  it('rejects a replay whose consent records outlive the stored profile', async () => {
+    const request = input();
+    await completeOnboarding(client.db, request);
+    await client.db
+      .delete(schema.participantProfiles)
+      .where(
+        and(
+          eq(schema.participantProfiles.eventId, primaryEventId),
+          eq(schema.participantProfiles.userId, userId),
+        ),
+      );
 
-    const records = await client.db.query.consentRecords.findMany({
-      where: eq(schema.consentRecords.userId, userId),
+    await expect(completeOnboarding(client.db, request)).rejects.toMatchObject({
+      code: 'REQUEST_ID_REUSED',
     });
-    expect(records).toHaveLength(3);
-    expect(records).toContainEqual(
-      expect.objectContaining({
-        legalDocumentId: primaryDocuments.networkingConsent,
-        decision: 'accepted',
-      }),
-    );
   });
 
   it('rejects stale or cross-event legal document IDs without partial writes', async () => {
@@ -269,23 +240,6 @@ integration('onboarding integration', () => {
         where: eq(schema.consentRecords.userId, userId),
       }),
     ).resolves.toBeUndefined();
-  });
-
-  it('rejects opt-in while the event feature is disabled', async () => {
-    await expect(
-      completeOnboarding(
-        client.db,
-        input({
-          eventId: isolationEventId,
-          termsDocumentId: isolationDocuments.terms,
-          privacyNoticeDocumentId: isolationDocuments.privacyNotice,
-          networking: {
-            enabled: true,
-            consentDocumentId: isolationDocuments.networkingConsent,
-          },
-        }),
-      ),
-    ).rejects.toMatchObject({ code: 'NETWORKING_DISABLED' });
   });
 
   it('requires acknowledgement again when the current terms version changes', async () => {

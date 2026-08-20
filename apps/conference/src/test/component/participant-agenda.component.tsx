@@ -196,25 +196,18 @@ const emptyMutationResponse = (
 ): ParticipantAgendaMutationResponse =>
   mutationResponse(
     participantAgendaFixtures.empty!,
-    request.action === 'registration_estimate'
+    request.action === 'accept_offer' || request.action === 'decline_offer'
       ? {
           action: request.action,
+          offerId: request.offerId,
           outcome: 'applied',
-          registered: request.registered,
           sessionId: request.sessionId,
         }
-      : request.action === 'accept_offer' || request.action === 'decline_offer'
-        ? {
-            action: request.action,
-            offerId: request.offerId,
-            outcome: 'applied',
-            sessionId: request.sessionId,
-          }
-        : {
-            action: request.action,
-            outcome: 'applied',
-            sessionId: request.sessionId,
-          },
+      : {
+          action: request.action,
+          outcome: 'applied',
+          sessionId: request.sessionId,
+        },
     request.expectedVersion,
   );
 
@@ -241,14 +234,6 @@ const joinableAgenda = participantAgendaResponseSchema.parse({
     savedAt: participantAgendaFixtures.waiting!.serverNow,
     capacity: item.capacity,
     action: { state: 'capacity_full' },
-  })),
-});
-
-const estimateNotRegisteredAgenda = participantAgendaResponseSchema.parse({
-  ...participantAgendaFixtures.registration_estimate!,
-  items: participantAgendaFixtures.registration_estimate!.items.map((item) => ({
-    ...item,
-    action: { state: 'registration_estimate', registered: false },
   })),
 });
 
@@ -854,44 +839,6 @@ describe('F3-01..F3-05 participant agenda', () => {
       .element(screen.getByText('Osobní agenda není zapnutá'))
       .toBeVisible();
     expect(screen.container.textContent).not.toContain('Otevření konference');
-  });
-
-  it('toggles the registration estimate as an explicit non-reservation state', async () => {
-    const { api } = agendaApiFor({
-      onRead: estimateNotRegisteredAgenda,
-      onMutation: (request) => {
-        expect(request).toMatchObject({
-          action: 'registration_estimate',
-          registered: true,
-        });
-        return jsonResponse(
-          mutationResponse(
-            participantAgendaFixtures.registration_estimate!,
-            {
-              action: 'registration_estimate',
-              outcome: 'applied',
-              registered: true,
-              sessionId: request.sessionId,
-            },
-            request.expectedVersion,
-          ),
-        );
-      },
-    });
-    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-
-    await expect.element(screen.getByText('Uloženo')).toBeVisible();
-    await screen
-      .getByRole('button', { name: 'Potvrdit předběžný zájem' })
-      .click();
-    await expect.element(screen.getByText('Zájem potvrzen')).toBeVisible();
-    await expect
-      .element(
-        screen.getByText(
-          'Jde o nezávazný odhad účasti, nikoli o rezervaci konkrétního místa.',
-        ),
-      )
-      .toBeVisible();
   });
 
   it('retries an in-progress mutation with the exact same idempotency key and accepts a canonical replay', async () => {

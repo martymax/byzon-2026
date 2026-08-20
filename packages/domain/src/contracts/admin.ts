@@ -81,8 +81,8 @@ export const adminPermissionSchema = z.enum([
   'operations:read',
   'audit:read',
   'event:settings:manage',
-  'attendance:assigned:write',
   'reservation:any:read',
+  'reservation:assigned:read',
   'agenda:any:override',
   'announcement:send',
   'personal-data:operational:export',
@@ -368,8 +368,6 @@ export type AdminExportResponse = z.infer<typeof adminExportResponseSchema>;
 
 export const adminReservationActionSchema = z.enum([
   'capacity_override',
-  'mark_attended',
-  'undo_attendance',
   'cancel_reservation',
 ]);
 
@@ -384,7 +382,7 @@ export const adminReservationRecordSchema = z
     sessionId: uuidSchema,
     sessionTitle: safeInlineTextSchema(160),
     participantReference: safeInlineTextSchema(80),
-    state: z.enum(['reserved', 'cancelled', 'attended']),
+    state: z.enum(['reserved', 'cancelled']),
     capacity: z.number().int().positive(),
     reservedCount: z.number().int().nonnegative(),
     version: versionSchema,
@@ -405,25 +403,6 @@ export const adminReservationRecordSchema = z
         code: 'custom',
         path: ['availableActions'],
         message: 'Available reservation actions must be unique',
-      });
-    }
-    const stateAction =
-      record.state === 'reserved'
-        ? 'mark_attended'
-        : record.state === 'attended'
-          ? 'undo_attendance'
-          : null;
-    if (
-      (stateAction !== null &&
-        !record.availableActions.includes(stateAction)) ||
-      (stateAction === null &&
-        (record.availableActions.includes('mark_attended') ||
-          record.availableActions.includes('undo_attendance')))
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['availableActions'],
-        message: 'Attendance action must match reservation state',
       });
     }
   });
@@ -477,11 +456,7 @@ export const adminReservationMutationRequestSchema = z.discriminatedUnion(
     }),
     z.strictObject({
       ...reservationMutationBase,
-      action: z.enum([
-        'mark_attended',
-        'undo_attendance',
-        'cancel_reservation',
-      ]),
+      action: z.literal('cancel_reservation'),
     }),
   ],
 );
@@ -522,7 +497,6 @@ export const adminAuditCategorySchema = z.enum([
   'announcement',
   'role',
   'reservation',
-  'attendance',
   'settings',
   'export',
 ]);

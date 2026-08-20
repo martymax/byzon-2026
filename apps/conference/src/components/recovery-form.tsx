@@ -24,7 +24,6 @@ import {
 } from '@/lib/activation-api';
 import type { ActivationReturnTo } from '@/lib/activation-return';
 import type { LoginMode } from '@/lib/login-mode';
-import { createMockRecoveryLinkToken } from '@/lib/mock-recovery-link';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
 import { useTransitionFocus } from '@/components/use-transition-focus';
 
@@ -32,6 +31,12 @@ type RecoveryFailure =
   | { readonly kind: 'rate_limited' }
   | { readonly kind: 'offline' }
   | { readonly kind: 'error'; readonly requestId?: RequestId };
+
+export interface RecoverySentPreview {
+  readonly href: string;
+  readonly actionLabel: string;
+  readonly description: string;
+}
 
 const mapRecoveryFailure = (
   failure: ApiFailure<ActivationRecoveryProblem>,
@@ -72,23 +77,20 @@ export const RecoveryForm = ({
   presentation = 'recovery',
   returnTo = '/app',
   createIdempotencyKey = () => runtimeSecret('recovery-request'),
-  createMockLinkToken = (destination) =>
-    createMockRecoveryLinkToken(destination),
 }: {
   readonly api?: ApiPort;
   readonly mode?: Extract<LoginMode, 'recovery' | 'switch'>;
   readonly presentation?: 'login' | 'recovery';
   readonly returnTo?: ActivationReturnTo;
   readonly createIdempotencyKey?: () => string;
-  readonly createMockLinkToken?: (destination: ActivationReturnTo) => string;
 }) => {
   const isLogin = mode === 'recovery' && presentation === 'login';
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string>();
   const [failure, setFailure] = useState<RecoveryFailure>();
   const [sent, setSent] = useState<{
-    readonly mockLink: string;
     readonly resendAfterSeconds: number;
+    readonly preview?: RecoverySentPreview;
   }>();
   const [submitting, setSubmitting] = useState(false);
   const submitLocked = useRef(false);
@@ -153,11 +155,18 @@ export const RecoveryForm = ({
       if (result.ok && result.kind === 'success') {
         requestAttempt.current = undefined;
         setEmail('');
+        let preview: RecoverySentPreview | undefined;
+        if (
+          process.env.NODE_ENV === 'development' ||
+          process.env.NODE_ENV === 'test'
+        ) {
+          const { createRecoverySentPreview } =
+            await import('../test/mocks/recovery-preview');
+          preview = createRecoverySentPreview(returnTo, isLogin);
+        }
         setSent({
-          mockLink: `/aktivace/odkaz#token=${encodeURIComponent(
-            createMockLinkToken(returnTo),
-          )}`,
           resendAfterSeconds: result.data.resendAfterSeconds,
+          ...(preview ? { preview } : {}),
         });
         return;
       }
@@ -191,11 +200,11 @@ export const RecoveryForm = ({
         </h1>
         <StatePanel
           action={
-            <ActionLink href={sent.mockLink}>
-              {isLogin
-                ? 'Otevřít syntetický odkaz pro přihlášení'
-                : 'Otevřít syntetický odkaz pro obnovu'}
-            </ActionLink>
+            sent.preview ? (
+              <ActionLink href={sent.preview.href}>
+                {sent.preview.actionLabel}
+              </ActionLink>
+            ) : undefined
           }
           kind="empty"
           title={
@@ -205,9 +214,8 @@ export const RecoveryForm = ({
           }
         >
           <p>
-            Odpověď je stejná pro existující i neexistující účet. V mock režimu
-            můžete použít syntetický odkaz; nevzniklo skutečné přihlášení ani
-            účast na akci.
+            {sent.preview?.description ??
+              'Odpověď je stejná pro existující i neexistující účet. Pokud účet existuje, pokračujte podle jednorázového odkazu doručeného e-mailem.'}
           </p>
           <p>
             Další odeslání je dostupné nejdříve za {sent.resendAfterSeconds}{' '}
