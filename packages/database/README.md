@@ -36,6 +36,14 @@ workshops (20 each), all closing at session start with waitlist disabled.
 Coaching, Friday networking and the two-part Saturday mastermind are
 intentionally not inferred by this migration.
 
+Migration `0010_coaching_slots.sql` replaces the eleven provenance-verified
+generic Friday coaching placeholders with two coach-specific 30-minute series.
+It creates only slots marked available for Radim Roček or Stanislava Maunová,
+sets capacity to one, closes reservations at the slot start and keeps the
+waitlist disabled. The migration aborts on partial source provenance,
+unexpected placeholder policy or any participant state instead of guessing how
+to move it.
+
 ## Apply migrations and seed
 
 Both commands require an explicit `DATABASE_URL`. Never point local commands at
@@ -75,6 +83,14 @@ transaction-scoped event lock serializes runs; repeating an unchanged source is
 a no-op. `content_import_provenance` records the source path and complete source
 SHA-256 for every imported target. Program section names remain reported rather
 than being guessed to be physical rooms, and invalid time ranges are skipped.
+
+The importer also validates
+`packages/database/data/coaching-schedule-2026.json`, a reviewed snapshot of
+`Pátek!G1:I18` in the authoritative Harmonogram BYZON 2026 sheet. Its exact
+sheet, columns, coach names, 30-minute duration, capacity and SHA-256 are stored
+as import provenance. Refresh and review this snapshot against the live sheet
+before the final content publication; changed columns or an incomplete legacy
+replacement fail closed.
 
 ## Bootstrap the first organizer admin
 

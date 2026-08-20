@@ -31,6 +31,10 @@ const reservationWindowMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0009_legacy_reservation_windows.sql'),
   'utf8',
 );
+const coachingMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0010_coaching_slots.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -61,6 +65,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0009_legacy_reservation_windows',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0010_coaching_slots',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -139,6 +146,18 @@ describe('versioned database artifacts', () => {
     expect(reservationWindowMigration).toContain(
       'OR NEW."reservation_windows" IS DISTINCT FROM OLD."reservation_windows"',
     );
+    expect(coachingMigration).toContain(
+      'Legacy coaching sessions contain participant state',
+    );
+    expect(coachingMigration).toContain("'content-publish:'");
+    expect(coachingMigration).toContain("'koucink-radim-0915'");
+    expect(coachingMigration).toContain("'koucink-stana-1615'");
+    expect(coachingMigration).toContain('\'coaching\'::"session_type"');
+    expect(coachingMigration).toContain('\'reservation\'::"capacity_mode"');
+    expect(coachingMigration).toContain("'Pátek!G18:I18#stana'");
+    expect(coachingMigration).toContain(
+      'b2743415963f645c11815d582f4a800a83094d78bb6c83763f06e56ec3822e48',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -149,6 +168,7 @@ describe('versioned database artifacts', () => {
     expect(rosterMigration).not.toContain('gen_random_uuid()');
     expect(agendaWriteMigration).not.toContain('gen_random_uuid()');
     expect(reservationWindowMigration).not.toContain('gen_random_uuid()');
+    expect(coachingMigration).not.toContain('gen_random_uuid()');
   });
 
   it('seeds both event scopes idempotently and keeps the test event archived', () => {

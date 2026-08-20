@@ -1226,6 +1226,7 @@ export const mutateParticipantAgenda = async (
           participantAgendaLockKey(context.event.id, session.user.id),
         );
         if (
+          parsed.data.action === 'add' ||
           parsed.data.action === 'reserve' ||
           parsed.data.action === 'cancel'
         ) {

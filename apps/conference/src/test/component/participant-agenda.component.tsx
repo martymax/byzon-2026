@@ -224,6 +224,30 @@ const reservableAgenda = participantAgendaResponseSchema.parse({
   })),
 });
 
+const coachingAgenda = participantAgendaResponseSchema.parse({
+  ...reservableAgenda,
+  items: reservableAgenda.items.map((item) => ({
+    ...item,
+    day: { localDate: '2026-09-18', title: 'Pátek' },
+    session: {
+      ...item.session,
+      title: 'Koučink – Radim Roček',
+      startsAt: '2026-09-18T07:15:00.000Z',
+      endsAt: '2026-09-18T07:45:00.000Z',
+      room: null,
+    },
+    capacity: {
+      mode: 'reservation',
+      capacity: 1,
+      confirmed: 0,
+      held: 0,
+      remaining: 1,
+      waitlistAvailable: false,
+      actorAvailability: { state: 'available' },
+    },
+  })),
+});
+
 const joinableAgenda = participantAgendaResponseSchema.parse({
   ...participantAgendaFixtures.waiting!,
   items: participantAgendaFixtures.waiting!.items.map((item) => ({
@@ -822,6 +846,27 @@ describe('F3-01..F3-05 participant agenda', () => {
       expect(mutationCount()).toBe(1);
     },
   );
+
+  it('renders a capacity-one coaching slot through the canonical reservation action without holder data', async () => {
+    const { api } = agendaApiFor({ onRead: coachingAgenda });
+    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+
+    await expect
+      .element(screen.getByText('Koučink – Radim Roček'))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByText(
+          'Poslední stav serveru: 1 místo k okamžité rezervaci. Rezervaci potvrdí až další odpověď serveru.',
+        ),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Rezervovat místo' }))
+      .toBeVisible();
+    expect(screen.container.textContent).not.toContain('rezervoval');
+    await expectComponentToPassAxe(screen.container);
+  });
 
   it('locks the prior canonical card when an applied mutation does not advance its version', async () => {
     const { api } = agendaApiFor({

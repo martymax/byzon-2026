@@ -25,7 +25,9 @@ describe('content import preparation', () => {
       speakers: 20,
       partners: 7,
       eventDays: 2,
-      sessions: 67,
+      sessions: 82,
+      coachingSessions: 26,
+      replacedSessions: 11,
       skippedSessions: 1,
     });
     expect(report.findings).toEqual(

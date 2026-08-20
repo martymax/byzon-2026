@@ -362,7 +362,7 @@ capability na `integrated` ani `UAT`.
 
 Tyto body nejsou chybějící mockované FE průchody:
 
-- `F3-06`/`P5-06` mají doplnit potvrzené coaching sloty z autoritativního
+- `F3-06`/`P5-06` jsou dokončené nad source-verified snapshotem autoritativního
   harmonogramu; `F3-07` zůstává částečně blokované na networkingové kapacitě
   `BLOCKER-RES-01` a jediném promotion režimu `BLOCKER-RES-04`;
 - produkční read-only roster endpoint a negativní cross-session autorizace

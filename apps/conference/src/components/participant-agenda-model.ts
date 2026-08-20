@@ -181,7 +181,11 @@ export const participantAgendaCapacityCopy = (
     item.capacity.held > 0
       ? ` Dalších ${item.capacity.held} míst je dočasně drženo v nabídkách.`
       : '';
-  return `Poslední stav serveru: ${item.capacity.remaining} míst k okamžité rezervaci.${held} Rezervaci potvrdí až další odpověď serveru.`;
+  const remaining =
+    item.capacity.remaining === 1
+      ? '1 místo'
+      : `${item.capacity.remaining} míst`;
+  return `Poslední stav serveru: ${remaining} k okamžité rezervaci.${held} Rezervaci potvrdí až další odpověď serveru.`;
 };
 
 export const participantAgendaActions = (
