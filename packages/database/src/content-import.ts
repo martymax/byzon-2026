@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, like, or } from 'drizzle-orm';
 
 import {
   acquireTransactionLock,
@@ -379,7 +379,28 @@ async function archiveLegacyCoachingSessions(
       inArray(schema.contentImportProvenance.sourcePath, sourcePaths),
     ),
   });
-  if (provenance.length === 0) return;
+  if (provenance.length === 0) {
+    const unreconciledLegacySession =
+      await transaction.query.programSessions.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(schema.programSessions.eventId, eventId),
+          or(
+            eq(schema.programSessions.title, LEGACY_COACHING_TITLE),
+            like(
+              schema.programSessions.slug,
+              'koucovaci-zona-koucovaci-sloty-%',
+            ),
+          ),
+        ),
+      });
+    if (unreconciledLegacySession) {
+      throw new Error(
+        'legacy coaching source paths require reconciliation before replacement',
+      );
+    }
+    return;
+  }
   if (provenance.length !== sourcePaths.length) {
     throw new Error(
       'legacy coaching import is incomplete and requires reconciliation',

@@ -149,6 +149,9 @@ describe('versioned database artifacts', () => {
     expect(coachingMigration).toContain(
       'Legacy coaching sessions contain participant state',
     );
+    expect(coachingMigration).toContain(
+      'Legacy coaching source paths require reconciliation',
+    );
     expect(coachingMigration).toContain("'content-publish:'");
     expect(coachingMigration).toContain("'koucink-radim-0915'");
     expect(coachingMigration).toContain("'koucink-stana-1615'");

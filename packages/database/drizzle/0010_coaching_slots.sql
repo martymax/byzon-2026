@@ -2,6 +2,7 @@ DO $$
 DECLARE
 	"v_event_id" uuid;
 	"legacy_count" integer;
+	"unreconciled_legacy_count" integer;
 	"legacy_matching_count" integer;
 	"legacy_state_count" integer;
 BEGIN
@@ -41,6 +42,23 @@ BEGIN
 	IF "legacy_count" NOT IN (0, 11) THEN
 		RAISE EXCEPTION 'Legacy coaching import is incomplete'
 			USING ERRCODE = 'check_violation';
+	END IF;
+
+	IF "legacy_count" = 0 AND "v_event_id" IS NOT NULL THEN
+		SELECT count(*)
+		INTO "unreconciled_legacy_count"
+		FROM "sessions"
+		WHERE
+			"event_id" = "v_event_id"
+			AND (
+				"title" = 'Koučovací sloty'
+				OR "slug" LIKE 'koucovaci-zona-koucovaci-sloty-%'
+			);
+
+		IF "unreconciled_legacy_count" <> 0 THEN
+			RAISE EXCEPTION 'Legacy coaching source paths require reconciliation'
+				USING ERRCODE = 'check_violation';
+		END IF;
 	END IF;
 
 	IF "legacy_count" = 11 THEN

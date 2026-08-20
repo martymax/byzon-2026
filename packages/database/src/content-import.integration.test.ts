@@ -96,17 +96,18 @@ integration('content import integration', () => {
       };
     });
     await client.db.insert(schema.programSessions).values(legacySessions);
-    await client.db.insert(schema.contentImportProvenance).values(
-      legacySessions.map(({ id }, index) => ({
-        id: generateUuidV7(),
-        eventId,
-        sourceName: 'static-site/data/content.json',
-        sourcePath: `program.days[0].stages[2].events[${legacyEventIndexes[index]}]`,
-        sourceSha256: 'e'.repeat(64),
-        targetType: 'session',
-        targetId: id,
-      })),
-    );
+    const legacyProvenance = legacySessions.map(({ id }, index) => ({
+      id: generateUuidV7(),
+      eventId,
+      sourceName: 'static-site/data/content.json',
+      sourcePath: `legacy-shifted-coaching[${index}]`,
+      sourceSha256: 'e'.repeat(64),
+      targetType: 'session',
+      targetId: id,
+    }));
+    await client.db
+      .insert(schema.contentImportProvenance)
+      .values(legacyProvenance);
 
     const options = {
       db: client.db,
@@ -114,6 +115,18 @@ integration('content import integration', () => {
       sourceFile: resolve(repositoryRoot, 'static-site/data/content.json'),
       repositoryRoot,
     };
+    await expect(importContentJson(options)).rejects.toThrow(
+      'legacy coaching source paths require reconciliation before replacement',
+    );
+    for (const [index, provenance] of legacyProvenance.entries()) {
+      await client.db
+        .update(schema.contentImportProvenance)
+        .set({
+          sourcePath: `program.days[0].stages[2].events[${legacyEventIndexes[index]}]`,
+        })
+        .where(eq(schema.contentImportProvenance.id, provenance.id));
+    }
+
     const first = await importContentJson(options);
     const firstSessions = await client.db
       .select({ id: schema.programSessions.id })
