@@ -27,6 +27,10 @@ const agendaWriteMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0008_pretty_firebrand.sql'),
   'utf8',
 );
+const reservationWindowMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0009_legacy_reservation_windows.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -54,6 +58,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0008_pretty_firebrand',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0009_legacy_reservation_windows',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -122,6 +129,16 @@ describe('versioned database artifacts', () => {
       "'2026-09-18T15:15:00+02:00'::timestamptz",
     );
     expect(agendaWriteMigration).toContain("'Workshop: Blanka Mrázková'");
+    expect(reservationWindowMigration).toContain('jsonb_object_agg');
+    expect(reservationWindowMigration).toContain(
+      'LOCK TABLE "sessions" IN SHARE MODE',
+    );
+    expect(reservationWindowMigration).toContain(
+      '\'reservationClosesAt\', to_jsonb("session"."reservation_closes_at")',
+    );
+    expect(reservationWindowMigration).toContain(
+      'OR NEW."reservation_windows" IS DISTINCT FROM OLD."reservation_windows"',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -131,6 +148,7 @@ describe('versioned database artifacts', () => {
     expect(identityMigration).not.toContain('gen_random_uuid()');
     expect(rosterMigration).not.toContain('gen_random_uuid()');
     expect(agendaWriteMigration).not.toContain('gen_random_uuid()');
+    expect(reservationWindowMigration).not.toContain('gen_random_uuid()');
   });
 
   it('seeds both event scopes idempotently and keeps the test event archived', () => {

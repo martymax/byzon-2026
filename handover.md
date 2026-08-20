@@ -227,14 +227,15 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   canonical snapshot; nová mutace je nadále odmítnuta uvnitř non-replay callbacku.
   Immutable publication nyní uchovává server-only rezervační okno, které
   public/participant program DTO odstraňují, ale agenda používá jako živý cutoff
-  až do další publikace; nepublikovaný import časů ho tedy nezmění. Conflict
-  odpovědi se po rollbacku překlasifikují podle čerstvé canonical projekce a
-  souběžné storno/změna kapacity již nevede na schema `500`.
+  až do další publikace; migrace `0009` ho z dosavadní autoritativní hodnoty
+  backfilluje i legacy publikacím, takže ho nepublikovaný import časů nezmění.
+  Conflict odpovědi se po rollbacku překlasifikují podle čerstvé canonical
+  projekce a souběžné storno/změna kapacity již nevede na schema `500`.
   Latest immutable publication se po participant locku rovněž znovu načte pro
   GET i non-replay mutation callback, takže agenda version, položky a
   publication version tvoří jeden canonical bod i při souběžném publish/add.
   PostgreSQL race sada má 28/28 agenda HTTP scénářů. Po rebase a rate-limit zapojení
-  prošel izolovaný PostgreSQL po všech devíti migracích, Redis integrační sada
+  prošel izolovaný PostgreSQL po všech deseti migracích, Redis integrační sada
   9/9, agenda HTTP 28/28 a conference 556/556 bez skipů. Globální
   gate prošel bez lint chyb včetně 890 workspace testů, všech
   typechecků, produkčního Next/worker buildu, source/build mock boundary a

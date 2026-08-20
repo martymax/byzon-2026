@@ -64,6 +64,13 @@
       "when": 1787241826765,
       "tag": "0008_pretty_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787259985500,
+      "tag": "0009_legacy_reservation_windows",
+      "breakpoints": true
     }
   ]
 }

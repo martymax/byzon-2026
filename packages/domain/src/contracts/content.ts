@@ -336,6 +336,41 @@ export const publishedProgramSnapshotSchema = z.object({
     .superRefine(validateProgram),
 });
 
+const reservationWindowShape = {
+  reservationOpensAt: z.string().datetime({ offset: true }).nullable(),
+  reservationClosesAt: z.string().datetime({ offset: true }).nullable(),
+};
+
+const validateReservationWindow = (
+  window: {
+    reservationOpensAt: string | null;
+    reservationClosesAt: string | null;
+  },
+  context: z.RefinementCtx,
+): void => {
+  if (
+    window.reservationOpensAt &&
+    window.reservationClosesAt &&
+    Date.parse(window.reservationClosesAt) <=
+      Date.parse(window.reservationOpensAt)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['reservationClosesAt'],
+      message: 'Snapshot reservation window must be ordered',
+    });
+  }
+};
+
+export const publishedAgendaReservationWindowsSchema = z.record(
+  uuidSchema,
+  z.strictObject(reservationWindowShape).superRefine(validateReservationWindow),
+);
+
+export type PublishedAgendaReservationWindows = z.infer<
+  typeof publishedAgendaReservationWindowsSchema
+>;
+
 /**
  * Server publication writes retain the reservation window beside the public
  * session projection. Public readers continue to use
@@ -351,16 +386,10 @@ export const publishedProgramAgendaSnapshotSchema = z.object({
           z
             .object({
               ...programSessionShape,
-              reservationOpensAt: z
-                .string()
-                .datetime({ offset: true })
-                .nullable()
-                .optional(),
-              reservationClosesAt: z
-                .string()
-                .datetime({ offset: true })
-                .nullable()
-                .optional(),
+              reservationOpensAt:
+                reservationWindowShape.reservationOpensAt.optional(),
+              reservationClosesAt:
+                reservationWindowShape.reservationClosesAt.optional(),
             })
             .superRefine((session, context) => {
               const hasWindow =
@@ -377,18 +406,13 @@ export const publishedProgramAgendaSnapshotSchema = z.object({
                   message: 'Snapshot reservation window must be complete',
                 });
               }
-              if (
-                session.reservationOpensAt &&
-                session.reservationClosesAt &&
-                Date.parse(session.reservationClosesAt) <=
-                  Date.parse(session.reservationOpensAt)
-              ) {
-                context.addIssue({
-                  code: 'custom',
-                  path: ['reservationClosesAt'],
-                  message: 'Snapshot reservation window must be ordered',
-                });
-              }
+              validateReservationWindow(
+                {
+                  reservationOpensAt: session.reservationOpensAt ?? null,
+                  reservationClosesAt: session.reservationClosesAt ?? null,
+                },
+                context,
+              );
             }),
         )
         .max(MAX_SESSIONS),

@@ -80,6 +80,12 @@ integration('content publication integration', () => {
     expect(publication).toMatchObject({
       version: 1,
       checksumSha256: first.checksumSha256,
+      reservationWindows: {
+        [sessionId]: {
+          reservationOpensAt: null,
+          reservationClosesAt: '2026-09-18T07:45:00.000Z',
+        },
+      },
     });
     const session = (
       publication!.snapshot.program as {

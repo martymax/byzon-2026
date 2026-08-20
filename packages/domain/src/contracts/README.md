@@ -172,12 +172,14 @@ empty agendas keep the distinct `empty` state. Waitlist promotion,
 cancellation, coaching and networking reservation remain outside this
 integrated subset.
 
-The immutable content-publication snapshot retains the server-only reservation
-window beside each session. Public and participant program extraction strips
-that policy before strict response validation, while the agenda reservation
-boundary uses it as the live cutoff until a later publication commits changed
-timing. Draft operational imports therefore cannot reopen or prematurely close
-an already published session.
+The immutable content-publication record retains the server-only reservation
+window beside each session and in its protected `reservation_windows` policy.
+Migration `0009` backfills that policy for legacy publications from the cutoff
+that was authoritative at rollout. Public and participant program extraction
+strips the policy before strict response validation, while the agenda uses it
+as the live cutoff until a later publication commits changed timing. Draft
+operational imports therefore cannot reopen or prematurely close an already
+published session.
 
 ## Assigned activity roster (`CS-ROSTER-01`)
 

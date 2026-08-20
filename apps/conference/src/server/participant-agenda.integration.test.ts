@@ -1866,6 +1866,41 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   });
 
   it('keeps the published reservation cutoff across unpublished operational timing changes', async () => {
+    const currentPublication =
+      await client.db.query.contentPublications.findFirst({
+        where: eq(schema.contentPublications.eventId, eventId),
+        orderBy: [desc(schema.contentPublications.version)],
+      });
+    const currentProgram = publishedProgramAgendaSnapshotSchema.parse(
+      currentPublication?.snapshot,
+    ).program;
+    await client.db.insert(schema.contentPublications).values({
+      id: crypto.randomUUID(),
+      eventId,
+      version: currentPublication!.version + 1,
+      snapshot: {
+        program: {
+          ...currentProgram,
+          sessions: currentProgram.sessions.map((session) => {
+            if (session.id !== cutoffRaceSessionId) return session;
+            const legacySession = { ...session };
+            delete legacySession.reservationClosesAt;
+            delete legacySession.reservationOpensAt;
+            return legacySession;
+          }),
+        },
+      },
+      reservationWindows: {
+        [cutoffRaceSessionId]: {
+          reservationOpensAt: null,
+          reservationClosesAt: '2026-09-18T07:00:30.000Z',
+        },
+      },
+      checksumSha256: 'f'.repeat(64),
+      publishedBy: publisherId,
+      publishedAt: new Date(fixedNow.getTime() + 500),
+    });
+
     const added = await mutate(
       publicationPolicyUserId,
       {

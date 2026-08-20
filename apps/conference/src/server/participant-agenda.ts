@@ -13,6 +13,7 @@ import {
   participantAgendaMutationResponseSchema,
   participantAgendaResponseSchema,
   problemTypeForCode,
+  publishedAgendaReservationWindowsSchema,
   publishedProgramAgendaSnapshotSchema,
   type AgendaSessionSnapshot,
   type ParticipantAgendaItem,
@@ -319,17 +320,27 @@ const loadAgendaPublication = async (
   event: AgendaEvent,
 ): Promise<AgendaContext> => {
   const publication = await db.query.contentPublications.findFirst({
-    columns: { snapshot: true, version: true },
+    columns: { reservationWindows: true, snapshot: true, version: true },
     where: eq(schema.contentPublications.eventId, event.id),
     orderBy: [desc(schema.contentPublications.version)],
   });
   const parsed = publishedProgramAgendaSnapshotSchema.safeParse(
     publication?.snapshot,
   );
-  if (!publication || !parsed.success) throw agendaDisabled();
+  const windows = publishedAgendaReservationWindowsSchema.safeParse(
+    publication?.reservationWindows,
+  );
+  if (!publication || !parsed.success || !windows.success)
+    throw agendaDisabled();
   return {
     event,
-    program: parsed.data.program,
+    program: {
+      ...parsed.data.program,
+      sessions: parsed.data.program.sessions.map((session) => {
+        const window = windows.data[session.id];
+        return window ? { ...session, ...window } : session;
+      }),
+    },
     publicationVersion: publication.version,
   };
 };
@@ -420,7 +431,9 @@ const capacityProjection = (
   session: {
     capacity: number | null;
     capacityMode: 'none' | 'registration_estimate' | 'reservation';
+    reservationClosesAt: Date | null;
     reservationOpensAt: Date | null;
+    startsAt: Date;
     status: 'archived' | 'cancelled' | 'draft' | 'published';
     type:
       | 'break'
@@ -459,10 +472,11 @@ const capacityProjection = (
         ? Number.NEGATIVE_INFINITY
         : Date.parse(published.reservationOpensAt);
   const closesAt =
-    published.reservationClosesAt === undefined ||
-    published.reservationClosesAt === null
-      ? Date.parse(published.startsAt)
-      : Date.parse(published.reservationClosesAt);
+    published.reservationClosesAt === undefined
+      ? (session.reservationClosesAt?.getTime() ?? session.startsAt.getTime())
+      : published.reservationClosesAt === null
+        ? Date.parse(published.startsAt)
+        : Date.parse(published.reservationClosesAt);
   const closed = now.getTime() < opensAt || now.getTime() >= closesAt;
   return {
     capacity: {
@@ -620,7 +634,9 @@ const loadParticipantAgendaSnapshotUnlocked = async (
             id: schema.programSessions.id,
             capacity: schema.programSessions.capacity,
             capacityMode: schema.programSessions.capacityMode,
+            reservationClosesAt: schema.programSessions.reservationClosesAt,
             reservationOpensAt: schema.programSessions.reservationOpensAt,
+            startsAt: schema.programSessions.startsAt,
             status: schema.programSessions.status,
             type: schema.programSessions.type,
           })
@@ -1254,7 +1270,9 @@ export const mutateParticipantAgenda = async (
                 columns: {
                   capacity: true,
                   capacityMode: true,
+                  reservationClosesAt: true,
                   reservationOpensAt: true,
+                  startsAt: true,
                   status: true,
                   type: true,
                 },
@@ -1386,10 +1404,12 @@ export const mutateParticipantAgenda = async (
                 ? Number.NEGATIVE_INFINITY
                 : Date.parse(publishedTarget.reservationOpensAt);
           const closesAt =
-            publishedTarget.reservationClosesAt === undefined ||
-            publishedTarget.reservationClosesAt === null
-              ? Date.parse(publishedTarget.startsAt)
-              : Date.parse(publishedTarget.reservationClosesAt);
+            publishedTarget.reservationClosesAt === undefined
+              ? (operationalTarget.reservationClosesAt?.getTime() ??
+                operationalTarget.startsAt.getTime())
+              : publishedTarget.reservationClosesAt === null
+                ? Date.parse(publishedTarget.startsAt)
+                : Date.parse(publishedTarget.reservationClosesAt);
           if (
             mutationNow.getTime() < opensAt ||
             mutationNow.getTime() >= closesAt
