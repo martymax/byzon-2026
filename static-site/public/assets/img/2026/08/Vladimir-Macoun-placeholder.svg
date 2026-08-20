@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" role="img" aria-labelledby="title description">
+  <title id="title">Vladimír Macoun</title>
+  <desc id="description">Dočasný profilový obrázek, fotografii připravujeme.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fce7f3"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#background)"/>
+  <path d="M0 0h260L0 340zm1080 1010v340H820z" fill="#140610" opacity=".08"/>
+  <circle cx="540" cy="465" r="190" fill="#f5218e" opacity=".12"/>
+  <circle cx="540" cy="430" r="88" fill="#f5218e" opacity=".78"/>
+  <path d="M350 705c20-155 115-235 190-235s170 80 190 235" fill="#f5218e" opacity=".78"/>
+  <text x="540" y="880" text-anchor="middle" fill="#140610" font-family="Arial, Helvetica, sans-serif" font-size="70" font-weight="700">VLADIMÍR</text>
+  <text x="540" y="970" text-anchor="middle" fill="#f5218e" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">MACOUN</text>
+  <line x1="350" y1="1025" x2="730" y2="1025" stroke="#f5218e" stroke-width="10"/>
+  <text x="540" y="1110" text-anchor="middle" fill="#6f6670" font-family="Arial, Helvetica, sans-serif" font-size="34">FOTOGRAFII PŘIPRAVUJEME</text>
+</svg>

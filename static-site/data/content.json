@@ -196,9 +196,11 @@
         "slug": "jiri-jemelka",
         "name": "Jiří Jemelka",
         "photo": "/assets/img/2026/06/Jiri-Jemelka.png",
-        "role": "Zakladatel J.I.P. pro firmy, byznys mentor a interim manažer",
+        "role": "Zakladatel JPF Czech, byznys mentor a interim manažer",
         "bio": [
-          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
+          "Jiří Jemelka pomáhá více než 20 let majitelům firem zvládat situace, na které už sami nestačí. Jako zakladatel JPF Czech stojí za rozvojem executive interim managementu v České republice a se svým týmem se podílel na řízení, stabilizaci a růstu stovek malých a středních firem napříč obory. JPF dnes prostřednictvím svých interim manažerů řídí v průměru více než 100 firem ročně.",
+          "Ve svých vystoupeních propojuje tvrdou realitu podnikání s konkrétními zkušenostmi z vedení firem v růstu, krizi i generační proměně. Otevřeně mluví o tématech, která majitelé často nechtějí slyšet: proč dobrý podnikatel nemusí být dobrý ředitel, jak poznat, že se firma stala závislou na svém zakladateli, a proč je schopnost předat řízení jedním z nejtěžších, ale nejdůležitějších manažerských rozhodnutí.",
+          "Jeho přístup je přímočarý, praktický a postavený na výsledcích. Místo teorie nabízí příběhy z firem, kde šlo o desítky miliónů korun, budoucnost stovek zaměstnanců a často i o samotné přežití podniku. Posluchači si z jeho vystoupení odnášejí nejen inspiraci, ale především konkrétní podněty, které mohou okamžitě využít ve vlastním byznysu."
         ]
       },
       {
@@ -215,6 +217,22 @@
           "linkedin": "https://www.linkedin.com/in/andreabohacikova",
           "web": "https://www.marter.cz",
           "instagram": "https://www.instagram.com/andyb_original/"
+        }
+      },
+      {
+        "slug": "david-kolar",
+        "name": "David Kolář",
+        "photo": "/assets/img/2026/08/David-Kolar.png",
+        "role": "Spoluzakladatel a CEO Scaleupboard",
+        "bio": [
+          "David Kolář je spoluzakladatel a CEO Scaleupboard. Už více než 12 let se pohybuje mezi lídry rostoucích firem a má za sebou přes 1000 rozhovorů o tom, co přináší růst, tlak i momenty, kdy firma narazí na svůj strop. Do Česka se svými společníky přinesl metodiku Scaling Up. Jako CEO rostoucí firmy zažívá stejné situace jako jeho klienti a sdílí zkušenosti z praxe.",
+          "Více než sedm let buduje firmu a komunitu pro CEO a foundery.",
+          "Se společníky přivezl z USA do Česka metodiku Scaling Up.",
+          "Vystupuje jako majitel a CEO firmy z praxe, ne jako konzultant. Tématem jeho vystoupení je, jak prorazit růstový strop a nespadnout do „údolí smrti“."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/davidkolar1/",
+          "web": "https://scaleupboard.com"
         }
       },
       {
@@ -239,6 +257,20 @@
         "links": {
           "linkedin": "https://www.linkedin.com/in/simon-srp/",
           "web": "https://simon-says.cz/"
+        }
+      },
+      {
+        "slug": "vladimir-macoun",
+        "name": "Vladimír Macoun",
+        "photo": "/assets/img/2026/08/Vladimir-Macoun-placeholder.svg",
+        "role": "Podnikatel v gastronomii",
+        "bio": [
+          "Do školy jsem skoro nechodil. Začínal jsem s produktem, kterému tehdy téměř nikdo nevěřil. Neměl jsem peníze ani know-how, jak podnikat. Jediné, co jsem měl, byla vášeň pro gastronomii a touha bourat zažité zvyky a rutiny.",
+          "Vždycky jsem chtěl tvořit originální věci, ze kterých si lidé doslova sednou na zadek. Právě tahle filozofie mě dovedla od jednoho nápadu ke druhému – k vybudování vlastní výroby, několika kaváren, pražírny, pekárny s cukrárnou a týmu desítek lidí."
+        ],
+        "links": {
+          "instagram": "https://www.instagram.com/vladimiroviny",
+          "facebook": "https://www.facebook.com/share/1GykyVK6xN/"
         }
       },
       {
@@ -312,6 +344,20 @@
         }
       },
       {
+        "slug": "tomas-ryza",
+        "name": "Tomáš Ryza",
+        "photo": "/assets/img/2026/08/Tomas-Ryza.png",
+        "role": "Expert na compliance, zakladatel projektu ComplianceWeb",
+        "bio": [
+          "Mám za sebou více než desetiletou praxi v různých oblastech, kde se propojovala znalost legislativy s implementací pravidel a procesů. Díky této rozmanité zkušenosti vnímám compliance z širší perspektivy, od tvorby zákonů po jejich praktické uplatnění ve složitých organizacích.",
+          "Mou expertizou je, jak budovat funkční firemní kulturu souladu, která nemusí bolet. Věřím, že srozumitelné vysvětlení pravidel a jejich praktické ukázky vedou k lepšímu pochopení a přijetí compliance na všech úrovních, a tím i k dlouhodobému úspěchu."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/ryzat/",
+          "web": "https://complianceweb.eu"
+        }
+      },
+      {
         "slug": "leonid-kushnir",
         "name": "Leonid Kushnir",
         "photo": "/assets/img/2026/06/Leonid-Kushnir.png",
@@ -366,6 +412,125 @@
         "links": {
           "linkedin": "https://www.linkedin.com/in/jakub-zikmund"
         }
+      }
+    ]
+  },
+  "sessions": {
+    "list": [
+      {
+        "slug": "lidskost-jako-konkurencni-vyhoda",
+        "title": "Lidskost jako konkurenční výhoda",
+        "kind": "Přednáška",
+        "speakers": ["margareta-krizova"],
+        "annotation": [
+          "V businessu, kde dominují čísla, měřitelný výkon a tlak na neustálý růst, se může lidskost na první pohled zdát jako slabost. Opak je ale pravdou.",
+          "Ukážu vám, proč jsou emoční inteligence, moderní leadership a psychologické bezpečí skutečnou konkurenční výhodou 21. století – a jak je využít v praxi.",
+          "Podnikatelé a manažeři, kteří dokážou lidem dát smysl a pocit sounáležitosti, získají týmy, které přicházejí s nápady, inovacemi a lidi, kteří jsou ochotní nést zodpovědnost.",
+          "Svět se mění nebývalou rychlostí. Adaptabilita, flexibilita a kreativita už nejsou „nice to have“, ale „must have“, bez ohledu na to, jestli rozjíždíte startup nebo vedete etablovanou firmu.",
+          "Výsledky a růst zůstávají základem podnikání. Mění se ale cesta, jak toho dosáhneme.",
+          "Ta cesta vede přes důvěru, vztahy, umění komunikace a lidský přístup.",
+          "Protože ve finále platí jednoduchá věc: lidé chtějí pracovat pro lidi a nakupovat od lidí."
+        ]
+      },
+      {
+        "slug": "lide-duveruji-lidem",
+        "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou",
+        "kind": "Přednáška",
+        "speakers": ["hana-slacalkova"],
+        "annotation": [
+          "Dnes už firmy nebojují jen cenou, produktem nebo reklamou. Bojují hlavně o důvěru zákazníků, kvalitní lidi do týmu a dlouhodobé vztahy. A právě lidé ve firmách – zakladatelé, lídři i týmy – často rozhodují o tom, komu zákazníci uvěří, od koho nakoupí nebo kde budou chtít pracovat.",
+          "Na konkrétních příkladech z praxe si ukážeme, proč dnes autenticita, osobní viditelnost a přirozená komunikace fungují lépe než dokonalý marketing. Ukážeme si, jak firmy díky viditelným lidem získávají nové klienty, přitahují kvalitní talenty a budují komunitu lidí, kteří je přirozeně doporučují dál."
+        ]
+      },
+      {
+        "slug": "host-to-pozna",
+        "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu",
+        "kind": "Panelová diskuze",
+        "speakers": ["vladimir-macoun", "konstancie-zelezna"],
+        "annotation": [
+          "V gastru nerozhoduje jen chuť, kvalita surovin nebo design prostoru. Host pozná atmosféru, péči i to, jak spolu lidé za oponou skutečně fungují. Jak se lidskost propisuje do služby, produktu a celkového zážitku? A dá se osobní přístup udržet i ve chvíli, kdy podnik roste, přibývají pravidla a roste tlak na výkon?"
+        ]
+      },
+      {
+        "slug": "co-vas-dostalo-sem-vas-dal-nedostane",
+        "title": "Co vás dostalo sem, vás dál nedostane",
+        "kind": "Přednáška",
+        "speakers": ["david-kolar"],
+        "annotation": [
+          "Při růstu firmy se lídři často dostávají do pomyslných údolí smrti – momentů, kdy přestává fungovat to, co firmu dostalo až sem. Další růst vyžaduje změnu přístupu. David Kolář ukáže, jak rozpoznat strop, na který firma narazila, co je potřeba změnit a jak další růst ustát, aniž by firma spadla dolů.",
+          "Proč se při růstu firmy CEO často dostávají do „údolí smrti“.",
+          "Jak poznat, že firma narazila na svůj aktuální strop.",
+          "Proč už dál nefunguje stejný způsob řízení jako doposud.",
+          "Jaké změny musí udělat CEO nejdřív sám u sebe.",
+          "Co se musí změnit ve vedení lidí a rozdělení odpovědností.",
+          "Jak dostat do firmy větší fokus, priority a jasný směr.",
+          "Proč je potřeba změnit systém řízení, ne jen přidat úsilí.",
+          "Jak lépe zvládat tlak na cashflow, výkon a rozhodování.",
+          "Co pomáhá firmě projít krizovou růstovou fází bez zbytečných dramat.",
+          "Jak prorazit strop a posunout firmu do další etapy růstu."
+        ]
+      },
+      {
+        "slug": "co-mi-nikdo-nerekl-o-tom-byt-ceo",
+        "title": "Co mi nikdo neřekl o tom být CEO",
+        "kind": "Přednáška",
+        "speakers": ["andrea-bohacikova"],
+        "annotation": [
+          "Za posledních patnáct let jsem vedla týmy, startup, jednala s firmami, investory i státní správou i politiky. Měnila firemní kulturu, podílela se na systémových změnách a budovala organizaci, která dnes patří mezi nejvýraznější hlasy v oblasti práce, rodičovství a leadershipu v Česku. A přesto mě na některé věci nikdo nepřipravil.",
+          "Na této přednášce otevřeně sdílím zkušenosti, které se do učebnic leadershipu nevejdou. Co se děje ve chvíli, kdy věci nejdou podle plánu? Jak se rozhodovat, když nemáte všechny odpovědi? Jak poznat, co vás skutečně posouvá vpřed a co vás naopak brzdí? A proč bývá největší překážkou růstu často něco úplně jiného, než si myslíme?",
+          "Bez klišé a univerzálních rad, se zkušenostmi z reálného života CEO. Pro všechny, kteří vedou lidi, chtějí růst do leadershipu nebo jednou vybudovat něco vlastního."
+        ]
+      },
+      {
+        "slug": "lidskost-pod-tlakem",
+        "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?",
+        "kind": "Panelová diskuze",
+        "speakers": ["barbora-tumova", "petr-dvorak", "michal-vesely"],
+        "annotation": [
+          "Ve chvíli, kdy firma čelí tlaku na výkon, výsledky a efektivitu, se její hodnoty ukazují v praxi. Jak neztratit lidskost ve velké organizaci, kde se rozhoduje o tisících lidí? A má lidský přístup své hranice? O těžkých rozhodnutích, odpovědnosti a tom, co z firemních hodnot zůstává, když jde do tuhého. Z pohledu top managementu i employer brandingu."
+        ]
+      },
+      {
+        "slug": "jak-vyjednavat-lidsky",
+        "title": "Jak vyjednávat lidsky a získávat zákazníky jinak než slevami",
+        "kind": "Přednáška",
+        "speakers": ["ondrej-vojacek"],
+        "annotation": [
+          "Kolik peněz necháváte každý měsíc na stole při jednání o cenách?",
+          "Jako podnikatelé vyjednáváte denně: s dodavateli o lepších cenách vstupů, s odběrateli o zakázkách, s bankou o podmínkách úvěru atd. Naučil vás někdy někdo, jak správně vyjednávat, abyste nenechávali peníze zbytečně ležet na stole?",
+          "Většina podnikatelů dělá při cenových vyjednáních základní chyby, které je stojí stovky tisíc měsíčně. Zkušená protistrana vám „vidí do karet“ dřív, než řeknete první číslo.",
+          "Vyjednávání přitom není jen talent. Je to dovednost s jasnými pravidly a postupy. Kdo je zná, dosahuje výsledků, i když mu okolnosti nehrají do karet.",
+          "Na přednášce vám představím základní pravidla vyjednávání podle Harvardu a FBI a ukážeme si, jak je aplikovat při jednáních s konkurencí, zákazníky i v rámci firmy. Upozorním vás na nejčastější chyby, kterých se dopouští většina podnikatelů bez tréninku vyjednávání.",
+          "Společně zjistíme, jak na tom jste, a naznačíme směr vašeho dalšího rozvoje, abyste byli ještě úspěšnější."
+        ]
+      },
+      {
+        "slug": "nejdrazsi-konkurencni-vyhoda-lidskost",
+        "title": "Nejdražší konkurenční výhoda? Lidskost.",
+        "kind": "Přednáška",
+        "speakers": ["jiri-jemelka"],
+        "annotation": [
+          "Většina firem investuje do technologií, procesů a efektivity. Jen málokterá systematicky investuje do charakteru lidí a firemní kultury.",
+          "Přitom právě důvěra, férovost, respekt a schopnost vytvářet zdravé vztahy patří mezi nejcennější aktiva každé organizace. Tato přednáška ukazuje, proč lidskost není slabost ani idealismus, ale tvrdá strategická výhoda, která ovlivňuje výkon, loajalitu lidí, reputaci i dlouhodobou hodnotu firmy."
+        ]
+      },
+      {
+        "slug": "zradci-lidskosti",
+        "title": "Zrádci lidskosti – moderovaná diskuze",
+        "kind": "Moderovaná diskuze",
+        "speakers": ["markus-krug"],
+        "annotation": [
+          "Zrádci jsou televizní hra, ale situace, které vytvářejí, známe i z pracovního života. Málo informací, velký tlak, boj o vliv, skryté zájmy a otázka, komu se dá věřit. Režisér Markus Krug odhalí, co se děje za kulisami jedné z nejintenzivnějších psychologických her – a co nám chování jejích hráčů ukazuje o důvěře, moci, skupinovém rozhodování i lidskosti v byznysu."
+        ]
+      },
+      {
+        "slug": "tyrkysova-firma",
+        "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?",
+        "kind": "Přednáška",
+        "speakers": ["patrik-cada"],
+        "annotation": [
+          "Před třemi lety jsem přestal říkat lidem, co mají dělat, a začal jsem jim věřit. Dnes každý v našem týmu rozhoduje sám, bez mého souhlasu, bez schválení, bez strachu. Tohle je přednáška o tyrkysové firmě zevnitř. A neřeknu vám jen, jak to funguje, ukážu vám to."
+        ]
       }
     ]
   },
@@ -476,22 +641,22 @@
             "events": [
               { "time": "8:00 - 9:00", "title": "Registrace", "type": "shared", "span": "all" },
               { "time": "9:00 - 9:15", "title": "Úvod", "type": "shared" },
-              { "time": "9:15 - 10:00", "title": "Margareta Křížová" },
+              { "time": "9:15 - 10:00", "title": "Lidskost jako konkurenční výhoda", "meta": "Margareta Křížová", "detail": "lidskost-jako-konkurencni-vyhoda" },
               { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček" },
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
               { "time": "10:45 - 11:15", "title": "Lukáš Hejlík" },
-              { "time": "11:15 - 11:45", "title": "Hana Slačálková" },
-              { "time": "11:45 - 12:15", "title": "Panelová diskuze", "meta": "Konstancie Železná, Vladimír Macoun", "type": "discussion" },
+              { "time": "11:15 - 11:45", "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou", "meta": "Hana Slačálková", "detail": "lide-duveruji-lidem" },
+              { "time": "11:45 - 12:15", "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu", "meta": "Vladimír Macoun, Konstancie Železná", "type": "discussion", "detail": "host-to-pozna" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
-              { "time": "13:15 - 13:45", "title": "David Kolář" },
-              { "time": "13:45 - 14:15", "title": "Andrea Bohačíková" },
+              { "time": "13:15 - 13:45", "title": "Co vás dostalo sem, vás dál nedostane", "meta": "David Kolář", "detail": "co-vas-dostalo-sem-vas-dal-nedostane" },
+              { "time": "13:45 - 14:15", "title": "Co mi nikdo neřekl o tom být CEO", "meta": "Andrea Bohačíková", "detail": "co-mi-nikdo-nerekl-o-tom-byt-ceo" },
               { "time": "14:15 - 14:45", "title": "Šimon Srp" },
               { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 15:45", "title": "Panelová diskuze", "meta": "Barbora Tůmová, Petr Dvořák, Michal Veselý", "type": "discussion" },
-              { "time": "15:45 - 16:15", "title": "Ondřej Vojáček" },
-              { "time": "16:15 - 16:45", "title": "Jiří Jemelka" },
+              { "time": "15:15 - 15:45", "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?", "meta": "Barbora Tůmová, Petr Dvořák, Michal Veselý", "type": "discussion", "detail": "lidskost-pod-tlakem" },
+              { "time": "15:45 - 16:15", "title": "Jak vyjednávat lidsky a získávat zákazníky jinak než slevami", "meta": "Ondřej Vojáček", "detail": "jak-vyjednavat-lidsky" },
+              { "time": "16:15 - 16:45", "title": "Nejdražší konkurenční výhoda? Lidskost.", "meta": "Jiří Jemelka", "detail": "nejdrazsi-konkurencni-vyhoda-lidskost" },
               { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
-              { "time": "17:00 - 17:45", "title": "Markus Krug", "meta": "rozhovor s moderátorem" },
+              { "time": "17:00 - 17:45", "title": "Zrádci lidskosti – moderovaná diskuze", "meta": "Markus Krug", "detail": "zradci-lidskosti" },
               { "time": "17:45 - 18:00", "title": "Tombola, závěr", "type": "shared" },
               { "time": "18:00 - 18:15", "title": "Společné foto před Clarionem", "meta": "z dronu", "type": "shared" }
             ]
@@ -505,7 +670,7 @@
               { "time": "11:15 - 11:45", "title": "Jan Plojhar" },
               { "time": "11:45 - 12:15", "title": "Blanka Mrázková" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
-              { "time": "13:15 - 13:45", "title": "Patrik Čada" },
+              { "time": "13:15 - 13:45", "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?", "meta": "Patrik Čada", "detail": "tyrkysova-firma" },
               { "time": "13:45 - 14:15", "title": "Andrea Bílá" },
               { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
               { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },

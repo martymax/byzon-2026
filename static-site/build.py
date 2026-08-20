@@ -91,6 +91,7 @@ SPEAKER_LINKS = (
     ("linkedin", "LinkedIn"),
     ("web", "Web"),
     ("instagram", "Instagram"),
+    ("facebook", "Facebook"),
     ("youtube", "YouTube"),
 )
 
@@ -98,6 +99,16 @@ SPEAKER_SLUGS = {
     sp["name"]: sp["slug"]
     for sp in C.get("speakers", {}).get("list", [])
     if sp.get("name") and sp.get("slug")
+}
+SPEAKERS_BY_SLUG = {
+    sp["slug"]: sp
+    for sp in C.get("speakers", {}).get("list", [])
+    if sp.get("slug")
+}
+SESSIONS_BY_SLUG = {
+    session["slug"]: session
+    for session in C.get("sessions", {}).get("list", [])
+    if session.get("slug")
 }
 SPEAKER_NAME_RE = re.compile(
     "|".join(re.escape(n) for n in sorted(SPEAKER_SLUGS, key=len, reverse=True))
@@ -140,21 +151,38 @@ def link_speaker_names(text):
     return "".join(out)
 
 
+def program_event_link(ev):
+    session_slug = ev.get("detail")
+    if session_slug in SESSIONS_BY_SLUG:
+        return f"/program/{session_slug}/", f"Detail programu: {ev.get('title', '')}"
+    speaker_slug = SPEAKER_SLUGS.get(ev.get("title", ""))
+    if speaker_slug:
+        return f"/speaker/{speaker_slug}/", f"Profil řečníka: {ev.get('title', '')}"
+    return None, None
+
+
+def program_event_meta(meta, inside_link=False):
+    if not meta:
+        return ""
+    content = esc(meta) if inside_link else link_speaker_names(meta)
+    return content
+
+
 def program_event(ev):
     title = ev.get("title", "")
     time = ev.get("time", "")
     meta = ev.get("meta")
     desc = ev.get("description")
-    slug = SPEAKER_SLUGS.get(title)
-    extra_class = " program-event--has-link" if slug else ""
-    meta_html = f'<span class="program-event__meta">{link_speaker_names(meta)}</span>' if meta else ""
+    href, aria_label = program_event_link(ev)
+    extra_class = " program-event--has-link" if href else ""
+    meta_html = f'<span class="program-event__meta">{program_event_meta(meta, bool(href))}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
-    title_text = esc(title) if slug else link_speaker_names(title)
+    title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-event__title">{title_text}</strong>'
-    if slug:
+    if href:
         body = (
             f'<a class="program-event__body program-event__body--link" '
-            f'href="/speaker/{att(slug)}/" aria-label="Profil řečníka: {att(title)}">'
+            f'href="{att(href)}" aria-label="{att(aria_label)}">'
             f'{title_html}{meta_html}{desc_html}</a>'
         )
     else:
@@ -317,25 +345,25 @@ def program_calendar_event(ev, col, row_by_slot):
     time = ev.get("time", "")
     meta = ev.get("meta")
     desc = ev.get("description")
-    slug = SPEAKER_SLUGS.get(title)
-    extra_class = " program-cal-event--has-link" if slug else ""
+    href, aria_label = program_event_link(ev)
+    extra_class = " program-cal-event--has-link" if href else ""
     grid_col = "2 / -1" if ev.get("span") == "all" else str(col)
     if ev.get("span") == "all":
         extra_class += " program-cal-event--span-all"
     if span == 1 or is_condensed_calendar_event(ev):
         extra_class += " program-cal-event--short"
-    meta_html = f'<span class="program-cal-event__meta">{link_speaker_names(meta)}</span>' if meta else ""
+    meta_html = f'<span class="program-cal-event__meta">{program_event_meta(meta, bool(href))}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
-    title_text = esc(title) if slug else link_speaker_names(title)
+    title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-cal-event__title">{title_text}</strong>'
     inner = (
         f'<span class="program-cal-event__time">{esc(time)}</span>'
         f'{title_html}{meta_html}{desc_html}'
     )
-    if slug:
+    if href:
         body = (
             f'<a class="program-cal-event__inner program-cal-event__inner--link" '
-            f'href="/speaker/{att(slug)}/" aria-label="Profil řečníka: {att(title)}">{inner}</a>'
+            f'href="{att(href)}" aria-label="{att(aria_label)}">{inner}</a>'
         )
     else:
         body = f'<div class="program-cal-event__inner">{inner}</div>'
@@ -364,26 +392,26 @@ def program_mobile_event(item, total_count):
     time = ev.get("time", "")
     meta = ev.get("meta")
     desc = ev.get("description")
-    slug = SPEAKER_SLUGS.get(title)
+    href, aria_label = program_event_link(ev)
     stage_label = _mobile_stage_label(item["stage_names"], total_count)
     stage_ids = " ".join(item["stage_ids"])
-    meta_html = f'<span class="program-mobile-event__meta">{link_speaker_names(meta)}</span>' if meta else ""
+    meta_html = f'<span class="program-mobile-event__meta">{program_event_meta(meta, bool(href))}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
-    title_text = esc(title) if slug else link_speaker_names(title)
-    if slug:
-        title_html = (
-            f'<a class="program-mobile-event__title program-mobile-event__title--link" '
-            f'href="/speaker/{att(slug)}/" aria-label="Profil řečníka: {att(title)}">'
-            f'{title_text}</a>'
-        )
-    else:
-        title_html = f'<strong class="program-mobile-event__title">{title_text}</strong>'
-    return f"""<article class="program-mobile-event{mobile_kind_class(ev.get("type"))}" data-stage-ids="{att(stage_ids)}">
-              <div class="program-mobile-event__top">
+    title_text = esc(title) if href else link_speaker_names(title)
+    title_html = f'<strong class="program-mobile-event__title">{title_text}</strong>'
+    inner = f"""<div class="program-mobile-event__top">
                 <span class="program-mobile-event__stage">{esc(stage_label)}</span>
                 <span class="program-mobile-event__time">{esc(time)}</span>
               </div>
-              {title_html}{meta_html}{desc_html}
+              {title_html}{meta_html}{desc_html}"""
+    extra_class = " program-mobile-event--has-link" if href else ""
+    if href:
+        inner = (
+            f'<a class="program-mobile-event__inner program-mobile-event__inner--link" '
+            f'href="{att(href)}" aria-label="{att(aria_label)}">{inner}</a>'
+        )
+    return f"""<article class="program-mobile-event{mobile_kind_class(ev.get("type"))}{extra_class}" data-stage-ids="{att(stage_ids)}">
+              {inner}
             </article>"""
 
 
@@ -1082,6 +1110,68 @@ def page_speaker(sp):
     return head(f"{sp['name']} – Byzon", desc, f"/speaker/{sp['slug']}/", sp["photo"]) + body + footer()
 
 
+def session_presenter(value):
+    sp = SPEAKERS_BY_SLUG.get(value)
+    if not sp:
+        return f"""<article class="session-presenter session-presenter--pending">
+      <div class="session-presenter__pending" aria-hidden="true">{ICONS['users']}</div>
+      <div>
+        <h3>{esc(value)}</h3>
+        <p class="session-presenter__note">Medailonek a fotografii připravujeme.</p>
+      </div>
+    </article>"""
+    role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
+    bio = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in sp.get("bio", []))
+    return f"""<article class="session-presenter">
+      <a class="session-presenter__portrait" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
+        <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}">
+      </a>
+      <div>
+        <span class="eyebrow">Řečník BYZON 2026</span>
+        <h3><a href="/speaker/{att(sp['slug'])}/">{esc(sp['name'])}</a></h3>{role}{speaker_socials(sp)}
+        <div class="bio">{bio}</div>
+      </div>
+    </article>"""
+
+
+def page_session(session):
+    annotation = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in session.get("annotation", []))
+    presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
+    presenter_count = len(session.get("speakers", []))
+    presenter_title = "Hosté diskuze" if presenter_count > 1 else "Řečník"
+    body = (
+        header("/program/", solid=True)
+        + '<main id="main">'
+        + f"""<section class="section session-page">
+  <div class="container session-page__container">
+    <nav class="breadcrumb speaker-back" style="justify-content:flex-start"><a href="/program/">‹ Zpět na program</a></nav>
+    <article class="session-intro">
+      <span class="eyebrow">{esc(session.get('kind', 'Přednáška'))}</span>
+      <h1>{esc(session['title'])}</h1>
+      <div class="session-annotation">{annotation}</div>
+    </article>
+    <section class="session-speakers" aria-labelledby="session-speakers-title">
+      <h2 id="session-speakers-title">{presenter_title}</h2>
+      <div class="session-speakers__list">{presenters}</div>
+    </section>
+  </div>
+</section>"""
+        + "</main>"
+    )
+    description = session.get("annotation", [session["title"]])[0]
+    first_speaker = next(
+        (SPEAKERS_BY_SLUG.get(value) for value in session.get("speakers", []) if SPEAKERS_BY_SLUG.get(value)),
+        None,
+    )
+    image = first_speaker.get("photo") if first_speaker else None
+    return head(
+        f"{session['title']} – Byzon",
+        description,
+        f"/program/{session['slug']}/",
+        image,
+    ) + body + footer()
+
+
 def page_legal(lp):
     frag = open(os.path.join(ROOT, lp["file"]), encoding="utf-8").read()
     body = (
@@ -1148,12 +1238,17 @@ def write_robots():
 
 
 def main():
+    deploy_junk = os.path.join(PUBLIC, ".DS_Store")
+    if os.path.exists(deploy_junk):
+        os.remove(deploy_junk)
     written = []
     written.append(write("index.html", page_home()))
     written.append(write("program/index.html", page_program()))
     written.append(write("byznys-konference/index.html", page_rocniky()))
     written.append(write("simpleshop/index.html", page_simpleshop()))
     written.append(write("stante-se-partnerem/index.html", page_partner()))
+    for session in C.get("sessions", {}).get("list", []):
+        written.append(write(f"program/{session['slug']}/index.html", page_session(session)))
     for sp in C["speakers"]["list"]:
         written.append(write(f"speaker/{sp['slug']}/index.html", page_speaker(sp)))
     for lp in C.get("legal_pages", []):
@@ -1164,6 +1259,8 @@ def main():
         write_sitemap(written),
         write_robots(),
     ]
+    if os.path.exists(deploy_junk):
+        os.remove(deploy_junk)
     print(f"Generated {len(written)} pages + {len(extras)} extra files:")
     for p in written + extras:
         print("  -", p)

@@ -37,6 +37,10 @@ def fail(message: str) -> None:
 
 
 def expected_outputs(content: dict[str, object]) -> set[str]:
+    session_pages = {
+        f"program/{session['slug']}/index.html"
+        for session in content.get("sessions", {}).get("list", [])  # type: ignore[union-attr]
+    }
     speaker_pages = {
         f"speaker/{speaker['slug']}/index.html"
         for speaker in content["speakers"]["list"]  # type: ignore[index]
@@ -45,7 +49,7 @@ def expected_outputs(content: dict[str, object]) -> set[str]:
         f"{page['slug']}/index.html"
         for page in content.get("legal_pages", [])  # type: ignore[union-attr]
     }
-    return FIXED_PAGES | speaker_pages | legal_pages | EXTRAS
+    return FIXED_PAGES | session_pages | speaker_pages | legal_pages | EXTRAS
 
 
 def sha256(path: Path) -> str:
@@ -107,6 +111,19 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     visible = [name for name, marker in hidden_markers.items() if marker in home]
     if visible:
         fail("Unexpected visible navigation markers: " + ", ".join(visible))
+
+    for session in content.get("sessions", {}).get("list", []):  # type: ignore[union-attr]
+        title = session["title"]
+        if title not in program:
+            fail(f"Program is missing session title: {title}")
+        detail = (PUBLIC_ROOT / "program" / session["slug"] / "index.html").read_text(
+            encoding="utf-8"
+        )
+        if title not in detail:
+            fail(f"Session detail is missing title: {title}")
+        for paragraph in session.get("annotation", []):
+            if paragraph not in detail:
+                fail(f"Session detail is missing annotation for: {title}")
 
 
 def main() -> int:
