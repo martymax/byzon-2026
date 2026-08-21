@@ -179,6 +179,26 @@ describe('participant agenda view model', () => {
     expect(fullCopy).toContain('0 míst');
   });
 
+  it('uses the Czech place-count forms for reachable remaining capacities', () => {
+    const saved = onlyItem(participantAgendaFixtures.conflict_target!);
+    if (saved.capacity.mode !== 'reservation') {
+      throw new TypeError('Saved fixture must expose reservation capacity.');
+    }
+    const capacity = saved.capacity;
+
+    const copyFor = (remaining: number) =>
+      participantAgendaCapacityCopy({
+        ...saved,
+        capacity: { ...capacity, remaining },
+      });
+
+    expect(copyFor(1)).toContain('1 místo');
+    expect(copyFor(2)).toContain('2 místa');
+    expect(copyFor(3)).toContain('3 místa');
+    expect(copyFor(4)).toContain('4 místa');
+    expect(copyFor(5)).toContain('5 míst');
+  });
+
   it('describes a confirmed last-seat reservation before generic full capacity', () => {
     const reserved = onlyItem(participantAgendaFixtures.reserved!);
     if (reserved.capacity.mode !== 'reservation') {
@@ -223,7 +243,7 @@ describe('participant agenda view model', () => {
       },
       waitlist: { ...waiting.waitlist, actionsAvailable: false },
     });
-    expect(promotionPending).toContain('Volná kapacita: 1');
+    expect(promotionPending).toContain('Volná kapacita: 1 místo');
     expect(promotionPending).toContain('čekáte na zpracování serverem');
     expect(promotionPending).not.toContain('Můžete požádat');
   });

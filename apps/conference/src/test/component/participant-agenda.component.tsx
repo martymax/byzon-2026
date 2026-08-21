@@ -864,7 +864,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     await expect
       .element(screen.getByRole('button', { name: 'Rezervovat místo' }))
       .toBeVisible();
-    expect(screen.container.textContent).not.toContain('rezervoval');
+    expect(screen.container.textContent).not.toMatch(/rezervoval/i);
     await expectComponentToPassAxe(screen.container);
   });
 

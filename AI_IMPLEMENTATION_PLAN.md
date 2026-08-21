@@ -2228,7 +2228,8 @@ mock boundary.
 - [x] `F3-05` Přidat osobní `.ics` export UI a component/axe/contract testy
   všech stavů; specializovaný coaching ani plné networking UI nejsou součástí
   tohoto generického slice.
-- [x] `F3-06` Společný canonical session action pattern podporuje potvrzené
+- [x] `F3-06` Implementační slice je dokončený: společný canonical session
+  action pattern podporuje potvrzené
   30minutové sloty Radima Ročka a Stanislavy Maunové, kapacitu 1 a přesnou
   dostupnost ze snapshotu `Pátek!G1:I18`. Účastnické UI používá serverový
   capacity stav a nezveřejňuje identitu rezervujícího.
@@ -2257,8 +2258,10 @@ testů, 28 fixture testů, 273 conference unit testů, 36 očekávaně přeskoč
 DB scénářů a 618 Chromium component/axe/responsive scénářů ve třech
 viewports. Prošly také Prettier, ESLint, všechny relevantní typechecky,
 produkční Next build a source/post-build mock boundary. Produktové vstupy pro
-`F3-06` jsou nově uzavřené v `SCOPE-2026-09`; implementace a v6 scope alignment
-zůstávají nehotové.
+`F3-06` jsou uzavřené v `SCOPE-2026-09` a implementační slice je dokončený.
+Agregovaná agenda capability zůstává `partially integrated` do zapojení
+`P5-04`/`P5-09`; před obsahovým UAT navíc proběhne finální publication
+reconciliation se živým coaching snapshotem.
 
 Produkční integrační řez z 20.–21. 8. 2026 posunul `CS-AGENDA-01` do stavu
 `partially integrated`: Better Auth a canonical event nyní napájejí live

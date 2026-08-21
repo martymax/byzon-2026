@@ -145,6 +145,25 @@ export const participantAgendaItemStatus = (
   };
 };
 
+const placesCopy = (count: number): string =>
+  count === 1
+    ? '1 místo'
+    : count >= 2 && count <= 4
+      ? `${count} místa`
+      : `${count} míst`;
+
+const additionalPlacesCopy = (count: number): string =>
+  count === 1
+    ? '1 další místo'
+    : count >= 2 && count <= 4
+      ? `${count} další místa`
+      : `${count} dalších míst`;
+
+const heldPlacesCopy = (count: number): string =>
+  count >= 2 && count <= 4
+    ? `${placesCopy(count)} jsou dočasně držena v nabídkách.`
+    : `${placesCopy(count)} je dočasně drženo v nabídkách.`;
+
 export const participantAgendaCapacityCopy = (
   item: ParticipantAgendaItem,
 ): string | null => {
@@ -152,39 +171,30 @@ export const participantAgendaCapacityCopy = (
   if (item.capacity.mode === 'none') return null;
   if (item.state === 'reserved') {
     const held =
-      item.capacity.held > 0
-        ? ` Dalších ${item.capacity.held} míst je dočasně drženo v nabídkách.`
-        : '';
-    return `Rezervace je potvrzená. Poslední stav serveru: ${item.capacity.remaining} dalších míst k okamžité rezervaci.${held}`;
+      item.capacity.held > 0 ? ` ${heldPlacesCopy(item.capacity.held)}` : '';
+    return `Rezervace je potvrzená. Poslední stav serveru: ${additionalPlacesCopy(item.capacity.remaining)} k okamžité rezervaci.${held}`;
   }
   if (item.action.state === 'closed') {
     return 'Rezervace jsou uzavřené.';
   }
   if (item.state === 'waitlisted' && item.waitlist.state === 'waiting') {
     return item.capacity.remaining === 0
-      ? `K okamžité rezervaci zbývá 0 míst. V čekací listině už jste na ${item.waitlist.position}. místě; není potřeba žádat znovu.`
-      : `Volná kapacita: ${item.capacity.remaining}. V čekací listině zůstáváte na ${item.waitlist.position}. místě a čekáte na zpracování serverem; není potřeba žádat znovu.`;
+      ? `K okamžité rezervaci zbývá ${placesCopy(0)}. V čekací listině už jste na ${item.waitlist.position}. místě; není potřeba žádat znovu.`
+      : `Volná kapacita: ${placesCopy(item.capacity.remaining)}. V čekací listině zůstáváte na ${item.waitlist.position}. místě a čekáte na zpracování serverem; není potřeba žádat znovu.`;
   }
   if (item.action.state === 'capacity_full') {
     const held =
-      item.capacity.held > 0
-        ? ` ${item.capacity.held} míst je dočasně drženo v nabídkách.`
-        : '';
+      item.capacity.held > 0 ? ` ${heldPlacesCopy(item.capacity.held)}` : '';
     return item.capacity.waitlistAvailable
-      ? `K okamžité rezervaci zbývá 0 míst.${held} Můžete požádat o zařazení do čekací listiny.`
-      : `K okamžité rezervaci zbývá 0 míst.${held} Čekací listina není dostupná.`;
+      ? `K okamžité rezervaci zbývá ${placesCopy(0)}.${held} Můžete požádat o zařazení do čekací listiny.`
+      : `K okamžité rezervaci zbývá ${placesCopy(0)}.${held} Čekací listina není dostupná.`;
   }
   if (item.state === 'waitlisted' && item.waitlist.state === 'offered') {
-    return `Server drží místo pro tento účet. Další okamžitě dostupná kapacita: ${item.capacity.remaining}. Rezervace vznikne až přijetím nabídky.`;
+    return `Server drží místo pro tento účet. Další okamžitě dostupná kapacita: ${placesCopy(item.capacity.remaining)}. Rezervace vznikne až přijetím nabídky.`;
   }
   const held =
-    item.capacity.held > 0
-      ? ` Dalších ${item.capacity.held} míst je dočasně drženo v nabídkách.`
-      : '';
-  const remaining =
-    item.capacity.remaining === 1
-      ? '1 místo'
-      : `${item.capacity.remaining} míst`;
+    item.capacity.held > 0 ? ` ${heldPlacesCopy(item.capacity.held)}` : '';
+  const remaining = placesCopy(item.capacity.remaining);
   return `Poslední stav serveru: ${remaining} k okamžité rezervaci.${held} Rezervaci potvrdí až další odpověď serveru.`;
 };
 
