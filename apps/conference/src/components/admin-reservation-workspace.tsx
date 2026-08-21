@@ -5,12 +5,16 @@ import {
   adminEventSettingsUpdateResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityMutationRequestSchema,
+  adminSessionCapacityMutationResponseSchema,
   type AdminAuditEntry,
   type AdminEventSettings,
   type AdminEventSettingsUpdateRequest,
   type AdminReservationAction,
   type AdminReservationMutationRequest,
   type AdminReservationRecord,
+  type AdminSessionCapacityMutationRequest,
+  type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts/admin';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -20,6 +24,7 @@ import {
   requestAdminEventSettingsUpdate,
   requestAdminReservationMutation,
   requestAdminReservations,
+  requestAdminSessionCapacityMutation,
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
@@ -38,13 +43,27 @@ import {
 import styles from './admin-workspace.module.css';
 
 const reservationActionLabels: Record<AdminReservationAction, string> = {
-  capacity_override: 'Změnit kapacitu',
   cancel_reservation: 'Zrušit rezervaci',
 };
 
 const stateLabels: Record<AdminReservationRecord['state'], string> = {
   reserved: 'Rezervováno',
   cancelled: 'Zrušeno',
+};
+
+const capacityTypeLabels: Record<
+  AdminSessionCapacityRecord['sessionType'],
+  string
+> = {
+  talk: 'Přednáška',
+  panel: 'Panel',
+  workshop: 'Workshop',
+  mastermind: 'Mastermind',
+  coaching: 'Koučink',
+  break: 'Přestávka',
+  meal: 'Občerstvení',
+  gala: 'Gala',
+  other: 'Aktivita',
 };
 
 type PendingChange =
@@ -56,6 +75,11 @@ type PendingChange =
   | Readonly<{
       kind: 'settings';
       body: AdminEventSettingsUpdateRequest;
+      idempotencyKey: string;
+    }>
+  | Readonly<{
+      kind: 'capacity';
+      body: AdminSessionCapacityMutationRequest;
       idempotencyKey: string;
     }>;
 
@@ -80,12 +104,18 @@ export const AdminReservationWorkspace = ({
     useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const [records, setRecords] = useState<readonly AdminReservationRecord[]>([]);
+  const [capacityRecords, setCapacityRecords] = useState<
+    readonly AdminSessionCapacityRecord[]
+  >([]);
   const [audits, setAudits] = useState<readonly AdminAuditEntry[]>([]);
   const [settings, setSettings] = useState<AdminEventSettings | null>(null);
   const [selected, setSelected] = useState<AdminReservationRecord | null>(null);
+  const [selectedCapacity, setSelectedCapacity] =
+    useState<AdminSessionCapacityRecord | null>(null);
   const [action, setAction] =
-    useState<AdminReservationAction>('capacity_override');
-  const [capacity, setCapacity] = useState(1);
+    useState<AdminReservationAction>('cancel_reservation');
+  const [capacityDraft, setCapacityDraft] = useState(1);
+  const [capacityReason, setCapacityReason] = useState('');
   const [reason, setReason] = useState('');
   const [settingsDraft, setSettingsDraft] = useState<{
     registrationMode: AdminEventSettings['registrationMode'];
@@ -94,7 +124,7 @@ export const AdminReservationWorkspace = ({
   } | null>(null);
   const [settingsReason, setSettingsReason] = useState('');
   const [attemptedKind, setAttemptedKind] = useState<
-    'reservation' | 'settings' | null
+    'capacity' | 'reservation' | 'settings' | null
   >(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -102,7 +132,7 @@ export const AdminReservationWorkspace = ({
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorScope, setErrorScope] = useState<
-    'read' | 'reservation' | 'settings' | null
+    'read' | 'capacity' | 'reservation' | 'settings' | null
   >(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState('all');
@@ -118,10 +148,7 @@ export const AdminReservationWorkspace = ({
     mode === 'full' && permissions.includes('event:settings:manage');
   const canPerformReservationAction = (
     candidate?: AdminReservationAction,
-  ): boolean =>
-    canOverride &&
-    (candidate === undefined ||
-      Object.hasOwn(reservationActionLabels, candidate));
+  ): boolean => canOverride && candidate !== undefined;
 
   const handleReadFailure = (
     result: Readonly<{
@@ -132,9 +159,11 @@ export const AdminReservationWorkspace = ({
   ) => {
     if (isAdminSecurityFailure(result)) {
       setRecords([]);
+      setCapacityRecords([]);
       setAudits([]);
       setSettings(null);
       setSelected(null);
+      setSelectedCapacity(null);
       setPending(null);
       invalidateSensitive(
         adminFailureMessage(result.failure, result.metadata?.requestId),
@@ -155,16 +184,25 @@ export const AdminReservationWorkspace = ({
         setBusy(false);
         if (!result.ok) {
           setRecords([]);
+          setCapacityRecords([]);
           handleReadFailure(result);
           return;
         }
         if (result.kind === 'success') {
           setRecords(result.data.items);
+          setCapacityRecords(result.data.capacityItems);
           setSelected((current) =>
             current
               ? (result.data.items.find(
                   ({ reservationId }) =>
                     reservationId === current.reservationId,
+                ) ?? null)
+              : null,
+          );
+          setSelectedCapacity((current) =>
+            current
+              ? (result.data.capacityItems.find(
+                  ({ sessionId }) => sessionId === current.sessionId,
                 ) ?? null)
               : null,
           );
@@ -249,9 +287,16 @@ export const AdminReservationWorkspace = ({
     ? adminReservationMutationRequestSchema.safeParse({
         reservationId: selected.reservationId,
         action,
-        ...(action === 'capacity_override' ? { capacity } : {}),
         expectedVersion: selected.version,
         reason,
+      })
+    : null;
+  const capacityCandidate = selectedCapacity
+    ? adminSessionCapacityMutationRequestSchema.safeParse({
+        sessionId: selectedCapacity.sessionId,
+        expectedVersion: selectedCapacity.version,
+        capacity: capacityDraft,
+        reason: capacityReason,
       })
     : null;
 
@@ -265,6 +310,8 @@ export const AdminReservationWorkspace = ({
       : null;
   const reservationValidationFailed =
     attemptedKind === 'reservation' && reservationCandidate?.success === false;
+  const capacityValidationFailed =
+    attemptedKind === 'capacity' && capacityCandidate?.success === false;
   const settingsValidationFailed =
     attemptedKind === 'settings' && settingsCandidate?.success === false;
 
@@ -276,8 +323,20 @@ export const AdminReservationWorkspace = ({
     if (!firstAvailable) return;
     setSelected(record);
     setAction(firstAvailable);
-    setCapacity(record.capacity);
     setReason('');
+    setAttemptedKind(null);
+    setPending(null);
+    setConfirming(false);
+    setAmbiguous(false);
+    setError(null);
+    setErrorScope(null);
+    setSuccess(null);
+  };
+
+  const beginCapacity = (record: AdminSessionCapacityRecord) => {
+    setSelectedCapacity(record);
+    setCapacityDraft(record.capacity);
+    setCapacityReason('');
     setAttemptedKind(null);
     setPending(null);
     setConfirming(false);
@@ -312,6 +371,18 @@ export const AdminReservationWorkspace = ({
     setAmbiguous(false);
   };
 
+  const prepareCapacity = () => {
+    setAttemptedKind('capacity');
+    if (!canOverride || !capacityCandidate?.success) return;
+    setPending({
+      kind: 'capacity',
+      body: capacityCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('session-capacity'),
+    });
+    setConfirming(true);
+    setAmbiguous(false);
+  };
+
   const execute = async (attempt: PendingChange) => {
     const request = requestFence.begin('reservation-mutation');
     setBusy(true);
@@ -328,13 +399,21 @@ export const AdminReservationWorkspace = ({
             attempt.idempotencyKey,
             request.signal,
           )
-        : await requestAdminEventSettingsUpdate(
-            api,
-            eventId,
-            attempt.body,
-            attempt.idempotencyKey,
-            request.signal,
-          );
+        : attempt.kind === 'capacity'
+          ? await requestAdminSessionCapacityMutation(
+              api,
+              eventId,
+              attempt.body,
+              attempt.idempotencyKey,
+              request.signal,
+            )
+          : await requestAdminEventSettingsUpdate(
+              api,
+              eventId,
+              attempt.body,
+              attempt.idempotencyKey,
+              request.signal,
+            );
     if (!request.isCurrent()) return;
     request.finish();
     setBusy(false);
@@ -342,7 +421,9 @@ export const AdminReservationWorkspace = ({
       if (isAdminSecurityFailure(result)) {
         setPending(null);
         setSelected(null);
+        setSelectedCapacity(null);
         setRecords([]);
+        setCapacityRecords([]);
         setAudits([]);
         setSettings(null);
         invalidateSensitive(
@@ -358,7 +439,7 @@ export const AdminReservationWorkspace = ({
         setError(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
-        if (attempt.kind === 'reservation') {
+        if (attempt.kind === 'reservation' || attempt.kind === 'capacity') {
           setBusy(true);
           setReloadReservations((value) => value + 1);
         } else {
@@ -374,7 +455,23 @@ export const AdminReservationWorkspace = ({
       return;
     }
     if (result.kind === 'success') {
-      if (attempt.kind === 'reservation') {
+      if (attempt.kind === 'capacity') {
+        const response = adminSessionCapacityMutationResponseSchema.parse(
+          result.data,
+        );
+        setCapacityRecords((current) =>
+          current.map((record) =>
+            record.sessionId === response.record.sessionId
+              ? response.record
+              : record,
+          ),
+        );
+        setSelectedCapacity(response.record);
+        setSuccess(
+          `${response.outcome === 'already_applied' ? 'Server potvrdil dřívější změnu' : 'Kapacita aktivity byla změněna'} · audit ${response.audit.auditId}`,
+        );
+        setReloadReservations((value) => value + 1);
+      } else if (attempt.kind === 'reservation') {
         const response = adminReservationMutationResponseSchema.parse(
           result.data,
         );
@@ -410,6 +507,7 @@ export const AdminReservationWorkspace = ({
       setAmbiguous(false);
       setAttemptedKind(null);
       setReason('');
+      setCapacityReason('');
       setSettingsReason('');
     }
   };
@@ -455,6 +553,137 @@ export const AdminReservationWorkspace = ({
         <p className={styles.success} role="status">
           {success}
         </p>
+      ) : null}
+
+      {canReadReservations ? (
+        <section className={styles.panel} aria-labelledby="capacity-title">
+          <div className={styles.panelHeader}>
+            <div>
+              <h2 id="capacity-title">Kapacity rezervovatelných aktivit</h2>
+              <p className={styles.muted}>
+                Kapacita je provozní nastavení session. Lze ji upravit i před
+                vznikem první rezervace; import programu pozdější
+                administrátorskou hodnotu nepřepíše.
+              </p>
+            </div>
+            <span className={styles.badge}>
+              {capacityRecords.length} aktivit
+            </span>
+          </div>
+          {busy && capacityRecords.length === 0 ? (
+            <p role="status">Načítám kapacity…</p>
+          ) : capacityRecords.length === 0 ? (
+            <p className={styles.empty}>
+              V programu zatím není žádná rezervovatelná aktivita s nastavenou
+              kapacitou.
+            </p>
+          ) : null}
+          <ul className={styles.cardList}>
+            {capacityRecords.map((record) => (
+              <li className={styles.dataCard} key={record.sessionId}>
+                <div className={styles.panelHeader}>
+                  <strong>{record.sessionTitle}</strong>
+                  <span className={styles.statusBadge}>
+                    {capacityTypeLabels[record.sessionType]}
+                  </span>
+                </div>
+                <dl>
+                  <dt>Obsazeno</dt>
+                  <dd>
+                    {record.confirmedCount} / {record.capacity}
+                  </dd>
+                  <dt>Verze nastavení</dt>
+                  <dd>{record.version}</dd>
+                </dl>
+                {canOverride &&
+                record.sessionStatus !== 'cancelled' &&
+                record.sessionStatus !== 'archived' ? (
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={pending !== null}
+                    onClick={() => beginCapacity(record)}
+                    type="button"
+                  >
+                    Upravit kapacitu
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {selectedCapacity ? (
+            <div className={styles.stack}>
+              <h3>
+                Kapacita: {selectedCapacity.sessionTitle} · snapshot v
+                {selectedCapacity.version}
+              </h3>
+              {capacityValidationFailed ||
+              (error && errorScope === 'capacity') ? (
+                <>
+                  <AdminFormErrorSummary
+                    descriptionId="admin-capacity-form-error"
+                    heading="Kapacitu zatím nelze potvrdit"
+                    message={
+                      error && errorScope === 'capacity'
+                        ? error
+                        : 'Zkontrolujte kapacitu a auditní důvod.'
+                    }
+                  />
+                  {ambiguous && pending?.kind === 'capacity' ? (
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={busy}
+                      onClick={() => void execute(pending)}
+                      type="button"
+                    >
+                      Zopakovat přesně stejný pokus
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+              <label className={styles.field}>
+                <span>Nová kapacita</span>
+                <input
+                  aria-describedby={
+                    capacityValidationFailed
+                      ? 'admin-capacity-form-error'
+                      : undefined
+                  }
+                  aria-invalid={capacityValidationFailed}
+                  disabled={pending !== null}
+                  max={100_000}
+                  min={Math.max(1, selectedCapacity.confirmedCount)}
+                  onChange={(event) =>
+                    setCapacityDraft(Number(event.target.value))
+                  }
+                  type="number"
+                  value={capacityDraft}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Auditní důvod</span>
+                <textarea
+                  aria-describedby={
+                    capacityValidationFailed
+                      ? 'admin-capacity-form-error'
+                      : undefined
+                  }
+                  aria-invalid={capacityValidationFailed}
+                  disabled={pending !== null}
+                  onChange={(event) => setCapacityReason(event.target.value)}
+                  value={capacityReason}
+                />
+              </label>
+              <button
+                className={styles.dangerButton}
+                disabled={busy || pending !== null}
+                onClick={prepareCapacity}
+                type="button"
+              >
+                Zkontrolovat změnu kapacity
+              </button>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {canReadReservations ? (
@@ -592,26 +821,6 @@ export const AdminReservationWorkspace = ({
                     ))}
                 </select>
               </label>
-              {action === 'capacity_override' ? (
-                <label className={styles.field}>
-                  <span>Nová kapacita</span>
-                  <input
-                    aria-describedby={
-                      reservationValidationFailed
-                        ? 'admin-reservation-form-error'
-                        : undefined
-                    }
-                    aria-invalid={reservationValidationFailed}
-                    disabled={pending !== null}
-                    min={selected.reservedCount}
-                    onChange={(event) =>
-                      setCapacity(Number(event.target.value))
-                    }
-                    type="number"
-                    value={capacity}
-                  />
-                </label>
-              ) : null}
               <label className={styles.field}>
                 <span>Auditní důvod</span>
                 <textarea
@@ -802,9 +1011,11 @@ export const AdminReservationWorkspace = ({
         <AdminConfirmDialog
           acknowledgement="Ověřil/a jsem aktuální snapshot, dopad změny a auditní důvod."
           confirmLabel={
-            pending.kind === 'reservation'
-              ? reservationActionLabels[pending.body.action]
-              : 'Uložit nastavení'
+            pending.kind === 'capacity'
+              ? 'Uložit kapacitu'
+              : pending.kind === 'reservation'
+                ? reservationActionLabels[pending.body.action]
+                : 'Uložit nastavení'
           }
           danger
           description="Server znovu ověří oprávnění, event scope a očekávanou verzi."
@@ -814,9 +1025,11 @@ export const AdminReservationWorkspace = ({
             setPending(null);
           }}
           title={
-            pending.kind === 'reservation'
-              ? 'Potvrdit změnu rezervace?'
-              : 'Potvrdit změnu nastavení?'
+            pending.kind === 'capacity'
+              ? 'Potvrdit změnu kapacity aktivity?'
+              : pending.kind === 'reservation'
+                ? 'Potvrdit změnu rezervace?'
+                : 'Potvrdit změnu nastavení?'
           }
         />
       ) : null}

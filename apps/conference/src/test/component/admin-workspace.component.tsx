@@ -2,7 +2,10 @@ import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendResponseSchema,
 } from '@byzon/domain/contracts';
-import { adminOperationsOverviewResponseSchema } from '@byzon/domain/contracts/admin';
+import {
+  adminOperationsOverviewResponseSchema,
+  adminSessionCapacityMutationResponseSchema,
+} from '@byzon/domain/contracts/admin';
 import {
   ticketImportApplyResponseSchema,
   ticketImportPreviewResponseSchema,
@@ -17,6 +20,7 @@ import {
   adminFixtureIds,
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
+  adminSessionCapacityMutationFixtures,
   supportSearchFixtures,
   ticketImportApplyFixtures,
   ticketImportPreviewFixtures,
@@ -39,6 +43,7 @@ import {
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
   adminReservationsEndpoint,
+  adminSessionCapacityMutationEndpoint,
   adminSupportMutationEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
@@ -495,6 +500,66 @@ describe('F4 contract-first admin journeys', () => {
     expect(
       screen.getByRole('heading', { name: 'Nastavení akce' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('edits a session capacity independently of a reservation record', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    let list = structuredClone(adminReservationFixtures.list!);
+    let mutationBody: Record<string, unknown> | null = null;
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as { readonly body?: Record<string, unknown> };
+      if (endpoint === adminReservationsEndpoint) return success(list);
+      if (endpoint === adminSessionCapacityMutationEndpoint) {
+        mutationBody = options.body ?? null;
+        const response = adminSessionCapacityMutationResponseSchema.parse({
+          ...adminSessionCapacityMutationFixtures.updated!,
+          record: {
+            ...adminSessionCapacityMutationFixtures.updated!.record,
+            capacity: options.body?.capacity,
+          },
+        });
+        list = {
+          ...list,
+          capacityItems: list.capacityItems.map((record) =>
+            record.sessionId === response.record.sessionId
+              ? response.record
+              : record,
+          ),
+        };
+        return success(response);
+      }
+      throw new Error('The capacity editor requested an unexpected endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationWorkspace mode="reservations" />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('button', { name: 'Upravit kapacitu' })
+      .first()
+      .click();
+    await screen.getByRole('spinbutton', { name: 'Nová kapacita' }).fill('42');
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod' })
+      .fill('Potvrzená provozní změna kapacity workshopu.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat změnu kapacity' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Uložit kapacitu' }).click();
+
+    await expect
+      .element(screen.getByText(/Kapacita aktivity byla změněna/))
+      .toBeVisible();
+    expect(mutationBody).toMatchObject({
+      sessionId: adminFixtureIds.session,
+      expectedVersion: 4,
+      capacity: 42,
+      reason: 'Potvrzená provozní změna kapacity workshopu.',
+    });
+    expect(mutationBody).not.toHaveProperty('reservationId');
   });
 
   it('invalidates edited announcement preview and sends only a reconfirmed canonical version', async () => {

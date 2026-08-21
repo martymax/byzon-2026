@@ -366,16 +366,48 @@ export const adminExportResponseSchema = z.strictObject({
 
 export type AdminExportResponse = z.infer<typeof adminExportResponseSchema>;
 
-export const adminReservationActionSchema = z.enum([
-  'capacity_override',
-  'cancel_reservation',
-]);
+export const adminReservationActionSchema = z.literal('cancel_reservation');
 
 export type AdminReservationAction = z.infer<
   typeof adminReservationActionSchema
 >;
 
 const adminReservationCapacitySchema = z.number().int().positive().max(100_000);
+
+export const adminSessionCapacityRecordSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    sessionId: uuidSchema,
+    sessionTitle: safeInlineTextSchema(160),
+    sessionType: z.enum([
+      'talk',
+      'panel',
+      'workshop',
+      'mastermind',
+      'coaching',
+      'break',
+      'meal',
+      'gala',
+      'other',
+    ]),
+    sessionStatus: z.enum(['draft', 'published', 'cancelled', 'archived']),
+    capacity: adminReservationCapacitySchema,
+    confirmedCount: z.number().int().nonnegative().max(100_000),
+    version: versionSchema,
+  })
+  .superRefine((record, context) => {
+    if (record.confirmedCount > record.capacity) {
+      context.addIssue({
+        code: 'custom',
+        path: ['confirmedCount'],
+        message: 'Confirmed count cannot exceed canonical capacity',
+      });
+    }
+  });
+
+export type AdminSessionCapacityRecord = z.infer<
+  typeof adminSessionCapacityRecordSchema
+>;
 
 export const adminReservationRecordSchema = z
   .strictObject({
@@ -417,6 +449,7 @@ export const adminReservationListResponseSchema = z
   .strictObject({
     eventId: uuidSchema,
     generatedAt: dateTimeSchema,
+    capacityItems: z.array(adminSessionCapacityRecordSchema).max(100),
     items: z.array(adminReservationRecordSchema).max(100),
   })
   .superRefine((response, context) => {
@@ -430,6 +463,19 @@ export const adminReservationListResponseSchema = z
         path: ['items'],
         message:
           'Reservation items must be unique and match the response event',
+      });
+    }
+    if (
+      response.capacityItems.some(
+        ({ eventId }) => eventId !== response.eventId,
+      ) ||
+      new Set(response.capacityItems.map(({ sessionId }) => sessionId)).size !==
+        response.capacityItems.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['capacityItems'],
+        message: 'Capacity items must be unique and match the response event',
       });
     }
   });
@@ -448,20 +494,10 @@ const reservationMutationBase = {
  * Assigned session IDs are server-side authorization context. They are
  * intentionally absent from every reservation mutation request.
  */
-export const adminReservationMutationRequestSchema = z.discriminatedUnion(
-  'action',
-  [
-    z.strictObject({
-      ...reservationMutationBase,
-      action: z.literal('capacity_override'),
-      capacity: adminReservationCapacitySchema,
-    }),
-    z.strictObject({
-      ...reservationMutationBase,
-      action: z.literal('cancel_reservation'),
-    }),
-  ],
-);
+export const adminReservationMutationRequestSchema = z.strictObject({
+  ...reservationMutationBase,
+  action: z.literal('cancel_reservation'),
+});
 
 export type AdminReservationMutationRequest = z.infer<
   typeof adminReservationMutationRequestSchema
@@ -491,6 +527,39 @@ export const adminReservationMutationResponseSchema = z
 
 export type AdminReservationMutationResponse = z.infer<
   typeof adminReservationMutationResponseSchema
+>;
+
+export const adminSessionCapacityMutationRequestSchema = z.strictObject({
+  sessionId: uuidSchema,
+  expectedVersion: versionSchema,
+  capacity: adminReservationCapacitySchema,
+  reason: mutationReasonSchema,
+});
+
+export type AdminSessionCapacityMutationRequest = z.infer<
+  typeof adminSessionCapacityMutationRequestSchema
+>;
+
+export const adminSessionCapacityMutationResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    outcome: z.enum(['updated', 'already_applied']),
+    record: adminSessionCapacityRecordSchema,
+    changedAt: dateTimeSchema,
+    audit: z.strictObject({ auditId: uuidSchema }),
+  })
+  .superRefine((response, context) => {
+    if (response.record.eventId !== response.eventId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['record', 'eventId'],
+        message: 'Session capacity record must match the response event',
+      });
+    }
+  });
+
+export type AdminSessionCapacityMutationResponse = z.infer<
+  typeof adminSessionCapacityMutationResponseSchema
 >;
 
 export const adminAuditCategorySchema = z.enum([

@@ -10,9 +10,11 @@ import {
   adminReadProblemSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationResponseSchema,
   problemTypeForCode,
   type AdminReservationRecord,
+  type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts';
 
 import { defineFixtureSet } from '../fixture-harness.js';
@@ -232,7 +234,7 @@ const reservedRecord = {
   capacity: 40,
   reservedCount: 38,
   version: 4,
-  availableActions: ['capacity_override', 'cancel_reservation'],
+  availableActions: ['cancel_reservation'],
 } satisfies AdminReservationRecord;
 
 const cancelledRecord = {
@@ -248,6 +250,28 @@ const cancelledRecord = {
   availableActions: [],
 } satisfies AdminReservationRecord;
 
+const workshopCapacityRecord = {
+  eventId: adminFixtureIds.event,
+  sessionId: adminFixtureIds.session,
+  sessionTitle: 'Růst bez zkratek',
+  sessionType: 'workshop' as const,
+  sessionStatus: 'published' as const,
+  capacity: 40,
+  confirmedCount: 38,
+  version: 4,
+} satisfies AdminSessionCapacityRecord;
+
+const panelCapacityRecord = {
+  eventId: adminFixtureIds.event,
+  sessionId: adminFixtureIds.secondSession,
+  sessionTitle: 'Panel: firmy v pohybu',
+  sessionType: 'panel' as const,
+  sessionStatus: 'published' as const,
+  capacity: 80,
+  confirmedCount: 65,
+  version: 2,
+} satisfies AdminSessionCapacityRecord;
+
 export const adminReservationFixtures = defineFixtureSet({
   name: 'admin.reservations',
   schema: adminReservationListResponseSchema,
@@ -255,17 +279,49 @@ export const adminReservationFixtures = defineFixtureSet({
     list: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
+      capacityItems: [workshopCapacityRecord, panelCapacityRecord],
       items: [reservedRecord, cancelledRecord],
     },
     empty: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
+      capacityItems: [],
       items: [],
     },
     assigned_session_only: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
+      capacityItems: [workshopCapacityRecord],
       items: [reservedRecord],
+    },
+  },
+});
+
+export const adminSessionCapacityMutationFixtures = defineFixtureSet({
+  name: 'admin.session-capacity-mutation',
+  schema: adminSessionCapacityMutationResponseSchema,
+  fixtures: {
+    updated: {
+      eventId: adminFixtureIds.event,
+      outcome: 'updated',
+      record: {
+        ...workshopCapacityRecord,
+        capacity: 42,
+        version: 5,
+      },
+      changedAt: '2026-07-25T12:20:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
+    },
+    idempotent_replay: {
+      eventId: adminFixtureIds.event,
+      outcome: 'already_applied',
+      record: {
+        ...workshopCapacityRecord,
+        capacity: 42,
+        version: 5,
+      },
+      changedAt: '2026-07-25T12:20:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
     },
   },
 });

@@ -5,6 +5,7 @@ import {
   adminFixtureIds,
   adminReservationFixtures,
   adminReservationMutationFixtures,
+  adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
   supportFixtureIds,
   supportMutationFixtures,
@@ -26,6 +27,7 @@ import {
   requestAdminEventSettingsUpdate,
   requestAdminOperationsOverview,
   requestAdminReservationMutation,
+  requestAdminSessionCapacityMutation,
   requestAdminRoleAssignment,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
@@ -165,6 +167,21 @@ describe('admin API contract policies', () => {
       },
     });
 
+    const capacity = adminReservationFixtures.list!.capacityItems[0]!;
+    const capacityBody = {
+      sessionId: capacity.sessionId,
+      expectedVersion: capacity.version,
+      capacity: capacity.capacity + 2,
+      reason: 'Bezpečný test přesné korelace kapacity session.',
+    };
+    const capacityApi = apiReturning({
+      ...adminSessionCapacityMutationFixtures.updated!,
+      record: {
+        ...adminSessionCapacityMutationFixtures.updated!.record,
+        version: capacity.version + 2,
+      },
+    });
+
     const settings = adminEventSettingsFixtures.open!;
     const settingsBody = {
       expectedVersion: settings.version,
@@ -207,6 +224,12 @@ describe('admin API contract policies', () => {
         adminFixtureIds.event,
         reservationBody,
         'admin-reservation-correlation-0001',
+      ),
+      requestAdminSessionCapacityMutation(
+        capacityApi,
+        adminFixtureIds.event,
+        capacityBody,
+        'admin-session-capacity-correlation-0001',
       ),
       requestAdminEventSettingsUpdate(
         settingsApi,

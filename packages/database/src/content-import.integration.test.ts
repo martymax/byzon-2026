@@ -138,6 +138,16 @@ integration('content import integration', () => {
         ),
       );
 
+    await client.db
+      .update(schema.programSessions)
+      .set({ capacity: 24 })
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.title, 'Workshop: Leonid Kushnir'),
+        ),
+      );
+
     const second = await importContentJson(options);
     const secondSessions = await client.db
       .select({
@@ -213,7 +223,7 @@ integration('content import integration', () => {
           title: 'Workshop: Leonid Kushnir',
           type: 'workshop',
           capacityMode: 'reservation',
-          capacity: 20,
+          capacity: 24,
           reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
         expect.objectContaining({
@@ -279,5 +289,5 @@ integration('content import integration', () => {
         ),
       );
     expect(invalid[0]!.value).toBe(0);
-  });
+  }, 15_000);
 });

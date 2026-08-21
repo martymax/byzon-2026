@@ -264,7 +264,7 @@ odkazy pro úkoly a akceptaci; nerozhodnuté body zůstávají pouze v §22.
 | `SCOPE-2026-05` | Dotazy jsou prostý sběr bez hlasování a moderátorského workflow. Jsou povolené jen pro páteční program na Byzon stage a Leadership stage; vidí je pouze přiřazení moderátoři na tabletu. | Žádné ankety, votes, merge, answered state, projection ani post-event answers. Každý publikovaný bod programu má stažitelný QR deep link pro úvodní slide; možnost položit dotaz se zobrazí jen u podporované session. | `AAACFfwvgXA`, `AAACFfwvgSw`, `AAACFfwvgRI` |
 | `SCOPE-2026-06` | Oznámení slouží jen pro kritické změny, například odpadnutí řečníka, zrušení části programu nebo bezpečnostní incident. | Povolené audience jsou celá akce nebo přímo dotčené sessions; běžné reminders a marketingové rozesílky se nestaví. Kalendář `.ics` zůstává. | `AAACFfwvgTE`, `AAACFfwvgP8` |
 | `SCOPE-2026-07` | Samostatný plánek, materiály a samoobslužný datový export se nestaví. Profil lze opravit přímo; telefon je dobrovolné profilové pole. | Lokace je text v programu, privacy UI nabízí editaci a kontaktní cestu, nikoli exportní job. | `AAACFfwvgWI`, `AAACFfwvgTA`, `AAACFfwvgPo`, `AAACFfwvgO4` |
-| `SCOPE-2026-08` | Rezervovatelné aktivity: pátek koučink, mastermind Expertního Boardu a řízený networking; sobota workshopy a mastermind Tomáše Ryzy. Potvrzené kapacity: koučink 1 osoba/slot, EB21 12, každý sobotní workshop 20, sobotní mastermind 6. Registrace končí začátkem aktivity; každý použitý pořadník je striktně FIFO. | Číselná kapacita a waitlist/storno detail pátečního networkingu chybí v `BLOCKER-RES-01`; do rozhodnutí jej nelze tiše změnit na `registration_estimate`. `BLOCKER-RES-04` ještě volí auto-confirm versus nabídku s expirací. | `AAACFfwvgWU`, `AAACD524HbQ` |
+| `SCOPE-2026-08` | Rezervovatelné aktivity: pátek koučink, mastermind Expertního Boardu a řízený networking; sobota workshopy a mastermind Tomáše Ryzy. Počáteční administrátorské hodnoty: koučink 1 osoba/slot, EB21 12, každý sobotní workshop 20, sobotní mastermind 6; nejde o konstanty v aplikačním kódu a provozní kapacita session je auditovaně editovatelná v administraci. Registrace končí začátkem aktivity; každý použitý pořadník je striktně FIFO. | Číselná kapacita a waitlist/storno detail pátečního networkingu chybí v `BLOCKER-RES-01`; do rozhodnutí jej nelze tiše změnit na `registration_estimate`. `BLOCKER-RES-04` ještě volí auto-confirm versus nabídku s expirací. | `AAACFfwvgWU`, `AAACD524HbQ` |
 | `SCOPE-2026-09` | Koučové jsou Radim Roček a Stanislava Maunová; slot trvá 30 minut a dostupnost se přebírá z listu Pátek, aktuálně sloupců H:I „Radim“/„Stáňa“ v [Harmonogramu BYZON 2026](https://docs.google.com/spreadsheets/d/1SgNPggOliwIz-TZghhQuxcs1Qv3hqzRNAOWXcAhz0zw/edit?gid=0#gid=0). | Vytvořit dvě paralelní zdrojové řady slotů, respektovat hodnoty dostupnosti a před publikací znovu validovat aktuální list/range místo hardcodování dnešního pořadí sloupců. | `AAACFfwvgWs` |
 | `SCOPE-2026-10` | Kouči, vedoucí mastermindů, workshopů a řízeného networkingu potřebují online jméno a firmu přihlášených pouze u svých aktivit. | Stávající technická role `room_operator` se v UI jmenuje „Vedoucí aktivity“, je scoped na session a má read-only roster; nedostává globální seznam ani práva řečníka/admina. | `AAACFfwvgUg`, `AAACFfwvgQM`, `AAACFfwvgOQ`, `AAACD524HbY` |
 | `SCOPE-2026-11` | Obecný QR na badge a obrazovkách vede jen na `https://app.byzon.cz`; osobní přístup přijde ověřeným e-mailovým linkem. | Veřejný QR nesmí obsahovat ticket ani token; ideální pozvánka 11. 9. 2026, hard deadline 15. 9. 2026; zachovat recovery přes e-mail. | `AAACD524Ha0`, `AAACFfwvgOk` |
@@ -677,7 +677,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `contract ready`; maskované hledání a verzované reasoned/idempotentní akce s auditem |
 | `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | `P6-01` až `P6-06`, `F5` | `F5` | `contract ready`; online-only bootstrap, lookup/search, confirm, undo a stats |
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
-| `CS-ADMIN-01` | dashboard, role, reservation override, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | `partially integrated`: reasoned/idempotentní reservation cancel a capacity override jsou live; dashboard, role, audit, export a settings zůstávají podle vlastníků v `P9` nebo `UI ready (mocked)` |
+| `CS-ADMIN-01` | dashboard, role, reservation override, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | `partially integrated`: reasoned/idempotentní reservation cancel a samostatná session-level správa kapacity jsou live; kapacitu lze změnit i bez existující rezervace a opakovaný import ji nepřepíše. Dashboard, role, audit, export a settings zůstávají podle vlastníků v `P9` nebo `UI ready (mocked)` |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
 | `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
 | `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
@@ -2553,7 +2553,9 @@ souběžně.
   locků. Exact-key replay překonaný pozdější opačnou mutací vrací aktuální
   canonical snapshot s výsledkem `superseded`, zatímco v databázi zůstává jen
   minimální receipt. Source-provenance policy
-  bezpečně nastavuje EB21 na 12 a oba sobotní workshopy na 20. Coaching
+  inicializuje EB21 na 12 a oba sobotní workshopy na 20. Jde o počáteční
+  session data; administrátor je může auditovaně změnit a opakovaný import
+  programu provozní hodnotu nepřepíše. Coaching
   1/slot zůstává v `P5-06`, protože živý list potvrzuje dvě paralelní řady;
   sobotní mastermind 6 čeká na group-booking rozhodnutí v `BLOCKER-RES-05`.
   Páteční networking zůstává za `BLOCKER-RES-01`.
@@ -2564,11 +2566,14 @@ souběžně.
   živé FIFO pořadí; vznik, promotion, nabídka/storno a worker orchestrace dál
   patří výhradně sem.
 - [x] `P5-05` Implementováno serverové participant zrušení do immutable
-  publikovaného začátku session a pozdější admin cancel/capacity override s
+  publikovaného začátku session a pozdější admin cancel spolu se
+  samostatnou session-level správou kapacity s
   povinným reason, optimistic version, idempotency a auditem. Owner → content
   → session locky serializují cancel s rezervací i provozní změnou; snížení
-  kapacity pod confirmed count je odmítnuté a capacity override invaliduje
-  session reservation snapshoty. Shared Redis HMAC buckety omezují read
+  kapacity pod confirmed count je odmítnuté a session capacity update
+  invaliduje reservation snapshoty. Kapacitu lze změnit i před první
+  rezervací; původní reservation-bound override už není součástí kontraktu.
+  Shared Redis HMAC buckety omezují read
   120/min a mutation 30/min; obě chráněné cesty failují zavřeně. Live
   participant `F3` a produkční reservation-only `F4-08` jsou napojené;
   waitlist se bez `P5-04` automaticky neposouvá. Transfer/storno ruší aktivní
@@ -3255,3 +3260,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.20 | 21. 8. 2026 | Dokončeno `P5-05`: participant může idempotentně zrušit potvrzenou rezervaci do publikovaného začátku session; po cutoffu zasáhne jen organizer admin přes reasoned, auditovaný cancel nebo kapacitní override. Sdílené owner/content/session locky, stale verze, exact replay, capacity guard, cross-event/retention/permission negativní testy, fail-closed shared Redis HMAC rate limits a produkční reservation-only admin UI jsou pokryté. Uvolněné místo bez `P5-04` neprovádí waitlist promotion. Service-backed workspace gate prošel 905/905, browser komponenty 852/852 a Playwright 15/15; build i audity jsou zelené. `RES-03` je rozhodnuté a ticket-transition napojení zůstává v `P4-09`. |
 | 6.21 | 21. 8. 2026 | Dokončeno `P5-06`/`F3-06`: snapshot živého `Pátek!G1:I18` vytváří dvě source-verified coaching řady (Radim 12, Stanislava 14), 30 minut, kapacitu 1, cutoff v začátku a vypnutý waitlist. Migrace/import failují při neúplné provenance, policy driftu nebo participant state; souběh posledního místa a UI bez identity držitele mají PostgreSQL/browser regresi. Před finální publikací se snapshot znovu porovná s autoritativním listem. |
 | 6.22 | 21. 8. 2026 | Dokončeno `P5-09`: produkční osobní agenda nabízí privátní autorizovaný RFC 5545 export nad stejným zamčeným canonical snapshotem jako JSON. Stabilní ne-PII UID, publication SEQUENCE, UTC, CRLF, escaping, Unicode-safe folding, cancellation a IDOR/retention hlavičky mají unit/PostgreSQL regresi. `P5-07` bylo znovu ověřeno proti nezměněné autoritativní revizi a zůstává fail-closed za chybějící kapacitou a waitlist/storno rozhodnutím `BLOCKER-RES-01`. |
+| 6.23 | 21. 8. 2026 | Kapacita rezervovatelné aktivity je samostatné session-level provozní nastavení v `/admin/rezervace`, nikoli konstanta nebo vlastnost konkrétní rezervace. Organizer ji může auditovaně a idempotentně změnit i před první rezervací; server odmítá hodnotu pod confirmed count, serializuje ji s participant rezervacemi a invaliduje dotčené snapshoty. Opakovaný import programu zachová administrátorskou hodnotu a starý reservation-bound capacity override byl odstraněn z kontraktu. |

@@ -47,6 +47,13 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `140ae8c`: participant cancel do začátku session, reasoned admin
   cancel/capacity override a produkční reservation-only admin UI. Waitlist
   promotion je vypnutá do `P5-04`.
+- Následná úprava odděluje kapacitu od konkrétní rezervace: produkční
+  `/admin/rezervace` načítá samostatné session capacity snapshoty a organizer
+  může kapacitu auditovaně/idempotentně změnit i u workshopu bez jediné
+  rezervace. Snížení pod confirmed count je odmítnuto, dotčené reservation
+  snapshoty se invalidují a opakovaný import programu administrátorskou
+  hodnotu nepřepíše. Starý reservation-bound capacity override byl odstraněn
+  z kontraktu; rezervace v administraci nyní mutuje jen storno.
 - `P5-06`/`F3-06` jsou sloučené do `main` přes
   [PR #25](https://github.com/martymax/byzon-2026/pull/25) merge commitem
   `9e2be72` jako dvě source-verified řady nad
