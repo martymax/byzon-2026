@@ -293,11 +293,15 @@ export const AdminReservationWorkspace = ({
         reason,
       })
     : null;
+  const effectiveCapacityDraft = Math.max(
+    capacityDraft,
+    selectedCapacity?.confirmedCount ?? 1,
+  );
   const capacityCandidate = selectedCapacity
     ? adminSessionCapacityMutationRequestSchema.safeParse({
         sessionId: selectedCapacity.sessionId,
         expectedVersion: selectedCapacity.version,
-        capacity: capacityDraft,
+        capacity: effectiveCapacityDraft,
         reason: capacityReason,
       })
     : null;
@@ -433,7 +437,11 @@ export const AdminReservationWorkspace = ({
         );
         return;
       }
-      if (isStaleAdminFailure(result.failure)) {
+      const capacitySnapshotChanged =
+        attempt.kind === 'capacity' &&
+        result.failure.kind === 'problem' &&
+        result.failure.problem.code === 'ADMIN_INVALID_TRANSITION';
+      if (isStaleAdminFailure(result.failure) || capacitySnapshotChanged) {
         setPending(null);
         setConfirming(false);
         setAmbiguous(false);
@@ -658,7 +666,7 @@ export const AdminReservationWorkspace = ({
                     setCapacityDraft(Number(event.target.value))
                   }
                   type="number"
-                  value={capacityDraft}
+                  value={effectiveCapacityDraft}
                 />
               </label>
               <label className={styles.field}>

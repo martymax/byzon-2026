@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { and, count, eq, ne } from 'drizzle-orm';
+import { and, count, eq, inArray, ne } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createDatabaseClient } from './client.js';
@@ -25,6 +25,9 @@ integration('content import integration', () => {
     onUnexpectedError: vi.fn(),
   });
   const eventId = generateUuidV7();
+  const restoredParticipantIds = Array.from({ length: 21 }, () =>
+    generateUuidV7(),
+  );
 
   beforeAll(async () => {
     await client.db.insert(schema.events).values({
@@ -38,6 +41,12 @@ integration('content import integration', () => {
   });
 
   afterAll(async () => {
+    await client.db
+      .delete(schema.reservations)
+      .where(eq(schema.reservations.eventId, eventId));
+    await client.db
+      .delete(schema.eventMemberships)
+      .where(eq(schema.eventMemberships.eventId, eventId));
     await client.db
       .delete(schema.programSessions)
       .where(eq(schema.programSessions.eventId, eventId));
@@ -57,6 +66,9 @@ integration('content import integration', () => {
       .delete(schema.assets)
       .where(eq(schema.assets.eventId, eventId));
     await client.db.delete(schema.events).where(eq(schema.events.id, eventId));
+    await client.db
+      .delete(schema.users)
+      .where(inArray(schema.users.id, restoredParticipantIds));
     await client.close();
   });
 
@@ -146,7 +158,11 @@ integration('content import integration', () => {
     const preservedWorkshopId = firstSessions.find(
       ({ title }) => title === 'Workshop: Leonid Kushnir',
     )?.id;
+    const restoredWorkshopId = firstSessions.find(
+      ({ title }) => title === 'Workshop: Blanka Mrázková',
+    )?.id;
     expect(preservedWorkshopId).toBeDefined();
+    expect(restoredWorkshopId).toBeDefined();
     await client.db
       .update(schema.programSessions)
       .set({
@@ -155,6 +171,29 @@ integration('content import integration', () => {
         waitlistMode: 'auto_confirm',
       })
       .where(eq(schema.programSessions.id, preservedWorkshopId!));
+    await client.db.insert(schema.users).values(
+      restoredParticipantIds.map((id, index) => ({
+        id,
+        name: `Obnovená kapacita ${index + 1}`,
+        email: `restored-capacity-${index + 1}-${eventId}@example.invalid`,
+      })),
+    );
+    await client.db
+      .insert(schema.eventMemberships)
+      .values(restoredParticipantIds.map((userId) => ({ eventId, userId })));
+    await client.db.insert(schema.reservations).values(
+      restoredParticipantIds.map((userId) => ({
+        id: generateUuidV7(),
+        eventId,
+        sessionId: restoredWorkshopId!,
+        userId,
+        source: 'participant',
+      })),
+    );
+    await client.db
+      .update(schema.programSessions)
+      .set({ capacityMode: 'none', capacity: null })
+      .where(eq(schema.programSessions.id, restoredWorkshopId!));
 
     const changedSourceDirectory = await mkdtemp(
       join(tmpdir(), 'byzon-content-import-'),
@@ -255,7 +294,7 @@ integration('content import integration', () => {
           title: 'Workshop: Blanka Mrázková',
           type: 'workshop',
           capacityMode: 'reservation',
-          capacity: 20,
+          capacity: 21,
           reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
         expect.objectContaining({

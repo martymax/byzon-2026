@@ -18,6 +18,7 @@ import {
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
   adminFixtureIds,
+  adminMutationProblemFixtures,
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
   adminSessionCapacityMutationFixtures,
@@ -560,6 +561,64 @@ describe('F4 contract-first admin journeys', () => {
       reason: 'Potvrzená provozní změna kapacity workshopu.',
     });
     expect(mutationBody).not.toHaveProperty('reservationId');
+  });
+
+  it('refreshes and clamps the capacity editor after the confirmed count changes', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    let list = structuredClone(adminReservationFixtures.list!);
+    let listCalls = 0;
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminReservationsEndpoint) {
+        listCalls += 1;
+        return success(list);
+      }
+      if (endpoint === adminSessionCapacityMutationEndpoint) {
+        list = {
+          ...list,
+          capacityItems: list.capacityItems.map((record) =>
+            record.sessionId === adminFixtureIds.session
+              ? { ...record, confirmedCount: 39 }
+              : record,
+          ),
+        };
+        return {
+          ok: false,
+          kind: 'failure',
+          status: 409,
+          failure: {
+            kind: 'problem',
+            problem: adminMutationProblemFixtures.invalid_transition!,
+          },
+          metadata,
+        } as const;
+      }
+      throw new Error('The capacity editor requested an unexpected endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationWorkspace mode="reservations" />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('button', { name: 'Upravit kapacitu' })
+      .first()
+      .click();
+    const initialListCalls = listCalls;
+    const capacity = screen.getByRole('spinbutton', { name: 'Nová kapacita' });
+    await capacity.fill('38');
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod' })
+      .fill('Ověření souběžně obsazeného místa workshopu.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat změnu kapacity' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Uložit kapacitu' }).click();
+
+    await expect.element(screen.getByText('39 / 40')).toBeVisible();
+    await expect.element(capacity).toHaveValue(39);
+    expect(listCalls).toBe(initialListCalls + 1);
   });
 
   it('invalidates edited announcement preview and sends only a reconfirmed canonical version', async () => {
