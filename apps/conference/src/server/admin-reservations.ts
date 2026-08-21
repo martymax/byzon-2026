@@ -17,6 +17,7 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
   adminSessionCapacityRecordSchema,
@@ -27,6 +28,7 @@ import {
   type AdminReservationListResponse,
   type AdminReservationMutationResponse,
   type AdminReservationRecord,
+  type AdminSessionCapacityListResponse,
   type AdminSessionCapacityMutationResponse,
   type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts';
@@ -186,6 +188,7 @@ const successResponse = (
     | AdminContextResponse
     | AdminReservationListResponse
     | AdminReservationMutationResponse
+    | AdminSessionCapacityListResponse
     | AdminSessionCapacityMutationResponse,
   requestId: string,
   extra: Record<string, string> = {},
@@ -581,9 +584,18 @@ const loadSessionCapacityRecords = async (
       sessionType: schema.programSessions.type,
       sessionStatus: schema.programSessions.status,
       capacity: schema.programSessions.capacity,
+      confirmedCount: count(schema.reservations.id),
       version: schema.programSessions.version,
     })
     .from(schema.programSessions)
+    .leftJoin(
+      schema.reservations,
+      and(
+        eq(schema.reservations.eventId, schema.programSessions.eventId),
+        eq(schema.reservations.sessionId, schema.programSessions.id),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    )
     .where(
       and(
         eq(schema.programSessions.eventId, eventId),
@@ -591,32 +603,20 @@ const loadSessionCapacityRecords = async (
         ne(schema.programSessions.type, 'networking'),
       ),
     )
+    .groupBy(
+      schema.programSessions.id,
+      schema.programSessions.title,
+      schema.programSessions.type,
+      schema.programSessions.status,
+      schema.programSessions.capacity,
+      schema.programSessions.version,
+      schema.programSessions.startsAt,
+    )
     .orderBy(
       asc(schema.programSessions.startsAt),
       asc(schema.programSessions.id),
     )
     .limit(MAX_CAPACITY_SESSIONS);
-  const sessionIds = sessions.map(({ sessionId }) => sessionId);
-  const counts =
-    sessionIds.length === 0
-      ? []
-      : await db
-          .select({
-            sessionId: schema.reservations.sessionId,
-            confirmed: count(),
-          })
-          .from(schema.reservations)
-          .where(
-            and(
-              eq(schema.reservations.eventId, eventId),
-              eq(schema.reservations.status, 'confirmed'),
-              inArray(schema.reservations.sessionId, sessionIds),
-            ),
-          )
-          .groupBy(schema.reservations.sessionId);
-  const confirmedBySession = new Map(
-    counts.map(({ sessionId, confirmed }) => [sessionId, confirmed]),
-  );
   return sessions.flatMap((session) =>
     session.capacity === null || session.sessionType === 'networking'
       ? []
@@ -632,7 +632,7 @@ const loadSessionCapacityRecords = async (
             sessionType: session.sessionType,
             sessionStatus: session.sessionStatus,
             capacity: session.capacity,
-            confirmedCount: confirmedBySession.get(session.sessionId) ?? 0,
+            confirmedCount: session.confirmedCount,
             version: session.version,
           },
         ],
@@ -690,12 +690,52 @@ export const readAdminReservations = async (
     const body = adminReservationListResponseSchema.parse({
       eventId: event.id,
       generatedAt: now.toISOString(),
-      capacityItems: await loadSessionCapacityRecords(
-        dependencies.db,
-        event.id,
-      ),
       items: await loadReservationRecords(dependencies.db, event.id),
     });
+    return withRateLimitHeaders(
+      successResponse(body, requestId),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
+  }
+};
+
+export const readAdminSessionCapacities = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminReservationDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    requireReadTransport(request);
+    if (!uuidSchema.safeParse(eventId).success) throw resourceNotFound();
+    const session = await requireSession(request, dependencies);
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
+    const now = dependencies.now?.() ?? new Date();
+    const event = await loadCurrentAdminEvent(
+      dependencies.db,
+      dependencies,
+      eventId,
+    );
+    requireOperationalDataAvailable(event, now);
+    await requirePermission(
+      dependencies.db,
+      session.user.id,
+      event.id,
+      'reservation:any:read',
+    );
+    const body: AdminSessionCapacityListResponse =
+      adminSessionCapacityListResponseSchema.parse({
+        eventId: event.id,
+        generatedAt: now.toISOString(),
+        items: await loadSessionCapacityRecords(dependencies.db, event.id),
+      });
     return withRateLimitHeaders(
       successResponse(body, requestId),
       rateLimitDecision,

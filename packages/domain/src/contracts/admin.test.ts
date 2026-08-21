@@ -10,6 +10,7 @@ import {
   adminOperationsOverviewResponseSchema,
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
+  adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminRoleAssignmentMutationRequestSchema,
   problemTypeForCode,
@@ -187,10 +188,10 @@ describe('CS-ADMIN-01 contracts', () => {
       version: 4,
       availableActions: ['cancel_reservation'] as const,
     };
-    const response = {
+    const capacityResponse = {
       eventId: ids.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
-      capacityItems: [
+      items: [
         {
           eventId: ids.event,
           sessionId: ids.session,
@@ -202,12 +203,25 @@ describe('CS-ADMIN-01 contracts', () => {
           version: 4,
         },
       ],
+    };
+    const response = {
+      eventId: ids.event,
+      generatedAt: '2026-07-25T12:00:00.000+02:00',
       items: [record],
     };
 
+    expect(
+      adminSessionCapacityListResponseSchema.parse(capacityResponse),
+    ).toEqual(capacityResponse);
     expect(adminReservationListResponseSchema.parse(response)).toEqual(
       response,
     );
+    expect(
+      adminReservationListResponseSchema.safeParse({
+        ...response,
+        capacityItems: capacityResponse.items,
+      }).success,
+    ).toBe(false);
     expect(
       adminReservationListResponseSchema.safeParse({
         ...response,

@@ -5,6 +5,7 @@ import {
   adminReadProblemSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationResponseSchema,
 } from '@byzon/domain/contracts';
 import { and, count, eq } from 'drizzle-orm';
@@ -15,6 +16,7 @@ import {
   mutateAdminSessionCapacity,
   readAdminContext,
   readAdminReservations,
+  readAdminSessionCapacities,
   type AdminReservationDependencies,
 } from './admin-reservations';
 
@@ -71,6 +73,11 @@ integration('P5-05 admin reservation HTTP integration', () => {
     new Request(
       `${appOrigin}/api/v1/admin/events/${requestedEventId}/reservations`,
       { headers: { 'x-request-id': 'admin-reservation-list-request' } },
+    );
+  const capacityListRequest = (requestedEventId = eventId) =>
+    new Request(
+      `${appOrigin}/api/v1/admin/events/${requestedEventId}/session-capacities`,
+      { headers: { 'x-request-id': 'admin-session-capacity-list-request' } },
     );
   const mutationRequest = (
     body: unknown,
@@ -374,13 +381,19 @@ integration('P5-05 admin reservation HTTP integration', () => {
     });
   });
 
-  it('lists only bounded same-event non-networking reservation records', async () => {
+  it('lists bounded reservation and capacity records on rollout-safe endpoints', async () => {
     const denied = await readAdminReservations(
       listRequest(),
       eventId,
       dependencies(participantId),
     );
     expect(denied.status).toBe(403);
+    const capacityDenied = await readAdminSessionCapacities(
+      capacityListRequest(),
+      eventId,
+      dependencies(participantId),
+    );
+    expect(capacityDenied.status).toBe(403);
 
     const response = await readAdminReservations(
       listRequest(),
@@ -391,12 +404,22 @@ integration('P5-05 admin reservation HTTP integration', () => {
     const body = adminReservationListResponseSchema.parse(
       await response.json(),
     );
+    expect(body).not.toHaveProperty('capacityItems');
     expect(body.eventId).toBe(eventId);
     expect(body.items).toHaveLength(2);
     expect(body.items.map(({ reservationId: id }) => id).sort()).toEqual(
       [reservationId, secondReservationId].sort(),
     );
-    expect(body.capacityItems).toEqual(
+    const capacityResponse = await readAdminSessionCapacities(
+      capacityListRequest(),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(capacityResponse.status).toBe(200);
+    const capacityBody = adminSessionCapacityListResponseSchema.parse(
+      await capacityResponse.json(),
+    );
+    expect(capacityBody.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           sessionId,
@@ -410,7 +433,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
         }),
       ]),
     );
-    expect(body.capacityItems).toHaveLength(2);
+    expect(capacityBody.items).toHaveLength(2);
     expect(body.items[0]).toMatchObject({
       state: 'reserved',
       capacity: 2,
@@ -431,6 +454,12 @@ integration('P5-05 admin reservation HTTP integration', () => {
       dependencies(adminId),
     );
     expect(crossEvent.status).toBe(404);
+    const crossEventCapacities = await readAdminSessionCapacities(
+      capacityListRequest(isolationEventId),
+      isolationEventId,
+      dependencies(adminId),
+    );
+    expect(crossEventCapacities.status).toBe(404);
   });
 
   it('edits session capacity before the first reservation exists', async () => {
@@ -722,6 +751,12 @@ integration('P5-05 admin reservation HTTP integration', () => {
       expect(adminReadProblemSchema.parse(await response.json()).code).toBe(
         'EVENT_ACCESS_DENIED',
       );
+      const capacityResponse = await readAdminSessionCapacities(
+        capacityListRequest(),
+        eventId,
+        dependencies(adminId, cutoff),
+      );
+      expect(capacityResponse.status).toBe(403);
     } finally {
       await client.db
         .update(schema.events)

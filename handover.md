@@ -295,12 +295,14 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `RESERVATION_CLOSED`. Exact replay nevytváří druhý audit a starý cancel
   replay po novější re-reservation vrátí `superseded` snapshot.
 - Produkční admin endpointy `GET /api/v1/admin/context`,
-  `GET /api/v1/admin/events/:eventId/reservations` a
-  `POST /api/v1/admin/events/:eventId/reservations/actions` jsou Better Auth,
+  `GET /api/v1/admin/events/:eventId/reservations`, oddělený rollout-safe
+  `GET /api/v1/admin/events/:eventId/session-capacities` a příslušné
+  `POST .../actions` jsou Better Auth,
   current-event a permission scoped, bounded a `private, no-store`. Organizer
   může po povinném reason a novém potvrzení snapshotu zrušit rezervaci i po
   participant cutoffu nebo změnit kapacitu; snížení pod confirmed count je
-  odmítnuté a obě akce jsou idempotentní a auditované.
+  odmítnuté a obě akce jsou idempotentní a auditované. Kapacita a
+  confirmed count se načítají jedním agregovaným DB statementem.
 - Admin reservation read a mutation mají samostatné one-minute shared Redis
   buckety 120/30, environment-keyed HMAC subject canonical event slugu a user
   UUID a fail-closed outage politiku. Mutace spotřebuje bucket před databází a

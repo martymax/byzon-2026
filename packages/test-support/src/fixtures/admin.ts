@@ -10,6 +10,7 @@ import {
   adminReadProblemSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationResponseSchema,
   problemTypeForCode,
@@ -279,20 +280,39 @@ export const adminReservationFixtures = defineFixtureSet({
     list: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
-      capacityItems: [workshopCapacityRecord, panelCapacityRecord],
       items: [reservedRecord, cancelledRecord],
     },
     empty: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
-      capacityItems: [],
       items: [],
     },
     assigned_session_only: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
-      capacityItems: [workshopCapacityRecord],
       items: [reservedRecord],
+    },
+  },
+});
+
+export const adminSessionCapacityFixtures = defineFixtureSet({
+  name: 'admin.session-capacities',
+  schema: adminSessionCapacityListResponseSchema,
+  fixtures: {
+    list: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-07-25T12:00:00.000+02:00',
+      items: [workshopCapacityRecord, panelCapacityRecord],
+    },
+    empty: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-07-25T12:00:00.000+02:00',
+      items: [],
+    },
+    assigned_session_only: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-07-25T12:00:00.000+02:00',
+      items: [workshopCapacityRecord],
     },
   },
 });

@@ -24,6 +24,7 @@ import {
   requestAdminEventSettingsUpdate,
   requestAdminReservationMutation,
   requestAdminReservations,
+  requestAdminSessionCapacities,
   requestAdminSessionCapacityMutation,
 } from '@/lib/admin-api';
 
@@ -177,40 +178,48 @@ export const AdminReservationWorkspace = ({
   useEffect(() => {
     if (!canReadReservations) return;
     const request = requestFence.begin('reservation-list');
-    void requestAdminReservations(api, eventId, request.signal).then(
-      (result) => {
-        if (!request.isCurrent()) return;
-        request.finish();
-        setBusy(false);
-        if (!result.ok) {
-          setRecords([]);
-          setCapacityRecords([]);
-          setSelected(null);
-          setSelectedCapacity(null);
-          handleReadFailure(result);
-          return;
-        }
-        if (result.kind === 'success') {
-          setRecords(result.data.items);
-          setCapacityRecords(result.data.capacityItems);
-          setSelected((current) =>
-            current
-              ? (result.data.items.find(
-                  ({ reservationId }) =>
-                    reservationId === current.reservationId,
-                ) ?? null)
-              : null,
-          );
-          setSelectedCapacity((current) =>
-            current
-              ? (result.data.capacityItems.find(
-                  ({ sessionId }) => sessionId === current.sessionId,
-                ) ?? null)
-              : null,
-          );
-        }
-      },
-    );
+    void Promise.all([
+      requestAdminReservations(api, eventId, request.signal),
+      requestAdminSessionCapacities(api, eventId, request.signal),
+    ]).then(([reservationResult, capacityResult]) => {
+      if (!request.isCurrent()) return;
+      request.finish();
+      setBusy(false);
+      const failure = !reservationResult.ok
+        ? reservationResult
+        : !capacityResult.ok
+          ? capacityResult
+          : null;
+      if (failure) {
+        setRecords([]);
+        setCapacityRecords([]);
+        setSelected(null);
+        setSelectedCapacity(null);
+        handleReadFailure(failure);
+        return;
+      }
+      if (
+        reservationResult.kind === 'success' &&
+        capacityResult.kind === 'success'
+      ) {
+        setRecords(reservationResult.data.items);
+        setCapacityRecords(capacityResult.data.items);
+        setSelected((current) =>
+          current
+            ? (reservationResult.data.items.find(
+                ({ reservationId }) => reservationId === current.reservationId,
+              ) ?? null)
+            : null,
+        );
+        setSelectedCapacity((current) =>
+          current
+            ? (capacityResult.data.items.find(
+                ({ sessionId }) => sessionId === current.sessionId,
+              ) ?? null)
+            : null,
+        );
+      }
+    });
     return () => requestFence.cancel('reservation-list');
     // `handleReadFailure` intentionally resolves against the current shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps

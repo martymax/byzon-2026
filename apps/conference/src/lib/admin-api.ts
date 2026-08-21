@@ -14,6 +14,7 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
@@ -287,6 +288,17 @@ export const adminReservationMutationEndpoint = defineApiEndpoint({
   responseKind: 'json',
   retry: 'never',
   idempotency: 'required',
+});
+
+export const adminSessionCapacitiesEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminSessionCapacityListResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
 });
 
 export const adminSessionCapacityMutationEndpoint = defineApiEndpoint({
@@ -628,6 +640,20 @@ export const requestAdminReservationMutation = async (
       data.eventId === eventId &&
       data.record.eventId === eventId &&
       matchesReservationMutation(data, body),
+  );
+
+export const requestAdminSessionCapacities = async (
+  api: ApiPort,
+  eventId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminSessionCapacitiesEndpoint, {
+      path: eventPath(eventId, '/session-capacities'),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
   );
 
 export const requestAdminSessionCapacityMutation = async (

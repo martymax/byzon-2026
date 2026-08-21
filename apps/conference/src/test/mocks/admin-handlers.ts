@@ -24,6 +24,7 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
@@ -72,6 +73,7 @@ import {
   adminOperationsOverviewFixtures,
   adminReadProblemFixtures,
   adminReservationFixtures,
+  adminSessionCapacityFixtures,
   adminReservationMutationFixtures,
   adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
@@ -149,7 +151,7 @@ const initialState = (): AdminMockState => ({
     eventScopedSupportRecord,
   ),
   reservations: clone(adminReservationFixtures.list!.items),
-  sessionCapacities: clone(adminReservationFixtures.list!.capacityItems),
+  sessionCapacities: clone(adminSessionCapacityFixtures.list!.items),
   settings: clone(adminEventSettingsFixtures.open!),
   announcementPreviewId: null,
   announcementPreviewVersion: 1,
@@ -1227,12 +1229,39 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       {
         ...clone(adminReservationFixtures.list!),
         eventId: adminFixtureIds.event,
-        capacityItems: state.sessionCapacities,
         items,
       },
       successOptions('admin.mock.reservations'),
     );
   }),
+
+  http.get(
+    '*/api/v1/admin/events/:eventId/session-capacities',
+    ({ params }) => {
+      const denied = authorize(
+        adminReadProblemSchema,
+        ['reservation:any:read'],
+        'admin.mock.session-capacities',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId)) {
+        return mockProblemResponse(
+          adminReadProblemSchema,
+          adminReadProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.session-capacities-not-found' },
+        );
+      }
+      return mockJsonResponse(
+        adminSessionCapacityListResponseSchema,
+        {
+          ...clone(adminSessionCapacityFixtures.list!),
+          eventId: adminFixtureIds.event,
+          items: state.sessionCapacities,
+        },
+        successOptions('admin.mock.session-capacities'),
+      );
+    },
+  ),
 
   http.post(
     '*/api/v1/admin/events/:eventId/reservations/actions',

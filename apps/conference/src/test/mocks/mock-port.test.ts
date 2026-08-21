@@ -61,6 +61,7 @@ import {
   requestAdminContext,
   requestAdminOperationsOverview,
   requestAdminReservations,
+  requestAdminSessionCapacities,
   requestAdminSessionCapacityMutation,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
@@ -338,7 +339,13 @@ describe('MSW through the production API port', () => {
     );
     expect(reservations).toMatchObject({ ok: true });
     if (!reservations.ok || reservations.kind !== 'success') return;
-    const capacity = reservations.data.capacityItems[0]!;
+    const capacities = await requestAdminSessionCapacities(
+      client,
+      adminFixtureIds.event,
+    );
+    expect(capacities).toMatchObject({ ok: true });
+    if (!capacities.ok || capacities.kind !== 'success') return;
+    const capacity = capacities.data.items[0]!;
     await expect(
       requestAdminSessionCapacityMutation(
         client,

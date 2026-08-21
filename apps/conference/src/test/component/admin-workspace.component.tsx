@@ -21,6 +21,7 @@ import {
   adminMutationProblemFixtures,
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
+  adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   supportSearchFixtures,
   ticketImportApplyFixtures,
@@ -44,6 +45,7 @@ import {
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
   adminReservationsEndpoint,
+  adminSessionCapacitiesEndpoint,
   adminSessionCapacityMutationEndpoint,
   adminSupportMutationEndpoint,
   adminSupportSearchEndpoint,
@@ -457,6 +459,9 @@ describe('F4 contract-first admin journeys', () => {
       if (endpoint === adminReservationsEndpoint) {
         return success(adminReservationFixtures.list!);
       }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
+      }
       throw new Error('A reservation reader attempted an unauthorized call.');
     });
     const screen = await renderComponent(
@@ -478,6 +483,9 @@ describe('F4 contract-first admin journeys', () => {
     const api = organizerApi((endpoint) => {
       if (endpoint === adminReservationsEndpoint) {
         return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
       }
       throw new Error('The live reservation page requested a mocked endpoint.');
     });
@@ -505,11 +513,16 @@ describe('F4 contract-first admin journeys', () => {
 
   it('edits a session capacity independently of a reservation record', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
-    let list = structuredClone(adminReservationFixtures.list!);
+    let capacities = structuredClone(adminSessionCapacityFixtures.list!);
     let mutationBody: Record<string, unknown> | null = null;
     const api = organizerApi((endpoint, rawOptions) => {
       const options = rawOptions as { readonly body?: Record<string, unknown> };
-      if (endpoint === adminReservationsEndpoint) return success(list);
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(capacities);
+      }
       if (endpoint === adminSessionCapacityMutationEndpoint) {
         mutationBody = options.body ?? null;
         const response = adminSessionCapacityMutationResponseSchema.parse({
@@ -519,9 +532,9 @@ describe('F4 contract-first admin journeys', () => {
             capacity: options.body?.capacity,
           },
         });
-        list = {
-          ...list,
-          capacityItems: list.capacityItems.map((record) =>
+        capacities = {
+          ...capacities,
+          items: capacities.items.map((record) =>
             record.sessionId === response.record.sessionId
               ? response.record
               : record,
@@ -565,17 +578,20 @@ describe('F4 contract-first admin journeys', () => {
 
   it('refreshes and clamps the capacity editor after the confirmed count changes', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
-    let list = structuredClone(adminReservationFixtures.list!);
-    let listCalls = 0;
+    let capacities = structuredClone(adminSessionCapacityFixtures.list!);
+    let capacityListCalls = 0;
     const api = organizerApi((endpoint) => {
       if (endpoint === adminReservationsEndpoint) {
-        listCalls += 1;
-        return success(list);
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        capacityListCalls += 1;
+        return success(capacities);
       }
       if (endpoint === adminSessionCapacityMutationEndpoint) {
-        list = {
-          ...list,
-          capacityItems: list.capacityItems.map((record) =>
+        capacities = {
+          ...capacities,
+          items: capacities.items.map((record) =>
             record.sessionId === adminFixtureIds.session
               ? { ...record, confirmedCount: 39 }
               : record,
@@ -604,7 +620,7 @@ describe('F4 contract-first admin journeys', () => {
       .getByRole('button', { name: 'Upravit kapacitu' })
       .first()
       .click();
-    const initialListCalls = listCalls;
+    const initialListCalls = capacityListCalls;
     const capacity = screen.getByRole('spinbutton', { name: 'Nová kapacita' });
     await capacity.fill('38');
     await screen
@@ -618,7 +634,7 @@ describe('F4 contract-first admin journeys', () => {
 
     await expect.element(screen.getByText('39 / 40')).toBeVisible();
     await expect.element(capacity).toHaveValue(39);
-    expect(listCalls).toBe(initialListCalls + 1);
+    expect(capacityListCalls).toBe(initialListCalls + 1);
   });
 
   it('invalidates edited announcement preview and sends only a reconfirmed canonical version', async () => {
@@ -695,6 +711,9 @@ describe('F4 contract-first admin journeys', () => {
     const api = organizerApi((endpoint, options) => {
       if (endpoint === adminReservationsEndpoint) {
         return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
       }
       if (endpoint === adminAuditEndpoint) {
         return success(adminAuditFixtures.page!);

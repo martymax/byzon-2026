@@ -409,6 +409,30 @@ export type AdminSessionCapacityRecord = z.infer<
   typeof adminSessionCapacityRecordSchema
 >;
 
+export const adminSessionCapacityListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    generatedAt: dateTimeSchema,
+    items: z.array(adminSessionCapacityRecordSchema).max(100),
+  })
+  .superRefine((response, context) => {
+    if (
+      response.items.some(({ eventId }) => eventId !== response.eventId) ||
+      new Set(response.items.map(({ sessionId }) => sessionId)).size !==
+        response.items.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message: 'Capacity items must be unique and match the response event',
+      });
+    }
+  });
+
+export type AdminSessionCapacityListResponse = z.infer<
+  typeof adminSessionCapacityListResponseSchema
+>;
+
 export const adminReservationRecordSchema = z
   .strictObject({
     reservationId: uuidSchema,
@@ -449,7 +473,6 @@ export const adminReservationListResponseSchema = z
   .strictObject({
     eventId: uuidSchema,
     generatedAt: dateTimeSchema,
-    capacityItems: z.array(adminSessionCapacityRecordSchema).max(100),
     items: z.array(adminReservationRecordSchema).max(100),
   })
   .superRefine((response, context) => {
@@ -463,19 +486,6 @@ export const adminReservationListResponseSchema = z
         path: ['items'],
         message:
           'Reservation items must be unique and match the response event',
-      });
-    }
-    if (
-      response.capacityItems.some(
-        ({ eventId }) => eventId !== response.eventId,
-      ) ||
-      new Set(response.capacityItems.map(({ sessionId }) => sessionId)).size !==
-        response.capacityItems.length
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['capacityItems'],
-        message: 'Capacity items must be unique and match the response event',
       });
     }
   });

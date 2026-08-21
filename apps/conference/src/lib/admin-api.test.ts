@@ -5,6 +5,7 @@ import {
   adminFixtureIds,
   adminReservationFixtures,
   adminReservationMutationFixtures,
+  adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
   supportFixtureIds,
@@ -27,6 +28,7 @@ import {
   requestAdminEventSettingsUpdate,
   requestAdminOperationsOverview,
   requestAdminReservationMutation,
+  requestAdminSessionCapacities,
   requestAdminSessionCapacityMutation,
   requestAdminRoleAssignment,
   requestAdminSupportMutation,
@@ -74,6 +76,26 @@ describe('admin API contract policies', () => {
       retry: 'never',
       idempotency: 'required',
     });
+  });
+
+  it('reads session capacities from a rollout-safe route separate from reservations', async () => {
+    const request = vi.fn(async () =>
+      success(adminSessionCapacityFixtures.list!),
+    );
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
+
+    await expect(
+      requestAdminSessionCapacities(api, adminFixtureIds.event),
+    ).resolves.toMatchObject({ ok: true });
+    expect(request).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        path: `/api/v1/admin/events/${adminFixtureIds.event}/session-capacities`,
+        cache: 'no-store',
+      }),
+    );
   });
 
   it('keeps support P3/S search terms out of the URL and sends a no-store POST body', async () => {
@@ -167,7 +189,7 @@ describe('admin API contract policies', () => {
       },
     });
 
-    const capacity = adminReservationFixtures.list!.capacityItems[0]!;
+    const capacity = adminSessionCapacityFixtures.list!.items[0]!;
     const capacityBody = {
       sessionId: capacity.sessionId,
       expectedVersion: capacity.version,
