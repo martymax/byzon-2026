@@ -1344,6 +1344,22 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(read.headers.get('ratelimit-remaining')).toBe('119');
     expect(readRateLimit).toHaveBeenCalledWith('read', primaryUserId);
 
+    const calendarRateLimit = vi.fn(async () => ({
+      allowed: true,
+      limit: 120,
+      remaining: 118,
+      resetAt: new Date(fixedNow.getTime() + 60_000),
+      retryAfterSeconds: 60,
+    }));
+    const calendar = await readParticipantAgendaCalendar(calendarRequest(), {
+      ...dependencies(primaryUserId),
+      rateLimit: calendarRateLimit,
+    });
+    expect(calendar.status).toBe(200);
+    expect(calendar.headers.get('ratelimit-limit')).toBe('120');
+    expect(calendar.headers.get('ratelimit-remaining')).toBe('118');
+    expect(calendarRateLimit).toHaveBeenCalledWith('read', primaryUserId);
+
     const exhaustedReadRateLimit = createParticipantAgendaRateLimiter({
       store: {
         consume: vi.fn(async () => ({
