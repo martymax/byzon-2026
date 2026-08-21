@@ -5,14 +5,18 @@ import {
   adminReadProblemSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
+  adminSessionCapacityMutationResponseSchema,
 } from '@byzon/domain/contracts';
 import { and, count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   mutateAdminReservation,
+  mutateAdminSessionCapacity,
   readAdminContext,
   readAdminReservations,
+  readAdminSessionCapacities,
   type AdminReservationDependencies,
 } from './admin-reservations';
 
@@ -36,6 +40,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
   const dayId = crypto.randomUUID();
   const isolationDayId = crypto.randomUUID();
   const sessionId = crypto.randomUUID();
+  const emptySessionId = crypto.randomUUID();
   const networkingSessionId = crypto.randomUUID();
   const isolationSessionId = crypto.randomUUID();
   const adminId = crypto.randomUUID();
@@ -69,6 +74,11 @@ integration('P5-05 admin reservation HTTP integration', () => {
       `${appOrigin}/api/v1/admin/events/${requestedEventId}/reservations`,
       { headers: { 'x-request-id': 'admin-reservation-list-request' } },
     );
+  const capacityListRequest = (requestedEventId = eventId) =>
+    new Request(
+      `${appOrigin}/api/v1/admin/events/${requestedEventId}/session-capacities`,
+      { headers: { 'x-request-id': 'admin-session-capacity-list-request' } },
+    );
   const mutationRequest = (
     body: unknown,
     key: string,
@@ -84,6 +94,25 @@ integration('P5-05 admin reservation HTTP integration', () => {
           'idempotency-key': key,
           origin,
           'x-request-id': 'admin-reservation-mutation-request',
+        },
+        body: JSON.stringify(body),
+      },
+    );
+  const capacityMutationRequest = (
+    body: unknown,
+    key: string,
+    origin = appOrigin,
+    requestedEventId = eventId,
+  ) =>
+    new Request(
+      `${appOrigin}/api/v1/admin/events/${requestedEventId}/session-capacities/actions`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': key,
+          origin,
+          'x-request-id': 'admin-session-capacity-mutation-request',
         },
         body: JSON.stringify(body),
       },
@@ -223,6 +252,20 @@ integration('P5-05 admin reservation HTTP integration', () => {
         sortOrder: 1,
       },
       {
+        id: emptySessionId,
+        eventId,
+        dayId,
+        slug: `admin-empty-workshop-${emptySessionId}`,
+        title: 'Workshop bez rezervací',
+        type: 'workshop',
+        startsAt: new Date('2026-09-18T13:00:00Z'),
+        endsAt: new Date('2026-09-18T14:00:00Z'),
+        status: 'draft',
+        capacityMode: 'reservation',
+        capacity: 7,
+        sortOrder: 2,
+      },
+      {
         id: isolationSessionId,
         eventId: isolationEventId,
         dayId: isolationDayId,
@@ -338,13 +381,19 @@ integration('P5-05 admin reservation HTTP integration', () => {
     });
   });
 
-  it('lists only bounded same-event non-networking reservation records', async () => {
+  it('lists bounded reservation and capacity records on rollout-safe endpoints', async () => {
     const denied = await readAdminReservations(
       listRequest(),
       eventId,
       dependencies(participantId),
     );
     expect(denied.status).toBe(403);
+    const capacityDenied = await readAdminSessionCapacities(
+      capacityListRequest(),
+      eventId,
+      dependencies(participantId),
+    );
+    expect(capacityDenied.status).toBe(403);
 
     const response = await readAdminReservations(
       listRequest(),
@@ -355,11 +404,36 @@ integration('P5-05 admin reservation HTTP integration', () => {
     const body = adminReservationListResponseSchema.parse(
       await response.json(),
     );
+    expect(body).not.toHaveProperty('capacityItems');
     expect(body.eventId).toBe(eventId);
     expect(body.items).toHaveLength(2);
     expect(body.items.map(({ reservationId: id }) => id).sort()).toEqual(
       [reservationId, secondReservationId].sort(),
     );
+    const capacityResponse = await readAdminSessionCapacities(
+      capacityListRequest(),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(capacityResponse.status).toBe(200);
+    const capacityBody = adminSessionCapacityListResponseSchema.parse(
+      await capacityResponse.json(),
+    );
+    expect(capacityBody.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId,
+          capacity: 2,
+          confirmedCount: 2,
+        }),
+        expect.objectContaining({
+          sessionId: emptySessionId,
+          capacity: 7,
+          confirmedCount: 0,
+        }),
+      ]),
+    );
+    expect(capacityBody.items).toHaveLength(2);
     expect(body.items[0]).toMatchObject({
       state: 'reserved',
       capacity: 2,
@@ -380,14 +454,53 @@ integration('P5-05 admin reservation HTTP integration', () => {
       dependencies(adminId),
     );
     expect(crossEvent.status).toBe(404);
+    const crossEventCapacities = await readAdminSessionCapacities(
+      capacityListRequest(isolationEventId),
+      isolationEventId,
+      dependencies(adminId),
+    );
+    expect(crossEventCapacities.status).toBe(404);
+  });
+
+  it('edits session capacity before the first reservation exists', async () => {
+    const response = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
+        {
+          sessionId: emptySessionId,
+          capacity: 9,
+          expectedVersion: 1,
+          reason: 'Provozní nastavení kapacity workshopu před registrací.',
+        },
+        'admin-empty-session-capacity-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(response.status).toBe(200);
+    const body = adminSessionCapacityMutationResponseSchema.parse(
+      await response.json(),
+    );
+    expect(body).toMatchObject({
+      outcome: 'updated',
+      record: {
+        sessionId: emptySessionId,
+        capacity: 9,
+        confirmedCount: 0,
+        version: 2,
+      },
+    });
+    const persisted = await client.db.query.programSessions.findFirst({
+      columns: { capacity: true, version: true },
+      where: eq(schema.programSessions.id, emptySessionId),
+    });
+    expect(persisted).toEqual({ capacity: 9, version: 2 });
   });
 
   it('guards capacity with the confirmed count and versions every same-session admin snapshot', async () => {
-    const tooLarge = await mutateAdminReservation(
-      mutationRequest(
+    const tooLarge = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
         {
-          action: 'capacity_override',
-          reservationId,
+          sessionId,
           capacity: 100_001,
           expectedVersion: 1,
           reason: 'Extrémní kapacita musí být odmítnutá kontraktem.',
@@ -402,11 +515,10 @@ integration('P5-05 admin reservation HTTP integration', () => {
       'VALIDATION_FAILED',
     );
 
-    const tooSmall = await mutateAdminReservation(
-      mutationRequest(
+    const tooSmall = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
         {
-          action: 'capacity_override',
-          reservationId,
+          sessionId,
           capacity: 1,
           expectedVersion: 1,
           reason: 'Kapacita nesmí klesnout pod počet rezervací.',
@@ -421,11 +533,10 @@ integration('P5-05 admin reservation HTTP integration', () => {
       'ADMIN_INVALID_TRANSITION',
     );
 
-    const response = await mutateAdminReservation(
-      mutationRequest(
+    const response = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
         {
-          action: 'capacity_override',
-          reservationId,
+          sessionId,
           capacity: 3,
           expectedVersion: 1,
           reason: 'Potvrzené navýšení kapacity workshopu na tři místa.',
@@ -436,15 +547,15 @@ integration('P5-05 admin reservation HTTP integration', () => {
       dependencies(adminId),
     );
     expect(response.status).toBe(200);
-    const body = adminReservationMutationResponseSchema.parse(
+    const body = adminSessionCapacityMutationResponseSchema.parse(
       await response.json(),
     );
     expect(body).toMatchObject({
       outcome: 'updated',
       record: {
-        reservationId,
+        sessionId,
         capacity: 3,
-        reservedCount: 2,
+        confirmedCount: 2,
         version: 2,
       },
     });
@@ -485,6 +596,25 @@ integration('P5-05 admin reservation HTTP integration', () => {
       code: 'STALE_VERSION',
       currentVersion: 2,
     });
+
+    const legacyTooSmall = await mutateAdminReservation(
+      mutationRequest(
+        {
+          action: 'capacity_override',
+          reservationId: secondReservationId,
+          expectedVersion: 2,
+          capacity: 1,
+          reason: 'Ani starý klient nesmí snížit kapacitu pod obsazenost.',
+        },
+        'admin-legacy-capacity-too-small-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(legacyTooSmall.status).toBe(409);
+    expect(
+      adminMutationProblemSchema.parse(await legacyTooSmall.json()).code,
+    ).toBe('ADMIN_INVALID_TRANSITION');
   });
 
   it('cancels after the participant cutoff with reasoned audit and exact replay', async () => {
@@ -624,6 +754,56 @@ integration('P5-05 admin reservation HTTP integration', () => {
     expect(unchanged).toEqual({ status: 'confirmed', version: 2 });
   });
 
+  it('keeps the legacy reservation-bound capacity action during the rollout window', async () => {
+    const response = await mutateAdminReservation(
+      mutationRequest(
+        {
+          action: 'capacity_override',
+          reservationId: secondReservationId,
+          expectedVersion: 2,
+          capacity: 4,
+          reason: 'Kompatibilní změna ze starší otevřené administrace.',
+        },
+        'admin-legacy-capacity-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(response.status).toBe(200);
+    const body = adminReservationMutationResponseSchema.parse(
+      await response.json(),
+    );
+    expect(body).toMatchObject({
+      outcome: 'updated',
+      record: {
+        reservationId: secondReservationId,
+        state: 'reserved',
+        capacity: 4,
+        reservedCount: 1,
+        version: 3,
+        availableActions: ['capacity_override', 'cancel_reservation'],
+      },
+    });
+    const session = await client.db.query.programSessions.findFirst({
+      columns: { capacity: true, version: true },
+      where: eq(schema.programSessions.id, sessionId),
+    });
+    expect(session).toEqual({ capacity: 4, version: 3 });
+    const reservation = await client.db.query.reservations.findFirst({
+      columns: { status: true, version: true },
+      where: eq(schema.reservations.id, secondReservationId),
+    });
+    expect(reservation).toEqual({ status: 'confirmed', version: 3 });
+    const audit = await client.db.query.auditLogs.findFirst({
+      columns: { action: true, targetId: true },
+      where: eq(schema.auditLogs.id, body.audit.auditId),
+    });
+    expect(audit).toEqual({
+      action: 'session.capacity_updated',
+      targetId: sessionId,
+    });
+  });
+
   it('fails operational reservation reads closed after the retention cutoff', async () => {
     const cutoff = new Date('2026-09-18T12:00:00.000Z');
     await client.db
@@ -640,6 +820,12 @@ integration('P5-05 admin reservation HTTP integration', () => {
       expect(adminReadProblemSchema.parse(await response.json()).code).toBe(
         'EVENT_ACCESS_DENIED',
       );
+      const capacityResponse = await readAdminSessionCapacities(
+        capacityListRequest(),
+        eventId,
+        dependencies(adminId, cutoff),
+      );
+      expect(capacityResponse.status).toBe(403);
     } finally {
       await client.db
         .update(schema.events)

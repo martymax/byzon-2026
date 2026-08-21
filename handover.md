@@ -47,6 +47,17 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `140ae8c`: participant cancel do začátku session, reasoned admin
   cancel/capacity override a produkční reservation-only admin UI. Waitlist
   promotion je vypnutá do `P5-04`.
+- Následná úprava odděluje kapacitu od konkrétní rezervace: produkční
+  `/admin/rezervace` načítá samostatné session capacity snapshoty a organizer
+  může kapacitu auditovaně/idempotentně změnit i u workshopu bez jediné
+  rezervace. Snížení pod confirmed count je odmítnuto, dotčené reservation
+  snapshoty se invalidují a opakovaný import programu administrátorskou
+  hodnotu nepřepíše. Nová administrace mutuje rezervaci jen při stornu a
+  kapacitu mění výhradně přes session-level endpoint. Starý
+  reservation-bound `capacity_override` zůstává dočasně jen jako serverová
+  rollout kompatibilita pro už otevřené/cachované klienty; nový UI jej
+  ignoruje. Odstranit jej lze až po nasazení této kompatibilní verze a ověření,
+  že předchozí frontend/service-worker cache už není v provozu.
 - `P5-06`/`F3-06` jsou sloučené do `main` přes
   [PR #25](https://github.com/martymax/byzon-2026/pull/25) merge commitem
   `9e2be72` jako dvě source-verified řady nad
@@ -288,12 +299,14 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `RESERVATION_CLOSED`. Exact replay nevytváří druhý audit a starý cancel
   replay po novější re-reservation vrátí `superseded` snapshot.
 - Produkční admin endpointy `GET /api/v1/admin/context`,
-  `GET /api/v1/admin/events/:eventId/reservations` a
-  `POST /api/v1/admin/events/:eventId/reservations/actions` jsou Better Auth,
+  `GET /api/v1/admin/events/:eventId/reservations`, oddělený rollout-safe
+  `GET /api/v1/admin/events/:eventId/session-capacities` a příslušné
+  `POST .../actions` jsou Better Auth,
   current-event a permission scoped, bounded a `private, no-store`. Organizer
   může po povinném reason a novém potvrzení snapshotu zrušit rezervaci i po
   participant cutoffu nebo změnit kapacitu; snížení pod confirmed count je
-  odmítnuté a obě akce jsou idempotentní a auditované.
+  odmítnuté a obě akce jsou idempotentní a auditované. Kapacita a
+  confirmed count se načítají jedním agregovaným DB statementem.
 - Admin reservation read a mutation mají samostatné one-minute shared Redis
   buckety 120/30, environment-keyed HMAC subject canonical event slugu a user
   UUID a fail-closed outage politiku. Mutace spotřebuje bucket před databází a

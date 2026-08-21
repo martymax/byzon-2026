@@ -10,6 +10,8 @@ import {
   adminOperationsOverviewResponseSchema,
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
+  adminSessionCapacityListResponseSchema,
+  adminSessionCapacityMutationRequestSchema,
   adminRoleAssignmentMutationRequestSchema,
   problemTypeForCode,
 } from './index.js';
@@ -151,14 +153,36 @@ describe('CS-ADMIN-01 contracts', () => {
       }).success,
     ).toBe(false);
     expect(
+      adminSessionCapacityMutationRequestSchema.parse({
+        sessionId: ids.session,
+        expectedVersion: 4,
+        reason: 'Potvrzená provozní změna kapacity workshopu.',
+        capacity: 42,
+      }),
+    ).toEqual({
+      sessionId: ids.session,
+      expectedVersion: 4,
+      reason: 'Potvrzená provozní změna kapacity workshopu.',
+      capacity: 42,
+    });
+    expect(
       adminReservationMutationRequestSchema.safeParse({
         action: 'capacity_override',
         reservationId: ids.reservation,
         expectedVersion: 4,
-        reason: 'Extrémní kapacita musí být odmítnutá kontraktem.',
-        capacity: 100_001,
+        reason: 'Neúplný starý požadavek musí zůstat odmítnutý.',
       }).success,
     ).toBe(false);
+    const legacyCapacityRequest = {
+      action: 'capacity_override' as const,
+      reservationId: ids.reservation,
+      expectedVersion: 4,
+      capacity: 42,
+      reason: 'Přechodová kompatibilita pro dříve načtenou administraci.',
+    };
+    expect(
+      adminReservationMutationRequestSchema.parse(legacyCapacityRequest),
+    ).toEqual(legacyCapacityRequest);
   });
 
   it('validates available reservation actions against canonical state', () => {
@@ -174,15 +198,40 @@ describe('CS-ADMIN-01 contracts', () => {
       version: 4,
       availableActions: ['capacity_override', 'cancel_reservation'] as const,
     };
+    const capacityResponse = {
+      eventId: ids.event,
+      generatedAt: '2026-07-25T12:00:00.000+02:00',
+      items: [
+        {
+          eventId: ids.event,
+          sessionId: ids.session,
+          sessionTitle: 'Růst bez zkratek',
+          sessionType: 'workshop' as const,
+          sessionStatus: 'published' as const,
+          capacity: 40,
+          confirmedCount: 38,
+          version: 4,
+        },
+      ],
+    };
     const response = {
       eventId: ids.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
       items: [record],
     };
 
+    expect(
+      adminSessionCapacityListResponseSchema.parse(capacityResponse),
+    ).toEqual(capacityResponse);
     expect(adminReservationListResponseSchema.parse(response)).toEqual(
       response,
     );
+    expect(
+      adminReservationListResponseSchema.safeParse({
+        ...response,
+        capacityItems: capacityResponse.items,
+      }).success,
+    ).toBe(false);
     expect(
       adminReservationListResponseSchema.safeParse({
         ...response,

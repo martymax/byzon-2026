@@ -17,6 +17,10 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
+  adminSessionCapacityMutationRequestSchema,
+  adminSessionCapacityMutationResponseSchema,
+  adminSessionCapacityRecordSchema,
   idempotencyKeySchema,
   problemTypeForCode,
   type AdminContextResponse,
@@ -24,8 +28,21 @@ import {
   type AdminReservationListResponse,
   type AdminReservationMutationResponse,
   type AdminReservationRecord,
+  type AdminSessionCapacityListResponse,
+  type AdminSessionCapacityMutationResponse,
+  type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts';
-import { and, count, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -40,6 +57,7 @@ import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const MAX_BODY_BYTES = 16_384;
 const MAX_RESERVATIONS = 100;
+const MAX_CAPACITY_SESSIONS = 100;
 const MAX_ASSIGNED_SESSIONS = 30;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 const uuidSchema = z.string().uuid();
@@ -60,7 +78,7 @@ export interface AdminReservationDependencies {
 
 class AdminStaleVersionError extends Error {
   constructor(readonly currentVersion: number) {
-    super('Admin reservation version changed');
+    super('Admin snapshot version changed');
     this.name = 'AdminStaleVersionError';
   }
 }
@@ -145,10 +163,10 @@ const privateProblemResponse = (
     return new Response(
       JSON.stringify({
         type: problemTypeForCode('STALE_VERSION'),
-        title: 'Reservation version changed',
+        title: 'Administration snapshot changed',
         status: 409,
         code: 'STALE_VERSION',
-        detail: 'Reload the canonical reservation record before retrying.',
+        detail: 'Reload the canonical administration record before retrying.',
         requestId,
         currentVersion: error.currentVersion,
       }),
@@ -169,7 +187,9 @@ const successResponse = (
   body:
     | AdminContextResponse
     | AdminReservationListResponse
-    | AdminReservationMutationResponse,
+    | AdminReservationMutationResponse
+    | AdminSessionCapacityListResponse
+    | AdminSessionCapacityMutationResponse,
   requestId: string,
   extra: Record<string, string> = {},
 ): Response =>
@@ -553,6 +573,72 @@ const loadReservationRecords = async (
   });
 };
 
+const loadSessionCapacityRecords = async (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+): Promise<readonly AdminSessionCapacityRecord[]> => {
+  const sessions = await db
+    .select({
+      sessionId: schema.programSessions.id,
+      sessionTitle: schema.programSessions.title,
+      sessionType: schema.programSessions.type,
+      sessionStatus: schema.programSessions.status,
+      capacity: schema.programSessions.capacity,
+      confirmedCount: count(schema.reservations.id),
+      version: schema.programSessions.version,
+    })
+    .from(schema.programSessions)
+    .leftJoin(
+      schema.reservations,
+      and(
+        eq(schema.reservations.eventId, schema.programSessions.eventId),
+        eq(schema.reservations.sessionId, schema.programSessions.id),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.programSessions.eventId, eventId),
+        eq(schema.programSessions.capacityMode, 'reservation'),
+        ne(schema.programSessions.type, 'networking'),
+      ),
+    )
+    .groupBy(
+      schema.programSessions.id,
+      schema.programSessions.title,
+      schema.programSessions.type,
+      schema.programSessions.status,
+      schema.programSessions.capacity,
+      schema.programSessions.version,
+      schema.programSessions.startsAt,
+    )
+    .orderBy(
+      asc(schema.programSessions.startsAt),
+      asc(schema.programSessions.id),
+    )
+    .limit(MAX_CAPACITY_SESSIONS);
+  return sessions.flatMap((session) =>
+    session.capacity === null || session.sessionType === 'networking'
+      ? []
+      : [
+          {
+            eventId,
+            sessionId: session.sessionId,
+            sessionTitle: safeLabel(
+              session.sessionTitle,
+              'Rezervovatelná aktivita',
+              160,
+            ),
+            sessionType: session.sessionType,
+            sessionStatus: session.sessionStatus,
+            capacity: session.capacity,
+            confirmedCount: session.confirmedCount,
+            version: session.version,
+          },
+        ],
+  );
+};
+
 const requirePermission = async (
   db: Database | DatabaseTransaction,
   userId: string,
@@ -618,6 +704,50 @@ export const readAdminReservations = async (
   }
 };
 
+export const readAdminSessionCapacities = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminReservationDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    requireReadTransport(request);
+    if (!uuidSchema.safeParse(eventId).success) throw resourceNotFound();
+    const session = await requireSession(request, dependencies);
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
+    const now = dependencies.now?.() ?? new Date();
+    const event = await loadCurrentAdminEvent(
+      dependencies.db,
+      dependencies,
+      eventId,
+    );
+    requireOperationalDataAvailable(event, now);
+    await requirePermission(
+      dependencies.db,
+      session.user.id,
+      event.id,
+      'reservation:any:read',
+    );
+    const body: AdminSessionCapacityListResponse =
+      adminSessionCapacityListResponseSchema.parse({
+        eventId: event.id,
+        generatedAt: now.toISOString(),
+        items: await loadSessionCapacityRecords(dependencies.db, event.id),
+      });
+    return withRateLimitHeaders(
+      successResponse(body, requestId),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
+  }
+};
+
 const loadMutationReservation = async (
   transaction: DatabaseTransaction,
   eventId: string,
@@ -631,6 +761,7 @@ const loadMutationReservation = async (
       status: schema.reservations.status,
       version: schema.reservations.version,
       capacity: schema.programSessions.capacity,
+      sessionVersion: schema.programSessions.version,
       capacityMode: schema.programSessions.capacityMode,
       sessionStatus: schema.programSessions.status,
       sessionTitle: schema.programSessions.title,
@@ -652,6 +783,237 @@ const loadMutationReservation = async (
     )
     .limit(1)
     .then(([row]) => row);
+
+export const mutateAdminSessionCapacity = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminReservationDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  const getNow = dependencies.now ?? (() => new Date());
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (!uuidSchema.safeParse(eventId).success) throw resourceNotFound();
+    const key = requireMutationTransport(request, dependencies.allowedOrigin);
+    const session = await requireSession(request, dependencies);
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', session.user.id)) ?? null;
+    const event = await loadCurrentAdminEvent(
+      dependencies.db,
+      dependencies,
+      eventId,
+    );
+    requireOperationalDataAvailable(event, getNow());
+    await requirePermission(
+      dependencies.db,
+      session.user.id,
+      event.id,
+      'agenda:any:override',
+    );
+    const json = await readBoundedJson(request);
+    const parsed = adminSessionCapacityMutationRequestSchema.safeParse(
+      json.value,
+    );
+    if (!parsed.success) throw validationFailed(zodFieldErrors(parsed.error));
+    const generateId = dependencies.generateId ?? generateUuidV7;
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId: event.id,
+        actorId: session.user.id,
+        scope: 'admin.session-capacity',
+        key,
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: json.raw,
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now: getNow(),
+        generateId,
+      },
+      async (transaction) => {
+        await acquireTransactionLock(
+          transaction,
+          `content-publish:${event.id}`,
+        );
+        await acquireTransactionLock(
+          transaction,
+          `participant-reservation:${event.id}:${parsed.data.sessionId}`,
+        );
+        const changedAt = getNow();
+        const lockedEvent = await loadCurrentAdminEvent(
+          transaction,
+          dependencies,
+          event.id,
+        );
+        requireOperationalDataAvailable(lockedEvent, changedAt);
+        if (lockedEvent.status === 'archived') {
+          throw invalidTransition('Archived events are read-only.');
+        }
+        await requirePermission(
+          transaction,
+          session.user.id,
+          event.id,
+          'agenda:any:override',
+        );
+        const current = await transaction.query.programSessions.findFirst({
+          columns: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            capacityMode: true,
+            capacity: true,
+            version: true,
+          },
+          where: and(
+            eq(schema.programSessions.eventId, event.id),
+            eq(schema.programSessions.id, parsed.data.sessionId),
+          ),
+        });
+        if (!current) throw resourceNotFound();
+        if (current.version !== parsed.data.expectedVersion) {
+          throw new AdminStaleVersionError(current.version);
+        }
+        if (
+          current.capacityMode !== 'reservation' ||
+          current.capacity === null ||
+          current.type === 'networking'
+        ) {
+          throw invalidTransition(
+            'The session no longer has an editable reservation capacity.',
+          );
+        }
+        if (current.status === 'cancelled' || current.status === 'archived') {
+          throw invalidTransition(
+            'Capacity cannot be changed for a cancelled or archived session.',
+          );
+        }
+        const countRows = await transaction
+          .select({ confirmed: count() })
+          .from(schema.reservations)
+          .where(
+            and(
+              eq(schema.reservations.eventId, event.id),
+              eq(schema.reservations.sessionId, current.id),
+              eq(schema.reservations.status, 'confirmed'),
+            ),
+          );
+        const confirmedCount = countRows[0]?.confirmed ?? 0;
+        if (parsed.data.capacity < confirmedCount) {
+          throw invalidTransition(
+            'Capacity cannot be lower than the current confirmed reservation count.',
+          );
+        }
+        const updated = await transaction
+          .update(schema.programSessions)
+          .set({
+            capacity: parsed.data.capacity,
+            updatedAt: changedAt,
+            version: sql`${schema.programSessions.version} + 1`,
+          })
+          .where(
+            and(
+              eq(schema.programSessions.eventId, event.id),
+              eq(schema.programSessions.id, current.id),
+              eq(schema.programSessions.version, current.version),
+            ),
+          )
+          .returning({ version: schema.programSessions.version });
+        if (updated.length !== 1) {
+          const latest = await transaction.query.programSessions.findFirst({
+            columns: { version: true },
+            where: and(
+              eq(schema.programSessions.eventId, event.id),
+              eq(schema.programSessions.id, current.id),
+            ),
+          });
+          throw latest
+            ? new AdminStaleVersionError(latest.version)
+            : resourceNotFound();
+        }
+        await transaction
+          .update(schema.reservations)
+          .set({ version: sql`${schema.reservations.version} + 1` })
+          .where(
+            and(
+              eq(schema.reservations.eventId, event.id),
+              eq(schema.reservations.sessionId, current.id),
+            ),
+          );
+        const nextVersion = updated[0]!.version;
+        const auditId = await writeAuditLog(
+          transaction,
+          {
+            eventId: event.id,
+            actorId: session.user.id,
+            actorType: 'user',
+            action: 'session.capacity_updated',
+            targetType: 'session',
+            targetId: current.id,
+            requestId: uuidSchema.safeParse(requestId).success
+              ? requestId
+              : generateUuidV7(),
+            reason: parsed.data.reason,
+            before: {
+              capacity: current.capacity,
+              confirmedCount,
+              version: current.version,
+            },
+            after: {
+              capacity: parsed.data.capacity,
+              confirmedCount,
+              version: nextVersion,
+            },
+          },
+          { generateId },
+        );
+        const record = adminSessionCapacityRecordSchema.parse({
+          eventId: event.id,
+          sessionId: current.id,
+          sessionTitle: safeLabel(
+            current.title,
+            'Rezervovatelná aktivita',
+            160,
+          ),
+          sessionType: current.type,
+          sessionStatus: current.status,
+          capacity: parsed.data.capacity,
+          confirmedCount,
+          version: nextVersion,
+        });
+        const body = adminSessionCapacityMutationResponseSchema.parse({
+          eventId: event.id,
+          outcome: 'updated',
+          record,
+          changedAt: changedAt.toISOString(),
+          audit: { auditId },
+        });
+        return {
+          status: 200,
+          body,
+          resultReference: current.id,
+        };
+      },
+    );
+    const body = adminSessionCapacityMutationResponseSchema.parse({
+      ...result.body,
+      outcome: result.replayed ? 'already_applied' : result.body.outcome,
+    });
+    return withRateLimitHeaders(
+      successResponse(body, requestId, {
+        'idempotency-replayed': result.replayed ? 'true' : 'false',
+      }),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
+  }
+};
 
 export const mutateAdminReservation = async (
   request: Request,
@@ -766,6 +1128,8 @@ export const mutateAdminReservation = async (
             ),
           );
         const confirmedBefore = countRows[0]?.confirmed ?? 0;
+        const legacyCapacityOverride =
+          parsed.data.action === 'capacity_override';
         let nextCapacity = current.capacity;
         let confirmedAfter = confirmedBefore;
         let nextState: AdminReservationRecord['state'] = 'reserved';
@@ -854,28 +1218,38 @@ export const mutateAdminReservation = async (
             eventId: event.id,
             actorId: session.user.id,
             actorType: 'user',
-            action:
-              parsed.data.action === 'capacity_override'
-                ? 'reservation.capacity_override'
-                : 'reservation.admin_cancelled',
-            targetType: 'reservation',
-            targetId: current.id,
+            action: legacyCapacityOverride
+              ? 'session.capacity_updated'
+              : 'reservation.admin_cancelled',
+            targetType: legacyCapacityOverride ? 'session' : 'reservation',
+            targetId: legacyCapacityOverride ? current.sessionId : current.id,
             requestId: uuidSchema.safeParse(requestId).success
               ? requestId
               : generateUuidV7(),
             reason: parsed.data.reason,
-            before: {
-              capacity: current.capacity,
-              reservationStatus: current.status,
-              version: current.version,
-            },
-            after: {
-              capacity: nextCapacity,
-              confirmed: confirmedAfter,
-              reservationStatus:
-                nextState === 'reserved' ? 'confirmed' : 'cancelled',
-              version: current.version + 1,
-            },
+            before: legacyCapacityOverride
+              ? {
+                  capacity: current.capacity,
+                  confirmedCount: confirmedBefore,
+                  version: current.sessionVersion,
+                }
+              : {
+                  capacity: current.capacity,
+                  reservationStatus: current.status,
+                  version: current.version,
+                },
+            after: legacyCapacityOverride
+              ? {
+                  capacity: nextCapacity,
+                  confirmedCount: confirmedAfter,
+                  version: current.sessionVersion + 1,
+                }
+              : {
+                  capacity: nextCapacity,
+                  confirmed: confirmedAfter,
+                  reservationStatus: 'cancelled',
+                  version: current.version + 1,
+                },
           },
           { generateId },
         );

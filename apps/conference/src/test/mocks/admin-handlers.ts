@@ -24,6 +24,9 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
+  adminSessionCapacityMutationRequestSchema,
+  adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
   adminRoleAssignmentMutationResponseSchema,
   type AdminContextResponse,
@@ -31,6 +34,7 @@ import {
   type AdminOperationsOverviewResponse,
   type AdminPermission,
   type AdminReservationRecord,
+  type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts/admin';
 import {
   supportMutationProblemSchema,
@@ -69,7 +73,9 @@ import {
   adminOperationsOverviewFixtures,
   adminReadProblemFixtures,
   adminReservationFixtures,
+  adminSessionCapacityFixtures,
   adminReservationMutationFixtures,
+  adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
 } from '@byzon/test-support/fixtures/admin';
 import {
@@ -118,6 +124,7 @@ interface AdminMockState {
   overview: AdminOperationsOverviewResponse;
   supportRecords: SupportRecord[];
   reservations: AdminReservationRecord[];
+  sessionCapacities: AdminSessionCapacityRecord[];
   settings: AdminEventSettings;
   announcementPreviewId: string | null;
   announcementPreviewVersion: number;
@@ -144,6 +151,7 @@ const initialState = (): AdminMockState => ({
     eventScopedSupportRecord,
   ),
   reservations: clone(adminReservationFixtures.list!.items),
+  sessionCapacities: clone(adminSessionCapacityFixtures.list!.items),
   settings: clone(adminEventSettingsFixtures.open!),
   announcementPreviewId: null,
   announcementPreviewVersion: 1,
@@ -361,19 +369,17 @@ const supportRecordAfter = (
 const reservationAfter = (
   record: AdminReservationRecord,
   body: z.output<typeof adminReservationMutationRequestSchema>,
-): AdminReservationRecord => {
-  const common = { ...record, version: record.version + 1 };
-  switch (body.action) {
-    case 'capacity_override':
-      return { ...common, capacity: body.capacity };
-    case 'cancel_reservation':
-      return {
-        ...common,
-        state: 'cancelled',
-        availableActions: [],
-      };
-  }
-};
+): AdminReservationRecord => ({
+  ...record,
+  capacity:
+    body.action === 'capacity_override' ? body.capacity : record.capacity,
+  version: record.version + 1,
+  state: body.action === 'capacity_override' ? 'reserved' : 'cancelled',
+  availableActions:
+    body.action === 'capacity_override'
+      ? ['capacity_override', 'cancel_reservation']
+      : [],
+});
 
 export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
   http.get('*/api/v1/admin/context', ({ request }) => {
@@ -437,6 +443,127 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       successOptions('admin.mock.operations'),
     );
   }),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/session-capacities/actions',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminMutationProblemSchema,
+        ['agenda:any:override'],
+        'admin.mock.session-capacity-mutation',
+      );
+      if (denied) return denied;
+      const body = adminSessionCapacityMutationRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'admin-session-capacity', body.data)
+        : null;
+      if (!routeMatchesEvent(params.eventId) || !body.success || !attempt) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.invalid_transition,
+          { fixtureName: 'admin.mock.session-capacity-invalid' },
+        );
+      }
+      if (
+        attempt.kind === 'collision' ||
+        scenario(body.data.reason).includes('collision')
+      ) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.session-capacity-collision' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminSessionCapacityMutationResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.session-capacity-replay'),
+        );
+      }
+      const index = state.sessionCapacities.findIndex(
+        ({ sessionId }) => sessionId === body.data.sessionId,
+      );
+      const record = state.sessionCapacities[index];
+      if (!record) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.invalid_transition,
+          { fixtureName: 'admin.mock.session-capacity-not-found' },
+        );
+      }
+      if (
+        scenario(body.data.reason).includes('stale') &&
+        !state.staleScenarios.has('session-capacity')
+      ) {
+        state.staleScenarios.add('session-capacity');
+        state.sessionCapacities[index] = {
+          ...record,
+          version: record.version + 1,
+        };
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          {
+            ...adminMutationProblemFixtures.stale,
+            currentVersion: record.version + 1,
+          },
+          { fixtureName: 'admin.mock.session-capacity-stale' },
+        );
+      }
+      if (
+        body.data.expectedVersion !== record.version ||
+        body.data.capacity < record.confirmedCount ||
+        record.sessionStatus === 'cancelled' ||
+        record.sessionStatus === 'archived'
+      ) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          body.data.expectedVersion !== record.version
+            ? {
+                ...adminMutationProblemFixtures.stale,
+                currentVersion: record.version,
+              }
+            : adminMutationProblemFixtures.invalid_transition,
+          { fixtureName: 'admin.mock.session-capacity-state' },
+        );
+      }
+      const next = {
+        ...record,
+        capacity: body.data.capacity,
+        version: record.version + 1,
+      };
+      state.sessionCapacities[index] = next;
+      state.reservations = state.reservations.map((reservation) =>
+        reservation.sessionId === record.sessionId
+          ? {
+              ...reservation,
+              capacity: body.data.capacity,
+              version: reservation.version + 1,
+            }
+          : reservation,
+      );
+      const response = adminSessionCapacityMutationResponseSchema.parse({
+        ...clone(adminSessionCapacityMutationFixtures.updated!),
+        eventId: adminFixtureIds.event,
+        record: next,
+      });
+      const transient = transientFailure(
+        body.data.reason,
+        attempt,
+        'admin-session-capacity',
+        response,
+      );
+      if (transient) return transient;
+      storeMutation(attempt, 'admin-session-capacity', response);
+      return mockJsonResponse(
+        adminSessionCapacityMutationResponseSchema,
+        response,
+        successOptions('admin.mock.session-capacity'),
+      );
+    },
+  ),
 
   http.post(
     '*/api/v1/admin/events/:eventId/ticket-imports/preview',
@@ -1114,6 +1241,34 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
 
+  http.get(
+    '*/api/v1/admin/events/:eventId/session-capacities',
+    ({ params }) => {
+      const denied = authorize(
+        adminReadProblemSchema,
+        ['reservation:any:read'],
+        'admin.mock.session-capacities',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId)) {
+        return mockProblemResponse(
+          adminReadProblemSchema,
+          adminReadProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.session-capacities-not-found' },
+        );
+      }
+      return mockJsonResponse(
+        adminSessionCapacityListResponseSchema,
+        {
+          ...clone(adminSessionCapacityFixtures.list!),
+          eventId: adminFixtureIds.event,
+          items: state.sessionCapacities,
+        },
+        successOptions('admin.mock.session-capacities'),
+      );
+    },
+  ),
+
   http.post(
     '*/api/v1/admin/events/:eventId/reservations/actions',
     async ({ params, request }) => {
@@ -1200,8 +1355,43 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.reservation-state' },
         );
       }
-      const next = reservationAfter(record, body.data);
-      state.reservations[index] = next;
+      let next = reservationAfter(record, body.data);
+      if (body.data.action === 'capacity_override') {
+        const legacyCapacity = body.data.capacity;
+        const capacityIndex = state.sessionCapacities.findIndex(
+          ({ sessionId }) => sessionId === record.sessionId,
+        );
+        const capacityRecord = state.sessionCapacities[capacityIndex];
+        if (
+          !capacityRecord ||
+          legacyCapacity < capacityRecord.confirmedCount ||
+          capacityRecord.sessionStatus === 'cancelled' ||
+          capacityRecord.sessionStatus === 'archived'
+        ) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            adminMutationProblemFixtures.invalid_transition,
+            { fixtureName: 'admin.mock.reservation-legacy-capacity-state' },
+          );
+        }
+        state.sessionCapacities[capacityIndex] = {
+          ...capacityRecord,
+          capacity: legacyCapacity,
+          version: capacityRecord.version + 1,
+        };
+        state.reservations = state.reservations.map((reservation) =>
+          reservation.sessionId === record.sessionId
+            ? {
+                ...reservation,
+                capacity: legacyCapacity,
+                version: reservation.version + 1,
+              }
+            : reservation,
+        );
+        next = state.reservations[index]!;
+      } else {
+        state.reservations[index] = next;
+      }
       const response = adminReservationMutationResponseSchema.parse({
         ...clone(adminReservationMutationFixtures.cancelled!),
         eventId: adminFixtureIds.event,

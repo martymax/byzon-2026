@@ -377,6 +377,65 @@ export type AdminReservationAction = z.infer<
 
 const adminReservationCapacitySchema = z.number().int().positive().max(100_000);
 
+export const adminSessionCapacityRecordSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    sessionId: uuidSchema,
+    sessionTitle: safeInlineTextSchema(160),
+    sessionType: z.enum([
+      'talk',
+      'panel',
+      'workshop',
+      'mastermind',
+      'coaching',
+      'break',
+      'meal',
+      'gala',
+      'other',
+    ]),
+    sessionStatus: z.enum(['draft', 'published', 'cancelled', 'archived']),
+    capacity: adminReservationCapacitySchema,
+    confirmedCount: z.number().int().nonnegative().max(100_000),
+    version: versionSchema,
+  })
+  .superRefine((record, context) => {
+    if (record.confirmedCount > record.capacity) {
+      context.addIssue({
+        code: 'custom',
+        path: ['confirmedCount'],
+        message: 'Confirmed count cannot exceed canonical capacity',
+      });
+    }
+  });
+
+export type AdminSessionCapacityRecord = z.infer<
+  typeof adminSessionCapacityRecordSchema
+>;
+
+export const adminSessionCapacityListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    generatedAt: dateTimeSchema,
+    items: z.array(adminSessionCapacityRecordSchema).max(100),
+  })
+  .superRefine((response, context) => {
+    if (
+      response.items.some(({ eventId }) => eventId !== response.eventId) ||
+      new Set(response.items.map(({ sessionId }) => sessionId)).size !==
+        response.items.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message: 'Capacity items must be unique and match the response event',
+      });
+    }
+  });
+
+export type AdminSessionCapacityListResponse = z.infer<
+  typeof adminSessionCapacityListResponseSchema
+>;
+
 export const adminReservationRecordSchema = z
   .strictObject({
     reservationId: uuidSchema,
@@ -447,6 +506,9 @@ const reservationMutationBase = {
 /**
  * Assigned session IDs are server-side authorization context. They are
  * intentionally absent from every reservation mutation request.
+ *
+ * `capacity_override` is a rollout-only compatibility branch for cached
+ * clients. New clients edit capacity through the session-level contract.
  */
 export const adminReservationMutationRequestSchema = z.discriminatedUnion(
   'action',
@@ -491,6 +553,39 @@ export const adminReservationMutationResponseSchema = z
 
 export type AdminReservationMutationResponse = z.infer<
   typeof adminReservationMutationResponseSchema
+>;
+
+export const adminSessionCapacityMutationRequestSchema = z.strictObject({
+  sessionId: uuidSchema,
+  expectedVersion: versionSchema,
+  capacity: adminReservationCapacitySchema,
+  reason: mutationReasonSchema,
+});
+
+export type AdminSessionCapacityMutationRequest = z.infer<
+  typeof adminSessionCapacityMutationRequestSchema
+>;
+
+export const adminSessionCapacityMutationResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    outcome: z.enum(['updated', 'already_applied']),
+    record: adminSessionCapacityRecordSchema,
+    changedAt: dateTimeSchema,
+    audit: z.strictObject({ auditId: uuidSchema }),
+  })
+  .superRefine((response, context) => {
+    if (response.record.eventId !== response.eventId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['record', 'eventId'],
+        message: 'Session capacity record must match the response event',
+      });
+    }
+  });
+
+export type AdminSessionCapacityMutationResponse = z.infer<
+  typeof adminSessionCapacityMutationResponseSchema
 >;
 
 export const adminAuditCategorySchema = z.enum([

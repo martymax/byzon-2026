@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 
-import { and, eq, inArray, like, or } from 'drizzle-orm';
+import { and, count, eq, inArray, like, or } from 'drizzle-orm';
 
 import {
   acquireTransactionLock,
@@ -997,6 +997,31 @@ export async function importContentJson(options: {
           `refusing to overwrite non-draft session: ${session.slug}`,
         );
       const id = existing?.id ?? generateUuidV7();
+      let importedCapacity = session.capacity;
+      if (session.capacityMode === 'reservation') {
+        if (session.capacity === null) {
+          throw new Error(
+            `reservable session is missing capacity: ${session.slug}`,
+          );
+        }
+        if (existing?.capacityMode === 'reservation') {
+          importedCapacity = existing.capacity ?? session.capacity;
+        } else if (existing) {
+          // Restoring a source policy must not undercut reservations retained
+          // while the session was temporarily non-reservable.
+          const [confirmed] = await transaction
+            .select({ value: count() })
+            .from(schema.reservations)
+            .where(
+              and(
+                eq(schema.reservations.eventId, eventId),
+                eq(schema.reservations.sessionId, existing.id),
+                eq(schema.reservations.status, 'confirmed'),
+              ),
+            );
+          importedCapacity = Math.max(session.capacity, confirmed?.value ?? 0);
+        }
+      }
       await transaction
         .insert(schema.programSessions)
         .values({
@@ -1012,7 +1037,7 @@ export async function importContentJson(options: {
           endsAt: session.endsAt,
           status: 'draft',
           capacityMode: session.capacityMode,
-          capacity: session.capacity,
+          capacity: importedCapacity,
           reservationClosesAt:
             session.capacityMode === 'reservation' ? session.startsAt : null,
           waitlistMode: 'disabled',
@@ -1020,6 +1045,10 @@ export async function importContentJson(options: {
         })
         .onConflictDoUpdate({
           target: [schema.programSessions.eventId, schema.programSessions.slug],
+          // Keep an audited numeric capacity while the source continues to
+          // classify the session as reservable. The remaining reservation
+          // policy stays source-managed so a newly confirmed/removed policy
+          // and a moved session cutoff are synchronized by repeat imports.
           set: {
             dayId: dayIds.get(session.dayPath)!,
             roomId: null,
@@ -1029,10 +1058,11 @@ export async function importContentJson(options: {
             startsAt: session.startsAt,
             endsAt: session.endsAt,
             capacityMode: session.capacityMode,
-            capacity: session.capacity,
+            capacity: importedCapacity,
             reservationClosesAt:
               session.capacityMode === 'reservation' ? session.startsAt : null,
             waitlistMode: 'disabled',
+            waitlistOfferTtlMinutes: null,
             sortOrder: session.sortOrder,
             updatedAt: new Date(),
           },

@@ -60,8 +60,9 @@ import {
   createAdminTicketImportUploadPort,
   requestAdminContext,
   requestAdminOperationsOverview,
-  requestAdminReservationMutation,
   requestAdminReservations,
+  requestAdminSessionCapacities,
+  requestAdminSessionCapacityMutation,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
 } from '../../lib/admin-api.js';
@@ -338,16 +339,21 @@ describe('MSW through the production API port', () => {
     );
     expect(reservations).toMatchObject({ ok: true });
     if (!reservations.ok || reservations.kind !== 'success') return;
-    const reservation = reservations.data.items[0]!;
+    const capacities = await requestAdminSessionCapacities(
+      client,
+      adminFixtureIds.event,
+    );
+    expect(capacities).toMatchObject({ ok: true });
+    if (!capacities.ok || capacities.kind !== 'success') return;
+    const capacity = capacities.data.items[0]!;
     await expect(
-      requestAdminReservationMutation(
+      requestAdminSessionCapacityMutation(
         client,
         adminFixtureIds.event,
         {
-          reservationId: reservation.reservationId,
-          action: 'capacity_override',
-          capacity: reservation.capacity + 1,
-          expectedVersion: reservation.version,
+          sessionId: capacity.sessionId,
+          capacity: capacity.capacity + 1,
+          expectedVersion: capacity.version,
           reason: 'Čtenář rezervací nesmí měnit kapacitu.',
         },
         'admin-reservation-read-only-0001',

@@ -147,20 +147,32 @@ standard rate-limit headers; exhausted buckets return `429 RATE_LIMITED`.
 ## Admin reservation overrides
 
 `GET /api/v1/admin/context`,
-`GET /api/v1/admin/events/:eventId/reservations` and
-`POST /api/v1/admin/events/:eventId/reservations/actions` derive the actor from
-Better Auth and constrain the requested event to the canonical server event.
-Reads require an active membership and `reservation:any:read`; mutations require
-the audited-exception form of `agenda:any:override`, exact same-origin JSON, an
-idempotency key, the current reservation version and a bounded reason.
+`GET /api/v1/admin/events/:eventId/reservations`,
+`GET /api/v1/admin/events/:eventId/session-capacities` and
+`POST /api/v1/admin/events/:eventId/reservations/actions` plus
+`POST /api/v1/admin/events/:eventId/session-capacities/actions` derive the actor
+from Better Auth and constrain the requested event to the canonical server
+event. Reads require an active membership and `reservation:any:read`; mutations
+require the audited-exception form of `agenda:any:override`, exact same-origin
+JSON, an idempotency key, the current reservation or session version and a
+bounded reason.
+
+The capacity read uses a separate versioned route so the strict legacy
+reservation-list response keeps its original shape during a rolling deployment.
+Each capacity row and its confirmed count come from one aggregate database
+statement, preventing mixed snapshots during concurrent reservations.
 
 Participant, content and session advisory locks serialize admin cancellation or
-capacity changes with participant reservation changes. Capacity cannot be
-lowered below the confirmed count or raised above the shared participant
-contract maximum of 100,000. A capacity change versions every reservation
-snapshot for the affected session; a cancellation also versions the owner's
-agenda. Both actions write one reasoned audit row in the business transaction,
-and exact replay returns the stored minimal response without another write.
+capacity changes with participant reservation changes. Capacity is edited on
+the session, including before its first reservation exists; it cannot be lowered
+below the confirmed count or raised above the shared participant contract
+maximum of 100,000. A capacity change versions every reservation snapshot for
+the affected session; a cancellation also versions the owner's agenda. Both
+actions write one reasoned audit row in the business transaction, and exact
+replay returns the stored minimal response without another write. Repeatable
+content imports synchronize source-managed reservation mode, cutoff and waitlist
+policy while preserving a later audited numeric capacity as long as the session
+remains reservable.
 Operational records stop at the event anonymization deadline and archived events
 are read-only. The DTO exposes only a masked participant reference, never contact
 or ticket data. Released capacity does not promote a waitlist row before

@@ -14,6 +14,9 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminSessionCapacityListResponseSchema,
+  adminSessionCapacityMutationRequestSchema,
+  adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
   adminRoleAssignmentMutationResponseSchema,
   type AdminAuditQuery,
@@ -21,6 +24,8 @@ import {
   type AdminExportRequest,
   type AdminReservationMutationRequest,
   type AdminReservationMutationResponse,
+  type AdminSessionCapacityMutationRequest,
+  type AdminSessionCapacityMutationResponse,
   type AdminRoleAssignmentMutationRequest,
   type AdminRoleAssignmentMutationResponse,
 } from '@byzon/domain/contracts/admin';
@@ -285,6 +290,28 @@ export const adminReservationMutationEndpoint = defineApiEndpoint({
   idempotency: 'required',
 });
 
+export const adminSessionCapacitiesEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminSessionCapacityListResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+
+export const adminSessionCapacityMutationEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminSessionCapacityMutationRequestSchema,
+  successSchema: adminSessionCapacityMutationResponseSchema,
+  problemSchema: adminMutationProblemSchema,
+  problemCodes: adminMutationProblemCodes,
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
 export const adminAuditEndpoint = defineApiEndpoint({
   method: 'GET',
   requestSchema: null,
@@ -406,13 +433,18 @@ const matchesReservationMutation = (
     return false;
   }
 
-  switch (body.action) {
-    case 'capacity_override':
-      return data.record.capacity === body.capacity;
-    case 'cancel_reservation':
-      return data.record.state === 'cancelled';
-  }
+  return body.action === 'capacity_override'
+    ? data.record.state === 'reserved' && data.record.capacity === body.capacity
+    : data.record.state === 'cancelled';
 };
+
+const matchesSessionCapacityMutation = (
+  data: AdminSessionCapacityMutationResponse,
+  body: AdminSessionCapacityMutationRequest,
+): boolean =>
+  data.record.sessionId === body.sessionId &&
+  data.record.version === body.expectedVersion + 1 &&
+  data.record.capacity === body.capacity;
 
 export const requestAdminContext = (api: ApiPort, signal?: AbortSignal) =>
   api.request(adminContextEndpoint, {
@@ -610,6 +642,41 @@ export const requestAdminReservationMutation = async (
       data.eventId === eventId &&
       data.record.eventId === eventId &&
       matchesReservationMutation(data, body),
+  );
+
+export const requestAdminSessionCapacities = async (
+  api: ApiPort,
+  eventId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminSessionCapacitiesEndpoint, {
+      path: eventPath(eventId, '/session-capacities'),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminSessionCapacityMutation = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminSessionCapacityMutationRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminSessionCapacityMutationEndpoint, {
+      path: eventPath(eventId, '/session-capacities/actions'),
+      body,
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.record.eventId === eventId &&
+      matchesSessionCapacityMutation(data, body),
   );
 
 export const requestAdminAudit = async (
