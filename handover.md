@@ -47,11 +47,22 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   `140ae8c`: participant cancel do začátku session, reasoned admin
   cancel/capacity override a produkční reservation-only admin UI. Waitlist
   promotion je vypnutá do `P5-04`.
-- `P5-06`/`F3-06` jsou implementované jako dvě source-verified řady nad
+- `P5-06`/`F3-06` jsou sloučené do `main` přes
+  [PR #25](https://github.com/martymax/byzon-2026/pull/25) merge commitem
+  `9e2be72` jako dvě source-verified řady nad
   snapshotem `Pátek!G1:I18`: Radim Roček 12 slotů a Stanislava Maunová 14
   slotů, vždy 30 minut, kapacita 1, cutoff v začátku a bez waitlistu. Import i
   migrace nahrazují 11 legacy placeholderů fail-closed a canonical agenda
   nezveřejňuje identitu rezervujícího.
+- `P5-09` zapojuje produkční `GET /api/v1/me/agenda.ics` nad stejným
+  autorizovaným, owner-scoped a pod participant lockem znovu načteným canonical
+  snapshotem jako JSON. Neprázdná live agenda nabízí privátní no-store download
+  se stabilním ne-PII UID, publication sequence, UTC, CRLF, Unicode-safe
+  75octetovým foldingem a `STATUS:CANCELLED`; prázdná agenda zůstává `empty`.
+- `P5-07` bylo 21. 8. 2026 znovu ověřeno proti autoritativnímu produktovému
+  dokumentu včetně všech komentářů. Revize se od 15. 8. nezměnila a stále
+  nedodává číselnou kapacitu networkingu ani waitlist/storno režim, proto úkol
+  korektně zůstává fail-closed za `BLOCKER-RES-01` bez náhradního estimate.
 - `static-site/data/content.json` nyní deterministicky připraví 67 validních
   sessions a jednu položku `24:00 - ?` odmítá; coaching snapshot nahradí 11
   obecných placeholderů 26 přesnými slots, takže výsledný aktivní import má 82
@@ -197,9 +208,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   coaching řady; nejsou zploštěné do chybného společného slotu.
   Dvoudílný sobotní mastermind s kapacitou 6 čeká na nový
   `BLOCKER-RES-05`, zda jedna rezervace pokrývá obě části.
-- Stav sloučeného PR záměrně odmítal cancel/waitlist/offer akce a pro
-  nehotový `.ics` vracel poctivé `not_ready`. Následné `P5-05` zapojuje cancel;
-  waitlist/offer zůstávají v `P5-04`, `.ics` v `P5-09` a networking za
+- Stav sloučeného PR záměrně odmítal cancel/waitlist/offer akce a pro tehdy
+  nehotový `.ics` vracel poctivé `not_ready`. Následné `P5-05` zapojilo cancel
+  a `P5-09` osobní `.ics`; waitlist/offer zůstávají v `P5-04` a networking za
   `BLOCKER-RES-01`.
 - Security/code review doplnil kontrolu aktivované vstupenky, audit a fail-closed
   ověření provozní session proti publication allowlistu. Review PR `#22`
@@ -1163,11 +1174,11 @@ Aktuální souhrn a konečné počty jsou výše.
   a environment-keyed HMAC subjecty; výpadek store je fail-closed.
 ## Doporučený další krok
 
-Dokončit `.ics` v `P5-09`. `P5-07` zůstává fail-closed za chybějící číselnou
-kapacitou a waitlist/storno detailem `BLOCKER-RES-01`; nevytvářet místo něj
-`registration_estimate`. `P5-04` nezačínat bez jediného potvrzeného promotion
-režimu v `BLOCKER-RES-04`; dvoudílný sobotní mastermind zůstává za
-`BLOCKER-RES-05`. Ticket transfer/storno consumer rozhodnutého cancel pravidla
+`P5-07` zůstává fail-closed za chybějící číselnou kapacitou a waitlist/storno
+detailem `BLOCKER-RES-01`; nevytvářet místo něj `registration_estimate`.
+`P5-04` nezačínat bez jediného potvrzeného promotion režimu v
+`BLOCKER-RES-04`; dvoudílný sobotní mastermind zůstává za `BLOCKER-RES-05`.
+Ticket transfer/storno consumer rozhodnutého cancel pravidla
 doplní `P4-09`, až vznikne skutečná ticket transition.
 
 ## Dokončená oprava review PR `#16`

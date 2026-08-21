@@ -2,6 +2,7 @@ export * from './activation.js';
 export * from './activity-roster.js';
 export * from './admin.js';
 export * from './agenda.js';
+export * from './agenda-calendar.js';
 export * from './announcements.js';
 export * from './base.js';
 export * from './content.js';

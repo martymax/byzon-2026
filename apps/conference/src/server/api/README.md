@@ -93,11 +93,12 @@ persisted in the browser. There is no roster mutation or export endpoint.
 
 ## Participant agenda
 
-`GET /api/v1/me/agenda` and `POST /api/v1/me/agenda/actions` derive both the
-actor and canonical event on the server. They require an active membership and
-participant-owned agenda permission, reject draft/archived events and stop
-serving operational data at the event anonymization deadline. Responses are
-bounded, `private, no-store` and vary by Cookie and Authorization.
+`GET /api/v1/me/agenda`, `GET /api/v1/me/agenda.ics` and
+`POST /api/v1/me/agenda/actions` derive both the actor and canonical event on
+the server. They require an active membership and participant-owned agenda
+permission, reject draft/archived events and stop serving operational data at
+the event anonymization deadline. Responses are bounded, `private, no-store`
+and vary by Cookie and Authorization.
 
 The current production mutation allowlist is `add`, `remove`, `reserve` and
 `cancel`.
@@ -123,12 +124,14 @@ reservation before the immutable published session start; at or after that
 instant only the separately authorized and audited admin override is available.
 Cancellation releases capacity but does not promote a waiting row before
 `P5-04`. Waitlist controls remain server-disabled, networking remains behind
-`BLOCKER-RES-01`, coaching source reconciliation belongs to `P5-06`, and the
-calendar representation remains unavailable until `P5-09`. The immutable
-publication is the visibility allowlist while non-archived operational rows
-provide capacity and immediate cancellation state. Capacity drift degrades only
-the affected confirmed reservation to a conservative closed projection and
-emits an operator warning instead of failing the entire agenda.
+`BLOCKER-RES-01`, and coaching source reconciliation belongs to `P5-06`. The
+calendar representation is generated from the same locked canonical snapshot
+as JSON, contains only the authenticated owner's current items and uses stable
+non-PII UID, publication sequence, UTC, CRLF and Unicode-safe 75-octet folding.
+The immutable publication is the visibility allowlist while non-archived
+operational rows provide capacity and immediate cancellation state. Capacity
+drift degrades only the affected confirmed reservation to a conservative closed
+projection and emits an operator warning instead of failing the entire agenda.
 Reservation creation shares the event content lock with organizer mutations,
 then acquires the session reservation lock, reloads operational status and
 re-evaluates the reservation window from a fresh authoritative clock value.
