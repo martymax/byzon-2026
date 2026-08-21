@@ -1,7 +1,6 @@
+import { participantAgendaCalendar } from '@byzon/domain/contracts';
 import { participantAgendaFixtures } from '@byzon/test-support/fixtures';
 import { describe, expect, it } from 'vitest';
-
-import { participantAgendaCalendar } from './calendar.js';
 
 describe('private participant RFC 5545 calendar', () => {
   it('uses stable non-PII UID/SEQUENCE, UTC dates and cancellation state', () => {

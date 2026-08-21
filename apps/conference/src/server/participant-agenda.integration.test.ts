@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   mutateParticipantAgenda,
   readParticipantAgenda,
+  readParticipantAgendaCalendar,
   type ParticipantAgendaDependencies,
 } from './participant-agenda';
 import { createParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
@@ -64,6 +65,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const coachingContenderOneId = crypto.randomUUID();
   const coachingContenderTwoId = crypto.randomUUID();
   const contentMutationRaceUserId = crypto.randomUUID();
+  const calendarUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -94,6 +96,10 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const readRequest = () =>
     new Request(`${appOrigin}/api/v1/me/agenda`, {
       headers: { 'x-request-id': 'agenda-read-request' },
+    });
+  const calendarRequest = (suffix = '') =>
+    new Request(`${appOrigin}/api/v1/me/agenda.ics${suffix}`, {
+      headers: { 'x-request-id': 'agenda-calendar-request' },
     });
   const mutationRequest = (body: unknown, key: string, origin = appOrigin) =>
     new Request(`${appOrigin}/api/v1/me/agenda/actions`, {
@@ -184,6 +190,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       coachingContenderOneId,
       coachingContenderTwoId,
       contentMutationRaceUserId,
+      calendarUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -217,6 +224,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         coachingContenderOneId,
         coachingContenderTwoId,
         contentMutationRaceUserId,
+        calendarUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -248,6 +256,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         coachingContenderOneId,
         coachingContenderTwoId,
         contentMutationRaceUserId,
+        calendarUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -556,16 +565,30 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         createdAt: fixedNow,
       },
     ]);
-    await client.db.insert(schema.participantAgendas).values({
-      eventId,
-      userId: cancelledPublicationUserId,
-    });
-    await client.db.insert(schema.agendaItems).values({
-      eventId,
-      userId: cancelledPublicationUserId,
-      sessionId: cancelledPublicationSessionId,
-      source: 'manual',
-    });
+    await client.db.insert(schema.participantAgendas).values([
+      {
+        eventId,
+        userId: cancelledPublicationUserId,
+      },
+      {
+        eventId,
+        userId: calendarUserId,
+      },
+    ]);
+    await client.db.insert(schema.agendaItems).values([
+      {
+        eventId,
+        userId: cancelledPublicationUserId,
+        sessionId: cancelledPublicationSessionId,
+        source: 'manual',
+      },
+      {
+        eventId,
+        userId: calendarUserId,
+        sessionId: savedSessionId,
+        source: 'manual',
+      },
+    ]);
   });
 
   afterAll(async () => {
@@ -608,6 +631,69 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       items: [],
       calendarExport: { state: 'unavailable', reason: 'empty' },
     });
+  });
+
+  it('serves only the authenticated owner agenda as a private RFC 5545 calendar', async () => {
+    const anonymous = await readParticipantAgendaCalendar(
+      calendarRequest(),
+      dependencies(null),
+    );
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.headers.get('cache-control')).toBe('private, no-store');
+
+    const crossEvent = await readParticipantAgendaCalendar(
+      calendarRequest(),
+      dependencies(isolationUserId),
+    );
+    expect(crossEvent.status).toBe(403);
+
+    const query = await readParticipantAgendaCalendar(
+      calendarRequest('?participant=other'),
+      dependencies(calendarUserId),
+    );
+    expect(query.status).toBe(422);
+
+    const otherOwner = await readParticipantAgendaCalendar(
+      calendarRequest(),
+      dependencies(primaryUserId),
+    );
+    expect(otherOwner.status).toBe(200);
+    expect(await otherOwner.text()).not.toContain(
+      `UID:${savedSessionId}@agenda.byzon.cz`,
+    );
+
+    const snapshot = await readParticipantAgenda(
+      readRequest(),
+      dependencies(calendarUserId),
+    );
+    expect(
+      participantAgendaResponseSchema.parse(await snapshot.json())
+        .calendarExport,
+    ).toEqual({ state: 'available', href: '/api/v1/me/agenda.ics' });
+
+    const response = await readParticipantAgendaCalendar(
+      calendarRequest(),
+      dependencies(calendarUserId),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('Authorization, Cookie');
+    expect(response.headers.get('content-type')).toBe(
+      'text/calendar; charset=utf-8',
+    );
+    expect(response.headers.get('content-disposition')).toBe(
+      'attachment; filename="byzon-2026-moje-agenda.ics"',
+    );
+    const calendar = await response.text();
+    expect(calendar).toContain('BEGIN:VCALENDAR\r\n');
+    expect(calendar).toContain(
+      `UID:${savedSessionId}@agenda.byzon.cz\r\nSEQUENCE:3`,
+    );
+    expect(calendar).toContain('DTSTART:20260918T080000Z');
+    expect(calendar.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(calendar).not.toContain(calendarUserId);
+    expect(calendar).not.toContain('@example.invalid');
+    expect(calendar.endsWith('\r\n')).toBe(true);
   });
 
   it('reads the version and projected items under the participant mutation lock', async () => {
@@ -1258,6 +1344,22 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(read.headers.get('ratelimit-remaining')).toBe('119');
     expect(readRateLimit).toHaveBeenCalledWith('read', primaryUserId);
 
+    const calendarRateLimit = vi.fn(async () => ({
+      allowed: true,
+      limit: 120,
+      remaining: 118,
+      resetAt: new Date(fixedNow.getTime() + 60_000),
+      retryAfterSeconds: 60,
+    }));
+    const calendar = await readParticipantAgendaCalendar(calendarRequest(), {
+      ...dependencies(primaryUserId),
+      rateLimit: calendarRateLimit,
+    });
+    expect(calendar.status).toBe(200);
+    expect(calendar.headers.get('ratelimit-limit')).toBe('120');
+    expect(calendar.headers.get('ratelimit-remaining')).toBe('118');
+    expect(calendarRateLimit).toHaveBeenCalledWith('read', primaryUserId);
+
     const exhaustedReadRateLimit = createParticipantAgendaRateLimiter({
       store: {
         consume: vi.fn(async () => ({
@@ -1486,7 +1588,10 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(reservedBody).toMatchObject({
       version: 6,
       mutation: { action: 'reserve', outcome: 'applied' },
-      calendarExport: { state: 'unavailable', reason: 'not_ready' },
+      calendarExport: {
+        state: 'available',
+        href: '/api/v1/me/agenda.ics',
+      },
     });
     expect(
       reservedBody.items.find(

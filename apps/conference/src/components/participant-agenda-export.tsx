@@ -21,7 +21,10 @@ export const ParticipantAgendaCalendarExport = ({
       </p>
     </div>
     {calendarExport.state === 'available' ? (
-      <ActionLink download="byzon-osobni-agenda.ics" href={calendarExport.href}>
+      <ActionLink
+        download="byzon-2026-moje-agenda.ics"
+        href={calendarExport.href}
+      >
         Stáhnout osobní agendu (.ics)
       </ActionLink>
     ) : (

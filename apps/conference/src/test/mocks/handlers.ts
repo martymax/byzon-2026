@@ -38,6 +38,7 @@ import {
   participantAgendaMutationProblemSchema,
   participantAgendaMutationRequestSchema,
   participantAgendaMutationResponseSchema,
+  participantAgendaCalendar,
   participantAgendaProblemSchema,
   participantAgendaResponseSchema,
   participantContentProblemSchema,
@@ -98,7 +99,6 @@ import {
 } from '@byzon/test-support/fixtures';
 import { http, HttpResponse, type RequestHandler } from 'msw';
 
-import { participantAgendaCalendar } from './calendar';
 import { adminMockHandlers } from './admin-handlers';
 import { checkinMockHandlers } from './checkin-handlers';
 import { mockJsonResponse, mockProblemResponse } from './response';

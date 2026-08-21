@@ -361,7 +361,9 @@ describe('F3-01..F3-05 participant agenda', () => {
       .getByRole('link', { name: 'Stáhnout osobní agendu (.ics)' })
       .element();
     expect(exportLink.getAttribute('href')).toBe('/api/v1/me/agenda.ics');
-    expect(exportLink.getAttribute('download')).toBe('byzon-osobni-agenda.ics');
+    expect(exportLink.getAttribute('download')).toBe(
+      'byzon-2026-moje-agenda.ics',
+    );
 
     for (const target of screen.container.querySelectorAll<
       HTMLAnchorElement | HTMLButtonElement

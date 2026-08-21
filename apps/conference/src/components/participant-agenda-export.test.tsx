@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ParticipantAgendaCalendarExport } from './participant-agenda-export';
 
 describe('participant agenda calendar export', () => {
-  it('distinguishes an empty agenda from an export that is not integrated yet', () => {
+  it('distinguishes an empty agenda from a staged unavailable export', () => {
     expect(
       renderToStaticMarkup(
         <ParticipantAgendaCalendarExport

@@ -159,18 +159,19 @@ remains saved or reserved. `STALE_VERSION`, `OFFER_EXPIRED`,
 agenda version and target state needed for safe replacement. Active offer
 countdowns are derived from `serverNow`, never from an uncorrelated client
 clock. The calendar metadata exposes only the same-origin
-`/api/v1/me/agenda.ics` endpoint; the production representation remains owned
-by `P5-09`, while the `F3-05` synthetic adapter uses the same RFC 5545
-UID/sequence, UTC, cancellation, escaping and folding invariants.
+`/api/v1/me/agenda.ics` endpoint. The production representation re-runs the
+same authenticated owner/event/retention gates as the JSON snapshot and uses
+the same RFC 5545 UID/sequence, UTC, cancellation, escaping and Unicode-safe
+folding invariants as the `F3-05` adapter.
 
-The integrated `P5-01`/`P5-02` slice serves the complete private snapshot and
-enables only add, remove and atomic reserve. A reserved item may explicitly
-disable participant cancellation and an existing waitlist item may disable its
-controls, so the production UI never exposes a later milestone's mutation.
-Non-empty live agendas report calendar export as `not_ready` until `P5-09`;
-empty agendas keep the distinct `empty` state. Waitlist promotion,
-cancellation, coaching and networking reservation remain outside this
-integrated subset.
+The integrated `P5-01`/`P5-02`/`P5-05` slice serves the complete private
+snapshot and enables add, remove, atomic reserve and policy-bounded participant
+cancel. A reserved item may explicitly disable participant cancellation and an
+existing waitlist item may disable its controls, so the production UI never
+exposes a later milestone's mutation.
+Non-empty live agendas expose the private same-origin calendar download; empty
+agendas keep the distinct `empty` state. Waitlist promotion and networking
+reservation remain outside this integrated subset.
 
 The immutable content-publication record retains the server-only reservation
 window beside each session and in its protected `reservation_windows` policy.

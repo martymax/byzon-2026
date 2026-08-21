@@ -12,6 +12,7 @@ import {
   participantAgendaMutationRequestSchema,
   participantAgendaMutationResponseSchema,
   participantAgendaResponseSchema,
+  participantAgendaCalendar,
   problemTypeForCode,
   publishedAgendaReservationWindowsSchema,
   publishedProgramAgendaSnapshotSchema,
@@ -204,6 +205,18 @@ const successResponse = (
   new Response(JSON.stringify(body), {
     status: 200,
     headers: privateHeaders(requestId, 'application/json', extra),
+  });
+
+const calendarSuccessResponse = (
+  body: ParticipantAgendaResponse,
+  requestId: string,
+): Response =>
+  new Response(participantAgendaCalendar(body), {
+    status: 200,
+    headers: privateHeaders(requestId, 'text/calendar; charset=utf-8', {
+      'content-disposition':
+        'attachment; filename="byzon-2026-moje-agenda.ics"',
+    }),
   });
 
 const withRateLimitHeaders = (
@@ -840,7 +853,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
     calendarExport:
       items.length === 0
         ? { state: 'unavailable', reason: 'empty' }
-        : { state: 'unavailable', reason: 'not_ready' },
+        : { state: 'available', href: '/api/v1/me/agenda.ics' },
   });
 };
 
@@ -1129,9 +1142,10 @@ const canonicalProblemResponse = (
   });
 };
 
-export const readParticipantAgenda = async (
+const readParticipantAgendaRepresentation = async (
   request: Request,
   dependencies: ParticipantAgendaDependencies,
+  respond: (body: ParticipantAgendaResponse, requestId: string) => Response,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
   let rateLimitDecision: RateLimitDecision | null = null;
@@ -1155,10 +1169,7 @@ export const readParticipantAgenda = async (
       getNow,
       dependencies.onOperationalDrift,
     );
-    return withRateLimitHeaders(
-      successResponse(body, requestId),
-      rateLimitDecision,
-    );
+    return withRateLimitHeaders(respond(body, requestId), rateLimitDecision);
   } catch (error) {
     return withRateLimitHeaders(
       privateProblemResponse(error, requestId),
@@ -1166,6 +1177,26 @@ export const readParticipantAgenda = async (
     );
   }
 };
+
+export const readParticipantAgenda = (
+  request: Request,
+  dependencies: ParticipantAgendaDependencies,
+): Promise<Response> =>
+  readParticipantAgendaRepresentation(
+    request,
+    dependencies,
+    (body, requestId) => successResponse(body, requestId),
+  );
+
+export const readParticipantAgendaCalendar = (
+  request: Request,
+  dependencies: ParticipantAgendaDependencies,
+): Promise<Response> =>
+  readParticipantAgendaRepresentation(
+    request,
+    dependencies,
+    calendarSuccessResponse,
+  );
 
 export const mutateParticipantAgenda = async (
   request: Request,

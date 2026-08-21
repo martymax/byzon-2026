@@ -1,4 +1,4 @@
-import type { ParticipantAgendaResponse } from '@byzon/domain/contracts';
+import type { ParticipantAgendaResponse } from './agenda.js';
 
 const encoder = new TextEncoder();
 

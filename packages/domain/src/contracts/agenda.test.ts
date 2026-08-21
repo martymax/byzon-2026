@@ -358,7 +358,7 @@ describe('CS-AGENDA-01 participant contracts', () => {
     ).toMatchObject({ items: [], calendarExport: { reason: 'empty' } });
   });
 
-  it('keeps a non-empty agenda honest while calendar export is not integrated', () => {
+  it('keeps a non-empty agenda honest for staged calendar rollouts', () => {
     expect(
       participantAgendaResponseSchema.parse({
         ...response,
