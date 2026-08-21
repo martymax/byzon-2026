@@ -54,7 +54,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   slotů, vždy 30 minut, kapacita 1, cutoff v začátku a bez waitlistu. Import i
   migrace nahrazují 11 legacy placeholderů fail-closed a canonical agenda
   nezveřejňuje identitu rezervujícího.
-- `P5-09` zapojuje produkční `GET /api/v1/me/agenda.ics` nad stejným
+- Opožděné review nálezy P5-06 jsou sloučené přes
+  [PR #26](https://github.com/martymax/byzon-2026/pull/26) merge commitem
+  `a7c0116`: lifecycle dokumentace je jednoznačná, české kapacitní texty
+  správně rozlišují 1/2–4/5+ míst a concealment regrese je case-insensitive.
+- `P5-09` v [PR #27](https://github.com/martymax/byzon-2026/pull/27) zapojuje
+  produkční `GET /api/v1/me/agenda.ics` nad stejným
   autorizovaným, owner-scoped a pod participant lockem znovu načteným canonical
   snapshotem jako JSON. Neprázdná live agenda nabízí privátní no-store download
   se stabilním ne-PII UID, publication sequence, UTC, CRLF, Unicode-safe
