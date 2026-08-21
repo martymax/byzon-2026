@@ -1082,7 +1082,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     await expect
       .element(
         screen.getByText(
-          'Server drží místo pro tento účet. Další okamžitě dostupná kapacita: 0. Rezervace vznikne až přijetím nabídky.',
+          'Server drží místo pro tento účet. Další okamžitě dostupná kapacita: 0 míst. Rezervace vznikne až přijetím nabídky.',
         ),
       )
       .toBeVisible();
