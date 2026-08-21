@@ -185,6 +185,8 @@ export const AdminReservationWorkspace = ({
         if (!result.ok) {
           setRecords([]);
           setCapacityRecords([]);
+          setSelected(null);
+          setSelectedCapacity(null);
           handleReadFailure(result);
           return;
         }

@@ -1020,9 +1020,10 @@ export async function importContentJson(options: {
         })
         .onConflictDoUpdate({
           target: [schema.programSessions.eventId, schema.programSessions.slug],
-          // Reservation policy is initialized on insert and then belongs to
-          // the audited administration workflow. A repeatable content import
-          // must not overwrite an operator-adjusted capacity or cutoff.
+          // Keep an audited numeric capacity while the source continues to
+          // classify the session as reservable. The remaining reservation
+          // policy stays source-managed so a newly confirmed/removed policy
+          // and a moved session cutoff are synchronized by repeat imports.
           set: {
             dayId: dayIds.get(session.dayPath)!,
             roomId: null,
@@ -1031,6 +1032,16 @@ export async function importContentJson(options: {
             type: session.type,
             startsAt: session.startsAt,
             endsAt: session.endsAt,
+            capacityMode: session.capacityMode,
+            capacity:
+              session.capacityMode === 'reservation' &&
+              existing?.capacityMode === 'reservation'
+                ? existing.capacity
+                : session.capacity,
+            reservationClosesAt:
+              session.capacityMode === 'reservation' ? session.startsAt : null,
+            waitlistMode: 'disabled',
+            waitlistOfferTtlMinutes: null,
             sortOrder: session.sortOrder,
             updatedAt: new Date(),
           },

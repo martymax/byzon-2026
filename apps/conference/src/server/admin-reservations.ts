@@ -55,6 +55,7 @@ import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const MAX_BODY_BYTES = 16_384;
 const MAX_RESERVATIONS = 100;
+const MAX_CAPACITY_SESSIONS = 100;
 const MAX_ASSIGNED_SESSIONS = 30;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 const uuidSchema = z.string().uuid();
@@ -594,7 +595,7 @@ const loadSessionCapacityRecords = async (
       asc(schema.programSessions.startsAt),
       asc(schema.programSessions.id),
     )
-    .limit(100);
+    .limit(MAX_CAPACITY_SESSIONS);
   const sessionIds = sessions.map(({ sessionId }) => sessionId);
   const counts =
     sessionIds.length === 0
@@ -791,21 +792,13 @@ export const mutateAdminSessionCapacity = async (
         generateId,
       },
       async (transaction) => {
-        const candidate = await transaction.query.programSessions.findFirst({
-          columns: { id: true },
-          where: and(
-            eq(schema.programSessions.eventId, event.id),
-            eq(schema.programSessions.id, parsed.data.sessionId),
-          ),
-        });
-        if (!candidate) throw resourceNotFound();
         await acquireTransactionLock(
           transaction,
           `content-publish:${event.id}`,
         );
         await acquireTransactionLock(
           transaction,
-          `participant-reservation:${event.id}:${candidate.id}`,
+          `participant-reservation:${event.id}:${parsed.data.sessionId}`,
         );
         const changedAt = getNow();
         const lockedEvent = await loadCurrentAdminEvent(

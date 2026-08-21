@@ -164,8 +164,9 @@ maximum of 100,000. A capacity change versions every reservation snapshot for
 the affected session; a cancellation also versions the owner's agenda. Both
 actions write one reasoned audit row in the business transaction, and exact
 replay returns the stored minimal response without another write. Repeatable
-content imports initialize reservation policy only for new sessions and preserve
-later audited capacity changes.
+content imports synchronize source-managed reservation mode, cutoff and waitlist
+policy while preserving a later audited numeric capacity as long as the session
+remains reservable.
 Operational records stop at the event anonymization deadline and archived events
 are read-only. The DTO exposes only a masked participant reference, never contact
 or ticket data. Released capacity does not promote a waitlist row before

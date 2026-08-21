@@ -1,4 +1,6 @@
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import { and, count, eq, ne } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -129,7 +131,10 @@ integration('content import integration', () => {
 
     const first = await importContentJson(options);
     const firstSessions = await client.db
-      .select({ id: schema.programSessions.id })
+      .select({
+        id: schema.programSessions.id,
+        title: schema.programSessions.title,
+      })
       .from(schema.programSessions)
       .where(
         and(
@@ -138,17 +143,36 @@ integration('content import integration', () => {
         ),
       );
 
+    const preservedWorkshopId = firstSessions.find(
+      ({ title }) => title === 'Workshop: Leonid Kushnir',
+    )?.id;
+    expect(preservedWorkshopId).toBeDefined();
     await client.db
       .update(schema.programSessions)
-      .set({ capacity: 24 })
-      .where(
-        and(
-          eq(schema.programSessions.eventId, eventId),
-          eq(schema.programSessions.title, 'Workshop: Leonid Kushnir'),
-        ),
-      );
+      .set({
+        capacity: 24,
+        reservationClosesAt: new Date('2026-09-19T07:00:00.000Z'),
+        waitlistMode: 'auto_confirm',
+      })
+      .where(eq(schema.programSessions.id, preservedWorkshopId!));
 
-    const second = await importContentJson(options);
+    const changedSourceDirectory = await mkdtemp(
+      join(tmpdir(), 'byzon-content-import-'),
+    );
+    const changedSourceFile = join(changedSourceDirectory, 'content.json');
+    await writeFile(
+      changedSourceFile,
+      `${await readFile(options.sourceFile, 'utf8')}\n `,
+    );
+    let second: Awaited<ReturnType<typeof importContentJson>>;
+    try {
+      second = await importContentJson({
+        ...options,
+        sourceFile: changedSourceFile,
+      });
+    } finally {
+      await rm(changedSourceDirectory, { recursive: true, force: true });
+    }
     const secondSessions = await client.db
       .select({
         id: schema.programSessions.id,
@@ -194,7 +218,7 @@ integration('content import integration', () => {
       .from(schema.sessionSpeakers)
       .where(eq(schema.sessionSpeakers.eventId, eventId));
 
-    expect(second.sourceSha256).toBe(first.sourceSha256);
+    expect(second.sourceSha256).not.toBe(first.sourceSha256);
     expect(secondSessions.map(({ id }) => id).sort()).toEqual(
       firstSessions.map(({ id }) => id).sort(),
     );
@@ -225,6 +249,7 @@ integration('content import integration', () => {
           capacityMode: 'reservation',
           capacity: 24,
           reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+          waitlistMode: 'disabled',
         }),
         expect.objectContaining({
           title: 'Workshop: Blanka Mrázková',
