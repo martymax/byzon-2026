@@ -511,6 +511,46 @@ describe('F4 contract-first admin journeys', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('keeps reservation management available when only the capacity read fails', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return failure('transport');
+      }
+      throw new Error('The degraded reservation page requested a mutation.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationWorkspace mode="reservations" />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Bezpečný snapshot se nepodařilo načíst',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('Růst bez zkratek', { exact: true }).last())
+      .toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Upravit kapacitu' }),
+    ).not.toBeInTheDocument();
+
+    await screen
+      .getByRole('button', { name: 'Připravit změnu' })
+      .first()
+      .click();
+    await expect
+      .element(screen.getByRole('heading', { name: /Změna nad snapshotem/ }))
+      .toBeVisible();
+  });
+
   it('edits a session capacity independently of a reservation record', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     let capacities = structuredClone(adminSessionCapacityFixtures.list!);

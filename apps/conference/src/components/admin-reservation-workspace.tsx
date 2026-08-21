@@ -185,25 +185,27 @@ export const AdminReservationWorkspace = ({
       if (!request.isCurrent()) return;
       request.finish();
       setBusy(false);
+      const securityFailure =
+        !reservationResult.ok && isAdminSecurityFailure(reservationResult)
+          ? reservationResult
+          : !capacityResult.ok && isAdminSecurityFailure(capacityResult)
+            ? capacityResult
+            : null;
+      if (securityFailure) {
+        handleReadFailure(securityFailure);
+        return;
+      }
+
       const failure = !reservationResult.ok
         ? reservationResult
         : !capacityResult.ok
           ? capacityResult
           : null;
-      if (failure) {
+      if (!reservationResult.ok) {
         setRecords([]);
-        setCapacityRecords([]);
         setSelected(null);
-        setSelectedCapacity(null);
-        handleReadFailure(failure);
-        return;
-      }
-      if (
-        reservationResult.kind === 'success' &&
-        capacityResult.kind === 'success'
-      ) {
+      } else if (reservationResult.kind === 'success') {
         setRecords(reservationResult.data.items);
-        setCapacityRecords(capacityResult.data.items);
         setSelected((current) =>
           current
             ? (reservationResult.data.items.find(
@@ -211,6 +213,12 @@ export const AdminReservationWorkspace = ({
               ) ?? null)
             : null,
         );
+      }
+      if (!capacityResult.ok) {
+        setCapacityRecords([]);
+        setSelectedCapacity(null);
+      } else if (capacityResult.kind === 'success') {
+        setCapacityRecords(capacityResult.data.items);
         setSelectedCapacity((current) =>
           current
             ? (capacityResult.data.items.find(
@@ -219,6 +227,7 @@ export const AdminReservationWorkspace = ({
             : null,
         );
       }
+      if (failure) handleReadFailure(failure);
     });
     return () => requestFence.cancel('reservation-list');
     // `handleReadFailure` intentionally resolves against the current shell.
