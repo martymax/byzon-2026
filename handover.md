@@ -52,8 +52,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   může kapacitu auditovaně/idempotentně změnit i u workshopu bez jediné
   rezervace. Snížení pod confirmed count je odmítnuto, dotčené reservation
   snapshoty se invalidují a opakovaný import programu administrátorskou
-  hodnotu nepřepíše. Starý reservation-bound capacity override byl odstraněn
-  z kontraktu; rezervace v administraci nyní mutuje jen storno.
+  hodnotu nepřepíše. Nová administrace mutuje rezervaci jen při stornu a
+  kapacitu mění výhradně přes session-level endpoint. Starý
+  reservation-bound `capacity_override` zůstává dočasně jen jako serverová
+  rollout kompatibilita pro už otevřené/cachované klienty; nový UI jej
+  ignoruje. Odstranit jej lze až po nasazení této kompatibilní verze a ověření,
+  že předchozí frontend/service-worker cache už není v provozu.
 - `P5-06`/`F3-06` jsou sloučené do `main` přes
   [PR #25](https://github.com/martymax/byzon-2026/pull/25) merge commitem
   `9e2be72` jako dvě source-verified řady nad

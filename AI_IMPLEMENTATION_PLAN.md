@@ -2572,7 +2572,11 @@ souběžně.
   → session locky serializují cancel s rezervací i provozní změnou; snížení
   kapacity pod confirmed count je odmítnuté a session capacity update
   invaliduje reservation snapshoty. Kapacitu lze změnit i před první
-  rezervací; původní reservation-bound override už není součástí kontraktu.
+  rezervací. Nový klient původní reservation-bound override nepoužívá;
+  `reservations/actions` jej dočasně přijímá a list jej inzeruje pouze kvůli
+  rolling-deploy kompatibilitě s již cachovaným klientem. Odstranění je
+  samostatný následný krok až po ověřené expiraci předchozího
+  frontend/service-worker buildu.
   Shared Redis HMAC buckety omezují read
   120/min a mutation 30/min; obě chráněné cesty failují zavřeně. Live
   participant `F3` a produkční reservation-only `F4-08` jsou napojené;
@@ -3260,4 +3264,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.20 | 21. 8. 2026 | Dokončeno `P5-05`: participant může idempotentně zrušit potvrzenou rezervaci do publikovaného začátku session; po cutoffu zasáhne jen organizer admin přes reasoned, auditovaný cancel nebo kapacitní override. Sdílené owner/content/session locky, stale verze, exact replay, capacity guard, cross-event/retention/permission negativní testy, fail-closed shared Redis HMAC rate limits a produkční reservation-only admin UI jsou pokryté. Uvolněné místo bez `P5-04` neprovádí waitlist promotion. Service-backed workspace gate prošel 905/905, browser komponenty 852/852 a Playwright 15/15; build i audity jsou zelené. `RES-03` je rozhodnuté a ticket-transition napojení zůstává v `P4-09`. |
 | 6.21 | 21. 8. 2026 | Dokončeno `P5-06`/`F3-06`: snapshot živého `Pátek!G1:I18` vytváří dvě source-verified coaching řady (Radim 12, Stanislava 14), 30 minut, kapacitu 1, cutoff v začátku a vypnutý waitlist. Migrace/import failují při neúplné provenance, policy driftu nebo participant state; souběh posledního místa a UI bez identity držitele mají PostgreSQL/browser regresi. Před finální publikací se snapshot znovu porovná s autoritativním listem. |
 | 6.22 | 21. 8. 2026 | Dokončeno `P5-09`: produkční osobní agenda nabízí privátní autorizovaný RFC 5545 export nad stejným zamčeným canonical snapshotem jako JSON. Stabilní ne-PII UID, publication SEQUENCE, UTC, CRLF, escaping, Unicode-safe folding, cancellation a IDOR/retention hlavičky mají unit/PostgreSQL regresi. `P5-07` bylo znovu ověřeno proti nezměněné autoritativní revizi a zůstává fail-closed za chybějící kapacitou a waitlist/storno rozhodnutím `BLOCKER-RES-01`. |
-| 6.23 | 21. 8. 2026 | Kapacita rezervovatelné aktivity je samostatné session-level provozní nastavení v `/admin/rezervace`, nikoli konstanta nebo vlastnost konkrétní rezervace. Organizer ji může auditovaně a idempotentně změnit i před první rezervací; server odmítá hodnotu pod confirmed count, serializuje ji s participant rezervacemi a invaliduje dotčené snapshoty. Opakovaný import programu zachová administrátorskou hodnotu a starý reservation-bound capacity override byl odstraněn z kontraktu. |
+| 6.23 | 21. 8. 2026 | Kapacita rezervovatelné aktivity je samostatné session-level provozní nastavení v `/admin/rezervace`, nikoli konstanta nebo vlastnost konkrétní rezervace. Organizer ji může auditovaně a idempotentně změnit i před první rezervací; server odmítá hodnotu pod confirmed count, serializuje ji s participant rezervacemi a invaliduje dotčené snapshoty. Opakovaný import programu zachová administrátorskou hodnotu. Nový klient používá jen session-level endpoint; starý reservation-bound override zůstává přechodově podporovaný na původní cestě po jednu kompatibilní rollout fázi a smí se odstranit až po ověřené expiraci předchozího klientského/service-worker buildu. |

@@ -44,6 +44,7 @@ import {
 import styles from './admin-workspace.module.css';
 
 const reservationActionLabels: Record<AdminReservationAction, string> = {
+  capacity_override: 'Změnit kapacitu přes starý formulář',
   cancel_reservation: 'Zrušit rezervaci',
 };
 
@@ -149,7 +150,7 @@ export const AdminReservationWorkspace = ({
     mode === 'full' && permissions.includes('event:settings:manage');
   const canPerformReservationAction = (
     candidate?: AdminReservationAction,
-  ): boolean => canOverride && candidate !== undefined;
+  ): boolean => canOverride && candidate === 'cancel_reservation';
 
   const handleReadFailure = (
     result: Readonly<{

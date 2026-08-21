@@ -439,7 +439,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
       capacity: 2,
       reservedCount: 2,
       version: 1,
-      availableActions: ['cancel_reservation'],
+      availableActions: ['capacity_override', 'cancel_reservation'],
     });
     expect(
       body.items.find(({ reservationId: id }) => id === reservationId)
@@ -596,6 +596,25 @@ integration('P5-05 admin reservation HTTP integration', () => {
       code: 'STALE_VERSION',
       currentVersion: 2,
     });
+
+    const legacyTooSmall = await mutateAdminReservation(
+      mutationRequest(
+        {
+          action: 'capacity_override',
+          reservationId: secondReservationId,
+          expectedVersion: 2,
+          capacity: 1,
+          reason: 'Ani starý klient nesmí snížit kapacitu pod obsazenost.',
+        },
+        'admin-legacy-capacity-too-small-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(legacyTooSmall.status).toBe(409);
+    expect(
+      adminMutationProblemSchema.parse(await legacyTooSmall.json()).code,
+    ).toBe('ADMIN_INVALID_TRANSITION');
   });
 
   it('cancels after the participant cutoff with reasoned audit and exact replay', async () => {
@@ -733,6 +752,56 @@ integration('P5-05 admin reservation HTTP integration', () => {
       where: eq(schema.reservations.id, secondReservationId),
     });
     expect(unchanged).toEqual({ status: 'confirmed', version: 2 });
+  });
+
+  it('keeps the legacy reservation-bound capacity action during the rollout window', async () => {
+    const response = await mutateAdminReservation(
+      mutationRequest(
+        {
+          action: 'capacity_override',
+          reservationId: secondReservationId,
+          expectedVersion: 2,
+          capacity: 4,
+          reason: 'Kompatibilní změna ze starší otevřené administrace.',
+        },
+        'admin-legacy-capacity-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(response.status).toBe(200);
+    const body = adminReservationMutationResponseSchema.parse(
+      await response.json(),
+    );
+    expect(body).toMatchObject({
+      outcome: 'updated',
+      record: {
+        reservationId: secondReservationId,
+        state: 'reserved',
+        capacity: 4,
+        reservedCount: 1,
+        version: 3,
+        availableActions: ['capacity_override', 'cancel_reservation'],
+      },
+    });
+    const session = await client.db.query.programSessions.findFirst({
+      columns: { capacity: true, version: true },
+      where: eq(schema.programSessions.id, sessionId),
+    });
+    expect(session).toEqual({ capacity: 4, version: 3 });
+    const reservation = await client.db.query.reservations.findFirst({
+      columns: { status: true, version: true },
+      where: eq(schema.reservations.id, secondReservationId),
+    });
+    expect(reservation).toEqual({ status: 'confirmed', version: 3 });
+    const audit = await client.db.query.auditLogs.findFirst({
+      columns: { action: true, targetId: true },
+      where: eq(schema.auditLogs.id, body.audit.auditId),
+    });
+    expect(audit).toEqual({
+      action: 'session.capacity_updated',
+      targetId: sessionId,
+    });
   });
 
   it('fails operational reservation reads closed after the retention cutoff', async () => {

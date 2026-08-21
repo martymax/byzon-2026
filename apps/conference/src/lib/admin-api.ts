@@ -433,7 +433,9 @@ const matchesReservationMutation = (
     return false;
   }
 
-  return data.record.state === 'cancelled';
+  return body.action === 'capacity_override'
+    ? data.record.state === 'reserved' && data.record.capacity === body.capacity
+    : data.record.state === 'cancelled';
 };
 
 const matchesSessionCapacityMutation = (

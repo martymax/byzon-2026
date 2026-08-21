@@ -566,7 +566,7 @@ const loadReservationRecords = async (
         version: row.version,
         availableActions:
           row.state === 'confirmed'
-            ? (['cancel_reservation'] as const)
+            ? (['capacity_override', 'cancel_reservation'] as const)
             : ([] as const),
       },
     ];
@@ -761,6 +761,7 @@ const loadMutationReservation = async (
       status: schema.reservations.status,
       version: schema.reservations.version,
       capacity: schema.programSessions.capacity,
+      sessionVersion: schema.programSessions.version,
       capacityMode: schema.programSessions.capacityMode,
       sessionStatus: schema.programSessions.status,
       sessionTitle: schema.programSessions.title,
@@ -1127,69 +1128,128 @@ export const mutateAdminReservation = async (
             ),
           );
         const confirmedBefore = countRows[0]?.confirmed ?? 0;
-        const cancelled = await transaction
-          .update(schema.reservations)
-          .set({
-            cancelledAt: changedAt,
-            status: 'cancelled',
-            version: sql`${schema.reservations.version} + 1`,
-          })
-          .where(
-            and(
-              eq(schema.reservations.eventId, event.id),
-              eq(schema.reservations.id, current.id),
-              eq(schema.reservations.status, 'confirmed'),
-              eq(schema.reservations.version, current.version),
-            ),
-          )
-          .returning({ id: schema.reservations.id });
-        if (cancelled.length !== 1) {
-          const latest = await loadMutationReservation(
-            transaction,
-            event.id,
-            current.id,
-          );
-          throw latest
-            ? new AdminStaleVersionError(latest.version)
-            : resourceNotFound();
+        const legacyCapacityOverride =
+          parsed.data.action === 'capacity_override';
+        let nextCapacity = current.capacity;
+        let confirmedAfter = confirmedBefore;
+        let nextState: AdminReservationRecord['state'] = 'reserved';
+        if (parsed.data.action === 'capacity_override') {
+          if (
+            current.sessionStatus === 'cancelled' ||
+            current.sessionStatus === 'archived'
+          ) {
+            throw invalidTransition(
+              'Capacity cannot be changed for a cancelled or archived session.',
+            );
+          }
+          if (parsed.data.capacity < confirmedBefore) {
+            throw invalidTransition(
+              'Capacity cannot be lower than the current confirmed reservation count.',
+            );
+          }
+          nextCapacity = parsed.data.capacity;
+          await transaction
+            .update(schema.programSessions)
+            .set({
+              capacity: nextCapacity,
+              updatedAt: changedAt,
+              version: sql`${schema.programSessions.version} + 1`,
+            })
+            .where(
+              and(
+                eq(schema.programSessions.eventId, event.id),
+                eq(schema.programSessions.id, current.sessionId),
+              ),
+            );
+          await transaction
+            .update(schema.reservations)
+            .set({ version: sql`${schema.reservations.version} + 1` })
+            .where(
+              and(
+                eq(schema.reservations.eventId, event.id),
+                eq(schema.reservations.sessionId, current.sessionId),
+              ),
+            );
+        } else {
+          const cancelled = await transaction
+            .update(schema.reservations)
+            .set({
+              cancelledAt: changedAt,
+              status: 'cancelled',
+              version: sql`${schema.reservations.version} + 1`,
+            })
+            .where(
+              and(
+                eq(schema.reservations.eventId, event.id),
+                eq(schema.reservations.id, current.id),
+                eq(schema.reservations.status, 'confirmed'),
+                eq(schema.reservations.version, current.version),
+              ),
+            )
+            .returning({ id: schema.reservations.id });
+          if (cancelled.length !== 1) {
+            const latest = await loadMutationReservation(
+              transaction,
+              event.id,
+              current.id,
+            );
+            throw latest
+              ? new AdminStaleVersionError(latest.version)
+              : resourceNotFound();
+          }
+          confirmedAfter = Math.max(0, confirmedBefore - 1);
+          nextState = 'cancelled';
+          await transaction
+            .update(schema.participantAgendas)
+            .set({
+              updatedAt: changedAt,
+              version: sql`${schema.participantAgendas.version} + 1`,
+            })
+            .where(
+              and(
+                eq(schema.participantAgendas.eventId, event.id),
+                eq(schema.participantAgendas.userId, current.userId),
+              ),
+            );
         }
-        const confirmedAfter = Math.max(0, confirmedBefore - 1);
-        await transaction
-          .update(schema.participantAgendas)
-          .set({
-            updatedAt: changedAt,
-            version: sql`${schema.participantAgendas.version} + 1`,
-          })
-          .where(
-            and(
-              eq(schema.participantAgendas.eventId, event.id),
-              eq(schema.participantAgendas.userId, current.userId),
-            ),
-          );
         const auditId = await writeAuditLog(
           transaction,
           {
             eventId: event.id,
             actorId: session.user.id,
             actorType: 'user',
-            action: 'reservation.admin_cancelled',
-            targetType: 'reservation',
-            targetId: current.id,
+            action: legacyCapacityOverride
+              ? 'session.capacity_updated'
+              : 'reservation.admin_cancelled',
+            targetType: legacyCapacityOverride ? 'session' : 'reservation',
+            targetId: legacyCapacityOverride ? current.sessionId : current.id,
             requestId: uuidSchema.safeParse(requestId).success
               ? requestId
               : generateUuidV7(),
             reason: parsed.data.reason,
-            before: {
-              capacity: current.capacity,
-              reservationStatus: current.status,
-              version: current.version,
-            },
-            after: {
-              capacity: current.capacity,
-              confirmed: confirmedAfter,
-              reservationStatus: 'cancelled',
-              version: current.version + 1,
-            },
+            before: legacyCapacityOverride
+              ? {
+                  capacity: current.capacity,
+                  confirmedCount: confirmedBefore,
+                  version: current.sessionVersion,
+                }
+              : {
+                  capacity: current.capacity,
+                  reservationStatus: current.status,
+                  version: current.version,
+                },
+            after: legacyCapacityOverride
+              ? {
+                  capacity: nextCapacity,
+                  confirmedCount: confirmedAfter,
+                  version: current.sessionVersion + 1,
+                }
+              : {
+                  capacity: nextCapacity,
+                  confirmed: confirmedAfter,
+                  reservationStatus: 'cancelled',
+                  version: current.version + 1,
+                },
           },
           { generateId },
         );
@@ -1203,11 +1263,14 @@ export const mutateAdminReservation = async (
             160,
           ),
           participantReference: participantReference(current.userId),
-          state: 'cancelled',
-          capacity: current.capacity,
+          state: nextState,
+          capacity: nextCapacity,
           reservedCount: confirmedAfter,
           version: current.version + 1,
-          availableActions: [],
+          availableActions:
+            nextState === 'reserved'
+              ? ['capacity_override', 'cancel_reservation']
+              : [],
         };
         const response = adminReservationMutationResponseSchema.parse({
           eventId: event.id,

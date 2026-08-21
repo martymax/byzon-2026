@@ -366,7 +366,10 @@ export const adminExportResponseSchema = z.strictObject({
 
 export type AdminExportResponse = z.infer<typeof adminExportResponseSchema>;
 
-export const adminReservationActionSchema = z.literal('cancel_reservation');
+export const adminReservationActionSchema = z.enum([
+  'capacity_override',
+  'cancel_reservation',
+]);
 
 export type AdminReservationAction = z.infer<
   typeof adminReservationActionSchema
@@ -503,11 +506,24 @@ const reservationMutationBase = {
 /**
  * Assigned session IDs are server-side authorization context. They are
  * intentionally absent from every reservation mutation request.
+ *
+ * `capacity_override` is a rollout-only compatibility branch for cached
+ * clients. New clients edit capacity through the session-level contract.
  */
-export const adminReservationMutationRequestSchema = z.strictObject({
-  ...reservationMutationBase,
-  action: z.literal('cancel_reservation'),
-});
+export const adminReservationMutationRequestSchema = z.discriminatedUnion(
+  'action',
+  [
+    z.strictObject({
+      ...reservationMutationBase,
+      action: z.literal('capacity_override'),
+      capacity: adminReservationCapacitySchema,
+    }),
+    z.strictObject({
+      ...reservationMutationBase,
+      action: z.literal('cancel_reservation'),
+    }),
+  ],
+);
 
 export type AdminReservationMutationRequest = z.infer<
   typeof adminReservationMutationRequestSchema

@@ -170,9 +170,19 @@ describe('CS-ADMIN-01 contracts', () => {
         action: 'capacity_override',
         reservationId: ids.reservation,
         expectedVersion: 4,
-        reason: 'Kapacita se nesmí měnit přes konkrétní rezervaci.',
+        reason: 'Neúplný starý požadavek musí zůstat odmítnutý.',
       }).success,
     ).toBe(false);
+    const legacyCapacityRequest = {
+      action: 'capacity_override' as const,
+      reservationId: ids.reservation,
+      expectedVersion: 4,
+      capacity: 42,
+      reason: 'Přechodová kompatibilita pro dříve načtenou administraci.',
+    };
+    expect(
+      adminReservationMutationRequestSchema.parse(legacyCapacityRequest),
+    ).toEqual(legacyCapacityRequest);
   });
 
   it('validates available reservation actions against canonical state', () => {
@@ -186,7 +196,7 @@ describe('CS-ADMIN-01 contracts', () => {
       capacity: 40,
       reservedCount: 38,
       version: 4,
-      availableActions: ['cancel_reservation'] as const,
+      availableActions: ['capacity_override', 'cancel_reservation'] as const,
     };
     const capacityResponse = {
       eventId: ids.event,

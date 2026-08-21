@@ -235,7 +235,7 @@ const reservedRecord = {
   capacity: 40,
   reservedCount: 38,
   version: 4,
-  availableActions: ['cancel_reservation'],
+  availableActions: ['capacity_override', 'cancel_reservation'],
 } satisfies AdminReservationRecord;
 
 const cancelledRecord = {

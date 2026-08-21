@@ -368,11 +368,17 @@ const supportRecordAfter = (
 
 const reservationAfter = (
   record: AdminReservationRecord,
+  body: z.output<typeof adminReservationMutationRequestSchema>,
 ): AdminReservationRecord => ({
   ...record,
+  capacity:
+    body.action === 'capacity_override' ? body.capacity : record.capacity,
   version: record.version + 1,
-  state: 'cancelled',
-  availableActions: [],
+  state: body.action === 'capacity_override' ? 'reserved' : 'cancelled',
+  availableActions:
+    body.action === 'capacity_override'
+      ? ['capacity_override', 'cancel_reservation']
+      : [],
 });
 
 export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
@@ -1349,8 +1355,43 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.reservation-state' },
         );
       }
-      const next = reservationAfter(record);
-      state.reservations[index] = next;
+      let next = reservationAfter(record, body.data);
+      if (body.data.action === 'capacity_override') {
+        const legacyCapacity = body.data.capacity;
+        const capacityIndex = state.sessionCapacities.findIndex(
+          ({ sessionId }) => sessionId === record.sessionId,
+        );
+        const capacityRecord = state.sessionCapacities[capacityIndex];
+        if (
+          !capacityRecord ||
+          legacyCapacity < capacityRecord.confirmedCount ||
+          capacityRecord.sessionStatus === 'cancelled' ||
+          capacityRecord.sessionStatus === 'archived'
+        ) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            adminMutationProblemFixtures.invalid_transition,
+            { fixtureName: 'admin.mock.reservation-legacy-capacity-state' },
+          );
+        }
+        state.sessionCapacities[capacityIndex] = {
+          ...capacityRecord,
+          capacity: legacyCapacity,
+          version: capacityRecord.version + 1,
+        };
+        state.reservations = state.reservations.map((reservation) =>
+          reservation.sessionId === record.sessionId
+            ? {
+                ...reservation,
+                capacity: legacyCapacity,
+                version: reservation.version + 1,
+              }
+            : reservation,
+        );
+        next = state.reservations[index]!;
+      } else {
+        state.reservations[index] = next;
+      }
       const response = adminReservationMutationResponseSchema.parse({
         ...clone(adminReservationMutationFixtures.cancelled!),
         eventId: adminFixtureIds.event,
