@@ -103,6 +103,30 @@ test('participant reserves the available place and downloads the Prague-time age
   page,
 }) => {
   test.setTimeout(60_000);
+  const apiTraffic: string[] = [];
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (
+      url.origin !== 'http://127.0.0.1:3000' ||
+      !url.pathname.startsWith('/api/')
+    ) {
+      return;
+    }
+    apiTraffic.push(
+      `${response.request().method()} ${url.pathname} ${response.status()} mock=${response.request().headers()['x-byzon-mock-participant'] ?? 'absent'}`,
+    );
+  });
+  page.on('requestfailed', (request) => {
+    const url = new URL(request.url());
+    if (
+      url.origin === 'http://127.0.0.1:3000' &&
+      url.pathname.startsWith('/api/')
+    ) {
+      apiTraffic.push(
+        `${request.method()} ${url.pathname} failed=${request.failure()?.errorText ?? 'unknown'}`,
+      );
+    }
+  });
 
   await page.setExtraHTTPHeaders({
     'x-byzon-mock-participant': 'active',
@@ -170,7 +194,7 @@ test('participant reserves the available place and downloads the Prague-time age
   const agendaPage = page.locator('.agenda-page');
   await expect(
     page.locator('article').filter({ hasText: 'Otevření konference' }),
-    `Agenda UI after a canonical 200 response:\n${await agendaPage.innerText()}`,
+    `Agenda UI after a canonical 200 response:\n${await agendaPage.innerText()}\nAPI traffic:\n${apiTraffic.join('\n')}`,
   ).toBeAttached({ timeout: 20_000 });
 
   const opening = page.getByRole('article').filter({
