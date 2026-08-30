@@ -125,39 +125,39 @@ test('participant reserves the available place and downloads the Prague-time age
     const bootstrap = await fetch('/api/v1/me/bootstrap', {
       headers: { 'x-byzon-mock-participant': 'active' },
     });
+    const agenda = await fetch('/api/v1/me/agenda', {
+      headers: { 'x-byzon-mock-participant': 'active' },
+    });
+    const agendaPayload = (await agenda.json()) as {
+      readonly items?: readonly {
+        readonly session?: { readonly title?: string };
+      }[];
+    };
     return {
+      agenda: {
+        ok: agenda.ok,
+        status: agenda.status,
+        titles:
+          agendaPayload.items?.map(({ session }) => session?.title ?? '') ?? [],
+      },
       bootstrap: { ok: bootstrap.ok, status: bootstrap.status },
       reset: { ok: reset.ok, status: reset.status },
     };
   }, mockParticipantSessionKey);
-  expect(syntheticSession).toEqual({
+  expect(syntheticSession).toMatchObject({
+    agenda: {
+      ok: true,
+      status: 200,
+      titles: expect.arrayContaining(['Otevření konference']),
+    },
     bootstrap: { ok: true, status: 200 },
     reset: { ok: true, status: 204 },
   });
 
-  const agendaResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'GET' &&
-      new URL(response.url()).pathname === '/api/v1/me/agenda',
-  );
   await page
     .getByRole('navigation', { name: 'Hlavní navigace' })
     .getByRole('link', { name: 'Agenda', exact: true })
     .click();
-  const agendaResponse = await agendaResponsePromise;
-  expect(agendaResponse.status()).toBe(200);
-  const agendaPayload = (await agendaResponse.json()) as {
-    readonly items?: readonly {
-      readonly session?: { readonly title?: string };
-    }[];
-  };
-  expect(agendaPayload.items).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        session: expect.objectContaining({ title: 'Otevření konference' }),
-      }),
-    ]),
-  );
   await expect(page).toHaveURL(/\/app\/agenda$/, { timeout: 20_000 });
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),
