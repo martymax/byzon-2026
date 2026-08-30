@@ -37,8 +37,9 @@ export const ParticipantAgendaConflictDialog = ({
   readonly timezone: string;
 }) => {
   const conflict = resource.conflict;
+  const directReservationConflict = conflict?.action === 'reserve';
   const reservationConflict =
-    conflict?.action === 'reserve' || conflict?.action === 'join_waitlist';
+    directReservationConflict || conflict?.action === 'join_waitlist';
   const closeConflict = useCallback(() => {
     resource.dismissConflict();
     window.requestAnimationFrame(() => {
@@ -66,12 +67,18 @@ export const ParticipantAgendaConflictDialog = ({
       {conflict ? (
         <div className="agenda-dialog-content">
           <p>
-            {reservationConflict
-              ? 'Požadavek jsme uložili. Jeho čas se ale překrývá s dalšími body ve vaší agendě; rozhodnutí můžete kdykoli změnit.'
-              : 'Bod jsme uložili do agendy. Jeho čas se ale překrývá s dalšími body; svůj plán můžete kdykoli změnit.'}
+            {directReservationConflict
+              ? 'Rezervaci jsme uložili. Její čas se ale překrývá s dalšími body ve vaší agendě; rozhodnutí můžete kdykoli změnit.'
+              : reservationConflict
+                ? 'Požadavek jsme uložili. Jeho čas se ale překrývá s dalšími body ve vaší agendě; rozhodnutí můžete kdykoli změnit.'
+                : 'Bod jsme uložili do agendy. Jeho čas se ale překrývá s dalšími body; svůj plán můžete kdykoli změnit.'}
           </p>
           <div className="agenda-conflict-target">
-            <span>Právě uloženo</span>
+            <span>
+              {directReservationConflict
+                ? 'Právě rezervováno'
+                : 'Právě uloženo'}
+            </span>
             <strong>{conflict.targetSession.title}</strong>
             <span>{agendaSessionTime(conflict.targetSession, timezone)}</span>
           </div>
@@ -93,9 +100,11 @@ export const ParticipantAgendaConflictDialog = ({
           </ul>
           <div className="agenda-dialog-actions">
             <Button onClick={closeConflict}>
-              {reservationConflict
-                ? 'Rozumím, ponechat požadavek'
-                : 'Rozumím, ponechat v agendě'}
+              {directReservationConflict
+                ? 'Rozumím, ponechat rezervaci'
+                : reservationConflict
+                  ? 'Rozumím, ponechat požadavek'
+                  : 'Rozumím, ponechat v agendě'}
             </Button>
           </div>
         </div>
