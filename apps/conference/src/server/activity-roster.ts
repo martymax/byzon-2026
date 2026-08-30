@@ -4,7 +4,7 @@ import {
   publishedProgramSnapshotSchema,
   type ActivityRosterResponse,
 } from '@byzon/domain/contracts';
-import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -217,7 +217,6 @@ export const loadActivityRoster = async (
               inArray(schema.programSessions.id, publishedSessionIds),
               inArray(schema.programSessions.status, ['draft', 'published']),
               eq(schema.programSessions.capacityMode, 'reservation'),
-              ne(schema.programSessions.type, 'networking'),
             ),
           )
           .orderBy(asc(schema.programSessions.id));

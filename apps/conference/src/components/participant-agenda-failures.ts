@@ -21,7 +21,6 @@ export type AgendaMutationFeedbackKind =
   | 'error'
   | 'in_progress'
   | 'not_found'
-  | 'offer_expired'
   | 'offline'
   | 'offline_restricted'
   | 'queue_conflict'
@@ -114,12 +113,6 @@ export const mapParticipantAgendaMutationFailure = (
         case 'RESERVATION_CLOSED':
           return {
             kind: 'closed',
-            requestId: failure.problem.requestId,
-            retry: 'none',
-          };
-        case 'OFFER_EXPIRED':
-          return {
-            kind: 'offer_expired',
             requestId: failure.problem.requestId,
             retry: 'none',
           };

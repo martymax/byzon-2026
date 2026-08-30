@@ -85,23 +85,19 @@ const offeredItem = {
   session,
   capacity: {
     ...reservationCapacity,
-    held: 1,
+    confirmed: 10,
+    held: 0,
     remaining: 0,
-    actorAvailability: {
-      state: 'held_for_participant' as const,
-      offerId: ids.offer,
-      expiresAt: '2026-09-18T06:45:00.000Z',
-    },
+    actorAvailability: { state: 'unavailable' as const },
   },
-  action: { state: 'available' as const },
+  action: { state: 'capacity_full' as const },
   state: 'waitlisted' as const,
   waitlist: {
     id: ids.waitlist,
-    state: 'offered' as const,
+    state: 'waiting' as const,
     joinedAt: '2026-09-18T05:00:00.000Z',
-    offerId: ids.offer,
-    offeredAt: '2026-09-18T06:00:00.000Z',
-    expiresAt: '2026-09-18T06:45:00.000Z',
+    position: 1,
+    actionsAvailable: true,
   },
 };
 
@@ -186,11 +182,7 @@ describe('CS-AGENDA-01 participant contracts', () => {
       'leave_waitlist',
     ] as const;
 
-    expect(agendaMutationActionSchema.options).toEqual([
-      ...simpleActions,
-      'accept_offer',
-      'decline_offer',
-    ]);
+    expect(agendaMutationActionSchema.options).toEqual(simpleActions);
     simpleActions.forEach((action) => {
       expect(
         participantAgendaMutationRequestSchema.parse({
@@ -204,16 +196,6 @@ describe('CS-AGENDA-01 participant contracts', () => {
         expectedVersion: 7,
       });
     });
-    for (const action of ['accept_offer', 'decline_offer'] as const) {
-      expect(
-        participantAgendaMutationRequestSchema.parse({
-          sessionId: ids.session,
-          action,
-          offerId: ids.offer,
-          expectedVersion: 7,
-        }),
-      ).toMatchObject({ action, offerId: ids.offer });
-    }
     expect(
       participantAgendaMutationRequestSchema.safeParse({
         sessionId: ids.session,
@@ -245,7 +227,7 @@ describe('CS-AGENDA-01 participant contracts', () => {
     ).toBe(false);
   });
 
-  it('validates canonical saved, reserved and offered snapshots', () => {
+  it('validates canonical saved, reserved and waiting snapshots', () => {
     expect(participantAgendaResponseSchema.parse(response)).toEqual(response);
     expect(
       participantAgendaResponseSchema.parse({
@@ -279,8 +261,8 @@ describe('CS-AGENDA-01 participant contracts', () => {
       }).items[0],
     ).toMatchObject({
       state: 'waitlisted',
-      waitlist: { state: 'offered' },
-      action: { state: 'available' },
+      waitlist: { state: 'waiting', position: 1 },
+      action: { state: 'capacity_full' },
     });
     expect(
       participantAgendaResponseSchema.parse({
@@ -618,53 +600,25 @@ describe('CS-AGENDA-01 participant contracts', () => {
     });
   });
 
-  it('derives active and expired offers from serverNow, never client time', () => {
-    expect(
-      participantAgendaResponseSchema.safeParse({
-        ...response,
-        serverNow: '2026-09-18T06:45:00.000Z',
-        items: [offeredItem],
-      }).success,
-    ).toBe(false);
-    expect(
-      participantAgendaResponseSchema.safeParse({
-        ...response,
-        items: [
-          {
-            ...offeredItem,
-            waitlist: {
-              ...offeredItem.waitlist,
-              state: 'expired',
-              expiredAt: '2026-09-18T06:46:00.000Z',
+  it('rejects legacy offered and expired waitlist projections', () => {
+    for (const state of ['offered', 'expired'] as const) {
+      expect(
+        participantAgendaResponseSchema.safeParse({
+          ...response,
+          items: [
+            {
+              ...offeredItem,
+              waitlist: {
+                ...offeredItem.waitlist,
+                state,
+                offerId: ids.offer,
+                expiresAt: '2026-09-18T06:45:00.000Z',
+              },
             },
-          },
-        ],
-      }).success,
-    ).toBe(false);
-    expect(
-      participantAgendaResponseSchema.safeParse({
-        ...response,
-        serverNow: '2026-09-18T06:46:00.000Z',
-        items: [
-          {
-            ...offeredItem,
-            action: { state: 'capacity_full' },
-            capacity: {
-              ...reservationCapacity,
-              confirmed: 10,
-              held: 0,
-              remaining: 0,
-              actorAvailability: { state: 'unavailable' },
-            },
-            waitlist: {
-              ...offeredItem.waitlist,
-              state: 'expired',
-              expiredAt: '2026-09-18T06:46:00.000Z',
-            },
-          },
-        ],
-      }).success,
-    ).toBe(true);
+          ],
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it('rejects a removed registration-estimate capacity branch', () => {
@@ -717,12 +671,6 @@ describe('CS-AGENDA-01 participant contracts', () => {
       {
         sessionId: ids.session,
         action: 'leave_waitlist' as const,
-        outcome: 'applied' as const,
-      },
-      {
-        sessionId: ids.session,
-        action: 'decline_offer' as const,
-        offerId: ids.offer,
         outcome: 'applied' as const,
       },
     ]) {
@@ -793,12 +741,6 @@ describe('CS-AGENDA-01 participant contracts', () => {
         action: 'leave_waitlist' as const,
         outcome: 'applied' as const,
       },
-      {
-        sessionId: ids.session,
-        action: 'decline_offer' as const,
-        offerId: ids.offer,
-        outcome: 'applied' as const,
-      },
     ];
 
     for (const mutation of releases) {
@@ -811,40 +753,20 @@ describe('CS-AGENDA-01 participant contracts', () => {
     }
   });
 
-  it('accepts a canonical terminal waitlist after leaving or declining', () => {
-    const cancelledWaitlistItem = {
-      ...offeredItem,
-      capacity: reservationCapacity,
-      waitlist: {
-        id: ids.waitlist,
-        state: 'cancelled' as const,
-        joinedAt: offeredItem.waitlist.joinedAt,
-        cancelledAt: response.serverNow,
-      },
-    };
-    for (const mutation of [
-      {
-        sessionId: ids.session,
-        action: 'leave_waitlist' as const,
-        outcome: 'applied' as const,
-      },
-      {
-        sessionId: ids.session,
-        action: 'decline_offer' as const,
-        offerId: ids.offer,
-        outcome: 'applied' as const,
-      },
-    ]) {
-      expect(
-        participantAgendaMutationResponseSchema.safeParse({
-          ...response,
-          version: 8,
-          items: [cancelledWaitlistItem],
-          mutation,
-          timeConflict: null,
-        }).success,
-      ).toBe(true);
-    }
+  it('accepts a canonical saved projection after leaving the waitlist', () => {
+    expect(
+      participantAgendaMutationResponseSchema.safeParse({
+        ...response,
+        version: 8,
+        items: [savedItem],
+        mutation: {
+          sessionId: ids.session,
+          action: 'leave_waitlist',
+          outcome: 'applied',
+        },
+        timeConflict: null,
+      }).success,
+    ).toBe(true);
   });
 
   it('validates bounded canonical conflict warnings and every explicit problem family', () => {
@@ -996,35 +918,6 @@ describe('CS-AGENDA-01 participant contracts', () => {
         agenda: { ...response, version: 8 },
       }).code,
     ).toBe('STALE_VERSION');
-    const expiredItem = {
-      ...offeredItem,
-      action: { state: 'capacity_full' as const },
-      capacity: {
-        ...reservationCapacity,
-        confirmed: 10,
-        held: 0,
-        remaining: 0,
-        actorAvailability: { state: 'unavailable' as const },
-      },
-      waitlist: {
-        ...offeredItem.waitlist,
-        state: 'expired' as const,
-        expiredAt: '2026-09-18T06:46:00.000Z',
-      },
-    };
-    expect(
-      participantAgendaMutationProblemSchema.parse({
-        ...problem('OFFER_EXPIRED', 409),
-        sessionId: ids.session,
-        offerId: ids.offer,
-        serverNow: '2026-09-18T06:46:00.000Z',
-        agenda: {
-          ...response,
-          serverNow: '2026-09-18T06:46:00.000Z',
-          items: [expiredItem],
-        },
-      }).code,
-    ).toBe('OFFER_EXPIRED');
     expect(
       participantAgendaMutationProblemSchema.parse({
         ...problem('CAPACITY_FULL', 409),

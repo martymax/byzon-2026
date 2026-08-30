@@ -123,7 +123,7 @@ oddělený a v produkčním buildu se nepoužívá.
 ## Personal agenda (`CS-AGENDA-01`)
 
 `agenda.ts` defines the strict event/user-scoped boundary for the personal
-agenda, reservations and waitlist offers. Registration estimates are not a v6
+agenda, reservations and the FIFO waitlist. Registration estimates are not a v6
 capacity mode and the parser rejects the historical branch.
 Every response carries canonical `serverNow`, the IANA `eventTimezone`, agenda
 and publication versions, and the complete ordered item list. Event-local days
@@ -138,9 +138,8 @@ owner/event-scoped IndexedDB snapshots and add/remove replay guarded by lease
 and revocation epoch; the production feature remains disabled without a real
 `lease-v1` preflight. Reservation, waitlist and estimate mutations are always
 online-only and require a transport idempotency key. Mutation bodies are
-discriminated by action and always carry `sessionId` plus `expectedVersion`.
-Offer decisions additionally require the exact `offerId`; registration
-estimates carry an explicit target boolean and are never implicit toggles.
+discriminated by action and always carry `sessionId` plus `expectedVersion`;
+registration estimates are never implicit toggles.
 Every success returns the complete new canonical snapshot instead of a locally
 predicted seat. If the original target state is replaced by a later mutation
 before the first response or an exact idempotency replay is assembled, the
@@ -148,30 +147,30 @@ explicit `superseded` outcome is returned against the current canonical
 snapshot; the server never fabricates a historical private snapshot or
 attaches a stale time-conflict warning.
 
-Reservation capacity separates confirmed seats, all active holds and genuinely
-remaining seats. `actorAvailability` distinguishes a public seat from a
-specific participant offer, so a held seat cannot be rendered as generally
-available. `timeConflict` correlates the requested target with ordered,
+Reservation capacity separates confirmed and genuinely remaining seats. The
+legacy `held` field is constrained to zero and `actorAvailability` exposes only
+whether the current participant may reserve. `timeConflict` correlates the
+requested target with ordered,
 actually overlapping same-event sessions inside the successful canonical
 mutation response; it is a non-blocking warning, never a `409`, and the target
-remains saved or reserved. `STALE_VERSION`, `OFFER_EXPIRED`,
-`CAPACITY_FULL`, `RESERVATION_CLOSED` and `TICKET_INACTIVE` carry the canonical
-agenda version and target state needed for safe replacement. Active offer
-countdowns are derived from `serverNow`, never from an uncorrelated client
-clock. The calendar metadata exposes only the same-origin
+remains saved, waiting or reserved. `STALE_VERSION`, `CAPACITY_FULL`,
+`RESERVATION_CLOSED` and `TICKET_INACTIVE` carry the canonical agenda version
+and target state needed for safe replacement. The calendar metadata exposes
+only the same-origin
 `/api/v1/me/agenda.ics` endpoint. The production representation re-runs the
 same authenticated owner/event/retention gates as the JSON snapshot and uses
 the same RFC 5545 UID/sequence, UTC, cancellation, escaping and Unicode-safe
 folding invariants as the `F3-05` adapter.
 
-The integrated `P5-01`/`P5-02`/`P5-05` slice serves the complete private
+The integrated `P5-01`/`P5-02`/`P5-04`/`P5-05` slice serves the complete private
 snapshot and enables add, remove, atomic reserve and policy-bounded participant
 cancel. A reserved item may explicitly disable participant cancellation and an
-existing waitlist item may disable its controls, so the production UI never
+existing FIFO waitlist item may disable its controls, so the production UI never
 exposes a later milestone's mutation.
 Non-empty live agendas expose the private same-origin calendar download; empty
-agendas keep the distinct `empty` state. Waitlist promotion and networking
-reservation remain outside this integrated subset.
+agendas keep the distinct `empty` state. Configured networking uses the same
+reservation/FIFO contract; without administrator-set capacity it remains
+fail-closed.
 
 The immutable content-publication record retains the server-only reservation
 window beside each session and in its protected `reservation_windows` policy.
@@ -196,10 +195,10 @@ The integrated adapter owns both the list and assigned-session detail routes.
 It derives event and operator scope from the server session, returns private
 `no-store` representations and gives unassigned and unknown detail IDs the same
 not-found outcome. The shared reservation/waitlist tables added with `P5-08`
-are only the known read-model foundation from plan section 9.6; reservation
-writes, capacity locking, cancellation and the single product-approved
-promotion mode remain in `P5-01` through `P5-05`. Networking is not projected
-until `BLOCKER-RES-01` is resolved.
+are the canonical foundation from plan section 9.6. Reservation writes,
+capacity locking, cancellation and automatic FIFO promotion are integrated.
+Networking is projected once an organizer has configured its positive
+reservation capacity; an unconfigured networking session remains fail-closed.
 
 ## Participant ticket (`CS-TICKET-01`, status-only slice)
 
@@ -245,12 +244,14 @@ advanced targeting and reporting remain server work in `P8-05`/`P8-06`.
 
 ## Ticket import (`CS-IMPORT-01`)
 
-`ticket-import.ts` defines an online-only, vendor-neutral CSV/XLSX workflow.
-The browser sends only bounded multipart source metadata and a file to a
-server-side quarantine; raw files, previews and operational PII are forbidden
-from browser persistence and shared/service-worker caches. Rows expose masked
-contacts and one of `new`, `unchanged`, `status_changed`, `conflict` or
-`unknown`, with totals validated against the complete preview.
+`ticket-import.ts` currently defines the vendor-neutral staging, preview and
+apply boundary originally exercised with CSV/XLSX fixtures. The SimpleShop
+production source will be a server-only, admin-triggered API adapter according
+to ADR-015; it reuses the canonical row/diff model without uploading or
+exporting a SimpleShop file. Raw API responses, previews and operational PII
+are forbidden from browser persistence and shared/service-worker caches. Rows
+expose masked contacts and one of `new`, `unchanged`, `status_changed`,
+`conflict` or `unknown`, with totals validated against the complete preview.
 
 Apply binds the exact event, preview ID/version and immutable SHA-256 digest,
 requires a visible reason and transport idempotency key, and is rejected while

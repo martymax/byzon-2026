@@ -118,10 +118,10 @@ na fázi eventu a v preview ukazuje publikovaný program, praktické informace a
 nejbližší kanonický bod osobní agendy bez vymyšlených live dat.
 
 Program má filtr, detail session, řečníky, partnery a praktický obsah. Agenda
-podporuje save/remove, rezervaci/cancel, waitlist, nabídku s expirací,
-kapacitní stavy, časový konflikt a `.ics` export. Historická
-`registration_estimate` větev byla z kontraktu, fixtures a UI odstraněna;
-networkingová rezervace čeká na `BLOCKER-RES-01`/`04`.
+podporuje save/remove, rezervaci/cancel, automatický FIFO waitlist, kapacitní
+stavy, časový konflikt a `.ics` export. Historická `registration_estimate` i
+offer/TTL větev byly z kontraktu, fixtures a UI odstraněny; networking je po
+administrátorském nastavení kladné kapacity běžná rezervovatelná session.
 Oznámení obsahují all/unread filtr, stránkování, detail, online read a bezpečný
 návrat s filtrem/scroll pozicí.
 
@@ -363,13 +363,13 @@ capability na `integrated` ani `UAT`.
 Tyto body nejsou chybějící mockované FE průchody:
 
 - `F3-06`/`P5-06` jsou dokončené nad source-verified snapshotem autoritativního
-  harmonogramu; `F3-07` zůstává částečně blokované na networkingové kapacitě
-  `BLOCKER-RES-01` a jediném promotion režimu `BLOCKER-RES-04`;
-- produkční read-only roster endpoint a negativní cross-session autorizace
-  zůstávají v `P5-08`;
+  harmonogramu; `F3-07` je integrované s administrátorskou networkingovou
+  kapacitou a automatickým FIFO;
+- read-only roster endpoint a negativní cross-session autorizace jsou
+  integrované v `P5-08`; zbývá finální přiřazení skutečných vedoucích;
 - skutečný auth/session/membership a autorizované backend endpointy pro celý
   F1–F6 rozsah;
-- produkční ticket import mapping/apply a SimpleShop synchronizace;
+- produkční SimpleShop API mapping, staging/apply a synchronizace na vyžádání;
 - úplný participant ticket credential za `BLOCKER-TKT-05`;
 - skutečné check-in credential adaptery, zařízení, load profil a provozní UAT;
 - produkční offline `lease-v1`, revocation a replay preflight;

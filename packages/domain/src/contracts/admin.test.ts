@@ -23,6 +23,7 @@ const ids = {
   auditNewest: '019fa200-0000-7000-8000-000000000004',
   auditOlder: '019fa200-0000-7000-8000-000000000005',
   operator: '019fa200-0000-7000-8000-000000000006',
+  networkingSession: '019fa200-0000-7000-8000-000000000007',
 } as const;
 
 describe('CS-ADMIN-01 contracts', () => {
@@ -223,6 +224,31 @@ describe('CS-ADMIN-01 contracts', () => {
     expect(
       adminSessionCapacityListResponseSchema.parse(capacityResponse),
     ).toEqual(capacityResponse);
+    expect(
+      adminSessionCapacityListResponseSchema.parse({
+        ...capacityResponse,
+        items: [
+          {
+            ...capacityResponse.items[0],
+            sessionId: ids.networkingSession,
+            sessionType: 'networking',
+            capacity: null,
+            confirmedCount: 0,
+          },
+        ],
+      }).items[0],
+    ).toMatchObject({ sessionType: 'networking', capacity: null });
+    expect(
+      adminSessionCapacityListResponseSchema.safeParse({
+        ...capacityResponse,
+        items: [
+          {
+            ...capacityResponse.items[0],
+            capacity: null,
+          },
+        ],
+      }).success,
+    ).toBe(false);
     expect(adminReservationListResponseSchema.parse(response)).toEqual(
       response,
     );

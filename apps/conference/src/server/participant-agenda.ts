@@ -34,6 +34,7 @@ import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import type { ParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
+import { promoteAutomaticWaitlist } from './reservation-waitlist';
 
 const MAX_AGENDA_ITEMS = 512;
 const MAX_BODY_BYTES = 16_384;
@@ -43,7 +44,14 @@ const uuidSchema = z.string().uuid();
 const participantAgendaLockKey = (eventId: string, userId: string): string =>
   `participant-agenda:${eventId}:${userId}`;
 const agendaMutationReceiptSchema = z.strictObject({
-  action: z.enum(['add', 'remove', 'reserve', 'cancel']),
+  action: z.enum([
+    'add',
+    'remove',
+    'reserve',
+    'cancel',
+    'join_waitlist',
+    'leave_waitlist',
+  ]),
   sessionId: uuidSchema,
   outcome: z.enum(['applied', 'already_applied']),
   version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -459,16 +467,13 @@ const capacityProjection = (
       | 'panel'
       | 'talk'
       | 'workshop';
+    waitlistMode: 'auto_confirm' | 'disabled' | 'offer_with_deadline';
   },
   published: PublishedProgramAgendaSnapshot['sessions'][number],
   confirmed: number,
   now: Date,
 ): Pick<ParticipantAgendaItem, 'action' | 'capacity'> => {
-  if (
-    session.capacityMode !== 'reservation' ||
-    session.capacity === null ||
-    session.type === 'networking'
-  ) {
+  if (session.capacityMode !== 'reservation' || session.capacity === null) {
     return {
       capacity: { mode: 'none' },
       action:
@@ -498,7 +503,10 @@ const capacityProjection = (
       confirmed,
       held: 0,
       remaining,
-      waitlistAvailable: false,
+      waitlistAvailable:
+        session.waitlistMode === 'auto_confirm' &&
+        !closed &&
+        session.status !== 'cancelled',
       actorAvailability: {
         state:
           remaining > 0 && !closed && session.status !== 'cancelled'
@@ -652,6 +660,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
             startsAt: schema.programSessions.startsAt,
             status: schema.programSessions.status,
             type: schema.programSessions.type,
+            waitlistMode: schema.programSessions.waitlistMode,
           })
           .from(schema.programSessions)
           .where(
@@ -819,7 +828,10 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           state: 'waiting',
           joinedAt: waiting.joinedAt.toISOString(),
           position: waiting.position,
-          actionsAvailable: false,
+          actionsAvailable:
+            operational.waitlistMode === 'auto_confirm' &&
+            common.session.status === 'published' &&
+            common.action.state !== 'closed',
         },
       });
       continue;
@@ -998,7 +1010,11 @@ const targetPublishedSession = (
   action: AgendaMutationReceipt['action'],
 ): PublishedProgramAgendaSnapshot['sessions'][number] | undefined => {
   const session = context.program.sessions.find(({ id }) => id === sessionId);
-  if (action !== 'remove' && (!session || session.status === 'cancelled')) {
+  if (
+    action !== 'remove' &&
+    action !== 'leave_waitlist' &&
+    (!session || session.status === 'cancelled')
+  ) {
     throw sessionNotFound();
   }
   return session;
@@ -1054,6 +1070,10 @@ const receiptPostconditionHolds = (
     case 'reserve':
       return item?.state === 'reserved';
     case 'cancel':
+      return item === undefined || item.state === 'saved';
+    case 'join_waitlist':
+      return item?.state === 'waitlisted' || item?.state === 'reserved';
+    case 'leave_waitlist':
       return item === undefined || item.state === 'saved';
   }
 };
@@ -1227,7 +1247,9 @@ export const mutateParticipantAgenda = async (
       parsed.data.action !== 'add' &&
       parsed.data.action !== 'remove' &&
       parsed.data.action !== 'reserve' &&
-      parsed.data.action !== 'cancel'
+      parsed.data.action !== 'cancel' &&
+      parsed.data.action !== 'join_waitlist' &&
+      parsed.data.action !== 'leave_waitlist'
     ) {
       throw validationFailed({
         action: ['This agenda action is not enabled in the current rollout.'],
@@ -1259,7 +1281,9 @@ export const mutateParticipantAgenda = async (
         if (
           parsed.data.action === 'add' ||
           parsed.data.action === 'reserve' ||
-          parsed.data.action === 'cancel'
+          parsed.data.action === 'cancel' ||
+          parsed.data.action === 'join_waitlist' ||
+          parsed.data.action === 'leave_waitlist'
         ) {
           await acquireTransactionLock(
             transaction,
@@ -1313,6 +1337,7 @@ export const mutateParticipantAgenda = async (
                   startsAt: true,
                   status: true,
                   type: true,
+                  waitlistMode: true,
                 },
                 where: and(
                   eq(schema.programSessions.eventId, context.event.id),
@@ -1321,6 +1346,7 @@ export const mutateParticipantAgenda = async (
               });
         if (
           action !== 'remove' &&
+          action !== 'leave_waitlist' &&
           (!operationalTarget ||
             operationalTarget.status === 'archived' ||
             operationalTarget.status === 'cancelled')
@@ -1432,7 +1458,33 @@ export const mutateParticipantAgenda = async (
               )
               .returning({ id: schema.reservations.id });
             if (cancelled.length === 1) outcome = 'applied';
+            if (cancelled.length === 1) {
+              await promoteAutomaticWaitlist({
+                transaction,
+                eventId: context.event.id,
+                sessionId: parsed.data.sessionId,
+                now: mutationNow,
+                requestId: uuidSchema.safeParse(requestId).success
+                  ? requestId
+                  : generateUuidV7(),
+                generateId,
+              });
+            }
           }
+        } else if (parsed.data.action === 'leave_waitlist') {
+          const cancelled = await transaction
+            .update(schema.waitlistEntries)
+            .set({ status: 'cancelled', cancelledAt: mutationNow })
+            .where(
+              and(
+                eq(schema.waitlistEntries.eventId, context.event.id),
+                eq(schema.waitlistEntries.userId, session.user.id),
+                eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                eq(schema.waitlistEntries.status, 'waiting'),
+              ),
+            )
+            .returning({ id: schema.waitlistEntries.id });
+          if (cancelled.length === 1) outcome = 'applied';
         } else {
           if (!operationalTarget || !publishedTarget) throw sessionNotFound();
           const saved = await transaction.query.agendaItems.findFirst({
@@ -1462,7 +1514,8 @@ export const mutateParticipantAgenda = async (
           if (
             operationalTarget.capacityMode !== 'reservation' ||
             operationalTarget.capacity === null ||
-            operationalTarget.type === 'networking'
+            (parsed.data.action === 'join_waitlist' &&
+              operationalTarget.waitlistMode !== 'auto_confirm')
           ) {
             throw sessionNotFound();
           }
@@ -1505,7 +1558,7 @@ export const mutateParticipantAgenda = async (
                 eq(schema.waitlistEntries.status, 'waiting'),
               ),
             });
-            if (waiting) {
+            if (waiting && parsed.data.action === 'reserve') {
               throw validationFailed({
                 action: [
                   'A waiting participant cannot bypass the canonical waitlist.',
@@ -1522,22 +1575,53 @@ export const mutateParticipantAgenda = async (
                   eq(schema.reservations.status, 'confirmed'),
                 ),
               );
-            if (
-              (capacityRows[0]?.confirmed ?? 0) >= operationalTarget.capacity
-            ) {
+            const capacityIsFull =
+              (capacityRows[0]?.confirmed ?? 0) >= operationalTarget.capacity;
+            if (capacityIsFull && parsed.data.action === 'reserve') {
               throw new AgendaCapacityFullError(parsed.data.sessionId);
             }
-            await transaction.insert(schema.reservations).values({
-              id: generateId(),
-              eventId: context.event.id,
-              userId: session.user.id,
-              sessionId: parsed.data.sessionId,
-              source: 'participant',
-              status: 'confirmed',
-              version: 1,
-              createdAt: mutationNow,
-            });
-            outcome = 'applied';
+            if (
+              capacityIsFull &&
+              parsed.data.action === 'join_waitlist' &&
+              !waiting
+            ) {
+              const [lastPosition] = await transaction
+                .select({
+                  value: sql<number>`coalesce(max(${schema.waitlistEntries.positionSequence}), 0)::integer`,
+                })
+                .from(schema.waitlistEntries)
+                .where(
+                  and(
+                    eq(schema.waitlistEntries.eventId, context.event.id),
+                    eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                  ),
+                );
+              await transaction.insert(schema.waitlistEntries).values({
+                id: generateId(),
+                eventId: context.event.id,
+                userId: session.user.id,
+                sessionId: parsed.data.sessionId,
+                status: 'waiting',
+                positionSequence: (lastPosition?.value ?? 0) + 1,
+                createdAt: mutationNow,
+              });
+              outcome = 'applied';
+            } else if (!capacityIsFull && !waiting) {
+              await transaction.insert(schema.reservations).values({
+                id: generateId(),
+                eventId: context.event.id,
+                userId: session.user.id,
+                sessionId: parsed.data.sessionId,
+                source:
+                  parsed.data.action === 'join_waitlist'
+                    ? 'waitlist_join'
+                    : 'participant',
+                status: 'confirmed',
+                version: 1,
+                createdAt: mutationNow,
+              });
+              outcome = 'applied';
+            }
           }
         }
         if (outcome === 'applied') {
@@ -1556,7 +1640,11 @@ export const mutateParticipantAgenda = async (
                 ? 'reservation.created'
                 : parsed.data.action === 'cancel'
                   ? 'reservation.cancelled'
-                  : `agenda.${parsed.data.action}`,
+                  : parsed.data.action === 'join_waitlist'
+                    ? 'waitlist.joined'
+                    : parsed.data.action === 'leave_waitlist'
+                      ? 'waitlist.left'
+                      : `agenda.${parsed.data.action}`,
             targetType: 'program_session',
             targetId: parsed.data.sessionId,
             requestId: uuidSchema.safeParse(requestId).success
@@ -1598,7 +1686,9 @@ export const mutateParticipantAgenda = async (
       },
       timeConflict:
         !responseSuperseded &&
-        (receipt.action === 'add' || receipt.action === 'reserve')
+        (receipt.action === 'add' ||
+          receipt.action === 'reserve' ||
+          receipt.action === 'join_waitlist')
           ? conflictFor(snapshot, receipt.sessionId)
           : null,
     });

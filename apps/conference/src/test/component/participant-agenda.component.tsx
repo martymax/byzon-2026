@@ -196,18 +196,11 @@ const emptyMutationResponse = (
 ): ParticipantAgendaMutationResponse =>
   mutationResponse(
     participantAgendaFixtures.empty!,
-    request.action === 'accept_offer' || request.action === 'decline_offer'
-      ? {
-          action: request.action,
-          offerId: request.offerId,
-          outcome: 'applied',
-          sessionId: request.sessionId,
-        }
-      : {
-          action: request.action,
-          outcome: 'applied',
-          sessionId: request.sessionId,
-        },
+    {
+      action: request.action,
+      outcome: 'applied',
+      sessionId: request.sessionId,
+    },
     request.expectedVersion,
   );
 
@@ -528,35 +521,31 @@ describe('F3-01..F3-05 participant agenda', () => {
 
   it('does not expose actionable waitlist controls after the event ended', async () => {
     const { api } = agendaApiFor({
-      onRead: participantAgendaFixtures.offered!,
+      onRead: participantAgendaFixtures.waiting!,
     });
     const screen = await renderComponent(
       <AgendaProbe agendaApi={api} identity={endedIdentity} />,
     );
 
-    await expect.element(screen.getByText('Nabídnuté místo')).toBeVisible();
+    await expect.element(screen.getByText('Čekací listina')).toBeVisible();
     await expect
       .element(
         screen.getByText('Po skončení akce je tato položka jen ke čtení.'),
       )
       .toBeVisible();
-    expect(screen.getByRole('dialog').elements()).toHaveLength(0);
     expect(
-      screen.getByRole('button', { name: 'Přijmout a rezervovat' }).elements(),
-    ).toHaveLength(0);
-    expect(
-      screen.getByRole('button', { name: 'Otevřít nabídku místa' }).elements(),
+      screen.getByRole('button', { name: 'Opustit čekací listinu' }).elements(),
     ).toHaveLength(0);
   });
 
-  it('does not expose an offered-place flow when server actions are disabled', async () => {
-    const offered = participantAgendaFixtures.offered!;
-    const item = offered.items[0];
+  it('does not expose waitlist controls when server actions are disabled', async () => {
+    const waiting = participantAgendaFixtures.waiting!;
+    const item = waiting.items[0];
     if (!item || item.state !== 'waitlisted') {
-      throw new TypeError('Offered fixture must expose a waitlist entry.');
+      throw new TypeError('Waiting fixture must expose a waitlist entry.');
     }
-    const disabledOffer = participantAgendaResponseSchema.parse({
-      ...offered,
+    const disabledWaitlist = participantAgendaResponseSchema.parse({
+      ...waiting,
       items: [
         {
           ...item,
@@ -564,14 +553,13 @@ describe('F3-01..F3-05 participant agenda', () => {
         },
       ],
     });
-    const { api } = agendaApiFor({ onRead: disabledOffer });
+    const { api } = agendaApiFor({ onRead: disabledWaitlist });
     const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
 
-    await expect.element(screen.getByText('Nabídnuté místo')).toBeVisible();
+    await expect.element(screen.getByText('Čekací listina')).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Otevřít nabídku místa' }).elements(),
+      screen.getByRole('button', { name: 'Opustit čekací listinu' }).elements(),
     ).toHaveLength(0);
-    expect(screen.getByRole('dialog').elements()).toHaveLength(0);
   });
 
   it('adds a session from its detail and adopts only the canonical saved response', async () => {
@@ -1033,14 +1021,13 @@ describe('F3-01..F3-05 participant agenda', () => {
     expect(mutationCount()).toBe(1);
   });
 
-  it('distinguishes full, waiting, expired, closed and cancelled states without color alone', async () => {
+  it('distinguishes full, waiting, closed and cancelled states without color alone', async () => {
     const cases = [
       [
         participantAgendaFixtures.full!,
         'K okamžité rezervaci zbývá 0 míst. Čekací listina není dostupná.',
       ],
       [participantAgendaFixtures.waiting!, 'Aktuální pořadí: 3.'],
-      [participantAgendaFixtures.expired!, 'Nabídka vypršela'],
       [participantAgendaFixtures.closed!, 'Rezervace jsou uzavřené.'],
       [
         participantAgendaFixtures.cancelled!,
@@ -1055,162 +1042,6 @@ describe('F3-01..F3-05 participant agenda', () => {
       await expectComponentToPassAxe(screen.container);
       await screen.unmount();
     }
-  });
-
-  it('opens an offered-place modal with a serverNow countdown and supports decline', async () => {
-    const { api } = agendaApiFor({
-      onRead: participantAgendaFixtures.offered!,
-      onMutation: (request) => {
-        expect(request).toMatchObject({
-          action: 'decline_offer',
-          offerId: agendaFixtureIds.offer,
-        });
-        return jsonResponse(emptyMutationResponse(request));
-      },
-    });
-    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Nabídka místa z čekací listiny',
-        }),
-      )
-      .toBeVisible();
-    await expect.element(screen.getByText('00:15:00')).toBeVisible();
-    await expect
-      .element(screen.getByRole('timer'))
-      .not.toHaveAttribute('aria-live');
-    await expect
-      .element(
-        screen.getByText(
-          'Server drží místo pro tento účet. Další okamžitě dostupná kapacita: 0 míst. Rezervace vznikne až přijetím nabídky.',
-        ),
-      )
-      .toBeVisible();
-    await expect
-      .element(screen.getByRole('button', { name: 'Zavřít' }))
-      .toHaveFocus();
-    await screen.getByRole('button', { name: 'Odmítnout nabídku' }).click();
-    await expect
-      .element(screen.getByText('Osobní agenda je zatím prázdná'))
-      .toBeVisible();
-    expect(document.querySelector('dialog[open]')).toBeNull();
-  });
-
-  it('closes an unresolved offer modal and retries outside it with the same idempotency key', async () => {
-    const keys: string[] = [];
-    const { api } = agendaApiFor({
-      onRead: participantAgendaFixtures.offered!,
-      onMutation: (request, init, index) => {
-        keys.push(new Headers(init?.headers).get('idempotency-key') ?? '');
-        if (index === 0) throw new TypeError('Synthetic transport failure');
-        return jsonResponse({
-          ...participantAgendaMutationFixtures.accepted_offer!,
-          version: request.expectedVersion + 1,
-        });
-      },
-    });
-    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-
-    await screen.getByRole('button', { name: 'Přijmout a rezervovat' }).click();
-    await expect
-      .element(screen.getByText('Změnu se nepodařilo potvrdit'))
-      .toBeVisible();
-    expect(document.querySelector('dialog[open]')).toBeNull();
-    await expect
-      .element(
-        screen.getByRole('button', {
-          name: 'Zkontrolovat stejný požadavek',
-        }),
-      )
-      .toBeVisible();
-
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat stejný požadavek' })
-      .click();
-    await expect
-      .element(screen.getByText('Rezervováno', { exact: true }))
-      .toBeVisible();
-    expect(keys).toHaveLength(2);
-    expect(keys[0]).toBe(keys[1]);
-  });
-
-  it('keeps the offer countdown anchored when the dialog is closed and reopened', async () => {
-    let monotonicNow = 10_000;
-    vi.spyOn(performance, 'now').mockImplementation(() => monotonicNow);
-    const { api } = agendaApiFor({
-      onRead: participantAgendaFixtures.offered!,
-    });
-    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-
-    await expect.element(screen.getByText('00:15:00')).toBeVisible();
-    await screen.getByRole('button', { name: 'Zavřít' }).click();
-    expect(document.querySelector('dialog[open]')).toBeNull();
-
-    monotonicNow += 60_000;
-    await screen.getByRole('button', { name: 'Otevřít nabídku místa' }).click();
-    await expect.element(screen.getByText('00:14:00')).toBeVisible();
-    expect(screen.container.textContent).not.toContain('00:15:00');
-  });
-
-  it('does not reset an offer countdown after an unrelated agenda mutation', async () => {
-    let monotonicNow = 10_000;
-    vi.spyOn(performance, 'now').mockImplementation(() => monotonicNow);
-    const offeredWithSavedAgenda = participantAgendaResponseSchema.parse({
-      ...participantAgendaFixtures.offered!,
-      items: [
-        ...participantAgendaFixtures.saved!.items,
-        ...participantAgendaFixtures.offered!.items,
-      ],
-    });
-    const { api } = agendaApiFor({
-      onRead: offeredWithSavedAgenda,
-      onMutation: (request) =>
-        jsonResponse(
-          mutationResponse(
-            participantAgendaFixtures.offered!,
-            {
-              action: 'remove',
-              outcome: 'applied',
-              sessionId: request.sessionId,
-            },
-            request.expectedVersion,
-          ),
-        ),
-    });
-    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-
-    await expect.element(screen.getByText('00:15:00')).toBeVisible();
-    await screen.getByRole('button', { name: 'Zavřít' }).click();
-    monotonicNow += 60_000;
-    await screen.getByRole('button', { name: 'Odebrat z agendy' }).click();
-    await expect
-      .element(screen.getByText('Workshop s aktivní nabídkou'))
-      .toBeVisible();
-    expect(screen.getByText('Otevření konference').elements()).toHaveLength(0);
-    await screen.getByRole('button', { name: 'Otevřít nabídku místa' }).click();
-
-    await expect.element(screen.getByText('00:14:00')).toBeVisible();
-    expect(screen.container.textContent).not.toContain('00:15:00');
-  });
-
-  it('accepts an offered place only after the canonical reserved response', async () => {
-    const { api } = agendaApiFor({
-      onRead: participantAgendaFixtures.offered!,
-      onMutation: (request) => {
-        expect(request.action).toBe('accept_offer');
-        return jsonResponse({
-          ...participantAgendaMutationFixtures.accepted_offer!,
-          version: request.expectedVersion + 1,
-        });
-      },
-    });
-    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
-
-    await screen.getByRole('button', { name: 'Přijmout a rezervovat' }).click();
-    await expect.element(screen.getByText('Rezervováno')).toBeVisible();
-    expect(document.querySelector('dialog[open]')).toBeNull();
   });
 
   it('keeps a conflicting reservation and renders a warning with trapped, restorable focus', async () => {

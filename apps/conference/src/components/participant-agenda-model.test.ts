@@ -2,14 +2,11 @@ import { participantAgendaFixtures } from '@byzon/test-support/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import {
-  agendaOfferIntents,
   formatAgendaLocalDate,
-  formatOfferCountdown,
   groupParticipantAgendaByDay,
   participantAgendaActions,
   participantAgendaCapacityCopy,
   participantAgendaItemStatus,
-  remainingOfferSeconds,
   selectNextParticipantAgendaItem,
 } from './participant-agenda-model';
 
@@ -62,7 +59,7 @@ describe('participant agenda view model', () => {
     ).toBeNull();
   });
 
-  it('describes saved, reserved and every waitlist state with text', () => {
+  it('describes saved, reserved, waiting and cancelled states with text', () => {
     expect(
       participantAgendaItemStatus(onlyItem(participantAgendaFixtures.saved!))
         .label,
@@ -77,19 +74,6 @@ describe('participant agenda view model', () => {
       label: 'Čekací listina',
       detail: 'Aktuální pořadí: 3.',
     });
-    expect(
-      participantAgendaItemStatus(onlyItem(participantAgendaFixtures.offered!))
-        .label,
-    ).toBe('Nabídnuté místo');
-    expect(
-      participantAgendaItemStatus(onlyItem(participantAgendaFixtures.expired!))
-        .label,
-    ).toBe('Nabídka vypršela');
-    expect(
-      participantAgendaItemStatus(
-        onlyItem(participantAgendaFixtures.waitlist_cancelled!),
-      ).label,
-    ).toBe('Čekání ukončeno');
     expect(
       participantAgendaItemStatus(
         onlyItem(participantAgendaFixtures.cancelled!),
@@ -110,22 +94,18 @@ describe('participant agenda view model', () => {
         variant: 'secondary',
       },
     ]);
-    const offered = onlyItem(participantAgendaFixtures.offered!);
-    const intents = agendaOfferIntents(offered);
-    expect(intents?.accept).toMatchObject({
-      action: 'accept_offer',
-      offerId:
-        offered.state === 'waitlisted' && offered.waitlist.state === 'offered'
-          ? offered.waitlist.offerId
-          : '',
-    });
-    expect(intents?.decline).toMatchObject({
-      action: 'decline_offer',
-      offerId:
-        offered.state === 'waitlisted' && offered.waitlist.state === 'offered'
-          ? offered.waitlist.offerId
-          : '',
-    });
+    expect(
+      participantAgendaActions(onlyItem(participantAgendaFixtures.waiting!)),
+    ).toEqual([
+      {
+        label: 'Opustit čekací listinu',
+        intent: {
+          action: 'leave_waitlist',
+          sessionId: participantAgendaFixtures.waiting!.items[0]!.session.id,
+        },
+        variant: 'secondary',
+      },
+    ]);
   });
 
   it('hides server-disabled cancellation and waitlist actions', () => {
@@ -153,26 +133,9 @@ describe('participant agenda view model', () => {
         waitlist: { ...waiting.waitlist, actionsAvailable: false },
       }),
     ).toEqual([]);
-
-    const offered = onlyItem(participantAgendaFixtures.offered!);
-    if (offered.state !== 'waitlisted') {
-      throw new TypeError('Offered fixture must expose a waitlist entry.');
-    }
-    expect(
-      agendaOfferIntents({
-        ...offered,
-        waitlist: { ...offered.waitlist, actionsAvailable: false },
-      }),
-    ).toBeNull();
   });
 
-  it('does not describe held capacity as a generally free place', () => {
-    const copy = participantAgendaCapacityCopy(
-      onlyItem(participantAgendaFixtures.offered!),
-    );
-    expect(copy).toContain('drží místo pro tento účet');
-    expect(copy).toContain('Rezervace vznikne až přijetím nabídky');
-
+  it('describes full capacity without presenting a free place', () => {
     const fullCopy = participantAgendaCapacityCopy(
       onlyItem(participantAgendaFixtures.full!),
     );
@@ -246,24 +209,6 @@ describe('participant agenda view model', () => {
     expect(promotionPending).toContain('Volná kapacita: 1 místo');
     expect(promotionPending).toContain('čekáte na zpracování serverem');
     expect(promotionPending).not.toContain('Můžete požádat');
-  });
-
-  it('derives a stable countdown from server time and monotonic elapsed time', () => {
-    expect(
-      remainingOfferSeconds(
-        '2026-09-18T06:30:00.000Z',
-        '2026-09-18T06:45:00.000Z',
-        1_500,
-      ),
-    ).toBe(899);
-    expect(
-      remainingOfferSeconds(
-        '2026-09-18T06:30:00.000Z',
-        '2026-09-18T06:45:00.000Z',
-        900_001,
-      ),
-    ).toBe(0);
-    expect(formatOfferCountdown(899)).toBe('00:14:59');
   });
 
   it('formats an event-local calendar date without applying a timezone twice', () => {

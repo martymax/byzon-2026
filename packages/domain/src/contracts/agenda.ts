@@ -144,11 +144,6 @@ export type AgendaDaySnapshot = z.infer<typeof agendaDaySnapshotSchema>;
 
 const reservationActorAvailabilitySchema = z.discriminatedUnion('state', [
   z.strictObject({ state: z.literal('available') }),
-  z.strictObject({
-    state: z.literal('held_for_participant'),
-    offerId: uuidSchema,
-    expiresAt: dateTimeSchema,
-  }),
   z.strictObject({ state: z.literal('unavailable') }),
 ]);
 
@@ -157,23 +152,20 @@ const reservationCapacitySchema = z
     mode: z.literal('reservation'),
     capacity: z.number().int().positive().max(100_000),
     confirmed: z.number().int().nonnegative().max(100_000),
-    held: z.number().int().nonnegative().max(100_000),
+    held: z.number().int().nonnegative().max(0),
     remaining: z.number().int().nonnegative().max(100_000),
     waitlistAvailable: z.boolean(),
     actorAvailability: reservationActorAvailabilitySchema,
   })
   .superRefine((capacity, context) => {
-    if (capacity.confirmed + capacity.held > capacity.capacity) {
+    if (capacity.confirmed > capacity.capacity) {
       context.addIssue({
         code: 'custom',
         path: ['confirmed'],
-        message: 'Confirmed reservations and holds cannot exceed capacity',
+        message: 'Confirmed reservations cannot exceed capacity',
       });
     }
-    if (
-      capacity.remaining !==
-      capacity.capacity - capacity.confirmed - capacity.held
-    ) {
+    if (capacity.remaining !== capacity.capacity - capacity.confirmed) {
       context.addIssue({
         code: 'custom',
         path: ['remaining'],
@@ -187,17 +179,7 @@ const reservationCapacitySchema = z
       context.addIssue({
         code: 'custom',
         path: ['actorAvailability'],
-        message: 'Actor availability requires unheld remaining capacity',
-      });
-    }
-    if (
-      capacity.actorAvailability.state === 'held_for_participant' &&
-      capacity.held === 0
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['actorAvailability'],
-        message: 'Actor offer requires canonical held capacity',
+        message: 'Actor availability requires remaining capacity',
       });
     }
   });
@@ -225,81 +207,14 @@ export type AgendaSessionActionState = z.infer<
 const waitlistBaseShape = {
   id: uuidSchema,
   joinedAt: dateTimeSchema,
-  actionsAvailable: z.boolean().optional(),
+  actionsAvailable: z.boolean(),
 } as const;
 
-export const agendaWaitlistStateSchema = z
-  .discriminatedUnion('state', [
-    z.strictObject({
-      ...waitlistBaseShape,
-      state: z.literal('waiting'),
-      position: z.number().int().positive().max(100_000),
-    }),
-    z.strictObject({
-      ...waitlistBaseShape,
-      state: z.literal('offered'),
-      offerId: uuidSchema,
-      offeredAt: dateTimeSchema,
-      expiresAt: dateTimeSchema,
-    }),
-    z.strictObject({
-      ...waitlistBaseShape,
-      state: z.literal('expired'),
-      offerId: uuidSchema,
-      offeredAt: dateTimeSchema,
-      expiresAt: dateTimeSchema,
-      expiredAt: dateTimeSchema,
-    }),
-    z.strictObject({
-      ...waitlistBaseShape,
-      state: z.literal('cancelled'),
-      cancelledAt: dateTimeSchema,
-    }),
-  ])
-  .superRefine((waitlist, context) => {
-    if (
-      waitlist.state !== 'waiting' &&
-      waitlist.state !== 'cancelled' &&
-      Date.parse(waitlist.offeredAt) < Date.parse(waitlist.joinedAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['offeredAt'],
-        message: 'Waitlist offer cannot precede joining the waitlist',
-      });
-    }
-    if (
-      waitlist.state !== 'waiting' &&
-      waitlist.state !== 'cancelled' &&
-      Date.parse(waitlist.expiresAt) <= Date.parse(waitlist.offeredAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['expiresAt'],
-        message: 'Waitlist offer must expire after it was created',
-      });
-    }
-    if (
-      waitlist.state === 'expired' &&
-      Date.parse(waitlist.expiredAt) < Date.parse(waitlist.expiresAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['expiredAt'],
-        message: 'Waitlist expiry record cannot precede its deadline',
-      });
-    }
-    if (
-      waitlist.state === 'cancelled' &&
-      Date.parse(waitlist.cancelledAt) < Date.parse(waitlist.joinedAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['cancelledAt'],
-        message: 'Waitlist cancellation cannot precede joining the waitlist',
-      });
-    }
-  });
+export const agendaWaitlistStateSchema = z.strictObject({
+  ...waitlistBaseShape,
+  state: z.literal('waiting'),
+  position: z.number().int().positive().max(100_000),
+});
 
 export type AgendaWaitlistState = z.infer<typeof agendaWaitlistStateSchema>;
 
@@ -344,9 +259,7 @@ export const participantAgendaItemSchema = z
   ])
   .superRefine((item, context) => {
     const disabledWaitingEntry =
-      item.state === 'waitlisted' &&
-      item.waitlist.state === 'waiting' &&
-      item.waitlist.actionsAvailable === false;
+      item.state === 'waitlisted' && item.waitlist.actionsAvailable === false;
     if (
       item.session.status === 'cancelled' &&
       item.action.state !== 'cancelled'
@@ -411,7 +324,6 @@ export const participantAgendaItemSchema = z
     }
     if (
       item.state === 'waitlisted' &&
-      item.waitlist.state === 'waiting' &&
       item.action.state !== 'capacity_full' &&
       !disabledWaitingEntry
     ) {
@@ -430,32 +342,6 @@ export const participantAgendaItemSchema = z
         code: 'custom',
         path: ['capacity', 'actorAvailability'],
         message: 'A disabled waiting entry cannot bypass FIFO promotion',
-      });
-    }
-    if (
-      item.state === 'waitlisted' &&
-      item.waitlist.state === 'offered' &&
-      (item.action.state !== 'available' ||
-        item.capacity.mode !== 'reservation' ||
-        item.capacity.actorAvailability.state !== 'held_for_participant' ||
-        item.capacity.actorAvailability.offerId !== item.waitlist.offerId ||
-        item.capacity.actorAvailability.expiresAt !== item.waitlist.expiresAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['action', 'state'],
-        message: 'An active offer requires available held capacity',
-      });
-    }
-    if (
-      item.capacity.mode === 'reservation' &&
-      item.capacity.actorAvailability.state === 'held_for_participant' &&
-      (item.state !== 'waitlisted' || item.waitlist.state !== 'offered')
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['capacity', 'actorAvailability'],
-        message: 'Participant hold requires the matching active offer state',
       });
     }
   });
@@ -574,42 +460,6 @@ const validateAgendaSnapshot = (
         });
       }
     });
-
-    if (item.state === 'waitlisted') {
-      const { waitlist } = item;
-      if (
-        waitlist.state === 'offered' &&
-        (Date.parse(waitlist.offeredAt) > serverNow ||
-          Date.parse(waitlist.expiresAt) <= serverNow)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['items', index, 'waitlist', 'expiresAt'],
-          message: 'An offered waitlist entry must be active at serverNow',
-        });
-      }
-      if (
-        waitlist.state === 'expired' &&
-        (Date.parse(waitlist.expiresAt) > serverNow ||
-          Date.parse(waitlist.expiredAt) > serverNow)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['items', index, 'waitlist', 'expiredAt'],
-          message: 'An expired waitlist entry must be expired at serverNow',
-        });
-      }
-      if (
-        waitlist.state === 'cancelled' &&
-        Date.parse(waitlist.cancelledAt) > serverNow
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['items', index, 'waitlist', 'cancelledAt'],
-          message: 'Waitlist cancellation cannot be in the future',
-        });
-      }
-    }
   });
 
   snapshot.items.slice(1).forEach((item, index) => {
@@ -660,8 +510,6 @@ export const agendaMutationActionSchema = z.enum([
   'cancel',
   'join_waitlist',
   'leave_waitlist',
-  'accept_offer',
-  'decline_offer',
 ]);
 
 export type AgendaMutationAction = z.infer<typeof agendaMutationActionSchema>;
@@ -671,34 +519,10 @@ const agendaMutationRequestBaseShape = {
   expectedVersion: agendaVersionSchema,
 } as const;
 
-const simpleAgendaMutationActionSchema = z.enum([
-  'add',
-  'remove',
-  'reserve',
-  'cancel',
-  'join_waitlist',
-  'leave_waitlist',
-]);
-
-export const participantAgendaMutationRequestSchema = z.discriminatedUnion(
-  'action',
-  [
-    z.strictObject({
-      ...agendaMutationRequestBaseShape,
-      action: simpleAgendaMutationActionSchema,
-    }),
-    z.strictObject({
-      ...agendaMutationRequestBaseShape,
-      action: z.literal('accept_offer'),
-      offerId: uuidSchema,
-    }),
-    z.strictObject({
-      ...agendaMutationRequestBaseShape,
-      action: z.literal('decline_offer'),
-      offerId: uuidSchema,
-    }),
-  ],
-);
+export const participantAgendaMutationRequestSchema = z.strictObject({
+  ...agendaMutationRequestBaseShape,
+  action: agendaMutationActionSchema,
+});
 
 export type ParticipantAgendaMutationRequest = z.infer<
   typeof participantAgendaMutationRequestSchema
@@ -721,22 +545,10 @@ const agendaMutationResultBaseShape = {
   outcome: z.enum(['applied', 'already_applied', 'superseded']),
 } as const;
 
-const agendaMutationResultSchema = z.discriminatedUnion('action', [
-  z.strictObject({
-    ...agendaMutationResultBaseShape,
-    action: simpleAgendaMutationActionSchema,
-  }),
-  z.strictObject({
-    ...agendaMutationResultBaseShape,
-    action: z.literal('accept_offer'),
-    offerId: uuidSchema,
-  }),
-  z.strictObject({
-    ...agendaMutationResultBaseShape,
-    action: z.literal('decline_offer'),
-    offerId: uuidSchema,
-  }),
-]);
+const agendaMutationResultSchema = z.strictObject({
+  ...agendaMutationResultBaseShape,
+  action: agendaMutationActionSchema,
+});
 
 type AgendaMutationResult = z.infer<typeof agendaMutationResultSchema>;
 
@@ -863,7 +675,7 @@ const validateAgendaMutationPostcondition = (
     if (
       mutation.action !== 'add' &&
       mutation.action !== 'reserve' &&
-      mutation.action !== 'accept_offer'
+      mutation.action !== 'join_waitlist'
     ) {
       issue('Only a mutation that adds an agenda item may carry a conflict');
     }
@@ -912,7 +724,6 @@ const validateAgendaMutationPostcondition = (
       if (item) issue('A removed session must be absent from the snapshot');
       return;
     case 'reserve':
-    case 'accept_offer':
       if (item?.state !== 'reserved') {
         issue('A successful reservation must be canonical and reserved');
       }
@@ -923,34 +734,13 @@ const validateAgendaMutationPostcondition = (
       }
       return;
     case 'join_waitlist':
-      if (item?.state !== 'waitlisted' || item.waitlist.state !== 'waiting') {
-        issue('A joined waitlist must be canonical and waiting');
+      if (item?.state !== 'waitlisted' && item?.state !== 'reserved') {
+        issue('A waitlist join must be canonical and waiting or reserved');
       }
       return;
     case 'leave_waitlist':
-      if (
-        item !== undefined &&
-        item.state !== 'saved' &&
-        (item.state !== 'waitlisted' ||
-          (item.waitlist.state !== 'expired' &&
-            item.waitlist.state !== 'cancelled'))
-      ) {
-        issue(
-          'A left waitlist must be saved, absent or in a terminal waitlist state',
-        );
-      }
-      return;
-    case 'decline_offer':
-      if (
-        item !== undefined &&
-        item.state !== 'saved' &&
-        (item.state !== 'waitlisted' ||
-          (item.waitlist.state !== 'expired' &&
-            item.waitlist.state !== 'cancelled'))
-      ) {
-        issue(
-          'A declined offer must be saved, absent or in a terminal waitlist state',
-        );
+      if (item !== undefined && item.state !== 'saved') {
+        issue('A left waitlist must be saved or absent');
       }
       return;
   }
@@ -1056,33 +846,6 @@ export const agendaReservationClosedProblemSchema = defineApiProblemSchema(
       });
     }
   });
-export const agendaOfferExpiredProblemSchema = defineApiProblemSchema(
-  'OFFER_EXPIRED',
-  409,
-)
-  .extend({
-    sessionId: uuidSchema,
-    offerId: uuidSchema,
-    serverNow: dateTimeSchema,
-    agenda: participantAgendaResponseSchema,
-  })
-  .superRefine((problem, context) => {
-    const item = problem.agenda.items.find(
-      ({ session }) => session.id === problem.sessionId,
-    );
-    if (
-      problem.serverNow !== problem.agenda.serverNow ||
-      item?.state !== 'waitlisted' ||
-      item.waitlist.state !== 'expired' ||
-      item.waitlist.offerId !== problem.offerId
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['agenda', 'items'],
-        message: 'Expired offer must match canonical server time and state',
-      });
-    }
-  });
 export const agendaStaleVersionProblemSchema = defineApiProblemSchema(
   'STALE_VERSION',
   409,
@@ -1136,7 +899,6 @@ export const participantAgendaMutationProblemSchema = z.discriminatedUnion(
     agendaTicketInactiveProblemSchema,
     agendaCapacityFullProblemSchema,
     agendaReservationClosedProblemSchema,
-    agendaOfferExpiredProblemSchema,
     agendaStaleVersionProblemSchema,
     idempotencyKeyReusedProblemSchema,
     idempotencyInProgressProblemSchema,

@@ -165,26 +165,27 @@ describe('participant agenda fixtures', () => {
       waitlist: { state: 'waiting' },
       action: { state: 'capacity_full' },
     });
-    expect(participantAgendaFixtures.offered?.items[0]).toMatchObject({
-      waitlist: { state: 'offered' },
-      action: { state: 'available' },
+    expect(
+      participantAgendaFixtures.fifo_first_waiting?.items[0],
+    ).toMatchObject({
+      waitlist: { state: 'waiting', position: 1 },
+      action: { state: 'capacity_full' },
       capacity: {
-        held: 1,
+        held: 0,
         remaining: 0,
         actorAvailability: {
-          state: 'held_for_participant',
-          offerId: agendaFixtureIds.offer,
+          state: 'unavailable',
         },
       },
     });
-    expect(participantAgendaFixtures.expired?.items[0]).toMatchObject({
-      waitlist: { state: 'expired' },
+    expect(
+      participantAgendaFixtures.fifo_second_waiting?.items[0],
+    ).toMatchObject({
+      waitlist: { state: 'waiting', position: 2 },
     });
     expect(
       participantAgendaFixtures.waitlist_cancelled?.items[0],
-    ).toMatchObject({
-      waitlist: { state: 'cancelled' },
-    });
+    ).toMatchObject({ state: 'saved' });
     expect(participantAgendaFixtures.cancelled?.items[0]).toMatchObject({
       session: { status: 'cancelled' },
       action: { state: 'cancelled' },
@@ -223,9 +224,6 @@ describe('participant agenda fixtures', () => {
       code: 'STALE_VERSION',
       currentVersion: 8,
     });
-    expect(participantAgendaMutationProblemFixtures.offer_expired?.code).toBe(
-      'OFFER_EXPIRED',
-    );
   });
 
   it('contains no identity of another participant or credential data', () => {

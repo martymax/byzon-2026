@@ -1198,14 +1198,23 @@ Aktuální souhrn a konečné počty jsou výše.
   a environment-keyed HMAC subjecty; výpadek store je fail-closed.
 ## Doporučený další krok
 
-`P5-07` zůstává fail-closed za chybějící číselnou kapacitou a waitlist/storno
-detailem `BLOCKER-RES-01`; nevytvářet místo něj `registration_estimate`.
-`P5-04` nezačínat bez jediného potvrzeného promotion režimu v
-`BLOCKER-RES-04`; dvoudílný sobotní mastermind zůstává za `BLOCKER-RES-05`.
+Produkt 30. 8. 2026 uzavřel `BLOCKER-RES-01`, `BLOCKER-RES-04` a
+`BLOCKER-RES-05` v ADR-014. `P5-04` implementuje jedinou automatickou FIFO
+promotion větev bez nabídek a TTL. `P5-07` zpřístupňuje networking jako
+rezervaci až po auditovaném zadání kladné kapacity v administraci; používá
+stejné storno, FIFO a scoped roster a nevytváří `registration_estimate`.
+Dvě části sobotního mastermindu ještě potřebují implementovat společnou
+rezervační projekci se sdílenou kapacitou 6 a rosterem.
 Ticket transfer/storno consumer rozhodnutého cancel pravidla
 doplní `P4-09`, až vznikne skutečná ticket transition. Nejbližší neblokovaný
-vývojový řez je `P6-01`: check-in schema, `CS-CHECKIN-01`, device identity a
-permission policies bez domýšlení event-day kapacity z `BLOCKER-OPS-01`.
+vývojový řez je `P6-01`: check-in schema,
+`CS-CHECKIN-01`, device identity a permission policies bez domýšlení event-day
+kapacity z `BLOCKER-OPS-01`.
+
+SimpleShop používá podle ADR-015 pouze serverové API načtené administrátorem na
+vyžádání, s odděleným preview a apply. `P4-02` může pokračovat po vložení
+vyhrazeného API e-mailu/klíče do secrets a dodání BYZON product/form IDs;
+read-only discovery pak doplní field/status mapping a source-code test vectors.
 
 ## Dokončená oprava review PR `#16`
 

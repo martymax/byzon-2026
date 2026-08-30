@@ -352,7 +352,7 @@ describe('MSW through the production API port', () => {
         adminFixtureIds.event,
         {
           sessionId: capacity.sessionId,
-          capacity: capacity.capacity + 1,
+          capacity: (capacity.capacity ?? 1) + 1,
           expectedVersion: capacity.version,
           reason: 'Čtenář rezervací nesmí měnit kapacitu.',
         },
@@ -582,14 +582,13 @@ describe('MSW through the production API port', () => {
         items: expect.arrayContaining([
           expect.objectContaining({
             session: expect.objectContaining({
-              id: agendaFixtureIds.offeredSession,
+              id: agendaFixtureIds.fifoFirstSession,
             }),
             capacity: expect.objectContaining({
-              held: 1,
+              held: 0,
               remaining: 0,
               actorAvailability: expect.objectContaining({
-                state: 'held_for_participant',
-                offerId: agendaFixtureIds.offer,
+                state: 'unavailable',
               }),
             }),
           }),
@@ -866,11 +865,6 @@ describe('MSW through the production API port', () => {
         expectedVersion: 7,
       },
       {
-        sessionId: agendaFixtureIds.offeredSession,
-        action: 'reserve',
-        expectedVersion: 7,
-      },
-      {
         sessionId: agendaFixtureIds.waitlistCancelledSession,
         action: 'join_waitlist',
         expectedVersion: 7,
@@ -916,16 +910,16 @@ describe('MSW through the production API port', () => {
           expect.objectContaining({
             state: 'waitlisted',
             session: expect.objectContaining({
-              id: agendaFixtureIds.offeredSession,
+              id: agendaFixtureIds.fifoFirstSession,
             }),
-            waitlist: expect.objectContaining({ state: 'offered' }),
+            waitlist: expect.objectContaining({ state: 'waiting' }),
           }),
         ]),
       },
     });
   });
 
-  it('returns correlated capacity, non-blocking conflict and expired-offer snapshots', async () => {
+  it('returns correlated capacity and non-blocking conflict snapshots', async () => {
     configureMockParticipantPrincipal({ active: true });
 
     await expect(
@@ -1036,30 +1030,6 @@ describe('MSW through the production API port', () => {
         ]),
       },
     });
-    await expect(
-      mutateParticipantAgenda(
-        client,
-        {
-          sessionId: agendaFixtureIds.expiredSession,
-          action: 'accept_offer',
-          offerId: agendaFixtureIds.offer,
-          expectedVersion: 8,
-        },
-        'agenda-expired-port-0001',
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      failure: {
-        kind: 'problem',
-        problem: {
-          code: 'OFFER_EXPIRED',
-          sessionId: agendaFixtureIds.expiredSession,
-          offerId: agendaFixtureIds.offer,
-          agenda: { version: 8 },
-        },
-      },
-    });
-
     configureMockAgendaAccess({ ticketActive: false });
     await expect(
       mutateParticipantAgenda(

@@ -247,7 +247,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         eventId,
         dayId: eventDayId,
         slug: `networking-${networkingSessionId}`,
-        title: 'Blokovaný networking',
+        title: 'Řízený networking',
         type: 'networking',
         startsAt: new Date('2026-09-18T10:00:00Z'),
         endsAt: new Date('2026-09-18T11:00:00Z'),
@@ -344,7 +344,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
               dayId: eventDayId,
               roomId: null,
               slug: `networking-${networkingSessionId}`,
-              title: 'Blokovaný networking',
+              title: 'Řízený networking',
               type: 'networking',
               status: 'published',
               startsAt: '2026-09-18T10:00:00.000Z',
@@ -467,13 +467,20 @@ integration('CS-ROSTER-01 HTTP integration', () => {
             },
           ],
         },
+        {
+          sessionId: networkingSessionId,
+          title: 'Řízený networking',
+          startsAt: '2026-09-18T10:00:00.000Z',
+          capacity: 10,
+          participants: [],
+        },
       ],
     });
     expect(raw).not.toContain('@example.invalid');
     expect(raw).not.toContain('+420');
     expect(raw).not.toContain(inactiveUserId);
     expect(raw).not.toContain(unassignedSessionId);
-    expect(raw).not.toContain(networkingSessionId);
+    expect(raw).toContain(networkingSessionId);
     expect(raw).not.toContain(isolationSessionId);
   });
 

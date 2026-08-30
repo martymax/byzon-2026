@@ -3,22 +3,16 @@
 import type { ParticipantAgendaItem } from '@byzon/domain/contracts';
 import { Button } from '@byzon/ui';
 
-import {
-  agendaOfferIntents,
-  participantAgendaActions,
-} from './participant-agenda-model';
+import { participantAgendaActions } from './participant-agenda-model';
 import type { ParticipantAgendaResource } from './participant-agenda-resource';
 
 export const ParticipantAgendaItemActions = ({
   item,
-  onOpenOffer,
   resource,
 }: {
   readonly item: ParticipantAgendaItem;
-  readonly onOpenOffer: (item: ParticipantAgendaItem) => void;
   readonly resource: ParticipantAgendaResource;
 }) => {
-  const offered = agendaOfferIntents(item) !== null;
   const actions = participantAgendaActions(item);
   const offline = resource.offline.cached;
   const visibleActions = offline
@@ -41,7 +35,7 @@ export const ParticipantAgendaItemActions = ({
     );
   }
 
-  if (offline && (offered || visibleActions.length === 0)) {
+  if (offline && visibleActions.length === 0) {
     return (
       <p className="agenda-read-only-item">
         Tato změna potřebuje aktuální potvrzení serveru.
@@ -49,21 +43,13 @@ export const ParticipantAgendaItemActions = ({
     );
   }
 
-  if (!offered && visibleActions.length === 0) return null;
+  if (visibleActions.length === 0) return null;
 
   return (
     <div
       className="agenda-item-actions"
       aria-label={`Akce pro ${item.session.title}`}
     >
-      {offered && !offline ? (
-        <Button
-          disabled={resource.pending !== null || reconciliationPending}
-          onClick={() => onOpenOffer(item)}
-        >
-          Otevřít nabídku místa
-        </Button>
-      ) : null}
       {visibleActions.map(({ intent, label, variant }) => (
         <Button
           disabled={

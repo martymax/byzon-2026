@@ -63,7 +63,7 @@ export type ParticipantAgendaResourceState =
     };
 
 export type AgendaConflict = AgendaTimeConflictWarning & {
-  readonly action: 'accept_offer' | 'add' | 'reserve';
+  readonly action: 'add' | 'join_waitlist' | 'reserve';
 };
 
 interface PendingAgendaMutation {
@@ -170,24 +170,11 @@ const accountFailureState = (
 const mutationInput = (
   intent: AgendaMutationIntent,
   expectedVersion: number,
-): ParticipantAgendaMutationInput => {
-  switch (intent.action) {
-    case 'accept_offer':
-    case 'decline_offer':
-      return {
-        action: intent.action,
-        expectedVersion,
-        offerId: intent.offerId,
-        sessionId: intent.sessionId,
-      };
-    default:
-      return {
-        action: intent.action,
-        expectedVersion,
-        sessionId: intent.sessionId,
-      };
-  }
-};
+): ParticipantAgendaMutationInput => ({
+  action: intent.action,
+  expectedVersion,
+  sessionId: intent.sessionId,
+});
 
 const mutationMatchesIntent = (
   response: ParticipantAgendaMutationResponse,
@@ -198,12 +185,6 @@ const mutationMatchesIntent = (
     response.mutation.sessionId !== intent.sessionId
   ) {
     return false;
-  }
-  if (intent.action === 'accept_offer' || intent.action === 'decline_offer') {
-    return (
-      response.mutation.action === intent.action &&
-      response.mutation.offerId === intent.offerId
-    );
   }
   return true;
 };
@@ -222,8 +203,8 @@ const conflictFromMutation = (
 ): AgendaConflict | null => {
   if (response.timeConflict === null) return null;
   switch (response.mutation.action) {
-    case 'accept_offer':
     case 'add':
+    case 'join_waitlist':
     case 'reserve':
       return {
         ...response.timeConflict,
@@ -883,15 +864,8 @@ export const useParticipantAgendaResource = (
           if (canonical) {
             const problemSessionId =
               'sessionId' in problem ? problem.sessionId : null;
-            const offerMismatch =
-              problem.code === 'OFFER_EXPIRED' &&
-              (request.intent.action !== 'accept_offer' &&
-              request.intent.action !== 'decline_offer'
-                ? true
-                : problem.offerId !== request.intent.offerId);
             const latest = stateRef.current;
             if (
-              offerMismatch ||
               (problemSessionId !== null &&
                 problemSessionId !== request.intent.sessionId) ||
               canonical.eventId !== expectedEventId ||

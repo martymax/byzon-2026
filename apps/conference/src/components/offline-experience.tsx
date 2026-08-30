@@ -412,7 +412,7 @@ export function OfflineExperience({
             </li>
           )}
           <li>
-            <strong>Vyžaduje server:</strong> rezervace, čekací listina, nabídka
+            <strong>Vyžaduje server:</strong> rezervace, čekací listina, přesun
             místa, vstupenka a check-in. Bez připojení nikdy nezobrazíme úspěch.
           </li>
           <li>

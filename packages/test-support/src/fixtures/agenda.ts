@@ -15,15 +15,14 @@ export const agendaFixtureIds = Object.freeze({
   savedSession: contentFixtureIds.opening,
   reservedSession: contentFixtureIds.workshop,
   waitingSession: contentFixtureIds.agendaWaiting,
-  offeredSession: contentFixtureIds.agendaOffered,
-  expiredSession: contentFixtureIds.agendaExpired,
+  fifoFirstSession: contentFixtureIds.agendaFifoFirst,
+  fifoSecondSession: contentFixtureIds.agendaFifoSecond,
   cancelledSession: contentFixtureIds.agendaCancelled,
   fullSession: contentFixtureIds.agendaFull,
   closedSession: contentFixtureIds.agendaClosed,
   waitlistCancelledSession: contentFixtureIds.agendaWaitlistCancelled,
   reservation: '01930000-0000-7000-8000-00000000000a',
   waitlist: '01930000-0000-7000-8000-00000000000b',
-  offer: '01930000-0000-7000-8000-00000000000c',
   conflictTargetSession: contentFixtureIds.agendaConflictTarget,
   roomMain: contentFixtureIds.mainStage,
   roomWorkshop: contentFixtureIds.workshopRoom,
@@ -94,15 +93,15 @@ const waitingSession = session(
   '2026-09-19T10:00:00.000Z',
   '2026-09-19T11:00:00.000Z',
 );
-const offeredSession = session(
-  agendaFixtureIds.offeredSession,
-  'Workshop s aktivní nabídkou',
+const fifoFirstSession = session(
+  agendaFixtureIds.fifoFirstSession,
+  'Workshop – první ve FIFO',
   '2026-09-19T11:30:00.000Z',
   '2026-09-19T12:30:00.000Z',
 );
-const expiredSession = session(
-  agendaFixtureIds.expiredSession,
-  'Workshop po vypršení nabídky',
+const fifoSecondSession = session(
+  agendaFixtureIds.fifoSecondSession,
+  'Workshop – druhý ve FIFO',
   '2026-09-19T13:00:00.000Z',
   '2026-09-19T14:00:00.000Z',
 );
@@ -227,6 +226,7 @@ const waitingItem = {
     state: 'waiting' as const,
     joinedAt: '2026-09-18T05:50:00.000Z',
     position: 3,
+    actionsAvailable: true,
   },
   capacity: {
     mode: 'reservation' as const,
@@ -240,37 +240,32 @@ const waitingItem = {
   action: { state: 'capacity_full' as const },
 };
 
-const offeredItem = {
+const fifoFirstItem = {
   day: saturday,
-  session: offeredSession,
+  session: fifoFirstSession,
   state: 'waitlisted' as const,
   waitlist: {
     id: agendaFixtureIds.waitlist,
-    state: 'offered' as const,
+    state: 'waiting' as const,
     joinedAt: '2026-09-18T05:00:00.000Z',
-    offerId: agendaFixtureIds.offer,
-    offeredAt: '2026-09-18T06:00:00.000Z',
-    expiresAt: '2026-09-18T06:45:00.000Z',
+    position: 1,
+    actionsAvailable: true,
   },
   capacity: {
     mode: 'reservation' as const,
     capacity: 12,
-    confirmed: 11,
-    held: 1,
+    confirmed: 12,
+    held: 0,
     remaining: 0,
     waitlistAvailable: true,
-    actorAvailability: {
-      state: 'held_for_participant' as const,
-      offerId: agendaFixtureIds.offer,
-      expiresAt: '2026-09-18T06:45:00.000Z',
-    },
+    actorAvailability: { state: 'unavailable' as const },
   },
-  action: { state: 'available' as const },
+  action: { state: 'capacity_full' as const },
 };
 
-const acceptedOfferItem = {
+const promotedItem = {
   day: saturday,
-  session: offeredSession,
+  session: fifoFirstSession,
   state: 'reserved' as const,
   reservation: {
     id: agendaFixtureIds.reservation,
@@ -289,18 +284,16 @@ const acceptedOfferItem = {
   action: { state: 'capacity_full' as const },
 };
 
-const expiredItem = {
+const fifoSecondItem = {
   day: saturday,
-  session: expiredSession,
+  session: fifoSecondSession,
   state: 'waitlisted' as const,
   waitlist: {
     id: agendaFixtureIds.waitlist,
-    state: 'expired' as const,
+    state: 'waiting' as const,
     joinedAt: '2026-09-18T04:30:00.000Z',
-    offerId: agendaFixtureIds.offer,
-    offeredAt: '2026-09-18T05:30:00.000Z',
-    expiresAt: '2026-09-18T06:00:00.000Z',
-    expiredAt: '2026-09-18T06:01:00.000Z',
+    position: 2,
+    actionsAvailable: true,
   },
   capacity: {
     mode: 'reservation' as const,
@@ -317,13 +310,9 @@ const expiredItem = {
 const waitlistCancelledItem = {
   day: saturday,
   session: waitlistCancelledSession,
-  state: 'waitlisted' as const,
-  waitlist: {
-    id: agendaFixtureIds.waitlist,
-    state: 'cancelled' as const,
-    joinedAt: '2026-09-18T05:00:00.000Z',
-    cancelledAt: '2026-09-18T06:15:00.000Z',
-  },
+  state: 'saved' as const,
+  source: 'manual' as const,
+  savedAt: '2026-09-18T05:00:00.000Z',
   capacity: {
     mode: 'reservation' as const,
     capacity: 10,
@@ -416,14 +405,14 @@ export const participantAgendaFixtures = defineFixtureSet({
       items: [waitingItem],
       calendarExport: availableExport,
     },
-    offered: {
+    fifo_first_waiting: {
       ...snapshotBase,
-      items: [offeredItem],
+      items: [fifoFirstItem],
       calendarExport: availableExport,
     },
-    expired: {
+    fifo_second_waiting: {
       ...snapshotBase,
-      items: [expiredItem],
+      items: [fifoSecondItem],
       calendarExport: availableExport,
     },
     waitlist_cancelled: {
@@ -482,15 +471,14 @@ export const participantAgendaMutationFixtures = defineFixtureSet({
         conflictingSessions: [savedSession],
       },
     },
-    accepted_offer: {
+    reserved_from_waitlist_capacity: {
       ...snapshotBase,
       version: 9,
-      items: [acceptedOfferItem],
+      items: [promotedItem],
       calendarExport: availableExport,
       mutation: {
-        sessionId: agendaFixtureIds.offeredSession,
-        action: 'accept_offer',
-        offerId: agendaFixtureIds.offer,
+        sessionId: agendaFixtureIds.fifoFirstSession,
+        action: 'reserve',
         outcome: 'applied',
       },
       timeConflict: null,
@@ -532,7 +520,6 @@ interface AgendaProblemStatus {
   readonly CAPACITY_FULL: 409;
   readonly RESERVATION_CLOSED: 409;
   readonly STALE_VERSION: 409;
-  readonly OFFER_EXPIRED: 409;
   readonly VALIDATION_FAILED: 422;
   readonly RATE_LIMITED: 429;
   readonly IDEMPOTENCY_KEY_REUSED: 409;
@@ -608,17 +595,6 @@ export const participantAgendaMutationProblemFixtures = defineFixtureSet({
         ...snapshotBase,
         version: 8,
         items: [savedItem, reservedItem, waitingItem],
-        calendarExport: availableExport,
-      },
-    },
-    offer_expired: {
-      ...problem('OFFER_EXPIRED', 409),
-      sessionId: agendaFixtureIds.expiredSession,
-      offerId: agendaFixtureIds.offer,
-      serverNow: snapshotBase.serverNow,
-      agenda: {
-        ...snapshotBase,
-        items: [expiredItem],
         calendarExport: availableExport,
       },
     },

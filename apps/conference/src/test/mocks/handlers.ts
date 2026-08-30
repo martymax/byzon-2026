@@ -299,8 +299,8 @@ const initialAgendaItems = (): ParticipantAgendaItem[] => {
     participantAgendaFixtures.saved,
     participantAgendaFixtures.reserved,
     participantAgendaFixtures.waiting,
-    participantAgendaFixtures.offered,
-    participantAgendaFixtures.expired,
+    participantAgendaFixtures.fifo_first_waiting,
+    participantAgendaFixtures.fifo_second_waiting,
     participantAgendaFixtures.waitlist_cancelled,
     participantAgendaFixtures.full,
     participantAgendaFixtures.closed,
@@ -834,7 +834,6 @@ type MockAgendaApplication =
       readonly kind: 'failure';
       readonly failure:
         | 'capacity_full'
-        | 'offer_expired'
         | 'reservation_closed'
         | 'session_not_found'
         | 'ticket_inactive'
@@ -852,8 +851,6 @@ const applyMockAgendaAction = (
     'cancel',
     'join_waitlist',
     'leave_waitlist',
-    'accept_offer',
-    'decline_offer',
   ]).has(request.action);
 
   if (!template) {
@@ -894,11 +891,7 @@ const applyMockAgendaAction = (
         outcome = 'already_applied';
         break;
       }
-      if (
-        current?.state === 'waitlisted' &&
-        (current.waitlist.state === 'waiting' ||
-          current.waitlist.state === 'offered')
-      ) {
+      if (current?.state === 'waitlisted') {
         return { kind: 'failure', failure: 'validation' };
       }
       if (
@@ -962,11 +955,7 @@ const applyMockAgendaAction = (
         outcome = 'already_applied';
         break;
       }
-      if (
-        current?.state === 'reserved' ||
-        (current?.state === 'waitlisted' &&
-          current.waitlist.state === 'offered')
-      ) {
+      if (current?.state === 'reserved') {
         return { kind: 'failure', failure: 'validation' };
       }
       if (
@@ -993,98 +982,20 @@ const applyMockAgendaAction = (
           state: 'waiting',
           joinedAt: participantAgendaFixtures.happy!.serverNow,
           position: 3,
+          actionsAvailable: true,
         },
       };
       break;
     case 'leave_waitlist':
-      if (
-        !current ||
-        current.state === 'saved' ||
-        (current.state === 'waitlisted' &&
-          (current.waitlist.state === 'expired' ||
-            current.waitlist.state === 'cancelled'))
-      ) {
+      if (!current || current.state === 'saved') {
         outcome = 'already_applied';
         break;
       }
-      if (
-        current.state !== 'waitlisted' ||
-        (current.waitlist.state !== 'waiting' &&
-          current.waitlist.state !== 'offered')
-      ) {
+      if (current.state !== 'waitlisted') {
         return { kind: 'failure', failure: 'validation' };
       }
-      if (
-        current.waitlist.state === 'offered' &&
-        current.capacity.mode === 'reservation'
-      ) {
-        next = savedAgendaItem(
-          current,
-          {
-            ...current.capacity,
-            held: Math.max(0, current.capacity.held - 1),
-            remaining: current.capacity.remaining + 1,
-            actorAvailability: { state: 'available' },
-          },
-          { state: 'available' },
-        );
-      } else {
-        next = savedAgendaItem(current);
-      }
+      next = savedAgendaItem(current);
       break;
-    case 'accept_offer':
-    case 'decline_offer': {
-      if (
-        current?.state === 'waitlisted' &&
-        current.waitlist.state === 'expired' &&
-        current.waitlist.offerId === request.offerId
-      ) {
-        return { kind: 'failure', failure: 'offer_expired' };
-      }
-      if (
-        current?.state !== 'waitlisted' ||
-        current.waitlist.state !== 'offered' ||
-        current.waitlist.offerId !== request.offerId ||
-        current.capacity.mode !== 'reservation' ||
-        current.capacity.actorAvailability.state !== 'held_for_participant' ||
-        current.capacity.actorAvailability.offerId !== request.offerId
-      ) {
-        return { kind: 'failure', failure: 'validation' };
-      }
-      const releasedCapacity = {
-        ...current.capacity,
-        held: Math.max(0, current.capacity.held - 1),
-        actorAvailability: { state: 'unavailable' as const },
-      };
-      if (request.action === 'accept_offer') {
-        next = {
-          day: current.day,
-          session: current.session,
-          capacity: {
-            ...releasedCapacity,
-            confirmed: current.capacity.confirmed + 1,
-          },
-          action: { state: 'capacity_full' },
-          state: 'reserved',
-          reservation: {
-            id: agendaFixtureIds.reservation,
-            version: 1,
-            confirmedAt: participantAgendaFixtures.happy!.serverNow,
-          },
-        };
-      } else {
-        next = savedAgendaItem(
-          current,
-          {
-            ...releasedCapacity,
-            remaining: current.capacity.remaining + 1,
-            actorAvailability: { state: 'available' },
-          },
-          { state: 'available' },
-        );
-      }
-      break;
-    }
   }
 
   if (outcome === 'already_applied') {
@@ -2180,23 +2091,6 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
             'agenda.mock.action-reservation-closed',
           );
         }
-        if (application.failure === 'offer_expired') {
-          const offerId =
-            parsed.data.action === 'accept_offer' ||
-            parsed.data.action === 'decline_offer'
-              ? parsed.data.offerId
-              : agendaFixtureIds.offer;
-          return completeProblem(
-            {
-              ...participantAgendaMutationProblemFixtures.offer_expired,
-              sessionId: parsed.data.sessionId,
-              offerId,
-              serverNow: canonicalAgenda.serverNow,
-              agenda: canonicalAgenda,
-            },
-            'agenda.mock.action-offer-expired',
-          );
-        }
         if (application.failure === 'ticket_inactive') {
           return completeProblem(
             {
@@ -2215,18 +2109,10 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
         );
       }
 
-      const mutation =
-        parsed.data.action === 'accept_offer' ||
-        parsed.data.action === 'decline_offer'
-          ? {
-              sessionId: parsed.data.sessionId,
-              action: parsed.data.action,
-              offerId: parsed.data.offerId,
-            }
-          : {
-              sessionId: parsed.data.sessionId,
-              action: parsed.data.action,
-            };
+      const mutation = {
+        sessionId: parsed.data.sessionId,
+        action: parsed.data.action,
+      };
       const successAgenda = canonicalAgendaForCurrentPrincipal();
       const targetSession = successAgenda.items.find(
         ({ session }) => session.id === parsed.data.sessionId,
@@ -2234,8 +2120,8 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       const conflicts =
         targetSession &&
         (parsed.data.action === 'add' ||
-          parsed.data.action === 'reserve' ||
-          parsed.data.action === 'accept_offer')
+          parsed.data.action === 'join_waitlist' ||
+          parsed.data.action === 'reserve')
           ? selectMockAgendaConflictingSessions(
               successAgenda.items.map(({ session }) => session),
               targetSession,

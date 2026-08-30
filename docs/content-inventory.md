@@ -38,7 +38,7 @@ použito přímo buildem nebo jde o starší/neaktivní varianty:
 | --- | --- | --- |
 | `site` | `events`, veřejná konfigurace značky, `assets` | Importovat název, jazyk, URL, kontakty a brand assety. Popis a SEO média držet ve veřejném publication snapshotu. Datum a místo číst z doménových polí, ne parsovat z popisu. |
 | `hero`, `co_vas_ceka`, `cta` | veřejné obsahové bloky/stránky | Zachovat jako řízený marketingový obsah veřejného webu. Do conference aplikace přenést jen výslovně použitý text; nevytvářet z těchto bloků program. |
-| `vstupenky` | veřejný prodejní obsah | Cenové texty a období ponechat jako marketingový obsah. Nevytvářet z nich ticket typy ani nároky; autoritou bude potvrzený SimpleShop import. |
+| `vstupenky` | veřejný prodejní obsah | Cenové texty a období ponechat jako marketingový obsah. Nevytvářet z nich ticket typy ani nároky; autoritou bude potvrzený SimpleShop API sync. |
 | `speakers.list[]` | `speakers`, veřejné profily, `assets` | Slug, jméno, role, bio, foto a odkazy importovat do draftu ročníku. Vazbu na program vytvářet přes stabilní ID po řízeném spárování, ne porovnáním textu za běhu. |
 | `program.days[]` | event days | Převést na lokální data ročníku. Řetězce dat nejdřív normalizovat na ISO `2026-09-18` a `2026-09-19`. |
 | `program.days[].stages[]` | `rooms` a prezentační programové sekce | Sedm současných sekcí není sedm fyzických místností. Před importem rozlišit místnost, track a seskupení večerního programu. |
@@ -65,7 +65,7 @@ Následující body se při budoucím importu nesmějí tiše domýšlet:
 - `Petr Dvořák` má prázdnou roli; několik profilů má pouze zástupný nebo velmi
   krátký medailonek. Sociální odkazy jsou volitelné a nestejnoměrné.
 - Koučovací zóna obsahuje obecné sloty bez koučů, kapacity a pravidel. Nesmí se
-  z ní automaticky vytvořit aktivní rezervační nabídka.
+  z ní automaticky vytvořit aktivní rezervace.
 - Partnerská data neobsahují profilový text ani cílovou URL.
 - Praktické informace neobsahují přesnou adresu, plánek, kontakty na místě ani
   strukturované FAQ/cutoffy.
@@ -74,8 +74,8 @@ Následující body se při budoucím importu nesmějí tiše domýšlet:
 - Všechny současné assety jsou veřejné. Budoucí soukromé materiály řečníků se
   nesmějí importovat do stejné veřejné cesty.
 
-Tyto nálezy odpovídají existujícím `BLOCKER-CONTENT-01`, `BLOCKER-RES-01`,
-`BLOCKER-RES-02` a ticketovým blokátorům. Nevytvářejí nový blocker pro skeleton
+Tyto nálezy odpovídají `BLOCKER-CONTENT-01`, ticketovým blokátorům a dnes již
+uzavřeným rezervačním vstupům z ADR-014. Nevytvářejí nový blocker pro skeleton
 ani pro draftový import s reportem nepřevedených polí.
 
 ## Kontrakt pro budoucí import

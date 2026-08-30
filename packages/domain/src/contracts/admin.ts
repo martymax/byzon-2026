@@ -388,18 +388,33 @@ export const adminSessionCapacityRecordSchema = z
       'workshop',
       'mastermind',
       'coaching',
+      'networking',
       'break',
       'meal',
       'gala',
       'other',
     ]),
     sessionStatus: z.enum(['draft', 'published', 'cancelled', 'archived']),
-    capacity: adminReservationCapacitySchema,
+    capacity: adminReservationCapacitySchema.nullable(),
     confirmedCount: z.number().int().nonnegative().max(100_000),
     version: versionSchema,
   })
   .superRefine((record, context) => {
-    if (record.confirmedCount > record.capacity) {
+    if (record.capacity === null && record.sessionType !== 'networking') {
+      context.addIssue({
+        code: 'custom',
+        path: ['capacity'],
+        message: 'Only networking may await an administrator-set capacity',
+      });
+    }
+    if (record.capacity === null && record.confirmedCount !== 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['confirmedCount'],
+        message: 'An unconfigured activity cannot have reservations',
+      });
+    }
+    if (record.capacity !== null && record.confirmedCount > record.capacity) {
       context.addIssue({
         code: 'custom',
         path: ['confirmedCount'],

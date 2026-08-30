@@ -24,6 +24,7 @@ export const adminFixtureIds = Object.freeze({
   event: '019fb200-0000-7000-8000-000000000001',
   session: '019fb200-0000-7000-8000-000000000002',
   secondSession: '019fb200-0000-7000-8000-000000000003',
+  networkingSession: '019fb200-0000-7000-8000-000000000012',
   operator: '019fb200-0000-7000-8000-000000000004',
   assignment: '019fb200-0000-7000-8000-000000000005',
   export: '019fb200-0000-7000-8000-000000000006',
@@ -273,6 +274,17 @@ const panelCapacityRecord = {
   version: 2,
 } satisfies AdminSessionCapacityRecord;
 
+const networkingCapacityRecord = {
+  eventId: adminFixtureIds.event,
+  sessionId: adminFixtureIds.networkingSession,
+  sessionTitle: 'Řízený networking',
+  sessionType: 'networking' as const,
+  sessionStatus: 'published' as const,
+  capacity: null,
+  confirmedCount: 0,
+  version: 1,
+} satisfies AdminSessionCapacityRecord;
+
 export const adminReservationFixtures = defineFixtureSet({
   name: 'admin.reservations',
   schema: adminReservationListResponseSchema,
@@ -302,7 +314,11 @@ export const adminSessionCapacityFixtures = defineFixtureSet({
     list: {
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
-      items: [workshopCapacityRecord, panelCapacityRecord],
+      items: [
+        workshopCapacityRecord,
+        panelCapacityRecord,
+        networkingCapacityRecord,
+      ],
     },
     empty: {
       eventId: adminFixtureIds.event,
@@ -339,6 +355,17 @@ export const adminSessionCapacityMutationFixtures = defineFixtureSet({
         ...workshopCapacityRecord,
         capacity: 42,
         version: 5,
+      },
+      changedAt: '2026-07-25T12:20:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
+    },
+    networking_configured: {
+      eventId: adminFixtureIds.event,
+      outcome: 'updated',
+      record: {
+        ...networkingCapacityRecord,
+        capacity: 14,
+        version: 2,
       },
       changedAt: '2026-07-25T12:20:00.000+02:00',
       audit: { auditId: adminFixtureIds.auditMutation },

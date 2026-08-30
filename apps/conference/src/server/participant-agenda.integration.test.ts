@@ -66,6 +66,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const coachingContenderTwoId = crypto.randomUUID();
   const contentMutationRaceUserId = crypto.randomUUID();
   const calendarUserId = crypto.randomUUID();
+  const waitlistOwnerId = crypto.randomUUID();
+  const waitlistFirstId = crypto.randomUUID();
+  const waitlistSecondId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -80,6 +83,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const archivedOperationalSessionId = crypto.randomUUID();
   const participantCancelSessionId = crypto.randomUUID();
   const coachingSessionId = crypto.randomUUID();
+  const waitlistSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
 
@@ -191,6 +195,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       coachingContenderTwoId,
       contentMutationRaceUserId,
       calendarUserId,
+      waitlistOwnerId,
+      waitlistFirstId,
+      waitlistSecondId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -225,6 +232,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         coachingContenderTwoId,
         contentMutationRaceUserId,
         calendarUserId,
+        waitlistOwnerId,
+        waitlistFirstId,
+        waitlistSecondId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -257,6 +267,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         coachingContenderTwoId,
         contentMutationRaceUserId,
         calendarUserId,
+        waitlistOwnerId,
+        waitlistFirstId,
+        waitlistSecondId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -286,6 +299,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         coachingContenderOneId,
         coachingContenderTwoId,
         contentMutationRaceUserId,
+        waitlistOwnerId,
+        waitlistFirstId,
+        waitlistSecondId,
       ].map((userId, index) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -387,6 +403,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'networking' as const,
         capacityMode: 'reservation' as const,
         capacity: 10,
+        waitlistMode: 'auto_confirm' as const,
       },
       {
         id: cancellationRaceSessionId,
@@ -470,6 +487,16 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         capacityMode: 'reservation' as const,
         capacity: 1,
       },
+      {
+        id: waitlistSessionId,
+        slug: `waitlist-${waitlistSessionId}`,
+        title: 'Automatický FIFO pořadník',
+        startsAt: new Date('2026-09-18T18:00:00Z'),
+        endsAt: new Date('2026-09-18T19:00:00Z'),
+        type: 'workshop' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
+      },
     ];
     await client.db.insert(schema.programSessions).values(
       sessions.map((session, index) => ({
@@ -478,7 +505,10 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         dayId,
         roomId,
         status: 'status' in session ? session.status : ('draft' as const),
-        waitlistMode: 'disabled' as const,
+        waitlistMode:
+          session.id === waitlistSessionId
+            ? ('auto_confirm' as const)
+            : ('disabled' as const),
         sortOrder: index,
       })),
     );
@@ -593,6 +623,173 @@ integration('CS-AGENDA-01 HTTP integration', () => {
 
   afterAll(async () => {
     await client.close();
+  });
+
+  it('joins and leaves a stable FIFO waitlist and auto-promotes the first eligible participant', async () => {
+    const addAndReturnVersion = async (userId: string, key: string) => {
+      const added = await mutate(
+        userId,
+        { action: 'add', sessionId: waitlistSessionId, expectedVersion: 1 },
+        key,
+      );
+      expect(added.status).toBe(200);
+      return participantAgendaMutationResponseSchema.parse(await added.json())
+        .version;
+    };
+
+    const ownerVersion = await addAndReturnVersion(
+      waitlistOwnerId,
+      'agenda-waitlist-owner-add-0001',
+    );
+    const reserved = await mutate(
+      waitlistOwnerId,
+      {
+        action: 'reserve',
+        sessionId: waitlistSessionId,
+        expectedVersion: ownerVersion,
+      },
+      'agenda-waitlist-owner-reserve-0001',
+    );
+    expect(reserved.status).toBe(200);
+    const reservedBody = participantAgendaMutationResponseSchema.parse(
+      await reserved.json(),
+    );
+    expect(
+      reservedBody.items.find(
+        ({ session }) => session.id === waitlistSessionId,
+      ),
+    ).toMatchObject({ state: 'reserved' });
+
+    const firstVersion = await addAndReturnVersion(
+      waitlistFirstId,
+      'agenda-waitlist-first-add-0001',
+    );
+    const secondVersion = await addAndReturnVersion(
+      waitlistSecondId,
+      'agenda-waitlist-second-add-0001',
+    );
+    const firstJoined = await mutate(
+      waitlistFirstId,
+      {
+        action: 'join_waitlist',
+        sessionId: waitlistSessionId,
+        expectedVersion: firstVersion,
+      },
+      'agenda-waitlist-first-join-0001',
+    );
+    expect(firstJoined.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema
+        .parse(await firstJoined.json())
+        .items.find(({ session }) => session.id === waitlistSessionId),
+    ).toMatchObject({
+      state: 'waitlisted',
+      waitlist: { state: 'waiting', position: 1, actionsAvailable: true },
+    });
+    const secondJoined = await mutate(
+      waitlistSecondId,
+      {
+        action: 'join_waitlist',
+        sessionId: waitlistSessionId,
+        expectedVersion: secondVersion,
+      },
+      'agenda-waitlist-second-join-0001',
+    );
+    expect(secondJoined.status).toBe(200);
+    const secondJoinedBody = participantAgendaMutationResponseSchema.parse(
+      await secondJoined.json(),
+    );
+    expect(
+      secondJoinedBody.items.find(
+        ({ session }) => session.id === waitlistSessionId,
+      ),
+    ).toMatchObject({
+      state: 'waitlisted',
+      waitlist: { state: 'waiting', position: 2, actionsAvailable: true },
+    });
+
+    const cancelled = await mutate(
+      waitlistOwnerId,
+      {
+        action: 'cancel',
+        sessionId: waitlistSessionId,
+        expectedVersion: reservedBody.version,
+      },
+      'agenda-waitlist-owner-cancel-0001',
+    );
+    expect(cancelled.status).toBe(200);
+    const firstAfterPromotion = participantAgendaResponseSchema.parse(
+      await (
+        await readParticipantAgenda(
+          readRequest(),
+          dependencies(waitlistFirstId),
+        )
+      ).json(),
+    );
+    expect(
+      firstAfterPromotion.items.find(
+        ({ session }) => session.id === waitlistSessionId,
+      ),
+    ).toMatchObject({
+      state: 'reserved',
+      reservation: { cancellation: { state: 'available' } },
+    });
+
+    const secondAfterPromotion = participantAgendaResponseSchema.parse(
+      await (
+        await readParticipantAgenda(
+          readRequest(),
+          dependencies(waitlistSecondId),
+        )
+      ).json(),
+    );
+    expect(
+      secondAfterPromotion.items.find(
+        ({ session }) => session.id === waitlistSessionId,
+      ),
+    ).toMatchObject({
+      state: 'waitlisted',
+      waitlist: { state: 'waiting', position: 1, actionsAvailable: true },
+    });
+    const left = await mutate(
+      waitlistSecondId,
+      {
+        action: 'leave_waitlist',
+        sessionId: waitlistSessionId,
+        expectedVersion: secondAfterPromotion.version,
+      },
+      'agenda-waitlist-second-leave-0001',
+    );
+    expect(left.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema
+        .parse(await left.json())
+        .items.find(({ session }) => session.id === waitlistSessionId),
+    ).toMatchObject({ state: 'saved' });
+
+    const waitingRows = await client.db
+      .select({ userId: schema.waitlistEntries.userId })
+      .from(schema.waitlistEntries)
+      .where(
+        and(
+          eq(schema.waitlistEntries.eventId, eventId),
+          eq(schema.waitlistEntries.sessionId, waitlistSessionId),
+          eq(schema.waitlistEntries.status, 'waiting'),
+        ),
+      );
+    expect(waitingRows).toEqual([]);
+    const promotedReservation = await client.db.query.reservations.findFirst({
+      columns: { source: true, userId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.sessionId, waitlistSessionId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(promotedReservation).toEqual({
+      source: 'waitlist_auto',
+      userId: waitlistFirstId,
+    });
   });
 
   it('enforces authentication, event scope, private caching and a bounded empty snapshot', async () => {
@@ -2482,7 +2679,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     }
   });
 
-  it('returns canonical stale and closed problems and rejects networking reservation', async () => {
+  it('returns canonical stale and closed problems and reserves configured networking', async () => {
     const stale = await mutate(
       primaryUserId,
       { action: 'add', sessionId: closedSessionId, expectedVersion: 1 },
@@ -2550,7 +2747,18 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       },
       'agenda-networking-reserve-0001',
     );
-    expect(networking.status).toBe(404);
+    expect(networking.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema.parse(await networking.json()),
+    ).toMatchObject({
+      mutation: { action: 'reserve', outcome: 'applied' },
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          state: 'reserved',
+          session: { id: networkingSessionId },
+        }),
+      ]),
+    });
   });
 
   it('requires an active ticket for the reservation itself', async () => {

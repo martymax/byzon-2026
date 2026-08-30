@@ -65,7 +65,7 @@ describe('participant agenda failure mapping', () => {
     ).toMatchObject({ kind: 'rate_limited', retry: 'mutation' });
   });
 
-  it('treats canonical capacity, closure, offer expiry and stale problems as final feedback', () => {
+  it('treats canonical capacity, closure and stale problems as final feedback', () => {
     expect(
       mapParticipantAgendaMutationFailure({
         kind: 'problem',
@@ -78,12 +78,6 @@ describe('participant agenda failure mapping', () => {
         problem: participantAgendaMutationProblemFixtures.reservation_closed!,
       }),
     ).toMatchObject({ kind: 'closed', retry: 'none' });
-    expect(
-      mapParticipantAgendaMutationFailure({
-        kind: 'problem',
-        problem: participantAgendaMutationProblemFixtures.offer_expired!,
-      }),
-    ).toMatchObject({ kind: 'offer_expired', retry: 'none' });
     expect(
       mapParticipantAgendaMutationFailure({
         kind: 'problem',

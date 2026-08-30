@@ -51,7 +51,6 @@ integration('P5-05 admin reservation HTTP integration', () => {
   const isolationAdminId = crypto.randomUUID();
   const reservationId = crypto.randomUUID();
   const secondReservationId = crypto.randomUUID();
-  const networkingReservationId = crypto.randomUUID();
   const isolationReservationId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T12:00:00.000Z');
 
@@ -242,13 +241,13 @@ integration('P5-05 admin reservation HTTP integration', () => {
         eventId,
         dayId,
         slug: `admin-networking-${networkingSessionId}`,
-        title: 'Blokovaný networking',
+        title: 'Řízený networking bez kapacity',
         type: 'networking',
         startsAt: new Date('2026-09-18T12:00:00Z'),
         endsAt: new Date('2026-09-18T13:00:00Z'),
         status: 'draft',
-        capacityMode: 'reservation',
-        capacity: 10,
+        capacityMode: 'none',
+        capacity: null,
         sortOrder: 1,
       },
       {
@@ -302,14 +301,6 @@ integration('P5-05 admin reservation HTTP integration', () => {
         eventId,
         sessionId,
         userId: secondParticipantId,
-        status: 'confirmed',
-        source: 'participant',
-      },
-      {
-        id: networkingReservationId,
-        eventId,
-        sessionId: networkingSessionId,
-        userId: participantId,
         status: 'confirmed',
         source: 'participant',
       },
@@ -431,9 +422,14 @@ integration('P5-05 admin reservation HTTP integration', () => {
           capacity: 7,
           confirmedCount: 0,
         }),
+        expect.objectContaining({
+          sessionId: networkingSessionId,
+          capacity: null,
+          confirmedCount: 0,
+        }),
       ]),
     );
-    expect(capacityBody.items).toHaveLength(2);
+    expect(capacityBody.items).toHaveLength(3);
     expect(body.items[0]).toMatchObject({
       state: 'reserved',
       capacity: 2,
@@ -460,6 +456,50 @@ integration('P5-05 admin reservation HTTP integration', () => {
       dependencies(adminId),
     );
     expect(crossEventCapacities.status).toBe(404);
+  });
+
+  it('opens networking reservations only after an administrator sets capacity', async () => {
+    const response = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
+        {
+          sessionId: networkingSessionId,
+          capacity: 14,
+          expectedVersion: 1,
+          reason: 'Potvrzená provozní kapacita řízeného networkingu.',
+        },
+        'admin-networking-capacity-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      adminSessionCapacityMutationResponseSchema.parse(await response.json()),
+    ).toMatchObject({
+      outcome: 'updated',
+      record: {
+        sessionId: networkingSessionId,
+        sessionType: 'networking',
+        capacity: 14,
+        confirmedCount: 0,
+        version: 2,
+      },
+    });
+    const persisted = await client.db.query.programSessions.findFirst({
+      columns: {
+        capacity: true,
+        capacityMode: true,
+        waitlistMode: true,
+        version: true,
+      },
+      where: eq(schema.programSessions.id, networkingSessionId),
+    });
+    expect(persisted).toEqual({
+      capacity: 14,
+      capacityMode: 'reservation',
+      waitlistMode: 'auto_confirm',
+      version: 2,
+    });
   });
 
   it('edits session capacity before the first reservation exists', async () => {

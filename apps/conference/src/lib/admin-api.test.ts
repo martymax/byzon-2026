@@ -193,7 +193,7 @@ describe('admin API contract policies', () => {
     const capacityBody = {
       sessionId: capacity.sessionId,
       expectedVersion: capacity.version,
-      capacity: capacity.capacity + 2,
+      capacity: (capacity.capacity ?? 1) + 2,
       reason: 'Bezpečný test přesné korelace kapacity session.',
     };
     const capacityApi = apiReturning({

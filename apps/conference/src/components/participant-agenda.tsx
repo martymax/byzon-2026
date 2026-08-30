@@ -6,16 +6,13 @@ import type {
 } from '@byzon/domain/contracts';
 import { ActionLink, Alert, StatePanel, StatusBadge } from '@byzon/ui';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { ApiPort } from '@/lib/api';
 import { subscribeToPrivateResourceInvalidation } from '@/lib/private-resource-events';
 
 import { ParticipantAgendaItemActions } from './participant-agenda-actions';
-import {
-  ParticipantAgendaConflictDialog,
-  ParticipantAgendaOfferDialog,
-} from './participant-agenda-dialogs';
+import { ParticipantAgendaConflictDialog } from './participant-agenda-dialogs';
 import { ParticipantAgendaCalendarExport } from './participant-agenda-export';
 import {
   formatAgendaLocalDate,
@@ -95,13 +92,11 @@ const agendaTime = (value: string, timezone: string): string => {
 
 const AgendaItem = ({
   item,
-  onOpenOffer,
   onOpenSession,
   resource,
   timezone,
 }: {
   readonly item: ParticipantAgendaItem;
-  readonly onOpenOffer: (item: ParticipantAgendaItem) => void;
   readonly onOpenSession: () => void;
   readonly resource: ReturnType<typeof useParticipantAgendaResource>;
   readonly timezone: string;
@@ -144,29 +139,10 @@ const AgendaItem = ({
         </div>
         {capacity ? <p className="agenda-capacity">{capacity}</p> : null}
       </div>
-      <ParticipantAgendaItemActions
-        item={item}
-        onOpenOffer={onOpenOffer}
-        resource={resource}
-      />
+      <ParticipantAgendaItemActions item={item} resource={resource} />
     </article>
   );
 };
-
-type WaitlistedAgendaItem = Extract<
-  ParticipantAgendaItem,
-  { readonly state: 'waitlisted' }
->;
-type OfferedAgendaItem = WaitlistedAgendaItem & {
-  readonly waitlist: Extract<
-    WaitlistedAgendaItem['waitlist'],
-    { readonly state: 'offered' }
-  >;
-};
-const isOfferedAgendaItem = (
-  item: ParticipantAgendaItem,
-): item is OfferedAgendaItem =>
-  item.state === 'waitlisted' && item.waitlist.state === 'offered';
 
 const ParticipantAgendaReadyView = ({
   ready,
@@ -182,38 +158,6 @@ const ParticipantAgendaReadyView = ({
     [ready.items],
   );
   const rememberScroll = useAgendaScrollContinuity(ready.version, scopeKey);
-  const [selectedOfferSessionId, setSelectedOfferSessionId] = useState<
-    string | null
-  >(null);
-  const [dismissedOfferIds, setDismissedOfferIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set());
-  const offeredItems = useMemo(
-    () => ready.items.filter(isOfferedAgendaItem),
-    [ready.items],
-  );
-  const selectedOffer =
-    offeredItems.find(({ session }) => session.id === selectedOfferSessionId) ??
-    offeredItems.find(
-      ({ waitlist }) =>
-        waitlist.state === 'offered' &&
-        !dismissedOfferIds.has(waitlist.offerId),
-    ) ??
-    null;
-
-  const closeOffer = useCallback(() => {
-    if (
-      selectedOffer?.state === 'waitlisted' &&
-      selectedOffer.waitlist.state === 'offered'
-    ) {
-      setDismissedOfferIds((current) => {
-        const next = new Set(current);
-        next.add(selectedOffer.waitlist.offerId);
-        return next;
-      });
-    }
-    setSelectedOfferSessionId(null);
-  }, [selectedOffer]);
 
   return (
     <>
@@ -260,9 +204,6 @@ const ParticipantAgendaReadyView = ({
                   <li key={item.session.id}>
                     <AgendaItem
                       item={item}
-                      onOpenOffer={(offered) =>
-                        setSelectedOfferSessionId(offered.session.id)
-                      }
                       onOpenSession={rememberScroll}
                       resource={resource}
                       timezone={ready.eventTimezone}
@@ -280,11 +221,6 @@ const ParticipantAgendaReadyView = ({
         resource={resource}
         returnOrigin="agenda"
         timezone={ready.eventTimezone}
-      />
-      <ParticipantAgendaOfferDialog
-        item={selectedOffer}
-        onClose={closeOffer}
-        resource={resource}
       />
     </>
   );

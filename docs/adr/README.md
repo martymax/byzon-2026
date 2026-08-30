@@ -20,6 +20,8 @@ v úkolech, které je zavádějí.
 | [ADR-011](011-event-feature-flags.md) | Feature flags Priority A/B po jednotlivých akcích | Přijato |
 | [ADR-012](012-multi-event-data-model.md) | Multi-event datový model | Přijato |
 | [ADR-013](013-incremental-frontend-architecture.md) | Inkrementální frontendová architektura | Přijato |
+| [ADR-014](014-reservation-waitlist-grouping.md) | Automatický FIFO waitlist a seskupené rezervace | Přijato |
+| [ADR-015](015-simpleshop-api-sync.md) | SimpleShop API synchronizace na vyžádání | Přijato |
 
 ## Životní cyklus
 

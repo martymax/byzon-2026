@@ -34,9 +34,9 @@ Tím se před akcí neprovádí destruktivní přepis consentů nebo session his
 | `SCOPE-2026-05` prosté dotazy bez votes/polls/projection | historický `polls_enabled` default `false`; otázky jsou Priority B            | žádný vote/poll/answer kontrakt                                                                      | žádná questions/moderator/projection route; `P12` nezačala                                                | aligned pro Gate A                                                                                                     |
 | `SCOPE-2026-06` jen kritická oznámení                    | `announcements_enabled` je per event                                          | severity pouze `critical`, audience pouze event nebo dotčené sessions, send jen admin                | participant inbox a admin preview/send nemají info/important/reminder větev                               | aligned jako `UI ready (mocked)`; server `P8` otevřen                                                                  |
 | `SCOPE-2026-07` bez plánku, materiálů a self-exportu     | nový nullable `participant_profiles.phone`; historické legal enumy se nemažou | profil má validovaný dobrovolný E.164 telefon; privacy mutation jen výmaz; bez own-export permission | `/app/profil` telefon, `/app/soukromi` zveřejněný support kontakt a deletion; bez map/material/export CTA | aligned jako kontrakt/preview; migrace `0005_charming_black_cat.sql`                                                   |
-| `SCOPE-2026-08` rezervace a FIFO                         | historický `capacity_mode=registration_estimate` zůstává jen ve storage enumu | agenda DTO/action estimate odmítá; rezervace/waitlist zůstávají                                      | estimate fixture, mock handler a CTA odstraněny                                                           | neblokovaná část aligned; networking čeká na `RES-01`, promotion na `RES-04`                                           |
+| `SCOPE-2026-08` rezervace a FIFO                         | historický `capacity_mode=registration_estimate` zůstává jen ve storage enumu | agenda DTO/action estimate a offer stavy odmítá; automatické FIFO je integrované                     | estimate i offer/TTL CTA odstraněny; networkingová kapacita se nastavuje v administraci                   | aligned a integrované; mastermind grouping zůstává samostatný implementační krok                                       |
 | `SCOPE-2026-09` 30min coaching                           | 26 source-verified reservation sessions, kapacita 1, cutoff v začátku         | společný canonical agenda/reservation kontrakt, bez identity rezervujícího                           | dvě řady Radim Roček / Stanislava Maunová podle `Pátek!G1:I18`                                            | implementace `F3-06`/`P5-06` dokončena; agenda capability `partially integrated`; před publikací znovu ověřit snapshot |
-| `SCOPE-2026-10` read-only roster vedoucího               | bez attendance/no-show evidence v novém slice                                 | `reservation:assigned:read`, minimální `CS-ROSTER-01`; žádný attendance write                        | `/host/aktivity` preview jen jméno, firma, stav a přiřazené sessions; žádný globální export               | `UI ready (mocked)`; server a IDOR testy v `P5-08`                                                                     |
+| `SCOPE-2026-10` read-only roster vedoucího               | bez attendance/no-show evidence v novém slice                                 | `reservation:assigned:read`, minimální `CS-ROSTER-01`; žádný attendance write                        | live `/host/aktivity` jen jméno, firma, stav a přiřazené sessions; žádný globální export                  | `integrated`; serverové assignment a IDOR testy v `P5-08`, nakonfigurovaný networking zahrnutý                         |
 | `SCOPE-2026-11` obecný QR a e-mailový přístup            | bez změny                                                                     | existující activation/recovery kontrakty neodvozují secret z URL                                     | žádná nová ticket/app QR větev v tomto kroku                                                              | beze změny; `P4-14`/`P4-15` otevřené                                                                                   |
 | `SCOPE-2026-12` web jako content baseline                | DB zůstává autorita po publikaci dle ADR-008                                  | content kontrakt beze změny                                                                          | veřejný web zachován                                                                                      | reconciliation `P3-11` zůstává otevřená do 31. 8.                                                                      |
 
@@ -68,12 +68,11 @@ release gate ani důvod mazat auditní historii před akcí.
 
 ## Otevřené hranice
 
-- `F3-07` je částečně dokončen: estimate je odstraněn, ale networkingovou
-  kapacitu nelze implementovat bez `BLOCKER-RES-01` a jediný promotion režim
-  nelze vybrat bez `BLOCKER-RES-04`.
-- `/host/aktivity` je pouze development/test preview nad validovanou fixture.
-  Produkční endpoint, assignment autorizace a negativní cross-session testy
-  vlastní `P5-08`.
+- `F3-07` je dokončen: estimate i offer/TTL větev jsou odstraněné, networking
+  dostává kladnou kapacitu v administraci a používá automatické FIFO. Bez
+  nastavené kapacity zůstává bezpečně nerezervovatelný.
+- `/host/aktivity` je produkčně integrované přes assignment autorizaci a
+  negativní cross-session/cross-event testy z `P5-08`.
 - Scope alignment nemění status žádné capability na `integrated` nebo `UAT`.
 
 ## Regresní kontrola

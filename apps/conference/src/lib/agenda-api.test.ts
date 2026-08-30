@@ -164,9 +164,10 @@ describe('CS-AGENDA-01 participant browser adapter', () => {
 
   it('rejects a valid snapshot whose mutation does not correlate to the request', async () => {
     const fetch = vi.fn<TestFetch>(async () =>
-      Response.json(participantAgendaMutationFixtures.accepted_offer, {
-        headers: responseHeaders,
-      }),
+      Response.json(
+        participantAgendaMutationFixtures.reserved_from_waitlist_capacity,
+        { headers: responseHeaders },
+      ),
     );
 
     await expect(
@@ -298,7 +299,6 @@ describe('CS-AGENDA-01 participant browser adapter', () => {
       'TICKET_INACTIVE',
       'CAPACITY_FULL',
       'RESERVATION_CLOSED',
-      'OFFER_EXPIRED',
       'STALE_VERSION',
       'VALIDATION_FAILED',
       'IDEMPOTENCY_KEY_REUSED',

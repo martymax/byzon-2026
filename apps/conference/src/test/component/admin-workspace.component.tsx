@@ -616,6 +616,60 @@ describe('F4 contract-first admin journeys', () => {
     expect(mutationBody).not.toHaveProperty('reservationId');
   });
 
+  it('configures networking capacity from an explicit unconfigured state', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    let mutationBody: Record<string, unknown> | null = null;
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as { readonly body?: Record<string, unknown> };
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacityMutationEndpoint) {
+        mutationBody = options.body ?? null;
+        return success({
+          ...adminSessionCapacityMutationFixtures.networking_configured!,
+          record: {
+            ...adminSessionCapacityMutationFixtures.networking_configured!
+              .record,
+            capacity: options.body?.capacity,
+          },
+        });
+      }
+      throw new Error(
+        'The networking editor requested an unexpected endpoint.',
+      );
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationWorkspace mode="reservations" />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByText('Kapacita není nastavená'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Nastavit kapacitu' }).click();
+    await screen.getByRole('spinbutton', { name: 'Nová kapacita' }).fill('14');
+    await screen
+      .getByRole('textbox', { name: 'Auditní důvod' })
+      .fill('Potvrzená provozní kapacita řízeného networkingu.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat změnu kapacity' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Uložit kapacitu' }).click();
+
+    expect(mutationBody).toMatchObject({
+      sessionId: adminFixtureIds.networkingSession,
+      expectedVersion: 1,
+      capacity: 14,
+      reason: 'Potvrzená provozní kapacita řízeného networkingu.',
+    });
+  });
+
   it('refreshes and clamps the capacity editor after the confirmed count changes', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     let capacities = structuredClone(adminSessionCapacityFixtures.list!);

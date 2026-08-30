@@ -62,6 +62,7 @@ const capacityTypeLabels: Record<
   workshop: 'Workshop',
   mastermind: 'Mastermind',
   coaching: 'Koučink',
+  networking: 'Řízený networking',
   break: 'Přestávka',
   meal: 'Občerstvení',
   gala: 'Gala',
@@ -360,7 +361,7 @@ export const AdminReservationWorkspace = ({
 
   const beginCapacity = (record: AdminSessionCapacityRecord) => {
     setSelectedCapacity(record);
-    setCapacityDraft(record.capacity);
+    setCapacityDraft(record.capacity ?? Math.max(1, record.confirmedCount));
     setCapacityReason('');
     setAttemptedKind(null);
     setPending(null);
@@ -603,8 +604,7 @@ export const AdminReservationWorkspace = ({
             <p role="status">Načítám kapacity…</p>
           ) : capacityRecords.length === 0 ? (
             <p className={styles.empty}>
-              V programu zatím není žádná rezervovatelná aktivita s nastavenou
-              kapacitou.
+              V programu zatím není žádná rezervovatelná aktivita.
             </p>
           ) : null}
           <ul className={styles.cardList}>
@@ -619,7 +619,9 @@ export const AdminReservationWorkspace = ({
                 <dl>
                   <dt>Obsazeno</dt>
                   <dd>
-                    {record.confirmedCount} / {record.capacity}
+                    {record.capacity === null
+                      ? 'Kapacita není nastavená'
+                      : `${record.confirmedCount} / ${record.capacity}`}
                   </dd>
                   <dt>Verze nastavení</dt>
                   <dd>{record.version}</dd>
@@ -633,7 +635,9 @@ export const AdminReservationWorkspace = ({
                     onClick={() => beginCapacity(record)}
                     type="button"
                   >
-                    Upravit kapacitu
+                    {record.capacity === null
+                      ? 'Nastavit kapacitu'
+                      : 'Upravit kapacitu'}
                   </button>
                 ) : null}
               </li>

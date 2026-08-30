@@ -79,7 +79,7 @@ export const ParticipantAgendaOfflineStatus = ({
       {cached ? (
         <p>
           Bez připojení lze odložit jen přidání nebo odebrání bodu. Rezervace,
-          čekací listina, nabídky míst a check-in zůstávají online.
+          čekací listina, automatické přesuny a check-in zůstávají online.
         </p>
       ) : null}
     </Alert>
@@ -207,7 +207,7 @@ const feedbackCopy: Record<
   offline_restricted: {
     title: 'Tato změna vyžaduje připojení',
     detail:
-      'Rezervace, čekací listina a nabídky míst se bez serveru nezařazují do fronty a nebyly provedeny.',
+      'Rezervace, čekací listina a automatické přesuny se bez serveru nezařazují do fronty a nebyly provedeny.',
     tone: 'warning',
   },
   queued: {
@@ -256,12 +256,6 @@ const feedbackCopy: Record<
     title: 'Osobní agenda už není zapnutá',
     detail:
       'Organizátoři funkci vypnuli. Zobrazené položky už nepovažujeme za aktuální a načteme stav znovu.',
-    tone: 'warning',
-  },
-  offer_expired: {
-    title: 'Nabídka už vypršela',
-    detail:
-      'Místo nebylo rezervováno. Načtěte aktuální agendu a zkontrolujte další možnosti.',
     tone: 'warning',
   },
   stale: {

@@ -45,7 +45,6 @@ export const participantAgendaMutationEndpoint = defineApiEndpoint({
     'TICKET_INACTIVE',
     'CAPACITY_FULL',
     'RESERVATION_CLOSED',
-    'OFFER_EXPIRED',
     'STALE_VERSION',
     'VALIDATION_FAILED',
     'IDEMPOTENCY_KEY_REUSED',
@@ -94,11 +93,7 @@ export const mutateParticipantAgenda = (
       const correlated =
         versionCorrelated &&
         mutation.sessionId === request.sessionId &&
-        mutation.action === request.action &&
-        (request.action === 'accept_offer' || request.action === 'decline_offer'
-          ? mutation.action === request.action &&
-            mutation.offerId === request.offerId
-          : true);
+        mutation.action === request.action;
       if (correlated) return result;
       return {
         ok: false as const,

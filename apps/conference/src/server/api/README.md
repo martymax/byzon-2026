@@ -82,8 +82,8 @@ the same `ROSTER_NOT_FOUND` response for an unknown and an unassigned session.
 Roster PII also fails closed once the canonical event reaches its operational
 data anonymization deadline.
 
-The roster reads only published, reservation-capacity, non-networking sessions.
-Networking remains excluded behind `BLOCKER-RES-01`. Participants come from
+The roster reads only published sessions with explicit reservation capacity,
+including configured networking. Participants come from
 active confirmed reservations or waiting FIFO entries joined to active event
 memberships and the event profile. The response allowlists only reservation
 reference, reservation state, display name and company; it never returns user
@@ -100,13 +100,13 @@ permission, reject draft/archived events and stop serving operational data at
 the event anonymization deadline. Responses are bounded, `private, no-store`
 and vary by Cookie and Authorization.
 
-The current production mutation allowlist is `add`, `remove`, `reserve` and
-`cancel`.
+The current production mutation allowlist is `add`, `remove`, `reserve`,
+`cancel`, `join_waitlist` and `leave_waitlist`.
 Every mutation requires exact same-origin JSON, an idempotency key and the
 canonical agenda version. Owner-scoped advisory locking serializes agenda
 changes; reservation adds a second event/session lock before counting confirmed
 places and inserting the final seat. A reservation also requires a saved agenda
-item, an activated ticket and a published non-networking session with explicit
+item, an activated ticket and a published session with explicit
 reservation capacity. Successful writes and their minimal audit entry share one
 transaction; no-op and replay do not create another audit row. Idempotency
 storage contains only action, session reference, outcome and resulting version;
@@ -122,9 +122,12 @@ The read model joins manual/organizer agenda items with confirmed reservations
 and any pre-existing waiting rows. A participant may cancel a confirmed
 reservation before the immutable published session start; at or after that
 instant only the separately authorized and audited admin override is available.
-Cancellation releases capacity but does not promote a waiting row before
-`P5-04`. Waitlist controls remain server-disabled, networking remains behind
-`BLOCKER-RES-01`, and coaching source reconciliation belongs to `P5-06`. The
+Cancellation releases capacity and automatically promotes eligible waiting
+rows in FIFO order in the same session-locked transaction. Waitlist join/leave
+uses the same canonical version and idempotency boundary. Configured networking
+uses the same reservation path; an unconfigured networking session remains
+fail-closed until an administrator supplies positive capacity. Coaching source
+reconciliation belongs to `P5-06`. The
 calendar representation is generated from the same locked canonical snapshot
 as JSON, contains only the authenticated owner's current items and uses stable
 non-PII UID, publication sequence, UTC, CRLF and Unicode-safe 75-octet folding.

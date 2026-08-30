@@ -40,7 +40,7 @@ import {
   eq,
   inArray,
   isNull,
-  ne,
+  or,
   sql,
 } from 'drizzle-orm';
 import { z } from 'zod';
@@ -54,6 +54,7 @@ import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
 import type { AdminReservationRateLimiter } from './admin-reservations-rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
+import { promoteAutomaticWaitlist } from './reservation-waitlist';
 
 const MAX_BODY_BYTES = 16_384;
 const MAX_RESERVATIONS = 100;
@@ -521,7 +522,6 @@ const loadReservationRecords = async (
       and(
         eq(schema.reservations.eventId, eventId),
         eq(schema.programSessions.capacityMode, 'reservation'),
-        ne(schema.programSessions.type, 'networking'),
       ),
     )
     .orderBy(
@@ -599,8 +599,10 @@ const loadSessionCapacityRecords = async (
     .where(
       and(
         eq(schema.programSessions.eventId, eventId),
-        eq(schema.programSessions.capacityMode, 'reservation'),
-        ne(schema.programSessions.type, 'networking'),
+        or(
+          eq(schema.programSessions.capacityMode, 'reservation'),
+          eq(schema.programSessions.type, 'networking'),
+        ),
       ),
     )
     .groupBy(
@@ -618,7 +620,7 @@ const loadSessionCapacityRecords = async (
     )
     .limit(MAX_CAPACITY_SESSIONS);
   return sessions.flatMap((session) =>
-    session.capacity === null || session.sessionType === 'networking'
+    session.capacity === null && session.sessionType !== 'networking'
       ? []
       : [
           {
@@ -877,9 +879,9 @@ export const mutateAdminSessionCapacity = async (
           throw new AdminStaleVersionError(current.version);
         }
         if (
-          current.capacityMode !== 'reservation' ||
-          current.capacity === null ||
-          current.type === 'networking'
+          (current.capacityMode !== 'reservation' &&
+            current.type !== 'networking') ||
+          (current.capacity === null && current.type !== 'networking')
         ) {
           throw invalidTransition(
             'The session no longer has an editable reservation capacity.',
@@ -910,6 +912,9 @@ export const mutateAdminSessionCapacity = async (
           .update(schema.programSessions)
           .set({
             capacity: parsed.data.capacity,
+            capacityMode: 'reservation',
+            waitlistMode:
+              current.type === 'networking' ? 'auto_confirm' : undefined,
             updatedAt: changedAt,
             version: sql`${schema.programSessions.version} + 1`,
           })
@@ -942,6 +947,19 @@ export const mutateAdminSessionCapacity = async (
               eq(schema.reservations.sessionId, current.id),
             ),
           );
+        const promotions =
+          current.capacity === null || parsed.data.capacity > current.capacity
+            ? await promoteAutomaticWaitlist({
+                transaction,
+                eventId: event.id,
+                sessionId: current.id,
+                now: changedAt,
+                requestId: uuidSchema.safeParse(requestId).success
+                  ? requestId
+                  : generateUuidV7(),
+                generateId,
+              })
+            : [];
         const nextVersion = updated[0]!.version;
         const auditId = await writeAuditLog(
           transaction,
@@ -963,7 +981,8 @@ export const mutateAdminSessionCapacity = async (
             },
             after: {
               capacity: parsed.data.capacity,
-              confirmedCount,
+              confirmedCount: confirmedCount + promotions.length,
+              promotedCount: promotions.length,
               version: nextVersion,
             },
           },
@@ -980,7 +999,7 @@ export const mutateAdminSessionCapacity = async (
           sessionType: current.type,
           sessionStatus: current.status,
           capacity: parsed.data.capacity,
-          confirmedCount,
+          confirmedCount: confirmedCount + promotions.length,
           version: nextVersion,
         });
         const body = adminSessionCapacityMutationResponseSchema.parse({
@@ -1110,8 +1129,7 @@ export const mutateAdminReservation = async (
         if (
           current.status !== 'confirmed' ||
           current.capacityMode !== 'reservation' ||
-          current.capacity === null ||
-          current.sessionType === 'networking'
+          current.capacity === null
         ) {
           throw invalidTransition(
             'The reservation no longer allows this administration action.',
@@ -1132,6 +1150,7 @@ export const mutateAdminReservation = async (
           parsed.data.action === 'capacity_override';
         let nextCapacity = current.capacity;
         let confirmedAfter = confirmedBefore;
+        let promotedCount = 0;
         let nextState: AdminReservationRecord['state'] = 'reserved';
         if (parsed.data.action === 'capacity_override') {
           if (
@@ -1170,6 +1189,20 @@ export const mutateAdminReservation = async (
                 eq(schema.reservations.sessionId, current.sessionId),
               ),
             );
+          if (nextCapacity > current.capacity) {
+            const promotions = await promoteAutomaticWaitlist({
+              transaction,
+              eventId: event.id,
+              sessionId: current.sessionId,
+              now: changedAt,
+              requestId: uuidSchema.safeParse(requestId).success
+                ? requestId
+                : generateUuidV7(),
+              generateId,
+            });
+            promotedCount = promotions.length;
+            confirmedAfter += promotedCount;
+          }
         } else {
           const cancelled = await transaction
             .update(schema.reservations)
@@ -1211,6 +1244,18 @@ export const mutateAdminReservation = async (
                 eq(schema.participantAgendas.userId, current.userId),
               ),
             );
+          const promotions = await promoteAutomaticWaitlist({
+            transaction,
+            eventId: event.id,
+            sessionId: current.sessionId,
+            now: changedAt,
+            requestId: uuidSchema.safeParse(requestId).success
+              ? requestId
+              : generateUuidV7(),
+            generateId,
+          });
+          promotedCount = promotions.length;
+          confirmedAfter += promotedCount;
         }
         const auditId = await writeAuditLog(
           transaction,
@@ -1242,11 +1287,13 @@ export const mutateAdminReservation = async (
               ? {
                   capacity: nextCapacity,
                   confirmedCount: confirmedAfter,
+                  promotedCount,
                   version: current.sessionVersion + 1,
                 }
               : {
                   capacity: nextCapacity,
                   confirmed: confirmedAfter,
+                  promotedCount,
                   reservationStatus: 'cancelled',
                   version: current.version + 1,
                 },

@@ -264,7 +264,7 @@ odkazy pro úkoly a akceptaci; nerozhodnuté body zůstávají pouze v §22.
 | `SCOPE-2026-05` | Dotazy jsou prostý sběr bez hlasování a moderátorského workflow. Jsou povolené jen pro páteční program na Byzon stage a Leadership stage; vidí je pouze přiřazení moderátoři na tabletu. | Žádné ankety, votes, merge, answered state, projection ani post-event answers. Každý publikovaný bod programu má stažitelný QR deep link pro úvodní slide; možnost položit dotaz se zobrazí jen u podporované session. | `AAACFfwvgXA`, `AAACFfwvgSw`, `AAACFfwvgRI` |
 | `SCOPE-2026-06` | Oznámení slouží jen pro kritické změny, například odpadnutí řečníka, zrušení části programu nebo bezpečnostní incident. | Povolené audience jsou celá akce nebo přímo dotčené sessions; běžné reminders a marketingové rozesílky se nestaví. Kalendář `.ics` zůstává. | `AAACFfwvgTE`, `AAACFfwvgP8` |
 | `SCOPE-2026-07` | Samostatný plánek, materiály a samoobslužný datový export se nestaví. Profil lze opravit přímo; telefon je dobrovolné profilové pole. | Lokace je text v programu, privacy UI nabízí editaci a kontaktní cestu, nikoli exportní job. | `AAACFfwvgWI`, `AAACFfwvgTA`, `AAACFfwvgPo`, `AAACFfwvgO4` |
-| `SCOPE-2026-08` | Rezervovatelné aktivity: pátek koučink, mastermind Expertního Boardu a řízený networking; sobota workshopy a mastermind Tomáše Ryzy. Počáteční administrátorské hodnoty: koučink 1 osoba/slot, EB21 12, každý sobotní workshop 20, sobotní mastermind 6; nejde o konstanty v aplikačním kódu a provozní kapacita session je auditovaně editovatelná v administraci. Registrace končí začátkem aktivity; každý použitý pořadník je striktně FIFO. | Číselná kapacita a waitlist/storno detail pátečního networkingu chybí v `BLOCKER-RES-01`; do rozhodnutí jej nelze tiše změnit na `registration_estimate`. `BLOCKER-RES-04` ještě volí auto-confirm versus nabídku s expirací. | `AAACFfwvgWU`, `AAACD524HbQ` |
+| `SCOPE-2026-08` | Rezervovatelné aktivity: pátek koučink, mastermind Expertního Boardu a řízený networking; sobota workshopy a mastermind Tomáše Ryzy. Počáteční administrátorské hodnoty: koučink 1 osoba/slot, EB21 12, každý sobotní workshop 20, sobotní mastermind 6; nejde o konstanty v aplikačním kódu a provozní kapacita session je auditovaně editovatelná v administraci. Registrace končí začátkem aktivity; každý použitý pořadník je striktně FIFO s automatickým potvrzením prvního čekajícího. Networking nemá hardcoded výchozí kapacitu a otevře se až po zadání kladné hodnoty v administraci. Dvě části sobotního mastermindu sdílejí jednu rezervaci, kapacitu a roster. | Nabídka s expirací, TTL a `registration_estimate` se neimplementují; podrobnosti závazně popisuje [ADR-014](docs/adr/014-reservation-waitlist-grouping.md). | `AAACFfwvgWU`, `AAACD524HbQ`, rozhodnutí produktu 30. 8. 2026 |
 | `SCOPE-2026-09` | Koučové jsou Radim Roček a Stanislava Maunová; slot trvá 30 minut a dostupnost se přebírá z listu Pátek, aktuálně sloupců H:I „Radim“/„Stáňa“ v [Harmonogramu BYZON 2026](https://docs.google.com/spreadsheets/d/1SgNPggOliwIz-TZghhQuxcs1Qv3hqzRNAOWXcAhz0zw/edit?gid=0#gid=0). | Vytvořit dvě paralelní zdrojové řady slotů, respektovat hodnoty dostupnosti a před publikací znovu validovat aktuální list/range místo hardcodování dnešního pořadí sloupců. | `AAACFfwvgWs` |
 | `SCOPE-2026-10` | Kouči, vedoucí mastermindů, workshopů a řízeného networkingu potřebují online jméno a firmu přihlášených pouze u svých aktivit. | Stávající technická role `room_operator` se v UI jmenuje „Vedoucí aktivity“, je scoped na session a má read-only roster; nedostává globální seznam ani práva řečníka/admina. | `AAACFfwvgUg`, `AAACFfwvgQM`, `AAACFfwvgOQ`, `AAACD524HbY` |
 | `SCOPE-2026-11` | Obecný QR na badge a obrazovkách vede jen na `https://app.byzon.cz`; osobní přístup přijde ověřeným e-mailovým linkem. | Veřejný QR nesmí obsahovat ticket ani token; ideální pozvánka 11. 9. 2026, hard deadline 15. 9. 2026; zachovat recovery přes e-mail. | `AAACD524Ha0`, `AAACFfwvgOk` |
@@ -277,7 +277,7 @@ Vlákna, která nepřinesla uzavřené produktové rozhodnutí, jsou vypořádá
 | `AAACFfwvgXI` | Právní revize se provede po potvrzení v6 scope; zůstává `BLOCKER-LEGAL-01`. |
 | `AAACFfwvgXE` | Počet vstupů, obsluha, zařízení, vlastník jmenovek, moderátoři a oprávnění k oznámením nejsou potvrzené; zůstává `BLOCKER-OPS-01`. |
 | `AAACD524HcI` | Žádost o posouzení ochrany údajů neobsahuje rozhodnutí; je evidovaná pod `BLOCKER-LEGAL-01`. |
-| `AAACD524HcE` | Přístupy do SimpleShopu byly předány, ale nebyl potvrzen export/statusy/sync; `BLOCKER-TKT-01` až `BLOCKER-TKT-04` zůstávají otevřené. |
+| `AAACD524HcE` | Přístupy do SimpleShopu byly předány; ADR-015 potvrdil API sync na vyžádání, ale read-only response mapping, statusy a source-code test vectors čekají na `BLOCKER-TKT-01`, `02` a `04`. |
 | `AAACD524HbA` | 48h session byla navržena a je implementovaným technickým baseline (`expiresIn=48 h`, `updateAge=24 h`), nikoli potvrzením kontinuity od pozvánky do akce; finální politika zůstává v `BLOCKER-AUTH-02`. |
 
 Vyřešené testovací vlákno `AAACDoE25qA` ověřovalo pouze viditelnost komentářů
@@ -672,14 +672,14 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil, session actions a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F1-06`, `F2-07` | `F1`, `F2`, `F6` | `integrated`: Better Auth session, serverově zvolený event, private/no-store bootstrap, atomický onboarding, verzovaný profil, deletion request a session actions; právní UAT dál blokuje `BLOCKER-LEGAL-01` |
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started`; hotový je pouze bezpečný status-only subset bez credentialu |
-| `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-06`, `F3` | `F3`, `F6` | `partially integrated`: private live read, add/remove, conflict, atomická nenetworkingová rezervace, participant cancel, osobní ICS a dvě source-verified coaching řady jsou produkčně napojené; waitlist zůstává v `P5-04`, networking a promotion režim za `RES-01`/`04` |
-| `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `contract ready`; vendor-neutral multipart staging, diff, immutable apply a report |
+| `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-06`, `F3` | `F3`, `F6` | `partially integrated`: private live read, add/remove, conflict, atomická rezervace, participant cancel, osobní ICS, automatické FIFO, dvě source-verified coaching řady a administrátorsky konfigurovaný networking jsou produkčně napojené; zbývá sdílená mastermind skupina dle ADR-014 |
+| `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `contract ready`; vendor-neutral staging, diff, immutable apply a report; produkční SimpleShop zdroj bude server-only API dle ADR-015 |
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `contract ready`; maskované hledání a verzované reasoned/idempotentní akce s auditem |
 | `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | `P6-01` až `P6-06`, `F5` | `F5` | `contract ready`; online-only bootstrap, lookup/search, confirm, undo a stats |
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
 | `CS-ADMIN-01` | dashboard, role, reservation cancel, session capacity, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | `partially integrated`: reasoned/idempotentní reservation cancel a samostatná session-level správa kapacity jsou live; kapacitu lze změnit i bez existující rezervace a opakovaný import ji nepřepíše. Dashboard, role, audit, export a settings zůstávají podle vlastníků v `P9` nebo `UI ready (mocked)` |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
-| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO a negativní cross-session/cross-event testy; networking zůstává za `RES-01` |
+| `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO, networking s kladnou kapacitou a negativní cross-session/cross-event testy |
 | `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `not started` |
 | `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
@@ -866,9 +866,11 @@ Admin může profil jako celek skrýt přes `moderation_status`; aplikace neprov
   `registration_estimate` se ve v6 nepoužívá a její bezpečné odstranění řeší
   scope-alignment/migrace
 - `capacity`, `reservation_opens_at`, `reservation_closes_at`
-- `waitlist_mode`: `disabled | auto_confirm | offer_with_deadline`; pořadí je
-  vždy FIFO, konkrétní promotion režim určuje `BLOCKER-RES-04`
-- `waitlist_offer_ttl_minutes` pouze pro `offer_with_deadline`
+- `waitlist_mode`: produkčně `disabled | auto_confirm`; pořadí je vždy FIFO a
+  uvolněné místo se automaticky potvrdí prvnímu způsobilému čekajícímu
+- historické DB hodnoty `offer_with_deadline` a `waitlist_offer_ttl_minutes`
+  zůstávají pouze kvůli bezpečné kompatibilitě uložených dat; kontrakt ani
+  produkční UI je nevystavují
 - `questions_enabled`, `version`
 - omezení: end > start; capacity nezáporná; kapacitní režim vyžaduje capacity podle pravidel
 
@@ -916,12 +918,10 @@ Admin může profil jako celek skrýt přes `moderation_status`; aplikace neprov
 
 #### `waitlist_entries`
 
-- společný základ: `id`, `session_id`, `user_id`, `status`: `waiting |
-  promoted | cancelled`, stabilní `position_sequence`, `promoted_at`
-- pouze pokud `BLOCKER-RES-04` vybere `offer_with_deadline`, přidají se stavy
-  `offered | accepted | expired` a pole `offered_at`, `offer_expires_at`
-- FIFO podle stabilního pořadí; admin override je auditovaný; nepoužitá větev se
-  před produkční integrací odstraní z kontraktu i schématu
+- `id`, `session_id`, `user_id`, `status`: `waiting | promoted | cancelled`,
+  stabilní `position_sequence`, `promoted_at`
+- FIFO podle stabilního pořadí; automatická promotion proběhne v transakci,
+  admin override je auditovaný
 
 Read-only roster vedoucího aktivity je autorizovaný pohled nad aktivními
 `reservations` a profilem (`first_name`, `last_name`, `company`), nikoli nová
@@ -1046,9 +1046,7 @@ Invarianty:
 
 ```text
 available → confirmed → cancelled
-full → waiting ──[auto_confirm]────────────→ promoted/confirmed
-               └─[offer_with_deadline]────→ offered → accepted/confirmed
-                                                      └→ expired → next waiting
+full → waiting ──[uvolněné místo]──────────→ promoted/confirmed
 ```
 
 Invarianty:
@@ -1056,8 +1054,7 @@ Invarianty:
 - počet aktivních potvrzených rezervací nikdy nepřekročí kapacitu;
 - rozhodnutí se provádí v DB transakci s row/advisory lockem session;
 - pořadník má deterministické FIFO pořadí; zrušení místa vybere první čekající
-  pro auto-confirm nebo nabídku podle `BLOCKER-RES-04`; ruční změna vyžaduje
-  audit a důvod;
+  pro automatické potvrzení; ruční změna vyžaduje audit a důvod;
 - agenda je projekce rezervace: potvrzená rezervace vytvoří položku, zrušení ji odstraní jen pokud nemá jiný zdroj;
 - časový konflikt se uživateli zobrazí jako varování; bez explicitního produktového rozhodnutí neblokuje uložení.
 
@@ -1134,12 +1131,10 @@ jen z neověřeného rozpracovaného claimu.
 - `DELETE /sessions/:sessionId/reservations/me`
 - `POST /sessions/:sessionId/waitlist`
 - `DELETE /sessions/:sessionId/waitlist/me`
-- `POST /sessions/:sessionId/waitlist-offers/:offerId/accept` pouze pokud se
-  v `BLOCKER-RES-04` zvolí `offer_with_deadline`
 
 Mutace vracejí aktuální kapacitu/stav, version a případný časový konflikt.
-Uvolněné místo se transakčně zpracuje pro první `waiting` záznam; případný
-offer/accept mezistav závisí na `BLOCKER-RES-04`. `409` rozlišuje `CAPACITY_FULL`,
+Uvolněné místo se transakčně potvrdí prvnímu způsobilému `waiting` záznamu.
+`409` rozlišuje `CAPACITY_FULL`,
 `RESERVATION_CLOSED`, `STALE_VERSION`, `TICKET_INACTIVE`.
 
 ### 11.4 Profil a networkingový adresář
@@ -1341,13 +1336,13 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 | Aktivace a identita v6 | `UI ready (mocked)` | `P4-13` integroval celý `CS-BOOT-01` včetně autorizovaného onboardingu a session actions; agregovaná capability zůstává na nižším stavu kvůli dosud mockovanému claim/recovery handshaku. | `BLOCKER-AUTH-01` a `BLOCKER-TKT-04` pro claim/recovery integraci; `BLOCKER-LEGAL-01` pouze pro právní UAT |
 | Program a informace | `UI ready (mocked)` | `F2-01`: sdílený participant navigation primitive, pět funkčních cílů, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; `F2-02`: serverovým event statusem řízený home nad publikovaným `CS-CONTENT-01` i kanonickou osobní agendou a bezpečné pre/live/post/archivní stavy; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-05` přidal discoverable inbox; `F2-07` sjednotil sekundární cíle pod funkční `Více`; `F2-06` kryje shell, program, ticket, inbox i účet component/axe/responsive scénáři. Etapový review doplnil přesný recovery návrat přes striktní allowlist. | `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A v6 | `integrated` | `P4-13` napojil existující UI na Better Auth `/api/v1/me/*`, event-scoped profil s optimistic verzí, aktuální legal acknowledgement, idempotentní deletion request a auditované session controls; anonymní, cross-origin a cross-event testy failují zavřeně. | `BLOCKER-LEGAL-01` pouze pro právní obsah a UAT |
-| Agenda a rezervace v6 | `partially integrated` | Live agenda podporuje add/remove, konflikty, atomickou rezervaci, participant cancel, privátní osobní `.ics` a 26 source-verified coaching sessions Radima Ročka a Stanislavy Maunové s kapacitou 1. `F3-07` odstranil registration estimate; waitlist ještě není live. | `BLOCKER-RES-01` pro networking a `BLOCKER-RES-04` pro jedinou produkční promotion větev |
+| Agenda a rezervace v6 | `partially integrated` | Live agenda podporuje add/remove, konflikty, atomickou rezervaci, participant cancel, automatické FIFO, privátní osobní `.ics`, 26 source-verified coaching sessions a administrátorem konfigurovanou rezervaci řízeného networkingu. | Dokončit jednu sdílenou rezervaci obou částí sobotního mastermindu podle ADR-014. |
 | Vstupenka účastníka | `UI ready (mocked)` | `F2-04`: dokončený status-only mocked UI řez nad striktním privátním/no-store kontraktem, validovanými fixtures a typed API portem; prezentační union přijímá pouze bezpečný unavailable stav a `F2-07` jej zpřístupnil z hubu `Více` | úplný `CS-TICKET-01`, skutečný `/me/ticket`, `P4-12` a available credential blokuje `BLOCKER-TKT-05` |
 | Offline čtení | `UI ready (mocked)` | `F6-01` až `F6-05`: versionovaný service worker, atomický public cache/rollback, last-updated/stale UX a owner/event-scoped osobní IndexedDB/queue s wipe, lease, epoch a fail-closed replay. Veřejný slice je použitelný; osobní cache/replay jsou v produkčním režimu vypnuté bez autoritativního owner lease. | `P7` a skutečný owner-lease/replay server pro integraci; fyzické PWA/UAT zůstává v `F6-06` až `F6-08` |
-| Import a support | `UI ready (mocked)` | `F4-02` až `F4-05`: canonical vendor-neutral import staging/diff/immutable apply/report a maskované support vyhledání s reasoned/idempotentními akcemi, přesnou korelací a auditem. | `TKT-01`/`TKT-02` prod mapping/apply, `P4`/`P9` autorizované endpointy; `TKT-03` jen prod sync |
+| Import a support | `UI ready (mocked)` | `F4-02` až `F4-05`: canonical vendor-neutral staging/diff/immutable apply/report a maskované support vyhledání s reasoned/idempotentními akcemi, přesnou korelací a auditem. | `TKT-01`/`TKT-02` prod API mapping/apply, `P4`/`P9` autorizované endpointy; sync kanál uzavírá ADR-015 |
 | Check-in | `UI ready (mocked)` | `F5-01` až `F5-06`: samostatný online-only operator shell, camera/manual/search lookup, úplné outcome stavy, confirm, přesný retry, auditované undo a stats nad `CS-CHECKIN-01`. | `P6`, `TKT-04` source kód, `TKT-05` jen app credential a `OPS-*` pro provozní UAT |
 | Admin Priority A v6 | `UI ready (mocked)` | `F4-10` odstranil attendance permission/actions/state/UI, přejmenoval roli, zúžil announcement severity/audience a zachoval rezervace, audit, settings i minimální organizační export. | `P5`/`P8`/`P9` a capability endpointy |
-| Roster vedoucího aktivity | `integrated` | `P5-08` napojil připravené `/host/aktivity` na autorizovaný `CS-ROSTER-01` list a detail. Server přijímá scope jen z aktivní `room_operator` role, promítá aktivní rezervace/FIFO čekání a profilové jméno/firmu, omezuje dotazy i DTO a nevrací telefon, e-mail, user/ticket ID, attendance ani export. | Finální přiřazení osob v `BLOCKER-OPS-01`; networkingová část až po `BLOCKER-RES-01` |
+| Roster vedoucího aktivity | `integrated` | `P5-08` napojil připravené `/host/aktivity` na autorizovaný `CS-ROSTER-01` list a detail. Server přijímá scope jen z aktivní `room_operator` role, promítá aktivní rezervace/FIFO čekání včetně networkingu s nastavenou kapacitou a profilové jméno/firmu, omezuje dotazy i DTO a nevrací telefon, e-mail, user/ticket ID, attendance ani export. | Finální přiřazení osob v `BLOCKER-OPS-01`. |
 | QR deep link každého bodu programu | `not started` | Publikované session a detail programu existují; chybí `CS-SESSION-QR-01`, stabilní QR export a dávkový balík pro všechny body. | `P3-12`; content UAT a decode test |
 | Provozní oznámení minimum v6 | `UI ready (mocked)` | Participant inbox a admin immutable preview/send přijímají jen critical severity a event/dotčené sessions; info/important/reminder větve jsou odstraněné. | `P8-05`/`P8-06` a produkční kritický e-mail `P8G` |
 
@@ -1407,8 +1402,9 @@ Fáze 2026 musí minimálně dodat provozní fallback mimo běžný online flow:
 
 ## 14. Online aktualizace bez zbytečné realtime infrastruktury
 
-- Outbox + worker zůstává autoritou pro kritická oznámení, e-mail a FIFO
-  promotion; doručení nespoléhá na procesovou paměť webu.
+- Outbox + worker zůstává autoritou pro kritická oznámení a e-mail. FIFO
+  promotion probíhá v autoritativní rezervační transakci; případné oznámení je
+  až navazující outbox side effect a neovlivňuje správnost rezervace.
 - Moderátorský feed dotazů používá bounded polling canonical REST snapshotu,
   výchozí interval 5 s a exponenciální backoff při chybě/pozadí.
 - Odpověď nese stabilní cursor/server time; klient po návratu online načte
@@ -1422,30 +1418,31 @@ Fáze 2026 musí minimálně dodat provozní fallback mimo běžný online flow:
 
 ### 15.1 SimpleShop
 
-Dokud není potvrzeno API/webhook schéma, výchozí implementace je bezpečný CSV/XLSX import přes admin UI.
-SimpleShop je výhradně serverová implementace rozhraní `TicketSourceAdapter`.
-Frontend nezná vendorové hlavičky ani význam zdrojových statusů; pracuje jen
-s kanonickými importními DTO, validačními chybami a diffem. Díky tomu lze upload,
-mapování, preview, support i activation UI vyvíjet nad syntetickými fixtures bez
-produkčního exportu. Takové UI smí dosáhnout nejvýše stavu `UI ready (mocked)`;
-produkční apply a aktivace čekají na příslušný integrační gate.
-Přístupy do SimpleShopu byly podle komentáře předány 24. 7. 2026; tato informace
-neuzavírá mapování exportu, význam statusů, entropii kódů ani synchronizační
-kanál v `BLOCKER-TKT-01` až `BLOCKER-TKT-04`.
+Podle [ADR-015](docs/adr/015-simpleshop-api-sync.md) je SimpleShop výhradně
+serverová implementace `TicketSourceAdapter` nad API. Produkční synchronizace
+nepoužívá CSV/XLSX export, plánovaný polling ani webhook. Oprávněný organizátor
+ji spustí na vyžádání; read-only fetch připraví staging a diff a až samostatné
+explicitní potvrzení s důvodem provede idempotentní apply.
 
-Import pipeline:
+Frontend nezná Basic Authorization, vendorové endpointy ani význam zdrojových
+statusů; pracuje jen s kanonickými DTO, validačními chybami a diffem. API e-mail
+a klíč jsou pouze serverové secrets. Díky tomu lze preview, support i activation
+UI vyvíjet nad syntetickými fixtures před produkční discovery. Takové UI smí
+dosáhnout nejvýše stavu `UI ready (mocked)`; produkční apply a aktivace čekají
+na příslušný integrační gate.
 
-1. upload do private/quarantine storage;
-2. detekce formátu a přesné mapování hlaviček;
-3. staging bez změny produkčních ticketů;
-4. kanonické byte encoding a výpočet HMAC; případná trim/case normalizace až
-   po `BLOCKER-TKT-04`;
-5. validační report: duplicity v souboru, duplicity v DB, chybějící kód/stav, neznámý stav;
+API sync pipeline:
+
+1. adminem spuštěný bounded read-only fetch ze SimpleShop API;
+2. striktní schema/pagination validace a staging bez změny ticketů;
+3. přesné mapování stabilního externího ID, kusů, statusu a opaque kódu;
+4. výpočet HMAC z přesných UTF-8 bytů bez trim/case/Unicode normalizace;
+5. validační report: duplicity v odpovědi/DB, chybějící kód/stav a neznámý stav;
 6. preview diffu: new/unchanged/status changed/conflict;
-7. explicitní potvrzení adminem;
+7. explicitní potvrzení adminem s čerstvou preview verzí a důvodem;
 8. transakční dávkové apply s idempotencí;
 9. outbox události pro storna/reaktivace;
-10. audit batch + stažitelný sanitizovaný report.
+10. audit batch + stažitelný sanitizovaný report bez vendor credentialů.
 
 Nikdy automaticky nestornovat aktivovanou vstupenku z neznámé hodnoty statusu. Nejdříve zastavit batch a zobrazit konflikt.
 Zdrojový kód je až do rozhodnutí `BLOCKER-TKT-04` neprůhledná hodnota: klient
@@ -1453,19 +1450,18 @@ ani serverový adapter jej nesmí trimovat, měnit velikost písmen nebo jinak
 normalizovat. Mock data používají pouze zjevně syntetické kódy a nesmějí se
 dostat do produkčního bundlu.
 
-Absence SimpleShop podkladů blokuje pouze produkční mapování, význam statusů,
+Absence API secrets a read-only discovery blokuje pouze produkční mapování, význam statusů,
 apply/synchronizaci, bezpečnost claimu a případný offline manifest. Neblokuje
 sdílené kontrakty, fixture validaci, komponenty, navigaci, formulářové stavy ani
 mockované frontendové uživatelské cesty `F0`–`F6`.
 
-Po získání podkladů rozhodnout:
+Před produkčním apply doplnit z read-only discovery:
 
-- manuální import vs API polling vs webhook;
-- stabilní externí ID;
+- stabilní externí ID a ID BYZON produktů/prodejních formulářů;
 - význam stornované/vrácené/nezaplacené vstupenky;
-- frekvence synchronizace;
 - způsob více vstupenek v jedné objednávce;
-- zda export obsahuje e-mail konkrétního účastníka nebo jen kupujícího.
+- zda API vrací e-mail konkrétního účastníka nebo jen kupujícího;
+- reálné source-code test vectors pro `TKT-04`.
 
 ### 15.2 Transakční e-mail
 
@@ -1473,8 +1469,7 @@ Vytvořit rozhraní `MailProvider` a šablony mimo konkrétní SDK. Povinné typ
 
 - magic link/obnova přístupu;
 - invitation/claim link;
-- potvrzení rezervace a výsledku FIFO (auto-promotion nebo nabídka podle
-  `BLOCKER-RES-04`);
+- potvrzení rezervace a automatické FIFO promotion;
 - organizátorem potvrzená kritická změna programu nebo jiné kritické provozní
   oznámení;
 - potvrzení přijetí ručně evidované privacy žádosti, pokud to právní postup vyžaduje.
@@ -1800,12 +1795,13 @@ fixtures.
 **Cíl:** odstranit nebezpečné nejasnosti a připravit měřitelný základ bez zásahu do veřejného webu.
 
 - [x] `P0-01` Založit `docs/adr/` a převést ADR-001 až ADR-012 do samostatných krátkých záznamů.
-- [ ] `P0-02` Získat a popsat vzorový SimpleShop export včetně stavů, více kusů objednávky a storna.
+- [~] `P0-02` Provést read-only SimpleShop API discovery a popsat odpovědi pro
+  zaplaceno, čeká na platbu, storno, refund a více kusů. Směr API, Basic Auth a
+  ruční sync uzavírá ADR-015; discovery čeká na secrets a BYZON product/form IDs.
 - [ ] `P0-03` Potvrdit cílový hosting/deploy veřejného `byzon.cz` a způsob triggeru rebuildu.
-- [~] `P0-04` Většina kapacit, cutoff, participant cancel i FIFO pořadí
-  je potvrzená v `SCOPE-2026-08`/`09` a `P5-05`; zbývá kapacita a detail
-  pátečního networkingu v `BLOCKER-RES-01` a způsob promotion v
-  `BLOCKER-RES-04`.
+- [x] `P0-04` Kapacity, cutoff, participant cancel, automatické FIFO,
+  administrátorské nastavení kapacity networkingu a jedna sdílená rezervace
+  obou částí sobotního mastermindu potvrzuje ADR-014.
 - [ ] `P0-05` Potvrdit event-day RACI: počet vstupů/check-in míst, zařízení,
   operátory a očekávanou špičku, vlastníka jmenovek, konkrétní moderátory,
   vedoucí aktivit a osoby oprávněné odeslat kritické oznámení.
@@ -2205,10 +2201,9 @@ mock boundary.
 
 - `depends_on`: `F0`, `F2-01` a `CS-CONTENT-01`; první deliverable
   `F3-01` společně s `P5-02` posune `CS-AGENDA-01` do `contract ready`.
-- `blocked_by`: `BLOCKER-RES-01` pro networkingovou rezervaci a
-  `BLOCKER-RES-04` pro promotion mechanismus. Transfer/storno pravidlo je
-  rozhodnuté v `P5-05`; ostatní kapacity, coaching a obecné FIFO pořadí jsou
-  uzavřené v `SCOPE-2026-08`/`09`.
+- `blocked_by`: žádný produktový blocker pro běžné rezervace, networking ani
+  automatické FIFO. Implementačně zbývá seskupit obě části sobotního
+  mastermindu podle ADR-014.
 - `parallel_with`: `P5-01` až `P5-05` a `P5-09`.
 - `integration_gate`: serverové mutace vracejí kanonický stav, version,
   kapacitu, konflikt a stabilní error code; race test je zelený.
@@ -2220,11 +2215,11 @@ mock boundary.
   generický registration-estimate CTA jako explicitní stavový automat s pending
   ochranou. Estimate větev není schválená náhrada networkingové rezervace a do
   v6 se bez jiného potvrzeného konzumenta neintegruje.
-- [x] `F3-03` Historický mock pokrývá capacity full, waiting, offered, expired,
-  cancelled, closed a stale-version; integruje se jen větev zvolená v
-  `BLOCKER-RES-04`.
-- [x] `F3-04` Historický mock obsahuje dialog konfliktu i waitlist nabídky;
-  countdown/offer UI se integruje pouze při `offer_with_deadline`.
+- [x] `F3-03` Historický mock pokrýval capacity full, waiting, offered,
+  expired, cancelled, closed a stale-version; produkční kontrakt nyní zachovává
+  pouze potvrzenou automatickou FIFO větev a legacy stavy odmítá.
+- [x] `F3-04` Dialog konfliktu a čekací listina používají automatické FIFO;
+  historický countdown/offer UI byl odstraněn.
 - [x] `F3-05` Přidat osobní `.ics` export UI a component/axe/contract testy
   všech stavů; specializovaný coaching ani plné networking UI nejsou součástí
   tohoto generického slice.
@@ -2233,12 +2228,11 @@ mock boundary.
   30minutové sloty Radima Ročka a Stanislavy Maunové, kapacitu 1 a přesnou
   dostupnost ze snapshotu `Pátek!G1:I18`. Účastnické UI používá serverový
   capacity stav a nezveřejňuje identitu rezervujícího.
-- [!] `F3-07` Nezablokovaná část dokončena: z `CS-AGENDA-01`, fixtures a UI je
-  odstraněn networkingový estimate. Po uzavření `BLOCKER-RES-01`/`04` odstranit
-  nepoužitou promotion větev a doplnit
-  schválenou networkingovou rezervaci. Uzávěrka registrace i participant
-  cancel cutoff jsou potvrzený začátek session; později je dostupný jen
-  auditovaný admin override.
+- [x] `F3-07` Z `CS-AGENDA-01`, fixtures a UI je odstraněn networkingový
+  estimate i nepoužitá offer/TTL větev. Networking se po nastavení kladné
+  kapacity v administraci chová jako běžná rezervovatelná session s
+  automatickým FIFO. Uzávěrka registrace i participant cancel cutoff jsou
+  potvrzený začátek session; později je dostupný jen auditovaný admin override.
 
 **Akceptace F3:** UI nikdy lokálně neslibuje poslední místo; po každé mutaci
 zobrazí serverový canonical stav; konflikt je srozumitelný i bez barvy; offline
@@ -2259,9 +2253,10 @@ DB scénářů a 618 Chromium component/axe/responsive scénářů ve třech
 viewports. Prošly také Prettier, ESLint, všechny relevantní typechecky,
 produkční Next build a source/post-build mock boundary. Produktové vstupy pro
 `F3-06` jsou uzavřené v `SCOPE-2026-09` a implementační slice je dokončený.
-Agregovaná agenda capability zůstává `partially integrated` do zapojení
-`P5-04`; osobní `.ics` dokončilo `P5-09`. Před obsahovým UAT navíc proběhne
-finální publication reconciliation se živým coaching snapshotem.
+Agregovaná agenda capability zůstává `partially integrated` do seskupení obou
+částí sobotního mastermindu. `P5-04` doplnilo automatické FIFO, `P5-07`
+networkingovou rezervaci a `P5-09` osobní `.ics`. Před obsahovým UAT navíc
+proběhne finální publication reconciliation se živým coaching snapshotem.
 
 Produkční integrační řez z 20.–21. 8. 2026 posunul `CS-AGENDA-01` do stavu
 `partially integrated`: Better Auth a canonical event nyní napájejí live
@@ -2269,8 +2264,8 @@ Produkční integrační řez z 20.–21. 8. 2026 posunul `CS-AGENDA-01` do stav
 aktivované vstupenky, version/idempotency, event/session lockem, auditem a
 canonical race chybou. `P5-05` doplnilo participant cancel do publikovaného
 začátku session a reasoned admin override; `P5-09` zpřístupnilo autorizovaný
-osobní ICS export. Produkční server dál záměrně odmítá historické
-waitlist/offer větve do `P5-04`.
+osobní ICS export. Produkční server přijímá jedinou automatickou FIFO větev a
+záměrně odmítá historické offer/TTL stavy.
 
 #### F4 – admin, import a support
 
@@ -2289,9 +2284,10 @@ waitlist/offer větve do `P5-04`.
 - [x] `F4-01` Sjednotit adaptivní admin shell: desktop sidebar, úzká
   navigace, role/scope guard, breadcrumbs a návrat z detailu bez druhé
   paralelní navigační soustavy.
-- [x] `F4-02` Implementovat upload CSV/XLSX, rozpoznání podporovaného typu,
-  průběh a bezpečné chyby; vendorové názvy sloupců patří až do serverového
-  adapteru.
+- [~] `F4-02` Historický vendor-neutral staging UI přijímá CSV/XLSX fixture.
+  Při integraci `P4-02` nahradit vstup SimpleShopu akcí „Načíst ze
+  SimpleShopu“, průběhem serverového API fetch a bezpečným retry; SimpleShop
+  file upload nebude produkční cesta. Diff a apply UI se znovu použijí.
 - [x] `F4-03` Implementovat staging validation a diff preview
   new/unchanged/status changed/conflict s filtrem, souhrnem a dostupnou
   tabulkou i úzkým card zobrazením.
@@ -2324,7 +2320,7 @@ waitlist/offer větve do `P5-04`.
   exportní metriky z produkčního integračního scope.
 
 **Akceptace F4:** kompletní import preview a support UI lze demonstrovat nad
-validovanými fixtures bez SimpleShop souboru; mock apply je nezaměnitelný s
+validovanými fixtures bez produkční SimpleShop API odpovědi; mock apply je nezaměnitelný s
 produkční akcí; neznámý status nic nemění; tabulky jsou použitelné na mobilu i
 desktopu; dashboard, role, overrides, audit a settings mají jednoho UI
 vlastníka; citlivá akce bez oprávnění/reason selže na serveru.
@@ -2450,17 +2446,18 @@ mockovaná frontendová cesta.
 
 ### Etapa 4 – vstupenky, import, claim a obnova přístupu
 
-**Závislost:** `BLOCKER-TKT-01`/`TKT-02` blokují produkční mapping a apply,
-`TKT-03` produkční synchronizaci, `TKT-04` bezpečnost reálného claimu,
+**Závislost:** `BLOCKER-TKT-01`/`TKT-02` blokují produkční API mapping a apply,
+`TKT-04` bezpečnost reálného claimu,
 `BLOCKER-AUTH-01` vznik identity/session a `BLOCKER-TKT-05` pouze účastnický
 prezentační credential. `BLOCKER-AUTH-02` blokuje až produkční invitation/UAT
 kontinuity mezi odesláním odkazu a konferencí. Vendor-neutral kontrakty,
 fixtures a `F1`/`F4` mockované UI mohou pokračovat.
 
 - [~] `P4-01` Tickets/import schema, HMAC infrastruktura, test vectors a pepper rotation runbook. Schéma a rotační mechanismus jsou implementované bez raw kódu; produkční normalizér a bezpečnostní akceptace claimu čekají na `BLOCKER-TKT-04`.
-- [ ] `P4-02` Serverový vendor-neutral upload/staging/validation/preview
-  kontrakt a `TicketSourceAdapter` skeleton bez změny ticketů; `F4-02` a
-  `F4-03` vlastní UI. Produkční mapování čeká na `TKT-01`/`TKT-02`.
+- [ ] `P4-02` Serverový SimpleShop API adapter a vendor-neutral
+  staging/validation/preview bez změny ticketů; `F4-02` a `F4-03` vlastní UI.
+  Síťové čtení spouští admin na vyžádání a nikdy samo neaplikuje změny.
+  Produkční endpoint/field mapping čeká na `TKT-01`/`TKT-02` discovery.
 - [ ] `P4-03` Transakční idempotentní apply a stavová historie.
 - [ ] `P4-04` Manual code claim doména a endpoint s lockem, rate limitem a
   generickými chybami; finální výstup identity/session čeká na
@@ -2506,10 +2503,11 @@ odmítají anonymní i cross-event přístup.
 
 **Závislost:** sessions, cutoff, koučové, většina kapacit a FIFO pořadí jsou
 potvrzené v `SCOPE-2026-08`/`09`; transfer/storno pravidlo uzavřelo `P5-05`.
-`BLOCKER-RES-01` blokuje pouze finální networkingovou rezervaci/roster,
-`BLOCKER-RES-04` promotion režim a nový `BLOCKER-RES-05` seskupení dvou částí
-sobotního mastermindu. Ostatní kontrakty a generický `F3` flow mohou vznikat
-souběžně.
+`BLOCKER-RES-01`, `BLOCKER-RES-04` a `BLOCKER-RES-05` uzavřelo 30. 8. 2026
+produktové rozhodnutí zaznamenané v
+[ADR-014](docs/adr/014-reservation-waitlist-grouping.md): automatická FIFO
+promotion, administrátorem povinně nastavená networkingová kapacita a jedna
+sdílená rezervace obou částí sobotního mastermindu.
 
 - [x] `P5-01` Agenda/reservation/waitlist schema a constraints bez session
   attendance/no-show evidence. `P5-08` dodal `reservations`/`waitlist_entries`;
@@ -2539,7 +2537,7 @@ souběžně.
   položku lze idempotentně odstranit i po jejím stornu nebo úplném odebrání z
   nové publikace. Existující waiting projekce zůstává viditelná i po uvolnění
   kapacity, používá živé pořadí pouze mezi aktivními waiting řádky a má vypnuté
-  akce, takže participant neobejde FIFO před zpracováním `P5-04` workerem. Při
+  akce, takže participant neobejde FIFO před dokončením autoritativní promotion. Při
   operational driftu kapacity nebo typu se waiting stav zachová jako bezpečně
   uzavřená reservation projekce a vyšle operator warning místo zmizení/500.
   Sdílené Redis
@@ -2557,14 +2555,16 @@ souběžně.
   session data; administrátor je může auditovaně změnit a opakovaný import
   programu provozní hodnotu nepřepíše. Coaching
   1/slot zůstává v `P5-06`, protože živý list potvrzuje dvě paralelní řady;
-  sobotní mastermind 6 čeká na group-booking rozhodnutí v `BLOCKER-RES-05`.
-  Páteční networking zůstává za `BLOCKER-RES-01`.
-- [ ] `P5-04` Implementovat serverový waitlist se stabilním FIFO a pouze
-  promotion režimem zvoleným v `BLOCKER-RES-04`; nepoužitou větev odstranit z
-  kontraktu a integrovat odpovídající stav `F3-03`/`F3-04`. Read projekce z
-  `P5-02` už bezpečně zachovává importovaný aktivní waiting stav a počítá jeho
-  živé FIFO pořadí; vznik, promotion, nabídka/storno a worker orchestrace dál
-  patří výhradně sem.
+  sobotní mastermind má podle ADR-014 jednu skupinovou rezervaci a sdílenou
+  počáteční administrátorskou kapacitu 6. Páteční networking se otevře až po
+  zadání kladné kapacity v administraci.
+- [x] `P5-04` Dokončen serverový waitlist se stabilním FIFO a jediným
+  automatickým promotion režimem podle ADR-014. Participant může zařazení i
+  opuštění provést jen online nad canonical verzí; cancel a auditované zvýšení
+  kapacity v témže session locku automaticky potvrzují první způsobilé čekající.
+  Nabídka, expirace, TTL, accept/decline a offer worker byly odstraněny z
+  kontraktu, UI, fixtures a mock serveru. Nezpůsobilý čekající se fail-closed
+  zruší s auditem; oznámení není podmínkou správnosti transakce.
 - [x] `P5-05` Implementováno serverové participant zrušení do immutable
   publikovaného začátku session a pozdější admin cancel spolu se
   samostatnou session-level správou kapacity s
@@ -2580,7 +2580,7 @@ souběžně.
   Shared Redis HMAC buckety omezují read
   120/min a mutation 30/min; obě chráněné cesty failují zavřeně. Live
   participant `F3` a produkční reservation-only `F4-08` jsou napojené;
-  waitlist se bez `P5-04` automaticky neposouvá. Transfer/storno ruší aktivní
+  waitlist se díky `P5-04` automaticky posouvá. Transfer/storno ruší aktivní
   rezervace a uvolní kapacitu, ale samotný ticket-transition consumer zůstává
   vlastnictvím `P4-09`.
 - [x] `P5-06` Koučovací doména/API a integrace `F3-06`: source-verified
@@ -2591,9 +2591,11 @@ souběžně.
   Poslední místo chrání existující transakční reservation lock a participant
   DTO/UI nezveřejňuje rezervujícího. Snapshot se před finální publikací znovu
   porovná s živým listem.
-- [!] `P5-07` Implementovat páteční řízený networking jako skutečnou rezervaci
-  a zahrnout jej do rosteru až po dodání kapacity a waitlist/storno detailu v
-  `BLOCKER-RES-01`; do té doby nevytvářet náhradní `registration_estimate`.
+- [x] `P5-07` Páteční řízený networking je skutečná rezervace a je zahrnutý do
+  scoped rosteru vedoucího aktivity. Nezkonfigurovaná networkingová session se
+  v administraci zobrazí s `capacity=null`; první auditované zadání kladné
+  kapacity ji atomicky přepne na `reservation` + `auto_confirm`. Do té chvíle
+  participant flow zůstává fail-closed a nevzniká `registration_estimate`.
   Networkingový profil/adresář zůstává oddělená Priority B capability.
   Autoritativní produktový dokument a všechna jeho vlákna byly znovu ověřeny
   21. 8. 2026 na nezměněné revizi: potvrzují rezervaci a roster, ale stále
@@ -2606,7 +2608,7 @@ souběžně.
   latest-publication allowlist nad běžnými importovanými `draft` provozními
   řádky, bounded DB projekci a PostgreSQL testy anonymního, role, revokovaného,
   cross-session i cross-event přístupu a retenčního deadline. Networking se
-  nevydává před `RES-01`.
+  vydává i nakonfigurovaný networking; bez kladné kapacity zůstává skrytý.
 - [x] `P5-09` Dokončen autorizovaný `GET /api/v1/me/agenda.ics` nad stejným
   owner/event/retention gate a zamčeným canonical snapshotem jako JSON agenda.
   Privátní no-store RFC 5545 reprezentace používá stabilní ne-PII UID,
@@ -2619,12 +2621,12 @@ souběžně.
   rezervace s participant/admin stornem a změnou kapacity, canonical cutoff,
   owner/event IDOR a nečitelnost nepřiřazeného/cizího rosteru. Importační test
   explicitně drží počáteční kapacity EB21 12, oba workshopy 20 a všech 26
-  coaching slotů 1, zatímco networking a obě části sobotního mastermindu
-  zůstávají bez domyšlené rezervace. Playwright cesta přes všechny tři
+  coaching slotů 1, zatímco networking zůstává bez domyšlené kapacity a obě
+  části sobotního mastermindu čekají na skupinovou projekci. Playwright cesta přes všechny tři
   viewporty rezervuje dostupné místo, ověřuje pražský lokální čas a stahuje
-  privátní UTC/CRLF `.ics`. FIFO vznik/promotion zůstává za `P5-04` a
-  `BLOCKER-RES-04`; úspěšná networkingová rezervace za `P5-07` a
-  `BLOCKER-RES-01`.
+  privátní UTC/CRLF `.ics`. FIFO join/leave/promotion i nakonfigurovaná
+  networkingová rezervace mají PostgreSQL regresi; service-backed CI je
+  finální gate.
 
 **Akceptace:** kapacitu nelze překročit; waitlist je deterministický a používá
 právě jeden schválený promotion režim; konflikt se zobrazí; změny mají audit;
@@ -2949,14 +2951,10 @@ rozhodnutí ani souhlas s produkčním nasazením.
 | --- | --- | --- | --- | --- | --- |
 | BLOCKER-AUTH-01 | Pořadí a handshake ticket claimu, ověření identity, vytvoření session a event membership včetně přerušení/obnovení toku | `P4-04` výstup, `P4-07`, `F1` integrace | Produkt + tech lead + security | Před claim/session integrací | Dokončit kontrakty, fixtures a mockované UI; neověřený pending claim nesmí vytvořit membership, relaci ani práva. |
 | BLOCKER-AUTH-02 | Jak 48h session funguje s invitation odeslanou 11.–15. 9. a konferencí 18.–19. 9.: očekávaná opakovaná recovery, nebo event-bound prodloužení | `P4-15`, invitation UAT a go-live recovery kapacita | Produkt + tech lead + security | Před produkční invitation dávkou | Zachovat implementovaných 48 h/24 h a spolehlivý recovery flow; neslibovat, že jedno otevření odkazu před akcí udrží relaci až do konference. |
-| BLOCKER-TKT-01 | Ukázkový SimpleShop export a přesné sloupce; přístup byl předán, mapping zatím není doložen | Produkční import mapping/apply | Organizátor | `P4-02` produkční preview | Aktivně získat export z poskytnutého přístupu; do té doby kanonický staging kontrakt a mock preview bez prod apply. |
+| BLOCKER-TKT-01 | Read-only SimpleShop API discovery: přesné endpointy, pagination, response fields, stabilní externí ID a BYZON product/form IDs | Produkční API mapping/apply | Organizátor | `P4-02` produkční preview | Vložit vyhrazený API e-mail/klíč do secrets; do té doby kanonický staging kontrakt a mock preview bez prod apply. |
 | BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno | Produkční ticket stavy/apply | Organizátor | `P4-03` prod apply | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat; UI stav otestovat fixturem. |
-| BLOCKER-TKT-03 | Frekvence a kanál změn SimpleShop | Prod sync | Organizátor | P4 produkční import | Ruční idempotentní import. |
 | BLOCKER-TKT-04 | Entropie, formát a povolená normalizace zdrojových kódů | Reálný claim/offline check-in security | Organizátor + tech lead | Před `P4-04` integrací | Kód je opaque bez trim/case změn, HMAC storage; syntetické UI fixtures povolené, offline manifest disabled. |
 | BLOCKER-TKT-05 | Formát, expirace, rotace a verifier skenovatelné účastnické vstupenky: podepsaný app credential vs bezpečně chráněný zdrojový kód | `F2-04` integrace, `P4-12` a pouze app-credential adapter/rehearsal v `P6-02` | Produkt + tech lead + security | Před integrací `/me/ticket` a UAT app credentialu | Zobrazit jen stav a suffix; HMAC není QR payload. Syntetický QR pouze dev/test. Source-ticket scan se řídí `TKT-04` nezávisle. |
-| BLOCKER-RES-01 | Číselná kapacita pátečního řízeného networkingu a zda používá stejný FIFO waitlist/storno pravidlo jako ostatní kapacitní aktivity; produktový dokument i komentáře znovu ověřeny 21. 8. 2026 na nezměněné revizi, vstup stále chybí | `P5-07`, networkingová část `CS-AGENDA-01` a `CS-ROSTER-01` | Produkt + organizace | Před implementací networkingové rezervace | Session je rezervovatelná a má roster; do rozhodnutí ji neimplementovat jako `registration_estimate` ani nevymýšlet kapacitu. |
-| BLOCKER-RES-04 | FIFO je potvrzené; zbývá nabídka s expirací versus automatická promotion a případný TTL | Waitlist worker, finální `CS-AGENDA-01`/UI větev | Produkt | Před `P5-04` implementací | Historický kontrakt/mock podporuje obojí; neintegrovat ani neudržovat obě produkční větve po rozhodnutí. |
-| BLOCKER-RES-05 | Zda jedna rezervace sobotního mastermindu Tomáše Ryzy s kapacitou 6 pokrývá obě programové části, nebo se rezervují samostatně | Dokončení konfigurace `P5-03`, agenda projekce a roster | Produkt + organizace | Před publikací sobotního mastermindu jako rezervovatelného | Nevytvářet dvě nezávislé kapacity 6 ani skrytě sdílenou rezervaci; EB21 a oba jednoznačné workshopy mohou běžet nezávisle. |
 | BLOCKER-OPS-01 | Event-day RACI a kapacita: počet vstupů/zařízení/operátorů, špička, vlastník jmenovek, konkrétní moderátoři a osoby oprávněné odeslat kritické oznámení | P6 load/rehearsal, role assignments, P8 send UAT, P12 moderator UAT | Organizace | Před P6-10/P8 send/P12 UAT | Parametrizovaný load profil; send pouze admin seedem, questions feature off a žádné domnělé přiřazení osob. |
 | BLOCKER-OPS-02 | Nouzový check-in a autorita ručních záznamů | P6 gate | Organizace + tech lead | P6-08 runbook | Online autorita + exportní fallback. |
 | BLOCKER-LIVE-01 | Finální ID pátečních sessions na Byzon/Leadership stage a přiřazení moderátorů; ankety/projekce nejsou vstup | Volitelná P12 Priority B | Organizace | Před P12-01/P12-06 | `questions_enabled=false`; lze připravit kontrakt a syntetické fixtures bez publikace feature. Programový QR generátor `P3-12` pokračuje pro všechny body nezávisle. |
@@ -2971,7 +2969,10 @@ Potvrzené kapacity/cutoff jsou v `SCOPE-2026-08` a coaching inputy dříve vede
 jako `BLOCKER-RES-02` jsou uzavřené v `SCOPE-2026-09`. `BLOCKER-RES-03`
 uzavřelo `P5-05` rozhodnutím zrušit při transferu/stornu aktivní rezervace
 a uvolnit kapacitu; napojení na ticket transition zůstává v `P4-09`.
-`BLOCKER-RES-01` zůstává otevřený pouze pro chybějící detail pátečního networkingu. Uzavření
+`BLOCKER-RES-01`, `BLOCKER-RES-04` a `BLOCKER-RES-05` jsou uzavřené
+[ADR-014](docs/adr/014-reservation-waitlist-grouping.md). Uzavření
+`BLOCKER-TKT-03` zaznamenal [ADR-015](docs/adr/015-simpleshop-api-sync.md):
+sync je ručně spuštěný API fetch s odděleným preview a apply. Uzavření
 `BLOCKER-AUTH-01`, `BLOCKER-AUTH-02`, `BLOCKER-TKT-04` nebo `BLOCKER-TKT-05` vyžaduje
 samostatný ADR, aktualizovaný threat model a konkrétní test vectors; samotná
 ústní dohoda nebo mockované UI blocker neuzavírá.
@@ -3033,7 +3034,7 @@ Po splnění Definition of Done agent předloží krok uživateli ke schválení
 
 ### Data a právní
 
-- [ ] Finální SimpleShop import a diff review.
+- [ ] Finální SimpleShop API sync a diff review.
 - [ ] Právní dokumenty a consent versions publikované.
 - [ ] DPA/vendor/region schválené.
 - [ ] Retenční data nastavena a maintenance job naplánován.
@@ -3165,15 +3166,13 @@ vrstvy. Service-backed gate prošel 880/880 workspace testy včetně database
 build, source/build mock boundary, static smoke a browser komponenty 849/849
 jsou zelené.
 
-1. `P5-06` je dokončené. Před finální publikací znovu porovnat uložený coaching
-   snapshot s `Pátek!G1:I18`. Dokončení sobotní kapacity 6 čeká na
-   `BLOCKER-RES-05`; `P5-04` na jediný promotion režim v `BLOCKER-RES-04`.
-2. Mimo stejné hotspoty otevřít `P4-02` a s předaným přístupem do
-   SimpleShopu získat vzorový export; produkční mapping/apply až po uzavření
-   `TKT-01` až `TKT-04`.
-3. `P5-09` je dokončené. Zbytek `F3-07` a networkingová část rosteru čekají
-   na kapacitu/detail networkingu `BLOCKER-RES-01`; do té doby se nic
-   nevymýšlí.
+1. Dokončit implementaci jedné sdílené rezervace, kapacity a rosteru obou částí
+   sobotního mastermindu podle ADR-014; produktové rozhodnutí už není blocker.
+2. Otevřít `P4-02` read-only API discovery po instalaci SimpleShop secrets a
+   dodání BYZON product/form IDs; produkční mapping/apply až po uzavření
+   `TKT-01`, `TKT-02` a `TKT-04`.
+3. `P5-04`, `P5-07` a `P5-09` jsou dokončené; před UAT nastavit skutečnou
+   networkingovou kapacitu v administraci a ověřit roster.
 4. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
    ekvivalentní e-mailový kanál.
 5. `P3-11` připraví content reconciliation a 31. 8. provede finální import/UAT;
@@ -3275,3 +3274,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.22 | 21. 8. 2026 | Dokončeno `P5-09`: produkční osobní agenda nabízí privátní autorizovaný RFC 5545 export nad stejným zamčeným canonical snapshotem jako JSON. Stabilní ne-PII UID, publication SEQUENCE, UTC, CRLF, escaping, Unicode-safe folding, cancellation a IDOR/retention hlavičky mají unit/PostgreSQL regresi. `P5-07` bylo znovu ověřeno proti nezměněné autoritativní revizi a zůstává fail-closed za chybějící kapacitou a waitlist/storno rozhodnutím `BLOCKER-RES-01`. |
 | 6.23 | 21. 8. 2026 | Kapacita rezervovatelné aktivity je samostatné session-level provozní nastavení v `/admin/rezervace`, nikoli konstanta nebo vlastnost konkrétní rezervace. Organizer ji může auditovaně a idempotentně změnit i před první rezervací; server odmítá hodnotu pod confirmed count, serializuje ji s participant rezervacemi a invaliduje dotčené snapshoty. Opakovaný import programu zachová administrátorskou hodnotu. Nový klient používá jen session-level endpoint; starý reservation-bound override zůstává přechodově podporovaný na původní cestě po jednu kompatibilní rollout fázi a smí se odstranit až po ověřené expiraci předchozího klientského/service-worker buildu. |
 | 6.24 | 26. 8. 2026 | Dokončena neblokovaná část `P5-11`: source/import regrese explicitně drží EB21 12, oba workshopy 20, 26 coaching slotů 1 a fail-closed networking/mastermind; existující PostgreSQL race a IDOR sada kryje poslední místo, coaching souběh, admin/participant mutace a cizí roster. Nový Playwright průchod na telefonu, tabletu a desktopu rezervuje dostupné místo, ověřuje zobrazení v `Europe/Prague` a privátní UTC/CRLF `.ics` download. FIFO/promotion a úspěšný networking zůstávají poctivě blokované `RES-04`/`RES-01`. |
+| 6.25 | 30. 8. 2026 | ADR-014 uzavřelo rezervační rozhodnutí a implementace dokončila `P5-04`/`P5-07`: jediná automatická FIFO promotion běží transakčně po participant/admin stornu i zvýšení kapacity, offer/TTL větev je odstraněná z kontraktu a UI a řízený networking dostává kladnou kapacitu auditovaně v administraci bez hardcoded hodnoty. ADR-015 mění produkční SimpleShop zdroj na server-only API fetch spuštěný administrátorem s odděleným preview/apply; CSV/XLSX export není produkční sync kanál. Zbývá implementovat sdílenou skupinu obou částí sobotního mastermindu a provést SimpleShop discovery po instalaci secrets a dodání product/form IDs. |
