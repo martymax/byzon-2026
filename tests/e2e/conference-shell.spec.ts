@@ -135,17 +135,38 @@ test('participant reserves the available place and downloads the Prague-time age
     reset: { ok: true, status: 204 },
   });
 
+  const agendaResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/me/agenda',
+  );
   await page
     .getByRole('navigation', { name: 'Hlavní navigace' })
     .getByRole('link', { name: 'Agenda', exact: true })
     .click();
+  const agendaResponse = await agendaResponsePromise;
+  expect(agendaResponse.status()).toBe(200);
+  const agendaPayload = (await agendaResponse.json()) as {
+    readonly items?: readonly {
+      readonly session?: { readonly title?: string };
+    }[];
+  };
+  expect(agendaPayload.items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        session: expect.objectContaining({ title: 'Otevření konference' }),
+      }),
+    ]),
+  );
   await expect(page).toHaveURL(/\/app\/agenda$/, { timeout: 20_000 });
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),
   ).toBeVisible({ timeout: 20_000 });
 
+  const agendaPage = page.locator('.agenda-page');
   await expect(
     page.locator('article').filter({ hasText: 'Otevření konference' }),
+    `Agenda UI after a canonical 200 response:\n${await agendaPage.innerText()}`,
   ).toBeAttached({ timeout: 20_000 });
 
   const opening = page.getByRole('article').filter({
