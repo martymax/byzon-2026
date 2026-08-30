@@ -99,6 +99,17 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         ),
         "SimpleShop loader": (checkout, "form.simpleshop.cz"),
         "GTM container": (home, "GTM-MSBB9L9"),
+        "Jan Plojhar homepage card": (home, '/speaker/jan-plojhar/'),
+        "Vladimír Macoun homepage card": (home, '/speaker/vladimir-macoun/'),
+        "mastermind title": (
+            program,
+            "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
+        ),
+        "Lucie Libovická program profile link": (program, '/speaker/lucie-libovicka/'),
+        "Pavel Janoušek program profile link": (program, '/speaker/pavel-janousek/'),
+        "Expertní Board 21 partner": (home, '/assets/img/2026/08/eb21-logo.png'),
+        "Wexia partner": (home, '/assets/img/2026/08/wexia.svg'),
+        "LIVEST partner": (home, '/assets/img/2026/08/livest.svg'),
     }
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
     if absent:
@@ -111,6 +122,19 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     visible = [name for name, marker in hidden_markers.items() if marker in home]
     if visible:
         fail("Unexpected visible navigation markers: " + ", ".join(visible))
+
+    hidden_homepage_speakers = {
+        "Lucie Libovická homepage card": '/speaker/lucie-libovicka/',
+        "Pavel Janoušek homepage card": '/speaker/pavel-janousek/',
+    }
+    visible_hidden_speakers = [
+        name for name, marker in hidden_homepage_speakers.items() if marker in home
+    ]
+    if visible_hidden_speakers:
+        fail(
+            "Unexpected program-only speaker cards on homepage: "
+            + ", ".join(visible_hidden_speakers)
+        )
 
     for session in content.get("sessions", {}).get("list", []):  # type: ignore[union-attr]
         title = session["title"]

@@ -687,6 +687,24 @@ strong { color: var(--ink); }
   font-size: .92rem;
 }
 .program-cal-event--has-link:hover { border-color: #cfc7cd; }
+.program-event__detail-link,
+.program-cal-event__detail-link,
+.program-mobile-event__detail-link {
+  display: block; color: inherit; border-radius: 4px;
+}
+.program-event__detail-link:hover .program-event__title,
+.program-cal-event__detail-link:hover .program-cal-event__title,
+.program-mobile-event__detail-link:hover .program-mobile-event__title { color: var(--pink); }
+.program-event__detail-link:focus-visible,
+.program-cal-event__detail-link:focus-visible,
+.program-mobile-event__detail-link:focus-visible {
+  outline: 3px solid rgba(245,33,142,.32); outline-offset: 2px;
+}
+.program-cal-event__meta .program-speaker-link,
+.program-mobile-event__meta .program-speaker-link {
+  color: var(--pink-700); font-weight: 700; text-decoration: underline;
+  text-decoration-thickness: 1px; text-underline-offset: 2px;
+}
 .program-speaker-link {
   color: inherit; font-weight: inherit; text-decoration: none;
 }
@@ -953,6 +971,9 @@ strong { color: var(--ink); }
   .program-mobile-event__inner--link {
     display: block; min-height: 100%; padding: 11px 12px 12px 14px; border-radius: 6px;
     color: inherit; transition: background .2s var(--ease);
+  }
+  .program-mobile-event__inner--split {
+    min-height: 100%; padding: 11px 12px 12px 14px;
   }
   .program-mobile-event__inner--link:hover,
   .program-mobile-event__inner--link:focus-visible { background: var(--pink-50); }

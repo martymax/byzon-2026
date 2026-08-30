@@ -174,12 +174,19 @@ def program_event(ev):
     meta = ev.get("meta")
     desc = ev.get("description")
     href, aria_label = program_event_link(ev)
+    direct_speaker_links = bool(href and ev.get("link_speakers"))
     extra_class = " program-event--has-link" if href else ""
-    meta_html = f'<span class="program-event__meta">{program_event_meta(meta, bool(href))}</span>' if meta else ""
+    meta_html = f'<span class="program-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-event__title">{title_text}</strong>'
-    if href:
+    if direct_speaker_links:
+        title_html = (
+            f'<a class="program-event__detail-link" href="{att(href)}" '
+            f'aria-label="{att(aria_label)}">{title_html}</a>'
+        )
+        body = f'<div class="program-event__body">{title_html}{meta_html}{desc_html}</div>'
+    elif href:
         body = (
             f'<a class="program-event__body program-event__body--link" '
             f'href="{att(href)}" aria-label="{att(aria_label)}">'
@@ -346,21 +353,27 @@ def program_calendar_event(ev, col, row_by_slot):
     meta = ev.get("meta")
     desc = ev.get("description")
     href, aria_label = program_event_link(ev)
+    direct_speaker_links = bool(href and ev.get("link_speakers"))
     extra_class = " program-cal-event--has-link" if href else ""
     grid_col = "2 / -1" if ev.get("span") == "all" else str(col)
     if ev.get("span") == "all":
         extra_class += " program-cal-event--span-all"
     if span == 1 or is_condensed_calendar_event(ev):
         extra_class += " program-cal-event--short"
-    meta_html = f'<span class="program-cal-event__meta">{program_event_meta(meta, bool(href))}</span>' if meta else ""
+    meta_html = f'<span class="program-cal-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-cal-event__title">{title_text}</strong>'
+    if direct_speaker_links:
+        title_html = (
+            f'<a class="program-cal-event__detail-link" href="{att(href)}" '
+            f'aria-label="{att(aria_label)}">{title_html}</a>'
+        )
     inner = (
         f'<span class="program-cal-event__time">{esc(time)}</span>'
         f'{title_html}{meta_html}{desc_html}'
     )
-    if href:
+    if href and not direct_speaker_links:
         body = (
             f'<a class="program-cal-event__inner program-cal-event__inner--link" '
             f'href="{att(href)}" aria-label="{att(aria_label)}">{inner}</a>'
@@ -393,23 +406,31 @@ def program_mobile_event(item, total_count):
     meta = ev.get("meta")
     desc = ev.get("description")
     href, aria_label = program_event_link(ev)
+    direct_speaker_links = bool(href and ev.get("link_speakers"))
     stage_label = _mobile_stage_label(item["stage_names"], total_count)
     stage_ids = " ".join(item["stage_ids"])
-    meta_html = f'<span class="program-mobile-event__meta">{program_event_meta(meta, bool(href))}</span>' if meta else ""
+    meta_html = f'<span class="program-mobile-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-mobile-event__title">{title_text}</strong>'
+    if direct_speaker_links:
+        title_html = (
+            f'<a class="program-mobile-event__detail-link" href="{att(href)}" '
+            f'aria-label="{att(aria_label)}">{title_html}</a>'
+        )
     inner = f"""<div class="program-mobile-event__top">
                 <span class="program-mobile-event__stage">{esc(stage_label)}</span>
                 <span class="program-mobile-event__time">{esc(time)}</span>
               </div>
               {title_html}{meta_html}{desc_html}"""
     extra_class = " program-mobile-event--has-link" if href else ""
-    if href:
+    if href and not direct_speaker_links:
         inner = (
             f'<a class="program-mobile-event__inner program-mobile-event__inner--link" '
             f'href="{att(href)}" aria-label="{att(aria_label)}">{inner}</a>'
         )
+    elif direct_speaker_links:
+        inner = f'<div class="program-mobile-event__inner program-mobile-event__inner--split">{inner}</div>'
     return f"""<article class="program-mobile-event{mobile_kind_class(ev.get("type"))}{extra_class}" data-stage-ids="{att(stage_ids)}">
               {inner}
             </article>"""
@@ -820,7 +841,7 @@ def speaker_socials(sp):
 
 def sec_speakers():
     d = C["speakers"]
-    cards = "".join(speaker_card(sp) for sp in d["list"])
+    cards = "".join(speaker_card(sp) for sp in d["list"] if sp.get("homepage", True))
     return f"""<section class="section section--pink" id="speakers">
   <div class="container">
     <div class="section-head section-head--center reveal">
@@ -1080,23 +1101,27 @@ def page_partner():
 
 def page_speaker(sp):
     cta = C["cta"]
+    homepage_speaker = sp.get("homepage", True)
+    back_href = "/#speakers" if homepage_speaker else "/program/"
+    back_label = "Zpět na řečníky" if homepage_speaker else "Zpět na program"
+    profile_label = sp.get("label", "Řečník BYZON 2026")
     role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
     socials = speaker_socials(sp)
+    socials_line = f"        {socials}\n" if socials else ""
     bio = "".join(f"<p>{esc(p)}</p>" for p in sp["bio"])
     body = (
-        header("/", solid=True)
+        header("/" if homepage_speaker else "/program/", solid=True)
         + '<main id="main">'
         + f"""<section class="section" style="padding-top:calc(var(--header-h) + 48px)">
   <div class="container">
-    <nav class="breadcrumb speaker-back" style="justify-content:flex-start"><a href="/#speakers">‹ Zpět na řečníky</a></nav>
+    <nav class="breadcrumb speaker-back" style="justify-content:flex-start"><a href="{att(back_href)}">‹ {esc(back_label)}</a></nav>
     <div class="speaker-detail">
       <div class="portrait"><img src="{att(sp['photo'])}" alt="{att(sp['name'])}" data-fallback="{att(sp['name'])}"></div>
       <div>
-        <span class="eyebrow">Řečník BYZON 2026</span>
+        <span class="eyebrow">{esc(profile_label)}</span>
         <h1>{esc(sp['name'])}</h1>
         {role}
-        {socials}
-        <div class="bio">{bio}</div>
+{socials_line}        <div class="bio">{bio}</div>
         <div class="hero__actions" style="margin-top:30px">
           <a class="btn" href="{att(cta['href'])}">{esc(cta['label'])} {ICONS['arrow']}</a>
         </div>
@@ -1127,7 +1152,7 @@ def session_presenter(value):
         <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}">
       </a>
       <div>
-        <span class="eyebrow">Řečník BYZON 2026</span>
+        <span class="eyebrow">{esc(sp.get('label', 'Řečník BYZON 2026'))}</span>
         <h3><a href="/speaker/{att(sp['slug'])}/">{esc(sp['name'])}</a></h3>{role}{speaker_socials(sp)}
         <div class="bio">{bio}</div>
       </div>
@@ -1138,7 +1163,10 @@ def page_session(session):
     annotation = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in session.get("annotation", []))
     presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
     presenter_count = len(session.get("speakers", []))
-    presenter_title = "Hosté diskuze" if presenter_count > 1 else "Řečník"
+    presenter_title = session.get(
+        "presenter_title",
+        "Hosté diskuze" if presenter_count > 1 else "Řečník",
+    )
     body = (
         header("/program/", solid=True)
         + '<main id="main">'
