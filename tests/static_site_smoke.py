@@ -112,6 +112,15 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     if visible:
         fail("Unexpected visible navigation markers: " + ", ".join(visible))
 
+    for speaker in content["speakers"]["list"]:  # type: ignore[index]
+        profile_href = f'/speaker/{speaker["slug"]}/'
+        appears_on_homepage = profile_href in home
+        should_appear = speaker.get("show_on_homepage", True)
+        if should_appear and not appears_on_homepage:
+            fail(f"Homepage is missing visible speaker: {speaker['name']}")
+        if not should_appear and appears_on_homepage:
+            fail(f"Homepage includes hidden speaker: {speaker['name']}")
+
     for session in content.get("sessions", {}).get("list", []):  # type: ignore[union-attr]
         title = session["title"]
         if title not in program:
@@ -124,6 +133,22 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         for paragraph in session.get("annotation", []):
             if paragraph not in detail:
                 fail(f"Session detail is missing annotation for: {title}")
+        takeaways = session.get("takeaways", [])
+        if takeaways and 'class="session-takeaways"' not in detail:
+            fail(f"Session detail is missing takeaways list for: {title}")
+        for takeaway in takeaways:
+            if takeaway not in detail:
+                fail(f"Session detail is missing takeaway for: {title}")
+        for speaker_slug in session.get("speakers", []):
+            speaker_path = PUBLIC_ROOT / "speaker" / speaker_slug / "index.html"
+            if not speaker_path.is_file():
+                continue
+            speaker_detail = speaker_path.read_text(encoding="utf-8")
+            session_href = f'/program/{session["slug"]}/'
+            if session_href not in speaker_detail:
+                fail(f"Speaker profile is missing program link: {speaker_slug} -> {title}")
+            if title not in speaker_detail:
+                fail(f"Speaker profile is missing program title: {speaker_slug} -> {title}")
 
 
 def main() -> int:

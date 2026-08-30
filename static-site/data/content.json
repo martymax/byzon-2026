@@ -241,7 +241,7 @@
         "photo": "/assets/img/2026/06/Petr-Dvorak.png",
         "role": "",
         "bio": [
-          "Super, že vás tento speaker zaujal. Vydržte, medailonek tu bude co nevidět."
+          "Vedu Budějovický Budvar s přesvědčením, že i tradiční značka může uspět v rychle se měnícím světě, pokud si zachová kvalitu, autenticitu a odvahu hledat nové cesty. Nejvíce mě zajímají témata strategie, rozvoje lidí, inovací a budování dlouhodobé hodnoty značky pro další generace zákazníků."
         ]
       },
       {
@@ -262,6 +262,7 @@
       {
         "slug": "vladimir-macoun",
         "name": "Vladimír Macoun",
+        "show_on_homepage": false,
         "photo": "/assets/img/2026/08/Vladimir-Macoun-placeholder.svg",
         "role": "Podnikatel v gastronomii",
         "bio": [
@@ -412,6 +413,18 @@
         "links": {
           "linkedin": "https://www.linkedin.com/in/jakub-zikmund"
         }
+      },
+      {
+        "slug": "tomas-reznicek",
+        "name": "Tomáš Řezníček",
+        "photo": "/assets/img/2026/06/Tomas-Reznicek.png",
+        "role": "profesionální propojovatel lidí a pořadatel networkingových akcí, Networ-King",
+        "bio": [
+          "Tomáš Řezníček je zakladatelem networkingového klubu Networ-King. Za 8 let vytvořil přes 200 Networ-Kingových událostí a jeho specializací je řízený Networ-King. Na konferencích pomáhá s externím networkingem, aby se lidé více seznamovali a cítili se lépe. Propojil více než 2000 lidí a inspiruje podnikatele i firmy v oblasti obchodní strategie a prodeje služeb."
+        ],
+        "links": {
+          "linkedin": "https://www.linkedin.com/in/tomasreznicek/"
+        }
       }
     ]
   },
@@ -452,12 +465,26 @@
         ]
       },
       {
+        "slug": "prestante-lidi-motivovat",
+        "title": "Přestaňte lidi motivovat",
+        "kind": "Přednáška",
+        "speakers": ["blanka-mrazkova"],
+        "annotation": [
+          "Jedna z nejčastějších otázek ve vedení lidí zní: „Jak motivovat lidi?“",
+          "Na dlouhodobý efekt externí motivace nevěřím. Věřím ale na systematické zvyšování angažovanosti týmů. A na rozdíl od navyšování mezd nebo přidávání dalších benefitů to firmu nemusí stát ani korunu navíc.",
+          "Co se stane, když leadeři začnou se svými lidmi systematicky komunikovat a rozvíjet je? Jaký jednoduchý nástroj může změnit způsob, jakým lidé svou práci a svého šéfa vnímají? A jak ho používat tak, aby opravdu fungoval?",
+          "Na příkladech konkrétních firem ukážu, co pomohlo zvýšit spokojenost lidí, snížit fluktuaci a přestat se jednou provždy ptát: „Jak máme lidi motivovat?“"
+        ]
+      },
+      {
         "slug": "co-vas-dostalo-sem-vas-dal-nedostane",
         "title": "Co vás dostalo sem, vás dál nedostane",
         "kind": "Přednáška",
         "speakers": ["david-kolar"],
         "annotation": [
-          "Při růstu firmy se lídři často dostávají do pomyslných údolí smrti – momentů, kdy přestává fungovat to, co firmu dostalo až sem. Další růst vyžaduje změnu přístupu. David Kolář ukáže, jak rozpoznat strop, na který firma narazila, co je potřeba změnit a jak další růst ustát, aniž by firma spadla dolů.",
+          "Při růstu firmy se lídři často dostávají do pomyslných údolí smrti – momentů, kdy přestává fungovat to, co firmu dostalo až sem. Další růst vyžaduje změnu přístupu. David Kolář ukáže, jak rozpoznat strop, na který firma narazila, co je potřeba změnit a jak další růst ustát, aniž by firma spadla dolů."
+        ],
+        "takeaways": [
           "Proč se při růstu firmy CEO často dostávají do „údolí smrti“.",
           "Jak poznat, že firma narazila na svůj aktuální strop.",
           "Proč už dál nefunguje stejný způsob řízení jako doposud.",
@@ -668,7 +695,7 @@
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
               { "time": "10:45 - 11:15", "title": "Leonid Kushnir" },
               { "time": "11:15 - 11:45", "title": "Jan Plojhar" },
-              { "time": "11:45 - 12:15", "title": "Blanka Mrázková" },
+              { "time": "11:45 - 12:15", "title": "Přestaňte lidi motivovat", "meta": "Blanka Mrázková", "detail": "prestante-lidi-motivovat" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
               { "time": "13:15 - 13:45", "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?", "meta": "Patrik Čada", "detail": "tyrkysova-firma" },
               { "time": "13:45 - 14:15", "title": "Andrea Bílá" },
