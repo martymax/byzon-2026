@@ -116,14 +116,24 @@ test('participant reserves the available place and downloads the Prague-time age
     'active',
     { timeout: 20_000 },
   );
-  const syntheticBootstrap = await page.evaluate(async (sessionKey) => {
+  const syntheticSession = await page.evaluate(async (sessionKey) => {
     window.sessionStorage.setItem(sessionKey, 'true');
-    const response = await fetch('/api/v1/me/bootstrap', {
+    const reset = await fetch('/__byzon/mock/participant-session', {
+      method: 'POST',
       headers: { 'x-byzon-mock-participant': 'active' },
     });
-    return { ok: response.ok, status: response.status };
+    const bootstrap = await fetch('/api/v1/me/bootstrap', {
+      headers: { 'x-byzon-mock-participant': 'active' },
+    });
+    return {
+      bootstrap: { ok: bootstrap.ok, status: bootstrap.status },
+      reset: { ok: reset.ok, status: reset.status },
+    };
   }, mockParticipantSessionKey);
-  expect(syntheticBootstrap).toEqual({ ok: true, status: 200 });
+  expect(syntheticSession).toEqual({
+    bootstrap: { ok: true, status: 200 },
+    reset: { ok: true, status: 204 },
+  });
 
   await page
     .getByRole('navigation', { name: 'Hlavní navigace' })

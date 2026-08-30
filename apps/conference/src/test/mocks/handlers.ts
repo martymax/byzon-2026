@@ -1168,6 +1168,16 @@ const parseMockActivationLink = (
 export const mockHandlers: readonly RequestHandler[] = Object.freeze([
   ...adminMockHandlers,
   ...checkinMockHandlers,
+  http.post('*/__byzon/mock/participant-session', ({ request }) => {
+    if (request.headers.get('x-byzon-mock-participant') !== 'active') {
+      return new HttpResponse(null, { status: 404 });
+    }
+    resetMockActivationState();
+    resetMockIdentityState();
+    resetMockAgendaState();
+    configureMockParticipantFromRequest(request);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get('*/api/v1/activation', () =>
     mockJsonResponse(
       activationLandingResponseSchema,

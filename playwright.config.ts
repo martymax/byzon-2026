@@ -10,9 +10,8 @@ export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
   fullyParallel: true,
-  // Stateful browser mocks back the same mutation journeys in every viewport.
-  // Run those journeys sequentially so one viewport cannot mutate another.
-  workers: 1,
+  // Keep cold route compilation responsive on four-core CI runners.
+  workers: 3,
   retries: 0,
   use: { baseURL: 'http://127.0.0.1:3000', trace: 'retain-on-failure' },
   projects: targetViewports.map(({ id, label, width, height }) => ({
