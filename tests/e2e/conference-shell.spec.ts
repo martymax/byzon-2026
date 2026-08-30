@@ -131,14 +131,23 @@ test('participant reserves the available place and downloads the Prague-time age
   await page.setExtraHTTPHeaders({
     'x-byzon-mock-participant': 'active',
   });
-  // Start on a public route so no protected resource can race the synthetic
-  // session bootstrap with a stale authentication failure.
-  await page.goto('/');
+  // Warm the browser mock runtime, then leave the protected layout. Returning
+  // through browser history is a client navigation, so protected reads cannot
+  // escape to the real dev endpoint during a document-level MSW bootstrap.
+  await page.goto('/app/program');
+  await expect(
+    page.getByRole('heading', { name: 'Program', level: 1 }),
+  ).toBeVisible();
   await expect(page.locator('#byzon-mock-mode-indicator')).toHaveAttribute(
     'data-state',
     'active',
     { timeout: 20_000 },
   );
+  await page.getByRole('link', { name: 'BYZON – přihlášení' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole('heading', { name: 'Přihlaste se do BYZON' }),
+  ).toBeVisible();
   const syntheticSession = await page.evaluate(async (sessionKey) => {
     window.sessionStorage.setItem(sessionKey, 'true');
     const reset = await fetch('/__byzon/mock/participant-session', {
@@ -177,7 +186,8 @@ test('participant reserves the available place and downloads the Prague-time age
     reset: { ok: true, status: 204 },
   });
 
-  await page.goto('/app/program');
+  await page.goBack();
+  await expect(page).toHaveURL(/\/app\/program$/);
   await expect(
     page.getByRole('heading', { name: 'Program', level: 1 }),
   ).toBeVisible();
