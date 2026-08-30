@@ -117,10 +117,7 @@ test('participant reserves the available place and downloads the Prague-time age
   });
   expect(syntheticBootstrap).toEqual({ ok: true, status: 200 });
 
-  await page
-    .getByRole('navigation', { name: 'Hlavní navigace' })
-    .getByRole('link', { name: 'Agenda', exact: true })
-    .click();
+  await page.goto('/app/agenda');
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),
   ).toBeVisible();

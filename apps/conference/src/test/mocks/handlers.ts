@@ -480,8 +480,28 @@ export const configureMockParticipantPrincipal = (options: {
   }
 };
 
+const mockParticipantSessionKey = 'byzon.mock.participant.active';
+
+const persistedMockParticipantIsActive = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(mockParticipantSessionKey) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const configureMockParticipantFromRequest = (request: Request): void => {
-  if (request.headers.get('x-byzon-mock-participant') === 'active') {
+  const explicitlyActive =
+    request.headers.get('x-byzon-mock-participant') === 'active';
+  if (explicitlyActive && typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(mockParticipantSessionKey, 'true');
+    } catch {
+      // Synthetic preview still works for the current document without storage.
+    }
+  }
+  if (explicitlyActive || persistedMockParticipantIsActive()) {
     configureMockParticipantPrincipal({ active: true });
   }
 };
