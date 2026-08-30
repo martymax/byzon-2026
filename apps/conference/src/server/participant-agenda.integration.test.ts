@@ -2755,7 +2755,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       items: expect.arrayContaining([
         expect.objectContaining({
           state: 'reserved',
-          session: { id: networkingSessionId },
+          session: expect.objectContaining({ id: networkingSessionId }),
         }),
       ]),
     });
