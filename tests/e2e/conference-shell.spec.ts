@@ -107,10 +107,9 @@ test('participant reserves the available place and downloads the Prague-time age
   await page.setExtraHTTPHeaders({
     'x-byzon-mock-participant': 'active',
   });
-  await page.goto('/app/program');
-  await expect(
-    page.getByRole('heading', { name: 'Program', level: 1 }),
-  ).toBeVisible();
+  // Start on a public route so no protected resource can race the synthetic
+  // session bootstrap with a stale authentication failure.
+  await page.goto('/');
   await expect(page.locator('#byzon-mock-mode-indicator')).toHaveAttribute(
     'data-state',
     'active',
@@ -153,6 +152,11 @@ test('participant reserves the available place and downloads the Prague-time age
     bootstrap: { ok: true, status: 200 },
     reset: { ok: true, status: 204 },
   });
+
+  await page.goto('/app/program');
+  await expect(
+    page.getByRole('heading', { name: 'Program', level: 1 }),
+  ).toBeVisible();
 
   await page
     .getByRole('navigation', { name: 'Hlavní navigace' })
