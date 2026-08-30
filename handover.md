@@ -1,5 +1,167 @@
 # BYZON 2026 – handover
 
+## Autoritativní navázání – SimpleShop API (`P0-02` / `P4-02`, 30. 8. 2026)
+
+Tato sekce je novější než starší stavové poznámky níže a má při konfliktu
+přednost.
+
+### Stav implementace `P4-02`
+
+- Read-only discovery a implementace `P0-02`/`P4-02`/`F4-02` jsou dokončené
+  na větvi `agent/p4-02-simpleshop-preview` v
+  [PR #30](https://github.com/martymax/byzon-2026/pull/30). Aktuální uživatelské
+  zadání výslovně povoluje commit, push, PR a merge tohoto řezu bez dalších
+  mezischválení; zákaz zápisu/apply v SimpleShopu zůstává absolutní.
+- Produkční adapter provádí jen dva allowlistované HTTPS `GET`: produkt
+  `143958` a `export/who-bought` se `strict=1`. Redirecty, jiný host/metoda,
+  další pagination metadata, nevalidní envelope, překročený timeout/byte/row
+  limit, nejednoznačná quantity a duplicity failují zavřeně.
+- Admin POST nejdřív ověřuje exact Origin, Better Auth session, current event a
+  `ticket:any:manage`, poté aplikuje dedikovaný Redis rate limit a teprve potom
+  čte SimpleShop. Odpověď i audit jsou private/no-store a bez PII/raw kódu.
+- Preview ukládá pouze stabilní ticket/order ID, zdrojový stav a sanitizovaný
+  diff do staging batch/rows. Nemění `tickets`, nevytváří HMAC z kódu a pro
+  SimpleShop zdroj nikdy nezpřístupní apply.
+- Security/code review opravil bounded stream čtení requestu i rozbalené HTTP
+  odpovědi, deadline přes celé streamované tělo, přesný JSON media type, limit
+  délky externích ID a explicitní `unknown/unapproved` místo domnělého mapování
+  pending/storno/refund. Finální review nemá otevřený actionable nález.
+
+### Sanitizovaný výsledek discovery
+
+- Oficiální kontrakt a staging potvrdily
+  `GET /2.0/product/143958/` a
+  `GET /2.0/export/who-bought/product/143958/?strict=1`.
+- Produkt je ticket type `9`, není archivovaný/testovací a form key `0MnNQ`
+  odpovídá `code` i `script_iframe`. Skutečné `id`/`type` jsou numeric strings,
+  přestože OpenAPI uvádí integer.
+- Export je přesně `{csv: string}`, UTF-8, středník a 35 sloupců. OpenAPI ani
+  odpověď nemají page/limit/cursor/next; adapter proto dovoluje právě jednu
+  stránku. Aktuální `strict=1` a `strict=0` byly shodné, což se nepovažuje za
+  obecný příslib.
+- 137 datových řádků obsahovalo 67 unikátních ticket řádků a 70 souhrnných
+  řádků. Ticket řádky: 63 uhrazeno, 3 neuhrazeno, 1 storno, vždy quantity 1.
+  Čtyři souhrnné řádky měly quantity 2; tickety jsou už rozbalené po jednom.
+  Stabilní per-ticket klíč je `ID vstupenky`, `ID dokladu` je opakované order
+  ID; celkem bylo 53 objednávek.
+- Voucher pole nebylo přítomné. Všech 67 ticket kódů bylo unikátních, 6 bytů,
+  jen číslice/velká ASCII písmena; žádná raw hodnota nebyla vypsána ani
+  uložena. Refund nebyl přítomen.
+- Pouze `Uhrazeno` je kandidát `active` v preview. `Neuhrazeno`, `STORNO`,
+  refund a nový stav zůstávají bez schváleného apply mapování. `TKT-01` je
+  uzavřen; `TKT-02` a `TKT-04` zůstávají otevřené pro `P4-03`/claim.
+
+### Ověření před publikací
+
+- Po finálním `git fetch --prune` jsou výchozí `HEAD` a `origin/main` shodné na
+  `346836a1a37feb8fad0604fc6b34590ab34148fb` (`0/0` divergence).
+- Typecheck prošel pro conference, config, domain a test-support; ESLint nad
+  celým dotčeným source a discovery skriptem i repository Prettier check jsou
+  zelené.
+- Domain testy prošly 177/177, config 26/26, test-support 37/37 a conference
+  server/unit 502/502. Cílená admin browser sada prošla 45/45 ve třech
+  viewports.
+- Nový PostgreSQL integrační test pro staging batch/rows/audit a nulovou mutaci
+  `tickets` je lokálně očekávaně přeskočen bez `TEST_DATABASE_URL`; plný běh
+  provede CI. Nevznikla migrace ani nová tabulka.
+
+### Kde pokračovat
+
+- Nepracovat v kořenovém checkoutu
+  `/Users/martymax/Můj disk/Development/jci/Byzon/byzon-2026`: jeho `main` je
+  19 commitů za `origin/main` a obsahuje cizí rozpracované změny.
+- Autoritativní pracovní klon je
+  `/Users/martymax/Můj disk/Development/jci/Byzon/byzon-2026/.codex-work-p5-04`.
+  Výchozí stav před implementací měl proti čistému sledovanému `main` pouze
+  připravenou změnu `handover.md`; tehdejší HEAD i `origin/main` byly
+  `346836a1a37feb8fad0604fc6b34590ab34148fb`. Záměrně ignorovat lokální
+  untracked `node_modules` adresáře; nikdy je nestagovat.
+- Poslední plný `main` CI je zelený:
+  <https://github.com/martymax/byzon-2026/actions/runs/33323716467>.
+
+### Oprávnění a bezpečnostní hranice
+
+- Uživatel výslovně potvrdil read-only SimpleShop API discovery ve stagingu
+  nad aktuálními daty. Jsou povoleny pouze bezpečné HTTP `GET` požadavky.
+- Neprovádět import apply ani žádnou změnu v SimpleShopu. Nepoužívat
+  `POST`/`PUT`/`PATCH`/`DELETE`, webhook, polling ani změnu produktu/formuláře.
+- API klíč, Basic Authorization, raw ticket/voucher kódy a PII nikdy
+  nevypisovat do terminálu, logu, auditu, reportu, chatu ani repozitáře.
+  Discovery výstup musí být agregovaný a sanitizovaný: názvy polí, typy,
+  počty, statusy, délky/znakové třídy a případně krátké nevratné hashe.
+- Staging secrets jsou uživatelem nastavené v Railway službě
+  `@byzon/conference` (nikoli `conference/web`) pod názvy
+  `SIMPLESHOP_API_EMAIL` a `SIMPLESHOP_API_KEY`. Hodnoty nečíst ani
+  nezobrazovat. Přítomnost lze bezpečně ověřit například přes výpis pouze
+  klíčů JSON, nikoli přes nezpracovaný `railway variables` výstup.
+- `~/.codex/config.toml` nově obsahuje `sandbox_mode = "workspace-write"` a
+  `[sandbox_workspace_write] network_access = true`. V nové Codex konverzaci
+  Railway CLI funguje; předchozí chat měl oprávnění zafixované bez DNS.
+
+### Potvrzené integrační údaje
+
+- Railway projekt: `Byzon 2026`; prostředí: `staging`; webová služba:
+  `@byzon/conference`.
+- SimpleShop produkt: `Konference BYZON 2026 - Regular Bird`.
+- Číselné/API ID produktu: `143958`.
+- Veřejný form key: `0MnNQ`.
+- Produkt/form URL: <https://form.simpleshop.cz/0MnNQ/>; checkout:
+  <https://form.simpleshop.cz/0MnNQ/buy/>.
+- API základ podle ADR-015: `https://api.simpleshop.cz/2.0/`; autentizace je
+  HTTP Basic, username je přihlašovací e-mail a password API klíč. Produkční
+  kód musí host allowlistovat a credentials musí zůstat výhradně na serveru.
+- Autoritativní rozhodnutí je v `docs/adr/015-simpleshop-api-sync.md`.
+  Relevantní plán: `P0-02`, `P4-02`, `F4-02`, `F4-03` a blockery
+  `BLOCKER-TKT-01`, `BLOCKER-TKT-02`, `BLOCKER-TKT-04`.
+
+### Lokální export – pouze pomocný read-only cross-check
+
+- Soubor
+  `/Users/martymax/Downloads/Vyfakturuj.cz%20export%202026-08-01%20-%202026-08-31%20enjoit-s-r-o.json`
+  byl už jednou přečten lokálně a nesmí se kopírovat do repozitáře.
+- Obsahuje skutečná osobní data a aktivní voucher identifikátory.
+- Má 5 záznamů, všechny placené; potvrzuje `X_vfproductid=143958`.
+- Vzorek obsahuje 0 nezaplacených, 0 stornovaných, 0 refundovaných a 0 položek
+  s množstvím větším než 1. Tři faktury mají více řádkových položek, ale žádná
+  položka nemá quantity > 1. Je v něm pět voucher ID, po jednom na produktový
+  záznam.
+- Tento export proto nestačí k uzavření mapování pending/storno/refund ani
+  více kusů. Slouží jen k lokálnímu porovnání již sanitizovaných agregátů.
+
+### Provedený postup (audit trail původního zadání)
+
+Následující body byly v tomto workstreamu provedeny; zůstávají zde jako
+bezpečnostní evidence, nikoli jako nový backlog:
+
+1. `cd` do `.codex-work-p5-04`; spustit `git status --short --branch`,
+   `git fetch --prune` a znovu ověřit `HEAD`/`origin/main`. Cizí změny
+   neupravovat.
+2. Spustit `railway status --json` a ověřit projekt/prostředí/službu.
+   Přítomnost secrets ověřit jen přes názvy, například bezpečnou projekcí
+   `railway variables --service '@byzon/conference' --json | jq -r
+   'keys[] | select(startswith("SIMPLESHOP_"))'`. Nikdy nepouštět nezpracovaný
+   výpis hodnot do zachyceného outputu.
+3. Z aktuální oficiální dokumentace určit přesné read endpointy pro produkt a
+   export „Kdo koupil“, pagination, limity a response envelope. Nic
+   nedovozovat podle názvu; skutečný staging response musí mapping potvrdit.
+4. Připravit malý server-side/CLI discovery program s allowlistovaným HTTPS
+   hostem, Basic Auth z env, krátkým timeoutem, bounded pagination/record
+   limitem a pouze `GET`. Program smí vytisknout jen sanitizované schema a
+   agregáty, nikdy raw response.
+5. Spustit jej přes `railway run --service '@byzon/conference' ...`, aby použil
+   staging secrets bez jejich kopírování. Ověřit produkt `143958` a zjistit
+   přesné stabilní externí ID, form/product vazbu, status/flags, quantity a
+   ticket/voucher pole. Pokud aktuální data neobsahují všechny stavy, výslovně
+   je ponechat otevřené; nehádat mapování.
+6. Výsledek zapsat do ADR/plánu bez PII. Potom implementovat `P4-02` serverový
+   `SimpleShopTicketSourceAdapter` a adminem spouštěný sanitizovaný preview bez
+   apply, s negativními testy pro jiný host, non-GET, timeout, pagination
+   overflow, malformed payload a credential/code redaction.
+7. Před uzavřením změn provést security review, code review, zapracovat nálezy
+   a spustit relevantní testy/CI. Dřívější uživatelovo široké schválení práce
+   na plánu neopravňuje k žádnému zápisu do SimpleShopu; pro tuto fázi platí
+   explicitně read-only discovery a žádný apply.
+
 > Poslední aktualizace: 21. srpna 2026
 
 ## Pokyny pro pokračování

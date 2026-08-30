@@ -1,10 +1,10 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.16 – publication refresh pod agenda lockem
+> Stav: implementační plán v6.26 – SimpleShop read-only preview
 >
 > Datum sestavení: 20. července 2026
 >
-> Poslední revize: 20. srpna 2026
+> Poslední revize: 30. srpna 2026
 >
 > Cílový repozitář: `martymax/byzon-2026`
 >
@@ -277,7 +277,7 @@ Vlákna, která nepřinesla uzavřené produktové rozhodnutí, jsou vypořádá
 | `AAACFfwvgXI` | Právní revize se provede po potvrzení v6 scope; zůstává `BLOCKER-LEGAL-01`. |
 | `AAACFfwvgXE` | Počet vstupů, obsluha, zařízení, vlastník jmenovek, moderátoři a oprávnění k oznámením nejsou potvrzené; zůstává `BLOCKER-OPS-01`. |
 | `AAACD524HcI` | Žádost o posouzení ochrany údajů neobsahuje rozhodnutí; je evidovaná pod `BLOCKER-LEGAL-01`. |
-| `AAACD524HcE` | Přístupy do SimpleShopu byly předány; ADR-015 potvrdil API sync na vyžádání, ale read-only response mapping, statusy a source-code test vectors čekají na `BLOCKER-TKT-01`, `02` a `04`. |
+| `AAACD524HcE` | Přístupy do SimpleShopu byly předány a read-only discovery 30. 8. 2026 uzavřelo endpoint/envelope/ID/quantity část `BLOCKER-TKT-01`. Apply mapování pending/storno/refund a bezpečnost source kódu zůstávají v `TKT-02` a `TKT-04`. |
 | `AAACD524HbA` | 48h session byla navržena a je implementovaným technickým baseline (`expiresIn=48 h`, `updateAge=24 h`), nikoli potvrzením kontinuity od pozvánky do akce; finální politika zůstává v `BLOCKER-AUTH-02`. |
 
 Vyřešené testovací vlákno `AAACDoE25qA` ověřovalo pouze viditelnost komentářů
@@ -673,7 +673,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started`; hotový je pouze bezpečný status-only subset bez credentialu |
 | `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-06`, `F3` | `F3`, `F6` | `partially integrated`: private live read, add/remove, conflict, atomická rezervace, participant cancel, osobní ICS, automatické FIFO, dvě source-verified coaching řady a administrátorsky konfigurovaný networking jsou produkčně napojené; zbývá sdílená mastermind skupina dle ADR-014 |
-| `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `contract ready`; vendor-neutral staging, diff, immutable apply a report; produkční SimpleShop zdroj bude server-only API dle ADR-015 |
+| `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `partially integrated`: produkční server-only SimpleShop GET adapter a autorizované sanitizované preview jsou live bez apply; historický vendor-neutral apply zůstává jen mocked a `P4-03` čeká na `TKT-02`/`TKT-04` |
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `contract ready`; maskované hledání a verzované reasoned/idempotentní akce s auditem |
 | `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | `P6-01` až `P6-06`, `F5` | `F5` | `contract ready`; online-only bootstrap, lookup/search, confirm, undo a stats |
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
@@ -1339,7 +1339,7 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 | Agenda a rezervace v6 | `partially integrated` | Live agenda podporuje add/remove, konflikty, atomickou rezervaci, participant cancel, automatické FIFO, privátní osobní `.ics`, 26 source-verified coaching sessions a administrátorem konfigurovanou rezervaci řízeného networkingu. | Dokončit jednu sdílenou rezervaci obou částí sobotního mastermindu podle ADR-014. |
 | Vstupenka účastníka | `UI ready (mocked)` | `F2-04`: dokončený status-only mocked UI řez nad striktním privátním/no-store kontraktem, validovanými fixtures a typed API portem; prezentační union přijímá pouze bezpečný unavailable stav a `F2-07` jej zpřístupnil z hubu `Více` | úplný `CS-TICKET-01`, skutečný `/me/ticket`, `P4-12` a available credential blokuje `BLOCKER-TKT-05` |
 | Offline čtení | `UI ready (mocked)` | `F6-01` až `F6-05`: versionovaný service worker, atomický public cache/rollback, last-updated/stale UX a owner/event-scoped osobní IndexedDB/queue s wipe, lease, epoch a fail-closed replay. Veřejný slice je použitelný; osobní cache/replay jsou v produkčním režimu vypnuté bez autoritativního owner lease. | `P7` a skutečný owner-lease/replay server pro integraci; fyzické PWA/UAT zůstává v `F6-06` až `F6-08` |
-| Import a support | `UI ready (mocked)` | `F4-02` až `F4-05`: canonical vendor-neutral staging/diff/immutable apply/report a maskované support vyhledání s reasoned/idempotentními akcemi, přesnou korelací a auditem. | `TKT-01`/`TKT-02` prod API mapping/apply, `P4`/`P9` autorizované endpointy; sync kanál uzavírá ADR-015 |
+| Import a support | `partially integrated` | `P4-02`/`F4-02` napojily autorizovaný admin POST na server-only SimpleShop adapter, který provádí pouze bounded allowlistované GET, ukládá sanitizovaný staging batch a vrací diff bez raw kódu/PII a bez apply. Vendor-neutral apply/report a support UI zůstávají mocked. | `TKT-02`/`TKT-04` a `P4-03` pro apply/claim; `P9` pro produkční support endpointy |
 | Check-in | `UI ready (mocked)` | `F5-01` až `F5-06`: samostatný online-only operator shell, camera/manual/search lookup, úplné outcome stavy, confirm, přesný retry, auditované undo a stats nad `CS-CHECKIN-01`. | `P6`, `TKT-04` source kód, `TKT-05` jen app credential a `OPS-*` pro provozní UAT |
 | Admin Priority A v6 | `UI ready (mocked)` | `F4-10` odstranil attendance permission/actions/state/UI, přejmenoval roli, zúžil announcement severity/audience a zachoval rezervace, audit, settings i minimální organizační export. | `P5`/`P8`/`P9` a capability endpointy |
 | Roster vedoucího aktivity | `integrated` | `P5-08` napojil připravené `/host/aktivity` na autorizovaný `CS-ROSTER-01` list a detail. Server přijímá scope jen z aktivní `room_operator` role, promítá aktivní rezervace/FIFO čekání včetně networkingu s nastavenou kapacitou a profilové jméno/firmu, omezuje dotazy i DTO a nevrací telefon, e-mail, user/ticket ID, attendance ani export. | Finální přiřazení osob v `BLOCKER-OPS-01`. |
@@ -1419,10 +1419,11 @@ Fáze 2026 musí minimálně dodat provozní fallback mimo běžný online flow:
 ### 15.1 SimpleShop
 
 Podle [ADR-015](docs/adr/015-simpleshop-api-sync.md) je SimpleShop výhradně
-serverová implementace `TicketSourceAdapter` nad API. Produkční synchronizace
-nepoužívá CSV/XLSX export, plánovaný polling ani webhook. Oprávněný organizátor
-ji spustí na vyžádání; read-only fetch připraví staging a diff a až samostatné
-explicitní potvrzení s důvodem provede idempotentní apply.
+serverová implementace `TicketSourceAdapter` nad API. Produkční preview
+nepoužívá ruční CSV/XLSX upload, plánovaný polling ani webhook. Oprávněný
+organizátor jej spustí na vyžádání; `P4-02` připraví pouze staging a diff bez
+apply. Samostatný `P4-03` smí přidat apply teprve po uzavření `TKT-02` a
+relevantní části `TKT-04`.
 
 Frontend nezná Basic Authorization, vendorové endpointy ani význam zdrojových
 statusů; pracuje jen s kanonickými DTO, validačními chybami a diffem. API e-mail
@@ -1431,12 +1432,20 @@ UI vyvíjet nad syntetickými fixtures před produkční discovery. Takové UI s
 dosáhnout nejvýše stavu `UI ready (mocked)`; produkční apply a aktivace čekají
 na příslušný integrační gate.
 
-API sync pipeline:
+Ověřený `P4-02` používá `GET /2.0/product/143958/` a
+`GET /2.0/export/who-bought/product/143958/?strict=1`. Export má jediný JSON
+envelope `{csv}`, žádný dokumentovaný ani pozorovaný cursor/page parametr a
+stabilní per-ticket `ID vstupenky`; `ID dokladu` je opakované ID objednávky.
+Detaily sanitizovaného discovery a přesné počty jsou v ADR-015.
+
+API sync pipeline (body 1–6 je implementované preview, 7–10 budoucí apply):
 
 1. adminem spuštěný bounded read-only fetch ze SimpleShop API;
 2. striktní schema/pagination validace a staging bez změny ticketů;
-3. přesné mapování stabilního externího ID, kusů, statusu a opaque kódu;
-4. výpočet HMAC z přesných UTF-8 bytů bez trim/case/Unicode normalizace;
+3. přesné mapování stabilního externího ID, kusů a statusu; raw opaque kód se
+   po in-memory validaci zahodí;
+4. výpočet HMAC z přesných UTF-8 bytů bez trim/case/Unicode normalizace až v
+   budoucím schváleném apply/claim řezu;
 5. validační report: duplicity v odpovědi/DB, chybějící kód/stav a neznámý stav;
 6. preview diffu: new/unchanged/status changed/conflict;
 7. explicitní potvrzení adminem s čerstvou preview verzí a důvodem;
@@ -1450,16 +1459,14 @@ ani serverový adapter jej nesmí trimovat, měnit velikost písmen nebo jinak
 normalizovat. Mock data používají pouze zjevně syntetické kódy a nesmějí se
 dostat do produkčního bundlu.
 
-Absence API secrets a read-only discovery blokuje pouze produkční mapování, význam statusů,
-apply/synchronizaci, bezpečnost claimu a případný offline manifest. Neblokuje
-sdílené kontrakty, fixture validaci, komponenty, navigaci, formulářové stavy ani
-mockované frontendové uživatelské cesty `F0`–`F6`.
+API secrets, product/form binding a read-only preview jsou ověřené. Otevřené
+významy stavů a bezpečnost source kódu blokují apply, claim a případný offline
+manifest, nikoli sanitizované admin preview.
 
-Před produkčním apply doplnit z read-only discovery:
+Před produkčním apply doplnit:
 
-- stabilní externí ID a ID BYZON produktů/prodejních formulářů;
-- význam stornované/vrácené/nezaplacené vstupenky;
-- způsob více vstupenek v jedné objednávce;
+- schválený význam stornované/vrácené/nezaplacené vstupenky; refund v aktuálním
+  datasetu nebyl;
 - zda API vrací e-mail konkrétního účastníka nebo jen kupujícího;
 - reálné source-code test vectors pro `TKT-04`.
 
@@ -1795,9 +1802,11 @@ fixtures.
 **Cíl:** odstranit nebezpečné nejasnosti a připravit měřitelný základ bez zásahu do veřejného webu.
 
 - [x] `P0-01` Založit `docs/adr/` a převést ADR-001 až ADR-012 do samostatných krátkých záznamů.
-- [~] `P0-02` Provést read-only SimpleShop API discovery a popsat odpovědi pro
-  zaplaceno, čeká na platbu, storno, refund a více kusů. Směr API, Basic Auth a
-  ruční sync uzavírá ADR-015; discovery čeká na secrets a BYZON product/form IDs.
+- [x] `P0-02` Read-only SimpleShop API discovery ověřilo produkt `143958`, form
+  `0MnNQ`, přesné GET endpointy, `{csv}` envelope bez pagination parametrů,
+  stabilní ticket/order ID, pending/storno a rozbalení více kusů. Refund v
+  aktuálních datech nebyl a jeho apply mapování zůstává explicitně otevřené v
+  `BLOCKER-TKT-02`; sanitizované důkazy jsou v ADR-015.
 - [ ] `P0-03` Potvrdit cílový hosting/deploy veřejného `byzon.cz` a způsob triggeru rebuildu.
 - [x] `P0-04` Kapacity, cutoff, participant cancel, automatické FIFO,
   administrátorské nastavení kapacity networkingu a jedna sdílená rezervace
@@ -2284,10 +2293,10 @@ záměrně odmítá historické offer/TTL stavy.
 - [x] `F4-01` Sjednotit adaptivní admin shell: desktop sidebar, úzká
   navigace, role/scope guard, breadcrumbs a návrat z detailu bez druhé
   paralelní navigační soustavy.
-- [~] `F4-02` Historický vendor-neutral staging UI přijímá CSV/XLSX fixture.
-  Při integraci `P4-02` nahradit vstup SimpleShopu akcí „Načíst ze
-  SimpleShopu“, průběhem serverového API fetch a bezpečným retry; SimpleShop
-  file upload nebude produkční cesta. Diff a apply UI se znovu použijí.
+- [x] `F4-02` Produkční vstup SimpleShopu je akce „Načíst ze SimpleShopu“ s
+  request fencingem, průběhem serverového API fetch a sanitizovaným diffem.
+  SimpleShop file upload ani apply nejsou produkční cestou `P4-02`; historický
+  vendor-neutral file/apply flow zůstává jen pro syntetické testy `F4-04`.
 - [x] `F4-03` Implementovat staging validation a diff preview
   new/unchanged/status changed/conflict s filtrem, souhrnem a dostupnou
   tabulkou i úzkým card zobrazením.
@@ -2446,18 +2455,20 @@ mockovaná frontendová cesta.
 
 ### Etapa 4 – vstupenky, import, claim a obnova přístupu
 
-**Závislost:** `BLOCKER-TKT-01`/`TKT-02` blokují produkční API mapping a apply,
-`TKT-04` bezpečnost reálného claimu,
+**Závislost:** `BLOCKER-TKT-01` je uzavřen. `TKT-02` blokuje produkční apply,
+`TKT-04` bezpečnost apply/claimu,
 `BLOCKER-AUTH-01` vznik identity/session a `BLOCKER-TKT-05` pouze účastnický
 prezentační credential. `BLOCKER-AUTH-02` blokuje až produkční invitation/UAT
 kontinuity mezi odesláním odkazu a konferencí. Vendor-neutral kontrakty,
 fixtures a `F1`/`F4` mockované UI mohou pokračovat.
 
 - [~] `P4-01` Tickets/import schema, HMAC infrastruktura, test vectors a pepper rotation runbook. Schéma a rotační mechanismus jsou implementované bez raw kódu; produkční normalizér a bezpečnostní akceptace claimu čekají na `BLOCKER-TKT-04`.
-- [ ] `P4-02` Serverový SimpleShop API adapter a vendor-neutral
-  staging/validation/preview bez změny ticketů; `F4-02` a `F4-03` vlastní UI.
-  Síťové čtení spouští admin na vyžádání a nikdy samo neaplikuje změny.
-  Produkční endpoint/field mapping čeká na `TKT-01`/`TKT-02` discovery.
+- [x] `P4-02` Serverový SimpleShop API adapter a autorizované
+  staging/validation/preview bez změny ticketů. Síťové čtení spouští admin na
+  vyžádání; adapter allowlistuje HTTPS host/cesty, používá jen GET, bounded
+  response/řádky, timeout, safe retry a sanitizované persistence/DTO. Preview
+  nikdy nenabízí apply; pending/storno/refund mapování zůstává pro `P4-03`
+  fail-closed.
 - [ ] `P4-03` Transakční idempotentní apply a stavová historie.
 - [ ] `P4-04` Manual code claim doména a endpoint s lockem, rate limitem a
   generickými chybami; finální výstup identity/session čeká na
@@ -2951,9 +2962,9 @@ rozhodnutí ani souhlas s produkčním nasazením.
 | --- | --- | --- | --- | --- | --- |
 | BLOCKER-AUTH-01 | Pořadí a handshake ticket claimu, ověření identity, vytvoření session a event membership včetně přerušení/obnovení toku | `P4-04` výstup, `P4-07`, `F1` integrace | Produkt + tech lead + security | Před claim/session integrací | Dokončit kontrakty, fixtures a mockované UI; neověřený pending claim nesmí vytvořit membership, relaci ani práva. |
 | BLOCKER-AUTH-02 | Jak 48h session funguje s invitation odeslanou 11.–15. 9. a konferencí 18.–19. 9.: očekávaná opakovaná recovery, nebo event-bound prodloužení | `P4-15`, invitation UAT a go-live recovery kapacita | Produkt + tech lead + security | Před produkční invitation dávkou | Zachovat implementovaných 48 h/24 h a spolehlivý recovery flow; neslibovat, že jedno otevření odkazu před akcí udrží relaci až do konference. |
-| BLOCKER-TKT-01 | Read-only SimpleShop API discovery: přesné endpointy, pagination, response fields, stabilní externí ID a BYZON product/form IDs | Produkční API mapping/apply | Organizátor | `P4-02` produkční preview | Vložit vyhrazený API e-mail/klíč do secrets; do té doby kanonický staging kontrakt a mock preview bez prod apply. |
+| BLOCKER-TKT-01 (uzavřen 30. 8. 2026) | Read-only discovery ověřilo endpointy, nepřítomnost pagination parametrů, `{csv}` envelope, stabilní ticket/order ID a BYZON product `143958` / form `0MnNQ`. | — | Organizátor | `P4-02` produkční preview | Ověřený kontrakt je v ADR-015; změna envelope/hlaviček/ID failne zavřeně. |
 | BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno | Produkční ticket stavy/apply | Organizátor | `P4-03` prod apply | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat; UI stav otestovat fixturem. |
-| BLOCKER-TKT-04 | Entropie, formát a povolená normalizace zdrojových kódů | Reálný claim/offline check-in security | Organizátor + tech lead | Před `P4-04` integrací | Kód je opaque bez trim/case změn, HMAC storage; syntetické UI fixtures povolené, offline manifest disabled. |
+| BLOCKER-TKT-04 | Entropie, formát a povolená normalizace zdrojových kódů; discovery pozorovalo 67 unikátních šestibytových hodnot z číslic/velkých ASCII písmen, ale raw vectors neuložilo | Reálný apply/claim/offline check-in security | Organizátor + tech lead | Před `P4-03`/`P4-04` integrací kódu | Kód je opaque bez trim/case změn; `P4-02` jej po in-memory validaci zahodí. HMAC storage až po schváleném bezpečnostním rozhodnutí, offline manifest disabled. |
 | BLOCKER-TKT-05 | Formát, expirace, rotace a verifier skenovatelné účastnické vstupenky: podepsaný app credential vs bezpečně chráněný zdrojový kód | `F2-04` integrace, `P4-12` a pouze app-credential adapter/rehearsal v `P6-02` | Produkt + tech lead + security | Před integrací `/me/ticket` a UAT app credentialu | Zobrazit jen stav a suffix; HMAC není QR payload. Syntetický QR pouze dev/test. Source-ticket scan se řídí `TKT-04` nezávisle. |
 | BLOCKER-OPS-01 | Event-day RACI a kapacita: počet vstupů/zařízení/operátorů, špička, vlastník jmenovek, konkrétní moderátoři a osoby oprávněné odeslat kritické oznámení | P6 load/rehearsal, role assignments, P8 send UAT, P12 moderator UAT | Organizace | Před P6-10/P8 send/P12 UAT | Parametrizovaný load profil; send pouze admin seedem, questions feature off a žádné domnělé přiřazení osob. |
 | BLOCKER-OPS-02 | Nouzový check-in a autorita ručních záznamů | P6 gate | Organizace + tech lead | P6-08 runbook | Online autorita + exportní fallback. |
@@ -3168,9 +3179,9 @@ jsou zelené.
 
 1. Dokončit implementaci jedné sdílené rezervace, kapacity a rosteru obou částí
    sobotního mastermindu podle ADR-014; produktové rozhodnutí už není blocker.
-2. Otevřít `P4-02` read-only API discovery po instalaci SimpleShop secrets a
-   dodání BYZON product/form IDs; produkční mapping/apply až po uzavření
-   `TKT-01`, `TKT-02` a `TKT-04`.
+2. `P4-02` read-only SimpleShop preview je dokončené. Před `P4-03` schválit
+   pending/storno/refund mapování (`TKT-02`) a bezpečnost kódu/HMAC (`TKT-04`);
+   do té doby žádný apply.
 3. `P5-04`, `P5-07` a `P5-09` jsou dokončené; před UAT nastavit skutečnou
    networkingovou kapacitu v administraci a ověřit roster.
 4. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
@@ -3275,3 +3286,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.23 | 21. 8. 2026 | Kapacita rezervovatelné aktivity je samostatné session-level provozní nastavení v `/admin/rezervace`, nikoli konstanta nebo vlastnost konkrétní rezervace. Organizer ji může auditovaně a idempotentně změnit i před první rezervací; server odmítá hodnotu pod confirmed count, serializuje ji s participant rezervacemi a invaliduje dotčené snapshoty. Opakovaný import programu zachová administrátorskou hodnotu. Nový klient používá jen session-level endpoint; starý reservation-bound override zůstává přechodově podporovaný na původní cestě po jednu kompatibilní rollout fázi a smí se odstranit až po ověřené expiraci předchozího klientského/service-worker buildu. |
 | 6.24 | 26. 8. 2026 | Dokončena neblokovaná část `P5-11`: source/import regrese explicitně drží EB21 12, oba workshopy 20, 26 coaching slotů 1 a fail-closed networking/mastermind; existující PostgreSQL race a IDOR sada kryje poslední místo, coaching souběh, admin/participant mutace a cizí roster. Nový Playwright průchod na telefonu, tabletu a desktopu rezervuje dostupné místo, ověřuje zobrazení v `Europe/Prague` a privátní UTC/CRLF `.ics` download. FIFO/promotion a úspěšný networking zůstávají poctivě blokované `RES-04`/`RES-01`. |
 | 6.25 | 30. 8. 2026 | ADR-014 uzavřelo rezervační rozhodnutí a implementace dokončila `P5-04`/`P5-07`: jediná automatická FIFO promotion běží transakčně po participant/admin stornu i zvýšení kapacity, offer/TTL větev je odstraněná z kontraktu a UI a řízený networking dostává kladnou kapacitu auditovaně v administraci bez hardcoded hodnoty. ADR-015 mění produkční SimpleShop zdroj na server-only API fetch spuštěný administrátorem s odděleným preview/apply; CSV/XLSX export není produkční sync kanál. Zbývá implementovat sdílenou skupinu obou částí sobotního mastermindu a provést SimpleShop discovery po instalaci secrets a dodání product/form IDs. |
+| 6.26 | 30. 8. 2026 | Dokončeno `P0-02`/`P4-02`/`F4-02`: oficiální OpenAPI a read-only staging discovery ověřily produkt `143958`, form `0MnNQ`, přesné GET endpointy, `{csv}` envelope bez pagination parametrů, per-ticket/order ID, quantity a pozorované paid/unpaid/storno stavy. Server-only adapter, autorizované/rate-limitované admin preview a sanitizovaný staging batch nepersistují raw kód/PII a nemají apply cestu. `TKT-01` je uzavřen; refund a apply mapování i bezpečnost kódu zůstávají fail-closed v `TKT-02`/`TKT-04`. |

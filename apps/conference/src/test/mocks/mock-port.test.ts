@@ -57,7 +57,6 @@ import {
 } from '../../lib/identity-api.js';
 import {
   adminContextEndpoint,
-  createAdminTicketImportUploadPort,
   requestAdminContext,
   requestAdminOperationsOverview,
   requestAdminReservations,
@@ -65,6 +64,7 @@ import {
   requestAdminSessionCapacityMutation,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
+  requestAdminTicketImportPreview,
 } from '../../lib/admin-api.js';
 import { adminFixtureIds } from '@byzon/test-support/fixtures/admin';
 import { createMockServer } from './node.js';
@@ -156,15 +156,11 @@ describe('MSW through the production API port', () => {
     });
   });
 
-  it('normalizes a safely sniffed empty-MIME CSV before the real multipart mock boundary', async () => {
-    const file = new File(
-      ['reference,state\nT001,active'],
-      'empty-browser-mime.csv',
+  it('loads a sanitized SimpleShop preview through the production API port', async () => {
+    const result = await requestAdminTicketImportPreview(
+      client,
+      adminFixtureIds.event,
     );
-
-    const result = await createAdminTicketImportUploadPort(
-      fetchWithOrigin,
-    ).preview(adminFixtureIds.event, file);
 
     expect(result).toMatchObject({
       ok: true,
@@ -172,9 +168,10 @@ describe('MSW through the production API port', () => {
       data: {
         eventId: adminFixtureIds.event,
         source: {
-          fileName: file.name,
-          mediaType: 'text/csv',
-          byteSize: file.size,
+          kind: 'simpleshop_api',
+          productId: 143_958,
+          formKey: '0MnNQ',
+          strict: true,
         },
       },
     });

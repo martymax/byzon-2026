@@ -8,9 +8,12 @@ import {
   type TicketImportPreviewResponse,
   type TicketImportRowStatus,
 } from '@byzon/domain/contracts/ticket-import';
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { requestAdminTicketImportApply } from '@/lib/admin-api';
+import {
+  requestAdminTicketImportApply,
+  requestAdminTicketImportPreview,
+} from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import {
@@ -57,14 +60,6 @@ type PendingApply = Readonly<{
   idempotencyKey: string;
 }>;
 
-const safeFileNameForDisplay = (fileName: string) =>
-  fileName
-    .replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '�')
-    .slice(0, 180);
-
-const fileFingerprint = (file: File): string =>
-  [file.name, file.type, file.size, file.lastModified].join('\u0000');
-
 const formatTicketState = (state: string | null): string =>
   state === null
     ? '—'
@@ -72,29 +67,37 @@ const formatTicketState = (state: string | null): string =>
       ? 'Aktivní'
       : state === 'blocked'
         ? 'Blokovaná'
-        : 'Zrušená';
+        : state === 'refunded'
+          ? 'Refundovaná'
+          : 'Zrušená';
+
+const sourceStatusLabels = {
+  paid: 'Uhrazeno',
+  unpaid: 'Neuhrazeno',
+  cancelled: 'Storno',
+  refunded: 'Refund',
+  unknown: 'Neznámý',
+} as const;
 
 export const AdminImportWorkspace = () => {
-  const { api, eventId, invalidateSensitive, uploadPort } = useAdminWorkspace();
+  const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const requestFence = useAdminRequestFence();
-  const selectedFileFingerprintRef = useRef<string | null>(null);
   const applyErrorSummaryRef = useRef<HTMLElement | null>(null);
-  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<TicketImportPreviewResponse | null>(
     null,
   );
   const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
   const [filter, setFilter] = useState<ImportFilter>('all');
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState<'upload' | 'apply' | null>(null);
+  const [busy, setBusy] = useState<'preview' | 'apply' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorScope, setErrorScope] = useState<'upload' | 'apply' | null>(null);
   const [attempted, setAttempted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState<PendingApply | null>(null);
   const [ambiguous, setAmbiguous] = useState(false);
-  const [uploadState, setUploadState] = useState<
-    'idle' | 'selected' | 'uploading' | 'validated' | 'error'
+  const [previewState, setPreviewState] = useState<
+    'idle' | 'loading' | 'validated' | 'error'
   >('idle');
 
   const visibleRows = useMemo(
@@ -125,32 +128,10 @@ export const AdminImportWorkspace = () => {
     }
   }, [applyValidationFailed, error, errorScope]);
 
-  const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0] ?? null;
-    requestFence.cancel('import-upload');
-    selectedFileFingerprintRef.current = selectedFile
-      ? fileFingerprint(selectedFile)
-      : null;
-    setBusy((current) => (current === 'upload' ? null : current));
-    setFile(selectedFile);
-    setUploadState(selectedFile ? 'selected' : 'idle');
-    setPreview(null);
-    setReport(null);
-    setPending(null);
-    setAmbiguous(false);
-    setError(null);
-    setErrorScope(null);
-    setAttempted(false);
-    setFilter('all');
-  };
-
-  const upload = async (staleMessage?: string) => {
-    if (!file) return;
-    const selectedFile = file;
-    const fingerprint = fileFingerprint(selectedFile);
-    const request = requestFence.begin('import-upload');
-    setBusy('upload');
-    setUploadState('uploading');
+  const loadPreview = async (staleMessage?: string) => {
+    const request = requestFence.begin('import-preview');
+    setBusy('preview');
+    setPreviewState('loading');
     setError(null);
     setErrorScope(null);
     setPreview(null);
@@ -158,17 +139,12 @@ export const AdminImportWorkspace = () => {
     setPending(null);
     setAmbiguous(false);
     try {
-      const result = await uploadPort.preview(
+      const result = await requestAdminTicketImportPreview(
+        api,
         eventId,
-        selectedFile,
         request.signal,
       );
-      if (
-        !request.isCurrent() ||
-        selectedFileFingerprintRef.current !== fingerprint
-      ) {
-        return;
-      }
+      if (!request.isCurrent()) return;
       if (!result.ok) {
         if (isAdminSecurityFailure(result)) {
           invalidateSensitive(
@@ -180,12 +156,12 @@ export const AdminImportWorkspace = () => {
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         setErrorScope('upload');
-        setUploadState('error');
+        setPreviewState('error');
         return;
       }
       if (result.kind === 'success') {
         setPreview(result.data);
-        setUploadState('validated');
+        setPreviewState('validated');
         setFilter('all');
         setReason('');
         setAttempted(false);
@@ -195,22 +171,14 @@ export const AdminImportWorkspace = () => {
         }
       }
     } catch {
-      if (
-        !request.isCurrent() ||
-        selectedFileFingerprintRef.current !== fingerprint
-      ) {
-        return;
-      }
+      if (!request.isCurrent()) return;
       setError(
-        'Soubor musí být neprázdný CSV nebo XLSX, mít odpovídající MIME typ a velikost nejvýše 10 MB.',
+        'SimpleShop preview se nepodařilo bezpečně načíst. Zkuste akci zopakovat.',
       );
       setErrorScope('upload');
-      setUploadState('error');
+      setPreviewState('error');
     } finally {
-      if (
-        request.isCurrent() &&
-        selectedFileFingerprintRef.current === fingerprint
-      ) {
+      if (request.isCurrent()) {
         request.finish();
         setBusy(null);
       }
@@ -250,7 +218,6 @@ export const AdminImportWorkspace = () => {
       if (isAdminSecurityFailure(result)) {
         setPending(null);
         setPreview(null);
-        setFile(null);
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -259,7 +226,7 @@ export const AdminImportWorkspace = () => {
       if (isStaleAdminFailure(result.failure)) {
         setPending(null);
         setAmbiguous(false);
-        await upload(
+        await loadPreview(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
@@ -286,73 +253,51 @@ export const AdminImportWorkspace = () => {
         <p className={styles.eyebrow}>F4 · bezpečný import</p>
         <h1>Import vstupenek</h1>
         <p>
-          Nahrajte CSV nebo XLSX, ověřte immutable staging diff a až poté
-          potvrďte dopad. Typ i obsah autoritativně ověřuje server.
+          Načtěte vstupenky serverovým read-only API spojením se SimpleShopem.
+          Preview je sanitizované a v tomto kroku nikdy neaplikuje změny.
         </p>
       </header>
 
       <section className={styles.panel} aria-labelledby="import-upload-title">
         <div className={styles.panelHeader}>
           <div>
-            <h2 id="import-upload-title">1. Soubor a serverová validace</h2>
+            <h2 id="import-upload-title">1. Read-only načtení a validace</h2>
             <p className={styles.muted}>
-              Soubor jde jako multipart; klient jej nepřevádí do base64.
+              Přístupové údaje zůstávají na serveru. SimpleShop obdrží pouze
+              allowlistované GET požadavky na produkt a export Kdo koupil.
             </p>
           </div>
-          <span className={styles.badge}>CSV / XLSX · max. 10 MB</span>
+          <span className={styles.badge}>SimpleShop · pouze GET</span>
         </div>
-        <label className={styles.field} htmlFor="admin-import-file">
-          <span>Zdrojový soubor</span>
-          <input
-            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            aria-describedby="admin-import-file-help"
-            disabled={busy === 'apply' || pending !== null}
-            id="admin-import-file"
-            onChange={selectFile}
-            type="file"
-          />
-          <span className={styles.helper} id="admin-import-file-help">
-            V mocked režimu lze scénář měnit názvem souboru: běžný, „conflict“,
-            „unknown“, „stale“ nebo „collision“.
-          </span>
-        </label>
-        {file ? (
-          <p>
-            Vybráno: <strong>{safeFileNameForDisplay(file.name)}</strong> ·{' '}
-            {file.size.toLocaleString('cs-CZ')} B
-          </p>
-        ) : null}
         <div className={styles.actionRow}>
           <button
             className={styles.button}
-            disabled={!file || busy !== null}
-            onClick={() => void upload()}
+            disabled={busy !== null || pending !== null}
+            onClick={() => void loadPreview()}
             type="button"
           >
-            {busy === 'upload'
-              ? 'Server validuje…'
-              : 'Vytvořit validované preview'}
+            {busy === 'preview'
+              ? 'SimpleShop se načítá…'
+              : 'Načíst ze SimpleShopu'}
           </button>
         </div>
         <div
-          aria-busy={uploadState === 'uploading'}
+          aria-busy={previewState === 'loading'}
           aria-live="polite"
           className={styles.progress}
           role="status"
         >
-          {uploadState === 'uploading' ? (
+          {previewState === 'loading' ? (
             <>
-              <progress aria-label="Nahrávání a serverová validace souboru" />
-              <span>Soubor se odesílá a server vytváří bezpečné preview…</span>
+              <progress aria-label="Read-only načítání SimpleShop preview" />
+              <span>Server načítá a sanitizuje SimpleShop preview…</span>
             </>
-          ) : uploadState === 'validated' ? (
-            <span>Soubor byl nahrán a serverové preview je připravené.</span>
-          ) : uploadState === 'error' ? (
-            <span>Nahrání nebo validace souboru selhaly.</span>
-          ) : uploadState === 'selected' ? (
-            <span>Soubor je vybraný a čeká na nahrání.</span>
+          ) : previewState === 'validated' ? (
+            <span>Sanitizované serverové preview je připravené.</span>
+          ) : previewState === 'error' ? (
+            <span>Načtení nebo validace SimpleShop dat selhaly.</span>
           ) : (
-            <span>Vyberte soubor k nahrání.</span>
+            <span>Načtení proběhne až po výslovném stisknutí tlačítka.</span>
           )}
         </div>
         {error && errorScope === 'upload' ? (
@@ -396,6 +341,41 @@ export const AdminImportWorkspace = () => {
               </strong>
             </div>
           </div>
+          {preview.source.kind === 'simpleshop_api' ? (
+            <div
+              className={styles.summaryGrid}
+              aria-label="Sanitizovaný souhrn SimpleShop zdroje"
+            >
+              <div className={styles.metric}>
+                <small>Zdroj / ticket řádky</small>
+                <strong>
+                  {preview.source.sourceRows} / {preview.source.ticketRows}
+                </strong>
+              </div>
+              <div className={styles.metric}>
+                <small>Souhrnné řádky / množství &gt; 1</small>
+                <strong>
+                  {preview.source.ignoredSummaryRows} /{' '}
+                  {preview.source.multipleQuantitySummaryRows}
+                </strong>
+              </div>
+              <div className={styles.metric}>
+                <small>Uhrazeno / neuhrazeno</small>
+                <strong>
+                  {preview.source.observedStatuses.paid} /{' '}
+                  {preview.source.observedStatuses.unpaid}
+                </strong>
+              </div>
+              <div className={styles.metric}>
+                <small>Storno / refund / neznámé</small>
+                <strong>
+                  {preview.source.observedStatuses.cancelled} /{' '}
+                  {preview.source.observedStatuses.refunded} /{' '}
+                  {preview.source.observedStatuses.unknown}
+                </strong>
+              </div>
+            </div>
+          ) : null}
           <label className={styles.field}>
             <span>Filtrovat řádky</span>
             <select
@@ -418,6 +398,7 @@ export const AdminImportWorkspace = () => {
                 <tr>
                   <th scope="col">Řádek</th>
                   <th scope="col">Účastník</th>
+                  <th scope="col">Zdrojový stav</th>
                   <th scope="col">Stav</th>
                   <th scope="col">Původní → nový</th>
                   <th scope="col">Poznámka</th>
@@ -434,6 +415,7 @@ export const AdminImportWorkspace = () => {
                         {row.maskedContact} · •{row.referenceSuffix}
                       </small>
                     </td>
+                    <td>{sourceStatusLabels[row.sourceStatus]}</td>
                     <td>
                       <span
                         className={`${styles.statusBadge} ${statusClass[row.status]}`}
@@ -478,6 +460,8 @@ export const AdminImportWorkspace = () => {
                       {formatTicketState(row.currentState)} →{' '}
                       {formatTicketState(row.incomingState)}
                     </dd>
+                    <dt>Zdrojový stav</dt>
+                    <dd>{sourceStatusLabels[row.sourceStatus]}</dd>
                     <dt>Poznámka</dt>
                     <dd>
                       {row.issues.map(({ message }) => message).join('; ') ||
@@ -490,65 +474,70 @@ export const AdminImportWorkspace = () => {
           </div>
           {!canApplyTicketImportPreview(preview) ? (
             <p className={styles.warning} role="alert">
-              Preview obsahuje konflikt nebo neznámý stav. Opravte zdroj a
-              nahrajte nový soubor; apply je fail-closed.
+              {preview.source.kind === 'simpleshop_api'
+                ? 'Toto je výhradně read-only SimpleShop preview. Apply není součástí P4-02 a server jej nenabízí.'
+                : 'Preview obsahuje konflikt nebo neznámý stav. Opravte zdroj; apply je fail-closed.'}
             </p>
           ) : null}
-          {applyValidationFailed || (error && errorScope === 'apply') ? (
-            <section
-              className={styles.errorSummary}
-              ref={applyErrorSummaryRef}
-              role="alert"
-              tabIndex={-1}
-            >
-              <h2>Apply zatím nelze potvrdit</h2>
-              <p id="admin-import-apply-error">
-                {error && errorScope === 'apply'
-                  ? error
-                  : 'Doplňte auditní důvod o nejméně 8 viditelných znaků.'}
-              </p>
-            </section>
-          ) : null}
-          <label className={styles.field} htmlFor="admin-import-reason">
-            <span>Auditní důvod</span>
-            <textarea
-              aria-describedby={
-                applyValidationFailed || errorScope === 'apply'
-                  ? 'admin-import-apply-error'
-                  : 'admin-import-reason-help'
-              }
-              aria-invalid={applyValidationFailed}
-              disabled={pending !== null}
-              id="admin-import-reason"
-              onChange={(event) => setReason(event.target.value)}
-              value={reason}
-            />
-            <span className={styles.helper} id="admin-import-reason-help">
-              Nejméně 8 viditelných znaků; důvod bude součástí auditu.
-            </span>
-          </label>
-          <button
-            className={styles.dangerButton}
-            disabled={!canPrepareApply || busy !== null || pending !== null}
-            onClick={prepareApply}
-            type="button"
-          >
-            Zkontrolovat a potvrdit apply
-          </button>
-          {ambiguous && pending ? (
-            <button
-              className={styles.secondaryButton}
-              disabled={busy !== null}
-              onClick={() => void submitPending(pending)}
-              type="button"
-            >
-              Zopakovat přesně stejný pokus
-            </button>
+          {preview.source.kind === 'file' ? (
+            <>
+              {applyValidationFailed || (error && errorScope === 'apply') ? (
+                <section
+                  className={styles.errorSummary}
+                  ref={applyErrorSummaryRef}
+                  role="alert"
+                  tabIndex={-1}
+                >
+                  <h2>Apply zatím nelze potvrdit</h2>
+                  <p id="admin-import-apply-error">
+                    {error && errorScope === 'apply'
+                      ? error
+                      : 'Doplňte auditní důvod o nejméně 8 viditelných znaků.'}
+                  </p>
+                </section>
+              ) : null}
+              <label className={styles.field} htmlFor="admin-import-reason">
+                <span>Auditní důvod</span>
+                <textarea
+                  aria-describedby={
+                    applyValidationFailed || errorScope === 'apply'
+                      ? 'admin-import-apply-error'
+                      : 'admin-import-reason-help'
+                  }
+                  aria-invalid={applyValidationFailed}
+                  disabled={pending !== null}
+                  id="admin-import-reason"
+                  onChange={(event) => setReason(event.target.value)}
+                  value={reason}
+                />
+                <span className={styles.helper} id="admin-import-reason-help">
+                  Nejméně 8 viditelných znaků; důvod bude součástí auditu.
+                </span>
+              </label>
+              <button
+                className={styles.dangerButton}
+                disabled={!canPrepareApply || busy !== null || pending !== null}
+                onClick={prepareApply}
+                type="button"
+              >
+                Zkontrolovat a potvrdit apply
+              </button>
+              {ambiguous && pending ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy !== null}
+                  onClick={() => void submitPending(pending)}
+                  type="button"
+                >
+                  Zopakovat přesně stejný pokus
+                </button>
+              ) : null}
+            </>
           ) : null}
         </section>
       ) : null}
 
-      {report ? (
+      {report && preview?.source.kind === 'file' ? (
         <section className={styles.success} role="status">
           <h2>
             {report.outcome === 'already_applied'
@@ -563,7 +552,7 @@ export const AdminImportWorkspace = () => {
         </section>
       ) : null}
 
-      {confirming && pending ? (
+      {confirming && pending && preview?.source.kind === 'file' ? (
         <AdminConfirmDialog
           acknowledgement="Ověřil/a jsem immutable preview, jeho verzi a uvedený dopad."
           confirmLabel="Aplikovat import"

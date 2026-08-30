@@ -21,12 +21,7 @@ import {
 
 import type { ApiPort } from '@/lib/api/endpoint';
 import { mayLeaveAdminContentDraft } from '@/lib/admin-content-dirty-guard';
-import {
-  browserAdminApi,
-  browserAdminTicketImportUpload,
-  requestAdminContext,
-  type AdminTicketImportUploadPort,
-} from '@/lib/admin-api';
+import { browserAdminApi, requestAdminContext } from '@/lib/admin-api';
 
 import { isAdminSecurityFailure } from './admin-workspace-runtime';
 import styles from './admin-workspace.module.css';
@@ -46,7 +41,7 @@ const navigation = [
   { href: '/admin', integrated: true, label: 'Přehled', section: 'overview' },
   {
     href: '/admin/vstupenky',
-    integrated: false,
+    integrated: true,
     label: 'Import vstupenek',
     section: 'import',
   },
@@ -225,7 +220,6 @@ export interface AdminWorkspaceValue {
   readonly permissions: readonly AdminPermission[];
   readonly assignedSessionIds: readonly string[];
   readonly securityEpoch: number;
-  readonly uploadPort: AdminTicketImportUploadPort;
   readonly refreshContext: () => void;
   readonly invalidateSensitive: (message?: string) => void;
 }
@@ -344,13 +338,11 @@ export const AdminWorkspaceShell = ({
   banner,
   children,
   environment = 'production',
-  uploadPort = browserAdminTicketImportUpload,
 }: {
   readonly api?: ApiPort;
   readonly banner?: ReactNode;
   readonly children: ReactNode;
   readonly environment?: 'production' | 'mocked';
-  readonly uploadPort?: AdminTicketImportUploadPort;
 }) => {
   const pathname = usePathname();
   const previousPathname = useRef(pathname);
@@ -433,18 +425,10 @@ export const AdminWorkspaceShell = ({
         ({ sessionId }) => sessionId,
       ),
       securityEpoch,
-      uploadPort,
       refreshContext,
       invalidateSensitive,
     };
-  }, [
-    effectiveApi,
-    invalidateSensitive,
-    refreshContext,
-    securityEpoch,
-    state,
-    uploadPort,
-  ]);
+  }, [effectiveApi, invalidateSensitive, refreshContext, securityEpoch, state]);
 
   const allowed =
     state.kind === 'ready' ? mayAccess(state.context, section) : false;

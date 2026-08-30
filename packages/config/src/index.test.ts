@@ -116,3 +116,32 @@ describe('conference authentication environment', () => {
     ).toThrow();
   });
 });
+
+describe('SimpleShop server environment', () => {
+  it('keeps credentials optional as a pair and server-only', () => {
+    expect(readConferenceEnv({}).SIMPLESHOP_API_EMAIL).toBeUndefined();
+    expect(() =>
+      readConferenceEnv({ SIMPLESHOP_API_EMAIL: 'api@example.test' }),
+    ).toThrow();
+    expect(
+      readConferenceEnv({
+        SIMPLESHOP_API_EMAIL: 'api@example.test',
+        SIMPLESHOP_API_KEY: 'test-only-key',
+      }),
+    ).toMatchObject({ SIMPLESHOP_API_EMAIL: 'api@example.test' });
+  });
+
+  it('allows the API base override only outside staging and production', () => {
+    expect(
+      readConferenceEnv({
+        SIMPLESHOP_API_BASE_URL: 'https://api.example.test/2.0/',
+      }).SIMPLESHOP_API_BASE_URL,
+    ).toBe('https://api.example.test/2.0/');
+    expect(() =>
+      readConferenceEnv({
+        ...stagingBase,
+        SIMPLESHOP_API_BASE_URL: 'https://api.example.test/2.0/',
+      }),
+    ).toThrow();
+  });
+});

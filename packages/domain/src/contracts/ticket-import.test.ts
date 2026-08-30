@@ -20,6 +20,7 @@ const ids = {
 } as const;
 
 const source = {
+  kind: 'file' as const,
   fileName: 'synthetic-tickets.csv',
   mediaType: 'text/csv' as const,
   byteSize: 4_096,
@@ -31,6 +32,7 @@ const newRow = {
   referenceSuffix: 'T001',
   displayName: 'Syntetický účastník',
   maskedContact: 's•••@example.test',
+  sourceStatus: 'paid' as const,
   status: 'new' as const,
   incomingState: 'active' as const,
   currentState: null,
@@ -43,6 +45,7 @@ const unchangedRow = {
   referenceSuffix: 'T002',
   displayName: 'Testovací návštěvník',
   maskedContact: 't•••@example.test',
+  sourceStatus: 'paid' as const,
   status: 'unchanged' as const,
   incomingState: 'active' as const,
   currentState: 'active' as const,
@@ -132,6 +135,7 @@ describe('CS-IMPORT-01 contracts', () => {
           ...newRow,
           rowId: ids.rowUnknown,
           sourceRowNumber: 5,
+          sourceStatus: 'unknown',
           status: 'unknown',
           incomingState: null,
           currentState: null,
@@ -160,6 +164,47 @@ describe('CS-IMPORT-01 contracts', () => {
         previewVersion: 3,
         expectedImpact: conflict.summary,
         reason: 'Potvrzený syntetický import.',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates the bounded SimpleShop source envelope and never enables apply', () => {
+    const simpleShopPreview = ticketImportPreviewResponseSchema.parse({
+      ...preview,
+      source: {
+        kind: 'simpleshop_api',
+        productId: 143_958,
+        formKey: '0MnNQ',
+        strict: true,
+        pageCount: 1,
+        sourceRows: 3,
+        ticketRows: 2,
+        ignoredSummaryRows: 1,
+        multipleQuantitySummaryRows: 1,
+        observedStatuses: {
+          paid: 2,
+          unpaid: 0,
+          cancelled: 0,
+          refunded: 0,
+          unknown: 0,
+        },
+        codeShape: {
+          count: 2,
+          minByteLength: 6,
+          maxByteLength: 6,
+          characterClasses: ['digit', 'upper_ascii'],
+        },
+      },
+    });
+
+    expect(canApplyTicketImportPreview(simpleShopPreview)).toBe(false);
+    expect(
+      ticketImportPreviewResponseSchema.safeParse({
+        ...simpleShopPreview,
+        source: {
+          ...simpleShopPreview.source,
+          pageCount: 2,
+        },
       }).success,
     ).toBe(false);
   });
