@@ -558,22 +558,22 @@ describe('MSW through the production API port', () => {
     });
   });
 
-  it('activates the synthetic E2E participant on the protected request itself', async () => {
-    const response = await fetchWithOrigin('/api/v1/me/agenda', {
-      headers: { 'x-byzon-mock-participant': 'active' },
-    });
+  it('activates the synthetic E2E participant on every protected read', async () => {
+    const paths = [
+      '/api/v1/me/agenda',
+      '/api/v1/me/announcements?filter=all',
+      '/api/v1/me/ticket',
+      `/api/v1/events/${contentFixtureIds.event}/program`,
+      `/api/v1/events/${contentFixtureIds.event}/content`,
+    ];
 
-    expect(response.ok).toBe(true);
-    await expect(response.json()).resolves.toMatchObject({
-      eventId: agendaFixtureIds.event,
-      items: expect.arrayContaining([
-        expect.objectContaining({
-          session: expect.objectContaining({
-            id: agendaFixtureIds.savedSession,
-          }),
-        }),
-      ]),
-    });
+    for (const path of paths) {
+      resetMockActivationState();
+      const response = await fetchWithOrigin(path, {
+        headers: { 'x-byzon-mock-participant': 'active' },
+      });
+      expect(response.ok, path).toBe(true);
+    }
   });
 
   it('marks private mock data as no-store and varies by session context', async () => {

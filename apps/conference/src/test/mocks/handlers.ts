@@ -1605,6 +1605,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
   http.patch('*/api/v1/me/profile', async ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         identityProfileUpdateProblemSchema,
@@ -1700,6 +1701,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
   http.post('*/api/v1/me/privacy-requests', async ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         identityPrivacyRequestProblemSchema,
@@ -1781,6 +1783,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     });
   }),
   http.post('*/api/v1/me/session-action', async ({ request }) => {
+    configureMockParticipantFromRequest(request);
     const body = await request.json().catch(() => undefined);
     const parsed = identitySessionActionRequestSchema.safeParse(body);
     const idempotencyKey = idempotencyKeySchema.safeParse(
@@ -2193,6 +2196,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     }
   }),
   http.get('*/api/v1/me/announcements', ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantAnnouncementInboxProblemSchema,
@@ -2288,6 +2292,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
   http.get(
     '*/api/v1/me/announcements/:announcementId',
     ({ params, request }) => {
+      configureMockParticipantFromRequest(request);
       if (!hasActiveParticipantAccess()) {
         return mockProblemResponse(
           participantAnnouncementDetailProblemSchema,
@@ -2359,6 +2364,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
   http.post(
     '*/api/v1/me/announcements/:announcementId/read',
     async ({ params, request }) => {
+      configureMockParticipantFromRequest(request);
       if (!hasActiveParticipantAccess()) {
         return mockProblemResponse(
           participantAnnouncementReadProblemSchema,
@@ -2474,7 +2480,8 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       );
     },
   ),
-  http.get('*/api/v1/events/:eventId/program', ({ params }) => {
+  http.get('*/api/v1/events/:eventId/program', ({ params, request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantProgramProblemSchema,
@@ -2508,7 +2515,8 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       },
     );
   }),
-  http.get('*/api/v1/events/:eventId/content', ({ params }) => {
+  http.get('*/api/v1/events/:eventId/content', ({ params, request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantContentProblemSchema,
@@ -2542,7 +2550,8 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       },
     );
   }),
-  http.get('*/api/v1/me/ticket', () => {
+  http.get('*/api/v1/me/ticket', ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantTicketProblemSchema,
