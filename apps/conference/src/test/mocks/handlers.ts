@@ -480,6 +480,12 @@ export const configureMockParticipantPrincipal = (options: {
   }
 };
 
+const configureMockParticipantFromRequest = (request: Request): void => {
+  if (request.headers.get('x-byzon-mock-participant') === 'active') {
+    configureMockParticipantPrincipal({ active: true });
+  }
+};
+
 const hasActiveParticipantAccess = (): boolean =>
   mockActivationState.principalActive && !mockActivationState.signedOut;
 
@@ -1400,9 +1406,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     });
   }),
   http.get('*/api/v1/me/bootstrap', ({ request }) => {
-    if (request.headers.get('x-byzon-mock-participant') === 'active') {
-      configureMockParticipantPrincipal({ active: true });
-    }
+    configureMockParticipantFromRequest(request);
     if (mockActivationState.signedOut) {
       return mockProblemResponse(
         identityBootstrapProblemSchema,
@@ -1815,6 +1819,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
   http.get('*/api/v1/me/agenda', ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantAgendaProblemSchema,
@@ -1855,6 +1860,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
   http.get('*/api/v1/me/agenda.ics', ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantAgendaProblemSchema,
@@ -1899,6 +1905,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
   http.post('*/api/v1/me/agenda/actions', async ({ request }) => {
+    configureMockParticipantFromRequest(request);
     if (!hasActiveParticipantAccess()) {
       return mockProblemResponse(
         participantAgendaMutationProblemSchema,
