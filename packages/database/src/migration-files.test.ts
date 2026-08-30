@@ -178,6 +178,6 @@ describe('versioned database artifacts', () => {
     expect(seed).toContain("'byzon-2026'");
     expect(seed).toContain("'byzon-isolation-test'");
     expect(seed).toContain("'archived'");
-    expect(seed.match(/ON CONFLICT/g)).toHaveLength(2);
+    expect(seed.match(/ON CONFLICT/g)).toHaveLength(4);
   });
 });

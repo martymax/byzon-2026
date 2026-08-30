@@ -325,6 +325,7 @@ export const programSessions = pgTable(
     allowReleaseAfterDeadline: boolean('allow_release_after_deadline')
       .default(false)
       .notNull(),
+    questionsEnabled: boolean('questions_enabled').default(false).notNull(),
     sortOrder: integer('sort_order').notNull(),
     version: integer('version').default(1).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })

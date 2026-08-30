@@ -8,6 +8,8 @@ export * from './base.js';
 export * from './content.js';
 export * from './identity.js';
 export * from './offline.js';
+export * from './networking.js';
+export * from './questions.js';
 export * from './support.js';
 export * from './ticket.js';
 export * from './ticket-import.js';

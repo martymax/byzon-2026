@@ -1,10 +1,10 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.26 – SimpleShop read-only preview
+> Stav: implementační plán v6.27 – neblokované A + gated B implementace
 >
 > Datum sestavení: 20. července 2026
 >
-> Poslední revize: 30. srpna 2026
+> Poslední revize: 31. srpna 2026
 >
 > Cílový repozitář: `martymax/byzon-2026`
 >
@@ -681,7 +681,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
 | `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO, networking s kladnou kapacitou a negativní cross-session/cross-event testy |
 | `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
-| `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `not started` |
+| `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `integrated`; SVG + batch ZIP nad latest immutable publication |
 | `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
 
 ---
@@ -1343,7 +1343,7 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 | Check-in | `UI ready (mocked)` | `F5-01` až `F5-06`: samostatný online-only operator shell, camera/manual/search lookup, úplné outcome stavy, confirm, přesný retry, auditované undo a stats nad `CS-CHECKIN-01`. | `P6`, `TKT-04` source kód, `TKT-05` jen app credential a `OPS-*` pro provozní UAT |
 | Admin Priority A v6 | `UI ready (mocked)` | `F4-10` odstranil attendance permission/actions/state/UI, přejmenoval roli, zúžil announcement severity/audience a zachoval rezervace, audit, settings i minimální organizační export. | `P5`/`P8`/`P9` a capability endpointy |
 | Roster vedoucího aktivity | `integrated` | `P5-08` napojil připravené `/host/aktivity` na autorizovaný `CS-ROSTER-01` list a detail. Server přijímá scope jen z aktivní `room_operator` role, promítá aktivní rezervace/FIFO čekání včetně networkingu s nastavenou kapacitou a profilové jméno/firmu, omezuje dotazy i DTO a nevrací telefon, e-mail, user/ticket ID, attendance ani export. | Finální přiřazení osob v `BLOCKER-OPS-01`. |
-| QR deep link každého bodu programu | `not started` | Publikované session a detail programu existují; chybí `CS-SESSION-QR-01`, stabilní QR export a dávkový balík pro všechny body. | `P3-12`; content UAT a decode test |
+| QR deep link každého bodu programu | `integrated` | Admin SVG a dávkový ZIP generují credential-free `/app/program/:sessionId` pro každý bod latest publication; zrušené body se nevydávají. | Zbývá tiskové/content UAT. |
 | Provozní oznámení minimum v6 | `UI ready (mocked)` | Participant inbox a admin immutable preview/send přijímají jen critical severity a event/dotčené sessions; info/important/reminder větve jsou odstraněné. | `P8-05`/`P8-06` a produkční kritický e-mail `P8G` |
 
 Původní `[x]` u `P3-04`/`P3-10` prokazuje dokončení jejich tehdejšího úzkého
@@ -1906,7 +1906,7 @@ fixtures.
   67 validních sessions, jednu neplatnou položku `24:00 - ?` bezpečně přeskočí
   a reportuje nepřevedené prezentační atributy včetně `span` a `compact`;
   finální obsahové UAT a uzávěrka tím nejsou splněné.
-- [ ] `P3-12` Implementovat `CS-SESSION-QR-01`: stabilní programový deep link,
+- [x] `P3-12` Implementovat `CS-SESSION-QR-01`: stabilní programový deep link,
   jednotlivé SVG a dávkový balík pro každý publikovaný bod programu. QR vede na
   `/app/program/[sessionId]`, neobsahuje credential a funguje i bez Priority B;
   u podporované session detail případně nabídne položení dotazu.
@@ -2497,7 +2497,7 @@ fixtures a `F1`/`F4` mockované UI mohou pokračovat.
   `POST /me/privacy-requests` a `POST /me/session-action`, migraci profilové
   verze/deletion requestu, přesný Origin gate, audit bez PII a PostgreSQL
   regrese pro anonymous/cross-event/CSRF, replay, collision a stale version.
-- [ ] `P4-14` Vygenerovat a otestovat obecný QR pouze pro
+- [x] `P4-14` Vygenerovat a otestovat obecný QR pouze pro
   `https://app.byzon.cz` na badge/obrazovky. Vizuálně i datově jej odlišit od
   session deep link QR a ticket/check-in credentialu.
 - [ ] `P4-15` Uzavřít `BLOCKER-AUTH-02` a otestovat realistickou cestu: pozvánka
@@ -2651,19 +2651,19 @@ blokují load profil, rehearsal a případný offline režim. `F5` mockovaná ob
 a serverové kontrakty mohou vznikat souběžně. `TKT-04` blokuje reálný
 source-ticket adapter; `TKT-05` pouze přídavný app-credential adapter.
 
-- [ ] `P6-01` Check-in schema, `CS-CHECKIN-01`, device identity a permission
+- [x] `P6-01` Check-in schema, `CS-CHECKIN-01`, device identity a permission
   policies.
 - [ ] `P6-02` Integrovat `F5` rychlý scan/lookup/confirm flow s autoritativním
   serverem přes alespoň jeden schválený credential adapter; app credential se
   přidá po `P4-12`. Haptická/zvuková odezva je pouze doplněk.
-- [ ] `P6-03` Implementovat serverový manual-code a jméno/e-mail lookup s
+- [x] `P6-03` Implementovat serverový manual-code a jméno/e-mail lookup s
   minimálními výsledky přes `POST` body bez PII v URL; integrovat
   `F5-02`/`F5-03` a opravit případný historický GET klient.
-- [ ] `P6-04` Implementovat canonical duplicate/storno/neznámý outcome,
+- [x] `P6-04` Implementovat canonical duplicate/storno/neznámý outcome,
   idempotenci a bezpečný retry; integrovat `F5-04`.
-- [ ] `P6-05` Implementovat serverové undo s důvodem, omezením role a audit
+- [x] `P6-05` Implementovat serverové undo s důvodem, omezením role a audit
   trail; integrovat `F5-05`.
-- [ ] `P6-06` Implementovat agregované stats/seznam výjimek DTO bez zbytečné
+- [x] `P6-06` Implementovat agregované stats/seznam výjimek DTO bez zbytečné
   PII; UI skládá `F4`/`F5`, nevzniká druhý operátorský frontend.
 - [ ] `P6-07` Implementovat export pro jmenovky/seznam, bez přímého tisku;
   spouští se přes společné export request UI `F4-07`.
@@ -2680,19 +2680,19 @@ Extrakce `CS-CONTENT-01` v `F2-03` může začít ihned nad publikovaným API z
 `F6-01`/`F6-02`. Osobní cache a queue se zapojují až po dostupnosti identity,
 agendy a jejich revokačních kontraktů.
 
-- [ ] `P7-01` Definovat a bezpečnostně zrevidovat server cache headers,
+- [x] `P7-01` Definovat a bezpečnostně zrevidovat server cache headers,
   service-worker scope a update/rollback policy; integrovat browserovou
   implementaci `F6-01`.
-- [ ] `P7-02` Dodat serverový publication version/invalidation kontrakt pro
+- [x] `P7-02` Dodat serverový publication version/invalidation kontrakt pro
   public snapshots a integrovat cache/last-updated UI `F6-02`.
-- [ ] `P7-03` Dodat do `CS-BOOT-01` event/user ownership a revocation signály
+- [x] `P7-03` Dodat do `CS-BOOT-01` event/user ownership a revocation signály
   pro osobní cache a integrovat IndexedDB `F6-03`.
-- [ ] `P7-04` Implementovat serverovou idempotenci/replay pravidla pouze pro
+- [x] `P7-04` Implementovat serverovou idempotenci/replay pravidla pouze pro
   schválené queue mutace a integrovat `F6-04`; rezervace a check-in zůstávají
   online-only.
-- [ ] `P7-05` Dodat privacy-safe sync telemetry a canonical
+- [~] `P7-05` Dodat privacy-safe sync telemetry a canonical
   conflict/retry/problem outcomes pro `F6-04`, bez payload PII.
-- [ ] `P7-06` Integrovat logout/logout-all/revokaci membership s wipe
+- [x] `P7-06` Integrovat logout/logout-all/revokaci membership s wipe
   mechanismem `F6-05` a negativně otestovat přepnutí účtu/eventu.
 - [ ] `P7-07` Spustit integrační offline/install/ownership matici
   `F6-07`/`F6-08` nad staging API v Chrome Android a Safari iOS/PWA.
@@ -2722,17 +2722,17 @@ rozšířené segmentování jsou v `P8B` výslovně vyřazené.
   korektně zavírá. Versionovaný Compose a CI používají skutečný Redis s
   `noeviction`; integrační test kryje souběh i BullMQ kompatibilitu. Produkční
   provisioning, EU region a credentials dál vyžadují provozní schválení.
-- [ ] `P8-02` Transactional outbox dispatcher a deduplication.
-- [ ] `P8-05` Implementovat serverový in-app announcement
+- [x] `P8-02` Transactional outbox dispatcher a deduplication.
+- [x] `P8-05` Implementovat serverový in-app announcement
   draft/audience-preview/immutable-confirm/send kontrakt pro bezpečné
   critical event-wide a přímo dotčené session publikum; integrovat scope-aligned
   `F4-06`/`F4-10`. Jiná severity/audience server odmítne.
-- [ ] `P8-06` Implementovat serverový in-app inbox/read state pro event a
+- [x] `P8-06` Implementovat serverový in-app inbox/read state pro event a
   přímo dotčené session publikum; integrovat `F2-05`.
-- [ ] `P8-08` Převést jen organizátorem označenou kritickou
+- [x] `P8-08` Převést jen organizátorem označenou kritickou
   `program.changed` událost na deduplikovaný draft s dotčeným publikem;
   běžná změna se automaticky nerozesílá a send vyžaduje immutable confirm.
-- [ ] `P8-10` Implementovat retry/backoff/dead-letter a bezpečné admin status
+- [x] `P8-10` Implementovat retry/backoff/dead-letter a bezpečné admin status
   DTO; integrovat provozní souhrn `F4-07`.
 
 **Akceptace P8A:** opakovaný job nevytvoří duplicitní oznámení; server odmítne
@@ -2770,27 +2770,27 @@ Admin UI používá shell a support patterns `F4`; tato etapa doplňuje serverov
 agregace, oprávnění, exporty a jejich integraci, nikoli další paralelní admin
 frontend.
 
-- [ ] `P9-01` Implementovat serverové agregace activation/check-in/reservation/
+- [x] `P9-01` Implementovat serverové agregace activation/check-in/reservation/
   content-sync stavu a integrovat dashboard `F4-07`.
-- [ ] `P9-02` Implementovat serverovou správu rolí a scoped operator
+- [x] `P9-02` Implementovat serverovou správu rolí a scoped operator
   assignments s auditem; `room_operator` vyžaduje session IDs a v UI se jmenuje
   Vedoucí aktivity, `moderator` smí dostat jen podporované sessions. Integrovat
   role UI `F4-07`/`F4-10`.
-- [ ] `P9-03` Implementovat participant/ticket search a auditované support
+- [x] `P9-03` Implementovat participant/ticket search a auditované support
   endpointy; integrovat `F4-05`, nevytvářet druhý support frontend.
-- [ ] `P9-04` Implementovat audit query s bezpečnými filtry a minimálními DTO;
+- [x] `P9-04` Implementovat audit query s bezpečnými filtry a minimálními DTO;
   integrovat audit browser `F4-08`.
-- [ ] `P9-05` Implementovat async export framework, expirující linky a
+- [x] `P9-05` Implementovat async export framework, expirující linky a
   download audit jen pro schválené organizační exporty; participant self-data
   export není konzument. Integrovat scope-aligned `F4-07`.
-- [ ] `P9-06` Vynutit CSV injection ochranu v exportech
+- [x] `P9-06` Vynutit CSV injection ochranu v exportech
   (`=`, `+`, `-`, `@`) a přidat regresní testy.
-- [ ] `P9-07` Implementovat pouze agregované activation, reservation a
+- [x] `P9-07` Implementovat pouze agregované activation, reservation a
   check-in report DTO. Žádosti, spojení, zprávy ani attendance se neměří;
   pokročilé grafy nejsou součástí launch minima.
 - [ ] `P9-08` Integrovat a ověřit `F4-09` admin accessibility, keyboard a
   desktop/mobile responsive smoke nad skutečnými endpointy.
-- [ ] `P9-09` Implementovat minimální event settings read/update API s
+- [x] `P9-09` Implementovat minimální event settings read/update API s
   optimistic version, oprávněním a auditem; integrovat settings `F4-08`.
 
 **Akceptace:** běžné organizační změny nevyžadují vývojáře; všechny výjimky jsou dohledatelné; exporty jsou minimální, bezpečné a časově omezené.
@@ -2831,16 +2831,16 @@ jako explicitně session-scoped `room_operator` podle P5/P9.
 
 ### Etapa 11 – jednoduchý networkingový adresář, volitelná Priority B
 
-- [ ] `P11-01` Rozšířit participant profil o opt-in, představení, dobrovolný
+- [x] `P11-01` Rozšířit participant profil o opt-in, představení, dobrovolný
   telefon/kontaktní e-mail/LinkedIn a `hidden | directory` visibility.
-- [ ] `P11-02` Implementovat pevný multiselect `today_hunting` se šesti
+- [x] `P11-02` Implementovat pevný multiselect `today_hunting` se šesti
   hodnotami z `SCOPE-2026-02`; žádné custom návrhy ani aliasy.
-- [ ] `P11-03` Directory search/filter podle jména, firmy a `today_hunting` s
+- [x] `P11-03` Directory search/filter podle jména, firmy a `today_hunting` s
   minimálním privacy DTO a cursor pagination.
-- [ ] `P11-04` Detail profilu bez contact unlock logiky; každé kontaktní pole
+- [x] `P11-04` Detail profilu bez contact unlock logiky; každé kontaktní pole
   respektuje vlastní visibility.
-- [ ] `P11-05` Instant hide po opt-out, admin hide a cache invalidace.
-- [ ] `P11-06` Privacy/IDOR/retention test suite včetně zákazu plošného exportu.
+- [x] `P11-05` Instant hide po opt-out, admin hide a cache invalidace.
+- [~] `P11-06` Privacy/IDOR/retention test suite včetně zákazu plošného exportu.
 - [–] `P11-07` Connections, requests, recommendations, messages, meeting
   proposals, blocks/reports a custom tags – mimo rozsah 2026.
 
@@ -2852,20 +2852,20 @@ do DTO/cache; adresář neposkytuje interní komunikaci ani export kontaktů.
 **Závislost:** finální seznam pátečních sessions na Byzon/Leadership stage a
 konkrétní session-scoped moderátoři v `BLOCKER-LIVE-01`.
 
-- [ ] `P12-01` Implementovat `questions` schema a `CS-QUESTIONS-01` bez
+- [x] `P12-01` Implementovat `questions` schema a `CS-QUESTIONS-01` bez
   moderation stavu, admin feedu, delete/hide, votes, rank, merge, answered a
   poll entit.
-- [ ] `P12-02` Participant submit UI přes detail programu/session QR deep link;
+- [x] `P12-02` Participant submit UI přes detail programu/session QR deep link;
   účastník nevidí ostatní dotazy.
-- [ ] `P12-03` Moderátorský read-only chronologický tabletový seznam; žádný
+- [x] `P12-03` Moderátorský read-only chronologický tabletový seznam; žádný
   admin read, hide/delete, approve/merge/reorder/answered workflow.
-- [ ] `P12-04` Bounded REST polling s cursor/server time, backoffem a canonical
+- [x] `P12-04` Bounded REST polling s cursor/server time, backoffem a canonical
   reloadem po reconnectu; bez SSE/Redis pub-sub.
-- [ ] `P12-05` Napojit question CTA podporovaných sessions na kanonické
+- [x] `P12-05` Napojit question CTA podporovaných sessions na kanonické
   programové deep linky/QR z `P3-12`; nevytvářet druhý question-only QR formát.
-- [ ] `P12-06` Rate-limit/XSS/IDOR testy a rehearsal na reálných tabletech
+- [~] `P12-06` Rate-limit/XSS/IDOR testy a rehearsal na reálných tabletech
   moderátorů v obou pátečních scénách.
-- [ ] `P12-07` Session/event ratings a completed suppression jako oddělený
+- [x] `P12-07` Session/event ratings a completed suppression jako oddělený
   volitelný slice; komentáře hodnocení nijak nezrušily.
 - [–] `P12-08` Hlasování o dotazech, ankety, projection view a live výsledky –
   mimo rozsah 2026.
@@ -3287,3 +3287,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.24 | 26. 8. 2026 | Dokončena neblokovaná část `P5-11`: source/import regrese explicitně drží EB21 12, oba workshopy 20, 26 coaching slotů 1 a fail-closed networking/mastermind; existující PostgreSQL race a IDOR sada kryje poslední místo, coaching souběh, admin/participant mutace a cizí roster. Nový Playwright průchod na telefonu, tabletu a desktopu rezervuje dostupné místo, ověřuje zobrazení v `Europe/Prague` a privátní UTC/CRLF `.ics` download. FIFO/promotion a úspěšný networking zůstávají poctivě blokované `RES-04`/`RES-01`. |
 | 6.25 | 30. 8. 2026 | ADR-014 uzavřelo rezervační rozhodnutí a implementace dokončila `P5-04`/`P5-07`: jediná automatická FIFO promotion běží transakčně po participant/admin stornu i zvýšení kapacity, offer/TTL větev je odstraněná z kontraktu a UI a řízený networking dostává kladnou kapacitu auditovaně v administraci bez hardcoded hodnoty. ADR-015 mění produkční SimpleShop zdroj na server-only API fetch spuštěný administrátorem s odděleným preview/apply; CSV/XLSX export není produkční sync kanál. Zbývá implementovat sdílenou skupinu obou částí sobotního mastermindu a provést SimpleShop discovery po instalaci secrets a dodání product/form IDs. |
 | 6.26 | 30. 8. 2026 | Dokončeno `P0-02`/`P4-02`/`F4-02`: oficiální OpenAPI a read-only staging discovery ověřily produkt `143958`, form `0MnNQ`, přesné GET endpointy, `{csv}` envelope bez pagination parametrů, per-ticket/order ID, quantity a pozorované paid/unpaid/storno stavy. Server-only adapter, autorizované/rate-limitované admin preview a sanitizovaný staging batch nepersistují raw kód/PII a nemají apply cestu. `TKT-01` je uzavřen; refund a apply mapování i bezpečnost kódu zůstávají fail-closed v `TKT-02`/`TKT-04`. |
+| 6.27 | 31. 8. 2026 | Jednoprůchodově dokončeny neblokované implementační řezy A: session/general QR, autoritativní check-in bez neschváleného credential adapteru, in-app critical announcements, admin operations/roles/support/audit/settings/exporty, worker outbox a serverově ověřený offline owner lease/replay preflight. Volitelné B jsou implementované za defaultně vypnutými event flags: privacy-minimal networking, jednoduché session questions/moderator polling a jednorázové ratings. Workspace testy, lint, typecheck, format, static smoke a produkční build jsou zelené bez lokální service-backed DB/Redis sady; produkční ticket/e-mail/retention rozhodnutí a fyzické UAT zůstávají explicitní blockery. |

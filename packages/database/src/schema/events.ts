@@ -107,6 +107,9 @@ export const eventMemberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     status: membershipStatus('status').default('active').notNull(),
+    offlineRevocationEpoch: uuid('offline_revocation_epoch')
+      .defaultRandom()
+      .notNull(),
     activatedAt: timestamp('activated_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     revocationReason: text('revocation_reason'),
@@ -133,7 +136,11 @@ export const eventRoles = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     role: eventRole('role').notNull(),
     scope: jsonb('scope_json')
-      .$type<{ roomIds?: string[]; sessionIds?: string[] }>()
+      .$type<{
+        roomIds?: string[];
+        sessionIds?: string[];
+        stationIds?: string[];
+      }>()
       .default({})
       .notNull(),
     grantedBy: uuid('granted_by').references(() => users.id, {

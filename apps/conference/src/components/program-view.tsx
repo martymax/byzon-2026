@@ -14,6 +14,7 @@ import {
   ResourceStatus,
   useParticipantProgram,
 } from './content-state';
+import { SessionRating } from './live-interactions';
 import { ParticipantSessionAgendaAction } from './participant-session-agenda-action';
 
 const time = (value: string) =>
@@ -354,6 +355,14 @@ export const SessionView = ({
           sessionId={session.id}
           {...(agendaApi ? { agendaApi } : {})}
         />
+      ) : null}
+      {session.questionsEnabled && session.status !== 'cancelled' ? (
+        <Link className="ui-button" href={`/app/interakce/${session.id}`}>
+          Položit dotaz moderátorovi
+        </Link>
+      ) : null}
+      {session.status !== 'cancelled' ? (
+        <SessionRating sessionId={session.id} endsAt={session.endsAt} />
       ) : null}
       <Link className="text-link" href={backHref}>
         ←{' '}

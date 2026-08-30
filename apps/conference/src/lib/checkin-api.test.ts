@@ -16,13 +16,13 @@ import { createFetchApiClient } from './api/fetch-client';
 describe('CS-CHECKIN-01 API descriptors', () => {
   it('separates read-only lookup from idempotent confirm and undo', () => {
     expect(checkinBootstrapEndpoint.retry).toBe('safe-read');
-    expect(checkinSearchEndpoint.retry).toBe('safe-read');
+    expect(checkinSearchEndpoint.retry).toBe('never');
     expect(checkinLookupEndpoint.idempotency).toBe('forbidden');
     expect(checkinConfirmEndpoint.idempotency).toBe('required');
     expect(checkinUndoEndpoint.idempotency).toBe('required');
   });
 
-  it('encodes bounded search input without exposing it elsewhere', async () => {
+  it('sends bounded search input in a POST body without exposing PII in the URL', async () => {
     const fetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         void input;
@@ -40,10 +40,12 @@ describe('CS-CHECKIN-01 API descriptors', () => {
     );
     const api = createFetchApiClient({ fetch, maxRetries: 0 });
     await requestCheckinSearch(api, 'Test User');
-    expect(fetch.mock.calls[0]?.[0]).toBe(
-      '/api/v1/check-in/search?q=Test+User&limit=5',
-    );
-    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store' });
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/v1/check-in/search');
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      cache: 'no-store',
+      body: JSON.stringify({ query: 'Test User' }),
+    });
     expect(() => requestCheckinSearch(api, 'x')).toThrow();
   });
 

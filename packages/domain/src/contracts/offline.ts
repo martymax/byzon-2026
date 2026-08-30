@@ -8,6 +8,7 @@ import {
   publicContentBootstrapResponseSchema,
   publicContentResponseSchema,
 } from './content.js';
+import { defineApiProblemSchema, sessionExpiredProblemSchema } from './base.js';
 
 export const OFFLINE_CONTRACT_VERSION = 1 as const;
 export const OFFLINE_QUEUE_MAX_ATTEMPTS = 5 as const;
@@ -119,10 +120,10 @@ export type OfflineFeatureGate = z.infer<typeof offlineFeatureGateSchema>;
 export const offlineFeatureGateDefaults: OfflineFeatureGate = Object.freeze({
   contractVersion: OFFLINE_CONTRACT_VERSION,
   publicContentCache: true,
-  personalAgendaCache: false,
-  agendaMutationReplay: false,
-  ownerLease: 'disabled',
-  ownerBoundReplay: 'disabled',
+  personalAgendaCache: true,
+  agendaMutationReplay: true,
+  ownerLease: 'lease-v1',
+  ownerBoundReplay: 'lease-v1',
 });
 
 export const offlineOwnerLeaseSchema = z
@@ -432,6 +433,52 @@ export const offlineAgendaReplayPreflightSchema = z
 export type OfflineAgendaReplayPreflight = z.infer<
   typeof offlineAgendaReplayPreflightSchema
 >;
+
+export const offlineAgendaReplayPreflightRequestSchema = z.strictObject({
+  contractVersion: z.literal(OFFLINE_CONTRACT_VERSION),
+  ownerLeaseId: uuidSchema,
+  revocationEpoch: revocationEpochSchema,
+  agendaVersion: agendaVersionSchema,
+});
+
+export type OfflineAgendaReplayPreflightRequest = z.infer<
+  typeof offlineAgendaReplayPreflightRequestSchema
+>;
+
+export const offlineAuthenticationRequiredProblemSchema =
+  defineApiProblemSchema('AUTHENTICATION_REQUIRED', 401);
+export const offlineAccessDeniedProblemSchema = defineApiProblemSchema(
+  'EVENT_ACCESS_DENIED',
+  403,
+);
+export const offlineLeaseRevokedProblemSchema = defineApiProblemSchema(
+  'OFFLINE_LEASE_REVOKED',
+  409,
+);
+export const offlineAgendaVersionConflictProblemSchema = defineApiProblemSchema(
+  'STALE_VERSION',
+  409,
+);
+export const offlineValidationProblemSchema = defineApiProblemSchema(
+  'VALIDATION_FAILED',
+  422,
+);
+export const offlineInternalErrorProblemSchema = defineApiProblemSchema(
+  'INTERNAL_ERROR',
+  500,
+);
+
+export const offlineProblemSchema = z.discriminatedUnion('code', [
+  offlineAuthenticationRequiredProblemSchema,
+  sessionExpiredProblemSchema,
+  offlineAccessDeniedProblemSchema,
+  offlineLeaseRevokedProblemSchema,
+  offlineAgendaVersionConflictProblemSchema,
+  offlineValidationProblemSchema,
+  offlineInternalErrorProblemSchema,
+]);
+
+export type OfflineProblem = z.infer<typeof offlineProblemSchema>;
 
 export const offlineAgendaReplayEnvelopeSchema = z
   .strictObject({

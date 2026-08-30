@@ -25,14 +25,17 @@
     "@byzon/ui": "workspace:*",
     "better-auth": "1.6.23",
     "drizzle-orm": "0.45.2",
+    "fflate": "^0.8.3",
     "next": "16.2.11",
     "pino": "10.3.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@byzon/test-support": "workspace:*",
+    "@types/qrcode": "^1.5.6",
     "axe-core": "4.12.1",
     "msw": "2.15.0"
   }

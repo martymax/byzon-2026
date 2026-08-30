@@ -3,6 +3,8 @@ import { readWorkerEnv } from '@byzon/config';
 import { createDatabaseClient } from '@byzon/database';
 import { createRedisConnection } from '@byzon/redis';
 
+import { dispatchSupportedOutboxOnce } from './outbox.js';
+
 const env = readWorkerEnv(process.env);
 const logger = pino({
   level: env.LOG_LEVEL,
@@ -81,7 +83,26 @@ logger.info(
   'Worker skeleton started',
 );
 
-const keepAlive = setInterval(() => undefined, 60_000);
+let dispatchRunning = false;
+const dispatch = async (): Promise<void> => {
+  if (dispatchRunning) return;
+  dispatchRunning = true;
+  try {
+    const outcome = await dispatchSupportedOutboxOnce(database.db);
+    if (outcome === 'failed') {
+      logger.error({ outcome }, 'Outbox event moved to dead letter state');
+    }
+  } catch (error) {
+    logger.warn(
+      { errorName: error instanceof Error ? error.name : 'UnknownError' },
+      'Outbox dispatch iteration failed',
+    );
+  } finally {
+    dispatchRunning = false;
+  }
+};
+await dispatch();
+const dispatchTimer = setInterval(() => void dispatch(), 1_000);
 await new Promise<void>((resolve) => {
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Worker skeleton stopped');
@@ -90,5 +111,5 @@ await new Promise<void>((resolve) => {
   process.once('SIGTERM', () => shutdown('SIGTERM'));
   process.once('SIGINT', () => shutdown('SIGINT'));
 });
-clearInterval(keepAlive);
+clearInterval(dispatchTimer);
 await Promise.all([redis.close(), database.close()]);

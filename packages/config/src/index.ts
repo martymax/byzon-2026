@@ -65,6 +65,7 @@ const conferenceEnvSchema = baseEnvSchema
     SIMPLESHOP_API_EMAIL: z.email().max(320).optional(),
     SIMPLESHOP_API_KEY: z.string().min(1).max(1_024).optional(),
     SIMPLESHOP_API_BASE_URL: z.url().optional(),
+    CHECKIN_DEVICE_ID: z.uuid().optional(),
   })
   .superRefine((value, context) => {
     if (

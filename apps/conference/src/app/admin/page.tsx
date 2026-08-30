@@ -9,7 +9,8 @@ export default function AdminOverviewPage() {
       <p className="eyebrow">Administrace</p>
       <h1>Provozní nástroje akce</h1>
       <p>
-        Produkčně jsou nyní dostupné rezervace a správa publikovaného obsahu.
+        Produkčně jsou dostupné provozní nástroje, podpora, kritická oznámení,
+        rezervace a správa publikovaného obsahu.
       </p>
       <ul>
         <li>
@@ -17,6 +18,18 @@ export default function AdminOverviewPage() {
         </li>
         <li>
           <Link href="/admin/obsah">Obsah akce</Link>
+        </li>
+        <li>
+          <Link href="/admin/ucastnici">Podpora účastníků</Link>
+        </li>
+        <li>
+          <Link href="/admin/oznameni">Kritická oznámení</Link>
+        </li>
+        <li>
+          <Link href="/admin/role">Role a provozní přehled</Link>
+        </li>
+        <li>
+          <Link href="/admin/audit">Audit a nastavení</Link>
         </li>
       </ul>
     </section>

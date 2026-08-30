@@ -1,5 +1,4 @@
 import {
-  OFFLINE_CONTRACT_VERSION,
   offlineAgendaReplayEnvelopeSchema,
   type ParticipantAgendaMutationProblem,
   type ParticipantAgendaMutationResponse,
@@ -30,6 +29,7 @@ import {
   abortParticipantPrivateOperations,
   trackParticipantPrivateOperation,
 } from './offline-operation-lifecycle';
+import { requestParticipantOfflineReplayPreflight } from './offline-api';
 import {
   parseApprovedOfflineAgendaMutation,
   parseParticipantOfflineScope,
@@ -367,20 +367,69 @@ const executeSync = async (
       );
       continue;
     }
-    const preflightIssuedAt = new Date();
-    offlineAgendaReplayEnvelopeSchema.parse({
-      preflight: {
-        contractVersion: OFFLINE_CONTRACT_VERSION,
-        eventId: parsedScope.eventId,
-        userId: parsedScope.userId,
+    const preflightResult = await requestParticipantOfflineReplayPreflight(
+      api,
+      {
+        contractVersion: record.contractVersion,
         ownerLeaseId: record.ownerLeaseId,
         revocationEpoch: record.revocationEpoch,
         agendaVersion: ownerAgendaVersion,
-        issuedAt: preflightIssuedAt.toISOString(),
-        validUntil: new Date(
-          preflightIssuedAt.getTime() + 60_000,
-        ).toISOString(),
       },
+      signal,
+    );
+    if (signal.aborted) break;
+    if (!preflightResult.ok) {
+      if (preflightResult.failure.kind === 'problem') {
+        const code = preflightResult.failure.problem.code;
+        if (
+          code === 'AUTHENTICATION_REQUIRED' ||
+          code === 'AUTH_SESSION_EXPIRED' ||
+          code === 'EVENT_ACCESS_DENIED' ||
+          code === 'OFFLINE_LEASE_REVOKED'
+        ) {
+          const invalidation =
+            code === 'AUTHENTICATION_REQUIRED' ||
+            code === 'AUTH_SESSION_EXPIRED'
+              ? 'session_expired'
+              : 'permission';
+          await invalidateParticipantPrivateResources(invalidation);
+          return {
+            blocked: 'owner_unverified',
+            canonical: null,
+            invalidation,
+            processed,
+            summary: EMPTY_OFFLINE_AGENDA_QUEUE,
+          };
+        }
+        if (code === 'STALE_VERSION') {
+          await markQueueFailure(
+            record,
+            'conflict',
+            'AGENDA_VERSION_CONFLICT',
+            expectedEpoch,
+          );
+          continue;
+        }
+      }
+      await markQueueFailure(
+        record,
+        'retry',
+        'PREFLIGHT_UNAVAILABLE',
+        expectedEpoch,
+      );
+      continue;
+    }
+    if (preflightResult.kind !== 'success') {
+      await markQueueFailure(
+        record,
+        'retry',
+        'PREFLIGHT_INVALID_RESPONSE',
+        expectedEpoch,
+      );
+      continue;
+    }
+    offlineAgendaReplayEnvelopeSchema.parse({
+      preflight: preflightResult.data,
       record: toOfflineAgendaQueueContract(record),
     });
     const replayRecord = await preflightOfflineAgendaQueueRecord(record, {

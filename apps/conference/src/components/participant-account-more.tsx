@@ -64,6 +64,9 @@ export const ParticipantMoreHub = () => (
             <ActionLink block href="/app/partneri" variant="secondary">
               Partneři
             </ActionLink>
+            <ActionLink block href="/app/networking" variant="secondary">
+              Networkingový adresář
+            </ActionLink>
           </nav>
 
           <Card className="participant-support-card">

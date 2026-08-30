@@ -21,9 +21,9 @@ describe('content import preparation', () => {
     });
 
     expect(report.counts).toMatchObject({
-      assets: 28,
-      speakers: 20,
-      partners: 7,
+      assets: 34,
+      speakers: 23,
+      partners: 10,
       eventDays: 2,
       sessions: 82,
       coachingSessions: 26,

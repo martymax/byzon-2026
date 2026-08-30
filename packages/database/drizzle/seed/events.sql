@@ -35,3 +35,15 @@ SELECT "id"
 FROM "events"
 WHERE "slug" IN ('byzon-2026', 'byzon-isolation-test')
 ON CONFLICT ("event_id") DO NOTHING;
+
+INSERT INTO "event_operational_settings" ("event_id")
+SELECT "id"
+FROM "events"
+WHERE "slug" IN ('byzon-2026', 'byzon-isolation-test')
+ON CONFLICT ("event_id") DO NOTHING;
+
+INSERT INTO "event_admin_versions" ("event_id")
+SELECT "id"
+FROM "events"
+WHERE "slug" IN ('byzon-2026', 'byzon-isolation-test')
+ON CONFLICT ("event_id") DO NOTHING;

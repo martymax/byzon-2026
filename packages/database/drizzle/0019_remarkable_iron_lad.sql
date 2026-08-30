@@ -1,0 +1,1 @@
+ALTER TABLE "audit_logs" ALTER COLUMN "request_id" SET DATA TYPE varchar(128);

@@ -26,11 +26,17 @@ import {
   syncOfflineAgendaQueue,
   type OfflineAgendaQueueSummary,
 } from '@/lib/offline/offline-agenda';
-import { readParticipantOfflineEpoch } from '@/lib/offline/offline-database';
+import {
+  readParticipantOfflineEpoch,
+  readVerifiedParticipantOfflineEpoch,
+  reconcileParticipantOfflineEpoch,
+} from '@/lib/offline/offline-database';
+import { requestParticipantOfflineLease } from '@/lib/offline/offline-api';
 import {
   OFFLINE_AGENDA_SYNC_EVENT,
   offlineAgendaReplayAvailable,
   offlineParticipantAgendaCacheAvailable,
+  participantOfflineServerLeaseRequired,
   type ParticipantOfflineScope,
 } from '@/lib/offline/offline-policy';
 import {
@@ -398,11 +404,38 @@ export const useParticipantAgendaResource = (
       userId: accountUserId,
     };
     const offlineCacheAvailable = offlineParticipantAgendaCacheAvailable();
-    const epochPromise = scopeTransition.then(() => {
+    const epochPromise = scopeTransition.then(async () => {
       if (!offlineCacheAvailable || activeOfflineEpoch.current !== null) {
         return activeOfflineEpoch.current;
       }
-      return readParticipantOfflineEpoch().then((offlineEpoch) => {
+      let offlineEpoch: string;
+      const requiresServerLease = participantOfflineServerLeaseRequired();
+      if (requiresServerLease && navigator.onLine) {
+        const lease = await requestParticipantOfflineLease(
+          api,
+          controller.signal,
+        );
+        if (
+          !lease.ok ||
+          lease.kind !== 'success' ||
+          lease.data.eventId !== offlineScope.eventId ||
+          lease.data.userId !== offlineScope.userId ||
+          lease.data.leaseId !== lease.data.revocationEpoch
+        ) {
+          return null;
+        }
+        offlineEpoch = await reconcileParticipantOfflineEpoch(
+          lease.data.revocationEpoch,
+          lease.data.expiresAt,
+        );
+      } else if (requiresServerLease) {
+        const verifiedEpoch = await readVerifiedParticipantOfflineEpoch();
+        if (!verifiedEpoch) return null;
+        offlineEpoch = verifiedEpoch;
+      } else {
+        offlineEpoch = await readParticipantOfflineEpoch();
+      }
+      return (() => {
         if (
           !controller.signal.aborted &&
           mounted.current &&
@@ -411,7 +444,7 @@ export const useParticipantAgendaResource = (
           activeOfflineEpoch.current = offlineEpoch;
         }
         return offlineEpoch;
-      });
+      })();
     });
     readController.current = controller;
     clearTransientState();

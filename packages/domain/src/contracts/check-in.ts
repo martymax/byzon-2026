@@ -276,6 +276,11 @@ export const checkinSearchQuerySchema = z
     message: 'Search query contains unsafe control characters',
   });
 
+export const checkinSearchRequestSchema = z.strictObject({
+  query: checkinSearchQuerySchema,
+});
+export type CheckinSearchRequest = z.infer<typeof checkinSearchRequestSchema>;
+
 export const checkinSearchResponseSchema = z.strictObject({
   results: z
     .array(

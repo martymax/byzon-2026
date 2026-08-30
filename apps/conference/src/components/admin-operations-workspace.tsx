@@ -71,7 +71,8 @@ export const AdminOperationsWorkspace = () => {
   const [operatorLabel, setOperatorLabel] = useState('');
   const [assignmentRole, setAssignmentRole] =
     useState<AdminAssignmentRole>('room_operator');
-  const [scopeLabel, setScopeLabel] = useState('Celá akce');
+  const [scopeId, setScopeId] = useState('');
+  const [scopeLabel, setScopeLabel] = useState('Vybraný rozsah');
   const [report, setReport] = useState<AdminExportRequest['report']>(
     'reservation_summary',
   );
@@ -150,7 +151,10 @@ export const AdminOperationsWorkspace = () => {
     action: 'grant',
     operatorId,
     role: assignmentRole,
-    scope: { kind: 'event', label: scopeLabel },
+    scope:
+      assignmentRole === 'checkin_operator'
+        ? { kind: 'station', stationId: scopeId, label: scopeLabel }
+        : { kind: 'session', sessionId: scopeId, label: scopeLabel },
     expectedVersion: overview?.version ?? 1,
     reason,
   });
@@ -165,7 +169,8 @@ export const AdminOperationsWorkspace = () => {
     attemptedOperation === 'role' &&
     (!roleCandidate.success ||
       roleCandidate.data.action !== 'grant' ||
-      !operatorLabel.trim());
+      !operatorLabel.trim() ||
+      !scopeId.trim());
   const exportValidationFailed =
     attemptedOperation === 'export' && !exportCandidate.success;
 
@@ -175,7 +180,8 @@ export const AdminOperationsWorkspace = () => {
       !canManageRoles ||
       !roleCandidate.success ||
       roleCandidate.data.action !== 'grant' ||
-      !operatorLabel.trim()
+      !operatorLabel.trim() ||
+      !scopeId.trim()
     ) {
       return;
     }
@@ -477,6 +483,22 @@ export const AdminOperationsWorkspace = () => {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className={styles.field}>
+              <span>
+                {assignmentRole === 'checkin_operator'
+                  ? 'ID stanoviště'
+                  : 'ID session'}
+              </span>
+              <input
+                aria-describedby={
+                  roleValidationFailed ? 'admin-role-form-error' : undefined
+                }
+                aria-invalid={roleValidationFailed}
+                disabled={pending !== null}
+                onChange={(event) => setScopeId(event.target.value)}
+                value={scopeId}
+              />
             </label>
             <label className={styles.field}>
               <span>Popis rozsahu</span>

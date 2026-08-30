@@ -123,7 +123,8 @@ const confirmedReservationPolicies = new Map<
     {
       capacity: 12,
       time: '15:15 - 16:45',
-      title: 'Expertní Board 21 - mastermind session',
+      title:
+        'Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?',
       type: 'mastermind',
     },
   ],
