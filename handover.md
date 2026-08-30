@@ -75,6 +75,12 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   snapshotem jako JSON. Neprázdná live agenda nabízí privátní no-store download
   se stabilním ne-PII UID, publication sequence, UTC, CRLF, Unicode-safe
   75octetovým foldingem a `STATUS:CANCELLED`; prázdná agenda zůstává `empty`.
+- Neblokovaná část `P5-11` doplňuje explicitní source/import matici kapacit
+  EB21 12, oba workshopy 20 a 26 coaching slotů 1 a tříviewportový Playwright
+  průchod rezervace → pražský lokální čas → privátní UTC/CRLF `.ics` download.
+  Spolu s existujícími PostgreSQL race a roster IDOR testy jsou uzavřené
+  všechny proveditelné hrany; FIFO/promotion čeká na `RES-04` a úspěšná
+  networkingová rezervace na `RES-01`.
 - `P5-07` bylo 21. 8. 2026 znovu ověřeno proti autoritativnímu produktovému
   dokumentu včetně všech komentářů. Revize se od 15. 8. nezměnila a stále
   nedodává číselnou kapacitu networkingu ani waitlist/storno režim, proto úkol
@@ -1197,7 +1203,9 @@ detailem `BLOCKER-RES-01`; nevytvářet místo něj `registration_estimate`.
 `P5-04` nezačínat bez jediného potvrzeného promotion režimu v
 `BLOCKER-RES-04`; dvoudílný sobotní mastermind zůstává za `BLOCKER-RES-05`.
 Ticket transfer/storno consumer rozhodnutého cancel pravidla
-doplní `P4-09`, až vznikne skutečná ticket transition.
+doplní `P4-09`, až vznikne skutečná ticket transition. Nejbližší neblokovaný
+vývojový řez je `P6-01`: check-in schema, `CS-CHECKIN-01`, device identity a
+permission policies bez domýšlení event-day kapacity z `BLOCKER-OPS-01`.
 
 ## Dokončená oprava review PR `#16`
 

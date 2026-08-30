@@ -2614,8 +2614,17 @@ souběžně.
   a stav zrušené session; live UI nabízí export jen pro neprázdnou agendu.
 - [–] `P5-10` Agenda/session reminders – vyřazeno rozhodnutím
   `SCOPE-2026-06`; `.ics` je minimum.
-- [ ] `P5-11` E2E/race/timezone/IDOR testy včetně přesných kapacit, FIFO,
-  coaching souběhu, networkingové rezervace a nemožnosti přečíst cizí roster.
+- [!] `P5-11` Neblokovaná testovací matice je dokončená: PostgreSQL regrese
+  ověřují jediného vítěze posledního místa i coaching slotu 1/slot, souběh
+  rezervace s participant/admin stornem a změnou kapacity, canonical cutoff,
+  owner/event IDOR a nečitelnost nepřiřazeného/cizího rosteru. Importační test
+  explicitně drží počáteční kapacity EB21 12, oba workshopy 20 a všech 26
+  coaching slotů 1, zatímco networking a obě části sobotního mastermindu
+  zůstávají bez domyšlené rezervace. Playwright cesta přes všechny tři
+  viewporty rezervuje dostupné místo, ověřuje pražský lokální čas a stahuje
+  privátní UTC/CRLF `.ics`. FIFO vznik/promotion zůstává za `P5-04` a
+  `BLOCKER-RES-04`; úspěšná networkingová rezervace za `P5-07` a
+  `BLOCKER-RES-01`.
 
 **Akceptace:** kapacitu nelze překročit; waitlist je deterministický a používá
 právě jeden schválený promotion režim; konflikt se zobrazí; změny mají audit;
@@ -3265,3 +3274,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.21 | 21. 8. 2026 | Dokončeno `P5-06`/`F3-06`: snapshot živého `Pátek!G1:I18` vytváří dvě source-verified coaching řady (Radim 12, Stanislava 14), 30 minut, kapacitu 1, cutoff v začátku a vypnutý waitlist. Migrace/import failují při neúplné provenance, policy driftu nebo participant state; souběh posledního místa a UI bez identity držitele mají PostgreSQL/browser regresi. Před finální publikací se snapshot znovu porovná s autoritativním listem. |
 | 6.22 | 21. 8. 2026 | Dokončeno `P5-09`: produkční osobní agenda nabízí privátní autorizovaný RFC 5545 export nad stejným zamčeným canonical snapshotem jako JSON. Stabilní ne-PII UID, publication SEQUENCE, UTC, CRLF, escaping, Unicode-safe folding, cancellation a IDOR/retention hlavičky mají unit/PostgreSQL regresi. `P5-07` bylo znovu ověřeno proti nezměněné autoritativní revizi a zůstává fail-closed za chybějící kapacitou a waitlist/storno rozhodnutím `BLOCKER-RES-01`. |
 | 6.23 | 21. 8. 2026 | Kapacita rezervovatelné aktivity je samostatné session-level provozní nastavení v `/admin/rezervace`, nikoli konstanta nebo vlastnost konkrétní rezervace. Organizer ji může auditovaně a idempotentně změnit i před první rezervací; server odmítá hodnotu pod confirmed count, serializuje ji s participant rezervacemi a invaliduje dotčené snapshoty. Opakovaný import programu zachová administrátorskou hodnotu. Nový klient používá jen session-level endpoint; starý reservation-bound override zůstává přechodově podporovaný na původní cestě po jednu kompatibilní rollout fázi a smí se odstranit až po ověřené expiraci předchozího klientského/service-worker buildu. |
+| 6.24 | 26. 8. 2026 | Dokončena neblokovaná část `P5-11`: source/import regrese explicitně drží EB21 12, oba workshopy 20, 26 coaching slotů 1 a fail-closed networking/mastermind; existující PostgreSQL race a IDOR sada kryje poslední místo, coaching souběh, admin/participant mutace a cizí roster. Nový Playwright průchod na telefonu, tabletu a desktopu rezervuje dostupné místo, ověřuje zobrazení v `Europe/Prague` a privátní UTC/CRLF `.ics` download. FIFO/promotion a úspěšný networking zůstávají poctivě blokované `RES-04`/`RES-01`. |
