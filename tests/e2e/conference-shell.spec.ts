@@ -1,59 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import {
-  identityFixtureIds,
-  identityFixtureProfile,
-} from '@byzon/test-support/fixtures';
+import { expect, test } from '@playwright/test';
 import { targetViewports } from '@byzon/test-support/viewports';
-
-const activateSyntheticParticipantBeforeBootstrap = async (page: Page) => {
-  await page.addInitScript(
-    ({ privacyNoticeDocumentId, profile, termsDocumentId }) => {
-      const nativeFetch = window.fetch.bind(window);
-      let activationRequest: Promise<void> | null = null;
-
-      window.fetch = async (input, init) => {
-        const requestUrl =
-          input instanceof Request
-            ? input.url
-            : input instanceof URL
-              ? input.href
-              : input;
-        const url = new URL(requestUrl, window.location.href);
-        if (url.pathname === '/api/v1/me/bootstrap') {
-          activationRequest ??= nativeFetch('/api/v1/me/onboarding', {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'idempotency-key': 'onboarding:e2e-active-participant',
-            },
-            body: JSON.stringify({
-              profile,
-              legal: {
-                termsDocumentId,
-                termsAccepted: true,
-                privacyNoticeDocumentId,
-                privacyAcknowledged: true,
-              },
-            }),
-          }).then((response) => {
-            if (!response.ok) {
-              throw new Error(
-                `Synthetic participant activation failed (${response.status}).`,
-              );
-            }
-          });
-          await activationRequest;
-        }
-        return nativeFetch(input, init);
-      };
-    },
-    {
-      privacyNoticeDocumentId: identityFixtureIds.privacyNotice,
-      profile: identityFixtureProfile,
-      termsDocumentId: identityFixtureIds.terms,
-    },
-  );
-};
 
 test('brand shell, manifest and health endpoints are available', async ({
   page,
@@ -156,7 +102,9 @@ test('participant reserves the available place and downloads the Prague-time age
 }) => {
   test.setTimeout(60_000);
 
-  await activateSyntheticParticipantBeforeBootstrap(page);
+  await page.setExtraHTTPHeaders({
+    'x-byzon-mock-participant': 'active',
+  });
   await page.goto('/app/agenda');
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),

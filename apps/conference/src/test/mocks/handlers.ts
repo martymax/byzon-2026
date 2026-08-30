@@ -1488,7 +1488,10 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       cacheControl: 'private, no-store',
     });
   }),
-  http.get('*/api/v1/me/bootstrap', () => {
+  http.get('*/api/v1/me/bootstrap', ({ request }) => {
+    if (request.headers.get('x-byzon-mock-participant') === 'active') {
+      configureMockParticipantPrincipal({ active: true });
+    }
     if (mockActivationState.signedOut) {
       return mockProblemResponse(
         identityBootstrapProblemSchema,
