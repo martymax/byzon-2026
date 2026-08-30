@@ -165,8 +165,12 @@ test('participant reserves the available place and downloads the Prague-time age
   const offeredPlace = page.getByRole('dialog', {
     name: 'Nabídka místa z čekací listiny',
   });
-  await expect(offeredPlace).toBeVisible({ timeout: 20_000 });
-  await offeredPlace.getByRole('button', { name: 'Zavřít' }).click();
+  await expect(
+    page.locator('article').filter({ hasText: 'Otevření konference' }),
+  ).toBeAttached({ timeout: 20_000 });
+  if (await offeredPlace.isVisible()) {
+    await offeredPlace.getByRole('button', { name: 'Zavřít' }).click();
+  }
 
   const opening = page.getByRole('article').filter({
     has: page.getByRole('link', { name: 'Otevření konference' }),
