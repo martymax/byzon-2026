@@ -144,8 +144,16 @@ integration('content import integration', () => {
     const first = await importContentJson(options);
     const firstSessions = await client.db
       .select({
+        capacity: schema.programSessions.capacity,
+        capacityMode: schema.programSessions.capacityMode,
+        endsAt: schema.programSessions.endsAt,
         id: schema.programSessions.id,
+        reservationClosesAt: schema.programSessions.reservationClosesAt,
+        slug: schema.programSessions.slug,
+        startsAt: schema.programSessions.startsAt,
         title: schema.programSessions.title,
+        type: schema.programSessions.type,
+        waitlistMode: schema.programSessions.waitlistMode,
       })
       .from(schema.programSessions)
       .where(
@@ -154,6 +162,71 @@ integration('content import integration', () => {
           ne(schema.programSessions.status, 'archived'),
         ),
       );
+
+    expect(firstSessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Expertní Board 21 - mastermind session',
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 12,
+          reservationClosesAt: new Date('2026-09-18T13:15:00.000Z'),
+          waitlistMode: 'disabled',
+        }),
+        expect.objectContaining({
+          title: 'Workshop: Leonid Kushnir',
+          type: 'workshop',
+          capacityMode: 'reservation',
+          capacity: 20,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+          waitlistMode: 'disabled',
+        }),
+        expect.objectContaining({
+          title: 'Workshop: Blanka Mrázková',
+          type: 'workshop',
+          capacityMode: 'reservation',
+          capacity: 20,
+          reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
+          waitlistMode: 'disabled',
+        }),
+        expect.objectContaining({
+          title: 'Řízený networking',
+          capacityMode: 'none',
+          capacity: null,
+        }),
+        expect.objectContaining({
+          title: 'Mastermind část 1',
+          capacityMode: 'none',
+          capacity: null,
+        }),
+        expect.objectContaining({
+          title: 'Mastermind část 2',
+          capacityMode: 'none',
+          capacity: null,
+        }),
+      ]),
+    );
+    const firstCoachingSessions = firstSessions.filter(
+      ({ type }) => type === 'coaching',
+    );
+    expect(firstCoachingSessions).toHaveLength(26);
+    expect(
+      firstCoachingSessions.every(
+        ({
+          capacity,
+          capacityMode,
+          endsAt,
+          reservationClosesAt,
+          startsAt,
+          waitlistMode,
+        }) =>
+          capacity === 1 &&
+          capacityMode === 'reservation' &&
+          endsAt.getTime() - startsAt.getTime() === 30 * 60 * 1_000 &&
+          reservationClosesAt?.getTime() === startsAt.getTime() &&
+          waitlistMode === 'disabled',
+      ),
+    ).toBe(true);
 
     const preservedWorkshopId = firstSessions.find(
       ({ title }) => title === 'Workshop: Leonid Kushnir',
