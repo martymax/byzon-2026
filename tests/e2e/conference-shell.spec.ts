@@ -105,20 +105,29 @@ test('participant reserves the available place and downloads the Prague-time age
   await page.setExtraHTTPHeaders({
     'x-byzon-mock-participant': 'active',
   });
-  await page.goto('/app/agenda');
+  await page.goto('/app/program');
+  await expect(
+    page.getByRole('heading', { name: 'Program', level: 1 }),
+  ).toBeVisible();
+  const syntheticBootstrap = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/me/bootstrap', {
+      headers: { 'x-byzon-mock-participant': 'active' },
+    });
+    return { ok: response.ok, status: response.status };
+  });
+  expect(syntheticBootstrap).toEqual({ ok: true, status: 200 });
+
+  await page
+    .getByRole('navigation', { name: 'Hlavní navigace' })
+    .getByRole('link', { name: 'Agenda', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),
   ).toBeVisible();
 
-  const offeredPlace = page.getByRole('dialog', {
-    name: 'Nabídka místa z čekací listiny',
-  });
   await expect(
     page.locator('article').filter({ hasText: 'Otevření konference' }),
   ).toBeAttached({ timeout: 20_000 });
-  if (await offeredPlace.isVisible()) {
-    await offeredPlace.getByRole('button', { name: 'Zavřít' }).click();
-  }
 
   const opening = page.getByRole('article').filter({
     has: page.getByRole('link', { name: 'Otevření konference' }),
