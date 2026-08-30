@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { targetViewports } from '@byzon/test-support/viewports';
 
+const mockParticipantSessionKey = 'byzon.mock.participant.active';
+
 test('brand shell, manifest and health endpoints are available', async ({
   page,
   request,
@@ -109,18 +111,28 @@ test('participant reserves the available place and downloads the Prague-time age
   await expect(
     page.getByRole('heading', { name: 'Program', level: 1 }),
   ).toBeVisible();
-  const syntheticBootstrap = await page.evaluate(async () => {
+  await expect(page.locator('#byzon-mock-mode-indicator')).toHaveAttribute(
+    'data-state',
+    'active',
+    { timeout: 20_000 },
+  );
+  const syntheticBootstrap = await page.evaluate(async (sessionKey) => {
+    window.sessionStorage.setItem(sessionKey, 'true');
     const response = await fetch('/api/v1/me/bootstrap', {
       headers: { 'x-byzon-mock-participant': 'active' },
     });
     return { ok: response.ok, status: response.status };
-  });
+  }, mockParticipantSessionKey);
   expect(syntheticBootstrap).toEqual({ ok: true, status: 200 });
 
-  await page.goto('/app/agenda');
+  await page
+    .getByRole('navigation', { name: 'Hlavní navigace' })
+    .getByRole('link', { name: 'Agenda', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/app\/agenda$/, { timeout: 20_000 });
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
 
   await expect(
     page.locator('article').filter({ hasText: 'Otevření konference' }),
