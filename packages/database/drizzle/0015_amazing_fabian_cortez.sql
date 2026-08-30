@@ -1,0 +1,3 @@
+ALTER TABLE "operational_export_requests" ADD COLUMN "content_type" varchar(80);--> statement-breakpoint
+ALTER TABLE "operational_export_requests" ADD COLUMN "content" text;--> statement-breakpoint
+ALTER TABLE "operational_export_requests" ADD CONSTRAINT "operational_export_requests_content_check" CHECK (("operational_export_requests"."state" = 'ready' and "operational_export_requests"."content_type" is not null and "operational_export_requests"."content" is not null and "operational_export_requests"."checksum_sha256" is not null) or ("operational_export_requests"."state" <> 'ready' and "operational_export_requests"."content_type" is null and "operational_export_requests"."content" is null));

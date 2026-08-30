@@ -1,0 +1,1 @@
+ALTER TABLE "checkin_lookups" ADD COLUMN "outcome" varchar(32) NOT NULL;

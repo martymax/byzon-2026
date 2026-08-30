@@ -48,9 +48,13 @@ import AdminTicketsPage from './vstupenky/page';
 const mockRoutes = [
   ['import', AdminImportPage],
   ['support', AdminSupportPage],
-  ['announcements', AdminAnnouncementsPage],
   ['operations', AdminOperationsPage],
   ['canonical tickets', AdminTicketsPage],
+] as const;
+
+const integratedRoutes = [
+  ['overview', AdminOverviewPage],
+  ['announcements', AdminAnnouncementsPage],
   ['canonical participants', AdminParticipantsPage],
   ['canonical roles', AdminRolesPage],
   ['canonical reports', AdminReportsPage],
@@ -69,7 +73,7 @@ describe('F4 direct mock admin route boundary', () => {
     });
   });
 
-  it.each([['overview', AdminOverviewPage]] as const)(
+  it.each(integratedRoutes)(
     'keeps the integrated %s route available in production',
     (_name, page) => {
       expect(() => page()).not.toThrow();

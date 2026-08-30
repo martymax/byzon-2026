@@ -1,0 +1,1 @@
+ALTER TABLE "event_memberships" ADD COLUMN "offline_revocation_epoch" uuid DEFAULT gen_random_uuid() NOT NULL;

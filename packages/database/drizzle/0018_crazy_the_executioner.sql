@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "questions_enabled" boolean DEFAULT false NOT NULL;

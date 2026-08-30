@@ -10,6 +10,7 @@ import {
   checkinLookupResponseSchema,
   checkinReadProblemSchema,
   checkinSearchQuerySchema,
+  checkinSearchRequestSchema,
   checkinSearchResponseSchema,
   checkinStatsResponseSchema,
   checkinUndoProblemSchema,
@@ -64,8 +65,8 @@ export const checkinLookupEndpoint = defineApiEndpoint({
 });
 
 export const checkinSearchEndpoint = defineApiEndpoint({
-  method: 'GET',
-  requestSchema: null,
+  method: 'POST',
+  requestSchema: checkinSearchRequestSchema,
   successSchema: checkinSearchResponseSchema,
   problemSchema: checkinReadProblemSchema,
   problemCodes: [
@@ -79,7 +80,7 @@ export const checkinSearchEndpoint = defineApiEndpoint({
     'INTERNAL_ERROR',
   ],
   responseKind: 'json',
-  retry: 'safe-read',
+  retry: 'never',
   idempotency: 'forbidden',
 });
 
@@ -176,12 +177,9 @@ export const requestCheckinSearch = (
   signal?: AbortSignal,
 ) => {
   const canonicalQuery = checkinSearchQuerySchema.parse(query);
-  const parameters = new URLSearchParams({
-    q: canonicalQuery,
-    limit: '5',
-  });
   return api.request(checkinSearchEndpoint, {
-    path: `/api/v1/check-in/search?${parameters.toString()}`,
+    path: '/api/v1/check-in/search',
+    body: { query: canonicalQuery },
     cache: 'no-store',
     ...(signal ? { signal } : {}),
   });

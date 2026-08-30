@@ -116,6 +116,7 @@ const programSessionShape = {
   status: z.enum(['published', 'cancelled']).optional(),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
+  questionsEnabled: z.boolean().optional(),
   sortOrder: sortOrderSchema,
 } as const;
 

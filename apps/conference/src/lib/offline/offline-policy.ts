@@ -11,7 +11,7 @@ import {
   type ParticipantAgendaResponse,
 } from '@byzon/domain/contracts';
 
-export const PARTICIPANT_OFFLINE_DATABASE_VERSION = 3;
+export const PARTICIPANT_OFFLINE_DATABASE_VERSION = 4;
 export const PARTICIPANT_OFFLINE_CONTRACT_VERSION = OFFLINE_CONTRACT_VERSION;
 export const PARTICIPANT_OFFLINE_DATABASE_NAME = 'byzon-participant-offline-v2';
 export const PUBLIC_CONTENT_STALE_AFTER_MS = 5 * 60 * 1_000;
@@ -46,30 +46,16 @@ export interface ApprovedOfflineAgendaMutation {
 
 export type PublicCacheFreshness = 'fresh' | 'stale';
 
-const mockedOfflineFeatureGate: OfflineFeatureGate =
-  offlineFeatureGateSchema.parse({
-    ...offlineFeatureGateDefaults,
-    personalAgendaCache: true,
-    agendaMutationReplay: true,
-    ownerLease: 'lease-v1',
-    ownerBoundReplay: 'lease-v1',
-  });
-
-const mockedOfflineRuntimeAvailable = (): boolean =>
-  process.env.NODE_ENV === 'test' ||
-  (process.env.NODE_ENV === 'development' &&
-    typeof document !== 'undefined' &&
-    document.documentElement.dataset.byzonMockMode === 'active');
-
-/**
- * Personal storage and replay stay fail-closed in production until the server
- * exposes the owner-bound CS-OFFLINE-01 lease and replay preflight. Only the
- * development mock port and tests opt into the complete synthetic workflow.
- */
 export const participantOfflineFeatureGate = (): OfflineFeatureGate =>
-  mockedOfflineRuntimeAvailable()
-    ? mockedOfflineFeatureGate
-    : offlineFeatureGateDefaults;
+  offlineFeatureGateSchema.parse(offlineFeatureGateDefaults);
+
+export const participantOfflineServerLeaseRequired = (): boolean =>
+  process.env.NODE_ENV !== 'test' &&
+  !(
+    process.env.NODE_ENV === 'development' &&
+    typeof document !== 'undefined' &&
+    document.documentElement.dataset.byzonMockMode === 'active'
+  );
 
 export const offlineParticipantAgendaCacheAvailable = (): boolean =>
   participantOfflineFeatureGate().personalAgendaCache;

@@ -167,6 +167,7 @@ interface ParticipantOfflineControlRecord {
   readonly epoch: string;
   readonly changedAt: string;
   readonly reason: OfflineWipeReason | 'schema_created';
+  readonly verifiedUntil: string | null;
 }
 
 export interface ParticipantOfflineDataEvent {
@@ -319,8 +320,8 @@ export const migrateParticipantOfflineDatabase: OfflineMigration = (
   ensureIndex(queue, 'createdAt', 'createdAt');
 
   if (oldVersion < PARTICIPANT_OFFLINE_DATABASE_VERSION) {
-    // Schema v3 changes the owner binding shared by the snapshot, metadata and
-    // queue. Clear all three stores in this upgrade transaction so no v2
+    // Schema v4 makes a server-verified lease mandatory. Clear all private
+    // stores so no locally generated v3 owner epoch can be treated as verified.
     // private record can survive under the newly rotated ownership epoch.
     agenda.clear();
     metadata.clear();
@@ -330,6 +331,7 @@ export const migrateParticipantOfflineDatabase: OfflineMigration = (
       epoch: createEpoch(),
       changedAt: new Date().toISOString(),
       reason: 'schema_created',
+      verifiedUntil: null,
     } satisfies ParticipantOfflineControlRecord);
   }
 };
@@ -433,7 +435,10 @@ const readControlRecord = async (
     existing.key === PARTICIPANT_OFFLINE_EPOCH_KEY &&
     typeof existing.epoch === 'string' &&
     isUuid(existing.epoch) &&
-    Number.isFinite(Date.parse(existing.changedAt))
+    Number.isFinite(Date.parse(existing.changedAt)) &&
+    (existing.verifiedUntil === null ||
+      (typeof existing.verifiedUntil === 'string' &&
+        Number.isFinite(Date.parse(existing.verifiedUntil))))
   ) {
     return existing;
   }
@@ -468,6 +473,61 @@ export const readParticipantOfflineEpoch = async (
     await transactionDone(transaction);
     return control.epoch;
   }, options);
+
+export const readVerifiedParticipantOfflineEpoch = async (
+  options?: OpenParticipantOfflineDatabaseOptions,
+): Promise<string | null> =>
+  withDatabase(async (database) => {
+    const transaction = database.transaction(
+      participantOfflineStoreNames.control,
+      'readonly',
+    );
+    const control = await readControlRecord(
+      transaction.objectStore(participantOfflineStoreNames.control),
+    );
+    await transactionDone(transaction);
+    return control.verifiedUntil !== null &&
+      Date.parse(control.verifiedUntil) > Date.now()
+      ? control.epoch
+      : null;
+  }, options);
+
+/**
+ * Adopt the server-issued revocation epoch. A changed epoch atomically wipes
+ * every owner-bound record before the new owner can persist private data.
+ */
+export const reconcileParticipantOfflineEpoch = async (
+  revocationEpoch: string,
+  expiresAt: string,
+  options?: OpenParticipantOfflineDatabaseOptions,
+): Promise<string> => {
+  if (
+    !isUuid(revocationEpoch) ||
+    !Number.isFinite(Date.parse(expiresAt)) ||
+    Date.parse(expiresAt) <= Date.now()
+  ) {
+    throw new ParticipantOfflineEpochChangedError();
+  }
+  const current = await readParticipantOfflineEpoch(options);
+  if (current !== revocationEpoch) {
+    await wipeAllParticipantOfflineData('revocation', options, revocationEpoch);
+  }
+  await withDatabase(async (database) => {
+    const transaction = database.transaction(
+      participantOfflineStoreNames.control,
+      'readwrite',
+    );
+    transaction.objectStore(participantOfflineStoreNames.control).put({
+      key: PARTICIPANT_OFFLINE_EPOCH_KEY,
+      epoch: revocationEpoch,
+      changedAt: new Date().toISOString(),
+      reason: 'revocation',
+      verifiedUntil: expiresAt,
+    } satisfies ParticipantOfflineControlRecord);
+    await transactionDone(transaction);
+  }, options);
+  return revocationEpoch;
+};
 
 export const assertParticipantOfflineEpoch = async (
   expectedEpoch: string,
@@ -510,9 +570,14 @@ export const writeOfflineAgendaSnapshot = async (
       transaction,
       options?.expectedEpoch,
     );
-    const expiresAt = new Date(
-      Date.parse(lastSyncedAt) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
-    ).toISOString();
+    const storedAtMs = Date.parse(lastSyncedAt);
+    const expiresAtMs = Math.min(
+      storedAtMs + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+      control.verifiedUntil
+        ? Date.parse(control.verifiedUntil)
+        : storedAtMs + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+    );
+    const expiresAt = new Date(expiresAtMs).toISOString();
     const canonical = offlineParticipantAgendaCacheSchema.parse({
       contractVersion: PARTICIPANT_OFFLINE_CONTRACT_VERSION,
       kind: 'participant-agenda',
@@ -531,8 +596,7 @@ export const writeOfflineAgendaSnapshot = async (
         revocationEpoch: control.epoch,
         issuedAt: lastSyncedAt,
         refreshAfter: new Date(
-          Date.parse(lastSyncedAt) +
-            Math.floor(OFFLINE_PRIVATE_RECORD_LEASE_MS / 2),
+          storedAtMs + Math.floor((expiresAtMs - storedAtMs) / 2),
         ).toISOString(),
         expiresAt,
       },
@@ -653,7 +717,12 @@ export const enqueueOfflineAgendaMutation = async (
       createdAt: timestamp,
       updatedAt: timestamp,
       expiresAt: new Date(
-        Date.parse(timestamp) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+        Math.min(
+          Date.parse(timestamp) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+          control.verifiedUntil
+            ? Date.parse(control.verifiedUntil)
+            : Date.parse(timestamp) + OFFLINE_PRIVATE_RECORD_LEASE_MS,
+        ),
       ).toISOString(),
       attempts: 0,
       status: 'pending',
@@ -1320,6 +1389,7 @@ export const wipeAllParticipantOfflineData = async (
       epoch: tombstoneEpoch,
       changedAt: new Date().toISOString(),
       reason,
+      verifiedUntil: null,
     } satisfies ParticipantOfflineControlRecord);
     await transactionDone(transaction);
   }, options);

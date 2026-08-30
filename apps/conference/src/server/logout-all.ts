@@ -49,6 +49,7 @@ export const logoutAllSessions = async (
   request: Request,
   auth: AuthRequestHandler,
   allowedOrigin: string,
+  beforeRevoke?: (headers: Headers) => Promise<void>,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
 
@@ -56,6 +57,8 @@ export const logoutAllSessions = async (
     if (request.headers.get('origin') !== allowedOrigin) {
       return problemResponse(authProblem(403), requestId);
     }
+
+    await beforeRevoke?.(request.headers);
 
     // Ask Better Auth for its exact cookie-expiration headers before the
     // irreversible revocation. Omitting the cookie keeps this request from

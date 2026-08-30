@@ -148,6 +148,7 @@ export const tickets = pgTable(
     claimedAt: timestamp('claimed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     transferredFromTicketId: uuid('transferred_from_ticket_id'),
+    version: integer('version').default(1).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -179,6 +180,7 @@ export const tickets = pgTable(
       name: 'tickets_transfer_source_event_fk',
     }).onDelete('restrict'),
     check('tickets_code_hmac_check', sql`${table.codeHmac} ~ '^[0-9a-f]{64}$'`),
+    check('tickets_version_check', sql`${table.version} > 0`),
     check(
       'tickets_claim_state_check',
       sql`(${table.status} = 'activated' and ${table.holderUserId} is not null and ${table.claimedAt} is not null) or ${table.status} <> 'activated'`,

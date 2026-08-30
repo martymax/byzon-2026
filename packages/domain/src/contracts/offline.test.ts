@@ -72,20 +72,21 @@ describe('CS-OFFLINE-01 canonical contracts', () => {
     ]);
   });
 
-  it('defaults personal persistence and replay to fail-closed', () => {
+  it('enables personal persistence only with the completed lease-v1 server contract', () => {
     expect(offlineFeatureGateSchema.parse(offlineFeatureGateDefaults)).toEqual(
       offlineFeatureGateDefaults,
     );
     expect(offlineFeatureGateDefaults).toMatchObject({
-      personalAgendaCache: false,
-      agendaMutationReplay: false,
-      ownerLease: 'disabled',
-      ownerBoundReplay: 'disabled',
+      personalAgendaCache: true,
+      agendaMutationReplay: true,
+      ownerLease: 'lease-v1',
+      ownerBoundReplay: 'lease-v1',
     });
     expect(
       offlineFeatureGateSchema.safeParse({
         ...offlineFeatureGateDefaults,
         agendaMutationReplay: true,
+        personalAgendaCache: false,
       }).success,
     ).toBe(false);
   });
