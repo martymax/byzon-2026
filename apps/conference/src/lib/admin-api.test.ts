@@ -24,7 +24,7 @@ import {
   adminOperationsOverviewEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
-  createAdminTicketImportUploadPort,
+  adminTicketImportPreviewEndpoint,
   requestAdminEventSettingsUpdate,
   requestAdminOperationsOverview,
   requestAdminReservationMutation,
@@ -34,6 +34,7 @@ import {
   requestAdminSupportMutation,
   requestAdminSupportSearch,
   requestAdminTicketImportApply,
+  requestAdminTicketImportPreview,
 } from './admin-api';
 
 const metadata = { requestId: 'admin-api-test-0001' } as const;
@@ -70,6 +71,11 @@ describe('admin API contract policies', () => {
       method: 'POST',
       retry: 'never',
       idempotency: 'required',
+    });
+    expect(adminTicketImportPreviewEndpoint).toMatchObject({
+      method: 'POST',
+      retry: 'never',
+      idempotency: 'forbidden',
     });
     expect(adminAnnouncementSendEndpoint).toMatchObject({
       method: 'POST',
@@ -295,105 +301,47 @@ describe('admin API contract policies', () => {
     });
   });
 
-  it('sends a real multipart File and parses the response through the canonical ApiPort', async () => {
-    const file = new File(['reference,state\nT001,active'], 'tickets.csv', {
-      type: 'text/csv',
-    });
+  it('requests a no-store server-side SimpleShop preview without file data', async () => {
     const preview = {
-      ...ticketImportPreviewFixtures.clean!,
+      ...ticketImportPreviewFixtures.simpleshop_readonly!,
       eventId: adminFixtureIds.event,
-      source: {
-        fileName: file.name,
-        mediaType: file.type,
-        byteSize: file.size,
-      },
     };
-    const fetch = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) => {
-        expect(init?.body).toBeInstanceOf(FormData);
-        expect(init?.body).not.toEqual(expect.any(String));
-        expect(new Headers(init?.headers).has('content-type')).toBe(false);
-        const multipart = init?.body as FormData;
-        const uploaded = multipart.get('file');
-        expect(uploaded).toBeInstanceOf(Blob);
-        expect((uploaded as File).name).toBe(file.name);
-        return new Response(JSON.stringify(preview), {
-          status: 200,
-          headers: {
-            'content-type': 'application/json',
-            'x-request-id': metadata.requestId,
-            'cache-control': 'private, no-store',
-          },
-        });
-      },
-    );
-
-    const result = await createAdminTicketImportUploadPort(fetch).preview(
-      adminFixtureIds.event,
-      file,
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      kind: 'success',
-      data: { eventId: adminFixtureIds.event, source: preview.source },
+    const request = vi.fn(async (endpoint: unknown, options: unknown) => {
+      void endpoint;
+      void options;
+      return success(preview);
     });
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('accepts an empty browser MIME only for a text-like .csv signature', async () => {
-    const file = new File(['reference,state\nT001,active'], 'tickets.csv');
-    const preview = {
-      ...ticketImportPreviewFixtures.clean!,
-      eventId: adminFixtureIds.event,
-      source: {
-        fileName: file.name,
-        mediaType: 'text/csv',
-        byteSize: file.size,
-      },
-    };
-    const fetch = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const uploaded = (init?.body as FormData | undefined)?.get('file');
-        expect(uploaded).toBeInstanceOf(Blob);
-        expect((uploaded as File).name).toBe(file.name);
-        expect((uploaded as Blob).type).toBe('text/csv');
-        return new Response(JSON.stringify(preview), {
-          status: 200,
-          headers: {
-            'content-type': 'application/json',
-            'x-request-id': metadata.requestId,
-            'cache-control': 'private, no-store',
-          },
-        });
-      },
-    );
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
 
     await expect(
-      createAdminTicketImportUploadPort(fetch).preview(
-        adminFixtureIds.event,
-        file,
-      ),
+      requestAdminTicketImportPreview(api, adminFixtureIds.event),
+    ).resolves.toMatchObject({ ok: true });
+    expect(request).toHaveBeenCalledWith(
+      adminTicketImportPreviewEndpoint,
+      expect.objectContaining({
+        path: `/api/v1/admin/events/${adminFixtureIds.event}/ticket-imports/preview`,
+        body: { source: 'simpleshop' },
+        cache: 'no-store',
+      }),
+    );
+    expect(JSON.stringify(request.mock.calls[0]?.[1])).not.toContain(
+      'SIMPLESHOP_API',
+    );
+  });
+
+  it('rejects a structurally valid file preview from the SimpleShop endpoint', async () => {
+    const api = apiReturning({
+      ...ticketImportPreviewFixtures.clean!,
+      eventId: adminFixtureIds.event,
+    });
+
+    await expect(
+      requestAdminTicketImportPreview(api, adminFixtureIds.event),
     ).resolves.toMatchObject({
-      ok: true,
-      data: { source: { mediaType: 'text/csv' } },
+      ok: false,
+      failure: { kind: 'invalid_response' },
     });
-    expect(fetch).toHaveBeenCalledOnce();
-  });
-
-  it('rejects a binary .csv with an empty browser MIME before upload', async () => {
-    const file = new File(
-      [new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00])],
-      'disguised.csv',
-    );
-    const fetch = vi.fn();
-
-    await expect(
-      createAdminTicketImportUploadPort(fetch).preview(
-        adminFixtureIds.event,
-        file,
-      ),
-    ).rejects.toThrow('Unsupported ticket import media type');
-    expect(fetch).not.toHaveBeenCalled();
   });
 });

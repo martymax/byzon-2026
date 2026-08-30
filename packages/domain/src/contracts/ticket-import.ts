@@ -10,6 +10,8 @@ import {
 
 export const TICKET_IMPORT_MAX_FILE_BYTES = 10_000_000;
 export const TICKET_IMPORT_MAX_PREVIEW_ROWS = 500;
+export const SIMPLESHOP_TICKET_PRODUCT_ID = 143_958;
+export const SIMPLESHOP_TICKET_FORM_KEY = '0MnNQ';
 
 const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime({ offset: true });
@@ -81,8 +83,9 @@ const maskedContactSchema = safeInlineTextSchema(120).refine(
   'Import contact must remain masked',
 );
 
-export const ticketImportSourceSchema = z
+export const ticketImportFileSourceSchema = z
   .strictObject({
+    kind: z.literal('file'),
     fileName: safeFileNameSchema,
     mediaType: ticketImportMediaTypeSchema,
     byteSize: z.number().int().positive().max(TICKET_IMPORT_MAX_FILE_BYTES),
@@ -103,7 +106,96 @@ export const ticketImportSourceSchema = z
     }
   });
 
+const simpleShopObservedStatusesSchema = z.strictObject({
+  paid: z.number().int().nonnegative(),
+  unpaid: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+  refunded: z.number().int().nonnegative(),
+  unknown: z.number().int().nonnegative(),
+});
+
+const simpleShopCodeShapeSchema = z.strictObject({
+  count: z.number().int().positive().max(TICKET_IMPORT_MAX_PREVIEW_ROWS),
+  minByteLength: z.number().int().positive().max(512),
+  maxByteLength: z.number().int().positive().max(512),
+  characterClasses: z
+    .array(
+      z.enum([
+        'digit',
+        'upper_ascii',
+        'lower_ascii',
+        'hyphen',
+        'whitespace',
+        'other_ascii',
+        'non_ascii',
+      ]),
+    )
+    .max(7),
+});
+
+export const ticketImportSimpleShopSourceSchema = z
+  .strictObject({
+    kind: z.literal('simpleshop_api'),
+    productId: z.literal(SIMPLESHOP_TICKET_PRODUCT_ID),
+    formKey: z.literal(SIMPLESHOP_TICKET_FORM_KEY),
+    strict: z.literal(true),
+    pageCount: z.literal(1),
+    sourceRows: z.number().int().positive().max(10_000),
+    ticketRows: z.number().int().positive().max(TICKET_IMPORT_MAX_PREVIEW_ROWS),
+    ignoredSummaryRows: z.number().int().nonnegative().max(10_000),
+    multipleQuantitySummaryRows: z.number().int().nonnegative().max(10_000),
+    observedStatuses: simpleShopObservedStatusesSchema,
+    codeShape: simpleShopCodeShapeSchema,
+  })
+  .superRefine((source, context) => {
+    if (source.sourceRows !== source.ticketRows + source.ignoredSummaryRows) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sourceRows'],
+        message: 'Source row counts must reconcile',
+      });
+    }
+    const statusTotal = Object.values(source.observedStatuses).reduce(
+      (total, count) => total + count,
+      0,
+    );
+    if (statusTotal !== source.ticketRows) {
+      context.addIssue({
+        code: 'custom',
+        path: ['observedStatuses'],
+        message: 'Observed status counts must match ticket rows',
+      });
+    }
+    if (source.codeShape.count !== source.ticketRows) {
+      context.addIssue({
+        code: 'custom',
+        path: ['codeShape', 'count'],
+        message: 'Ticket-code shape count must match ticket rows',
+      });
+    }
+    if (source.codeShape.minByteLength > source.codeShape.maxByteLength) {
+      context.addIssue({
+        code: 'custom',
+        path: ['codeShape'],
+        message: 'Ticket-code length range is invalid',
+      });
+    }
+  });
+
+export const ticketImportSourceSchema = z.union([
+  ticketImportFileSourceSchema,
+  ticketImportSimpleShopSourceSchema,
+]);
+
 export type TicketImportSource = z.infer<typeof ticketImportSourceSchema>;
+
+export const ticketImportPreviewRequestSchema = z.strictObject({
+  source: z.literal('simpleshop'),
+});
+
+export type TicketImportPreviewRequest = z.infer<
+  typeof ticketImportPreviewRequestSchema
+>;
 
 export const ticketImportRowStatusSchema = z.enum([
   'new',
@@ -119,10 +211,23 @@ export const ticketImportTicketStateSchema = z.enum([
   'active',
   'blocked',
   'cancelled',
+  'refunded',
 ]);
 
 export type TicketImportTicketState = z.infer<
   typeof ticketImportTicketStateSchema
+>;
+
+export const ticketImportSourceStatusSchema = z.enum([
+  'paid',
+  'unpaid',
+  'cancelled',
+  'refunded',
+  'unknown',
+]);
+
+export type TicketImportSourceStatus = z.infer<
+  typeof ticketImportSourceStatusSchema
 >;
 
 export const ticketImportIssueCodeSchema = z.enum([
@@ -148,6 +253,7 @@ export const ticketImportRowSchema = z
     referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
     displayName: safeInlineTextSchema(160),
     maskedContact: maskedContactSchema,
+    sourceStatus: ticketImportSourceStatusSchema,
     status: ticketImportRowStatusSchema,
     incomingState: ticketImportTicketStateSchema.nullable(),
     currentState: ticketImportTicketStateSchema.nullable(),
@@ -273,6 +379,16 @@ export const ticketImportPreviewResponseSchema = z
         message: 'Import preview row IDs must be unique',
       });
     }
+    if (
+      preview.source.kind === 'simpleshop_api' &&
+      preview.source.ticketRows !== preview.rows.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['source', 'ticketRows'],
+        message: 'SimpleShop ticket count must match preview rows',
+      });
+    }
   });
 
 export type TicketImportPreviewResponse = z.infer<
@@ -281,7 +397,10 @@ export type TicketImportPreviewResponse = z.infer<
 
 export const canApplyTicketImportPreview = (
   preview: TicketImportPreviewResponse,
-): boolean => preview.summary.conflict === 0 && preview.summary.unknown === 0;
+): boolean =>
+  preview.source.kind !== 'simpleshop_api' &&
+  preview.summary.conflict === 0 &&
+  preview.summary.unknown === 0;
 
 export const ticketImportApplyRequestSchema = z
   .strictObject({
@@ -368,6 +487,20 @@ export const ticketImportInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
 );
+export const ticketImportSourceUnavailableProblemSchema =
+  defineApiProblemSchema('IMPORT_SOURCE_UNAVAILABLE', 502);
+export const ticketImportSourceTimeoutProblemSchema = defineApiProblemSchema(
+  'IMPORT_SOURCE_TIMEOUT',
+  504,
+);
+export const ticketImportSourceInvalidProblemSchema = defineApiProblemSchema(
+  'IMPORT_SOURCE_INVALID',
+  502,
+);
+export const ticketImportRateLimitedProblemSchema = defineApiProblemSchema(
+  'RATE_LIMITED',
+  429,
+);
 
 const ticketImportReadProblems = [
   ticketImportAuthenticationRequiredProblemSchema,
@@ -389,6 +522,10 @@ export const ticketImportPreviewProblemSchema = z.discriminatedUnion('code', [
   ticketImportEventAccessDeniedProblemSchema,
   ticketImportUnsupportedFormatProblemSchema,
   ticketImportValidationProblemSchema,
+  ticketImportRateLimitedProblemSchema,
+  ticketImportSourceUnavailableProblemSchema,
+  ticketImportSourceTimeoutProblemSchema,
+  ticketImportSourceInvalidProblemSchema,
   ticketImportInternalErrorProblemSchema,
 ]);
 

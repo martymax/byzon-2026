@@ -55,12 +55,10 @@ import {
   ticketImportApplyProblemSchema,
   ticketImportApplyRequestSchema,
   ticketImportApplyResponseSchema,
+  ticketImportPreviewRequestSchema,
   ticketImportPreviewProblemSchema,
   ticketImportPreviewResponseSchema,
-  ticketImportSourceSchema,
   type TicketImportApplyRequest,
-  type TicketImportMediaType,
-  type TicketImportSource,
 } from '@byzon/domain/contracts/ticket-import';
 
 import {
@@ -111,23 +109,20 @@ export const adminOperationsOverviewEndpoint = defineApiEndpoint({
   idempotency: 'forbidden',
 });
 
-/**
- * `requestSchema` validates the metadata that accompanies the browser `File`.
- * The narrow upload port below replaces the generated JSON body with
- * `multipart/form-data`; the normal ApiPort still performs the canonical
- * response/problem parsing.
- */
 export const adminTicketImportPreviewEndpoint = defineApiEndpoint({
   method: 'POST',
-  requestSchema: ticketImportSourceSchema,
+  requestSchema: ticketImportPreviewRequestSchema,
   successSchema: ticketImportPreviewResponseSchema,
   problemSchema: ticketImportPreviewProblemSchema,
   problemCodes: [
     'AUTHENTICATION_REQUIRED',
     'AUTH_SESSION_EXPIRED',
     'EVENT_ACCESS_DENIED',
-    'IMPORT_UNSUPPORTED_FORMAT',
     'IMPORT_VALIDATION_FAILED',
+    'IMPORT_SOURCE_UNAVAILABLE',
+    'IMPORT_SOURCE_TIMEOUT',
+    'IMPORT_SOURCE_INVALID',
+    'RATE_LIMITED',
     'INTERNAL_ERROR',
   ],
   responseKind: 'json',
@@ -744,134 +739,17 @@ export const requestAdminEventSettingsUpdate = async (
       ),
   );
 
-type FetchImplementation = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
-
-export interface AdminTicketImportUploadPort {
-  readonly preview: (
-    eventId: string,
-    file: File,
-    signal?: AbortSignal,
-  ) => ReturnType<typeof requestAdminTicketImportPreview>;
-}
-
-const throwIfAborted = (signal?: AbortSignal): void => {
-  if (signal?.aborted) {
-    throw new DOMException('The operation was aborted.', 'AbortError');
-  }
-};
-
-const hasSafeCsvSignature = async (
-  file: File,
-  signal?: AbortSignal,
-): Promise<boolean> => {
-  throwIfAborted(signal);
-  const bytes = new Uint8Array(
-    await file.slice(0, Math.min(file.size, 4096)).arrayBuffer(),
-  );
-  throwIfAborted(signal);
-  if (bytes.length === 0) return false;
-  if (
-    bytes.some(
-      (byte) =>
-        byte === 0 ||
-        (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d),
-    )
-  ) {
-    return false;
-  }
-  try {
-    const sample = new TextDecoder('utf-8', { fatal: true })
-      .decode(bytes)
-      .replace(/^\uFEFF/, '');
-    return (
-      sample.trim().length > 0 &&
-      (sample.includes(',') ||
-        sample.includes(';') ||
-        sample.includes('\t') ||
-        /[\r\n]/.test(sample))
-    );
-  } catch {
-    return false;
-  }
-};
-
-const mediaTypeForFile = async (
-  file: File,
-  signal?: AbortSignal,
-): Promise<TicketImportMediaType> => {
-  if (file.type === 'text/csv') return 'text/csv';
-  if (
-    file.type ===
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  ) {
-    return file.type;
-  }
-  if (
-    file.type === '' &&
-    /\.csv$/i.test(file.name) &&
-    (await hasSafeCsvSignature(file, signal))
-  ) {
-    return 'text/csv';
-  }
-  throw new TypeError('Unsupported ticket import media type');
-};
-
 export const requestAdminTicketImportPreview = async (
   api: ApiPort,
   eventId: string,
-  source: TicketImportSource,
   signal?: AbortSignal,
 ) =>
   correlated(
     await api.request(adminTicketImportPreviewEndpoint, {
       path: eventPath(eventId, '/ticket-imports/preview'),
-      body: source,
+      body: { source: 'simpleshop' },
       cache: 'no-store',
       ...(signal ? { signal } : {}),
     }),
-    (data) => data.eventId === eventId && sameJson(data.source, source),
+    (data) => data.eventId === eventId && data.source.kind === 'simpleshop_api',
   );
-
-export const createAdminTicketImportUploadPort = (
-  fetchImplementation: FetchImplementation = globalThis.fetch.bind(globalThis),
-): AdminTicketImportUploadPort => ({
-  preview: async (eventId, file, signal) => {
-    const mediaType = await mediaTypeForFile(file, signal);
-    throwIfAborted(signal);
-    const source = ticketImportSourceSchema.parse({
-      fileName: file.name,
-      mediaType,
-      byteSize: file.size,
-    });
-    const multipart = new FormData();
-    const uploadPart =
-      file.type === source.mediaType
-        ? file
-        : new Blob([file], { type: source.mediaType });
-    multipart.append('file', uploadPart, source.fileName);
-    const multipartApi = createFetchApiClient({
-      maxRetries: 0,
-      fetch: (input, init) => {
-        const headers = new Headers(init?.headers);
-        headers.delete('content-type');
-        return fetchImplementation(input, {
-          ...init,
-          body: multipart,
-          headers,
-        });
-      },
-    });
-    return requestAdminTicketImportPreview(
-      multipartApi,
-      eventId,
-      source,
-      signal,
-    );
-  },
-});
-
-export const browserAdminTicketImportUpload =
-  createAdminTicketImportUploadPort();

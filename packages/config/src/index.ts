@@ -58,10 +58,36 @@ const workerEnvSchema = baseEnvSchema.extend({
   WORKER_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(4),
 });
 
-const conferenceEnvSchema = baseEnvSchema.extend({
-  BETTER_AUTH_SECRET: z.string().min(32),
-  RATE_LIMIT_SUBJECT_SECRET: z.string().min(32),
-});
+const conferenceEnvSchema = baseEnvSchema
+  .extend({
+    BETTER_AUTH_SECRET: z.string().min(32),
+    RATE_LIMIT_SUBJECT_SECRET: z.string().min(32),
+    SIMPLESHOP_API_EMAIL: z.email().max(320).optional(),
+    SIMPLESHOP_API_KEY: z.string().min(1).max(1_024).optional(),
+    SIMPLESHOP_API_BASE_URL: z.url().optional(),
+  })
+  .superRefine((value, context) => {
+    if (
+      (value.SIMPLESHOP_API_EMAIL === undefined) !==
+      (value.SIMPLESHOP_API_KEY === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SIMPLESHOP_API_EMAIL'],
+        message: 'SimpleShop API credentials must be configured together',
+      });
+    }
+    if (
+      value.SIMPLESHOP_API_BASE_URL !== undefined &&
+      (value.APP_ENV === 'staging' || value.APP_ENV === 'production')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SIMPLESHOP_API_BASE_URL'],
+        message: 'SimpleShop API base URL override is test-only',
+      });
+    }
+  });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;
 const developmentDefaults = {

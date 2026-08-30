@@ -103,6 +103,14 @@ lze zastavit přes `pnpm dev:infra:down` bez smazání jejich volumes.
 Kontroly aplikace spustíte přes `pnpm run ci`, browser smoke přes `pnpm test:e2e`.
 Railway staging postup je v `docs/runbooks/railway-staging.md`.
 
+Admin preview vstupenek používá výhradně serverové SimpleShop API credentials
+`SIMPLESHOP_API_EMAIL` a `SIMPLESHOP_API_KEY`. Organizátor spouští bounded
+read-only načtení ručně; aplikace posílá do SimpleShopu jen allowlistované
+`GET` požadavky a vrací sanitizované schema/agregáty. `P4-02` nemá apply cestu
+a nemění ticket tabulku. Test-only `SIMPLESHOP_API_BASE_URL` je ve stagingu a
+produkci odmítnut. Přesný ověřený kontrakt a otevřená mapování stavů jsou v
+[`ADR-015`](docs/adr/015-simpleshop-api-sync.md).
+
 Kompletní vývojový frontend nad výhradně syntetickými daty spustíte odděleně:
 
 ```bash

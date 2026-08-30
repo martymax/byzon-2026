@@ -7,10 +7,6 @@ import {
   adminSessionCapacityMutationResponseSchema,
 } from '@byzon/domain/contracts/admin';
 import {
-  ticketImportApplyResponseSchema,
-  ticketImportPreviewResponseSchema,
-} from '@byzon/domain/contracts/ticket-import';
-import {
   adminAnnouncementPreviewFixtures,
   adminAnnouncementSendFixtures,
   adminAuditFixtures,
@@ -24,7 +20,6 @@ import {
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   supportSearchFixtures,
-  ticketImportApplyFixtures,
   ticketImportPreviewFixtures,
 } from '@byzon/test-support/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,8 +44,7 @@ import {
   adminSessionCapacityMutationEndpoint,
   adminSupportMutationEndpoint,
   adminSupportSearchEndpoint,
-  adminTicketImportApplyEndpoint,
-  type AdminTicketImportUploadPort,
+  adminTicketImportPreviewEndpoint,
 } from '../../lib/admin-api';
 import type { ApiPort } from '../../lib/api/endpoint';
 import { expectComponentToPassAxe } from './accessibility';
@@ -147,174 +141,75 @@ describe('F4 contract-first admin journeys', () => {
     );
   });
 
-  it('uploads multipart metadata and retries an ambiguous import with the exact body and key', async () => {
+  it('loads a sanitized SimpleShop preview and never offers apply', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
-    const applyCalls: unknown[] = [];
-    const applySignals: AbortSignal[] = [];
-    let applyCount = 0;
-    const file = new File(['reference,state\nT001,active'], 'tickets.csv', {
-      type: 'text/csv',
-    });
-    const preview = ticketImportPreviewResponseSchema.parse({
-      ...ticketImportPreviewFixtures.clean!,
+    const preview = {
+      ...ticketImportPreviewFixtures.simpleshop_readonly!,
       eventId: adminFixtureIds.event,
-      source: {
-        fileName: file.name,
-        mediaType: file.type,
-        byteSize: file.size,
-      },
-    });
-    const applied = ticketImportApplyResponseSchema.parse({
-      ...ticketImportApplyFixtures.applied!,
-      eventId: adminFixtureIds.event,
-      previewId: preview.previewId,
-      previewVersion: preview.previewVersion,
-    });
-    const api = organizerApi((endpoint, options) => {
-      if (endpoint === adminTicketImportApplyEndpoint) {
-        const { signal, ...serializableOptions } = options as Record<
-          string,
-          unknown
-        > & { readonly signal: AbortSignal };
-        applyCalls.push(structuredClone(serializableOptions));
-        applySignals.push(signal);
-        applyCount += 1;
-        return applyCount === 1 ? failure('timeout') : success(applied);
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminTicketImportPreviewEndpoint) {
+        return success(preview);
       }
       throw new Error('Unexpected admin endpoint.');
     });
-    const uploadPort: AdminTicketImportUploadPort = {
-      preview: async () => success(preview),
-    };
     const screen = await renderComponent(
-      <AdminWorkspaceShell
-        api={api}
-        environment="mocked"
-        uploadPort={uploadPort}
-      >
+      <AdminWorkspaceShell api={api} environment="mocked">
         <AdminImportWorkspace />
       </AdminWorkspaceShell>,
     );
 
-    await screen.getByLabelText('Zdrojový soubor').upload(file);
-    await screen
-      .getByRole('button', { name: 'Vytvořit validované preview' })
-      .click();
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
     await expect
       .element(screen.getByRole('heading', { name: '2. Staging diff preview' }))
       .toBeVisible();
-    await screen
-      .getByRole('textbox', { name: 'Auditní důvod' })
-      .fill('Bezpečné ověření syntetického importu.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat a potvrdit apply' })
-      .click();
-    await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Aplikovat import' }).click();
     await expect
       .element(
-        screen.getByRole('button', {
-          name: 'Zopakovat přesně stejný pokus',
-        }),
+        screen.getByText(
+          'Toto je výhradně read-only SimpleShop preview. Apply není součástí P4-02 a server jej nenabízí.',
+        ),
       )
       .toBeVisible();
     await expect
       .element(screen.getByRole('textbox', { name: 'Auditní důvod' }))
-      .toBeDisabled();
-    await screen
-      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
-      .click();
+      .not.toBeInTheDocument();
     await expect
-      .element(screen.getByRole('heading', { name: 'Import byl aplikován' }))
-      .toBeVisible();
-    expect(applyCalls).toHaveLength(2);
-    expect(applyCalls[1]).toEqual(applyCalls[0]);
-    expect(applySignals).toHaveLength(2);
-    expect(applySignals.every((signal) => signal instanceof AbortSignal)).toBe(
-      true,
-    );
+      .element(screen.getByRole('button', { name: /apply/i }))
+      .not.toBeInTheDocument();
     await expectComponentToPassAxe(adminRoot());
   });
 
-  it('aborts and fences an older upload when the selected file changes', async () => {
+  it('prevents duplicate preview submission and aborts the request on unmount', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
-    const firstFile = new File(
-      ['reference,state\nT001,active'],
-      'first-conflict.csv',
-      { type: 'text/csv' },
-    );
-    const secondFile = new File(
-      ['reference,state\nT002,active'],
-      'second-clean.csv',
-      { type: 'text/csv' },
-    );
-    const firstPreview = ticketImportPreviewResponseSchema.parse({
-      ...ticketImportPreviewFixtures.conflict!,
-      eventId: adminFixtureIds.event,
-      source: {
-        fileName: firstFile.name,
-        mediaType: firstFile.type,
-        byteSize: firstFile.size,
-      },
+    let previewSignal: AbortSignal | undefined;
+    const previewRequest = vi.fn((_endpoint: unknown, options: unknown) => {
+      previewSignal = (options as { signal?: AbortSignal }).signal;
+      return new Promise<unknown>(() => undefined);
     });
-    const secondPreview = ticketImportPreviewResponseSchema.parse({
-      ...ticketImportPreviewFixtures.clean!,
-      eventId: adminFixtureIds.event,
-      source: {
-        fileName: secondFile.name,
-        mediaType: secondFile.type,
-        byteSize: secondFile.size,
-      },
-    });
-    let resolveFirst: (result: unknown) => void = () => undefined;
-    const firstRequest = new Promise<unknown>((resolve) => {
-      resolveFirst = resolve;
-    });
-    let firstSignal: AbortSignal | undefined;
-    const previewRequest = vi.fn(
-      (_eventId: string, selected: File, signal?: AbortSignal) => {
-        if (selected.name === firstFile.name) {
-          firstSignal = signal;
-          return firstRequest;
-        }
-        return Promise.resolve(success(secondPreview));
-      },
-    );
-    const uploadPort: AdminTicketImportUploadPort = {
-      preview:
-        previewRequest as unknown as AdminTicketImportUploadPort['preview'],
-    };
-    const api = organizerApi(() => {
-      throw new Error('No mutation is expected during the upload race.');
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminTicketImportPreviewEndpoint) {
+        return previewRequest(endpoint, options);
+      }
+      throw new Error('No other request is expected during preview.');
     });
     const screen = await renderComponent(
-      <AdminWorkspaceShell
-        api={api}
-        environment="mocked"
-        uploadPort={uploadPort}
-      >
+      <AdminWorkspaceShell api={api} environment="mocked">
         <AdminImportWorkspace />
       </AdminWorkspaceShell>,
     );
-    const input = screen.getByLabelText('Zdrojový soubor');
+    const button = screen.getByRole('button', {
+      name: 'Načíst ze SimpleShopu',
+    });
 
-    await input.upload(firstFile);
-    await screen
-      .getByRole('button', { name: 'Vytvořit validované preview' })
-      .click();
-    await input.upload(secondFile);
-    expect(firstSignal?.aborted).toBe(true);
-    await screen
-      .getByRole('button', { name: 'Vytvořit validované preview' })
-      .click();
+    await button.click();
     await expect
-      .element(screen.getByText(new RegExp(secondPreview.previewId)))
-      .toBeVisible();
+      .element(screen.getByRole('button', { name: 'SimpleShop se načítá…' }))
+      .toBeDisabled();
+    expect(previewRequest).toHaveBeenCalledTimes(1);
+    expect(previewSignal?.aborted).toBe(false);
 
-    resolveFirst(success(firstPreview));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(document.body.textContent).toContain(secondPreview.previewId);
-    expect(document.body.textContent).not.toContain(firstPreview.previewId);
+    await screen.unmount();
+    expect(previewSignal?.aborted).toBe(true);
   });
 
   it('wipes support P3 state and closes the workspace when an online-only read reports offline', async () => {

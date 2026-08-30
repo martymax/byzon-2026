@@ -49,9 +49,9 @@ import {
   ticketImportApplyProblemSchema,
   ticketImportApplyRequestSchema,
   ticketImportApplyResponseSchema,
+  ticketImportPreviewRequestSchema,
   ticketImportPreviewProblemSchema,
   ticketImportPreviewResponseSchema,
-  ticketImportSourceSchema,
   type TicketImportPreviewResponse,
 } from '@byzon/domain/contracts/ticket-import';
 import {
@@ -581,62 +581,23 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.import-preview-event' },
         );
       }
-      const contentType = request.headers.get('content-type') ?? '';
-      if (!contentType.startsWith('multipart/form-data;')) {
-        return mockProblemResponse(
-          ticketImportPreviewProblemSchema,
-          ticketImportPreviewProblemFixtures.unsupported_format,
-          { fixtureName: 'admin.mock.import-preview-media' },
-        );
-      }
-      const form = await request.formData().catch(() => null);
-      const candidate = form?.get('file');
-      if (
-        !(candidate instanceof Blob) ||
-        typeof (candidate as File).name !== 'string'
-      ) {
+      const body = ticketImportPreviewRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      if (!body.success) {
         return mockProblemResponse(
           ticketImportPreviewProblemSchema,
           ticketImportPreviewProblemFixtures.validation,
-          { fixtureName: 'admin.mock.import-preview-file' },
+          { fixtureName: 'admin.mock.import-preview-body' },
         );
       }
-      const file = candidate as File;
-      const source = ticketImportSourceSchema.safeParse({
-        fileName: file.name,
-        mediaType: file.type,
-        byteSize: file.size,
-      });
-      if (!source.success) {
-        return mockProblemResponse(
-          ticketImportPreviewProblemSchema,
-          file.size > 10_000_000
-            ? ticketImportPreviewProblemFixtures.validation
-            : ticketImportPreviewProblemFixtures.unsupported_format,
-          { fixtureName: 'admin.mock.import-preview-source' },
-        );
-      }
-      const fileScenario = scenario(file.name);
-      if (fileScenario.includes('invalid')) {
-        return mockProblemResponse(
-          ticketImportPreviewProblemSchema,
-          ticketImportPreviewProblemFixtures.validation,
-          { fixtureName: 'admin.mock.import-preview-invalid' },
-        );
-      }
-      const base = fileScenario.includes('conflict')
-        ? ticketImportPreviewFixtures.conflict!
-        : fileScenario.includes('unknown')
-          ? ticketImportPreviewFixtures.unknown!
-          : ticketImportPreviewFixtures.clean!;
       const preview = ticketImportPreviewResponseSchema.parse({
-        ...clone(base),
+        ...clone(ticketImportPreviewFixtures.simpleshop_readonly!),
         eventId: adminFixtureIds.event,
-        source: source.data,
       });
       state.importPreviews.set(preview.previewId, {
         preview,
-        scenario: fileScenario,
+        scenario: body.data.source,
       });
       return mockJsonResponse(
         ticketImportPreviewResponseSchema,
@@ -709,6 +670,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         );
       }
       if (
+        storedPreview.preview.source.kind === 'simpleshop_api' ||
         storedPreview.preview.summary.conflict > 0 ||
         storedPreview.preview.summary.unknown > 0
       ) {
