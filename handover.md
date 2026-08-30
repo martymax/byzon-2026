@@ -67,15 +67,14 @@ přednost.
 
 ### Kde pokračovat
 
-- Nepracovat v kořenovém checkoutu
-  `/Users/martymax/Můj disk/Development/jci/Byzon/byzon-2026`: jeho `main` je
-  19 commitů za `origin/main` a obsahuje cizí rozpracované změny.
-- Autoritativní pracovní klon je
-  `/Users/martymax/Můj disk/Development/jci/Byzon/byzon-2026/.codex-work-p5-04`.
-  Výchozí stav před implementací měl proti čistému sledovanému `main` pouze
-  připravenou změnu `handover.md`; tehdejší HEAD i `origin/main` byly
-  `346836a1a37feb8fad0604fc6b34590ab34148fb`. Záměrně ignorovat lokální
-  untracked `node_modules` adresáře; nikdy je nestagovat.
+- Autoritativní pracovní checkout je opět kořen repozitáře
+  `/Users/martymax/Můj disk/Development/jci/Byzon/byzon-2026`. Audit 30. 8. 2026
+  odstranil překonanou lokální práci a fast-forwardoval jeho `main` na
+  `origin/main`; před dalším řezem znovu spustit `git fetch --prune`.
+- Dočasný klon `.codex-work-p5-04` obsahoval pouze implementační commit
+  `b6e6f22`, který je součástí `main` přes PR #30, a lokální `node_modules`.
+  Po auditu byl odstraněn. `.codex-work-*`, `.pnpm-store` a `node_modules`
+  jsou lokální artefakty, nikdy je nestagovat.
 - Poslední plný `main` CI je zelený:
   <https://github.com/martymax/byzon-2026/actions/runs/33323716467>.
 
