@@ -1,4 +1,6 @@
 node_modules/
+.codex-work-*/
+.pnpm-store/
 .next/
 dist/
 *.tsbuildinfo
