@@ -360,7 +360,11 @@ def program_calendar_event(ev, col, row_by_slot):
         extra_class += " program-cal-event--span-all"
     if span == 1 or is_condensed_calendar_event(ev):
         extra_class += " program-cal-event--short"
-    meta_html = f'<span class="program-cal-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
+    meta_html = (
+        f'<span class="program-cal-event__meta" title="{att(meta)}">'
+        f'{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>'
+        if meta else ""
+    )
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-cal-event__title">{title_text}</strong>'
@@ -841,7 +845,11 @@ def speaker_socials(sp):
 
 def sec_speakers():
     d = C["speakers"]
-    cards = "".join(speaker_card(sp) for sp in d["list"] if sp.get("homepage", True))
+    cards = "".join(
+        speaker_card(sp)
+        for sp in d["list"]
+        if sp.get("homepage", sp.get("show_on_homepage", True))
+    )
     return f"""<section class="section section--pink" id="speakers">
   <div class="container">
     <div class="section-head section-head--center reveal">
@@ -1101,27 +1109,29 @@ def page_partner():
 
 def page_speaker(sp):
     cta = C["cta"]
-    homepage_speaker = sp.get("homepage", True)
+    homepage_speaker = sp.get("homepage", sp.get("show_on_homepage", True))
     back_href = "/#speakers" if homepage_speaker else "/program/"
     back_label = "Zpět na řečníky" if homepage_speaker else "Zpět na program"
     profile_label = sp.get("label", "Řečník BYZON 2026")
     role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
     socials = speaker_socials(sp)
+    role_line = f"        {role}\n" if role else ""
     socials_line = f"        {socials}\n" if socials else ""
     bio = "".join(f"<p>{esc(p)}</p>" for p in sp["bio"])
+    program = speaker_program(sp)
     body = (
         header("/" if homepage_speaker else "/program/", solid=True)
         + '<main id="main">'
         + f"""<section class="section" style="padding-top:calc(var(--header-h) + 48px)">
   <div class="container">
-    <nav class="breadcrumb speaker-back" style="justify-content:flex-start"><a href="{att(back_href)}">‹ {esc(back_label)}</a></nav>
+    <nav class="breadcrumb speaker-back" aria-label="Návrat na předchozí přehled" style="justify-content:flex-start"><a href="{att(back_href)}">‹ {esc(back_label)}</a></nav>
     <div class="speaker-detail">
-      <div class="portrait"><img src="{att(sp['photo'])}" alt="{att(sp['name'])}" data-fallback="{att(sp['name'])}"></div>
+      <div class="portrait"><img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="1080" height="1350" decoding="async" data-fallback="{att(sp['name'])}"></div>
       <div>
         <span class="eyebrow">{esc(profile_label)}</span>
         <h1>{esc(sp['name'])}</h1>
-        {role}
-{socials_line}        <div class="bio">{bio}</div>
+{role_line}{socials_line}        <div class="bio">{bio}</div>
+{program}
         <div class="hero__actions" style="margin-top:30px">
           <a class="btn" href="{att(cta['href'])}">{esc(cta['label'])} {ICONS['arrow']}</a>
         </div>
@@ -1135,6 +1145,62 @@ def page_speaker(sp):
     return head(f"{sp['name']} – Byzon", desc, f"/speaker/{sp['slug']}/", sp["photo"]) + body + footer()
 
 
+def session_schedule(session_slug):
+    """Return the canonical schedule metadata for a session detail."""
+    for day in C.get("program", {}).get("days", []):
+        for stage in day.get("stages", []):
+            for event in stage.get("events", []):
+                if event.get("detail") == session_slug:
+                    return {
+                        "day": day.get("name"),
+                        "time": event.get("time"),
+                        "stage": stage.get("name"),
+                    }
+    return None
+
+
+def speaker_program(sp):
+    sessions = [
+        session
+        for session in C.get("sessions", {}).get("list", [])
+        if sp.get("slug") in session.get("speakers", [])
+    ]
+    if not sessions:
+        return ""
+
+    cards = []
+    for session in sessions:
+        schedule = session_schedule(session["slug"]) or {}
+        schedule_parts = [
+            schedule.get("day"),
+            schedule.get("time", "").replace(" - ", "–"),
+            schedule.get("stage"),
+        ]
+        schedule_text = " · ".join(part for part in schedule_parts if part)
+        schedule_html = f"<span>{esc(schedule_text)}</span>" if schedule_text else ""
+        annotation = session.get("annotation", [])
+        annotation_html = (
+            f'<p class="speaker-session-card__annotation">{esc(annotation[0])}</p>'
+            if annotation else ""
+        )
+        cards.append(f"""<li>
+          <a class="speaker-session-card" href="/program/{att(session['slug'])}/" aria-label="Detail přednášky: {att(session['title'])}">
+            <p class="speaker-session-card__meta"><span class="speaker-session-card__kind">{esc(session.get('kind', 'Přednáška'))}</span>{schedule_html}</p>
+            <h3>{esc(session['title'])}</h3>
+            {annotation_html}
+            <span class="speaker-session-card__action">Detail přednášky {ICONS['arrow']}</span>
+          </a>
+        </li>""")
+
+    return f"""<section class="speaker-program" aria-labelledby="speaker-program-title">
+      <div class="speaker-program__head">
+        <span class="eyebrow">Kde se potkáme</span>
+        <h2 id="speaker-program-title">V programu</h2>
+      </div>
+      <ul class="speaker-program__list">{''.join(cards)}</ul>
+    </section>"""
+
+
 def session_presenter(value):
     sp = SPEAKERS_BY_SLUG.get(value)
     if not sp:
@@ -1146,21 +1212,33 @@ def session_presenter(value):
       </div>
     </article>"""
     role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
-    bio = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in sp.get("bio", []))
+    # The program detail needs a compact medallion; the full biography remains
+    # available on the dedicated speaker page.
+    bio = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in sp.get("bio", [])[:1])
     return f"""<article class="session-presenter">
       <a class="session-presenter__portrait" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
-        <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}">
+        <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="1080" height="1350" loading="lazy" decoding="async" data-fallback="{att(sp['name'])}">
       </a>
-      <div>
+      <div class="session-presenter__summary">
         <span class="eyebrow">{esc(sp.get('label', 'Řečník BYZON 2026'))}</span>
         <h3><a href="/speaker/{att(sp['slug'])}/">{esc(sp['name'])}</a></h3>{role}{speaker_socials(sp)}
-        <div class="bio">{bio}</div>
+        <a class="textlink session-presenter__profile-link" href="/speaker/{att(sp['slug'])}/">Celý profil řečníka {ICONS['arrow']}</a>
       </div>
+      <div class="bio session-presenter__bio">{bio}</div>
     </article>"""
 
 
+def session_annotation(session):
+    paragraphs = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in session.get("annotation", []))
+    takeaways = session.get("takeaways", [])
+    if not takeaways:
+        return paragraphs
+    items = "".join(f"<li>{esc(item)}</li>" for item in takeaways)
+    return paragraphs + f'<ul class="session-takeaways">{items}</ul>'
+
+
 def page_session(session):
-    annotation = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in session.get("annotation", []))
+    annotation = session_annotation(session)
     presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
     presenter_count = len(session.get("speakers", []))
     presenter_title = session.get(
@@ -1172,7 +1250,7 @@ def page_session(session):
         + '<main id="main">'
         + f"""<section class="section session-page">
   <div class="container session-page__container">
-    <nav class="breadcrumb speaker-back" style="justify-content:flex-start"><a href="/program/">‹ Zpět na program</a></nav>
+    <nav class="breadcrumb speaker-back" aria-label="Návrat do programu" style="justify-content:flex-start"><a href="/program/">‹ Zpět na program</a></nav>
     <article class="session-intro">
       <span class="eyebrow">{esc(session.get('kind', 'Přednáška'))}</span>
       <h1>{esc(session['title'])}</h1>

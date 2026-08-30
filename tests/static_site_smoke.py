@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from html import escape
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -88,6 +89,8 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     home = (PUBLIC_ROOT / "index.html").read_text(encoding="utf-8")
     program = (PUBLIC_ROOT / "program/index.html").read_text(encoding="utf-8")
     checkout = (PUBLIC_ROOT / "simpleshop/index.html").read_text(encoding="utf-8")
+    petr_profile = (PUBLIC_ROOT / "speaker/petr-dvorak/index.html").read_text(encoding="utf-8")
+    tomas_profile = (PUBLIC_ROOT / "speaker/tomas-reznicek/index.html").read_text(encoding="utf-8")
 
     required_markers = {
         "homepage skip link": (home, 'href="#main"'),
@@ -101,6 +104,16 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         "GTM container": (home, "GTM-MSBB9L9"),
         "Jan Plojhar homepage card": (home, '/speaker/jan-plojhar/'),
         "Vladimír Macoun homepage card": (home, '/speaker/vladimir-macoun/'),
+        "Tomáš Řezníček homepage card": (home, '/speaker/tomas-reznicek/'),
+        "Petr Dvořák biography": (
+            petr_profile,
+            "Vedu Budějovický Budvar s přesvědčením",
+        ),
+        "Petr Dvořák LinkedIn": (petr_profile, "https://linkedin.com/petr-dvorak"),
+        "Tomáš Řezníček biography": (
+            tomas_profile,
+            "Tomáš Řezníček je zakladatelem networkingového klubu Networ-King.",
+        ),
         "mastermind title": (
             program,
             "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
@@ -123,18 +136,31 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     if visible:
         fail("Unexpected visible navigation markers: " + ", ".join(visible))
 
-    hidden_homepage_speakers = {
-        "Lucie Libovická homepage card": '/speaker/lucie-libovicka/',
-        "Pavel Janoušek homepage card": '/speaker/pavel-janousek/',
-    }
-    visible_hidden_speakers = [
-        name for name, marker in hidden_homepage_speakers.items() if marker in home
-    ]
-    if visible_hidden_speakers:
-        fail(
-            "Unexpected program-only speaker cards on homepage: "
-            + ", ".join(visible_hidden_speakers)
+    for speaker in content["speakers"]["list"]:  # type: ignore[index]
+        profile_href = f'/speaker/{speaker["slug"]}/'
+        appears_on_homepage = profile_href in home
+        should_appear = speaker.get(
+            "homepage",
+            speaker.get("show_on_homepage", True),
         )
+        if should_appear and not appears_on_homepage:
+            fail(f"Homepage is missing visible speaker: {speaker['name']}")
+        if not should_appear and appears_on_homepage:
+            fail(f"Homepage includes hidden speaker: {speaker['name']}")
+
+        speaker_detail = (
+            PUBLIC_ROOT / "speaker" / speaker["slug"] / "index.html"
+        ).read_text(encoding="utf-8")
+        if speaker["name"] not in speaker_detail:
+            fail(f"Speaker profile is missing name: {speaker['name']}")
+        if speaker["photo"] not in speaker_detail:
+            fail(f"Speaker profile is missing photo: {speaker['name']}")
+        for paragraph in speaker.get("bio", []):
+            if escape(paragraph) not in speaker_detail:
+                fail(f"Speaker profile is missing biography text: {speaker['name']}")
+        for href in speaker.get("links", {}).values():
+            if escape(href, quote=True) not in speaker_detail:
+                fail(f"Speaker profile is missing social link: {speaker['name']} -> {href}")
 
     for session in content.get("sessions", {}).get("list", []):  # type: ignore[union-attr]
         title = session["title"]
@@ -148,6 +174,22 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         for paragraph in session.get("annotation", []):
             if paragraph not in detail:
                 fail(f"Session detail is missing annotation for: {title}")
+        takeaways = session.get("takeaways", [])
+        if takeaways and 'class="session-takeaways"' not in detail:
+            fail(f"Session detail is missing takeaways list for: {title}")
+        for takeaway in takeaways:
+            if takeaway not in detail:
+                fail(f"Session detail is missing takeaway for: {title}")
+        for speaker_slug in session.get("speakers", []):
+            speaker_path = PUBLIC_ROOT / "speaker" / speaker_slug / "index.html"
+            if not speaker_path.is_file():
+                continue
+            speaker_detail = speaker_path.read_text(encoding="utf-8")
+            session_href = f'/program/{session["slug"]}/'
+            if session_href not in speaker_detail:
+                fail(f"Speaker profile is missing program link: {speaker_slug} -> {title}")
+            if title not in speaker_detail:
+                fail(f"Speaker profile is missing program title: {speaker_slug} -> {title}")
 
 
 def main() -> int:
