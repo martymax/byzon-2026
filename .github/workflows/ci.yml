@@ -6,7 +6,7 @@ on:
     branches: [main, staging, 'stage/**']
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   static-site:
@@ -65,3 +65,12 @@ jobs:
       - run: pnpm test:components
       - run: pnpm test:e2e
       - run: pnpm audit --audit-level high
+
+  signal-success:
+    needs: [static-site, application]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          git tag "ci-pass-${GITHUB_SHA}"
+          git push origin "ci-pass-${GITHUB_SHA}"
