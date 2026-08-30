@@ -168,6 +168,13 @@ def program_event_meta(meta, inside_link=False):
     return content
 
 
+def program_event_badge(ev, class_name):
+    badge = ev.get("badge")
+    if not badge:
+        return ""
+    return f'<span class="{class_name}">{esc(badge)}</span>'
+
+
 def program_event(ev):
     title = ev.get("title", "")
     time = ev.get("time", "")
@@ -176,6 +183,7 @@ def program_event(ev):
     href, aria_label = program_event_link(ev)
     direct_speaker_links = bool(href and ev.get("link_speakers"))
     extra_class = " program-event--has-link" if href else ""
+    badge_html = program_event_badge(ev, "program-event__badge")
     meta_html = f'<span class="program-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
     desc_html = f'<p>{esc(desc)}</p>' if desc else ""
     title_text = esc(title) if href else link_speaker_names(title)
@@ -185,15 +193,15 @@ def program_event(ev):
             f'<a class="program-event__detail-link" href="{att(href)}" '
             f'aria-label="{att(aria_label)}">{title_html}</a>'
         )
-        body = f'<div class="program-event__body">{title_html}{meta_html}{desc_html}</div>'
+        body = f'<div class="program-event__body">{badge_html}{title_html}{meta_html}{desc_html}</div>'
     elif href:
         body = (
             f'<a class="program-event__body program-event__body--link" '
             f'href="{att(href)}" aria-label="{att(aria_label)}">'
-            f'{title_html}{meta_html}{desc_html}</a>'
+            f'{badge_html}{title_html}{meta_html}{desc_html}</a>'
         )
     else:
-        body = f'<div class="program-event__body">{title_html}{meta_html}{desc_html}</div>'
+        body = f'<div class="program-event__body">{badge_html}{title_html}{meta_html}{desc_html}</div>'
     return (
         f'<li class="program-event{program_kind_class(ev.get("type"))}{extra_class}">'
         f'<span class="program-event__time">{esc(time)}</span>{body}</li>'
@@ -355,6 +363,7 @@ def program_calendar_event(ev, col, row_by_slot):
     href, aria_label = program_event_link(ev)
     direct_speaker_links = bool(href and ev.get("link_speakers"))
     extra_class = " program-cal-event--has-link" if href else ""
+    badge_html = program_event_badge(ev, "program-cal-event__badge")
     grid_col = "2 / -1" if ev.get("span") == "all" else str(col)
     if ev.get("span") == "all":
         extra_class += " program-cal-event--span-all"
@@ -375,7 +384,7 @@ def program_calendar_event(ev, col, row_by_slot):
         )
     inner = (
         f'<span class="program-cal-event__time">{esc(time)}</span>'
-        f'{title_html}{meta_html}{desc_html}'
+        f'{title_html}{meta_html}{badge_html}{desc_html}'
     )
     if href and not direct_speaker_links:
         body = (
@@ -411,6 +420,8 @@ def program_mobile_event(item, total_count):
     desc = ev.get("description")
     href, aria_label = program_event_link(ev)
     direct_speaker_links = bool(href and ev.get("link_speakers"))
+    badge_html = program_event_badge(ev, "program-mobile-event__badge")
+    badge_line = f"\n                {badge_html}" if badge_html else ""
     stage_label = _mobile_stage_label(item["stage_names"], total_count)
     stage_ids = " ".join(item["stage_ids"])
     meta_html = f'<span class="program-mobile-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
@@ -424,7 +435,7 @@ def program_mobile_event(item, total_count):
         )
     inner = f"""<div class="program-mobile-event__top">
                 <span class="program-mobile-event__stage">{esc(stage_label)}</span>
-                <span class="program-mobile-event__time">{esc(time)}</span>
+                <span class="program-mobile-event__time">{esc(time)}</span>{badge_line}
               </div>
               {title_html}{meta_html}{desc_html}"""
     extra_class = " program-mobile-event--has-link" if href else ""

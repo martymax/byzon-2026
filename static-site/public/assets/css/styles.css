@@ -530,6 +530,16 @@ strong { color: var(--ink); }
   line-height: 1.15; font-weight: 600; overflow-wrap: anywhere;
 }
 .program-event__body--link:hover .program-event__title { color: var(--pink-700); }
+.program-event__badge,
+.program-cal-event__badge,
+.program-mobile-event__badge {
+  display: inline-flex; width: max-content; max-width: 100%; align-items: center;
+  padding: .3em .7em; border: 1px solid var(--pink-100); border-radius: var(--r-pill);
+  background: var(--pink-50); color: var(--pink-700); font-family: var(--font-display);
+  font-size: .72rem; font-weight: 700; letter-spacing: .05em; line-height: 1;
+  text-transform: uppercase;
+}
+.program-event__badge { margin-bottom: 7px; }
 .program-event__meta {
   display: block; margin-top: 4px; color: var(--slate-400); font-size: 1rem; line-height: 1.3;
 }
@@ -620,6 +630,8 @@ strong { color: var(--ink); }
   transition: background .2s var(--ease), color .2s var(--ease);
 }
 .program-cal-event__inner--link:hover { background: #f8f5f7; }
+.program-cal-event__inner--link:hover .program-cal-event__title,
+.program-cal-event__inner--link:focus-visible .program-cal-event__title { color: var(--pink-700); }
 .program-cal-event__time {
   display: block; grid-column: 1; grid-row: 1; color: #655b63; font-family: var(--font-display); font-size: .82rem;
   font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums;
@@ -633,6 +645,9 @@ strong { color: var(--ink); }
   display: block; min-width: 0; grid-column: 2; grid-row: 1; overflow: hidden;
   color: #756c73; font-size: .84rem; line-height: 1.15; text-align: right;
   white-space: nowrap; text-overflow: ellipsis;
+}
+.program-cal-event__badge {
+  grid-column: 1 / -1; grid-row: 3; align-self: start; margin-top: 2px;
 }
 .program-cal-event p {
   grid-column: 1 / -1; color: #756c73; font-size: .88rem; line-height: 1.25;
@@ -708,7 +723,7 @@ strong { color: var(--ink); }
 }
 .program-event__detail-link:hover .program-event__title,
 .program-cal-event__detail-link:hover .program-cal-event__title,
-.program-mobile-event__detail-link:hover .program-mobile-event__title { color: var(--pink); }
+.program-mobile-event__detail-link:hover .program-mobile-event__title { color: var(--pink-700); }
 .program-event__detail-link:focus-visible,
 .program-cal-event__detail-link:focus-visible,
 .program-mobile-event__detail-link:focus-visible {

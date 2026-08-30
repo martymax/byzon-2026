@@ -774,7 +774,7 @@
               { "time": "13:45 - 14:15", "title": "Andrea Bílá" },
               { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
               { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 16:45", "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?", "meta": "Lucie Libovická – facilitátor, Pavel Janoušek – mentor", "detail": "co-o-svych-lidech-skutecne-vite", "link_speakers": true },
+              { "time": "15:15 - 16:45", "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?", "meta": "Lucie Libovická, Pavel Janoušek", "badge": "Mastermind", "detail": "co-o-svych-lidech-skutecne-vite", "link_speakers": true },
               { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
               { "time": "17:00 - 18:15", "title": "Společně na BYZON Stage", "type": "shared" },
               { "time": "18:15 - 19:00", "title": "Volný program", "type": "shared" },

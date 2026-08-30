@@ -118,6 +118,7 @@ def validate_critical_contract(content: dict[str, object]) -> None:
             program,
             "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
         ),
+        "mastermind badge": (program, ">Mastermind</span>"),
         "Lucie Libovická program profile link": (program, '/speaker/lucie-libovicka/'),
         "Pavel Janoušek program profile link": (program, '/speaker/pavel-janousek/'),
         "Expertní Board 21 partner": (home, '/assets/img/2026/08/eb21-logo.png'),
@@ -135,6 +136,16 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     visible = [name for name, marker in hidden_markers.items() if marker in home]
     if visible:
         fail("Unexpected visible navigation markers: " + ", ".join(visible))
+
+    obsolete_mastermind_roles = ["– facilitátor", "– mentor"]
+    visible_mastermind_roles = [
+        role for role in obsolete_mastermind_roles if role in program
+    ]
+    if visible_mastermind_roles:
+        fail(
+            "Unexpected mastermind speaker roles in program: "
+            + ", ".join(visible_mastermind_roles)
+        )
 
     for speaker in content["speakers"]["list"]:  # type: ignore[index]
         profile_href = f'/speaker/{speaker["slug"]}/'
