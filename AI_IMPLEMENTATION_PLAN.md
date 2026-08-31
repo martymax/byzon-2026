@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.28 – importovaný přístup, bez check-inu, řízené B
+> Stav: implementační plán v6.29 – produkční klon, první load/restore ověření
 >
 > Datum sestavení: 20. července 2026
 >
@@ -275,7 +275,7 @@ odkazy pro úkoly a akceptaci; nerozhodnuté body zůstávají pouze v §22.
 | `SCOPE-2026-14` | Kontrola vstupenek a check-in jsou pro rok 2026 mimo rozsah aplikace. | `P6` a ticket presentation/claim UI nejsou launch gate; aktivní admin UI ani provozní metriky je nenabízejí. | Rozhodnutí produktu 31. 8. 2026, [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) |
 | `SCOPE-2026-15` | Networking vyžaduje event-wide povolení administrátorem i výslovný opt-in účastníka. Po opt-in se zobrazí všechna vyplněná pole veřejného profilu; bez opt-in není profil viditelný. | Jediná profilová visibility je odvozena z opt-in; opt-out okamžitě skryje celý profil. | Rozhodnutí produktu 31. 8. 2026 |
 | `SCOPE-2026-16` | Data se automaticky nemažou; odstranění/anonymizaci řídí organizátor. | Žádný aktivní produkční retention job s domyšlenou lhůtou; ruční operace zůstává auditovaná. | Rozhodnutí produktu 31. 8. 2026 |
-| `SCOPE-2026-17` | Produkční platforma je Railway; staging používá `https://byzonconference-staging.up.railway.app`, cílová `app.byzon.cz` bude připojena přes Cloudflare. | Existující Railway web/worker/PostgreSQL/Redis se znovu použijí; secrets jsou environment-scoped. | Rozhodnutí produktu 31. 8. 2026 |
+| `SCOPE-2026-17` | Produkční platforma je Railway; staging používá `https://byzonconference-staging.up.railway.app`, oddělený klon `production-2026` používá `https://byzonconference-production-2026.up.railway.app` a cílová `app.byzon.cz` bude připojena přes Cloudflare. | Produkce má vlastní web/worker/PostgreSQL/Redis a `APP_ENV=production`; DB volume ani stagingová PII se nekopírovaly. Dočasně klonované aplikační secrets se před skutečným provozem musí rotovat. | Rozhodnutí produktu a nasazení 31. 8. 2026, [Railway runbook](docs/runbooks/railway-staging.md) |
 
 Vlákna, která nepřinesla uzavřené produktové rozhodnutí, jsou vypořádána takto:
 
@@ -1483,7 +1483,8 @@ Před produkčním apply doplnit:
 
 - schválený význam stornované/vrácené/nezaplacené vstupenky; refund v aktuálním
   datasetu nebyl;
-- zda API vrací e-mail konkrétního účastníka nebo jen kupujícího;
+- prioritu ověřených polí konkrétního účastníka („prodej na jméno“) vůči
+  e-mailu kupujícího a fallback pro skupinový nákup;
 
 ### 15.2 Transakční e-mail
 
@@ -2809,7 +2810,8 @@ Před zahájením volitelné Priority B musí být na staging akceptováno:
 - [ ] kritické oznámení prošlo UAT v aplikaci i přes produkčně ekvivalentní
   e-mailový kanál;
 - [ ] souhlasy, privacy defaults, audit a ručně řízený postup odstranění;
-- [ ] záloha + restore drill;
+- [x] záloha + restore drill na odděleném `production-2026` klonu 31. 8. 2026
+  po importu 82 sessions; shoda 48 tabulek, 20 migrací, 2 eventů a 82 sessions;
 - [ ] fallback runbooky;
 - [ ] load/security/accessibility minimum;
 - [ ] žádné otevřené severity 1/2 vady.
@@ -2923,10 +2925,12 @@ privacy cesta splňuje právně schválený postup.
 ### Etapa 15 – hardening, UAT a go-live
 
 - [ ] `P15-01` Kompletní test matrix na produkčně podobném stagingu.
-- [ ] `P15-02` Concurrency/load test podle potvrzených počtů.
+- [~] `P15-02` První produkčně podobný baseline 31. 8. 2026 prošel 200/200
+  HTTP požadavků při concurrency 10; finální test čeká na potvrzené počty.
 - [ ] `P15-03` Security review a oprava high/critical.
 - [ ] `P15-04` Accessibility audit kritických cest.
-- [ ] `P15-05` Restore drill a deploy rollback drill.
+- [~] `P15-05` Restore drill po importu obsahu prošel 31. 8. 2026 na
+  `production-2026`; deploy rollback drill zbývá.
 - [ ] `P15-06` Rehearsal se skutečnými/testovacími ticket kódy a zařízeními na místě.
 - [ ] `P15-07` E-mail deliverability a announcement dry run s bezpečnou test skupinou.
 - [ ] `P15-08` Feature flag a role review.
@@ -2967,7 +2971,7 @@ rozhodnutí ani souhlas s produkčním nasazením.
 | BLOCKER-AUTH-01 | Bezpečný invitation handshake mezi předem importovanou identitou/membershipem, Better Auth session a onboardingem včetně přerušení/obnovení toku | `P4-07`, invitation `F1` integrace | Produkt + tech lead + security | Před invitation/session integrací | Neověřený nebo cizí invitation token nesmí vytvořit identitu, membership, relaci ani práva. |
 | BLOCKER-AUTH-02 | Jak 48h session funguje s invitation odeslanou 11.–15. 9. a konferencí 18.–19. 9.: očekávaná opakovaná recovery, nebo event-bound prodloužení | `P4-15`, invitation UAT a go-live recovery kapacita | Produkt + tech lead + security | Před produkční invitation dávkou | Zachovat implementovaných 48 h/24 h a spolehlivý recovery flow; neslibovat, že jedno otevření odkazu před akcí udrží relaci až do konference. |
 | BLOCKER-TKT-01 (uzavřen 30. 8. 2026) | Read-only discovery ověřilo endpointy, nepřítomnost pagination parametrů, `{csv}` envelope, stabilní ticket/order ID a BYZON product `143958` / form `0MnNQ`. | — | Organizátor | `P4-02` produkční preview | Ověřený kontrakt je v ADR-015; změna envelope/hlaviček/ID failne zavřeně. |
-| BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno | Produkční ticket stavy/apply | Organizátor | `P4-03` prod apply | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat; UI stav otestovat fixturem. |
+| BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno a priorita identity účastníka vůči kupujícímu | Produkční participant apply | Organizátor | `P4-03` prod apply | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat; při skupinovém nákupu bez jednoznačného účastnického e-mailu nevytvářet duplicitní identity. |
 | BLOCKER-TKT-04 (uzavřen scope 31. 8. 2026) | Zdrojový ticket kód se nepoužívá pro přístup ani check-in. | — | Produkt | `SCOPE-2026-13`/`14` | Preview jej po in-memory validaci zahodí; HMAC/claim se neimplementuje. |
 | BLOCKER-TKT-05 (uzavřen scope 31. 8. 2026) | Skenovatelný ticket credential není součástí aplikace 2026. | — | Produkt | `SCOPE-2026-14` | Existuje jen obecný app QR a session deep link QR. |
 | BLOCKER-OPS-01 | Konkrétní moderátoři a osoby oprávněné odeslat kritické oznámení | P8 send UAT, P12 moderator UAT | Organizace | Před P8 send/P12 UAT | Send pouze admin rolí, questions feature off; přiřazení se provede v `/admin/interakce` bez ručního session ID. |
@@ -3293,3 +3297,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.26 | 30. 8. 2026 | Dokončeno `P0-02`/`P4-02`/`F4-02`: oficiální OpenAPI a read-only staging discovery ověřily produkt `143958`, form `0MnNQ`, přesné GET endpointy, `{csv}` envelope bez pagination parametrů, per-ticket/order ID, quantity a pozorované paid/unpaid/storno stavy. Server-only adapter, autorizované/rate-limitované admin preview a sanitizovaný staging batch nepersistují raw kód/PII a nemají apply cestu. `TKT-01` je uzavřen; refund a apply mapování i bezpečnost kódu zůstávají fail-closed v `TKT-02`/`TKT-04`. |
 | 6.27 | 31. 8. 2026 | Jednoprůchodově dokončeny neblokované implementační řezy A: session/general QR, autoritativní check-in bez neschváleného credential adapteru, in-app critical announcements, admin operations/roles/support/audit/settings/exporty, worker outbox a serverově ověřený offline owner lease/replay preflight. Volitelné B jsou implementované za defaultně vypnutými event flags: privacy-minimal networking, jednoduché session questions/moderator polling a jednorázové ratings. Workspace testy, lint, typecheck, format, static smoke a produkční build jsou zelené bez lokální service-backed DB/Redis sady; produkční ticket/e-mail/retention rozhodnutí a fyzické UAT zůstávají explicitní blockery. |
 | 6.28 | 31. 8. 2026 | ADR-016 mění vstup do aplikace na SimpleShop API import účastníků a samostatnou adminem spuštěnou e-mailovou pozvánku; ticket credential/claim a celý check-in jsou mimo scope 2026. Railway staging je potvrzen na `byzonconference-staging.up.railway.app`, produkční `app.byzon.cz` půjde přes Cloudflare. Networking nyní výslovně zveřejňuje všechna vyplněná pole a bez opt-in skrývá celý profil; automatická retence je vypnutá. Nové `/admin/interakce` integruje auditované event flags, session questions a výběr moderátorů bez ručního session ID. |
+| 6.29 | 31. 8. 2026 | Nedestruktivně vytvořeno oddělené Railway prostředí `production-2026`, protože starší prostředí `production` už existovalo a zůstalo nedotčené. Web, worker, vlastní PostgreSQL a Redis běží na releasu `9ddeec7`; produkční DB bez stagingové PII dostala baseline a kanonický draftový obsah 82 sessions. Readiness/smoke a 200 požadavků při concurrency 10 prošly, stejně jako post-import backup/restore kontrola 48 tabulek, 20 migrací, 2 eventů a 82 sessions. Před skutečným provozem zbývá rotace dočasně klonovaných aplikačních secrets, bootstrap organizer admina, auditovaná publikace, klikací UAT a rollback drill. |

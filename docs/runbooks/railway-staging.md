@@ -1,4 +1,4 @@
-# Railway staging
+# Railway prostředí
 
 Autoritativní staging aplikace je
 `https://byzonconference-staging.up.railway.app`. Projekt `Byzon 2026` používá
@@ -8,6 +8,34 @@ prostředí `staging` a existující služby `@byzon/conference`,
 Cílová produkční doména je `https://app.byzon.cz`; DNS/proxy připojení se
 provede přes Cloudflare až po staging UAT. Railway je produkční platforma,
 nikoli dočasný hosting.
+
+## Produkční klon 2026
+
+Dne 31. 8. 2026 vzniklo nové Railway prostředí `production-2026` jako nativní
+duplikát `staging`. Původní prostředí `production` už v projektu existovalo a
+nebylo změněno ani odstraněno. Do rozhodnutí o jeho archivaci používejte
+výhradně explicitní název prostředí, ne nejednoznačné označení „production“.
+
+- web: `https://byzonconference-production-2026.up.railway.app`
+- worker: `https://byzonworker-production-2026.up.railway.app`
+- služby: `@byzon/conference`, `@byzon/worker`, vlastní `Postgres` a vlastní
+  `Redis`
+- runtime: `APP_ENV=production`, `PUBLIC_SITE_URL=https://byzon.cz` a
+  `APP_BASE_URL` nastavené na generickou produkční Railway doménu
+- release webu i workeru: `9ddeec7d4adeb351fc3e77ac595468f630e883b3`
+
+Duplikace prostředí nekopíruje obsah databázového volume. Produkční databáze
+proto dostala idempotentní baseline seed a kanonický import repozitářového
+obsahu: 82 sessions, 24 řečníků, 10 partnerů, 35 assetů a 1 praktickou stránku.
+Nevznikl žádný uživatel a ze stagingu se nekopírovaly osobní údaje. Importovaný
+obsah zůstává draftem; publikaci musí po přidání prvního produkčního organizer
+admina provést oprávněný uživatel přes auditovaný publish flow.
+
+Klon dočasně převzal také stagingové aplikační secrets. Před prvním skutečným
+uživatelem je povinné v obou produkčních app službách vygenerovat samostatné
+`BETTER_AUTH_SECRET` a `RATE_LIMIT_SUBJECT_SECRET`. E-mailové proměnné zůstávají
+na inertním sentinelu `__FILL_IN_RAILWAY__`; invitation batch se do jejich
+nahrazení a ověření domény nesmí spustit.
 
 ## Služby a deployment
 
@@ -91,3 +119,24 @@ sink; nesmí odesílat skutečným účastníkům.
 4. Otestujte SimpleShop pouze jako sanitizované read-only preview. Participant
    apply a skutečné pozvánky se nesmí před dokončením `P4-03`/`P4-06`
    spustit.
+
+## První provozní ověření 31. 8. 2026
+
+Na `production-2026` proběhly po importu obsahu tyto nedestruktivní kontroly:
+
+- readiness: `200`, prostředí `production`, databáze i Redis `ready`;
+- 100 souběžných HTTP kontrol `/health/ready` při concurrency 10: 100/100
+  odpovědí `200`, průměr 0,237 s, maximum 1,270 s;
+- 100 souběžných HTTP kontrol `/` při concurrency 10: 100/100 odpovědí `200`,
+  průměr 0,290 s, maximum 0,584 s;
+- `/admin/interakce` vrací `200`, zatímco vyřazené `/check-in` a
+  `/api/v1/check-in/context` vracejí `404`;
+- custom-format PostgreSQL backup byl obnoven do dočasné databáze a počty se
+  shodovaly: 48 tabulek, 20 migrací, 2 eventy a 82 sessions; dočasná databáze
+  byla po testu odstraněna.
+
+Jde o technický smoke a první load baseline, nikoli o formální load/UAT gate.
+Zbývá klikací role-based UAT s produkčním organizer adminem, potvrzení cílové
+zátěže, deploy rollback drill a accessibility/security průchod. Přímé browser
+UAT nebylo v tomto běhu možné kvůli chybě lokálního browser-control runtime;
+HTTP, databázové a CI kontroly tím nebyly dotčené.

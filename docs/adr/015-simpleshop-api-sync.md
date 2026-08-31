@@ -73,6 +73,11 @@ pomocí `GET`, proti oficiálnímu OpenAPI a skutečným odpovědím pro BYZON p
 - Voucher pole v exportu není. Ticket kód je přítomný pouze v poli
   `Kód vstupenky`; 67 hodnot bylo unikátních, vždy 6 UTF-8 bytů a pouze
   číslice / velká ASCII písmena. Raw hodnoty nebyly vypsány ani uloženy.
+- Export obsahuje jak kontakt kupujícího (`E-mail`, `Telefon`, odběratelské
+  údaje), tak samostatná pole „prodej na jméno“: jméno, příjmení, e-mail,
+  firma, pozice a telefon konkrétního účastníka. Přítomnost obou sad je
+  ověřená z hlavičky bez výpisu osobních hodnot; jejich priorita a fallback
+  pro skupinový nákup zůstávají produktovým rozhodnutím před apply.
 
 ## Mapování pro `P4-02`
 
@@ -100,6 +105,8 @@ pomocí `GET`, proti oficiálnímu OpenAPI a skutečným odpovědím pro BYZON p
 - potvrzené mapování zdrojových statusů na kanonické ticket stavy;
 - reprezentativní refund v read-only datech a produktové rozhodnutí, zda a jak
   se pending, storno a refund smějí promítnout při `P4-03`;
+- schválená identita účastníka: priorita e-mailu „prodej na jméno“ a bezpečný
+  fallback na e-mail kupujícího u objednávky s jedním nebo více účastníky;
 - bezpečnostní rozhodnutí o entropii, přesné normalizaci a HMAC ticket kódu bez
   uložení raw test vectors do repozitáře nebo chatu.
 
