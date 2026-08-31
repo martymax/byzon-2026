@@ -67,7 +67,12 @@ const success = <Value,>(data: Value) =>
   }) as const;
 
 const failure = (
-  kind: 'offline' | 'timeout' | 'transport' | 'invalid_response',
+  kind:
+    | 'offline'
+    | 'timeout'
+    | 'transport'
+    | 'invalid_response'
+    | 'session_expired',
   status = 0,
 ) =>
   ({
@@ -114,6 +119,27 @@ beforeEach(() => {
 });
 
 describe('F4 contract-first admin journeys', () => {
+  it('offers the production login route and preserves the exact admin return', async () => {
+    window.history.replaceState({}, '', '/admin/interakce');
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return failure('session_expired', 401);
+      }
+      throw new Error('An unauthenticated shell requested a private resource.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminEngagementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    const login = screen.getByRole('link', { name: 'Přihlásit se' });
+    await expect.element(login).toBeVisible();
+    expect(login.element().getAttribute('href')).toBe(
+      '/prihlaseni?returnTo=%2Fadmin%2Finterakce',
+    );
+  });
+
   it('loads canonical context and fails closed before a forbidden resource is mounted', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
     const api = createApi((endpoint) => {

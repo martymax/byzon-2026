@@ -20,6 +20,7 @@ integration('organizer admin bootstrap integration', () => {
   });
   const userId = generateUuidV7();
   const userEmail = `admin-bootstrap-${userId}@example.invalid`;
+  const provisionedUserEmail = `admin-provision-${userId}@example.invalid`;
   let primaryEventId: string;
   let isolationEventId: string;
 
@@ -49,6 +50,18 @@ integration('organizer admin bootstrap integration', () => {
       .delete(schema.auditLogs)
       .where(eq(schema.auditLogs.targetId, userId));
     await client.db.delete(schema.users).where(eq(schema.users.id, userId));
+    const [provisionedUser] = await client.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.email, provisionedUserEmail));
+    if (provisionedUser) {
+      await client.db
+        .delete(schema.auditLogs)
+        .where(eq(schema.auditLogs.targetId, provisionedUser.id));
+    }
+    await client.db
+      .delete(schema.users)
+      .where(eq(schema.users.email, provisionedUserEmail));
     await client.close();
   });
 
@@ -167,5 +180,57 @@ integration('organizer admin bootstrap integration', () => {
         userEmail: `missing-${userEmail}`,
       }),
     ).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+  });
+
+  it('explicitly provisions the first unverified admin identity', async () => {
+    const result = await bootstrapOrganizerAdmin(client.db, {
+      createUserIfMissing: true,
+      eventSlug: 'byzon-2026',
+      userEmail: provisionedUserEmail,
+    });
+
+    expect(result).toMatchObject({ status: 'granted', userCreated: true });
+    const [user] = await client.db
+      .select({
+        email: schema.users.email,
+        emailVerified: schema.users.emailVerified,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.email, provisionedUserEmail));
+    expect(user).toEqual({
+      email: provisionedUserEmail,
+      emailVerified: false,
+    });
+
+    const repeated = await bootstrapOrganizerAdmin(client.db, {
+      createUserIfMissing: true,
+      eventSlug: 'byzon-2026',
+      userEmail: provisionedUserEmail,
+    });
+    expect(repeated).toMatchObject({
+      status: 'already_granted',
+      userCreated: false,
+      userId: result.userId,
+    });
+
+    const [audit] = await client.db
+      .select({
+        before: schema.auditLogs.before,
+        after: schema.auditLogs.after,
+      })
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.targetId, result.userId));
+    expect(audit).toEqual({
+      before: {
+        identityStatus: 'absent',
+        membershipStatus: 'absent',
+        role: 'absent',
+      },
+      after: {
+        identityStatus: 'provisioned_unverified',
+        membershipStatus: 'active',
+        role: 'organizer_admin',
+      },
+    });
   });
 });

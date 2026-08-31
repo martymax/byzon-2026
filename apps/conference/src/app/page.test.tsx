@@ -1,14 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const loginFlowMocks = vi.hoisted(() => ({
+const loginMocks = vi.hoisted(() => ({
   render: vi.fn(),
 }));
 
-vi.mock('@/components/login-flow', () => ({
-  LoginFlow: (props: Readonly<Record<string, unknown>>) => {
-    loginFlowMocks.render(props);
-    return <div data-login-flow="true" />;
+vi.mock('../components/magic-link-login', () => ({
+  MagicLinkLogin: (props: Readonly<Record<string, unknown>>) => {
+    loginMocks.render(props);
+    return <div data-magic-link-login="true" />;
   },
 }));
 
@@ -16,18 +16,14 @@ import HomePage, { metadata } from './page';
 
 describe('conference sign-in homepage', () => {
   beforeEach(() => {
-    loginFlowMocks.render.mockReset();
+    loginMocks.render.mockReset();
   });
 
-  it('opens the safe magic-link login without a marketing journey hub', () => {
-    const markup = renderToStaticMarkup(<HomePage />);
+  it('opens the safe magic-link login without a ticket activation gate', async () => {
+    const markup = renderToStaticMarkup(await HomePage({}));
 
-    expect(loginFlowMocks.render.mock.calls[0]?.[0]).toEqual({
-      mode: 'recovery',
-      presentation: 'login',
-      returnTo: '/app',
-    });
-    expect(markup).toBe('<div data-login-flow="true"></div>');
+    expect(loginMocks.render.mock.calls[0]?.[0]).toEqual({ returnTo: '/app' });
+    expect(markup).toBe('<div data-magic-link-login="true"></div>');
   });
 
   it('keeps the login document private and out of search results', () => {

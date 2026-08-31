@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { writeAuditLog } from './audit.js';
@@ -26,6 +28,7 @@ export class AdminBootstrapError extends Error {
 }
 
 export interface OrganizerAdminBootstrapInput {
+  createUserIfMissing?: boolean;
   eventSlug: string;
   userEmail: string;
 }
@@ -33,6 +36,7 @@ export interface OrganizerAdminBootstrapInput {
 interface OrganizerAdminBootstrapResultBase {
   eventId: string;
   roleId: string;
+  userCreated: boolean;
   userId: string;
 }
 
@@ -54,7 +58,13 @@ export const bootstrapOrganizerAdmin = async (
 ): Promise<OrganizerAdminBootstrapResult> => {
   const eventSlug = normalizeRequired(input.eventSlug);
   const userEmail = normalizeRequired(input.userEmail).toLowerCase();
-  if (!eventSlug || !userEmail) {
+  if (
+    !eventSlug ||
+    !userEmail ||
+    userEmail.length > 320 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail) ||
+    /[\u0000-\u001F\u007F]/.test(userEmail)
+  ) {
     throw new AdminBootstrapError(
       'INVALID_INPUT',
       'Both event slug and user email are required.',
@@ -74,23 +84,39 @@ export const bootstrapOrganizerAdmin = async (
       );
     }
 
-    const userRows = await transaction
+    const identityLock = createHash('sha256').update(userEmail).digest('hex');
+    await acquireTransactionLock(transaction, `admin-identity:${identityLock}`);
+
+    let userRows = await transaction
       .select({ id: schema.users.id })
       .from(schema.users)
       .where(sql`lower(${schema.users.email}) = ${userEmail}`)
       .limit(2);
-    if (userRows.length !== 1) {
+    if (userRows.length > 1) {
       throw new AdminBootstrapError(
         'USER_NOT_FOUND',
         'Exactly one existing Better Auth user is required.',
       );
     }
+    let userCreated = false;
+    if (userRows.length === 0) {
+      if (!input.createUserIfMissing) {
+        throw new AdminBootstrapError(
+          'USER_NOT_FOUND',
+          'Exactly one existing Better Auth user is required.',
+        );
+      }
+      const id = generateUuidV7();
+      await transaction.insert(schema.users).values({
+        id,
+        name: '',
+        email: userEmail,
+        emailVerified: false,
+      });
+      userRows = [{ id }];
+      userCreated = true;
+    }
     const user = userRows[0]!;
-
-    await acquireTransactionLock(
-      transaction,
-      `organizer-admin-bootstrap:${event.id}:${user.id}`,
-    );
 
     const [membership] = await transaction
       .select({ status: schema.eventMemberships.status })
@@ -127,6 +153,7 @@ export const bootstrapOrganizerAdmin = async (
         requestId: null,
         roleId: activeRole.id,
         status: 'already_granted',
+        userCreated,
         userId: user.id,
       };
     }
@@ -161,10 +188,12 @@ export const bootstrapOrganizerAdmin = async (
       requestId,
       reason: 'explicit organizer admin bootstrap',
       before: {
+        identityStatus: userCreated ? 'absent' : 'existing',
         membershipStatus: membership?.status ?? 'absent',
         role: activeRole ? 'organizer_admin' : 'absent',
       },
       after: {
+        identityStatus: userCreated ? 'provisioned_unverified' : 'existing',
         membershipStatus: 'active',
         role: 'organizer_admin',
       },
@@ -175,6 +204,7 @@ export const bootstrapOrganizerAdmin = async (
       requestId,
       roleId,
       status: 'granted',
+      userCreated,
       userId: user.id,
     };
   });

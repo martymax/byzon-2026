@@ -50,6 +50,7 @@ export const createAuth = (
     },
     plugins: [
       magicLink({
+        disableSignUp: true,
         expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
         storeToken: 'hashed',
         rateLimit: { window: 60, max: 5 },

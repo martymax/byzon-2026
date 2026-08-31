@@ -18,6 +18,76 @@ const redisUrlSchema = z.string().refine((value) => {
   }
 }, 'REDIS_URL must be a Redis URL');
 
+const railwayPlaceholderToUndefined = (value: unknown): unknown =>
+  value === '' || value === '__FILL_IN_RAILWAY__' ? undefined : value;
+
+const optionalMailValue = (maximum: number) =>
+  z.preprocess(
+    railwayPlaceholderToUndefined,
+    z
+      .string()
+      .min(1)
+      .max(maximum)
+      .refine(
+        (value) => !/[\r\n\u0000]/.test(value),
+        'Mail configuration contains unsafe control characters',
+      )
+      .optional(),
+  );
+
+const mailEnvSchema = {
+  MAIL_PROVIDER: z.preprocess(
+    railwayPlaceholderToUndefined,
+    z.enum(['sink', 'resend']).optional(),
+  ),
+  MAIL_API_KEY: optionalMailValue(1_024),
+  MAIL_FROM: optionalMailValue(320),
+  MAIL_REPLY_TO: optionalMailValue(320),
+} as const;
+
+const validateMailEnvironment = (
+  value: {
+    readonly APP_ENV: 'development' | 'test' | 'staging' | 'production';
+    readonly MAIL_PROVIDER?: 'sink' | 'resend' | undefined;
+    readonly MAIL_API_KEY?: string | undefined;
+    readonly MAIL_FROM?: string | undefined;
+    readonly MAIL_REPLY_TO?: string | undefined;
+  },
+  context: z.RefinementCtx,
+) => {
+  const mailValues = [value.MAIL_API_KEY, value.MAIL_FROM, value.MAIL_REPLY_TO];
+  if (
+    value.MAIL_PROVIDER === undefined &&
+    mailValues.some((candidate) => candidate !== undefined)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_PROVIDER'],
+      message: 'MAIL_PROVIDER is required when mail settings are present',
+    });
+  }
+  if (
+    value.MAIL_PROVIDER === 'resend' &&
+    mailValues.some((candidate) => candidate === undefined)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_PROVIDER'],
+      message: 'Resend requires MAIL_API_KEY, MAIL_FROM and MAIL_REPLY_TO',
+    });
+  }
+  if (
+    value.MAIL_PROVIDER === 'sink' &&
+    (value.APP_ENV === 'staging' || value.APP_ENV === 'production')
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_PROVIDER'],
+      message: 'The in-memory mail sink is forbidden outside dev/test',
+    });
+  }
+};
+
 const baseEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   APP_ENV: z.enum(['development', 'test', 'staging', 'production']),
@@ -53,13 +123,17 @@ const baseEnvSchema = z.object({
     .default(2_000),
 });
 
-const workerEnvSchema = baseEnvSchema.extend({
-  WORKER_CONCURRENCY_EMAIL: z.coerce.number().int().positive().default(2),
-  WORKER_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(4),
-});
+const workerEnvSchema = baseEnvSchema
+  .extend({
+    ...mailEnvSchema,
+    WORKER_CONCURRENCY_EMAIL: z.coerce.number().int().positive().default(2),
+    WORKER_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(4),
+  })
+  .superRefine(validateMailEnvironment);
 
 const conferenceEnvSchema = baseEnvSchema
   .extend({
+    ...mailEnvSchema,
     BETTER_AUTH_SECRET: z.string().min(32),
     RATE_LIMIT_SUBJECT_SECRET: z.string().min(32),
     SIMPLESHOP_API_EMAIL: z.email().max(320).optional(),
@@ -68,6 +142,7 @@ const conferenceEnvSchema = baseEnvSchema
     CHECKIN_DEVICE_ID: z.uuid().optional(),
   })
   .superRefine((value, context) => {
+    validateMailEnvironment(value, context);
     if (
       (value.SIMPLESHOP_API_EMAIL === undefined) !==
       (value.SIMPLESHOP_API_KEY === undefined)

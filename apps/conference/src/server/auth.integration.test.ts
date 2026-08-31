@@ -45,6 +45,12 @@ integration('magic-link authentication integration', () => {
   beforeEach(async () => {
     mail.clear();
     await client.pool.query('delete from "user" where email = $1', [email]);
+    await client.db.insert(schema.users).values({
+      id: crypto.randomUUID(),
+      name: '',
+      email,
+      emailVerified: false,
+    });
   });
 
   afterAll(async () => {
@@ -107,6 +113,29 @@ integration('magic-link authentication integration', () => {
 
     const secondUse = await auth.handler(new Request(deliveredUrl));
     expect(secondUse.headers.get('location')).toContain('INVALID_TOKEN');
+  });
+
+  it('does not create an identity that was not imported or provisioned', async () => {
+    const unknownEmail = `unknown-${crypto.randomUUID()}@example.com`;
+    const requested = await auth.handler(
+      new Request('http://localhost:3000/api/auth/sign-in/magic-link', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: unknownEmail, callbackURL: '/' }),
+      }),
+    );
+    expect(requested.status).toBe(200);
+    const deliveredUrl = mail.messages.at(-1)?.url;
+    expect(deliveredUrl).toBeTruthy();
+    const consumed = await auth.handler(new Request(deliveredUrl!));
+    expect(consumed.headers.get('location')).toContain(
+      'new_user_signup_disabled',
+    );
+    const users = await client.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.email, unknownEmail));
+    expect(users).toEqual([]);
   });
 
   it('rejects an expired session at the HTTP boundary', async () => {

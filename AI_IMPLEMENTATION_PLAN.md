@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.30 – schválený SimpleShop participant apply
+> Stav: implementační plán v6.31 – přímý Better Auth admin login
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2494,9 +2494,10 @@ claim a check-in vyřazuje
   (`SCOPE-2026-13`/`14`).
 - [ ] `P4-06` Invitation link a adminem spuštěný batch přes worker; připravit
   idempotentní odeslání 11. 9. 2026 a hard-deadline runbook pro 15. 9. 2026.
-- [ ] `P4-07` Propojit invitation token s předem importovanou Better Auth
-  identitou, event membershipem a onboardingem; neexistující importovanou
-  identitu link nesmí vytvořit.
+- [~] `P4-07` Přímý Better Auth magic link na `/` a `/prihlaseni` je napojený
+  na předem provisionovanou identitu, bez ticketové aktivace a bez možnosti
+  samovolně vytvořit neznámý účet. Zbývá invitation token/batch handoff do
+  onboardingu pro importované účastníky.
 - [ ] `P4-08` Opakovaná pozvánka/recovery bezpečně obnoví přístup bez
   duplicitního profilu nebo membershipu.
 - [ ] `P4-09` Auditovaný support pro resend/revoke invitation a opravu
@@ -2739,7 +2740,9 @@ send snapshotu; `F2-05`/`F4-06` jsou integrovány po v6 scope alignmentu;
 
 #### P8G – produkční transakční e-mail, před go-live
 
-- [ ] `P8-03` MailProvider prod adapter + fake dev adapter.
+- [~] `P8-03` Resend prod adapter a fake dev/test adapter jsou implementované;
+  staging/production s neúplnou konfigurací failují zavřeně. Dokončení čeká na
+  schválení providera/DPA, API secret, ověřený sender a deliverability smoke.
 - [ ] `P8-04` Šablony a delivery log pro povinné auth, claim, recovery a
   rezervační/FIFO změny a kritické event/session oznámení. Invitation batch musí
   podporovat termíny 11. a 15. 9. 2026.
@@ -2980,7 +2983,8 @@ rozhodnutí ani souhlas s produkčním nasazením.
 | BLOCKER-LIVE-01 | Finální provozní výběr sessions a moderátorů pro tabletové UAT; nejde o implementační vstup | Pouze `P12-06` UAT | Organizace | Před `P12-06` | Vše je defaultně vypnuté; administrace nabízí kanonický výběr sessions a aktivních uživatelů. |
 | BLOCKER-CONTENT-01 | Finální program reconciliation, loga partnerů a FAQ k uzávěrce 31. 8. 2026 | Obsah UAT | Organizace | Gate A content UAT | Aktuální web je označený baseline/draft; plánek ani materiály se neočekávají. |
 | BLOCKER-LEGAL-01 | Schválené účely a texty souhlasů, kontaktní privacy postup a pravidla ručního odstranění/anonymizace | Produkční onboarding, privacy operations a networkingový adresář | ENJOiT | Gate A onboarding/networking UAT | Explicitní opt-in je implementovaný, bez opt-in je profil skrytý a automatické mazání je vypnuté podle `SCOPE-2026-15`/`16`; finální právní copy musí schválit organizátor. |
-| BLOCKER-VENDOR-01 | E-mail provider + DPA/region | Prod e-mail | ENJOiT + tech lead | P8-03 | Fake/sink adapter. |
+| BLOCKER-VENDOR-01 | Schválení Resend DPA/regionu, environment-specific API key, ověřený sender a reply-to | Aktivace prod e-mailu a login UAT | ENJOiT + tech lead | Dokončení P8-03 | Resend adapter je připravený; neúplná konfigurace failuje zavřeně a dev/test používá fake sink. |
+| BLOCKER-OPS-03 | Přesný e-mail prvního organizer admina | Provisioning první produkční identity a role-based login UAT | Organizátor | Před prvním loginem | Identitu neodvozovat z Git konfigurace ani jiné nepřímé stopy; bootstrap spustit pouze s potvrzeným e-mailem. |
 | BLOCKER-VENDOR-02 | Error/uptime provider + privacy nastavení | Go-live monitor | Tech lead + ENJOiT | P15-11 | Redacted logs + Railway, ale launch gate zůstává otevřená. |
 | BLOCKER-INFRA-01 | Railway DPA, subprocesory, datová rezidence a bezpečnost/retence bucketu | Produkční PII, ticket importy, organizační exporty a schválené obrázky | ENJOiT + tech lead | První produkční PII/upload | Pouze syntetický/anonymizovaný staging; žádné speaker materiály se neočekávají. |
 | BLOCKER-WEB-01 | Hosting/deploy trigger `byzon.cz` | P14 | Tech lead | P14-03 | Public API + no-op adapter + sync_pending. |
@@ -3300,3 +3304,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.28 | 31. 8. 2026 | ADR-016 mění vstup do aplikace na SimpleShop API import účastníků a samostatnou adminem spuštěnou e-mailovou pozvánku; ticket credential/claim a celý check-in jsou mimo scope 2026. Railway staging je potvrzen na `byzonconference-staging.up.railway.app`, produkční `app.byzon.cz` půjde přes Cloudflare. Networking nyní výslovně zveřejňuje všechna vyplněná pole a bez opt-in skrývá celý profil; automatická retence je vypnutá. Nové `/admin/interakce` integruje auditované event flags, session questions a výběr moderátorů bez ručního session ID. |
 | 6.29 | 31. 8. 2026 | Nedestruktivně vytvořeno oddělené Railway prostředí `production-2026`, protože starší prostředí `production` už existovalo a zůstalo nedotčené. Web, worker, vlastní PostgreSQL a Redis běží na releasu `9ddeec7`; produkční DB bez stagingové PII dostala baseline a kanonický draftový obsah 82 sessions. Readiness/smoke a 200 požadavků při concurrency 10 prošly, stejně jako post-import backup/restore kontrola 48 tabulek, 20 migrací, 2 eventů a 82 sessions. Před skutečným provozem zbývá rotace dočasně klonovaných aplikačních secrets, bootstrap organizer admina, auditovaná publikace, klikací UAT a rollback drill. |
 | 6.30 | 31. 8. 2026 | Uzavřen `BLOCKER-TKT-02`: pouze `Uhrazeno` opravňuje k participant apply, ostatní/unknown stavy nového účastníka neimportují a pozdější downgrade existujícího účastníka jde k ruční kontrole bez automatického lockoutu. Identita preferuje e-mail „prodej na jméno“; kupující je fallback jen pro objednávku s jedinou způsobilou vstupenkou a nejednoznačný skupinový nákup se neaplikuje. |
+| 6.31 | 31. 8. 2026 | `/` a produkčně dostupné `/prihlaseni` používají přímo pětiminutový jednorázový Better Auth magic link bez ticket activation gate; sign-up je zakázaný a callbacky mají explicitní bezpečný allowlist. Přidán Resend adapter s bounded timeoutem/idempotency klíčem, fail-closed produkční konfigurace a přístupný responzivní login. Bootstrap CLI umí výslovně provisionovat první neověřenou identitu, event membership a `organizer_admin` s auditem bez PII. Skutečný login čeká jen na potvrzený admin e-mail a kompletní schválené mail secrets/sender. |

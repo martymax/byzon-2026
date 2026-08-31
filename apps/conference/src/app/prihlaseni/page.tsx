@@ -1,11 +1,7 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 
-import { ActivationIdentity } from '@/components/activation-identity';
-import { LoginFlow } from '@/components/login-flow';
-import { resolveActivationReturnTo } from '@/lib/activation-return';
-import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
-import { resolveLoginMode } from '@/lib/login-mode';
+import { MagicLinkLogin } from '../../components/magic-link-login';
+import { resolveAuthReturnTo } from '../../lib/auth-return';
 
 export const metadata: Metadata = {
   title: 'Bezpečné přihlášení',
@@ -17,18 +13,8 @@ export default async function LoginPage({
 }: {
   readonly searchParams: Promise<{
     readonly returnTo?: string | string[] | undefined;
-    readonly mode?: string | string[] | undefined;
   }>;
 }) {
-  if (!isFrontendPreviewAvailable()) notFound();
   const query = await searchParams;
-  const mode = resolveLoginMode(query.mode);
-  const returnTo = resolveActivationReturnTo(
-    query.returnTo,
-    mode === 'identity' ? '/onboarding' : '/app',
-  );
-  if (mode === 'recovery' || mode === 'switch') {
-    return <LoginFlow mode={mode} returnTo={returnTo} />;
-  }
-  return <ActivationIdentity returnTo={returnTo} />;
+  return <MagicLinkLogin returnTo={resolveAuthReturnTo(query.returnTo)} />;
 }

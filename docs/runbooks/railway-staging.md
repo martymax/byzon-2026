@@ -31,11 +31,13 @@ Nevznikl žádný uživatel a ze stagingu se nekopírovaly osobní údaje. Impor
 obsah zůstává draftem; publikaci musí po přidání prvního produkčního organizer
 admina provést oprávněný uživatel přes auditovaný publish flow.
 
-Klon dočasně převzal také stagingové aplikační secrets. Před prvním skutečným
-uživatelem je povinné v obou produkčních app službách vygenerovat samostatné
-`BETTER_AUTH_SECRET` a `RATE_LIMIT_SUBJECT_SECRET`. E-mailové proměnné zůstávají
-na inertním sentinelu `__FILL_IN_RAILWAY__`; invitation batch se do jejich
-nahrazení a ověření domény nesmí spustit.
+Klon dočasně převzal také stagingové aplikační secrets. Dne 31. 8. 2026 byly ve
+webové službě `production-2026` před prvním skutečným uživatelem atomicky
+nahrazené samostatnými náhodnými `BETTER_AUTH_SECRET` a
+`RATE_LIMIT_SUBJECT_SECRET`; kontrola potvrdila, že už se stagingem nejsou
+shodné. E-mailové proměnné zůstávají na inertním sentinelu
+`__FILL_IN_RAILWAY__`; invitation batch se do jejich nahrazení a ověření domény
+nesmí spustit.
 
 ## Služby a deployment
 
@@ -77,12 +79,14 @@ Worker potřebuje stejné `NODE_ENV`, `APP_ENV`, `APP_BASE_URL`,
 `WORKER_CONCURRENCY_EMAIL` a `WORKER_CONCURRENCY_DEFAULT`, jakmile budou
 explicitně nastavené; do té doby platí validované serverové defaulty.
 
-## E-mailové placeholders
+## E-mailové placeholders a magic link
 
-Produkční provider zatím není zvolený. Railway CLI nepovoluje nulovou délku
-hodnoty, proto jsou ve webu i workeru připravené staging placeholders s
-inertní hodnotou `__FILL_IN_RAILWAY__`. Aplikace je nesmí číst ani považovat za
-aktivní konfiguraci, dokud nejsou vyplněné všechny povinné hodnoty:
+Web má připravený skutečný Resend adapter pro Better Auth magic link. Jeho
+produkční aktivace stále vyžaduje schválení zpracovatele, environment-specific
+API klíč a ověřenou odesílací doménu. Railway CLI nepovoluje nulovou délku
+hodnoty, proto jsou ve webu i workeru připravené placeholders s inertní hodnotou
+`__FILL_IN_RAILWAY__`. Aplikace je nesmí číst ani považovat za aktivní
+konfiguraci, dokud nejsou vyplněné všechny povinné hodnoty:
 
 - `MAIL_PROVIDER`
 - `MAIL_API_KEY` (secret)
@@ -93,9 +97,39 @@ Sentinel znamená výhradně „čeká na doplnění“, nikoli povolení odesí
 doplnění se musí web i worker restartovat a validace musí odmítnout sentinel i
 částečně vyplněnou konfiguraci.
 
+Pro web nastavte celou sadu atomicky:
+
+```text
+MAIL_PROVIDER=resend
+MAIL_API_KEY=<environment-specific Resend secret>
+MAIL_FROM=BYZON <prihlaseni@overena-odesilaci-domena>
+MAIL_REPLY_TO=<organizacni podpora>
+```
+
+Staging ani produkce nesmí použít vestavěný in-memory `sink`; ten je povolený
+jen v dev/test. Neúplná staging/produkční konfigurace failne zavřeně a magic
+link neodešle. `/` i `/prihlaseni` posílají požadavek přímo do Better Auth,
+nepoužívají ticketovou aktivaci a neznámá identita se sama nevytvoří.
+
 Před produkční invitation batchí musí odesílací doména projít SPF, DKIM,
 DMARC a deliverability smoke. Staging do té doby používá pouze bezpečný
-sink; nesmí odesílat skutečným účastníkům.
+providerový testovací režim nebo schválené syntetické adresy; nesmí odesílat
+skutečným účastníkům.
+
+První organizer admin se provisionuje teprve po potvrzení přesné e-mailové
+adresy. Pro cílové prostředí spusťte:
+
+```bash
+DATABASE_URL="$DATABASE_URL" \
+  pnpm --filter @byzon/database db:bootstrap-admin \
+  --event-slug byzon-2026 \
+  --user-email organizer@example.com \
+  --create-user
+```
+
+Příkaz vytvoří neověřenou passwordless identitu, aktivní event membership a
+event-scoped `organizer_admin`. První úspěšně otevřený magic link e-mail ověří;
+opakované spuštění je no-op a role grant se auditovaně zapisuje bez e-mailu.
 
 ## Redis a databáze
 

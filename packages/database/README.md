@@ -95,20 +95,24 @@ replacement fail closed.
 ## Bootstrap the first organizer admin
 
 There is intentionally no public endpoint that can grant the
-`organizer_admin` role. The target user must first sign in once so Better Auth
-creates the global identity. Then run the explicit CLI against the intended
-database and event:
+`organizer_admin` role. For an imported participant, the Better Auth identity
+already exists. The first organizer can instead be explicitly provisioned by
+the CLI before login. Run it against the intended database and event:
 
 ```bash
 DATABASE_URL=postgresql://... \
   pnpm --filter @byzon/database db:bootstrap-admin \
   --event-slug byzon-2026 \
-  --user-email organizer@example.invalid
+  --user-email organizer@example.invalid \
+  --create-user
 ```
 
-The command creates a missing active event membership and grants only the
-event-scoped organizer role. It is idempotent, writes an audit record without
-the email address, and refuses to reactivate a suspended or revoked membership.
+`--create-user` creates only a non-verified passwordless identity; the e-mail is
+verified by the first magic link. Without this flag the command still requires
+an existing user. The command creates a missing active event membership and
+grants only the event-scoped organizer role. It is idempotent, writes an audit
+record without the email address, and refuses to reactivate a suspended or
+revoked membership.
 Use the environment-specific `DATABASE_URL`; the command has no implicit local
 or production fallback.
 

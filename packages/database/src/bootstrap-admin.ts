@@ -10,6 +10,7 @@ const main = async (): Promise<void> => {
   const { values } = parseArgs({
     allowPositionals: false,
     options: {
+      'create-user': { type: 'boolean', default: false },
       'event-slug': { type: 'string' },
       'user-email': { type: 'string' },
     },
@@ -20,7 +21,7 @@ const main = async (): Promise<void> => {
   if (!eventSlug || !userEmail) {
     throw new AdminBootstrapError(
       'INVALID_INPUT',
-      'Usage: db:bootstrap-admin --event-slug <slug> --user-email <email>',
+      'Usage: db:bootstrap-admin --event-slug <slug> --user-email <email> [--create-user]',
     );
   }
 
@@ -45,6 +46,7 @@ const main = async (): Promise<void> => {
 
   try {
     const result = await bootstrapOrganizerAdmin(client.db, {
+      createUserIfMissing: values['create-user'],
       eventSlug,
       userEmail,
     });
@@ -52,7 +54,7 @@ const main = async (): Promise<void> => {
       ? `; audit request ${result.requestId}`
       : '';
     process.stdout.write(
-      `Organizer admin bootstrap ${result.status} for event ID ${result.eventId}${auditSuffix}.\n`,
+      `Organizer admin bootstrap ${result.status} for event ID ${result.eventId}; user ${result.userCreated ? 'created' : 'existing'}${auditSuffix}.\n`,
     );
   } finally {
     await client.close();

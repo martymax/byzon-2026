@@ -15,6 +15,15 @@ const stagingBase = {
 describe('worker environment', () => {
   it('validates positive concurrency', () =>
     expect(() => readWorkerEnv({ WORKER_CONCURRENCY_DEFAULT: 0 })).toThrow());
+
+  it('shares the fail-closed mail configuration rules', () => {
+    expect(() =>
+      readWorkerEnv({ ...stagingBase, MAIL_PROVIDER: 'resend' }),
+    ).toThrow();
+    expect(() =>
+      readWorkerEnv({ ...stagingBase, MAIL_PROVIDER: 'sink' }),
+    ).toThrow();
+  });
 });
 
 describe('database environment', () => {
@@ -113,6 +122,36 @@ describe('conference authentication environment', () => {
         ...stagingBase,
         RATE_LIMIT_SUBJECT_SECRET: undefined,
       }),
+    ).toThrow();
+  });
+
+  it('treats Railway mail sentinels as unconfigured', () => {
+    expect(
+      readConferenceEnv({
+        ...stagingBase,
+        MAIL_PROVIDER: '__FILL_IN_RAILWAY__',
+        MAIL_API_KEY: '__FILL_IN_RAILWAY__',
+        MAIL_FROM: '__FILL_IN_RAILWAY__',
+        MAIL_REPLY_TO: '__FILL_IN_RAILWAY__',
+      }),
+    ).toMatchObject({ MAIL_PROVIDER: undefined });
+  });
+
+  it('requires a complete Resend configuration and forbids sinks in staging', () => {
+    expect(() =>
+      readConferenceEnv({ ...stagingBase, MAIL_PROVIDER: 'resend' }),
+    ).toThrow();
+    expect(
+      readConferenceEnv({
+        ...stagingBase,
+        MAIL_PROVIDER: 'resend',
+        MAIL_API_KEY: 're_test',
+        MAIL_FROM: 'BYZON <login@app.byzon.cz>',
+        MAIL_REPLY_TO: 'podpora@byzon.cz',
+      }),
+    ).toMatchObject({ MAIL_PROVIDER: 'resend' });
+    expect(() =>
+      readConferenceEnv({ ...stagingBase, MAIL_PROVIDER: 'sink' }),
     ).toThrow();
   });
 });

@@ -332,7 +332,15 @@ export const useAdminRequestFence = (): AdminRequestFence => {
 type ShellState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly context: AdminContextResponse }
-  | { readonly kind: 'blocked'; readonly message: string };
+  | {
+      readonly kind: 'blocked';
+      readonly loginRequired: boolean;
+      readonly message: string;
+    };
+
+const requiresLogin = (failure: ApiFailure<ApiProblem>): boolean =>
+  failure.kind === 'session_expired' ||
+  (failure.kind === 'problem' && failure.problem.status === 401);
 
 const failureMessage = (failure: ApiFailure<ApiProblem>): string => {
   if (failure.kind === 'offline') {
@@ -370,6 +378,7 @@ export const AdminWorkspaceShell = ({
   const [securityEpoch, setSecurityEpoch] = useState(0);
   const section = sectionForPath(pathname);
   const activeNavigation = itemForPath(pathname) ?? navigation[0];
+  const loginReturnTo = canonicalPathForNavigation(pathname);
   const effectiveApi = useMemo(
     () => (environment === 'mocked' ? personaApi(api, previewPersona) : api),
     [api, environment, previewPersona],
@@ -386,6 +395,7 @@ export const AdminWorkspaceShell = ({
     setSecurityEpoch((current) => current + 1);
     setState({
       kind: 'blocked',
+      loginRequired: false,
       message:
         message ??
         'Oprávnění nebo připojení se změnilo. Soukromá data byla odstraněna.',
@@ -406,6 +416,7 @@ export const AdminWorkspaceShell = ({
         setSecurityEpoch((current) => current + 1);
         setState({
           kind: 'blocked',
+          loginRequired: requiresLogin(result.failure),
           message: failureMessage(result.failure),
         });
         return;
@@ -413,6 +424,7 @@ export const AdminWorkspaceShell = ({
       if (result.kind === 'not_modified') {
         setState({
           kind: 'blocked',
+          loginRequired: false,
           message: 'Administrační kontext neposkytl úplný bezpečný snapshot.',
         });
         return;
@@ -554,13 +566,22 @@ export const AdminWorkspaceShell = ({
                 <p className={styles.eyebrow}>Přístup uzavřen</p>
                 <h1>Administraci nelze bezpečně zobrazit</h1>
                 <p>{state.message}</p>
-                <button
-                  className={styles.secondaryButton}
-                  onClick={refreshContext}
-                  type="button"
-                >
-                  Ověřit přístup znovu
-                </button>
+                {state.loginRequired ? (
+                  <Link
+                    className={styles.secondaryButton}
+                    href={`/prihlaseni?returnTo=${encodeURIComponent(loginReturnTo)}`}
+                  >
+                    Přihlásit se
+                  </Link>
+                ) : (
+                  <button
+                    className={styles.secondaryButton}
+                    onClick={refreshContext}
+                    type="button"
+                  >
+                    Ověřit přístup znovu
+                  </button>
+                )}
               </section>
             ) : (
               <AdminWorkspaceContext.Provider value={value}>
