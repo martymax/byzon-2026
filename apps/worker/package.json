@@ -7,6 +7,7 @@
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --alias:@byzon/config=../../packages/config/src/index.ts --alias:@byzon/database=../../packages/database/src/index.ts --outfile=dist/index.js",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
+    "pretest": "pnpm --filter @byzon/database build && pnpm --filter @byzon/redis build",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
