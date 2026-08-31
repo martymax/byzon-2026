@@ -27,9 +27,7 @@ describe('2026 retired route boundary', () => {
   it('keeps preview routes available to local component development', () => {
     vi.stubEnv('NODE_ENV', 'test');
 
-    const response = proxy(
-      new NextRequest('https://app.byzon.test/check-in'),
-    );
+    const response = proxy(new NextRequest('https://app.byzon.test/check-in'));
 
     expect(response.status).toBe(200);
   });
