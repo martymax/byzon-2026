@@ -4,6 +4,7 @@ import {
   checkinConfirmResponseSchema,
   checkinLookupRequestSchema,
   checkinLookupResponseSchema,
+  checkinSearchRequestSchema,
   checkinSearchResponseSchema,
   checkinUndoRequestSchema,
   checkinUndoResponseSchema,
@@ -207,8 +208,10 @@ export const createCheckinDemoApi = ({
         );
       }
 
-      if (method === 'GET' && url.pathname === '/api/v1/check-in/search') {
-        const query = url.searchParams.get('q')?.toLocaleLowerCase('cs') ?? '';
+      if (method === 'POST' && url.pathname === '/api/v1/check-in/search') {
+        const query = checkinSearchRequestSchema
+          .parse(parsedBody(init))
+          .query.toLocaleLowerCase('cs');
         const matches =
           query.includes('nikdo') || query.includes('empty')
             ? []

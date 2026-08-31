@@ -145,7 +145,7 @@ describe('offline experience', () => {
     await expectComponentToPassAxe(screen.container);
   });
 
-  it('reports the production owner-lease gate honestly and never promises replay', async () => {
+  it('reports the enabled production owner-lease and replay capabilities honestly', async () => {
     const screen = await renderComponent(
       <div style={visualTestStyle}>
         <OfflineExperience
@@ -156,18 +156,16 @@ describe('offline experience', () => {
     );
 
     await expect
-      .element(screen.getByText('Vypnutá feature gatem'))
+      .element(screen.getByText('Zapnutá feature gatem'))
       .toBeVisible();
+    await expect.element(screen.getByText('Integrovaný')).toBeVisible();
     await expect
-      .element(screen.getByText('Chybí · osobní data se neukládají'))
+      .element(screen.getByText('Zapnuté owner-bound replay'))
       .toBeVisible();
-    await expect
-      .element(screen.getByText('Vypnuté · změny vyžadují server'))
-      .toBeVisible();
-    expect(screen.container.textContent).toContain(
+    expect(screen.container.textContent).toContain('Lze odložit:');
+    expect(screen.container.textContent).not.toContain(
       'Produkční owner-lease a owner-bound replay nejsou integrovány',
     );
-    expect(screen.container.textContent).not.toContain('Lze odložit:');
     await expectComponentToPassAxe(screen.container);
   });
 

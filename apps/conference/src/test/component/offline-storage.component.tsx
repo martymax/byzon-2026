@@ -90,6 +90,37 @@ const requestResult = <Value,>(request: IDBRequest<Value>): Promise<Value> =>
     request.onerror = () => reject(request.error);
   });
 
+const requestPath = (input: RequestInfo | URL): string =>
+  new URL(
+    input instanceof Request ? input.url : input.toString(),
+    'https://byzon.invalid',
+  ).pathname;
+
+const replayPreflightResponse = (
+  offlineEpoch: string,
+  requestId: string,
+): Response => {
+  const issuedAt = new Date();
+  return Response.json(
+    {
+      contractVersion: 1,
+      eventId: scope.eventId,
+      userId: scope.userId,
+      ownerLeaseId: offlineEpoch,
+      revocationEpoch: offlineEpoch,
+      agendaVersion: participantAgendaFixtures.happy!.version,
+      issuedAt: issuedAt.toISOString(),
+      validUntil: new Date(issuedAt.getTime() + 30_000).toISOString(),
+    },
+    {
+      headers: {
+        'content-type': 'application/json',
+        'x-request-id': requestId,
+      },
+    },
+  );
+};
+
 const createSeededVersionTwo = (name: string): Promise<void> =>
   new Promise((resolve, reject) => {
     const request = indexedDB.open(name, 2);
@@ -362,6 +393,12 @@ describe('participant offline IndexedDB', () => {
               'x-request-id': 'offline-owner-preflight-0001',
             },
           });
+        }
+        if (requestPath(_input) === '/api/v1/me/offline-replay-preflight') {
+          return replayPreflightResponse(
+            offlineEpoch,
+            'offline-replay-preflight-0001',
+          );
         }
         expect(method).toBe('POST');
         const headers =
@@ -702,6 +739,12 @@ describe('participant offline IndexedDB', () => {
               'x-request-id': 'offline-owner-preflight-0004',
             },
           });
+        }
+        if (requestPath(_input) === '/api/v1/me/offline-replay-preflight') {
+          return replayPreflightResponse(
+            offlineEpoch,
+            'offline-replay-preflight-0002',
+          );
         }
         postStarted = true;
         return new Promise<Response>((resolve) => {
