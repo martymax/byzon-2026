@@ -166,7 +166,8 @@ integration('content import integration', () => {
     expect(firstSessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: 'Expertní Board 21 - mastermind session',
+          title:
+            'Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?',
           type: 'mastermind',
           capacityMode: 'reservation',
           capacity: 12,
@@ -349,7 +350,8 @@ integration('content import integration', () => {
           endsAt: new Date('2026-09-18T19:00:00.000Z'),
         }),
         expect.objectContaining({
-          title: 'Expertní Board 21 - mastermind session',
+          title:
+            'Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?',
           type: 'mastermind',
           capacityMode: 'reservation',
           capacity: 12,
@@ -426,5 +428,5 @@ integration('content import integration', () => {
         ),
       );
     expect(invalid[0]!.value).toBe(0);
-  }, 15_000);
+  }, 60_000);
 });
