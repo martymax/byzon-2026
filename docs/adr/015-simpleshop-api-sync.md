@@ -91,6 +91,23 @@ pomocí `GET`, proti oficiálnímu OpenAPI a skutečným odpovědím pro BYZON p
   `P4-02` neukládá raw kód, vratný otisk ani HMAC; rozhodnutí o normalizaci,
   entropii a HMAC zůstává v `BLOCKER-TKT-04`.
 
+## Schválené mapování pro `P4-03`
+
+Dne 31. 8. 2026 organizátor schválil konzervativní participant apply:
+
+1. Pouze `Uhrazeno` opravňuje k importu účastníka, aktivnímu event membershipu
+   a následné administrátorem spuštěné pozvánce.
+2. `Neuhrazeno`, `STORNO`, refund a každý neznámý stav nového účastníka
+   neimportují. Neznámý stav zastaví batch jako validační konflikt.
+3. Pozdější přechod již importovaného účastníka na `Neuhrazeno`, `STORNO` nebo
+   refund zastaví další pozvánky a vytvoří administrátorský konflikt. Membership
+   ani rezervace se automaticky neruší, dokud praktické ověření reprezentativního
+   refundu nepodpoří samostatně schválenou automatizaci.
+4. Identitou je přednostně normalizovaný e-mail „prodej na jméno“. E-mail
+   kupujícího je fallback pouze u objednávky s právě jednou způsobilou placenou
+   vstupenkou. Skupinový nákup bez jednoznačných účastnických e-mailů jde do
+   ručního řešení a nevytvoří duplicitní identity ani pozvánky.
+
 ## Provozní tok
 
 1. Organizátor zvolí „Načíst ze SimpleShopu“.
@@ -102,21 +119,19 @@ pomocí `GET`, proti oficiálnímu OpenAPI a skutečným odpovědím pro BYZON p
 
 ## Otevřené integrační vstupy
 
-- potvrzené mapování zdrojových statusů na kanonické ticket stavy;
-- reprezentativní refund v read-only datech a produktové rozhodnutí, zda a jak
-  se pending, storno a refund smějí promítnout při `P4-03`;
-- schválená identita účastníka: priorita e-mailu „prodej na jméno“ a bezpečný
-  fallback na e-mail kupujícího u objednávky s jedním nebo více účastníky;
-- bezpečnostní rozhodnutí o entropii, přesné normalizaci a HMAC ticket kódu bez
-  uložení raw test vectors do repozitáře nebo chatu.
+- reprezentativní refund v read-only datech pro praktické ověření zdrojové
+  reprezentace; do té doby se fail-closed klasifikuje jako nezpůsobilý konflikt;
+- ticket kód se po rozhodnutí scope 2026 nepoužívá pro identitu, přístup ani
+  check-in a po in-memory validaci se zahodí.
 
 ## Důsledky
 
 - `BLOCKER-TKT-03` je uzavřen: synchronizace je ruční, na vyžádání, ve dvou
   krocích preview/apply.
 - `BLOCKER-TKT-01` je uzavřen ověřeným endpoint/envelope/ID/quantity mappingem.
-- `BLOCKER-TKT-02` a `TKT-04` zůstávají otevřené pro apply a claim; neblokují
-  adminem spouštěné read-only preview.
+- `BLOCKER-TKT-02` je uzavřen schváleným participant mapováním z 31. 8. 2026.
+  `TKT-04` je uzavřen scope rozhodnutím nepoužívat ticket kód pro přístup ani
+  check-in.
 - Historické CSV/XLSX fixtures mohou zůstat pro testy kanonického stagingu,
   ale SimpleShop administrace nebude nabízet file upload ani paralelní
   produkční sync kanál.
