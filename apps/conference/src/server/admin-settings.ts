@@ -1,4 +1,9 @@
-import { schema, writeAuditLog, type Database } from '@byzon/database';
+import {
+  acquireTransactionLock,
+  schema,
+  writeAuditLog,
+  type Database,
+} from '@byzon/database';
 import {
   adminEventSettingsSchema,
   adminEventSettingsUpdateRequestSchema,
@@ -171,6 +176,7 @@ export const handleAdminSettings = async (
         now: changedAt,
       },
       async (transaction) => {
+        await acquireTransactionLock(transaction, `admin-settings:${eventId}`);
         const current =
           await transaction.query.eventOperationalSettings.findFirst({
             where: eq(schema.eventOperationalSettings.eventId, eventId),

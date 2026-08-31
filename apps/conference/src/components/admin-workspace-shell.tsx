@@ -34,6 +34,7 @@ type AdminWorkspaceSection =
   | 'support'
   | 'announcements'
   | 'operations'
+  | 'engagement'
   | 'reservations'
   | 'content';
 
@@ -42,7 +43,7 @@ const navigation = [
   {
     href: '/admin/vstupenky',
     integrated: true,
-    label: 'Import vstupenek',
+    label: 'Import účastníků',
     section: 'import',
   },
   {
@@ -68,6 +69,12 @@ const navigation = [
     integrated: true,
     label: 'Reporty',
     section: 'operations',
+  },
+  {
+    href: '/admin/interakce',
+    integrated: true,
+    label: 'Interakce',
+    section: 'engagement',
   },
   {
     href: '/admin/rezervace',
@@ -123,6 +130,12 @@ const sectionPermissions: Readonly<
     'operations:read',
     'role:manage',
     'personal-data:operational:export',
+  ],
+  engagement: [
+    'event:settings:manage',
+    'participant:operational:read',
+    'program:manage',
+    'role:manage',
   ],
   reservations: ['reservation:any:read', 'audit:read', 'event:settings:manage'],
   content: ['program:manage'],
@@ -185,9 +198,13 @@ const mayAccess = (
   context: AdminContextResponse,
   section: AdminWorkspaceSection,
 ): boolean =>
-  sectionPermissions[section].some((permission) =>
-    context.actor.permissions.includes(permission),
-  );
+  section === 'engagement'
+    ? sectionPermissions[section].every((permission) =>
+        context.actor.permissions.includes(permission),
+      )
+    : sectionPermissions[section].some((permission) =>
+        context.actor.permissions.includes(permission),
+      );
 
 const AdminNavigation = ({
   activeHref,

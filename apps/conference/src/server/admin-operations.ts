@@ -1,6 +1,6 @@
 import { schema, type Database } from '@byzon/database';
 import { adminOperationsOverviewResponseSchema } from '@byzon/domain/contracts';
-import { and, count, eq, inArray, isNull, sum } from 'drizzle-orm';
+import { and, count, eq, inArray, sum } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -70,7 +70,6 @@ export const handleAdminOperations = async (
       ticketCounts,
       latestImport,
       publication,
-      checkins,
       reservations,
       capacity,
       outbox,
@@ -94,15 +93,6 @@ export const handleAdminOperations = async (
         where: eq(schema.contentPublications.eventId, eventId),
         orderBy: (table, { desc }) => [desc(table.version)],
       }),
-      dependencies.db
-        .select({ count: count() })
-        .from(schema.checkIns)
-        .where(
-          and(
-            eq(schema.checkIns.eventId, eventId),
-            isNull(schema.checkIns.undoneAt),
-          ),
-        ),
       dependencies.db
         .select({ count: count() })
         .from(schema.reservations)
@@ -176,13 +166,6 @@ export const handleAdminOperations = async (
           detail: publication
             ? `Synchronizační stav: ${publication.syncStatus}.`
             : 'Chybí publikovaný obsah aplikace.',
-        },
-        {
-          id: 'checkin',
-          label: 'Příchody',
-          value: String(checkins[0]?.count ?? 0),
-          state: 'healthy',
-          detail: 'Počet aktivních autoritativních check-in záznamů.',
         },
         {
           id: 'reservation',

@@ -14,6 +14,9 @@ export default function AdminOverviewPage() {
       </p>
       <ul>
         <li>
+          <Link href="/admin/vstupenky">Import účastníků</Link>
+        </li>
+        <li>
           <Link href="/admin/rezervace">Rezervace a kapacitní výjimky</Link>
         </li>
         <li>
@@ -27,6 +30,9 @@ export default function AdminOverviewPage() {
         </li>
         <li>
           <Link href="/admin/role">Role a provozní přehled</Link>
+        </li>
+        <li>
+          <Link href="/admin/interakce">Networking, otázky a hodnocení</Link>
         </li>
         <li>
           <Link href="/admin/audit">Audit a nastavení</Link>

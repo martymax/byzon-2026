@@ -28,12 +28,16 @@ vi.mock('@/components/admin-announcement-workspace', () => ({
 vi.mock('@/components/admin-operations-workspace', () => ({
   AdminOperationsWorkspace: () => null,
 }));
+vi.mock('@/components/admin-engagement-workspace', () => ({
+  AdminEngagementWorkspace: () => null,
+}));
 vi.mock('@/components/admin-reservation-workspace', () => ({
   AdminReservationWorkspace: () => null,
 }));
 
 import AdminAuditPage from './audit/page';
 import AdminImportPage from './import/page';
+import AdminEngagementPage from './interakce/page';
 import AdminSettingsPage from './nastaveni/page';
 import AdminAnnouncementsPage from './oznameni/page';
 import AdminOverviewPage from './page';
@@ -49,7 +53,6 @@ const mockRoutes = [
   ['import', AdminImportPage],
   ['support', AdminSupportPage],
   ['operations', AdminOperationsPage],
-  ['canonical tickets', AdminTicketsPage],
 ] as const;
 
 const integratedRoutes = [
@@ -60,6 +63,8 @@ const integratedRoutes = [
   ['canonical reports', AdminReportsPage],
   ['canonical audit', AdminAuditPage],
   ['canonical settings', AdminSettingsPage],
+  ['canonical engagement', AdminEngagementPage],
+  ['canonical participant import', AdminTicketsPage],
 ] as const;
 
 describe('F4 direct mock admin route boundary', () => {

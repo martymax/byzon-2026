@@ -1,4 +1,10 @@
 import {
+  adminEngagementMutationRequestSchema,
+  adminEngagementMutationResponseSchema,
+  adminEngagementOverviewSchema,
+  type AdminEngagementOverview,
+} from '@byzon/domain/contracts/admin-engagement';
+import {
   adminAnnouncementPreviewProblemSchema,
   adminAnnouncementPreviewRequestSchema,
   adminAnnouncementPreviewResponseSchema,
@@ -64,6 +70,7 @@ import {
 import {
   adminAuditFixtures,
   adminContextFixtures,
+  adminEngagementOverviewFixtures,
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
   adminExportFixtures,
@@ -122,6 +129,7 @@ interface StoredImportPreview {
 interface AdminMockState {
   persona: AdminMockPersona;
   overview: AdminOperationsOverviewResponse;
+  engagement: AdminEngagementOverview;
   supportRecords: SupportRecord[];
   reservations: AdminReservationRecord[];
   sessionCapacities: AdminSessionCapacityRecord[];
@@ -147,6 +155,7 @@ const initialState = (): AdminMockState => ({
     ...clone(adminOperationsOverviewFixtures.healthy!),
     eventId: adminFixtureIds.event,
   },
+  engagement: clone(adminEngagementOverviewFixtures.default!),
   supportRecords: supportSearchFixtures.ambiguous!.matches.map(
     eventScopedSupportRecord,
   ),
@@ -443,6 +452,259 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       successOptions('admin.mock.operations'),
     );
   }),
+
+  http.get('*/api/v1/admin/events/:eventId/engagement', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      [
+        'event:settings:manage',
+        'participant:operational:read',
+        'program:manage',
+        'role:manage',
+      ],
+      'admin.mock.engagement',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
+        adminReadProblemSchema,
+        adminReadProblemFixtures.not_found,
+        { fixtureName: 'admin.mock.engagement-not-found' },
+      );
+    }
+    return mockJsonResponse(
+      adminEngagementOverviewSchema,
+      state.engagement,
+      successOptions('admin.mock.engagement'),
+    );
+  }),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/engagement',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminMutationProblemSchema,
+        [
+          'event:settings:manage',
+          'participant:operational:read',
+          'program:manage',
+          'role:manage',
+        ],
+        'admin.mock.engagement-update',
+      );
+      if (denied) return denied;
+      const body = adminEngagementMutationRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'admin-engagement', body.data)
+        : null;
+      if (!routeMatchesEvent(params.eventId) || !body.success || !attempt) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.invalid_transition,
+          { fixtureName: 'admin.mock.engagement-invalid' },
+        );
+      }
+      const mutation = body.data;
+      if (
+        attempt.kind === 'collision' ||
+        scenario(mutation.reason).includes('collision')
+      ) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.engagement-collision' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminEngagementMutationResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.engagement-replay'),
+        );
+      }
+      if (
+        scenario(mutation.reason).includes('stale') &&
+        !state.staleScenarios.has('engagement')
+      ) {
+        state.staleScenarios.add('engagement');
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          {
+            ...adminMutationProblemFixtures.stale,
+            currentVersion:
+              mutation.action === 'update_features'
+                ? state.engagement.settingsVersion
+                : mutation.action === 'set_session_questions'
+                  ? (state.engagement.sessions.find(
+                      ({ sessionId }) => sessionId === mutation.sessionId,
+                    )?.version ?? 1)
+                  : state.engagement.assignmentsVersion,
+          },
+          { fixtureName: 'admin.mock.engagement-stale' },
+        );
+      }
+
+      let response: z.input<typeof adminEngagementMutationResponseSchema>;
+      if (mutation.action === 'update_features') {
+        if (
+          mutation.expectedSettingsVersion !== state.engagement.settingsVersion
+        ) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            {
+              ...adminMutationProblemFixtures.stale,
+              currentVersion: state.engagement.settingsVersion,
+            },
+            { fixtureName: 'admin.mock.engagement-features-version' },
+          );
+        }
+        state.engagement = adminEngagementOverviewSchema.parse({
+          ...state.engagement,
+          settingsVersion: state.engagement.settingsVersion + 1,
+          features: mutation.features,
+        });
+        response = {
+          action: mutation.action,
+          eventId: adminFixtureIds.event,
+          outcome: 'updated',
+          settingsVersion: state.engagement.settingsVersion,
+          features: mutation.features,
+          changedAt: '2026-07-25T12:30:00.000+02:00',
+          audit: { auditId: adminFixtureIds.auditMutation },
+        };
+      } else if (mutation.action === 'set_session_questions') {
+        const session = state.engagement.sessions.find(
+          ({ sessionId }) => sessionId === mutation.sessionId,
+        );
+        if (!session || session.version !== mutation.expectedSessionVersion) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            {
+              ...adminMutationProblemFixtures.stale,
+              currentVersion: session?.version ?? 1,
+            },
+            { fixtureName: 'admin.mock.engagement-session-version' },
+          );
+        }
+        const nextSession = {
+          ...session,
+          questionsEnabled: mutation.enabled,
+          version: session.version + 1,
+        };
+        state.engagement = adminEngagementOverviewSchema.parse({
+          ...state.engagement,
+          sessions: state.engagement.sessions.map((item) =>
+            item.sessionId === nextSession.sessionId ? nextSession : item,
+          ),
+        });
+        response = {
+          action: mutation.action,
+          eventId: adminFixtureIds.event,
+          outcome: 'updated',
+          session: {
+            sessionId: nextSession.sessionId,
+            questionsEnabled: nextSession.questionsEnabled,
+            version: nextSession.version,
+          },
+          changedAt: '2026-07-25T12:31:00.000+02:00',
+          audit: { auditId: adminFixtureIds.auditMutation },
+        };
+      } else {
+        if (
+          mutation.expectedAssignmentsVersion !==
+          state.engagement.assignmentsVersion
+        ) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            {
+              ...adminMutationProblemFixtures.stale,
+              currentVersion: state.engagement.assignmentsVersion,
+            },
+            { fixtureName: 'admin.mock.engagement-role-version' },
+          );
+        }
+        const candidate = state.engagement.moderatorCandidates.find(
+          ({ userId }) => userId === mutation.userId,
+        );
+        const session = state.engagement.sessions.find(
+          ({ sessionId }) => sessionId === mutation.sessionId,
+        );
+        if (!candidate || !session) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            adminMutationProblemFixtures.invalid_transition,
+            { fixtureName: 'admin.mock.engagement-role-target' },
+          );
+        }
+        const alreadyAssigned = session.moderators.some(
+          ({ userId }) => userId === candidate.userId,
+        );
+        const alreadyApplied =
+          mutation.action === 'assign_moderator'
+            ? alreadyAssigned
+            : !alreadyAssigned;
+        const moderators =
+          mutation.action === 'assign_moderator'
+            ? alreadyAssigned
+              ? session.moderators
+              : [
+                  ...session.moderators,
+                  {
+                    assignmentId: adminFixtureIds.assignment,
+                    ...candidate,
+                  },
+                ]
+            : session.moderators.filter(
+                ({ userId }) => userId !== candidate.userId,
+              );
+        const assignmentsVersion =
+          state.engagement.assignmentsVersion + (alreadyApplied ? 0 : 1);
+        state.engagement = adminEngagementOverviewSchema.parse({
+          ...state.engagement,
+          assignmentsVersion,
+          sessions: state.engagement.sessions.map((item) =>
+            item.sessionId === session.sessionId
+              ? { ...item, moderators }
+              : item,
+          ),
+        });
+        response = {
+          action: mutation.action,
+          eventId: adminFixtureIds.event,
+          outcome: alreadyApplied ? 'already_applied' : 'updated',
+          assignmentsVersion,
+          assignment:
+            mutation.action === 'assign_moderator'
+              ? {
+                  sessionId: session.sessionId,
+                  userId: candidate.userId,
+                  displayName: candidate.displayName,
+                  maskedContact: candidate.maskedContact,
+                }
+              : null,
+          changedAt: '2026-07-25T12:32:00.000+02:00',
+          audit: { auditId: adminFixtureIds.auditMutation },
+        };
+      }
+      const parsedResponse =
+        adminEngagementMutationResponseSchema.parse(response);
+      const transient = transientFailure(
+        mutation.reason,
+        attempt,
+        'admin-engagement',
+        parsedResponse,
+      );
+      if (transient) return transient;
+      storeMutation(attempt, 'admin-engagement', parsedResponse);
+      return mockJsonResponse(
+        adminEngagementMutationResponseSchema,
+        parsedResponse,
+        successOptions('admin.mock.engagement-update'),
+      );
+    },
+  ),
 
   http.post(
     '*/api/v1/admin/events/:eventId/session-capacities/actions',

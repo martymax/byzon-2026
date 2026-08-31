@@ -1,6 +1,8 @@
 import {
   adminAuditResponseSchema,
   adminContextResponseSchema,
+  adminEngagementMutationResponseSchema,
+  adminEngagementOverviewSchema,
   adminEventSettingsSchema,
   adminEventSettingsUpdateResponseSchema,
   adminExportProblemSchema,
@@ -33,6 +35,8 @@ export const adminFixtureIds = Object.freeze({
   auditNewest: '019fb200-0000-7000-8000-000000000009',
   auditOlder: '019fb200-0000-7000-8000-000000000010',
   auditMutation: '019fb200-0000-7000-8000-000000000011',
+  moderator: '019fb200-0000-7000-8000-000000000013',
+  moderatorAssignment: '019fb200-0000-7000-8000-000000000014',
 } as const);
 
 export const adminContextFixtures = defineFixtureSet({
@@ -118,13 +122,6 @@ export const adminOperationsOverviewFixtures = defineFixtureSet({
           detail: 'Bez čekajících změn publikace.',
         },
         {
-          id: 'checkin',
-          label: 'Check-in',
-          value: '186 odbaveno',
-          state: 'healthy',
-          detail: 'Dvě syntetická stanoviště jsou aktivní.',
-        },
-        {
           id: 'reservation',
           label: 'Rezervace',
           value: '89 %',
@@ -159,6 +156,108 @@ export const adminOperationsOverviewFixtures = defineFixtureSet({
         },
       ],
       queues: [{ queue: 'notifications', ready: 0, processing: 0, failed: 1 }],
+    },
+  },
+});
+
+export const adminEngagementOverviewFixtures = defineFixtureSet({
+  name: 'admin.engagement-overview',
+  schema: adminEngagementOverviewSchema,
+  fixtures: {
+    default: {
+      eventId: adminFixtureIds.event,
+      settingsVersion: 5,
+      assignmentsVersion: 3,
+      features: {
+        networkingEnabled: false,
+        questionsEnabled: true,
+        ratingsEnabled: false,
+      },
+      sessions: [
+        {
+          sessionId: adminFixtureIds.session,
+          title: 'Růst bez zkratek',
+          startsAt: '2026-10-16T09:00:00.000+02:00',
+          status: 'published',
+          questionsEnabled: true,
+          version: 2,
+          moderators: [
+            {
+              assignmentId: adminFixtureIds.moderatorAssignment,
+              userId: adminFixtureIds.moderator,
+              displayName: 'Demo Moderátor',
+              maskedContact: 'd***@example.test',
+            },
+          ],
+        },
+        {
+          sessionId: adminFixtureIds.secondSession,
+          title: 'Panel: firmy v pohybu',
+          startsAt: '2026-10-16T10:00:00.000+02:00',
+          status: 'published',
+          questionsEnabled: false,
+          version: 4,
+          moderators: [],
+        },
+      ],
+      moderatorCandidates: [
+        {
+          userId: adminFixtureIds.moderator,
+          displayName: 'Demo Moderátor',
+          maskedContact: 'd***@example.test',
+        },
+        {
+          userId: adminFixtureIds.operator,
+          displayName: 'Operátor #27',
+          maskedContact: 'o***@example.test',
+        },
+      ],
+    },
+  },
+});
+
+export const adminEngagementMutationFixtures = defineFixtureSet({
+  name: 'admin.engagement-mutation',
+  schema: adminEngagementMutationResponseSchema,
+  fixtures: {
+    features_updated: {
+      action: 'update_features',
+      eventId: adminFixtureIds.event,
+      outcome: 'updated',
+      settingsVersion: 6,
+      features: {
+        networkingEnabled: true,
+        questionsEnabled: true,
+        ratingsEnabled: true,
+      },
+      changedAt: '2026-07-25T12:30:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
+    },
+    session_updated: {
+      action: 'set_session_questions',
+      eventId: adminFixtureIds.event,
+      outcome: 'updated',
+      session: {
+        sessionId: adminFixtureIds.secondSession,
+        questionsEnabled: true,
+        version: 5,
+      },
+      changedAt: '2026-07-25T12:31:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
+    },
+    moderator_assigned: {
+      action: 'assign_moderator',
+      eventId: adminFixtureIds.event,
+      outcome: 'updated',
+      assignmentsVersion: 4,
+      assignment: {
+        sessionId: adminFixtureIds.secondSession,
+        userId: adminFixtureIds.operator,
+        displayName: 'Operátor #27',
+        maskedContact: 'o***@example.test',
+      },
+      changedAt: '2026-07-25T12:32:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
     },
   },
 });

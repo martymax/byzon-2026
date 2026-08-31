@@ -1,5 +1,27 @@
 # BYZON 2026 – handover
 
+## Autoritativní navázání – scope 31. 8. 2026
+
+Tato sekce je novější než všechny starší poznámky níže a má při
+konfliktu přednost.
+
+- Přístup účastníka vzniká SimpleShop API importem a následnou
+  e-mailovou pozvánkou spuštěnou administrátorem. Ticket claim/QR/credential
+  ani volná registrace nejsou vstupní mechanismus 2026.
+- Kontrola vstupenek a check-in jsou mimo aplikační scope 2026. Starší
+  check-in implementace je dormant kompatibilní vrstva, ne launch/UAT gate.
+- Railway projekt `Byzon 2026` má staging web na
+  `https://byzonconference-staging.up.railway.app`, worker, Postgres a Redis.
+  Produkční `app.byzon.cz` bude připojeno přes Cloudflare.
+- `/admin/interakce` je kanonické UI pro default-off networking, otázky a
+  hodnocení, per-session otázky a session-scoped moderátory.
+- Networking vyžaduje explicitní participant opt-in. Poté jsou viditelná
+  všechna vyplněná pole veřejného profilu; opt-out skryje celý profil.
+- Automatická retence je vypnutá. Případné odstranění/anonymizaci spouští
+  organizátor podle auditovaného postupu.
+- Závazné rozhodnutí je v
+  `docs/adr/016-participant-access-and-2026-operations-scope.md` a plánu v6.28.
+
 ## Autoritativní navázání – SimpleShop API (`P0-02` / `P4-02`, 30. 8. 2026)
 
 Tato sekce je novější než starší stavové poznámky níže a má při konfliktu

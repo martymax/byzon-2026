@@ -1,52 +1,93 @@
-# Railway staging skeleton
+# Railway staging
 
-Etapa 1 připravuje konfiguraci, neautorizuje produkční deployment ani přenos osobních údajů.
+Autoritativní staging aplikace je
+`https://byzonconference-staging.up.railway.app`. Projekt `Byzon 2026` používá
+prostředí `staging` a existující služby `@byzon/conference`,
+`@byzon/worker`, `Postgres` a `Redis`. Nevytvářejte jejich duplicitní kopie.
 
-## Služby
+Cílová produkční doména je `https://app.byzon.cz`; DNS/proxy připojení se
+provede přes Cloudflare až po staging UAT. Railway je produkční platforma,
+nikoli dočasný hosting.
 
-1. Založte prostředí `staging` a služby `byzon-app-web` a `byzon-app-worker` v jednom schváleném EU regionu.
-2. Obě služby připojte ke stejné větvi `staging`, root directory ponechte `/`.
-3. Webu nastavte config path `/railway.web.json`, workeru `/railway.worker.json`.
-4. Nastavte nesekretní proměnné z `.env.example`; `APP_ENV=staging`, `APP_BASE_URL` na staging doménu a `RELEASE_SHA` na Railway commit SHA.
-5. Ověřte `GET /health/live`, `GET /health/ready`, start workeru a že změna pouze veřejného statického webu nespustí tyto služby.
+## Služby a deployment
 
-Databáze, Redis, bucket a produkční PII se připojí až v příslušných etapách a po uzavření `BLOCKER-INFRA-01`.
+1. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
+   sledují větev `main`.
+2. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
+   migraci spustí idempotentní seed. Worker migrace nespouští.
+3. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
+   Redis. Produkční a staging data ani credentials se nesmí sdílet.
+4. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
+   2026 neprovisionují.
+5. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
+   restart loopu a aktuální release SHA.
 
-## Etapa 2 – PostgreSQL
+## Proměnné webu
 
-Před deployem `P2-03`:
+| Proměnná                    | Staging hodnota / zdroj                            |
+| --------------------------- | -------------------------------------------------- |
+| `NODE_ENV`                  | `production`                                       |
+| `APP_ENV`                   | `staging`                                          |
+| `APP_BASE_URL`              | `https://byzonconference-staging.up.railway.app`   |
+| `PUBLIC_SITE_URL`           | `https://byzon.cz`                                 |
+| `DATABASE_URL`              | private reference na `Postgres.DATABASE_URL`       |
+| `REDIS_URL`                 | private reference na `Redis.REDIS_URL`             |
+| `REDIS_FAMILY`              | `0`                                                |
+| `REDIS_CONNECT_TIMEOUT_MS`  | `3000`                                             |
+| `REDIS_COMMAND_TIMEOUT_MS`  | `2000`                                             |
+| `BETTER_AUTH_SECRET`        | samostatný staging secret, minimálně 32 znaků      |
+| `RATE_LIMIT_SUBJECT_SECRET` | jiný samostatný staging secret, minimálně 32 znaků |
+| `SIMPLESHOP_API_EMAIL`      | existující server-only staging secret              |
+| `SIMPLESHOP_API_KEY`        | existující server-only staging secret              |
+| `RELEASE_SHA`               | Railway commit SHA                                 |
 
-1. Ve staging prostředí přidejte Railway PostgreSQL službu. V aktuálním projektu
-   se jmenuje `Postgres`; umístěte ji do stejného schváleného EU regionu jako web
-   a worker.
-2. V `@byzon/conference` (web) i `@byzon/worker` přidejte reference variable
-   `DATABASE_URL` odkazující na privátní `DATABASE_URL` služby `Postgres`.
-3. V obou službách nastavte `DATABASE_POOL_MAX=5`,
-   `DATABASE_IDLE_TIMEOUT_MS=30000` a `DATABASE_CONNECT_TIMEOUT_MS=5000`.
-4. Nezadávejte veřejnou DB URL a nekopírujte produkční osobní údaje.
-5. Web config spustí před nasazením migraci; pouze v prostředí pojmenovaném
-   přesně `staging` poté spustí idempotentní seed. Worker migrace nespouští.
-6. Po deployi ověřte web `GET /health/ready` (`200`,
-   `dependencies.database=ready`), worker start bez restart loopu a v DB právě
-   eventy `byzon-2026` a `byzon-isolation-test`.
+## Proměnné workeru
 
-## Etapa 8 – Redis a worker connection
+Worker potřebuje stejné `NODE_ENV`, `APP_ENV`, `APP_BASE_URL`,
+`PUBLIC_SITE_URL`, `DATABASE_URL`, `REDIS_URL`, `REDIS_FAMILY`,
+`REDIS_CONNECT_TIMEOUT_MS` a `RELEASE_SHA`. Dále používá
+`WORKER_CONCURRENCY_EMAIL` a `WORKER_CONCURRENCY_DEFAULT`, jakmile budou
+explicitně nastavené; do té doby platí validované serverové defaulty.
 
-Před staging deployem `P8-01` a až po schválení infrastruktury:
+## E-mailové placeholders
 
-1. Ve stejném schváleném EU regionu přidejte oddělenou Railway Redis službu;
-   staging nesmí sdílet instanci ani credentials s produkcí.
-2. Webu i workeru nastavte reference `REDIS_URL` na privátní URL služby. URL
-   nekopírujte do logu, PR prostředí ani klientského `NEXT_PUBLIC_*` prostoru.
-3. Ponechte `REDIS_FAMILY=0`, `REDIS_CONNECT_TIMEOUT_MS=3000` a pro web
-   `REDIS_COMMAND_TIMEOUT_MS=2000`; hodnotu family měňte na `4`/`6` pouze po
-   síťové diagnostice konkrétního prostředí.
-4. Webu vytvořte samostatný minimálně 32bytový `RATE_LIMIT_SUBJECT_SECRET` pro
-   dané prostředí. Nepoužívejte Better Auth ani ticket pepper a nesdílejte key
-   mezi stagingem a produkcí.
-5. Ověřte Redis `maxmemory-policy=noeviction`. Web readiness musí při dostupném
-   Redis vrátit `dependencies.redis=ready` a číselnou
-   `metrics.redisPingMs`; worker musí zalogovat pouze stav a latenci bez URL.
-6. Simulovaný výpadek Redis nesmí poškodit PostgreSQL. Web readiness zůstane
-   při zdravé DB `200` se stavem `degraded`, chráněná rate-limit mutace selže
-   zavřeně a worker se po obnovení Redis znovu připojí.
+Produkční provider zatím není zvolený. Railway CLI nepovoluje nulovou délku
+hodnoty, proto jsou ve webu i workeru připravené staging placeholders s
+inertní hodnotou `__FILL_IN_RAILWAY__`. Aplikace je nesmí číst ani považovat za
+aktivní konfiguraci, dokud nejsou vyplněné všechny povinné hodnoty:
+
+- `MAIL_PROVIDER`
+- `MAIL_API_KEY` (secret)
+- `MAIL_FROM`
+- `MAIL_REPLY_TO`
+
+Sentinel znamená výhradně „čeká na doplnění“, nikoli povolení odesílání. Po
+doplnění se musí web i worker restartovat a validace musí odmítnout sentinel i
+částečně vyplněnou konfiguraci.
+
+Před produkční invitation batchí musí odesílací doména projít SPF, DKIM,
+DMARC a deliverability smoke. Staging do té doby používá pouze bezpečný
+sink; nesmí odesílat skutečným účastníkům.
+
+## Redis a databáze
+
+- `Postgres` a `Redis` musí být ve stejném schváleném EU regionu jako web
+  a worker. Veřejné databázové URL nepatří do aplikace ani logů.
+- Redis zůstává `noeviction`. Výpadek nesmí poškodit PostgreSQL; readiness
+  jej smí hlásit jako degradaci, chráněné mutace failují podle své politiky.
+- Staging seed je idempotentní. Produkční osobní data se do stagingu
+  nekopírují.
+
+## Ověření releasu
+
+1. Otevřete `/health/live` a `/health/ready`; readiness musí vrátit `200` a
+   databázi/Redis bez secret URL.
+2. Přihlaste se administrátorskou staging identitou a ověřte
+   `/admin/interakce`: default-off flags, výběr přednášky a maskovaný výběr
+   moderátora.
+3. Otestujte zapnutí a vypnutí networkingu syntetickým účastníkem; bez opt-in
+   nesmí být profil zjistitelný, po opt-in se zobrazí všechna vyplněná
+   veřejná pole.
+4. Otestujte SimpleShop pouze jako sanitizované read-only preview. Participant
+   apply a skutečné pozvánky se nesmí před dokončením `P4-03`/`P4-06`
+   spustit.

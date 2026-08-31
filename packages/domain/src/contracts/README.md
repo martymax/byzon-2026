@@ -301,6 +301,14 @@ Self-lockout, last-administrator removal, stale version, forbidden transition
 and export availability are explicit problem branches. The UI role guard is
 never a substitute for server authorization.
 
+`admin-engagement.ts` adds `CS-ADMIN-ENGAGEMENT-01` for the default-off
+networking, questions and ratings event flags, per-session questions and
+session-scoped moderator assignments. Reads are private/no-store and expose
+only masked moderator contacts. Every mutation requires the narrow server
+permission, an optimistic version, an idempotency key, a visible reason and an
+audit record; the client selects canonical sessions and active event members
+instead of entering IDs manually.
+
 The `/admin/obsah` editor requires exact `program:manage` permission and uses
 one typed port for days, venues, rooms, sessions, speakers, partners, practical
 pages and FAQs. Production reads pass explicit fetch response schemas and

@@ -8,6 +8,7 @@ const mockRoot = dirname(fileURLToPath(import.meta.url));
 const allowedExternalImports = new Set([
   '@byzon/domain/contracts',
   '@byzon/domain/contracts/admin',
+  '@byzon/domain/contracts/admin-engagement',
   '@byzon/domain/contracts/check-in',
   '@byzon/domain/contracts/support',
   '@byzon/domain/contracts/ticket-import',

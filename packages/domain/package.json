@@ -24,6 +24,10 @@
       "types": "./src/contracts/admin.ts",
       "default": "./dist/contracts/admin.js"
     },
+    "./contracts/admin-engagement": {
+      "types": "./src/contracts/admin-engagement.ts",
+      "default": "./dist/contracts/admin-engagement.js"
+    },
     "./contracts/support": {
       "types": "./src/contracts/support.ts",
       "default": "./dist/contracts/support.js"

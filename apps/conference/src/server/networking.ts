@@ -31,6 +31,21 @@ import { EventAccessDeniedError, requireEventPermission } from './policy';
 const MAX_BODY_BYTES = 16_384;
 const uuidSchema = z.string().uuid();
 
+export const networkingVisibilityForOptIn = (
+  networkingEnabled: boolean,
+): 'directory' | 'hidden' => (networkingEnabled ? 'directory' : 'hidden');
+
+export const projectNetworkingContacts = (
+  profile: Pick<
+    typeof schema.participantProfiles.$inferSelect,
+    'contactEmail' | 'linkedinUrl' | 'phone'
+  >,
+) => ({
+  email: profile.contactEmail,
+  phone: profile.phone,
+  linkedinUrl: profile.linkedinUrl,
+});
+
 interface NetworkingIdentity {
   user: { id: string };
 }
@@ -166,23 +181,29 @@ const loadContext = async (
 };
 
 const projectSettings = (context: Awaited<ReturnType<typeof loadContext>>) =>
-  networkingSettingsSchema.parse({
-    eventId: context.eventId,
-    userId: context.userId,
-    version: context.profile.version,
-    networkingEnabled: context.profile.networkingEnabled === true,
-    introduction: context.profile.bio ?? '',
-    company: context.profile.company ?? '',
-    jobTitle: context.profile.jobTitle ?? '',
-    todayHunting: context.profile.todayHunting,
-    contactEmail: context.profile.contactEmail,
-    phone: context.profile.phone,
-    linkedinUrl: context.profile.linkedinUrl,
-    emailVisibility: context.profile.emailVisibility,
-    phoneVisibility: context.profile.phoneVisibility,
-    linkedinVisibility: context.profile.linkedinVisibility,
-    updatedAt: context.profile.updatedAt.toISOString(),
-  });
+  networkingSettingsSchema.parse(
+    (() => {
+      const networkingEnabled = context.profile.networkingEnabled === true;
+      const visibility = networkingVisibilityForOptIn(networkingEnabled);
+      return {
+        eventId: context.eventId,
+        userId: context.userId,
+        version: context.profile.version,
+        networkingEnabled,
+        introduction: context.profile.bio ?? '',
+        company: context.profile.company ?? '',
+        jobTitle: context.profile.jobTitle ?? '',
+        todayHunting: context.profile.todayHunting,
+        contactEmail: context.profile.contactEmail,
+        phone: context.profile.phone,
+        linkedinUrl: context.profile.linkedinUrl,
+        emailVisibility: visibility,
+        phoneVisibility: visibility,
+        linkedinVisibility: visibility,
+        updatedAt: context.profile.updatedAt.toISOString(),
+      };
+    })(),
+  );
 
 const requireNetworkingParticipant = async (
   context: Awaited<ReturnType<typeof loadContext>>,
@@ -288,6 +309,9 @@ export const handleNetworkingSettings = async (
         );
       }
       const version = current.version + 1;
+      const visibility = networkingVisibilityForOptIn(
+        parsed.data.networkingEnabled,
+      );
       await transaction
         .update(schema.participantProfiles)
         .set({
@@ -299,9 +323,9 @@ export const handleNetworkingSettings = async (
           contactEmail: parsed.data.contactEmail,
           phone: parsed.data.phone,
           linkedinUrl: parsed.data.linkedinUrl,
-          emailVisibility: parsed.data.emailVisibility,
-          phoneVisibility: parsed.data.phoneVisibility,
-          linkedinVisibility: parsed.data.linkedinVisibility,
+          emailVisibility: visibility,
+          phoneVisibility: visibility,
+          linkedinVisibility: visibility,
           version,
           updatedAt: now,
         })
@@ -340,9 +364,9 @@ export const handleNetworkingSettings = async (
         contactEmail: parsed.data.contactEmail,
         phone: parsed.data.phone,
         linkedinUrl: parsed.data.linkedinUrl,
-        emailVisibility: parsed.data.emailVisibility,
-        phoneVisibility: parsed.data.phoneVisibility,
-        linkedinVisibility: parsed.data.linkedinVisibility,
+        emailVisibility: visibility,
+        phoneVisibility: visibility,
+        linkedinVisibility: visibility,
         updatedAt: now.toISOString(),
       });
     });
@@ -373,12 +397,7 @@ const projectDirectoryProfile = (
     jobTitle: row.jobTitle ?? '',
     introduction: row.bio ?? '',
     todayHunting: row.todayHunting,
-    contacts: {
-      email: row.emailVisibility === 'directory' ? row.contactEmail : null,
-      phone: row.phoneVisibility === 'directory' ? row.phone : null,
-      linkedinUrl:
-        row.linkedinVisibility === 'directory' ? row.linkedinUrl : null,
-    },
+    contacts: projectNetworkingContacts(row),
   });
 
 const requireDirectoryReader = async (

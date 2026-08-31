@@ -1,4 +1,11 @@
 import {
+  adminEngagementMutationRequestSchema,
+  adminEngagementMutationResponseSchema,
+  adminEngagementOverviewSchema,
+  type AdminEngagementMutationRequest,
+  type AdminEngagementMutationResponse,
+} from '@byzon/domain/contracts/admin-engagement';
+import {
   adminAuditQuerySchema,
   adminAuditResponseSchema,
   adminContextResponseSchema,
@@ -107,6 +114,28 @@ export const adminOperationsOverviewEndpoint = defineApiEndpoint({
   responseKind: 'json',
   retry: 'safe-read',
   idempotency: 'forbidden',
+});
+
+export const adminEngagementOverviewEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminEngagementOverviewSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+
+export const adminEngagementMutationEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminEngagementMutationRequestSchema,
+  successSchema: adminEngagementMutationResponseSchema,
+  problemSchema: adminMutationProblemSchema,
+  problemCodes: adminMutationProblemCodes,
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
 });
 
 export const adminTicketImportPreviewEndpoint = defineApiEndpoint({
@@ -460,6 +489,76 @@ export const requestAdminOperationsOverview = async (
       ...(signal ? { signal } : {}),
     }),
     (data) => data.eventId === eventId,
+  );
+
+export const requestAdminEngagementOverview = async (
+  api: ApiPort,
+  eventId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminEngagementOverviewEndpoint, {
+      path: eventPath(eventId, '/engagement'),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+const matchesEngagementMutation = (
+  data: AdminEngagementMutationResponse,
+  body: AdminEngagementMutationRequest,
+): boolean => {
+  if (data.action !== body.action) return false;
+  if (body.action === 'update_features' && data.action === 'update_features') {
+    return (
+      data.settingsVersion === body.expectedSettingsVersion + 1 &&
+      sameJson(data.features, body.features)
+    );
+  }
+  if (
+    body.action === 'set_session_questions' &&
+    data.action === 'set_session_questions'
+  ) {
+    return (
+      data.session.sessionId === body.sessionId &&
+      data.session.questionsEnabled === body.enabled &&
+      data.session.version === body.expectedSessionVersion + 1
+    );
+  }
+  if (
+    (body.action === 'assign_moderator' ||
+      body.action === 'remove_moderator') &&
+    (data.action === 'assign_moderator' || data.action === 'remove_moderator')
+  ) {
+    return (
+      data.assignmentsVersion ===
+        body.expectedAssignmentsVersion +
+          (data.outcome === 'updated' ? 1 : 0) &&
+      (data.assignment === null ||
+        (data.assignment.sessionId === body.sessionId &&
+          data.assignment.userId === body.userId))
+    );
+  }
+  return false;
+};
+
+export const requestAdminEngagementMutation = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminEngagementMutationRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminEngagementMutationEndpoint, {
+      path: eventPath(eventId, '/engagement'),
+      body,
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId && matchesEngagementMutation(data, body),
   );
 
 export const requestAdminTicketImportApply = async (

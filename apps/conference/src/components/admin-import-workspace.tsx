@@ -251,10 +251,11 @@ export const AdminImportWorkspace = () => {
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>F4 · bezpečný import</p>
-        <h1>Import vstupenek</h1>
+        <h1>Import účastníků</h1>
         <p>
-          Načtěte vstupenky serverovým read-only API spojením se SimpleShopem.
-          Preview je sanitizované a v tomto kroku nikdy neaplikuje změny.
+          Načtěte účastníky serverovým read-only API spojením se SimpleShopem.
+          Preview je sanitizované a v tomto kroku nevytváří účty, přístupy ani
+          e-mailové pozvánky.
         </p>
       </header>
 
@@ -347,7 +348,7 @@ export const AdminImportWorkspace = () => {
               aria-label="Sanitizovaný souhrn SimpleShop zdroje"
             >
               <div className={styles.metric}>
-                <small>Zdroj / ticket řádky</small>
+                <small>Zdroj / účastnické řádky</small>
                 <strong>
                   {preview.source.sourceRows} / {preview.source.ticketRows}
                 </strong>

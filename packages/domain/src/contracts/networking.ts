@@ -59,20 +59,38 @@ export const networkingSettingsSchema = z.strictObject({
   updatedAt: dateTimeSchema,
 });
 
-export const networkingSettingsUpdateRequestSchema = z.strictObject({
-  expectedVersion: z.number().int().positive(),
-  networkingEnabled: z.boolean(),
-  introduction: cleanText(1_000),
-  company: cleanText(160),
-  jobTitle: cleanText(160),
-  todayHunting: networkingTodayHuntingSchema,
-  contactEmail: identityEmailSchema,
-  phone: identityPhoneSchema.nullable(),
-  linkedinUrl: networkingLinkedinSchema.nullable(),
-  emailVisibility: networkingVisibilitySchema,
-  phoneVisibility: networkingVisibilitySchema,
-  linkedinVisibility: networkingVisibilitySchema,
-});
+export const networkingSettingsUpdateRequestSchema = z
+  .strictObject({
+    expectedVersion: z.number().int().positive(),
+    networkingEnabled: z.boolean(),
+    introduction: cleanText(1_000),
+    company: cleanText(160),
+    jobTitle: cleanText(160),
+    todayHunting: networkingTodayHuntingSchema,
+    contactEmail: identityEmailSchema,
+    phone: identityPhoneSchema.nullable(),
+    linkedinUrl: networkingLinkedinSchema.nullable(),
+    emailVisibility: networkingVisibilitySchema,
+    phoneVisibility: networkingVisibilitySchema,
+    linkedinVisibility: networkingVisibilitySchema,
+  })
+  .superRefine((settings, context) => {
+    const expected = settings.networkingEnabled ? 'directory' : 'hidden';
+    for (const field of [
+      'emailVisibility',
+      'phoneVisibility',
+      'linkedinVisibility',
+    ] as const) {
+      if (settings[field] !== expected) {
+        context.addIssue({
+          code: 'custom',
+          path: [field],
+          message:
+            'All completed public-profile fields share the explicit networking opt-in visibility',
+        });
+      }
+    }
+  });
 
 export const networkingDirectoryProfileSchema = z.strictObject({
   profileId: uuidSchema,

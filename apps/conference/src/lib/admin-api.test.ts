@@ -1,6 +1,8 @@
 import {
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
+  adminEngagementMutationFixtures,
+  adminEngagementOverviewFixtures,
   adminOperationsOverviewFixtures,
   adminFixtureIds,
   adminReservationFixtures,
@@ -21,11 +23,15 @@ import type { ApiPort } from './api/endpoint';
 import {
   adminAnnouncementSendEndpoint,
   adminContextEndpoint,
+  adminEngagementMutationEndpoint,
+  adminEngagementOverviewEndpoint,
   adminOperationsOverviewEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
   requestAdminEventSettingsUpdate,
+  requestAdminEngagementMutation,
+  requestAdminEngagementOverview,
   requestAdminOperationsOverview,
   requestAdminReservationMutation,
   requestAdminSessionCapacities,
@@ -62,6 +68,16 @@ describe('admin API contract policies', () => {
       retry: 'safe-read',
       idempotency: 'forbidden',
     });
+    expect(adminEngagementOverviewEndpoint).toMatchObject({
+      method: 'GET',
+      retry: 'safe-read',
+      idempotency: 'forbidden',
+    });
+    expect(adminEngagementMutationEndpoint).toMatchObject({
+      method: 'POST',
+      retry: 'never',
+      idempotency: 'required',
+    });
     expect(adminSupportSearchEndpoint).toMatchObject({
       method: 'POST',
       retry: 'never',
@@ -81,6 +97,59 @@ describe('admin API contract policies', () => {
       method: 'POST',
       retry: 'never',
       idempotency: 'required',
+    });
+  });
+
+  it('loads one no-store engagement snapshot without raw participant contacts', async () => {
+    const request = vi.fn(async (...args: [unknown, unknown]) => {
+      void args;
+      return success(adminEngagementOverviewFixtures.default!);
+    });
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
+
+    await expect(
+      requestAdminEngagementOverview(api, adminFixtureIds.event),
+    ).resolves.toMatchObject({ ok: true });
+    expect(request).toHaveBeenCalledWith(
+      adminEngagementOverviewEndpoint,
+      expect.objectContaining({
+        path: `/api/v1/admin/events/${adminFixtureIds.event}/engagement`,
+        cache: 'no-store',
+      }),
+    );
+    expect(JSON.stringify(request.mock.calls[0]?.[1])).not.toContain('@');
+  });
+
+  it('rejects an engagement mutation response that does not match the requested flags', async () => {
+    const overview = adminEngagementOverviewFixtures.default!;
+    const body = {
+      action: 'update_features' as const,
+      expectedSettingsVersion: overview.settingsVersion,
+      features: {
+        networkingEnabled: true,
+        questionsEnabled: true,
+        ratingsEnabled: false,
+      },
+      reason: 'Schválené zapnutí networkingu.',
+    };
+    const api = apiReturning({
+      ...adminEngagementMutationFixtures.features_updated!,
+      settingsVersion: body.expectedSettingsVersion + 1,
+      features: { ...body.features, networkingEnabled: false },
+    });
+
+    await expect(
+      requestAdminEngagementMutation(
+        api,
+        adminFixtureIds.event,
+        body,
+        'admin-engagement-correlation-0001',
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: { kind: 'invalid_response' },
     });
   });
 

@@ -41,6 +41,10 @@ const roleLabels: Record<AdminAssignmentRole, string> = {
   room_operator: 'Vedoucí aktivity',
 };
 
+const visibleRoleOptions = [
+  'room_operator',
+] as const satisfies readonly AdminAssignmentRole[];
+
 type PendingOperation =
   | Readonly<{
       kind: 'role';
@@ -477,9 +481,9 @@ export const AdminOperationsWorkspace = () => {
                 }
                 value={assignmentRole}
               >
-                {Object.entries(roleLabels).map(([value, label]) => (
+                {visibleRoleOptions.map((value) => (
                   <option key={value} value={value}>
-                    {label}
+                    {roleLabels[value]}
                   </option>
                 ))}
               </select>
@@ -571,7 +575,6 @@ export const AdminOperationsWorkspace = () => {
               value={report}
             >
               <option value="participant_summary">Souhrn účastníků</option>
-              <option value="checkin_summary">Souhrn check-inu</option>
               <option value="reservation_summary">Souhrn rezervací</option>
               <option value="audit_log">Auditní log</option>
             </select>

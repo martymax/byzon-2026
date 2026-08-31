@@ -22,6 +22,7 @@ v úkolech, které je zavádějí.
 | [ADR-013](013-incremental-frontend-architecture.md) | Inkrementální frontendová architektura | Přijato |
 | [ADR-014](014-reservation-waitlist-grouping.md) | Automatický FIFO waitlist a seskupené rezervace | Přijato |
 | [ADR-015](015-simpleshop-api-sync.md) | SimpleShop API synchronizace na vyžádání | Přijato |
+| [ADR-016](016-participant-access-and-2026-operations-scope.md) | Přístup účastníků a provozní rozsah 2026 | Přijato |
 
 ## Životní cyklus
 

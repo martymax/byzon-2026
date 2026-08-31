@@ -11,6 +11,8 @@ import {
   adminAnnouncementSendFixtures,
   adminAuditFixtures,
   adminContextFixtures,
+  adminEngagementMutationFixtures,
+  adminEngagementOverviewFixtures,
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
   adminFixtureIds,
@@ -26,6 +28,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminAnnouncementWorkspace } from '../../components/admin-announcement-workspace';
 import { AdminImportWorkspace } from '../../components/admin-import-workspace';
+import { AdminEngagementWorkspace } from '../../components/admin-engagement-workspace';
 import { AdminOperationsWorkspace } from '../../components/admin-operations-workspace';
 import { AdminReservationWorkspace } from '../../components/admin-reservation-workspace';
 import { AdminSupportWorkspace } from '../../components/admin-support-workspace';
@@ -35,6 +38,8 @@ import {
   adminAnnouncementSendEndpoint,
   adminAuditEndpoint,
   adminContextEndpoint,
+  adminEngagementMutationEndpoint,
+  adminEngagementOverviewEndpoint,
   adminEventSettingsEndpoint,
   adminEventSettingsUpdateEndpoint,
   adminExportEndpoint,
@@ -85,7 +90,7 @@ const createApi = (handler: RequestHandler): ApiPort => ({
 
 const adminRoot = (): HTMLElement => {
   const element = document.querySelector<HTMLElement>(
-    '[data-admin-environment="mocked"]',
+    '[data-admin-environment]',
   );
   if (!element) throw new Error('Admin workspace root is missing.');
   return element;
@@ -176,6 +181,109 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(screen.getByRole('button', { name: /apply/i }))
       .not.toBeInTheDocument();
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('configures per-session questions and assigns a moderator from canonical selects', async () => {
+    window.history.replaceState({}, '', '/admin/interakce');
+    let overview = structuredClone(adminEngagementOverviewFixtures.default!);
+    const mutationBodies: Record<string, unknown>[] = [];
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as { readonly body?: Record<string, unknown> };
+      if (endpoint === adminEngagementOverviewEndpoint) {
+        return success(overview);
+      }
+      if (endpoint === adminEngagementMutationEndpoint) {
+        const body = options.body ?? {};
+        mutationBodies.push(structuredClone(body));
+        if (body.action === 'set_session_questions') {
+          overview = {
+            ...overview,
+            sessions: overview.sessions.map((session) =>
+              session.sessionId === adminFixtureIds.secondSession
+                ? { ...session, questionsEnabled: true, version: 5 }
+                : session,
+            ),
+          };
+          return success(adminEngagementMutationFixtures.session_updated!);
+        }
+        if (body.action === 'assign_moderator') {
+          overview = {
+            ...overview,
+            assignmentsVersion: 4,
+            sessions: overview.sessions.map((session) =>
+              session.sessionId === adminFixtureIds.secondSession
+                ? {
+                    ...session,
+                    moderators: [
+                      {
+                        assignmentId: adminFixtureIds.assignment,
+                        userId: adminFixtureIds.operator,
+                        displayName: 'Operátor #27',
+                        maskedContact: 'o***@example.test',
+                      },
+                    ],
+                  }
+                : session,
+            ),
+          };
+          return success(adminEngagementMutationFixtures.moderator_assigned!);
+        }
+      }
+      throw new Error('Unexpected engagement endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminEngagementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('textbox', { name: 'Důvod pro další operaci' })
+      .fill('Povolení dotazů pro vybranou přednášku.');
+    await screen
+      .getByRole('button', {
+        name: 'Povolit otázky pro Panel: firmy v pohybu',
+      })
+      .click();
+    await screen
+      .getByRole('checkbox', { name: /Potvrzuji správnou přednášku/ })
+      .click();
+    await screen
+      .getByRole('button', { name: 'Povolit otázky', exact: true })
+      .click();
+    await expect.element(screen.getByText(/zapsána do auditu/i)).toBeVisible();
+
+    await screen
+      .getByRole('combobox', { name: 'Přednáška' })
+      .selectOptions(adminFixtureIds.secondSession);
+    await screen
+      .getByRole('combobox', { name: 'Účastník' })
+      .selectOptions(adminFixtureIds.operator);
+    await screen
+      .getByRole('textbox', { name: 'Důvod pro další operaci' })
+      .fill('Přiřazení moderátora ke konkrétní přednášce.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat přiřazení moderátora' })
+      .click();
+    await screen
+      .getByRole('checkbox', { name: /Ověřil\/a jsem osobu i přednášku/ })
+      .click();
+    await screen.getByRole('button', { name: 'Přiřadit moderátora' }).click();
+
+    expect(mutationBodies).toEqual([
+      expect.objectContaining({
+        action: 'set_session_questions',
+        sessionId: adminFixtureIds.secondSession,
+        enabled: true,
+      }),
+      expect.objectContaining({
+        action: 'assign_moderator',
+        sessionId: adminFixtureIds.secondSession,
+        userId: adminFixtureIds.operator,
+      }),
+    ]);
+    expect(document.body.textContent).not.toContain('operator@example.test');
     await expectComponentToPassAxe(adminRoot());
   });
 

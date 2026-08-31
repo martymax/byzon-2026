@@ -102,14 +102,21 @@ lze zastavit přes `pnpm dev:infra:down` bez smazání jejich volumes.
 
 Kontroly aplikace spustíte přes `pnpm run ci`, browser smoke přes `pnpm test:e2e`.
 Railway staging postup je v `docs/runbooks/railway-staging.md`.
+Aktuální staging běží na
+<https://byzonconference-staging.up.railway.app>; cílové `app.byzon.cz` bude
+připojené přes Cloudflare.
 
-Admin preview vstupenek používá výhradně serverové SimpleShop API credentials
+Admin preview účastníků používá výhradně serverové SimpleShop API credentials
 `SIMPLESHOP_API_EMAIL` a `SIMPLESHOP_API_KEY`. Organizátor spouští bounded
 read-only načtení ručně; aplikace posílá do SimpleShopu jen allowlistované
 `GET` požadavky a vrací sanitizované schema/agregáty. `P4-02` nemá apply cestu
-a nemění ticket tabulku. Test-only `SIMPLESHOP_API_BASE_URL` je ve stagingu a
+a nemění identity ani membershipy. Produkční apply vytvoří event-scoped
+účastníky až v samostatném kroku; pozvánky pak spustí administrátor jako
+další oddělenou dávku. Aplikace v roce 2026 nekontroluje vstupenky ani
+neprovádí check-in. Test-only `SIMPLESHOP_API_BASE_URL` je ve stagingu a
 produkci odmítnut. Přesný ověřený kontrakt a otevřená mapování stavů jsou v
-[`ADR-015`](docs/adr/015-simpleshop-api-sync.md).
+[`ADR-015`](docs/adr/015-simpleshop-api-sync.md) a
+[`ADR-016`](docs/adr/016-participant-access-and-2026-operations-scope.md).
 
 Kompletní vývojový frontend nad výhradně syntetickými daty spustíte odděleně:
 

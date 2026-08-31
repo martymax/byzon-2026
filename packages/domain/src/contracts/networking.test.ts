@@ -17,7 +17,7 @@ const base = {
   phone: '+420777123456',
   linkedinUrl: 'https://www.linkedin.com/in/synthetic',
   emailVisibility: 'directory' as const,
-  phoneVisibility: 'hidden' as const,
+  phoneVisibility: 'directory' as const,
   linkedinVisibility: 'directory' as const,
 };
 
@@ -33,6 +33,24 @@ describe('networking contracts', () => {
     expect(
       networkingSettingsUpdateRequestSchema.parse(base).todayHunting,
     ).toEqual(['know_how', 'clients']);
+  });
+
+  it('makes every completed public-profile field follow the explicit opt-in', () => {
+    expect(
+      networkingSettingsUpdateRequestSchema.safeParse({
+        ...base,
+        phoneVisibility: 'hidden',
+      }).success,
+    ).toBe(false);
+    expect(
+      networkingSettingsUpdateRequestSchema.safeParse({
+        ...base,
+        networkingEnabled: false,
+        emailVisibility: 'hidden',
+        phoneVisibility: 'hidden',
+        linkedinVisibility: 'hidden',
+      }).success,
+    ).toBe(true);
   });
 
   it('projects hidden contacts as null and rejects extra internal fields', () => {

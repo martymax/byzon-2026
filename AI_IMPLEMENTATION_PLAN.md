@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.27 – neblokované A + gated B implementace
+> Stav: implementační plán v6.28 – importovaný přístup, bez check-inu, řízené B
 >
 > Datum sestavení: 20. července 2026
 >
@@ -206,9 +206,9 @@ Nová aplikace se přidá do stejného repozitáře jako monorepo. Přesun nebo 
 
 - Mobilně orientovaná PWA na `app.byzon.cz`, bez povinné instalace.
 - Veřejný `byzon.cz` zůstává marketingovým/prodejním webem.
-- Aktivace osobním odkazem, skenem QR/čárového kódu nebo ručním zadáním stejného kódu vstupenky.
-- Jedna jedinečná vstupenka se aktivuje právě k jednomu účtu; oprávněný správce může řešit převod/reaktivaci.
-- Program, osobní agenda, rezervace, čekací listiny, praktické informace a check-in.
+- Účastníci se importují ze SimpleShop API a administrátor následně
+  výslovně spouští e-mailovou pozvánku do aplikace.
+- Program, osobní agenda, rezervace, čekací listiny a praktické informace.
 - Online seznamy přihlášených pro vedoucí přiřazených kapacitních aktivit.
 - Kritická provozní oznámení a organizační přehledy v rozsahu nutném pro akci.
 - Volitelně až po Gate A: jednoduchý networkingový adresář, sběr dotazů u
@@ -237,11 +237,13 @@ Nová aplikace se přidá do stejného repozitáře jako monorepo. Přesun nebo 
 - plná CZ/EN lokalizace;
 - Apple/Google Wallet;
 - přímé řízení tiskárny jmenovek.
+- kontrola vstupenek, ticket QR/credential a check-in v aplikaci;
+- volná registrace účastníků jako primární vstup do akce.
 
 ### 3.3 Priority
 
 - **A – podmínka spuštění:** účet a aktivace, program, agenda, kapacitní
-  rezervace a FIFO pořadník, praktické informace, check-in, přiřazené seznamy
+  rezervace a FIFO pořadník, praktické informace, přiřazené seznamy
   účastníků pro vedoucí aktivit, kritická provozní oznámení, organizační správa,
   ochrana dat a provozní fallbacky.
 - **B – volitelné až po Gate A:** jednoduchý opt-in networkingový adresář bez
@@ -269,6 +271,11 @@ odkazy pro úkoly a akceptaci; nerozhodnuté body zůstávají pouze v §22.
 | `SCOPE-2026-10` | Kouči, vedoucí mastermindů, workshopů a řízeného networkingu potřebují online jméno a firmu přihlášených pouze u svých aktivit. | Stávající technická role `room_operator` se v UI jmenuje „Vedoucí aktivity“, je scoped na session a má read-only roster; nedostává globální seznam ani práva řečníka/admina. | `AAACFfwvgUg`, `AAACFfwvgQM`, `AAACFfwvgOQ`, `AAACD524HbY` |
 | `SCOPE-2026-11` | Obecný QR na badge a obrazovkách vede jen na `https://app.byzon.cz`; osobní přístup přijde ověřeným e-mailovým linkem. | Veřejný QR nesmí obsahovat ticket ani token; ideální pozvánka 11. 9. 2026, hard deadline 15. 9. 2026; zachovat recovery přes e-mail. | `AAACD524Ha0`, `AAACFfwvgOk` |
 | `SCOPE-2026-12` | Vstupním baseline je aktuální web; partner list se ještě aktualizuje, FAQ se doplní a obsahová uzávěrka je 31. 8. 2026. Praktické kontakty: Jindřich Hrdý 774 835 456, Tomáš Ryza 776 089 866, Veronika Vicková 733 726 753. | Finální web → DB reconciliation/content UAT je samostatný gate; po publikaci zůstává autoritou DB dle ADR-008. Do uzávěrky lze používat viditelně označený draft. | `AAACFfwvgW4` |
+| `SCOPE-2026-13` | Přístup vzniká importem účastníků ze SimpleShop API a následnou e-mailovou pozvánkou spuštěnou administrátorem. | Bez volné registrace, ticket claimu a QR credentialu; import a invitation batch jsou oddělené auditované kroky. | Rozhodnutí produktu 31. 8. 2026, [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) |
+| `SCOPE-2026-14` | Kontrola vstupenek a check-in jsou pro rok 2026 mimo rozsah aplikace. | `P6` a ticket presentation/claim UI nejsou launch gate; aktivní admin UI ani provozní metriky je nenabízejí. | Rozhodnutí produktu 31. 8. 2026, [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) |
+| `SCOPE-2026-15` | Networking vyžaduje event-wide povolení administrátorem i výslovný opt-in účastníka. Po opt-in se zobrazí všechna vyplněná pole veřejného profilu; bez opt-in není profil viditelný. | Jediná profilová visibility je odvozena z opt-in; opt-out okamžitě skryje celý profil. | Rozhodnutí produktu 31. 8. 2026 |
+| `SCOPE-2026-16` | Data se automaticky nemažou; odstranění/anonymizaci řídí organizátor. | Žádný aktivní produkční retention job s domyšlenou lhůtou; ruční operace zůstává auditovaná. | Rozhodnutí produktu 31. 8. 2026 |
+| `SCOPE-2026-17` | Produkční platforma je Railway; staging používá `https://byzonconference-staging.up.railway.app`, cílová `app.byzon.cz` bude připojena přes Cloudflare. | Existující Railway web/worker/PostgreSQL/Redis se znovu použijí; secrets jsou environment-scoped. | Rozhodnutí produktu 31. 8. 2026 |
 
 Vlákna, která nepřinesla uzavřené produktové rozhodnutí, jsou vypořádána takto:
 
@@ -285,7 +292,8 @@ a nemění produkt ani plán.
 
 Průřezový komentář `AAACE2Bh_kg` kromě zúžení rozsahu v `SCOPE-2026-01`
 podporuje zachování otevřených integračních, provozních a právních vstupů
-`BLOCKER-TKT-*`, `BLOCKER-OPS-01` a `BLOCKER-LEGAL-01`; sám je neuzavírá.
+`BLOCKER-TKT-*`, `BLOCKER-OPS-01` a `BLOCKER-LEGAL-01`; jejich pozdější
+stav upravují `SCOPE-2026-13` až `17` a ADR-016.
 
 ---
 
@@ -306,6 +314,9 @@ podporuje zachování otevřených integračních, provozních a právních vstu
 | [ADR-011](docs/adr/011-event-feature-flags.md) | Feature flags per event | Produkt + tech lead | Bezpečné oddělení launch Priority A od volitelné B; vyřazené funkce zůstávají produkčně nedostupné. |
 | [ADR-012](docs/adr/012-multi-event-data-model.md) | Multi-event datový model od začátku | Produkt + tech lead | Opakované použití pro další ročník bez sdílení dat mezi akcemi. |
 | [ADR-013](docs/adr/013-incremental-frontend-architecture.md) | Fungující frontendový stack se rozvíjí inkrementálně | Tech lead | Před akcí se nedělá plošná migrace na jiný UI/data stack; nové knihovny jen pro doložený omezený use case. |
+| [ADR-014](docs/adr/014-reservation-waitlist-grouping.md) | Automatický FIFO waitlist a seskupené rezervace | Produkt + tech lead | Jediný promotion režim a sdílená rezervace navazujících sessions. |
+| [ADR-015](docs/adr/015-simpleshop-api-sync.md) | SimpleShop API synchronizace na vyžádání | Produkt + tech lead | Server-only preview a oddělený apply bez ručního CSV kanálu. |
+| [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) | Importovaný přístup bez ticket credentialu a check-inu | Produkt + organizátor | API import, admin invitation, explicitní networking opt-in a Railway provoz 2026. |
 
 Nezafixované externí služby (e-mail, error tracking, uptime monitor, případný malware scanner) se implementují přes rozhraní/adaptéry. Produkční provider musí být vybrán a právně schválen před příslušnou launch gate.
 
@@ -346,13 +357,15 @@ Pro každé dlouhodobé prostředí vytvořit oddělené služby a data:
 - `byzon-app-worker`
 - `byzon-app-postgres`
 - `byzon-app-redis`
-- `byzon-app-storage`
-- případně `byzon-app-maintenance` pro cron
+- `byzon-app-storage` až pro schválený upload/export scope
+- případně `byzon-app-maintenance` pouze pro ručně schválené joby
 
 Prostředí:
 
-- `production`: větev `main`, doména `app.byzon.cz`, produkční data;
-- `staging`: větev `staging`, doména např. `staging-app.byzon.cz`, anonymizovaná/testovací data;
+- `production`: větev `main`, cílová doména `app.byzon.cz` přes
+  Cloudflare, produkční data;
+- `staging`: větev `main`, generická doména
+  `https://byzonconference-staging.up.railway.app`, anonymizovaná/testovací data;
 - PR environments: až po ověření nákladů; nikdy nekopírovat produkční osobní údaje.
 
 Web a worker používají stejný image/lockfile, ale různé start commands. Migrace se spouštějí jako Railway pre-deploy command pouze jednou na webové službě. Worker se nesmí rozběhnout proti nekompatibilnímu schématu.
@@ -606,8 +619,6 @@ Názvy se mohou upravit pouze konzistentně ve schema, `.env.example`, Railway a
 | `BETTER_AUTH_SECRET` | ano | ne | ano | Podpis/šifrování auth; minimální délka dle knihovny. |
 | `BETTER_AUTH_URL` | ano | ne | ne | Kanonický auth origin, bez wildcardu. |
 | `RATE_LIMIT_SUBJECT_SECRET` | ano | ne | ano | Samostatný environment-scoped HMAC key pro opaque rate-limit subjecty. |
-| `TICKET_CODE_PEPPER_ACTIVE` | ano | ne | ano | Aktivní HMAC key. |
-| `TICKET_CODE_PEPPER_PREVIOUS` | ano | ne | ano | Volitelné rotační přechodné čtení; odstranit po rehash migraci. |
 | `MAIL_PROVIDER` | ano | ano | ne | `sink` v dev/test, schválený provider v prod. |
 | `MAIL_API_KEY` | ano | ano | ano | Provider credential. |
 | `MAIL_FROM` | ano | ano | ne | Ověřený sender. |
@@ -668,19 +679,20 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | Slice ID | Scope | Cílové schema | Vlastník kontraktu/integrace | Konzumenti | Stav |
 | --- | --- | --- | --- | --- | --- |
 | `CS-BASE-01` | problem, session-expired, pagination a transport metadata | `packages/domain/src/contracts/base.ts` | `F0-02` | všechny `F*` | `contract ready` |
-| `CS-ACT-01` | claim outcomes, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-04`, `P4-07` | `F1` | `contract ready`; striktní landing/claim/identity/link/recovery kontrakt a validované syntetické fixtures |
+| `CS-ACT-01` | invitation, recovery a auth handoff | `packages/domain/src/contracts/activation.ts` | `F1-01`, `P4-07` | `F1` | `contract ready`; původní claim větve je nutné scope-alignovat na importovanou identitu dle ADR-016 |
 | `CS-BOOT-01` | `/me/bootstrap`, onboarding, profil, session actions a privacy minimum | `packages/domain/src/contracts/identity.ts` | `P4-13`, `F1-05`, `F1-06`, `F2-07` | `F1`, `F2`, `F6` | `integrated`: Better Auth session, serverově zvolený event, private/no-store bootstrap, atomický onboarding, verzovaný profil, deletion request a session actions; právní UAT dál blokuje `BLOCKER-LEGAL-01` |
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
-| `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | `P4-12`, `F2-04` | `F2`; volitelně `F5` | `not started`; hotový je pouze bezpečný status-only subset bez credentialu |
+| `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | — | — | `not started`; vyřazeno pro 2026 podle `SCOPE-2026-14`, nesmí být aktivní route/CTA |
 | `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-06`, `F3` | `F3`, `F6` | `partially integrated`: private live read, add/remove, conflict, atomická rezervace, participant cancel, osobní ICS, automatické FIFO, dvě source-verified coaching řady a administrátorsky konfigurovaný networking jsou produkčně napojené; zbývá sdílená mastermind skupina dle ADR-014 |
-| `CS-IMPORT-01` | batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `partially integrated`: produkční server-only SimpleShop GET adapter a autorizované sanitizované preview jsou live bez apply; historický vendor-neutral apply zůstává jen mocked a `P4-03` čeká na `TKT-02`/`TKT-04` |
+| `CS-IMPORT-01` | participant batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `partially integrated`: server-only SimpleShop preview je live bez apply; `P4-03` doplní identity/membership apply po `TKT-02`, bez ticket credentialu |
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `contract ready`; maskované hledání a verzované reasoned/idempotentní akce s auditem |
-| `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | `P6-01` až `P6-06`, `F5` | `F5` | `contract ready`; online-only bootstrap, lookup/search, confirm, undo a stats |
+| `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | — | — | `not started`; vyřazeno pro 2026, dormant kompatibilní vrstva, ne aktivní UI/UAT |
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
 | `CS-ADMIN-01` | dashboard, role, reservation cancel, session capacity, audit, organizační export a settings | `packages/domain/src/contracts/admin.ts` | `P9`, `F4-07`, `F4-08`, `F4-10` | `F4` | `partially integrated`: reasoned/idempotentní reservation cancel a samostatná session-level správa kapacity jsou live; kapacitu lze změnit i bez existující rezervace a opakovaný import ji nepřepíše. Dashboard, role, audit, export a settings zůstávají podle vlastníků v `P9` nebo `UI ready (mocked)` |
 | `CS-OFFLINE-01` | version, ownership, revocation a replay policy | `packages/domain/src/contracts/offline.ts` | `P7`, `F6` | `F6` | `contract ready`; public snapshot, owner lease, revocation epoch a queue/rebase/replay policy |
 | `CS-ROSTER-01` | přiřazené kapacitní sessions a read-only jméno/firma přihlášených | `packages/domain/src/contracts/activity-roster.ts` | `P5-08`, scope alignment `F4-10` | `F4` | `integrated`: Better Auth, canonical event, latest-publication allowlist, aktivní session-scoped `room_operator`, list/detail endpointy, live `/host/aktivity`, private/no-store DTO, networking s kladnou kapacitou a negativní cross-session/cross-event testy |
-| `CS-NETWORKING-01` | opt-in adresář, profil, fixed „Dnes lovím“ a field visibility | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `not started` |
+| `CS-NETWORKING-01` | opt-in adresář, profil a fixed „Dnes lovím“ | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `integrated`; event-wide gate + explicitní participant opt-in, který atomicky zveřejní všechna vyplněná veřejná pole |
+| `CS-ADMIN-ENGAGEMENT-01` | event flags, session questions a session-scoped moderátoři | `packages/domain/src/contracts/admin-engagement.ts` | `P11-08`, `P12-10` | admin Priority B | `integrated`; private/no-store snapshot, masked candidates, optimistic/idempotentní auditované mutace a `/admin/interakce` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `integrated`; SVG + batch ZIP nad latest immutable publication |
 | `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
 
@@ -1333,15 +1345,17 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 
 | Capability | Lifecycle stav | Evidence | Další závislost/blocker |
 | --- | --- | --- | --- |
-| Aktivace a identita v6 | `UI ready (mocked)` | `P4-13` integroval celý `CS-BOOT-01` včetně autorizovaného onboardingu a session actions; agregovaná capability zůstává na nižším stavu kvůli dosud mockovanému claim/recovery handshaku. | `BLOCKER-AUTH-01` a `BLOCKER-TKT-04` pro claim/recovery integraci; `BLOCKER-LEGAL-01` pouze pro právní UAT |
+| Aktivace a identita v6 | `UI ready (mocked)` | `P4-13` integroval celý `CS-BOOT-01`; agregovaná capability čeká na scope-alignment původního claim UI na invitation předem importované identity. | `P4-03`/`P4-06`/`P4-07`, e-mail provider a `BLOCKER-AUTH-01`; `BLOCKER-LEGAL-01` pouze pro právní UAT |
 | Program a informace | `UI ready (mocked)` | `F2-01`: sdílený participant navigation primitive, pět funkčních cílů, aktivní stav detailů, mobilní safe-area/content clearance a bounded focus po route change; `F2-02`: serverovým event statusem řízený home nad publikovaným `CS-CONTENT-01` i kanonickou osobní agendou a bezpečné pre/live/post/archivní stavy; `F2-03`: sdílený `CS-CONTENT-01`, validované fixtures, typed P3 adapter a hardening povinných UI stavů; `F2-05` přidal discoverable inbox; `F2-07` sjednotil sekundární cíle pod funkční `Více`; `F2-06` kryje shell, program, ticket, inbox i účet component/axe/responsive scénáři. Etapový review doplnil přesný recovery návrat přes striktní allowlist. | `BLOCKER-CONTENT-01` až pro obsahové UAT |
 | Účet, profil a soukromí Priority A v6 | `integrated` | `P4-13` napojil existující UI na Better Auth `/api/v1/me/*`, event-scoped profil s optimistic verzí, aktuální legal acknowledgement, idempotentní deletion request a auditované session controls; anonymní, cross-origin a cross-event testy failují zavřeně. | `BLOCKER-LEGAL-01` pouze pro právní obsah a UAT |
 | Agenda a rezervace v6 | `partially integrated` | Live agenda podporuje add/remove, konflikty, atomickou rezervaci, participant cancel, automatické FIFO, privátní osobní `.ics`, 26 source-verified coaching sessions a administrátorem konfigurovanou rezervaci řízeného networkingu. | Dokončit jednu sdílenou rezervaci obou částí sobotního mastermindu podle ADR-014. |
-| Vstupenka účastníka | `UI ready (mocked)` | `F2-04`: dokončený status-only mocked UI řez nad striktním privátním/no-store kontraktem, validovanými fixtures a typed API portem; prezentační union přijímá pouze bezpečný unavailable stav a `F2-07` jej zpřístupnil z hubu `Více` | úplný `CS-TICKET-01`, skutečný `/me/ticket`, `P4-12` a available credential blokuje `BLOCKER-TKT-05` |
+| Vstupenka účastníka | `not started` | Vyřazeno z produktu 2026 podle `SCOPE-2026-14`; historické preview nesmí být aktivní route/CTA. | Žádná launch závislost. |
 | Offline čtení | `UI ready (mocked)` | `F6-01` až `F6-05`: versionovaný service worker, atomický public cache/rollback, last-updated/stale UX a owner/event-scoped osobní IndexedDB/queue s wipe, lease, epoch a fail-closed replay. Veřejný slice je použitelný; osobní cache/replay jsou v produkčním režimu vypnuté bez autoritativního owner lease. | `P7` a skutečný owner-lease/replay server pro integraci; fyzické PWA/UAT zůstává v `F6-06` až `F6-08` |
-| Import a support | `partially integrated` | `P4-02`/`F4-02` napojily autorizovaný admin POST na server-only SimpleShop adapter, který provádí pouze bounded allowlistované GET, ukládá sanitizovaný staging batch a vrací diff bez raw kódu/PII a bez apply. Vendor-neutral apply/report a support UI zůstávají mocked. | `TKT-02`/`TKT-04` a `P4-03` pro apply/claim; `P9` pro produkční support endpointy |
-| Check-in | `UI ready (mocked)` | `F5-01` až `F5-06`: samostatný online-only operator shell, camera/manual/search lookup, úplné outcome stavy, confirm, přesný retry, auditované undo a stats nad `CS-CHECKIN-01`. | `P6`, `TKT-04` source kód, `TKT-05` jen app credential a `OPS-*` pro provozní UAT |
-| Admin Priority A v6 | `UI ready (mocked)` | `F4-10` odstranil attendance permission/actions/state/UI, přejmenoval roli, zúžil announcement severity/audience a zachoval rezervace, audit, settings i minimální organizační export. | `P5`/`P8`/`P9` a capability endpointy |
+| Import a support | `partially integrated` | `P4-02`/`F4-02` napojily server-only SimpleShop preview bez raw kódu/PII a bez apply. | `TKT-02` a `P4-03` pro participant apply; `P4-06` pro invitation. |
+| Check-in | `not started` | Vyřazeno z produktu 2026 podle `SCOPE-2026-14`; interní historická vrstva je dormant. | Žádná launch závislost. |
+| Admin Priority A/B v6 | `integrated` | Produkční admin endpointy pokrývají rezervace, audit, settings, exporty, oznámení a nové `/admin/interakce` pro event flags, session questions a scoped moderátory; check-in ovládání je odstraněno. | Staging accessibility/UAT a e-mail/import capability. |
+| Networking Priority B | `integrated` | Event-wide admin gate, explicitní participant opt-in/opt-out, adresář a profil; opt-in zveřejní všechna vyplněná veřejná pole. | `BLOCKER-LEGAL-01` pro finální copy a staging UAT. |
+| Otázky a hodnocení Priority B | `integrated` | Default-off event/session flags, participant submit/ratings, moderator feed a auditovaný výběr session i moderátora v `/admin/interakce`. | `P12-06` tabletové UAT s provozním přiřazením. |
 | Roster vedoucího aktivity | `integrated` | `P5-08` napojil připravené `/host/aktivity` na autorizovaný `CS-ROSTER-01` list a detail. Server přijímá scope jen z aktivní `room_operator` role, promítá aktivní rezervace/FIFO čekání včetně networkingu s nastavenou kapacitou a profilové jméno/firmu, omezuje dotazy i DTO a nevrací telefon, e-mail, user/ticket ID, attendance ani export. | Finální přiřazení osob v `BLOCKER-OPS-01`. |
 | QR deep link každého bodu programu | `integrated` | Admin SVG a dávkový ZIP generují credential-free `/app/program/:sessionId` pro každý bod latest publication; zrušené body se nevydávají. | Zbývá tiskové/content UAT. |
 | Provozní oznámení minimum v6 | `UI ready (mocked)` | Participant inbox a admin immutable preview/send přijímají jen critical severity a event/dotčené sessions; info/important/reminder větve jsou odstraněné. | `P8-05`/`P8-06` a produkční kritický e-mail `P8G` |
@@ -1422,8 +1436,10 @@ Podle [ADR-015](docs/adr/015-simpleshop-api-sync.md) je SimpleShop výhradně
 serverová implementace `TicketSourceAdapter` nad API. Produkční preview
 nepoužívá ruční CSV/XLSX upload, plánovaný polling ani webhook. Oprávněný
 organizátor jej spustí na vyžádání; `P4-02` připraví pouze staging a diff bez
-apply. Samostatný `P4-03` smí přidat apply teprve po uzavření `TKT-02` a
-relevantní části `TKT-04`.
+apply. [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md)
+omezuje budoucí `P4-03` na import způsobilých účastníků a event membershipů;
+ticket credential, claim a check-in se nevytvářejí. Před apply musí zůstat
+fail-closed schválené mapování způsobilosti zdrojových stavů.
 
 Frontend nezná Basic Authorization, vendorové endpointy ani význam zdrojových
 statusů; pracuje jen s kanonickými DTO, validačními chybami a diffem. API e-mail
@@ -1438,20 +1454,20 @@ envelope `{csv}`, žádný dokumentovaný ani pozorovaný cursor/page parametr a
 stabilní per-ticket `ID vstupenky`; `ID dokladu` je opakované ID objednávky.
 Detaily sanitizovaného discovery a přesné počty jsou v ADR-015.
 
-API sync pipeline (body 1–6 je implementované preview, 7–10 budoucí apply):
+API sync pipeline (body 1–6 je implementované preview, 7–10 budoucí participant apply):
 
 1. adminem spuštěný bounded read-only fetch ze SimpleShop API;
 2. striktní schema/pagination validace a staging bez změny ticketů;
 3. přesné mapování stabilního externího ID, kusů a statusu; raw opaque kód se
    po in-memory validaci zahodí;
-4. výpočet HMAC z přesných UTF-8 bytů bez trim/case/Unicode normalizace až v
-   budoucím schváleném apply/claim řezu;
+4. zdrojový ticket kód se po validačním preview zahodí a nepropíše do
+   identity, membershipu ani pozvánky;
 5. validační report: duplicity v odpovědi/DB, chybějící kód/stav a neznámý stav;
 6. preview diffu: new/unchanged/status changed/conflict;
 7. explicitní potvrzení adminem s čerstvou preview verzí a důvodem;
-8. transakční dávkové apply s idempotencí;
-9. outbox události pro storna/reaktivace;
-10. audit batch + stažitelný sanitizovaný report bez vendor credentialů.
+8. transakční idempotentní upsert identity a event membershipu bez odeslání;
+9. samostatná administrátorem potvrzená invitation batch do outboxu;
+10. audit importu i pozvánky + sanitizovaný report bez vendor credentialů.
 
 Nikdy automaticky nestornovat aktivovanou vstupenku z neznámé hodnoty statusu. Nejdříve zastavit batch a zobrazit konflikt.
 Zdrojový kód je až do rozhodnutí `BLOCKER-TKT-04` neprůhledná hodnota: klient
@@ -1460,15 +1476,14 @@ normalizovat. Mock data používají pouze zjevně syntetické kódy a nesmějí
 dostat do produkčního bundlu.
 
 API secrets, product/form binding a read-only preview jsou ověřené. Otevřené
-významy stavů a bezpečnost source kódu blokují apply, claim a případný offline
-manifest, nikoli sanitizované admin preview.
+významy stavů blokují apply způsobilosti; source kód, claim a offline manifest
+se po `SCOPE-2026-13`/`14` neimplementují.
 
 Před produkčním apply doplnit:
 
 - schválený význam stornované/vrácené/nezaplacené vstupenky; refund v aktuálním
   datasetu nebyl;
 - zda API vrací e-mail konkrétního účastníka nebo jen kupujícího;
-- reálné source-code test vectors pro `TKT-04`.
 
 ### 15.2 Transakční e-mail
 
@@ -1594,15 +1609,16 @@ Hodnoty jsou konfigurovatelné per environment a musí projít load/UAT testem:
 
 ### 17.2 Retenční joby
 
-- Hodnoty 30 dnů pro adresářová profilová pole a 90 dnů pro provozní data jsou
-  pouze návrhové/testovací parametry, nikoli schválená produkční retence.
-- Produkční konfigurace nemá bezpečný číselný default: apply job zůstává
-  zablokovaný `BLOCKER-LEGAL-01`, dokud nejsou písemně potvrzené účely, lhůty,
-  výjimky a legal hold. Na syntetických datech lze připravit dry-run s 30/90 dny.
+- Podle `SCOPE-2026-16` se data nemažou automaticky a produkční konfigurace
+  nemá číselný retention default ani naplánovaný apply job.
+- Odstranění nebo anonymizaci spouští organizátor ručně nad explicitním
+  scope a preview. Operace musí být idempotentní a auditovaná; právní text,
+  výjimky a legal hold zůstávají v `BLOCKER-LEGAL-01`.
 - Žádné zprávy ani spojení nevznikají; právně schválená adresářová retence proto
   pracuje jen s opt-in profilovými poli.
 - Oddělit zákonně uchovávané účetní/smluvní doklady; aplikace je nemá přebírat bez potřeby.
-- Retention job má dry-run report, explicitní scope, idempotenci, audit, testovací fixture a možnost schválit první produkční běh.
+- Případná budoucí automatizace vyžaduje nové produktové a právní
+  rozhodnutí; pro rok 2026 je vypnutá.
 - Backup politika nesmí fakticky obcházet schválenou retenci; dokumentovat expiraci záloh a režim obnovy.
 
 ### 17.3 Subjekt údajů
@@ -2453,42 +2469,41 @@ poškození aktuální cache a non-production efekt odregistruje pouze vlastní
 `/sw.js`. `F6-06` až `F6-08` jsou integrační/UAT blokátory, nikoli chybějící
 mockovaná frontendová cesta.
 
-### Etapa 4 – vstupenky, import, claim a obnova přístupu
+### Etapa 4 – import účastníků, pozvánka a obnova přístupu
 
-**Závislost:** `BLOCKER-TKT-01` je uzavřen. `TKT-02` blokuje produkční apply,
-`TKT-04` bezpečnost apply/claimu,
-`BLOCKER-AUTH-01` vznik identity/session a `BLOCKER-TKT-05` pouze účastnický
-prezentační credential. `BLOCKER-AUTH-02` blokuje až produkční invitation/UAT
-kontinuity mezi odesláním odkazu a konferencí. Vendor-neutral kontrakty,
-fixtures a `F1`/`F4` mockované UI mohou pokračovat.
+**Závislost:** `BLOCKER-TKT-01` je uzavřen. `TKT-02` blokuje pouze produkční
+mapování způsobilosti k importu. Ticket credential, claim a check-in vyřazuje
+`SCOPE-2026-13`/`14`; produkční invitation delivery blokuje e-mail provider a
+`BLOCKER-AUTH-02` blokuje UAT kontinuity mezi odesláním odkazu a konferencí.
 
-- [~] `P4-01` Tickets/import schema, HMAC infrastruktura, test vectors a pepper rotation runbook. Schéma a rotační mechanismus jsou implementované bez raw kódu; produkční normalizér a bezpečnostní akceptace claimu čekají na `BLOCKER-TKT-04`.
+- [–] `P4-01` Ticket HMAC/pepper infrastruktura – mimo rozsah 2026 podle
+  `SCOPE-2026-13`/`14`; existující dormant schéma není launch dependency.
 - [x] `P4-02` Serverový SimpleShop API adapter a autorizované
   staging/validation/preview bez změny ticketů. Síťové čtení spouští admin na
   vyžádání; adapter allowlistuje HTTPS host/cesty, používá jen GET, bounded
   response/řádky, timeout, safe retry a sanitizované persistence/DTO. Preview
   nikdy nenabízí apply; pending/storno/refund mapování zůstává pro `P4-03`
   fail-closed.
-- [ ] `P4-03` Transakční idempotentní apply a stavová historie.
-- [ ] `P4-04` Manual code claim doména a endpoint s lockem, rate limitem a
-  generickými chybami; finální výstup identity/session čeká na
-  `BLOCKER-AUTH-01`.
-- [ ] `P4-05` Integrovat scanner a ruční fallback z `F1-02`/`F1-03` se stejným
-  claim endpointem; nevytvářet druhou UI implementaci.
-- [ ] `P4-06` Claim link token a invitation batch přes worker; připravit
+- [ ] `P4-03` Transakční idempotentní apply: upsert identity a event
+  membershipu pro způsobilé importované účastníky, bez automatického
+  odeslání e-mailu a bez uložení ticket credentialu.
+- [–] `P4-04` Manual code claim – mimo rozsah 2026 (`SCOPE-2026-13`).
+- [–] `P4-05` Scanner a ruční ticket kód – mimo rozsah 2026
+  (`SCOPE-2026-13`/`14`).
+- [ ] `P4-06` Invitation link a adminem spuštěný batch přes worker; připravit
   idempotentní odeslání 11. 9. 2026 a hard-deadline runbook pro 15. 9. 2026.
-- [ ] `P4-07` Propojení claimu s Better Auth identitou a onboardingem podle
-  rozhodnutí `BLOCKER-AUTH-01`.
-- [ ] `P4-08` Již aktivovaný kód: bezpečné přihlášení/support flow, žádný duplicitní profil.
-- [ ] `P4-09` Implementovat serverové ruční přiřazení/aktivaci,
-  storno/refund/block/transfer/reactivation s ověřením identity, důvodem a
-  auditem; integrovat support UI `F4-05`.
-- [ ] `P4-10` Recovery ověřeným e-mailem a revokace relací při transferu.
-- [ ] `P4-11` Abuse, race a E2E testy všech stavů.
-  Zahrnout bezplatnou vstupenku řečníka; cena 0 Kč nesmí měnit ticket claim
-  pravidla ani udělit zvláštní roli.
-- [ ] `P4-12` Serverový kontrakt a rotovatelný prezentační credential pro
-  `/me/ticket` podle `BLOCKER-TKT-05`; z HMAC/suffixu negenerovat zdrojový QR.
+- [ ] `P4-07` Propojit invitation token s předem importovanou Better Auth
+  identitou, event membershipem a onboardingem; neexistující importovanou
+  identitu link nesmí vytvořit.
+- [ ] `P4-08` Opakovaná pozvánka/recovery bezpečně obnoví přístup bez
+  duplicitního profilu nebo membershipu.
+- [ ] `P4-09` Auditovaný support pro resend/revoke invitation a opravu
+  importované identity; ticket transfer/storno workflow se nevytváří.
+- [ ] `P4-10` Recovery ověřeným e-mailem a revokace relací při odebrání
+  event membershipu.
+- [ ] `P4-11` Abuse, race a E2E testy importu, invitation batch a recovery.
+- [–] `P4-12` Prezentační ticket credential a `/me/ticket` – mimo rozsah
+  2026 (`SCOPE-2026-14`).
 - [x] `P4-13` Implementovat `CS-BOOT-01`: autorizované `GET /me/bootstrap`,
   `POST /me/onboarding` a Priority A account/profile/privacy minimum nad
   doménou `P2-06`, včetně negativních event-scope testů; integrovat `F1-05`,
@@ -2499,16 +2514,15 @@ fixtures a `F1`/`F4` mockované UI mohou pokračovat.
   regrese pro anonymous/cross-event/CSRF, replay, collision a stale version.
 - [x] `P4-14` Vygenerovat a otestovat obecný QR pouze pro
   `https://app.byzon.cz` na badge/obrazovky. Vizuálně i datově jej odlišit od
-  session deep link QR a ticket/check-in credentialu.
+  session deep link QR; ticket/check-in credential neexistuje.
 - [ ] `P4-15` Uzavřít `BLOCKER-AUTH-02` a otestovat realistickou cestu: pozvánka
   odeslaná 11.–15. 9., první otevření, 48h expirace, recovery e-mailem a návrat
   do původního úkolu během 18.–19. 9.
 
-**Akceptace:** žádný raw kód v DB/logu; dva souběžné claimy nevytvoří dva
-držitele; stornovaná vstupenka nezíská práva; uživatel se po claimu může
-bezpečně vrátit magic linkem; `F1`, `F2-04` a relevantní `F4` slices jsou
-integrované, ne pouze mockované; `CS-BOOT-01` a Priority A účet/soukromí
-odmítají anonymní i cross-event přístup.
+**Akceptace:** žádný raw ticket kód v DB/logu; import a odeslání jsou dva
+oddělené adminem potvrzené kroky; souběh ani replay nevytvoří duplicitní
+identitu, membership nebo e-mail; nezpůsobilý zdrojový stav nezíská přístup;
+recovery funguje bez ticketu a `CS-BOOT-01` odmítá anonymní i cross-event přístup.
 
 ### Etapa 5 – agenda, rezervace, waitlist a kalendář
 
@@ -2644,34 +2658,14 @@ právě jeden schválený promotion režim; konflikt se zobrazí; změny mají a
 ICS funguje v reprezentativních kalendářích; vedoucí aktivity čte jen
 přiřazený roster a žádné nadbytečné PII.
 
-### Etapa 6 – check-in a provozní výjimky
+### Etapa 6 – check-in vyřazen z rozsahu 2026
 
-**Závislost:** `BLOCKER-OPS-*`, zejména zařízení, stanoviště a offline postup,
-blokují load profil, rehearsal a případný offline režim. `F5` mockovaná obsluha
-a serverové kontrakty mohou vznikat souběžně. `TKT-04` blokuje reálný
-source-ticket adapter; `TKT-05` pouze přídavný app-credential adapter.
+Podle `SCOPE-2026-14` aplikace vstupenky nekontroluje a check-in neprovádí.
 
-- [x] `P6-01` Check-in schema, `CS-CHECKIN-01`, device identity a permission
-  policies.
-- [ ] `P6-02` Integrovat `F5` rychlý scan/lookup/confirm flow s autoritativním
-  serverem přes alespoň jeden schválený credential adapter; app credential se
-  přidá po `P4-12`. Haptická/zvuková odezva je pouze doplněk.
-- [x] `P6-03` Implementovat serverový manual-code a jméno/e-mail lookup s
-  minimálními výsledky přes `POST` body bez PII v URL; integrovat
-  `F5-02`/`F5-03` a opravit případný historický GET klient.
-- [x] `P6-04` Implementovat canonical duplicate/storno/neznámý outcome,
-  idempotenci a bezpečný retry; integrovat `F5-04`.
-- [x] `P6-05` Implementovat serverové undo s důvodem, omezením role a audit
-  trail; integrovat `F5-05`.
-- [x] `P6-06` Implementovat agregované stats/seznam výjimek DTO bez zbytečné
-  PII; UI skládá `F4`/`F5`, nevzniká druhý operátorský frontend.
-- [ ] `P6-07` Implementovat export pro jmenovky/seznam, bez přímého tisku;
-  spouští se přes společné export request UI `F4-07`.
-- [ ] `P6-08` Nouzový offline runbook + ruční import/sloučení.
-- [ ] `P6-09` Rozhodnutí a případná implementace device offline manifestu za feature flagem.
-- [ ] `P6-10` Load test očekávané špičky a onsite rehearsal checklist.
-
-**Akceptace:** běžný check-in je rychlý a idempotentní; duplicitní scan nic nepoškodí; obsluha nevidí zbytečná data; fallback je prakticky odzkoušen.
+- [–] `P6-01` až `P6-10` – mimo rozsah 2026. Již implementované interní
+  kontrakty/serverové vrstvy zůstávají dočasně dormant pro kompatibilitu,
+  ale nejsou dostupné v aktivní administraci, nejsou launch gate a nevyžadují
+  zařízení, operátory, export ani onsite rehearsal.
 
 ### Etapa 7 – PWA offline čtení a odolnost Priority A
 
@@ -2770,7 +2764,7 @@ Admin UI používá shell a support patterns `F4`; tato etapa doplňuje serverov
 agregace, oprávnění, exporty a jejich integraci, nikoli další paralelní admin
 frontend.
 
-- [x] `P9-01` Implementovat serverové agregace activation/check-in/reservation/
+- [x] `P9-01` Implementovat serverové agregace activation/reservation/
   content-sync stavu a integrovat dashboard `F4-07`.
 - [x] `P9-02` Implementovat serverovou správu rolí a scoped operator
   assignments s auditem; `room_operator` vyžaduje session IDs a v UI se jmenuje
@@ -2785,8 +2779,8 @@ frontend.
   export není konzument. Integrovat scope-aligned `F4-07`.
 - [x] `P9-06` Vynutit CSV injection ochranu v exportech
   (`=`, `+`, `-`, `@`) a přidat regresní testy.
-- [x] `P9-07` Implementovat pouze agregované activation, reservation a
-  check-in report DTO. Žádosti, spojení, zprávy ani attendance se neměří;
+- [x] `P9-07` Implementovat pouze agregované activation a reservation report
+  DTO. Žádosti, spojení, zprávy, check-in ani attendance se neměří;
   pokročilé grafy nejsou součástí launch minima.
 - [ ] `P9-08` Integrovat a ověřit `F4-09` admin accessibility, keyboard a
   desktop/mobile responsive smoke nad skutečnými endpointy.
@@ -2801,9 +2795,10 @@ Před zahájením volitelné Priority B musí být na staging akceptováno:
 
 - [ ] všechny Priority A capability v §12.8 dosáhly stavu `UAT`, nikoli jen
   `UI ready (mocked)`;
-- [ ] kompletní activation → onboarding → program → reservation → ticket → check-in cesta;
+- [ ] kompletní import účastníka → admin invitation → onboarding →
+  program → reservation cesta;
 - [ ] offline program/agenda/info;
-- [ ] admin program/import/support/check-in/announcement základ;
+- [ ] admin program/import/invitation/support/announcement základ;
 - [ ] Scope audit etapy 0 a všechny `F1-07`/`F2-08`/`F3-07`/`F4-10`
   scope-alignment kontroly uzavřené; vyřazené v5 route/CTA/API nejsou v
   produkčním grafu;
@@ -2813,7 +2808,7 @@ Před zahájením volitelné Priority B musí být na staging akceptováno:
 - [ ] QR deep link a dávkový balík existují pro každý publikovaný bod programu;
 - [ ] kritické oznámení prošlo UAT v aplikaci i přes produkčně ekvivalentní
   e-mailový kanál;
-- [ ] souhlasy, privacy defaults, audit a retention skeleton;
+- [ ] souhlasy, privacy defaults, audit a ručně řízený postup odstranění;
 - [ ] záloha + restore drill;
 - [ ] fallback runbooky;
 - [ ] load/security/accessibility minimum;
@@ -2832,17 +2827,22 @@ jako explicitně session-scoped `room_operator` podle P5/P9.
 ### Etapa 11 – jednoduchý networkingový adresář, volitelná Priority B
 
 - [x] `P11-01` Rozšířit participant profil o opt-in, představení, dobrovolný
-  telefon/kontaktní e-mail/LinkedIn a `hidden | directory` visibility.
+  telefon/kontaktní e-mail/LinkedIn. Jediná visibility všech vyplněných
+  veřejných polí je odvozena z explicitního opt-in podle `SCOPE-2026-15`.
 - [x] `P11-02` Implementovat pevný multiselect `today_hunting` se šesti
   hodnotami z `SCOPE-2026-02`; žádné custom návrhy ani aliasy.
 - [x] `P11-03` Directory search/filter podle jména, firmy a `today_hunting` s
   minimálním privacy DTO a cursor pagination.
 - [x] `P11-04` Detail profilu bez contact unlock logiky; každé kontaktní pole
-  respektuje vlastní visibility.
+  se po opt-in zobrazí, pokud jej účastník vyplnil.
 - [x] `P11-05` Instant hide po opt-out, admin hide a cache invalidace.
-- [~] `P11-06` Privacy/IDOR/retention test suite včetně zákazu plošného exportu.
+- [~] `P11-06` Privacy/IDOR test suite včetně zákazu plošného exportu;
+  automatická retence je vyřazená `SCOPE-2026-16`.
 - [–] `P11-07` Connections, requests, recommendations, messages, meeting
   proposals, blocks/reports a custom tags – mimo rozsah 2026.
+- [x] `P11-08` Integrovat auditovaný event-wide networking přepínač do
+  `/admin/interakce`; default je vypnuto a optimistic verze brání přepsání
+  souběžné změny.
 
 **Akceptace:** opt-out profil není zjistitelný; skrytý kontakt se nikdy nedostane
 do DTO/cache; adresář neposkytuje interní komunikaci ani export kontaktů.
@@ -2871,6 +2871,10 @@ konkrétní session-scoped moderátoři v `BLOCKER-LIVE-01`.
   mimo rozsah 2026.
 - [–] `P12-09` Přiřazení nezodpovězených dotazů řečníkům a odpovědi po akci –
   mimo rozsah 2026.
+- [x] `P12-10` Integrovat `/admin/interakce`: event-wide otázky a hodnocení,
+  samostatný přepínač otázek u každé session a session-scoped přiřazení
+  moderátora výběrem přednášky a aktivního účastníka. Vše je defaultně
+  vypnuté, idempotentní, optimistic a auditované.
 
 **Akceptace:** participant odešle dotaz jen podporované session; ostatní dotazy
 nevidí; moderátor čte pouze svůj chronologický feed na tabletu; QR neobsahuje
@@ -2960,17 +2964,17 @@ rozhodnutí ani souhlas s produkčním nasazením.
 
 | ID | Potřebný vstup | Blokuje | Vlastník | Gate | Bezpečný výchozí postup |
 | --- | --- | --- | --- | --- | --- |
-| BLOCKER-AUTH-01 | Pořadí a handshake ticket claimu, ověření identity, vytvoření session a event membership včetně přerušení/obnovení toku | `P4-04` výstup, `P4-07`, `F1` integrace | Produkt + tech lead + security | Před claim/session integrací | Dokončit kontrakty, fixtures a mockované UI; neověřený pending claim nesmí vytvořit membership, relaci ani práva. |
+| BLOCKER-AUTH-01 | Bezpečný invitation handshake mezi předem importovanou identitou/membershipem, Better Auth session a onboardingem včetně přerušení/obnovení toku | `P4-07`, invitation `F1` integrace | Produkt + tech lead + security | Před invitation/session integrací | Neověřený nebo cizí invitation token nesmí vytvořit identitu, membership, relaci ani práva. |
 | BLOCKER-AUTH-02 | Jak 48h session funguje s invitation odeslanou 11.–15. 9. a konferencí 18.–19. 9.: očekávaná opakovaná recovery, nebo event-bound prodloužení | `P4-15`, invitation UAT a go-live recovery kapacita | Produkt + tech lead + security | Před produkční invitation dávkou | Zachovat implementovaných 48 h/24 h a spolehlivý recovery flow; neslibovat, že jedno otevření odkazu před akcí udrží relaci až do konference. |
 | BLOCKER-TKT-01 (uzavřen 30. 8. 2026) | Read-only discovery ověřilo endpointy, nepřítomnost pagination parametrů, `{csv}` envelope, stabilní ticket/order ID a BYZON product `143958` / form `0MnNQ`. | — | Organizátor | `P4-02` produkční preview | Ověřený kontrakt je v ADR-015; změna envelope/hlaviček/ID failne zavřeně. |
 | BLOCKER-TKT-02 | Význam statusů storno/refund/nezaplaceno | Produkční ticket stavy/apply | Organizátor | `P4-03` prod apply | Neznámý stav = validation error, nikdy automaticky neaktivovat/stornovat; UI stav otestovat fixturem. |
-| BLOCKER-TKT-04 | Entropie, formát a povolená normalizace zdrojových kódů; discovery pozorovalo 67 unikátních šestibytových hodnot z číslic/velkých ASCII písmen, ale raw vectors neuložilo | Reálný apply/claim/offline check-in security | Organizátor + tech lead | Před `P4-03`/`P4-04` integrací kódu | Kód je opaque bez trim/case změn; `P4-02` jej po in-memory validaci zahodí. HMAC storage až po schváleném bezpečnostním rozhodnutí, offline manifest disabled. |
-| BLOCKER-TKT-05 | Formát, expirace, rotace a verifier skenovatelné účastnické vstupenky: podepsaný app credential vs bezpečně chráněný zdrojový kód | `F2-04` integrace, `P4-12` a pouze app-credential adapter/rehearsal v `P6-02` | Produkt + tech lead + security | Před integrací `/me/ticket` a UAT app credentialu | Zobrazit jen stav a suffix; HMAC není QR payload. Syntetický QR pouze dev/test. Source-ticket scan se řídí `TKT-04` nezávisle. |
-| BLOCKER-OPS-01 | Event-day RACI a kapacita: počet vstupů/zařízení/operátorů, špička, vlastník jmenovek, konkrétní moderátoři a osoby oprávněné odeslat kritické oznámení | P6 load/rehearsal, role assignments, P8 send UAT, P12 moderator UAT | Organizace | Před P6-10/P8 send/P12 UAT | Parametrizovaný load profil; send pouze admin seedem, questions feature off a žádné domnělé přiřazení osob. |
-| BLOCKER-OPS-02 | Nouzový check-in a autorita ručních záznamů | P6 gate | Organizace + tech lead | P6-08 runbook | Online autorita + exportní fallback. |
-| BLOCKER-LIVE-01 | Finální ID pátečních sessions na Byzon/Leadership stage a přiřazení moderátorů; ankety/projekce nejsou vstup | Volitelná P12 Priority B | Organizace | Před P12-01/P12-06 | `questions_enabled=false`; lze připravit kontrakt a syntetické fixtures bez publikace feature. Programový QR generátor `P3-12` pokračuje pro všechny body nezávisle. |
+| BLOCKER-TKT-04 (uzavřen scope 31. 8. 2026) | Zdrojový ticket kód se nepoužívá pro přístup ani check-in. | — | Produkt | `SCOPE-2026-13`/`14` | Preview jej po in-memory validaci zahodí; HMAC/claim se neimplementuje. |
+| BLOCKER-TKT-05 (uzavřen scope 31. 8. 2026) | Skenovatelný ticket credential není součástí aplikace 2026. | — | Produkt | `SCOPE-2026-14` | Existuje jen obecný app QR a session deep link QR. |
+| BLOCKER-OPS-01 | Konkrétní moderátoři a osoby oprávněné odeslat kritické oznámení | P8 send UAT, P12 moderator UAT | Organizace | Před P8 send/P12 UAT | Send pouze admin rolí, questions feature off; přiřazení se provede v `/admin/interakce` bez ručního session ID. |
+| BLOCKER-OPS-02 (uzavřen scope 31. 8. 2026) | Check-in a jeho fallback jsou mimo rozsah aplikace. | — | Produkt | `SCOPE-2026-14` | Žádné zařízení, export ani rehearsal. |
+| BLOCKER-LIVE-01 | Finální provozní výběr sessions a moderátorů pro tabletové UAT; nejde o implementační vstup | Pouze `P12-06` UAT | Organizace | Před `P12-06` | Vše je defaultně vypnuté; administrace nabízí kanonický výběr sessions a aktivních uživatelů. |
 | BLOCKER-CONTENT-01 | Finální program reconciliation, loga partnerů a FAQ k uzávěrce 31. 8. 2026 | Obsah UAT | Organizace | Gate A content UAT | Aktuální web je označený baseline/draft; plánek ani materiály se neočekávají. |
-| BLOCKER-LEGAL-01 | Schválené účely, texty, retence, kontaktní privacy postup a případný directory consent po finálním v6 scope | Produkční onboarding, privacy operations a networkingový adresář | ENJOiT | Gate A onboarding UAT / před P11 | Verze draft, žádný produkční directory opt-in; právo na přístup se neinterpretuje jako zrušené odstraněním self-service exportu. |
+| BLOCKER-LEGAL-01 | Schválené účely a texty souhlasů, kontaktní privacy postup a pravidla ručního odstranění/anonymizace | Produkční onboarding, privacy operations a networkingový adresář | ENJOiT | Gate A onboarding/networking UAT | Explicitní opt-in je implementovaný, bez opt-in je profil skrytý a automatické mazání je vypnuté podle `SCOPE-2026-15`/`16`; finální právní copy musí schválit organizátor. |
 | BLOCKER-VENDOR-01 | E-mail provider + DPA/region | Prod e-mail | ENJOiT + tech lead | P8-03 | Fake/sink adapter. |
 | BLOCKER-VENDOR-02 | Error/uptime provider + privacy nastavení | Go-live monitor | Tech lead + ENJOiT | P15-11 | Redacted logs + Railway, ale launch gate zůstává otevřená. |
 | BLOCKER-INFRA-01 | Railway DPA, subprocesory, datová rezidence a bezpečnost/retence bucketu | Produkční PII, ticket importy, organizační exporty a schválené obrázky | ENJOiT + tech lead | První produkční PII/upload | Pouze syntetický/anonymizovaný staging; žádné speaker materiály se neočekávají. |
@@ -2984,9 +2988,10 @@ a uvolnit kapacitu; napojení na ticket transition zůstává v `P4-09`.
 [ADR-014](docs/adr/014-reservation-waitlist-grouping.md). Uzavření
 `BLOCKER-TKT-03` zaznamenal [ADR-015](docs/adr/015-simpleshop-api-sync.md):
 sync je ručně spuštěný API fetch s odděleným preview a apply. Uzavření
-`BLOCKER-AUTH-01`, `BLOCKER-AUTH-02`, `BLOCKER-TKT-04` nebo `BLOCKER-TKT-05` vyžaduje
-samostatný ADR, aktualizovaný threat model a konkrétní test vectors; samotná
-ústní dohoda nebo mockované UI blocker neuzavírá.
+credential/check-in blockerů `TKT-04`, `TKT-05` a `OPS-02` scope rozhodnutím
+zaznamenává [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md).
+`BLOCKER-AUTH-01` a `BLOCKER-AUTH-02` nyní platí pouze pro invitation/recovery
+handshake a jeho UAT.
 
 ---
 
@@ -3036,8 +3041,8 @@ Po splnění Definition of Done agent předloží krok uživateli ke schválení
 - [ ] Finální publikovaný program a praktické informace.
 - [ ] Kapacity/uzávěrky/waitlist pravidla potvrzené.
 - [ ] Finální program, partner loga, FAQ a praktické kontakty reconciled k 31. 8. 2026.
-- [ ] Tři typy QR (app URL, session deep link, ticket/check-in credential)
-  vizuálně i datově odlišené a otestované z tiskových materiálů/obrazovek;
+- [ ] Dva typy QR (app URL a session deep link) vizuálně i datově
+  odlišené a otestované z tiskových materiálů/obrazovek;
   session dávka pokrývá každý publikovaný bod programu.
 - [ ] Čeština a mikrocopy zkontrolované.
 - [ ] Speaker portal, spojení/zprávy, polls/projection, social wall, plánek,
@@ -3045,10 +3050,11 @@ Po splnění Definition of Done agent předloží krok uživateli ke schválení
 
 ### Data a právní
 
-- [ ] Finální SimpleShop API sync a diff review.
+- [ ] Finální SimpleShop participant import, diff review a invitation preview.
 - [ ] Právní dokumenty a consent versions publikované.
 - [ ] DPA/vendor/region schválené.
-- [ ] Retenční data nastavena a maintenance job naplánován.
+- [ ] Ruční privacy removal/anonymization postup a vlastník potvrzeni;
+  automatický retention job není naplánován.
 - [ ] Produkční exporty omezeny rolemi a auditovány.
 
 ### Technologie
@@ -3060,15 +3066,13 @@ Po splnění Definition of Done agent předloží krok uživateli ke schválení
 - [ ] Invitation batch připravený na 11. 9. a nejzazší běh 15. 9.; 48h session
   a recovery cesta jsou produktově schválené a odzkoušené.
 - [ ] Restore a rollback drill úspěšný.
-- [ ] Load test splňuje check-in a app budget.
+- [ ] Load test splňuje web, API, reservation a invitation worker budget.
 - [ ] Žádné high/critical bezpečnostní vady.
 
 ### Provoz na místě
 
-- [ ] Operátoři mají správné role, zařízení a nabíjení.
-- [ ] Test scan z aplikace, PDF, SMS i ručního kódu.
-- [ ] Test stornované/duplicitní/neznámé vstupenky.
-- [ ] Fallback seznam/export aktuální a bezpečně distribuovaný.
+- [ ] Check-in, kontrola vstupenek, operátorská zařízení a ticket fallback
+  nejsou součástí aplikačního provozu 2026.
 - [ ] Incident/eskalační kontakty jsou dostupné offline.
 - [ ] Vedoucí aktivit mají přiřazené pouze své sessions a prošli roster UAT.
 - [ ] Pokud se zapne volitelná Priority B dotazů, konkrétní moderátoři a jejich
@@ -3288,3 +3292,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.25 | 30. 8. 2026 | ADR-014 uzavřelo rezervační rozhodnutí a implementace dokončila `P5-04`/`P5-07`: jediná automatická FIFO promotion běží transakčně po participant/admin stornu i zvýšení kapacity, offer/TTL větev je odstraněná z kontraktu a UI a řízený networking dostává kladnou kapacitu auditovaně v administraci bez hardcoded hodnoty. ADR-015 mění produkční SimpleShop zdroj na server-only API fetch spuštěný administrátorem s odděleným preview/apply; CSV/XLSX export není produkční sync kanál. Zbývá implementovat sdílenou skupinu obou částí sobotního mastermindu a provést SimpleShop discovery po instalaci secrets a dodání product/form IDs. |
 | 6.26 | 30. 8. 2026 | Dokončeno `P0-02`/`P4-02`/`F4-02`: oficiální OpenAPI a read-only staging discovery ověřily produkt `143958`, form `0MnNQ`, přesné GET endpointy, `{csv}` envelope bez pagination parametrů, per-ticket/order ID, quantity a pozorované paid/unpaid/storno stavy. Server-only adapter, autorizované/rate-limitované admin preview a sanitizovaný staging batch nepersistují raw kód/PII a nemají apply cestu. `TKT-01` je uzavřen; refund a apply mapování i bezpečnost kódu zůstávají fail-closed v `TKT-02`/`TKT-04`. |
 | 6.27 | 31. 8. 2026 | Jednoprůchodově dokončeny neblokované implementační řezy A: session/general QR, autoritativní check-in bez neschváleného credential adapteru, in-app critical announcements, admin operations/roles/support/audit/settings/exporty, worker outbox a serverově ověřený offline owner lease/replay preflight. Volitelné B jsou implementované za defaultně vypnutými event flags: privacy-minimal networking, jednoduché session questions/moderator polling a jednorázové ratings. Workspace testy, lint, typecheck, format, static smoke a produkční build jsou zelené bez lokální service-backed DB/Redis sady; produkční ticket/e-mail/retention rozhodnutí a fyzické UAT zůstávají explicitní blockery. |
+| 6.28 | 31. 8. 2026 | ADR-016 mění vstup do aplikace na SimpleShop API import účastníků a samostatnou adminem spuštěnou e-mailovou pozvánku; ticket credential/claim a celý check-in jsou mimo scope 2026. Railway staging je potvrzen na `byzonconference-staging.up.railway.app`, produkční `app.byzon.cz` půjde přes Cloudflare. Networking nyní výslovně zveřejňuje všechna vyplněná pole a bez opt-in skrývá celý profil; automatická retence je vypnutá. Nové `/admin/interakce` integruje auditované event flags, session questions a výběr moderátorů bez ručního session ID. |

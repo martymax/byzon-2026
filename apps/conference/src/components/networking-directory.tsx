@@ -95,9 +95,11 @@ export const NetworkingDirectory = () => {
     const selected = Object.keys(hunting).filter((value) =>
       data.has(`hunt:${value}`),
     ) as NetworkingSettings['todayHunting'];
+    const networkingEnabled = data.get('enabled') === 'on';
+    const visibility = networkingEnabled ? 'directory' : 'hidden';
     void updateNetworkingSettings({
       expectedVersion: settings.version,
-      networkingEnabled: data.get('enabled') === 'on',
+      networkingEnabled,
       introduction: String(data.get('introduction') ?? '').trim(),
       company: String(data.get('company') ?? '').trim(),
       jobTitle: String(data.get('jobTitle') ?? '').trim(),
@@ -105,12 +107,9 @@ export const NetworkingDirectory = () => {
       contactEmail: String(data.get('email') ?? '').trim(),
       phone: String(data.get('phone') ?? '').trim() || null,
       linkedinUrl: String(data.get('linkedin') ?? '').trim() || null,
-      emailVisibility:
-        data.get('emailVisibility') === 'directory' ? 'directory' : 'hidden',
-      phoneVisibility:
-        data.get('phoneVisibility') === 'directory' ? 'directory' : 'hidden',
-      linkedinVisibility:
-        data.get('linkedinVisibility') === 'directory' ? 'directory' : 'hidden',
+      emailVisibility: visibility,
+      phoneVisibility: visibility,
+      linkedinVisibility: visibility,
     }).then((result) => {
       setWorking(false);
       if (result.ok && result.kind === 'success') {
@@ -134,7 +133,8 @@ export const NetworkingDirectory = () => {
           Networking
         </h1>
         <p>
-          Kontakty se zobrazí jen podle vašeho výslovného nastavení. Aplikace
+          Profil není vidět, dokud jej výslovně nezapnete. Po zapnutí se
+          ostatním účastníkům zobrazí všechna pole, která zde vyplníte. Aplikace
           neposílá zprávy ani žádosti o spojení.
         </p>
       </header>
@@ -196,28 +196,8 @@ export const NetworkingDirectory = () => {
             />
           </label>
           <label>
-            Viditelnost e-mailu
-            <select
-              defaultValue={settings.emailVisibility}
-              name="emailVisibility"
-            >
-              <option value="hidden">Skrytý</option>
-              <option value="directory">V adresáři</option>
-            </select>
-          </label>
-          <label>
             Telefon
             <input defaultValue={settings.phone ?? ''} name="phone" />
-          </label>
-          <label>
-            Viditelnost telefonu
-            <select
-              defaultValue={settings.phoneVisibility}
-              name="phoneVisibility"
-            >
-              <option value="hidden">Skrytý</option>
-              <option value="directory">V adresáři</option>
-            </select>
           </label>
           <label>
             LinkedIn
@@ -227,16 +207,10 @@ export const NetworkingDirectory = () => {
               type="url"
             />
           </label>
-          <label>
-            Viditelnost LinkedInu
-            <select
-              defaultValue={settings.linkedinVisibility}
-              name="linkedinVisibility"
-            >
-              <option value="hidden">Skrytý</option>
-              <option value="directory">V adresáři</option>
-            </select>
-          </label>
+          <p>
+            Zapnutím adresáře zveřejníte ostatním účastníkům všechna výše
+            vyplněná pole. Vypnutím se celý profil okamžitě skryje.
+          </p>
           <Button disabled={working} type="submit">
             {working ? 'Ukládám…' : 'Uložit nastavení'}
           </Button>
