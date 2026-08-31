@@ -46,7 +46,7 @@ test('public shell preserves keyboard access and layout at the target viewport',
   expect(brandTarget?.height).toBeGreaterThanOrEqual(44);
 
   const controls = [
-    page.getByRole('link', { name: 'Aktivovat vstupenku' }),
+    page.getByLabel('E-mail'),
     page.getByRole('button', { name: 'Poslat přihlašovací odkaz' }),
   ];
   const controlTargets = [];
