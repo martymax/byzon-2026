@@ -260,6 +260,8 @@ export const ticketImportRowSchema = z
     referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
     sourceTicketId: z.string().regex(/^\d{1,64}$/),
     sourceOrderId: z.string().regex(/^\d{1,64}$/),
+    purchasedOn: z.string().date(),
+    discountCoupon: optionalContactTextSchema(100),
     contactName: optionalContactTextSchema(160),
     contactEmail: z.email().max(320).nullable(),
     contactCompany: optionalContactTextSchema(160),

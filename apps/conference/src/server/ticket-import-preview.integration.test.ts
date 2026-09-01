@@ -60,6 +60,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200001',
         sourceStatus: 'paid',
         quantity: 1,
+        purchasedOn: '2026-08-18',
+        discountCoupon: 'EARLYBIRD',
         contactName: 'Existing Participant',
         contactEmail: 'existing@example.test',
         contactCompany: 'Example s.r.o.',
@@ -73,6 +75,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200002',
         sourceStatus: 'paid',
         quantity: 1,
+        purchasedOn: '2026-08-19',
+        discountCoupon: null,
         contactName: 'Single Ticket Buyer',
         contactEmail: 'buyer@example.test',
         contactCompany: null,
@@ -86,6 +90,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200003',
         sourceStatus: 'unpaid',
         quantity: 1,
+        purchasedOn: '2026-08-20',
+        discountCoupon: 'PARTNER2026',
         contactName: 'Unpaid Buyer',
         contactEmail: 'unpaid@example.test',
         contactCompany: null,
@@ -169,6 +175,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
     expect(body.rows[0]).toMatchObject({
       contactName: 'Existing Participant',
       contactEmail: 'existing@example.test',
+      purchasedOn: '2026-08-18',
+      discountCoupon: 'EARLYBIRD',
     });
     expect(body.summary).toEqual({
       total: 3,
@@ -245,5 +253,6 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
     expect(JSON.stringify({ batch, rows, audit })).not.toContain(
       'existing@example.test',
     );
+    expect(JSON.stringify({ batch, rows, audit })).not.toContain('EARLYBIRD');
   });
 });

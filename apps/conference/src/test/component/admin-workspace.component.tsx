@@ -210,6 +210,9 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.body.textContent).toContain('Alice Participant');
     expect(document.body.textContent).toContain('alice@example.test');
     expect(document.body.textContent).toContain('Vstupenka 7100001');
+    expect(document.body.textContent).toContain('18. 8. 2026');
+    expect(document.body.textContent).toContain('Kupón EARLYBIRD');
+    expect(document.body.textContent).toContain('Bez slevového kupónu');
     expect(document.body.textContent).toContain(
       'Účastník z „prodeje na jméno“',
     );

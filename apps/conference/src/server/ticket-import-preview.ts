@@ -290,6 +290,8 @@ const rowFor = (
     referenceSuffix: suffix,
     sourceTicketId: source.externalId,
     sourceOrderId: source.orderExternalId,
+    purchasedOn: source.purchasedOn,
+    discountCoupon: source.discountCoupon,
     contactName: source.contactName,
     contactEmail: source.contactEmail,
     contactCompany: source.contactCompany,

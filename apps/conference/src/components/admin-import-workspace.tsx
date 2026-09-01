@@ -96,6 +96,14 @@ const companyAndPosition = (row: {
   return values.length > 0 ? values.join(' · ') : null;
 };
 
+const purchaseDateFormatter = new Intl.DateTimeFormat('cs-CZ', {
+  dateStyle: 'medium',
+  timeZone: 'Europe/Prague',
+});
+
+const formatPurchaseDate = (value: string): string =>
+  purchaseDateFormatter.format(new Date(`${value}T12:00:00Z`));
+
 export const AdminImportWorkspace = () => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const requestFence = useAdminRequestFence();
@@ -429,6 +437,7 @@ export const AdminImportWorkspace = () => {
                   <th scope="col">Řádek</th>
                   <th scope="col">Účastník</th>
                   <th scope="col">SimpleShop reference</th>
+                  <th scope="col">Nákup</th>
                   <th scope="col">Zdrojový stav</th>
                   <th scope="col">Stav</th>
                   <th scope="col">Původní → nový</th>
@@ -454,6 +463,18 @@ export const AdminImportWorkspace = () => {
                       <span>Vstupenka {row.sourceTicketId}</span>
                       <small>Doklad {row.sourceOrderId}</small>
                       <small>Preview •{row.referenceSuffix}</small>
+                    </td>
+                    <td className={styles.purchaseCell}>
+                      <strong>
+                        <time dateTime={row.purchasedOn}>
+                          {formatPurchaseDate(row.purchasedOn)}
+                        </time>
+                      </strong>
+                      <small>
+                        {row.discountCoupon
+                          ? `Kupón ${row.discountCoupon}`
+                          : 'Bez slevového kupónu'}
+                      </small>
                     </td>
                     <td>{sourceStatusLabels[row.sourceStatus]}</td>
                     <td>
@@ -513,6 +534,14 @@ export const AdminImportWorkspace = () => {
                       Vstupenka {row.sourceTicketId} · doklad{' '}
                       {row.sourceOrderId} · preview •{row.referenceSuffix}
                     </dd>
+                    <dt>Datum nákupu</dt>
+                    <dd>
+                      <time dateTime={row.purchasedOn}>
+                        {formatPurchaseDate(row.purchasedOn)}
+                      </time>
+                    </dd>
+                    <dt>Slevový kupón</dt>
+                    <dd>{row.discountCoupon ?? 'Bez slevového kupónu'}</dd>
                     <dt>Stav</dt>
                     <dd>
                       {formatTicketState(row.currentState)} →{' '}

@@ -55,6 +55,8 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000001',
       sourceStatus: 'paid',
       quantity: 1,
+      purchasedOn: '2026-08-18',
+      discountCoupon: 'EARLYBIRD',
       contactName: 'Alice Participant',
       contactEmail: 'alice@example.test',
       contactCompany: 'Example s.r.o.',
@@ -68,6 +70,8 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000002',
       sourceStatus: 'unpaid',
       quantity: 1,
+      purchasedOn: '2026-08-19',
+      discountCoupon: null,
       contactName: 'Unpaid Buyer',
       contactEmail: 'unpaid@example.test',
       contactCompany: null,
@@ -81,6 +85,8 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000003',
       sourceStatus: 'cancelled',
       quantity: 1,
+      purchasedOn: '2026-08-20',
+      discountCoupon: 'PARTNER2026',
       contactName: 'Cancelled Participant',
       contactEmail: 'cancelled@example.test',
       contactCompany: null,
@@ -175,6 +181,8 @@ describe('SimpleShop ticket import preview handler', () => {
       identitySource: 'named_participant',
       sourceTicketId: '7000001',
       sourceOrderId: '80000001',
+      purchasedOn: '2026-08-18',
+      discountCoupon: 'EARLYBIRD',
     });
     const serializedResponse = JSON.stringify(body);
     const serializedPersistence = JSON.stringify(
@@ -188,7 +196,11 @@ describe('SimpleShop ticket import preview handler', () => {
       expect(serializedResponse).not.toContain(forbidden);
       expect(serializedPersistence).not.toContain(forbidden);
     }
-    for (const pii of ['Alice Participant', 'alice@example.test']) {
+    for (const pii of [
+      'Alice Participant',
+      'alice@example.test',
+      'EARLYBIRD',
+    ]) {
       expect(serializedResponse).toContain(pii);
       expect(serializedPersistence).not.toContain(pii);
     }

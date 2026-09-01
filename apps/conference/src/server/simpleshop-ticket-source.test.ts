@@ -27,6 +27,8 @@ const headers = [
   'Počet',
   'ID dokladu',
   'Stav',
+  'Vytvořeno',
+  'Slevový kupón',
   'E-mail',
   'Telefon',
   'Jméno',
@@ -49,6 +51,8 @@ const sourceRows = [
     '1',
     '80000001',
     'Uhrazeno',
+    '18.08.2026',
+    'EARLYBIRD',
     'buyer@example.test',
     '+420111222333',
     'Buyer',
@@ -66,6 +70,8 @@ const sourceRows = [
     '2',
     '80000001',
     'Uhrazeno',
+    '18.08.2026',
+    'EARLYBIRD',
     'buyer@example.test',
     '',
     '',
@@ -83,6 +89,8 @@ const sourceRows = [
     '1',
     '80000002',
     'Neuhrazeno',
+    '19.08.2026',
+    '',
     'two@example.test',
     '+420222333444',
     'Unpaid',
@@ -100,6 +108,8 @@ const sourceRows = [
     '1',
     '80000003',
     'STORNO',
+    '20.08.2026',
+    'PARTNER2026',
     'three@example.test',
     '',
     'Third',
@@ -192,6 +202,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000001',
         sourceStatus: 'paid',
         quantity: 1,
+        purchasedOn: '2026-08-18',
+        discountCoupon: 'EARLYBIRD',
         contactName: 'Alice Participant',
         contactEmail: 'alice@example.test',
         contactCompany: 'Example s.r.o.',
@@ -205,6 +217,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000002',
         sourceStatus: 'unpaid',
         quantity: 1,
+        purchasedOn: '2026-08-19',
+        discountCoupon: null,
         contactName: 'Unpaid Buyer',
         contactEmail: 'two@example.test',
         contactCompany: null,
@@ -218,6 +232,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000003',
         sourceStatus: 'cancelled',
         quantity: 1,
+        purchasedOn: '2026-08-20',
+        discountCoupon: 'PARTNER2026',
         contactName: 'Cancelled Participant',
         contactEmail: 'cancelled@example.test',
         contactCompany: null,
@@ -248,6 +264,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         '1',
         '8000010',
         'Uhrazeno',
+        '21.08.2026',
+        'SINGLE10',
         'single@example.test',
         '',
         'Single',
@@ -265,6 +283,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         '1',
         '8000020',
         'Uhrazeno',
+        '22.08.2026',
+        '',
         'group@example.test',
         '',
         'Group',
@@ -282,6 +302,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         '1',
         '8000020',
         'Uhrazeno',
+        '22.08.2026',
+        '',
         'group@example.test',
         '',
         'Group',
@@ -310,6 +332,29 @@ describe('SimpleShopTicketSourceAdapter', () => {
     expect(
       snapshot.records.map(({ identitySource }) => identitySource),
     ).toEqual(['single_paid_ticket_buyer', 'manual_review', 'manual_review']);
+  });
+
+  it.each([
+    { name: 'impossible purchase date', date: '31.02.2026', coupon: '' },
+    { name: 'unsafe coupon markup', date: '18.08.2026', coupon: '<coupon>' },
+  ])('rejects $name', async ({ date, coupon }) => {
+    const invalidRow: string[] = [...sourceRows[0]];
+    invalidRow[5] = date;
+    invalidRow[6] = coupon;
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.pathname === '/2.0/product/143958/'
+        ? jsonResponse(product)
+        : jsonResponse({ csv: csv([invalidRow]) });
+    });
+
+    await expect(
+      createSimpleShopTicketSourceAdapter({
+        ...credentials,
+        fetch,
+        maxAttempts: 1,
+      }).fetchPreviewSource(),
+    ).rejects.toMatchObject({ code: 'invalid_payload' });
   });
 
   it('rejects a different host and every non-GET method', () => {

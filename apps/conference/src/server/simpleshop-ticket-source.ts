@@ -28,6 +28,8 @@ export interface SimpleShopTicketSourceRecord {
   readonly orderExternalId: string;
   readonly sourceStatus: TicketImportSourceStatus;
   readonly quantity: number;
+  readonly purchasedOn: string;
+  readonly discountCoupon: string | null;
   readonly contactName: string | null;
   readonly contactEmail: string | null;
   readonly contactCompany: string | null;
@@ -105,6 +107,8 @@ const requiredHeaders = [
   'Počet',
   'ID dokladu',
   'Stav',
+  'Vytvořeno',
+  'Slevový kupón',
   'E-mail',
   'Telefon',
   'Jméno',
@@ -147,12 +151,28 @@ const fullName = (firstName: string, lastName: string): string | null => {
   return parts.length === 0 ? null : parts.join(' ');
 };
 
+const simpleShopPurchaseDatePattern = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+
+const purchaseDate = (value: string): string => {
+  const match = simpleShopPurchaseDatePattern.exec(value.trim());
+  if (!match) throw new SimpleShopTicketSourceError('invalid_payload');
+  const [, day, month, year] = match;
+  const normalized = `${year}-${month}-${day}`;
+  const parsed = z.string().date().safeParse(normalized);
+  if (!parsed.success) {
+    throw new SimpleShopTicketSourceError('invalid_payload');
+  }
+  return parsed.data;
+};
+
 interface ParsedSimpleShopTicketRow {
   readonly sourceRowNumber: number;
   readonly externalId: string;
   readonly orderExternalId: string;
   readonly sourceStatus: TicketImportSourceStatus;
   readonly quantity: number;
+  readonly purchasedOn: string;
+  readonly discountCoupon: string | null;
   readonly namedContactName: string | null;
   readonly namedContactEmail: string | null;
   readonly namedContactCompany: string | null;
@@ -382,6 +402,8 @@ const parseExport = (
       orderExternalId,
       sourceStatus,
       quantity,
+      purchasedOn: purchaseDate(at(row, 'Vytvořeno')),
+      discountCoupon: optionalSourceText(at(row, 'Slevový kupón'), 100),
       namedContactName: fullName(
         at(row, 'Jméno (prodej na jméno)'),
         at(row, 'Příjmení (prodej na jméno)'),
@@ -440,6 +462,8 @@ const parseExport = (
         orderExternalId: row.orderExternalId,
         sourceStatus: row.sourceStatus,
         quantity: row.quantity,
+        purchasedOn: row.purchasedOn,
+        discountCoupon: row.discountCoupon,
         contactName:
           identitySource === 'named_participant'
             ? row.namedContactName

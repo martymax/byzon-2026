@@ -32,6 +32,8 @@ const newRow = {
   referenceSuffix: 'T001',
   sourceTicketId: '7000001',
   sourceOrderId: '8000001',
+  purchasedOn: '2026-08-18',
+  discountCoupon: 'EARLYBIRD',
   contactName: 'Syntetický účastník',
   contactEmail: 'synteticky@example.test',
   contactCompany: 'Example s.r.o.',
@@ -51,6 +53,8 @@ const unchangedRow = {
   referenceSuffix: 'T002',
   sourceTicketId: '7000002',
   sourceOrderId: '8000002',
+  purchasedOn: '2026-08-19',
+  discountCoupon: null,
   contactName: 'Testovací návštěvník',
   contactEmail: 'navstevnik@example.test',
   contactCompany: null,
@@ -107,6 +111,21 @@ describe('CS-IMPORT-01 contracts', () => {
       ticketImportPreviewResponseSchema.safeParse({
         ...preview,
         rows: [{ ...newRow, maskedContact: 's•••@example.test' }, unchangedRow],
+      }).success,
+    ).toBe(false);
+    expect(
+      ticketImportPreviewResponseSchema.safeParse({
+        ...preview,
+        rows: [{ ...newRow, purchasedOn: '18.08.2026' }, unchangedRow],
+      }).success,
+    ).toBe(false);
+    expect(
+      ticketImportPreviewResponseSchema.safeParse({
+        ...preview,
+        rows: [
+          { ...newRow, discountCoupon: '<script>coupon</script>' },
+          unchangedRow,
+        ],
       }).success,
     ).toBe(false);
   });

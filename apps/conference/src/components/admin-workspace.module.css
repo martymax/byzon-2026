@@ -593,28 +593,36 @@
 }
 
 .importTable {
-  min-width: 72rem;
+  min-width: 82rem;
 }
 
 .identityCell > *,
-.referenceCell > * {
+.referenceCell > *,
+.purchaseCell > * {
   display: block;
 }
 
 .identityCell strong,
 .identityCell span,
-.referenceCell span {
+.referenceCell span,
+.purchaseCell small {
   overflow-wrap: anywhere;
 }
 
 .identityCell small,
-.referenceCell small {
+.referenceCell small,
+.purchaseCell small {
   margin-top: 0.2rem;
   color: var(--admin-muted);
 }
 
-.referenceCell {
+.referenceCell,
+.purchaseCell {
   font-variant-numeric: tabular-nums;
+}
+
+.purchaseCell time {
+  white-space: nowrap;
 }
 
 .table caption {
