@@ -23,6 +23,7 @@ import type { ApiPort } from '@/lib/api/endpoint';
 import { mayLeaveAdminContentDraft } from '@/lib/admin-content-dirty-guard';
 import { browserAdminApi, requestAdminContext } from '@/lib/admin-api';
 
+import { adminActorRoleLabels } from './admin-ui-registry';
 import { isAdminSecurityFailure } from './admin-workspace-runtime';
 import styles from './admin-workspace.module.css';
 
@@ -140,13 +141,6 @@ const sectionPermissions: Readonly<
   reservations: ['reservation:any:read', 'audit:read', 'event:settings:manage'],
   content: ['program:manage'],
 };
-
-const roleLabels = {
-  organizer_admin: 'Administrátor',
-  checkin_operator: 'Operátor check-inu',
-  moderator: 'Moderátor',
-  room_operator: 'Vedoucí aktivity',
-} as const;
 
 const previewPersonas = {
   organizer: 'Administrátor',
@@ -467,6 +461,7 @@ export const AdminWorkspaceShell = ({
   return (
     <div
       className={styles.workspace}
+      data-admin-root=""
       data-admin-environment={environment}
       data-admin-role={primaryRole}
     >
@@ -548,7 +543,8 @@ export const AdminWorkspaceShell = ({
             </nav>
             {state.kind === 'ready' && primaryRole ? (
               <span className={styles.roleBadge}>
-                {roleLabels[primaryRole]} · {state.context.event.timezone}
+                {adminActorRoleLabels[primaryRole]} ·{' '}
+                {state.context.event.timezone}
               </span>
             ) : null}
           </header>

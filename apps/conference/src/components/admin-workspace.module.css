@@ -1,55 +1,42 @@
 .workspace {
-  --admin-ink: #172033;
-  --admin-muted: #536078;
-  --admin-surface: #ffffff;
-  --admin-canvas: #f4f6fa;
-  --admin-border: #cbd3e1;
-  --admin-primary: #183f73;
-  --admin-primary-hover: #0e315f;
-  --admin-accent: #e8f0fb;
-  --admin-success: #176b45;
-  --admin-success-bg: #e7f6ee;
-  --admin-warning: #7a4a00;
-  --admin-warning-bg: #fff3d6;
-  --admin-danger: #a12424;
-  --admin-danger-bg: #ffeded;
-  --admin-focus: #006ee6;
-  --admin-on-primary: #ffffff;
-  --admin-sidebar: #142a48;
-  --admin-sidebar-muted: #dbe8fb;
-  --admin-sidebar-link: #eaf2ff;
-  --admin-sidebar-hover: #23466f;
-  --admin-banner-ink: #4b2d00;
-  --admin-banner-bg: #ffe7ad;
-  --admin-warning-border: #d7a33a;
-  --admin-select-border: #9bb3d3;
-  --admin-breadcrumb-muted: #8893a6;
-  --admin-control-border: #929db0;
-  --admin-action-border: #8090a8;
-  --admin-danger-hover: #811818;
-  --admin-surface-subtle: #fafbfe;
-  --admin-attention-border: #b46d00;
-  --admin-table-divider: #dde2ec;
-  --admin-table-heading-ink: #39455a;
-  --admin-table-heading-bg: #f1f4f9;
-  --admin-table-hover: #f7f9fc;
-  --admin-neutral-state-ink: #46536b;
-  --admin-neutral-state-bg: #eef1f6;
-  --admin-info-border: #9ab6dc;
-  --admin-info-bg: #edf4fd;
-  --admin-warning-border: #d7a33a;
-  --admin-warning-bg: #fff3d6;
-  --admin-warning-ink: #5d3900;
-  --admin-warning-ink: #5d3900;
-  --admin-success-border: #68a98b;
-  --admin-success-ink: #105436;
-  --admin-error-border: #d88c8c;
-  --admin-error-ink: #781818;
-  --admin-error-link: #6f0e0e;
-  --admin-topbar-bg: rgba(255, 255, 255, 0.95);
-  --admin-panel-shadow: rgba(32, 50, 81, 0.06);
-  --admin-dialog-scrim: rgba(12, 22, 38, 0.62);
-  --admin-dialog-shadow: rgba(0, 0, 0, 0.3);
+  --admin-muted: var(--admin-text-muted);
+  --admin-accent: var(--admin-surface-brand);
+  --admin-success-bg: var(--admin-success-soft);
+  --admin-warning-bg: var(--admin-warning-soft);
+  --admin-danger-bg: var(--admin-danger-soft);
+  --admin-on-primary: var(--admin-surface);
+  --admin-sidebar: var(--admin-surface);
+  --admin-sidebar-muted: var(--admin-text-muted);
+  --admin-sidebar-link: var(--admin-text);
+  --admin-sidebar-hover: var(--admin-surface-brand);
+  --admin-banner-ink: var(--admin-warning);
+  --admin-banner-bg: var(--admin-warning-soft);
+  --admin-warning-border: var(--admin-warning);
+  --admin-select-border: var(--admin-border-strong);
+  --admin-breadcrumb-muted: var(--admin-text-muted);
+  --admin-control-border: var(--admin-border-strong);
+  --admin-action-border: var(--admin-border-strong);
+  --admin-danger-hover: var(--byzon-danger-hover);
+  --admin-surface-subtle: var(--admin-canvas);
+  --admin-attention-border: var(--admin-warning);
+  --admin-table-divider: var(--admin-border);
+  --admin-table-heading-ink: var(--admin-text);
+  --admin-table-heading-bg: var(--admin-canvas);
+  --admin-table-hover: var(--admin-surface-brand);
+  --admin-neutral-state-ink: var(--admin-text);
+  --admin-neutral-state-bg: var(--admin-canvas);
+  --admin-info-border: var(--admin-info);
+  --admin-info-bg: var(--admin-info-soft);
+  --admin-warning-ink: var(--admin-warning);
+  --admin-success-border: var(--admin-success);
+  --admin-success-ink: var(--admin-success);
+  --admin-error-border: var(--admin-danger);
+  --admin-error-ink: var(--admin-danger);
+  --admin-error-link: var(--admin-danger);
+  --admin-topbar-bg: var(--admin-surface);
+  --admin-panel-shadow: transparent;
+  --admin-dialog-scrim: var(--byzon-scrim);
+  --admin-dialog-shadow: var(--byzon-shadow-overlay);
   min-height: 100dvh;
   color: var(--admin-ink);
   background: var(--admin-canvas);
@@ -105,12 +92,14 @@
   align-self: start;
   min-height: calc(100dvh - 2.75rem);
   padding: 1.5rem 1rem;
-  color: var(--admin-on-primary);
+  border-right: 1px solid var(--admin-border);
+  color: var(--admin-text);
   background: var(--admin-sidebar);
 }
 
 .brand {
   margin: 0 0 0.25rem;
+  color: var(--admin-ink);
   font-size: 1.25rem;
   font-weight: 800;
 }
@@ -136,7 +125,7 @@
   padding: 0.5rem 2rem 0.5rem 0.65rem;
   border: 1px solid var(--admin-select-border);
   border-radius: 0.5rem;
-  color: var(--admin-sidebar);
+  color: var(--admin-ink);
   background: var(--admin-surface);
   font: inherit;
 }
@@ -162,8 +151,8 @@
 }
 
 .navigation a[aria-current='page'] {
-  color: var(--admin-sidebar);
-  background: var(--admin-surface);
+  color: var(--admin-primary);
+  background: var(--admin-surface-brand);
 }
 
 .mainColumn {
@@ -518,7 +507,10 @@
 .secondaryButton:disabled,
 .dangerButton:disabled,
 .filterButton:disabled {
-  opacity: 0.45;
+  border-color: var(--admin-border-strong);
+  color: var(--admin-text-muted);
+  background: var(--admin-canvas);
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -820,32 +812,25 @@
 }
 
 .contentWorkspace {
-  --admin-ink: #172033;
-  --admin-muted: #536078;
-  --admin-surface: #ffffff;
-  --admin-border: #cbd3e1;
-  --admin-primary: #183f73;
-  --admin-primary-hover: #0e315f;
-  --admin-accent: #e8f0fb;
-  --admin-success: #176b45;
-  --admin-success-bg: #e7f6ee;
-  --admin-danger: #a12424;
-  --admin-danger-bg: #ffeded;
-  --admin-focus: #006ee6;
-  --admin-on-primary: #ffffff;
-  --admin-control-border: #929db0;
-  --admin-action-border: #8090a8;
-  --admin-danger-hover: #811818;
-  --admin-surface-subtle: #fafbfe;
-  --admin-info-border: #9ab6dc;
-  --admin-info-bg: #edf4fd;
-  --admin-success-border: #68a98b;
-  --admin-success-ink: #105436;
-  --admin-error-border: #d88c8c;
-  --admin-error-ink: #781818;
-  --admin-error-link: #6f0e0e;
-  --admin-dialog-scrim: rgba(12, 22, 38, 0.62);
-  --admin-dialog-shadow: rgba(0, 0, 0, 0.3);
+  --admin-muted: var(--admin-text-muted);
+  --admin-accent: var(--admin-surface-brand);
+  --admin-success-bg: var(--admin-success-soft);
+  --admin-danger-bg: var(--admin-danger-soft);
+  --admin-on-primary: var(--admin-surface);
+  --admin-control-border: var(--admin-border-strong);
+  --admin-action-border: var(--admin-border-strong);
+  --admin-danger-hover: var(--byzon-danger-hover);
+  --admin-surface-subtle: var(--admin-canvas);
+  --admin-info-border: var(--admin-info);
+  --admin-info-bg: var(--admin-info-soft);
+  --admin-success-border: var(--admin-success);
+  --admin-success-ink: var(--admin-success);
+  --admin-error-border: var(--admin-danger);
+  --admin-error-ink: var(--admin-danger);
+  --admin-error-link: var(--admin-danger);
+  --admin-panel-shadow: transparent;
+  --admin-dialog-scrim: var(--byzon-scrim);
+  --admin-dialog-shadow: var(--byzon-shadow-overlay);
   display: grid;
   gap: 1.25rem;
   min-width: 0;
@@ -859,7 +844,7 @@
   border: 1px solid var(--admin-border);
   border-radius: 0.875rem;
   background: var(--admin-surface);
-  box-shadow: 0 0.35rem 1rem var(--admin-panel-shadow, rgb(32 50 81 / 6%));
+  box-shadow: 0 0.35rem 1rem var(--admin-panel-shadow);
 }
 
 .publicationControl h2,
@@ -1035,7 +1020,7 @@
     background: var(--admin-surface);
     border: 1px solid var(--admin-border);
     border-radius: 0.75rem;
-    box-shadow: 0 1rem 2rem rgb(15 23 42 / 16%);
+    box-shadow: var(--byzon-shadow-md);
     scroll-snap-type: none;
   }
 
