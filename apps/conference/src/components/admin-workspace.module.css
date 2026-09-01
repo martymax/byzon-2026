@@ -453,6 +453,7 @@
 .filterButton:focus-visible,
 .navigation a:focus-visible,
 .roleControl select:focus-visible,
+.tableWrap:focus-visible,
 .dialog button:focus-visible,
 .dialog input:focus-visible {
   outline: 3px solid var(--admin-focus);
@@ -589,6 +590,31 @@
   min-width: 48rem;
   border-collapse: collapse;
   background: var(--admin-surface);
+}
+
+.importTable {
+  min-width: 72rem;
+}
+
+.identityCell > *,
+.referenceCell > * {
+  display: block;
+}
+
+.identityCell strong,
+.identityCell span,
+.referenceCell span {
+  overflow-wrap: anywhere;
+}
+
+.identityCell small,
+.referenceCell small {
+  margin-top: 0.2rem;
+  color: var(--admin-muted);
+}
+
+.referenceCell {
+  font-variant-numeric: tabular-nums;
 }
 
 .table caption {

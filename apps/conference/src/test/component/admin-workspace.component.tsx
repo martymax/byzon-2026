@@ -207,6 +207,13 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(screen.getByRole('button', { name: /apply/i }))
       .not.toBeInTheDocument();
+    expect(document.body.textContent).toContain('Alice Participant');
+    expect(document.body.textContent).toContain('alice@example.test');
+    expect(document.body.textContent).toContain('Vstupenka 7100001');
+    expect(document.body.textContent).toContain(
+      'Účastník z „prodeje na jméno“',
+    );
+    expect(document.body.textContent).not.toContain('kontakt •••');
     await expectComponentToPassAxe(adminRoot());
   });
 

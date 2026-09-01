@@ -28,16 +28,89 @@ const headers = [
   'ID dokladu',
   'Stav',
   'E-mail',
+  'Telefon',
+  'Jméno',
+  'Příjmení',
+  'Jméno (prodej na jméno)',
+  'Příjmení (prodej na jméno)',
+  'E-mail (prodej na jméno)',
+  'Název firmy (prodej na jméno)',
+  'Pozice (prodej na jméno)',
+  'Telefonní kontakt (prodej na jméno)',
 ];
 
 const csv = (rows: readonly (readonly string[])[]) =>
   [headers, ...rows].map((row) => row.join(';')).join('\r\n');
 
 const sourceRows = [
-  ['7000001', 'ABC123', '1', '80000001', 'Uhrazeno', 'one@example.test'],
-  ['', '', '2', '80000001', 'Uhrazeno', 'one@example.test'],
-  ['7000002', 'DEF456', '1', '80000002', 'Neuhrazeno', 'two@example.test'],
-  ['7000003', 'GHI789', '1', '80000003', 'STORNO', 'three@example.test'],
+  [
+    '7000001',
+    'ABC123',
+    '1',
+    '80000001',
+    'Uhrazeno',
+    'buyer@example.test',
+    '+420111222333',
+    'Buyer',
+    'Person',
+    'Alice',
+    'Participant',
+    'alice@example.test',
+    'Example s.r.o.',
+    'CEO',
+    '+420777111222',
+  ],
+  [
+    '',
+    '',
+    '2',
+    '80000001',
+    'Uhrazeno',
+    'buyer@example.test',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ],
+  [
+    '7000002',
+    'DEF456',
+    '1',
+    '80000002',
+    'Neuhrazeno',
+    'two@example.test',
+    '+420222333444',
+    'Unpaid',
+    'Buyer',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ],
+  [
+    '7000003',
+    'GHI789',
+    '1',
+    '80000003',
+    'STORNO',
+    'three@example.test',
+    '',
+    'Third',
+    'Buyer',
+    'Cancelled',
+    'Participant',
+    'cancelled@example.test',
+    '',
+    '',
+    '',
+  ],
 ] as const;
 
 const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
@@ -79,7 +152,7 @@ describe('SimpleShopTicketSourceAdapter', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('uses only allowlisted GETs and returns a PII/code-free source snapshot', async () => {
+  it('uses only allowlisted GETs and resolves explicit participant contacts', async () => {
     const fetch = successfulFetch();
     const snapshot = await createSimpleShopTicketSourceAdapter({
       ...credentials,
@@ -119,6 +192,12 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000001',
         sourceStatus: 'paid',
         quantity: 1,
+        contactName: 'Alice Participant',
+        contactEmail: 'alice@example.test',
+        contactCompany: 'Example s.r.o.',
+        contactPosition: 'CEO',
+        contactPhone: '+420777111222',
+        identitySource: 'named_participant',
       },
       {
         sourceRowNumber: 4,
@@ -126,6 +205,12 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000002',
         sourceStatus: 'unpaid',
         quantity: 1,
+        contactName: 'Unpaid Buyer',
+        contactEmail: 'two@example.test',
+        contactCompany: null,
+        contactPosition: null,
+        contactPhone: '+420222333444',
+        identitySource: 'manual_review',
       },
       {
         sourceRowNumber: 5,
@@ -133,6 +218,12 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000003',
         sourceStatus: 'cancelled',
         quantity: 1,
+        contactName: 'Cancelled Participant',
+        contactEmail: 'cancelled@example.test',
+        contactCompany: null,
+        contactPosition: null,
+        contactPhone: null,
+        identitySource: 'named_participant',
       },
     ]);
     const serialized = JSON.stringify(snapshot);
@@ -140,12 +231,85 @@ describe('SimpleShopTicketSourceAdapter', () => {
       'ABC123',
       'DEF456',
       'GHI789',
-      'one@example.test',
       credentials.email,
       credentials.apiKey,
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
+    expect(serialized).toContain('alice@example.test');
+    expect(serialized).toContain('Alice Participant');
+  });
+
+  it('uses a buyer only for a single paid ticket and flags group buyers for review', async () => {
+    const identityRows = [
+      [
+        '7000010',
+        'SINGLE1',
+        '1',
+        '8000010',
+        'Uhrazeno',
+        'single@example.test',
+        '',
+        'Single',
+        'Buyer',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
+      [
+        '7000020',
+        'GROUP01',
+        '1',
+        '8000020',
+        'Uhrazeno',
+        'group@example.test',
+        '',
+        'Group',
+        'Buyer',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
+      [
+        '7000021',
+        'GROUP02',
+        '1',
+        '8000020',
+        'Uhrazeno',
+        'group@example.test',
+        '',
+        'Group',
+        'Buyer',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
+    ];
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.pathname === '/2.0/product/143958/'
+        ? jsonResponse(product)
+        : jsonResponse({ csv: csv(identityRows) });
+    });
+
+    const snapshot = await createSimpleShopTicketSourceAdapter({
+      ...credentials,
+      fetch,
+      maxAttempts: 1,
+    }).fetchPreviewSource();
+
+    expect(
+      snapshot.records.map(({ identitySource }) => identitySource),
+    ).toEqual(['single_paid_ticket_buyer', 'manual_review', 'manual_review']);
   });
 
   it('rejects a different host and every non-GET method', () => {

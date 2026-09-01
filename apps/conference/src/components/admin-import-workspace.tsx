@@ -5,6 +5,7 @@ import {
   ticketImportApplyRequestSchema,
   type TicketImportApplyRequest,
   type TicketImportApplyResponse,
+  type TicketImportIdentitySource,
   type TicketImportPreviewResponse,
   type TicketImportRowStatus,
 } from '@byzon/domain/contracts/ticket-import';
@@ -78,6 +79,22 @@ const sourceStatusLabels = {
   refunded: 'Refund',
   unknown: 'Neznámý',
 } as const;
+
+const identitySourceLabels: Record<TicketImportIdentitySource, string> = {
+  named_participant: 'Účastník z „prodeje na jméno“',
+  single_paid_ticket_buyer: 'Kupující = účastník (1 uhrazená vstupenka)',
+  manual_review: 'Kontakt kupujícího · vyžaduje ruční přiřazení',
+};
+
+const companyAndPosition = (row: {
+  readonly contactCompany: string | null;
+  readonly contactPosition: string | null;
+}): string | null => {
+  const values = [row.contactCompany, row.contactPosition].filter(
+    (value): value is string => value !== null,
+  );
+  return values.length > 0 ? values.join(' · ') : null;
+};
 
 export const AdminImportWorkspace = () => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
@@ -254,7 +271,8 @@ export const AdminImportWorkspace = () => {
         <h1>Import účastníků</h1>
         <p>
           Načtěte účastníky serverovým read-only API spojením se SimpleShopem.
-          Preview je sanitizované a v tomto kroku nevytváří účty, přístupy ani
+          Chráněné provozní preview zobrazuje organizátorovi identifikační a
+          kontaktní údaje, ale v tomto kroku nevytváří účty, přístupy ani
           e-mailové pozvánky.
         </p>
       </header>
@@ -392,13 +410,25 @@ export const AdminImportWorkspace = () => {
               ))}
             </select>
           </label>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <caption>Maskovaný immutable rozdíl importu.</caption>
+          <p className={styles.callout}>
+            Preview obsahuje osobní údaje pro troubleshooting. Je dostupné jen
+            oprávněnému administrátorovi, neposílá se do cache ani browserového
+            úložiště a jeho načtení se zapisuje do auditu.
+          </p>
+          <div
+            aria-label="Tabulka chráněného preview importu; vodorovně posouvatelná"
+            className={styles.tableWrap}
+            tabIndex={0}
+          >
+            <table className={`${styles.table} ${styles.importTable}`}>
+              <caption>
+                Chráněný immutable rozdíl importu se jmény a kontakty.
+              </caption>
               <thead>
                 <tr>
                   <th scope="col">Řádek</th>
                   <th scope="col">Účastník</th>
+                  <th scope="col">SimpleShop reference</th>
                   <th scope="col">Zdrojový stav</th>
                   <th scope="col">Stav</th>
                   <th scope="col">Původní → nový</th>
@@ -409,12 +439,21 @@ export const AdminImportWorkspace = () => {
                 {visibleRows.map((row) => (
                   <tr key={row.rowId}>
                     <td>{row.sourceRowNumber}</td>
-                    <td>
-                      {row.displayName}
-                      <br />
-                      <small>
-                        {row.maskedContact} · •{row.referenceSuffix}
-                      </small>
+                    <td className={styles.identityCell}>
+                      <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
+                      <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
+                      <small>{identitySourceLabels[row.identitySource]}</small>
+                      {companyAndPosition(row) ? (
+                        <small>{companyAndPosition(row)}</small>
+                      ) : null}
+                      {row.contactPhone ? (
+                        <small>{row.contactPhone}</small>
+                      ) : null}
+                    </td>
+                    <td className={styles.referenceCell}>
+                      <span>Vstupenka {row.sourceTicketId}</span>
+                      <small>Doklad {row.sourceOrderId}</small>
+                      <small>Preview •{row.referenceSuffix}</small>
                     </td>
                     <td>{sourceStatusLabels[row.sourceStatus]}</td>
                     <td>
@@ -443,7 +482,8 @@ export const AdminImportWorkspace = () => {
                 <li className={styles.dataCard} key={row.rowId}>
                   <div className={styles.panelHeader}>
                     <strong>
-                      Řádek {row.sourceRowNumber} · {row.displayName}
+                      Řádek {row.sourceRowNumber} ·{' '}
+                      {row.contactName ?? 'Jméno neuvedeno'}
                     </strong>
                     <span
                       className={`${styles.statusBadge} ${statusClass[row.status]}`}
@@ -452,9 +492,26 @@ export const AdminImportWorkspace = () => {
                     </span>
                   </div>
                   <dl>
-                    <dt>Kontakt</dt>
+                    <dt>E-mail</dt>
+                    <dd>{row.contactEmail ?? 'Neuveden'}</dd>
+                    <dt>Zdroj identity</dt>
+                    <dd>{identitySourceLabels[row.identitySource]}</dd>
+                    {companyAndPosition(row) ? (
+                      <>
+                        <dt>Firma / pozice</dt>
+                        <dd>{companyAndPosition(row)}</dd>
+                      </>
+                    ) : null}
+                    {row.contactPhone ? (
+                      <>
+                        <dt>Telefon</dt>
+                        <dd>{row.contactPhone}</dd>
+                      </>
+                    ) : null}
+                    <dt>SimpleShop reference</dt>
                     <dd>
-                      {row.maskedContact} · •{row.referenceSuffix}
+                      Vstupenka {row.sourceTicketId} · doklad{' '}
+                      {row.sourceOrderId} · preview •{row.referenceSuffix}
                     </dd>
                     <dt>Stav</dt>
                     <dd>

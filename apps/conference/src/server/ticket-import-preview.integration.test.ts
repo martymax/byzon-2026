@@ -60,6 +60,12 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200001',
         sourceStatus: 'paid',
         quantity: 1,
+        contactName: 'Existing Participant',
+        contactEmail: 'existing@example.test',
+        contactCompany: 'Example s.r.o.',
+        contactPosition: 'CEO',
+        contactPhone: '+420777111222',
+        identitySource: 'named_participant',
       },
       {
         sourceRowNumber: 3,
@@ -67,6 +73,12 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200002',
         sourceStatus: 'paid',
         quantity: 1,
+        contactName: 'Single Ticket Buyer',
+        contactEmail: 'buyer@example.test',
+        contactCompany: null,
+        contactPosition: null,
+        contactPhone: null,
+        identitySource: 'single_paid_ticket_buyer',
       },
       {
         sourceRowNumber: 4,
@@ -74,6 +86,12 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200003',
         sourceStatus: 'unpaid',
         quantity: 1,
+        contactName: 'Unpaid Buyer',
+        contactEmail: 'unpaid@example.test',
+        contactCompany: null,
+        contactPosition: null,
+        contactPhone: null,
+        identitySource: 'manual_review',
       },
     ],
     snapshotDigest: 'a'.repeat(64),
@@ -148,6 +166,10 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
 
     expect(response.status).toBe(200);
     const body = ticketImportPreviewResponseSchema.parse(await response.json());
+    expect(body.rows[0]).toMatchObject({
+      contactName: 'Existing Participant',
+      contactEmail: 'existing@example.test',
+    });
     expect(body.summary).toEqual({
       total: 3,
       new: 1,
@@ -220,5 +242,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
       applyAvailable: false,
     });
     expect(JSON.stringify({ batch, rows, audit })).not.toContain('SAFE01');
+    expect(JSON.stringify({ batch, rows, audit })).not.toContain(
+      'existing@example.test',
+    );
   });
 });

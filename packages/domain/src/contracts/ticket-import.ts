@@ -76,12 +76,18 @@ const safeFileNameSchema = z
     'File name contains path, control, bidi or markup characters',
   );
 
-const maskedContactSchema = safeInlineTextSchema(120).refine(
-  (value) =>
-    /[*•…]/.test(value) &&
-    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
-  'Import contact must remain masked',
-);
+const optionalContactTextSchema = (maximum: number) =>
+  safeInlineTextSchema(maximum).nullable();
+
+export const ticketImportIdentitySourceSchema = z.enum([
+  'named_participant',
+  'single_paid_ticket_buyer',
+  'manual_review',
+]);
+
+export type TicketImportIdentitySource = z.infer<
+  typeof ticketImportIdentitySourceSchema
+>;
 
 export const ticketImportFileSourceSchema = z
   .strictObject({
@@ -237,6 +243,7 @@ export const ticketImportIssueCodeSchema = z.enum([
   'missing_status',
   'unknown_status',
   'state_conflict',
+  'participant_identity_manual_review',
 ]);
 
 export type TicketImportIssueCode = z.infer<typeof ticketImportIssueCodeSchema>;
@@ -251,8 +258,14 @@ export const ticketImportRowSchema = z
     rowId: uuidSchema,
     sourceRowNumber: z.number().int().positive().max(1_000_000),
     referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
-    displayName: safeInlineTextSchema(160),
-    maskedContact: maskedContactSchema,
+    sourceTicketId: z.string().regex(/^\d{1,64}$/),
+    sourceOrderId: z.string().regex(/^\d{1,64}$/),
+    contactName: optionalContactTextSchema(160),
+    contactEmail: z.email().max(320).nullable(),
+    contactCompany: optionalContactTextSchema(160),
+    contactPosition: optionalContactTextSchema(160),
+    contactPhone: optionalContactTextSchema(64),
+    identitySource: ticketImportIdentitySourceSchema,
     sourceStatus: ticketImportSourceStatusSchema,
     status: ticketImportRowStatusSchema,
     incomingState: ticketImportTicketStateSchema.nullable(),
@@ -267,6 +280,26 @@ export const ticketImportRowSchema = z
         message,
       });
     };
+
+    if (row.identitySource !== 'manual_review' && row.contactEmail === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['contactEmail'],
+        message: 'Resolved participant identity requires an email address',
+      });
+    }
+    if (
+      row.identitySource === 'manual_review' &&
+      !row.issues.some(
+        ({ code }) => code === 'participant_identity_manual_review',
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['issues'],
+        message: 'Manual participant identity requires a review issue',
+      });
+    }
 
     switch (row.status) {
       case 'new':

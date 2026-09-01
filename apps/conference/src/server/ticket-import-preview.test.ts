@@ -55,6 +55,12 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000001',
       sourceStatus: 'paid',
       quantity: 1,
+      contactName: 'Alice Participant',
+      contactEmail: 'alice@example.test',
+      contactCompany: 'Example s.r.o.',
+      contactPosition: 'CEO',
+      contactPhone: '+420777111222',
+      identitySource: 'named_participant',
     },
     {
       sourceRowNumber: 4,
@@ -62,6 +68,12 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000002',
       sourceStatus: 'unpaid',
       quantity: 1,
+      contactName: 'Unpaid Buyer',
+      contactEmail: 'unpaid@example.test',
+      contactCompany: null,
+      contactPosition: null,
+      contactPhone: null,
+      identitySource: 'manual_review',
     },
     {
       sourceRowNumber: 5,
@@ -69,6 +81,12 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000003',
       sourceStatus: 'cancelled',
       quantity: 1,
+      contactName: 'Cancelled Participant',
+      contactEmail: 'cancelled@example.test',
+      contactCompany: null,
+      contactPosition: null,
+      contactPhone: null,
+      identitySource: 'named_participant',
     },
   ],
   snapshotDigest: 'a'.repeat(64),
@@ -126,7 +144,7 @@ const dependencies = (
 });
 
 describe('SimpleShop ticket import preview handler', () => {
-  it('authorizes first, returns a private sanitized preview and saves no ticket codes or PII', async () => {
+  it('authorizes first, returns private operational contacts and persists no PII', async () => {
     const previewStore = store();
     const adapter = { fetchPreviewSource: vi.fn(async () => snapshot) };
     const response = await previewSimpleShopTickets(request(), ids.event, {
@@ -147,20 +165,35 @@ describe('SimpleShop ticket import preview handler', () => {
       '7000003',
     ]);
     expect(previewStore.savePreview).toHaveBeenCalledTimes(1);
-    const serialized = JSON.stringify({
-      response: await response.json(),
-      saved: vi.mocked(previewStore.savePreview).mock.calls,
+    const body = await response.json();
+    expect(body.rows[0]).toMatchObject({
+      contactName: 'Alice Participant',
+      contactEmail: 'alice@example.test',
+      contactCompany: 'Example s.r.o.',
+      contactPosition: 'CEO',
+      contactPhone: '+420777111222',
+      identitySource: 'named_participant',
+      sourceTicketId: '7000001',
+      sourceOrderId: '80000001',
     });
+    const serializedResponse = JSON.stringify(body);
+    const serializedPersistence = JSON.stringify(
+      vi.mocked(previewStore.savePreview).mock.calls,
+    );
     for (const forbidden of [
       'RAW-TICKET-CODE',
-      'person@example.test',
       'SIMPLESHOP_API_KEY',
       'SIMPLESHOP_API_EMAIL',
     ]) {
-      expect(serialized).not.toContain(forbidden);
+      expect(serializedResponse).not.toContain(forbidden);
+      expect(serializedPersistence).not.toContain(forbidden);
     }
-    expect(serialized).toContain('simpleshop_api');
-    expect(serialized).toContain('unknown_status');
+    for (const pii of ['Alice Participant', 'alice@example.test']) {
+      expect(serializedResponse).toContain(pii);
+      expect(serializedPersistence).not.toContain(pii);
+    }
+    expect(serializedResponse).toContain('simpleshop_api');
+    expect(serializedResponse).toContain('unknown_status');
   });
 
   it.each([

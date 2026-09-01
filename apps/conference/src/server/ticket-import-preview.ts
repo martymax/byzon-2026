@@ -46,8 +46,11 @@ export interface ExistingTicketRecord {
 
 interface PersistedPreviewRow {
   readonly id: string;
-  readonly source: SimpleShopTicketSourceRecord;
-  readonly preview: TicketImportRow;
+  readonly source: Pick<
+    SimpleShopTicketSourceRecord,
+    'sourceRowNumber' | 'externalId' | 'orderExternalId' | 'sourceStatus'
+  >;
+  readonly preview: Pick<TicketImportRow, 'incomingState' | 'issues'>;
 }
 
 export interface TicketImportPreviewStore {
@@ -61,7 +64,7 @@ export interface TicketImportPreviewStore {
     actorId: string;
     requestId: string;
     previewId: string;
-    snapshot: SimpleShopTicketSourceSnapshot;
+    snapshot: Pick<SimpleShopTicketSourceSnapshot, 'source' | 'snapshotDigest'>;
     rows: readonly PersistedPreviewRow[];
     summary: TicketImportSummary;
     createdAt: Date;
@@ -283,13 +286,27 @@ const rowFor = (
 ): TicketImportRow => {
   const suffix = referenceSuffix(rowId);
   const currentState = existing ? currentStateFor(existing.status) : null;
+  const participant = {
+    referenceSuffix: suffix,
+    sourceTicketId: source.externalId,
+    sourceOrderId: source.orderExternalId,
+    contactName: source.contactName,
+    contactEmail: source.contactEmail,
+    contactCompany: source.contactCompany,
+    contactPosition: source.contactPosition,
+    contactPhone: source.contactPhone,
+    identitySource: source.identitySource,
+  } as const;
+  const identityIssue = {
+    code: 'participant_identity_manual_review' as const,
+    message:
+      'Chybí potvrzený účastnický e-mail; kontakt kupujícího slouží pouze pro ruční dořešení.',
+  };
   if (source.sourceStatus !== 'paid') {
     return {
       rowId,
       sourceRowNumber: source.sourceRowNumber,
-      referenceSuffix: suffix,
-      displayName: `Účastník •${suffix}`,
-      maskedContact: 'kontakt •••',
+      ...participant,
       sourceStatus: source.sourceStatus,
       status: 'unknown',
       incomingState: null,
@@ -299,16 +316,27 @@ const rowFor = (
           code: 'unknown_status',
           message: 'Zdrojový stav nemá schválené mapování pro apply.',
         },
+        ...(source.identitySource === 'manual_review' ? [identityIssue] : []),
       ],
+    };
+  }
+  if (source.identitySource === 'manual_review') {
+    return {
+      rowId,
+      sourceRowNumber: source.sourceRowNumber,
+      ...participant,
+      sourceStatus: source.sourceStatus,
+      status: 'conflict',
+      incomingState: null,
+      currentState,
+      issues: [identityIssue],
     };
   }
   if (!existing) {
     return {
       rowId,
       sourceRowNumber: source.sourceRowNumber,
-      referenceSuffix: suffix,
-      displayName: `Účastník •${suffix}`,
-      maskedContact: 'kontakt •••',
+      ...participant,
       sourceStatus: source.sourceStatus,
       status: 'new',
       incomingState: 'active',
@@ -320,9 +348,7 @@ const rowFor = (
     return {
       rowId,
       sourceRowNumber: source.sourceRowNumber,
-      referenceSuffix: suffix,
-      displayName: `Účastník •${suffix}`,
-      maskedContact: 'kontakt •••',
+      ...participant,
       sourceStatus: source.sourceStatus,
       status: 'unchanged',
       incomingState: 'active',
@@ -333,9 +359,7 @@ const rowFor = (
   return {
     rowId,
     sourceRowNumber: source.sourceRowNumber,
-    referenceSuffix: suffix,
-    displayName: `Účastník •${suffix}`,
-    maskedContact: 'kontakt •••',
+    ...participant,
     sourceStatus: source.sourceStatus,
     status: 'conflict',
     incomingState: 'active',
@@ -381,10 +405,16 @@ export const buildTicketImportPreview = (input: {
   }
   const rows = input.snapshot.records.map((source) => {
     const id = input.generateId();
+    const preview = rowFor(source, existingById.get(source.externalId), id);
     return {
       id,
-      source,
-      preview: rowFor(source, existingById.get(source.externalId), id),
+      source: {
+        sourceRowNumber: source.sourceRowNumber,
+        externalId: source.externalId,
+        orderExternalId: source.orderExternalId,
+        sourceStatus: source.sourceStatus,
+      },
+      preview,
     };
   });
   const previewRows = rows.map(({ preview }) => preview);
@@ -400,7 +430,17 @@ export const buildTicketImportPreview = (input: {
     rows: previewRows,
     summary: summaryFor(previewRows),
   });
-  return { response, rows };
+  return {
+    response,
+    rows: rows.map(({ id, source, preview }) => ({
+      id,
+      source,
+      preview: {
+        incomingState: preview.incomingState,
+        issues: preview.issues,
+      },
+    })),
+  };
 };
 
 const requireDatabaseAccess = async (
@@ -597,7 +637,10 @@ export const previewSimpleShopTickets = async (
         ? requestId
         : generateId(),
       previewId,
-      snapshot,
+      snapshot: {
+        source: snapshot.source,
+        snapshotDigest: snapshot.snapshotDigest,
+      },
       rows: built.rows,
       summary: built.response.summary,
       createdAt,

@@ -5,6 +5,7 @@ import {
   SIMPLESHOP_TICKET_PRODUCT_ID,
   TICKET_IMPORT_MAX_PREVIEW_ROWS,
   ticketImportSimpleShopSourceSchema,
+  type TicketImportIdentitySource,
   type TicketImportSource,
   type TicketImportSourceStatus,
 } from '@byzon/domain/contracts/ticket-import';
@@ -27,6 +28,12 @@ export interface SimpleShopTicketSourceRecord {
   readonly orderExternalId: string;
   readonly sourceStatus: TicketImportSourceStatus;
   readonly quantity: number;
+  readonly contactName: string | null;
+  readonly contactEmail: string | null;
+  readonly contactCompany: string | null;
+  readonly contactPosition: string | null;
+  readonly contactPhone: string | null;
+  readonly identitySource: TicketImportIdentitySource;
 }
 
 export interface SimpleShopTicketSourceSnapshot {
@@ -98,8 +105,63 @@ const requiredHeaders = [
   'Počet',
   'ID dokladu',
   'Stav',
+  'E-mail',
+  'Telefon',
+  'Jméno',
+  'Příjmení',
+  'Jméno (prodej na jméno)',
+  'Příjmení (prodej na jméno)',
+  'E-mail (prodej na jméno)',
+  'Název firmy (prodej na jméno)',
+  'Pozice (prodej na jméno)',
+  'Telefonní kontakt (prodej na jméno)',
 ] as const;
 const MAX_EXTERNAL_ID_LENGTH = 64;
+const unsafeContactPattern =
+  /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/;
+
+const optionalSourceText = (value: string, maximum: number): string | null => {
+  const normalized = value.trim().replace(/\s+/gu, ' ');
+  if (normalized.length === 0) return null;
+  if (normalized.length > maximum || unsafeContactPattern.test(normalized)) {
+    throw new SimpleShopTicketSourceError('invalid_payload');
+  }
+  return normalized;
+};
+
+const optionalEmail = (value: string): string | null => {
+  const normalized = optionalSourceText(value, 320)?.toLocaleLowerCase('en-US');
+  if (normalized === undefined || normalized === null) return null;
+  const parsed = z.email().max(320).safeParse(normalized);
+  if (!parsed.success) {
+    throw new SimpleShopTicketSourceError('invalid_payload');
+  }
+  return parsed.data;
+};
+
+const fullName = (firstName: string, lastName: string): string | null => {
+  const parts = [
+    optionalSourceText(firstName, 80),
+    optionalSourceText(lastName, 80),
+  ].filter((value): value is string => value !== null);
+  return parts.length === 0 ? null : parts.join(' ');
+};
+
+interface ParsedSimpleShopTicketRow {
+  readonly sourceRowNumber: number;
+  readonly externalId: string;
+  readonly orderExternalId: string;
+  readonly sourceStatus: TicketImportSourceStatus;
+  readonly quantity: number;
+  readonly namedContactName: string | null;
+  readonly namedContactEmail: string | null;
+  readonly namedContactCompany: string | null;
+  readonly namedContactPosition: string | null;
+  readonly namedContactPhone: string | null;
+  readonly buyerName: string | null;
+  readonly buyerEmail: string | null;
+  readonly buyerPhone: string | null;
+}
 
 const sourceStatusFor = (value: string): TicketImportSourceStatus => {
   switch (value) {
@@ -257,7 +319,7 @@ const parseExport = (
 
   const externalIds = new Set<string>();
   const ticketCodes = new Set<string>();
-  const records: SimpleShopTicketSourceRecord[] = [];
+  const parsedTicketRows: ParsedSimpleShopTicketRow[] = [];
   const codeByteLengths: number[] = [];
   const codeClasses = new Set<string>();
   const observedStatuses: Record<TicketImportSourceStatus, number> = {
@@ -314,21 +376,94 @@ const parseExport = (
       codeClasses.add(item),
     );
     observedStatuses[sourceStatus] += 1;
-    records.push({
+    parsedTicketRows.push({
       sourceRowNumber,
       externalId,
       orderExternalId,
       sourceStatus,
       quantity,
+      namedContactName: fullName(
+        at(row, 'Jméno (prodej na jméno)'),
+        at(row, 'Příjmení (prodej na jméno)'),
+      ),
+      namedContactEmail: optionalEmail(at(row, 'E-mail (prodej na jméno)')),
+      namedContactCompany: optionalSourceText(
+        at(row, 'Název firmy (prodej na jméno)'),
+        160,
+      ),
+      namedContactPosition: optionalSourceText(
+        at(row, 'Pozice (prodej na jméno)'),
+        160,
+      ),
+      namedContactPhone: optionalSourceText(
+        at(row, 'Telefonní kontakt (prodej na jméno)'),
+        64,
+      ),
+      buyerName: fullName(at(row, 'Jméno'), at(row, 'Příjmení')),
+      buyerEmail: optionalEmail(at(row, 'E-mail')),
+      buyerPhone: optionalSourceText(at(row, 'Telefon'), 64),
     });
-    if (records.length > maxPreviewRows) {
+    if (parsedTicketRows.length > maxPreviewRows) {
       throw new SimpleShopTicketSourceError('record_limit_exceeded');
     }
   });
 
-  if (records.length === 0 || codeByteLengths.some((length) => length === 0)) {
+  if (
+    parsedTicketRows.length === 0 ||
+    codeByteLengths.some((length) => length === 0)
+  ) {
     throw new SimpleShopTicketSourceError('invalid_payload');
   }
+  const paidTicketCountByOrder = new Map<string, number>();
+  for (const row of parsedTicketRows) {
+    if (row.sourceStatus !== 'paid') continue;
+    paidTicketCountByOrder.set(
+      row.orderExternalId,
+      (paidTicketCountByOrder.get(row.orderExternalId) ?? 0) + 1,
+    );
+  }
+  const records: SimpleShopTicketSourceRecord[] = parsedTicketRows.map(
+    (row) => {
+      const hasNamedParticipant = row.namedContactEmail !== null;
+      const canUseSingleTicketBuyer =
+        row.sourceStatus === 'paid' &&
+        paidTicketCountByOrder.get(row.orderExternalId) === 1 &&
+        row.buyerEmail !== null;
+      const identitySource: TicketImportIdentitySource = hasNamedParticipant
+        ? 'named_participant'
+        : canUseSingleTicketBuyer
+          ? 'single_paid_ticket_buyer'
+          : 'manual_review';
+      return {
+        sourceRowNumber: row.sourceRowNumber,
+        externalId: row.externalId,
+        orderExternalId: row.orderExternalId,
+        sourceStatus: row.sourceStatus,
+        quantity: row.quantity,
+        contactName:
+          identitySource === 'named_participant'
+            ? row.namedContactName
+            : row.buyerName,
+        contactEmail:
+          identitySource === 'named_participant'
+            ? row.namedContactEmail
+            : row.buyerEmail,
+        contactCompany:
+          identitySource === 'named_participant'
+            ? row.namedContactCompany
+            : null,
+        contactPosition:
+          identitySource === 'named_participant'
+            ? row.namedContactPosition
+            : null,
+        contactPhone:
+          identitySource === 'named_participant'
+            ? row.namedContactPhone
+            : row.buyerPhone,
+        identitySource,
+      };
+    },
+  );
   const source = ticketImportSimpleShopSourceSchema.parse({
     kind: 'simpleshop_api',
     productId: SIMPLESHOP_TICKET_PRODUCT_ID,
