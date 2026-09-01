@@ -1,5 +1,25 @@
 # BYZON 2026 – handover
 
+## Aktivní navázání – redesign administrace (`AUX`, 1. 9. 2026)
+
+- Autoritativní specifikace i jediný tracker jsou v
+  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.32 obsahuje obousměrné
+  AUX→F4/P/CS mapování a per-route integrační vlastníky.
+- `AUX-00B` je dokončený na větvi
+  `track/admin-ux/aux-00b-governance`. Další nezablokovaný krok je foundation
+  `AUX-01A`/`AUX-01C`, potom primitives a shell.
+- Každý tematický celek vzniká z aktuálního `main` na větvi
+  `track/admin-ux/<aux-id>-<název>`, projde security review → code review →
+  opravy a testy a podle explicitního zadání se sloučí do `main`.
+- `packages/ui`, root chrome, admin shell a sdílený admin CSS jsou během
+  foundations jediný hotspot. Po rozdělení rout vlastní lane route-local
+  komponenty a styly.
+- Asset read/resolver/upload/replace/remove má nový backendový úkol `P3-13`.
+  Do jeho integrace foto/logo UI nezobrazuje raw asset ID ani smyšlený náhled.
+- Fyzický nábor pěti pořadatelů, 25 UAT pokusů, device/browser evidence a
+  produkčně podobný staging zůstávají samostatným `AUX-00C`/`AUX-14` gate;
+  nelze je uzavřít pouze lokálními testy.
+
 ## Autoritativní navázání – scope 31. 8. 2026
 
 Tato sekce je novější než všechny starší poznámky níže a má při
