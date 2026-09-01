@@ -620,8 +620,11 @@ Názvy se mohou upravit pouze konzistentně ve schema, `.env.example`, Railway a
 | `BETTER_AUTH_SECRET` | ano | ne | ano | Podpis/šifrování auth; minimální délka dle knihovny. |
 | `BETTER_AUTH_URL` | ano | ne | ne | Kanonický auth origin, bez wildcardu. |
 | `RATE_LIMIT_SUBJECT_SECRET` | ano | ne | ano | Samostatný environment-scoped HMAC key pro opaque rate-limit subjecty. |
-| `MAIL_PROVIDER` | ano | ano | ne | `sink` v dev/test, schválený provider v prod. |
+| `MAIL_PROVIDER` | ano | ano | ne | `sink` v dev/test, `mailpit` pouze ve stagingu, schválený provider v prod. |
 | `MAIL_API_KEY` | ano | ano | ano | Provider credential. |
+| `MAILPIT_API_URL` | ano | ne | ne | Privátní staging URL Mailpit HTTP API. |
+| `MAILPIT_API_USERNAME` | ano | ne | ano | Staging-only Mailpit send API identita. |
+| `MAILPIT_API_PASSWORD` | ano | ne | ano | Staging-only Mailpit send API credential. |
 | `MAIL_FROM` | ano | ano | ne | Ověřený sender. |
 | `MAIL_REPLY_TO` | ano | ano | ne | Organizační podpora. |
 | `STORAGE_ENDPOINT` | ano | ano | ne | S3-compatible endpoint. |

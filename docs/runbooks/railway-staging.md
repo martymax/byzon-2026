@@ -111,6 +111,28 @@ jen v dev/test. Neúplná staging/produkční konfigurace failne zavřeně a mag
 link neodešle. `/` i `/prihlaseni` posílají požadavek přímo do Better Auth,
 nepoužívají ticketovou aktivaci a neznámá identita se sama nevytvoří.
 
+Staging používá samostatnou Railway službu `mailpit` na připnutém image
+`axllent/mailpit:v1.31.0`. Zprávy se zachytávají do volume `/data`, po sedmi
+dnech expirují a nikam se nepřeposílají. Web posílá přes chráněné privátní API
+`http://mailpit.railway.internal:8025`; veřejné UI
+`https://mailpit-staging-3138.up.railway.app` vyžaduje Basic Auth uložený v
+`MP_UI_AUTH` u služby `mailpit`. Credential se nesmí kopírovat do aplikace ani
+do repozitáře.
+
+Webová staging konfigurace:
+
+```text
+MAIL_PROVIDER=mailpit
+MAILPIT_API_URL=http://mailpit.railway.internal:8025
+MAILPIT_API_USERNAME=byzon
+MAILPIT_API_PASSWORD=<hodnota odpovídající MP_SEND_API_AUTH>
+MAIL_FROM=login@app.byzon.cz
+MAIL_REPLY_TO=<organizacni podpora>
+```
+
+`mailpit` je schématem výslovně povolen pouze pro `APP_ENV=staging`; produkční
+start s touto hodnotou selže. Pro produkci dál platí následující Resend sada.
+
 Před produkční invitation batchí musí odesílací doména projít SPF, DKIM,
 DMARC a deliverability smoke. Staging do té doby používá pouze bezpečný
 providerový testovací režim nebo schválené syntetické adresy; nesmí odesílat

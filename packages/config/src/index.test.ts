@@ -154,6 +154,28 @@ describe('conference authentication environment', () => {
       readConferenceEnv({ ...stagingBase, MAIL_PROVIDER: 'sink' }),
     ).toThrow();
   });
+
+  it('allows complete Mailpit configuration only in staging', () => {
+    const mailpit = {
+      ...stagingBase,
+      MAIL_PROVIDER: 'mailpit',
+      MAILPIT_API_URL: 'http://mailpit.railway.internal:8025',
+      MAILPIT_API_USERNAME: 'byzon',
+      MAILPIT_API_PASSWORD: 'mailpit-secret',
+      MAIL_FROM: 'login@app.byzon.cz',
+      MAIL_REPLY_TO: 'podpora@byzon.cz',
+    } as const;
+
+    expect(readConferenceEnv(mailpit)).toMatchObject({
+      MAIL_PROVIDER: 'mailpit',
+    });
+    expect(() =>
+      readConferenceEnv({ ...mailpit, MAILPIT_API_PASSWORD: undefined }),
+    ).toThrow();
+    expect(() =>
+      readConferenceEnv({ ...mailpit, APP_ENV: 'production' }),
+    ).toThrow();
+  });
 });
 
 describe('SimpleShop server environment', () => {

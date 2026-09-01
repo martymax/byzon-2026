@@ -44,6 +44,15 @@ export interface ResendAuthMailProviderOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
+export interface MailpitAuthMailProviderOptions {
+  readonly apiUrl: string;
+  readonly username: string;
+  readonly password: string;
+  readonly from: string;
+  readonly replyTo: string;
+  readonly fetch?: typeof globalThis.fetch;
+}
+
 const escapeHtml = (value: string): string =>
   value
     .replaceAll('&', '&amp;')
@@ -51,6 +60,12 @@ const escapeHtml = (value: string): string =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+
+const createMagicLinkContent = (message: MagicLinkMessage) => ({
+  subject: 'Přihlášení do aplikace BYZON 2026',
+  text: `Přihlaste se jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.`,
+  html: `<p>Přihlaste se do aplikace BYZON 2026:</p><p><a href="${escapeHtml(message.url)}">Otevřít bezpečné přihlášení</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.</p>`,
+});
 
 export class ResendAuthMailProvider implements AuthMailProvider {
   readonly #apiKey: string;
@@ -69,7 +84,7 @@ export class ResendAuthMailProvider implements AuthMailProvider {
     const idempotencyKey = `byzon-magic-link-${createHash('sha256')
       .update(message.url)
       .digest('hex')}`;
-    const safeUrl = escapeHtml(message.url);
+    const content = createMagicLinkContent(message);
     let response: Response;
     try {
       response = await this.#fetch('https://api.resend.com/emails', {
@@ -85,9 +100,61 @@ export class ResendAuthMailProvider implements AuthMailProvider {
           from: this.#from,
           to: [message.to],
           reply_to: this.#replyTo,
-          subject: 'Přihlášení do aplikace BYZON 2026',
-          text: `Přihlaste se jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.`,
-          html: `<p>Přihlaste se do aplikace BYZON 2026:</p><p><a href="${safeUrl}">Otevřít bezpečné přihlášení</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.</p>`,
+          ...content,
+        }),
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch {
+      throw new MailDeliveryUnavailableError();
+    }
+    if (!response.ok) throw new MailDeliveryUnavailableError();
+  }
+}
+
+export class MailpitAuthMailProvider implements AuthMailProvider {
+  readonly #apiUrl: string;
+  readonly #authorization: string;
+  readonly #fetch: typeof globalThis.fetch;
+  readonly #from: string;
+  readonly #replyTo: string;
+
+  constructor(options: MailpitAuthMailProviderOptions) {
+    this.#apiUrl = options.apiUrl.replace(/\/+$/, '');
+    this.#authorization = `Basic ${Buffer.from(
+      `${options.username}:${options.password}`,
+      'utf8',
+    ).toString('base64')}`;
+    this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#from = options.from;
+    this.#replyTo = options.replyTo;
+  }
+
+  async sendMagicLink(message: MagicLinkMessage): Promise<void> {
+    const content = createMagicLinkContent(message);
+    const idempotencyKey = createHash('sha256')
+      .update(message.url)
+      .digest('hex');
+    let response: Response;
+    try {
+      response = await this.#fetch(`${this.#apiUrl}/api/v1/send`, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          authorization: this.#authorization,
+          'content-type': 'application/json',
+          'user-agent': 'byzon-conference/2026',
+        },
+        body: JSON.stringify({
+          From: { Email: this.#from, Name: 'BYZON' },
+          To: [{ Email: message.to }],
+          ReplyTo: [{ Email: this.#replyTo }],
+          Subject: content.subject,
+          Text: content.text,
+          HTML: content.html,
+          Headers: {
+            'X-BYZON-Idempotency-Key': idempotencyKey,
+          },
+          Tags: ['auth', 'staging'],
         }),
         signal: AbortSignal.timeout(8_000),
       });
@@ -106,6 +173,16 @@ export const createAuthMailProvider = (
   if (env.MAIL_PROVIDER === 'resend') {
     return new ResendAuthMailProvider({
       apiKey: env.MAIL_API_KEY!,
+      fetch,
+      from: env.MAIL_FROM!,
+      replyTo: env.MAIL_REPLY_TO!,
+    });
+  }
+  if (env.MAIL_PROVIDER === 'mailpit') {
+    return new MailpitAuthMailProvider({
+      apiUrl: env.MAILPIT_API_URL!,
+      username: env.MAILPIT_API_USERNAME!,
+      password: env.MAILPIT_API_PASSWORD!,
       fetch,
       from: env.MAIL_FROM!,
       replyTo: env.MAIL_REPLY_TO!,

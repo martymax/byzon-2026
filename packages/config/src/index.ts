@@ -35,12 +35,26 @@ const optionalMailValue = (maximum: number) =>
       .optional(),
   );
 
+const optionalMailUrl = z.preprocess(
+  railwayPlaceholderToUndefined,
+  z
+    .url()
+    .refine((value) => {
+      const protocol = new URL(value).protocol;
+      return protocol === 'http:' || protocol === 'https:';
+    }, 'Mail API URL must use HTTP or HTTPS')
+    .optional(),
+);
+
 const mailEnvSchema = {
   MAIL_PROVIDER: z.preprocess(
     railwayPlaceholderToUndefined,
-    z.enum(['sink', 'resend']).optional(),
+    z.enum(['sink', 'resend', 'mailpit']).optional(),
   ),
   MAIL_API_KEY: optionalMailValue(1_024),
+  MAILPIT_API_URL: optionalMailUrl,
+  MAILPIT_API_USERNAME: optionalMailValue(128),
+  MAILPIT_API_PASSWORD: optionalMailValue(1_024),
   MAIL_FROM: optionalMailValue(320),
   MAIL_REPLY_TO: optionalMailValue(320),
 } as const;
@@ -48,14 +62,24 @@ const mailEnvSchema = {
 const validateMailEnvironment = (
   value: {
     readonly APP_ENV: 'development' | 'test' | 'staging' | 'production';
-    readonly MAIL_PROVIDER?: 'sink' | 'resend' | undefined;
+    readonly MAIL_PROVIDER?: 'sink' | 'resend' | 'mailpit' | undefined;
     readonly MAIL_API_KEY?: string | undefined;
+    readonly MAILPIT_API_URL?: string | undefined;
+    readonly MAILPIT_API_USERNAME?: string | undefined;
+    readonly MAILPIT_API_PASSWORD?: string | undefined;
     readonly MAIL_FROM?: string | undefined;
     readonly MAIL_REPLY_TO?: string | undefined;
   },
   context: z.RefinementCtx,
 ) => {
-  const mailValues = [value.MAIL_API_KEY, value.MAIL_FROM, value.MAIL_REPLY_TO];
+  const mailValues = [
+    value.MAIL_API_KEY,
+    value.MAILPIT_API_URL,
+    value.MAILPIT_API_USERNAME,
+    value.MAILPIT_API_PASSWORD,
+    value.MAIL_FROM,
+    value.MAIL_REPLY_TO,
+  ];
   if (
     value.MAIL_PROVIDER === undefined &&
     mailValues.some((candidate) => candidate !== undefined)
@@ -68,12 +92,38 @@ const validateMailEnvironment = (
   }
   if (
     value.MAIL_PROVIDER === 'resend' &&
-    mailValues.some((candidate) => candidate === undefined)
+    [value.MAIL_API_KEY, value.MAIL_FROM, value.MAIL_REPLY_TO].some(
+      (candidate) => candidate === undefined,
+    )
   ) {
     context.addIssue({
       code: 'custom',
       path: ['MAIL_PROVIDER'],
       message: 'Resend requires MAIL_API_KEY, MAIL_FROM and MAIL_REPLY_TO',
+    });
+  }
+  if (
+    value.MAIL_PROVIDER === 'mailpit' &&
+    [
+      value.MAILPIT_API_URL,
+      value.MAILPIT_API_USERNAME,
+      value.MAILPIT_API_PASSWORD,
+      value.MAIL_FROM,
+      value.MAIL_REPLY_TO,
+    ].some((candidate) => candidate === undefined)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_PROVIDER'],
+      message:
+        'Mailpit requires MAILPIT_API_URL, MAILPIT_API_USERNAME, MAILPIT_API_PASSWORD, MAIL_FROM and MAIL_REPLY_TO',
+    });
+  }
+  if (value.MAIL_PROVIDER === 'mailpit' && value.APP_ENV !== 'staging') {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_PROVIDER'],
+      message: 'Mailpit is restricted to the staging environment',
     });
   }
   if (
