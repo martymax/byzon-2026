@@ -22,12 +22,18 @@ import {
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   supportSearchFixtures,
+  ticketImportApplyFixtures,
+  ticketImportApplyProblemFixtures,
   ticketImportPreviewFixtures,
+  ticketImportPreviewProblemFixtures,
 } from '@byzon/test-support/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminAnnouncementWorkspace } from '../../components/admin-announcement-workspace';
-import { AdminImportWorkspace } from '../../components/admin-import-workspace';
+import {
+  AdminImportWorkspace,
+  type AdminTicketUpdatePort,
+} from '../../components/admin-import-workspace';
 import { AdminEngagementWorkspace } from '../../components/admin-engagement-workspace';
 import {
   AdminOperationsWorkspace,
@@ -58,6 +64,7 @@ import {
   adminSessionCapacityMutationEndpoint,
   adminSupportMutationEndpoint,
   adminSupportSearchEndpoint,
+  adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
 } from '../../lib/admin-api';
 import type { ApiPort } from '../../lib/api/endpoint';
@@ -75,13 +82,15 @@ const success = <Value,>(data: Value) =>
     metadata,
   }) as const;
 
-const failure = (
-  kind:
+const failure = <
+  Kind extends
     | 'offline'
     | 'timeout'
     | 'transport'
     | 'invalid_response'
     | 'session_expired',
+>(
+  kind: Kind,
   status = 0,
 ) =>
   ({
@@ -89,6 +98,17 @@ const failure = (
     kind: 'failure',
     status,
     failure: { kind },
+  }) as const;
+
+const problemFailure = <Problem extends { readonly status: number }>(
+  problem: Problem,
+) =>
+  ({
+    ok: false,
+    kind: 'failure',
+    status: problem.status,
+    failure: { kind: 'problem', problem },
+    metadata,
   }) as const;
 
 type RequestHandler = (
@@ -433,32 +453,398 @@ describe('F4 contract-first admin journeys', () => {
 
     await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
     await expect
-      .element(screen.getByRole('heading', { name: '2. Staging diff preview' }))
+      .element(screen.getByRole('heading', { name: 'Zkontrolovat změny' }))
       .toBeVisible();
     await expect
       .element(
         screen.getByText(
-          'Toto je výhradně read-only SimpleShop preview. Apply není součástí P4-02 a server jej nenabízí.',
+          /Použití změn se zobrazí až po dokončení navazujícího serverového propojení/,
         ),
       )
       .toBeVisible();
     await expect
-      .element(screen.getByRole('textbox', { name: 'Auditní důvod' }))
+      .element(screen.getByRole('textbox', { name: 'Důvod aktualizace' }))
       .not.toBeInTheDocument();
     await expect
-      .element(screen.getByRole('button', { name: /apply/i }))
+      .element(screen.getByRole('button', { name: 'Použít změny' }))
       .not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Alice Participant');
+    await screen
+      .getByRole('combobox', { name: 'Filtrovat záznamy' })
+      .selectOptions('all');
     expect(document.body.textContent).toContain('Alice Participant');
     expect(document.body.textContent).toContain('alice@example.test');
-    expect(document.body.textContent).toContain('Vstupenka 7100001');
+    expect(document.body.textContent).toContain('•A1B2C3');
+    expect(document.body.textContent).not.toContain('7100001');
+    expect(document.body.textContent).not.toContain('8100001');
     expect(document.body.textContent).toContain('18. 8. 2026');
-    expect(document.body.textContent).toContain('Kupón EARLYBIRD');
-    expect(document.body.textContent).toContain('Bez slevového kupónu');
+    expect(document.body.textContent).not.toContain('EARLYBIRD');
     expect(document.body.textContent).toContain(
       'Účastník z „prodeje na jméno“',
     );
     expect(document.body.textContent).not.toContain('kontakt •••');
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(document.body.textContent?.toLowerCase()).not.toContain('dropzone');
+    const previewCall = vi
+      .mocked(api.request)
+      .mock.calls.find(
+        ([endpoint]) => endpoint === adminTicketImportPreviewEndpoint,
+      );
+    expect(previewCall?.[1]).toMatchObject({
+      body: { source: 'simpleshop' },
+      cache: 'no-store',
+    });
+    expect(
+      vi
+        .mocked(api.request)
+        .mock.calls.some(
+          ([endpoint]) => endpoint === adminTicketImportApplyEndpoint,
+        ),
+    ).toBe(false);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
     await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('keeps Back read-only, confirms exact impact and reports a mocked apply', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const preview = {
+      ...ticketImportPreviewFixtures.clean!,
+      eventId: adminFixtureIds.event,
+    };
+    const report = {
+      ...ticketImportApplyFixtures.applied!,
+      eventId: adminFixtureIds.event,
+    };
+    const apply = vi.fn(async () => success(report));
+    const port = {
+      preview: vi.fn(async () => success(preview)),
+      apply,
+    } satisfies AdminTicketUpdatePort;
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={organizerApi(() => null)} environment="mocked">
+        <AdminImportWorkspace port={port} />
+      </AdminWorkspaceShell>,
+    );
+
+    const stepper = screen.getByRole('navigation', {
+      name: 'Postup aktualizace vstupenek',
+    });
+    for (const label of [
+      'Načíst ze SimpleShopu',
+      'Zkontrolovat změny',
+      'Potvrdit změny',
+      'Výsledek',
+    ]) {
+      await expect.element(stepper).toHaveTextContent(label);
+    }
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await screen.getByRole('button', { name: 'Zpět ke zdroji' }).click();
+    expect(apply).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('heading', { name: 'Zkontrolovat změny' }),
+    ).not.toBeInTheDocument();
+
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .fill('Pravidelná kontrola prodejů.');
+    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Použít tyto změny vstupenek?',
+        }),
+      )
+      .toBeVisible();
+    const dialog = screen.getByRole('dialog', {
+      name: 'Použít tyto změny vstupenek?',
+    });
+    await expect.element(dialog).toHaveTextContent('Přidá 1 vstupenku');
+    const confirm = dialog.getByRole('button', { name: 'Použít změny' });
+    expect((await confirm.element()).className).not.toContain('danger');
+    await acknowledgeDialog(screen);
+    await confirm.click();
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Změny vstupenek byly použity',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Zobrazit účastníky' }))
+      .toHaveAttribute('href', '/admin/ucastnici');
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a no-change result and retries a temporarily unavailable source', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const clean = ticketImportPreviewFixtures.clean!;
+    const unchangedRows = clean.rows.filter(
+      ({ status }) => status === 'unchanged',
+    );
+    const noChanges = {
+      ...clean,
+      eventId: adminFixtureIds.event,
+      rows: unchangedRows,
+      summary: {
+        total: unchangedRows.length,
+        new: 0,
+        unchanged: unchangedRows.length,
+        statusChanged: 0,
+        excluded: 0,
+        conflict: 0,
+        unknown: 0,
+      },
+    };
+    let attempt = 0;
+    const simpleShopSource =
+      ticketImportPreviewFixtures.simpleshop_readonly!.source;
+    if (simpleShopSource.kind !== 'simpleshop_api') {
+      throw new Error('SimpleShop fixture has an unexpected source.');
+    }
+    const api = organizerApi((endpoint) => {
+      if (endpoint !== adminTicketImportPreviewEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      attempt += 1;
+      return attempt === 1
+        ? problemFailure(ticketImportPreviewProblemFixtures.source_unavailable!)
+        : success({
+            ...ticketImportPreviewFixtures.simpleshop_readonly!,
+            eventId: adminFixtureIds.event,
+            rows: noChanges.rows,
+            summary: noChanges.summary,
+            source: {
+              ...simpleShopSource,
+              ticketRows: 1,
+              sourceRows: 1,
+              ignoredSummaryRows: 0,
+              multipleQuantitySummaryRows: 0,
+              observedStatuses: {
+                paid: 1,
+                unpaid: 0,
+                cancelled: 0,
+                refunded: 0,
+                unknown: 0,
+              },
+              codeShape: {
+                ...simpleShopSource.codeShape,
+                count: 1,
+              },
+            },
+          });
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminImportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await expect.element(screen.getByRole('alert')).toBeVisible();
+    await screen.getByRole('button', { name: 'Zkusit načíst znovu' }).click();
+    await expect
+      .element(
+        screen.getByText('Od poslední kontroly nejsou žádné nové změny.'),
+      )
+      .toBeVisible();
+    expect(attempt).toBe(2);
+  });
+
+  it('reuses the exact request identity after an ambiguous apply result', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const preview = {
+      ...ticketImportPreviewFixtures.clean!,
+      eventId: adminFixtureIds.event,
+    };
+    const report = {
+      ...ticketImportApplyFixtures.idempotent_replay!,
+      eventId: adminFixtureIds.event,
+    };
+    let attempt = 0;
+    const idempotencyKeys: string[] = [];
+    const apply = vi.fn(
+      async (...args: Parameters<AdminTicketUpdatePort['apply']>) => {
+        idempotencyKeys.push(args[3]);
+        attempt += 1;
+        return attempt === 1 ? failure('transport') : success(report);
+      },
+    );
+    const port = {
+      preview: vi.fn(async () => success(preview)),
+      apply,
+    } satisfies AdminTicketUpdatePort;
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={organizerApi(() => null)} environment="mocked">
+        <AdminImportWorkspace port={port} />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .fill('Přesná opakovaná aktualizace.');
+    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Použít změny' })
+      .click();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Server potvrdil dříve dokončenou aktualizaci',
+        }),
+      )
+      .toBeVisible();
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(idempotencyKeys[0]).toBe(idempotencyKeys[1]);
+  });
+
+  it('invalidates a stale apply and reloads the exact preview boundary', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const preview = {
+      ...ticketImportPreviewFixtures.clean!,
+      eventId: adminFixtureIds.event,
+    };
+    const port = {
+      preview: vi.fn(async () => success(preview)),
+      apply: vi.fn(async () =>
+        problemFailure(ticketImportApplyProblemFixtures.stale!),
+      ),
+    } satisfies AdminTicketUpdatePort;
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={organizerApi(() => null)} environment="mocked">
+        <AdminImportWorkspace port={port} />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .fill('Kontrola zastaralé dávky.');
+    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Použít změny' })
+      .click();
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Změny zatím nelze potvrdit',
+        }),
+      )
+      .toBeVisible();
+    await vi.waitFor(() => expect(port.preview).toHaveBeenCalledTimes(2));
+    expect(
+      screen.getByRole('button', { name: 'Zopakovat přesně stejný pokus' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(['conflict', 'unknown'] as const)(
+    'puts the %s source problem first and blocks confirmation',
+    async (fixtureName) => {
+      window.history.replaceState({}, '', '/admin/vstupenky');
+      const preview = {
+        ...ticketImportPreviewFixtures[fixtureName]!,
+        eventId: adminFixtureIds.event,
+      };
+      const problemRow = preview.rows.find(({ status }) =>
+        fixtureName === 'conflict'
+          ? status === 'conflict'
+          : status === 'unknown',
+      );
+      const port = {
+        preview: vi.fn(async () => success(preview)),
+        apply: vi.fn(async () => {
+          throw new Error('A blocked preview must never be applied.');
+        }),
+      } satisfies AdminTicketUpdatePort;
+      const screen = await renderComponent(
+        <AdminWorkspaceShell
+          api={organizerApi(() => null)}
+          environment="mocked"
+        >
+          <AdminImportWorkspace port={port} />
+        </AdminWorkspaceShell>,
+      );
+
+      await screen
+        .getByRole('button', { name: 'Načíst ze SimpleShopu' })
+        .click();
+      await expect
+        .element(screen.getByRole('combobox', { name: 'Filtrovat záznamy' }))
+        .toHaveValue('needs_attention');
+      expect(document.body.textContent).toContain(problemRow?.contactName);
+      await expect
+        .element(screen.getByRole('button', { name: 'Použít změny' }))
+        .toBeDisabled();
+      expect(port.apply).not.toHaveBeenCalled();
+    },
+  );
+
+  it('wipes ticket preview state when the online-only source reports offline', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminTicketImportPreviewEndpoint) {
+        return failure('offline');
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminImportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Aktualizace vstupenek' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('wipes ticket preview state when the source session expires', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminTicketImportPreviewEndpoint) {
+        return problemFailure(
+          ticketImportPreviewProblemFixtures.session_expired!,
+        );
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminImportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Zdroj vstupenek');
   });
 
   it('configures per-session questions and assigns a moderator from canonical selects', async () => {
