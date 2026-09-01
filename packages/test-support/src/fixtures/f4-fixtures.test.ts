@@ -11,6 +11,7 @@ import {
   adminRoleAssignmentMutationResponseSchema,
   supportMutationResponseSchema,
   supportSearchResponseSchema,
+  supportTargetTicketSearchResponseSchema,
   ticketImportApplyResponseSchema,
   ticketImportPreviewResponseSchema,
 } from '@byzon/domain/contracts';
@@ -36,6 +37,8 @@ import {
   supportMutationProblemFixtures,
   supportSearchFixtures,
   supportSearchProblemFixtures,
+  supportTargetTicketSearchFixtures,
+  supportTargetTicketSearchProblemFixtures,
   ticketImportApplyFixtures,
   ticketImportApplyProblemFixtures,
   ticketImportPreviewFixtures,
@@ -76,10 +79,21 @@ describe('F4 canonical fixture sets', () => {
     for (const fixture of Object.values(supportMutationFixtures)) {
       expect(supportMutationResponseSchema.parse(fixture)).toEqual(fixture);
     }
+    for (const fixture of Object.values(supportTargetTicketSearchFixtures)) {
+      expect(supportTargetTicketSearchResponseSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+    }
 
     expect(supportSearchFixtures.no_match?.matches).toHaveLength(0);
     expect(supportSearchFixtures.single_match?.matches).toHaveLength(1);
     expect(supportSearchFixtures.ambiguous?.matches).toHaveLength(2);
+    expect(
+      supportTargetTicketSearchFixtures.ambiguous?.candidates,
+    ).toHaveLength(2);
+    expect(supportTargetTicketSearchProblemFixtures.stale?.code).toBe(
+      'STALE_VERSION',
+    );
     expect(supportMutationFixtures.idempotent_replay?.outcome).toBe(
       'already_applied',
     );

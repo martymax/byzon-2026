@@ -1002,6 +1002,66 @@
   overflow-wrap: anywhere;
 }
 
+.supportRecordSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0 1rem;
+  color: var(--admin-muted);
+  font-size: 0.875rem;
+}
+
+.supportRecordSummary span + span::before {
+  margin-right: 1rem;
+  color: var(--admin-border-strong);
+  content: '•';
+}
+
+.supportActionPicker {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.supportActionPicker legend {
+  margin-bottom: 0.75rem;
+  font-weight: 750;
+}
+
+.supportActionPicker label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.65rem;
+  background: var(--admin-surface);
+  cursor: pointer;
+}
+
+.supportActionPicker label:has(input:checked) {
+  border-color: var(--admin-primary);
+  background: var(--admin-surface-brand);
+}
+
+.supportActionPicker input {
+  margin-top: 0.2rem;
+}
+
+.supportActionPicker span,
+.supportActionPicker small {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.supportActionPicker small {
+  color: var(--admin-muted);
+  font-size: 0.8125rem;
+  font-weight: 450;
+}
+
 .statusNew,
 .statusHealthy {
   color: var(--admin-success);

@@ -60,7 +60,8 @@ scope.
 - aktualizace vstupenek používá serverový SimpleShop preview bez file inputu;
   cílené fixture testy kryjí no-change, conflict, unknown, stale, ambiguous,
   offline a session-expired stavy i mockované potvrzení/report;
-- support hledání: `single`, `ambiguous`, `none`, `error`;
+- support hledání používá syntetické `single`, `ambiguous`, `none`, `error`;
+  vstup se posílá jen POST/no-store body a neukládá se do URL/historie;
 - oznámení umožňuje scénáře stale/expired/timeout podle nápovědy přímo ve
   formuláři;
 - role, export, rezervace a settings mají canonical success,
@@ -147,7 +148,11 @@ v desktopové tabulce i mobilních kartách. Browser nevytváří `File`, `FormD
 ani multipart request. Potvrzení/report jsou připravené a testované nad
 oddělenou mock fixture hranicí; produkční route je do `P4-03`/`AUX-13D`
 nezobrazuje. Support pracuje s maskovanými PII, POST search body, odděleným
-read/write oprávněním, reason, potvrzením, idempotencí a výsledným auditem.
+read/write oprávněním, lidskými stavy a akcemi, důvodem, potvrzením,
+idempotencí a výsledným auditem. `block`, `reactivate` a případný serverem
+povolený `resend` vysvětlují použití, dopad i recovery. Target-ticket picker
+má strict reference kontrakt bez UUID vstupu; `reassign` a `transfer` jsou do
+produktového rozhodnutí o jejich rozdílu a rezervacích fail-closed skryté.
 
 Oznámení používají critical-only draft, event/affected-session audience preview
 a immutable send. Role jsou event/session/room scoped; exporty jsou

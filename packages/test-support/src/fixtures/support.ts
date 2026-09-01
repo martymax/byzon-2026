@@ -4,6 +4,8 @@ import {
   supportMutationResponseSchema,
   supportSearchProblemSchema,
   supportSearchResponseSchema,
+  supportTargetTicketSearchProblemSchema,
+  supportTargetTicketSearchResponseSchema,
   type SupportRecord,
 } from '@byzon/domain/contracts';
 
@@ -73,6 +75,54 @@ export const supportSearchFixtures = defineFixtureSet({
   },
 });
 
+const targetCandidate = {
+  eventId: supportFixtureIds.event,
+  ticketId: supportFixtureIds.ticketTwo,
+  maskedContact: 't•••@example.test',
+  referenceSuffix: 'T002',
+  ticketState: 'active' as const,
+  accessState: 'claimed' as const,
+  version: 2,
+};
+
+const targetSearchBase = {
+  eventId: supportFixtureIds.event,
+  sourceTicketId: supportFixtureIds.ticket,
+  sourceVersion: 3,
+  limitedTo: 5 as const,
+};
+
+export const supportTargetTicketSearchFixtures = defineFixtureSet({
+  name: 'support.target-ticket-search',
+  schema: supportTargetTicketSearchResponseSchema,
+  fixtures: {
+    no_match: {
+      ...targetSearchBase,
+      outcome: 'no_match',
+      candidates: [],
+    },
+    single_match: {
+      ...targetSearchBase,
+      outcome: 'single_match',
+      candidates: [targetCandidate],
+    },
+    ambiguous: {
+      ...targetSearchBase,
+      outcome: 'ambiguous',
+      candidates: [
+        targetCandidate,
+        {
+          ...targetCandidate,
+          ticketId: '019fb100-0000-7000-8000-000000000007',
+          maskedContact: 'u•••@example.test',
+          referenceSuffix: 'T003',
+          version: 1,
+        },
+      ],
+    },
+  },
+});
+
 const mutationBase = {
   eventId: supportFixtureIds.event,
   changedAt: '2026-07-25T12:40:00.000+02:00',
@@ -137,6 +187,29 @@ export const supportSearchProblemFixtures = defineFixtureSet({
     authentication: problem('AUTHENTICATION_REQUIRED', 401),
     session_expired: problem('AUTH_SESSION_EXPIRED', 401),
     permission: problem('EVENT_ACCESS_DENIED', 403),
+    rate_limited: problem('SUPPORT_RATE_LIMITED', 429),
+    validation: problem('VALIDATION_FAILED', 422),
+    internal_error: problem('INTERNAL_ERROR', 500),
+  },
+});
+
+export const supportTargetTicketSearchProblemFixtures = defineFixtureSet({
+  name: 'support.target-ticket-search-problem',
+  schema: supportTargetTicketSearchProblemSchema,
+  fixtures: {
+    authentication: problem('AUTHENTICATION_REQUIRED', 401),
+    session_expired: problem('AUTH_SESSION_EXPIRED', 401),
+    permission: problem('EVENT_ACCESS_DENIED', 403),
+    source_not_found: problem('SUPPORT_RECORD_NOT_FOUND', 404),
+    stale: {
+      type: problemTypeForCode('STALE_VERSION'),
+      title: 'Synthetic support target search problem',
+      status: 409,
+      code: 'STALE_VERSION',
+      detail: 'Synthetic source ticket changed before target lookup.',
+      requestId: 'fixture-support-target-0002',
+      currentVersion: 4,
+    },
     rate_limited: problem('SUPPORT_RATE_LIMITED', 429),
     validation: problem('VALIDATION_FAILED', 422),
     internal_error: problem('INTERNAL_ERROR', 500),

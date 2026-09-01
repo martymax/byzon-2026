@@ -8,6 +8,9 @@ import {
   supportMutationRequestSchema,
   supportSearchQuerySchema,
   supportSearchResponseSchema,
+  supportTargetTicketSearchProblemSchema,
+  supportTargetTicketSearchRequestSchema,
+  supportTargetTicketSearchResponseSchema,
 } from './index.js';
 
 const ids = {
@@ -100,6 +103,73 @@ describe('CS-SUPPORT-01 contracts', () => {
         ],
       }).success,
     ).toBe(false);
+  });
+
+  it('defines a reference-based target picker with no, ambiguous and stale branches', () => {
+    expect(
+      supportTargetTicketSearchRequestSchema.parse({
+        sourceTicketId: ids.ticket,
+        sourceExpectedVersion: 3,
+        reference: 'T002',
+        limit: 5,
+      }),
+    ).toMatchObject({ reference: 'T002' });
+    expect(
+      supportTargetTicketSearchRequestSchema.safeParse({
+        sourceTicketId: ids.ticket,
+        sourceExpectedVersion: 3,
+        reference: ids.ticketTwo,
+        targetTicketId: ids.ticketTwo,
+      }).success,
+    ).toBe(false);
+
+    const candidate = {
+      eventId: ids.event,
+      ticketId: ids.ticketTwo,
+      maskedContact: 't•••@example.test',
+      referenceSuffix: 'T002',
+      ticketState: 'active' as const,
+      accessState: 'claimed' as const,
+      version: 2,
+    };
+    expect(
+      supportTargetTicketSearchResponseSchema.parse({
+        eventId: ids.event,
+        sourceTicketId: ids.ticket,
+        sourceVersion: 3,
+        limitedTo: 5,
+        outcome: 'ambiguous',
+        candidates: [
+          candidate,
+          {
+            ...candidate,
+            ticketId: '019fa100-0000-7000-8000-000000000006',
+            referenceSuffix: 'T003',
+          },
+        ],
+      }).outcome,
+    ).toBe('ambiguous');
+    expect(
+      supportTargetTicketSearchResponseSchema.safeParse({
+        eventId: ids.event,
+        sourceTicketId: ids.ticket,
+        sourceVersion: 3,
+        limitedTo: 5,
+        outcome: 'single_match',
+        candidates: [{ ...candidate, maskedContact: 'target@example.test' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      supportTargetTicketSearchProblemSchema.parse({
+        type: problemTypeForCode('STALE_VERSION'),
+        title: 'Source changed',
+        status: 409,
+        code: 'STALE_VERSION',
+        detail: 'Reload the source record.',
+        requestId: 'support-target-test',
+        currentVersion: 4,
+      }).code,
+    ).toBe('STALE_VERSION');
   });
 
   it('requires reason/version/target while deriving actor authority server-side', () => {

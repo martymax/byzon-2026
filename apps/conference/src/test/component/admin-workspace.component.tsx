@@ -21,6 +21,8 @@ import {
   adminReservationFixtures,
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
+  supportMutationFixtures,
+  supportMutationProblemFixtures,
   supportSearchFixtures,
   ticketImportApplyFixtures,
   ticketImportApplyProblemFixtures,
@@ -996,10 +998,10 @@ describe('F4 contract-first admin journeys', () => {
     );
 
     const search = screen.getByRole('searchbox', {
-      name: 'Reference nebo jméno',
+      name: 'Jméno, e-mail nebo reference vstupenky',
     });
     await search.fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat' }).click();
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
     await expect
       .element(
         screen.getByRole('heading', {
@@ -1037,19 +1039,20 @@ describe('F4 contract-first admin journeys', () => {
     );
 
     await screen
-      .getByRole('searchbox', { name: 'Reference nebo jméno' })
+      .getByRole('searchbox', {
+        name: 'Jméno, e-mail nebo reference vstupenky',
+      })
       .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat' }).click();
-    await screen.getByRole('button', { name: 'Připravit podporu' }).click();
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
+    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
     await screen
-      .getByRole('textbox', { name: 'Auditní důvod' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Bezpečný test odebraného oprávnění.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat a potvrdit' })
-      .click();
+    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
     await acknowledgeDialog(screen);
     await screen
-      .getByRole('button', { name: 'Znovu odeslat aktivační výzvu' })
+      .getByRole('button', { name: 'Znovu poslat aktivační výzvu' })
       .click();
 
     await expect
@@ -1100,15 +1103,351 @@ describe('F4 contract-first admin journeys', () => {
     );
 
     await screen
-      .getByRole('searchbox', { name: 'Reference nebo jméno' })
+      .getByRole('searchbox', {
+        name: 'Jméno, e-mail nebo reference vstupenky',
+      })
       .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat' }).click();
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    expect(document.body.textContent).toContain(
+      searchResponse.matches[0]!.displayName,
+    );
+    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
+    expect(
+      screen.getByRole('button', { name: 'Vyřešit problém' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps participant search PII in a no-store POST body and localizes ambiguous results', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const searchResponse = {
+      ...supportSearchFixtures.ambiguous!,
+      eventId: adminFixtureIds.event,
+      matches: supportSearchFixtures.ambiguous!.matches.map((record) => ({
+        ...record,
+        eventId: adminFixtureIds.event,
+      })),
+    };
+    let requestOptions: unknown;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminSupportSearchEndpoint) {
+        requestOptions = options;
+        return success(searchResponse);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('searchbox', {
+        name: 'Jméno, e-mail nebo reference vstupenky',
+      })
+      .fill('citlivy@example.test');
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+
+    expect(requestOptions).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/support/search`,
+      cache: 'no-store',
+      body: { query: 'citlivy@example.test', limit: 5 },
+    });
+    expect(window.location.href).not.toContain('citlivy');
+    expect(window.location.pathname).toBe('/admin/ucastnici');
     await expect
-      .element(screen.getByText(searchResponse.matches[0]!.displayName))
+      .element(
+        screen.getByText(
+          'Našli jsme více lidí. Vyberte správný záznam podle maskovaného kontaktu nebo reference.',
+        ),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).toContain('Aktivní');
+    expect(document.body.textContent).not.toContain('claimed');
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('explains and confirms a safe support action while hiding unresolved target actions', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const source = {
+      ...supportSearchFixtures.single_match!.matches[0]!,
+      eventId: adminFixtureIds.event,
+      availableActions: ['reassign', 'block', 'transfer'] as const,
+    };
+    const searchResponse = {
+      ...supportSearchFixtures.single_match!,
+      eventId: adminFixtureIds.event,
+      matches: [source] as const,
+    };
+    const mutationResponse = {
+      ...supportMutationFixtures.blocked!,
+      eventId: adminFixtureIds.event,
+      record: {
+        ...source,
+        ticketState: 'blocked' as const,
+        version: source.version + 1,
+        availableActions: ['reactivate'] as const,
+      },
+    };
+    let mutationOptions: unknown;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminSupportSearchEndpoint) {
+        return success(searchResponse);
+      }
+      if (endpoint === adminSupportMutationEndpoint) {
+        mutationOptions = options;
+        return success(mutationResponse);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('searchbox', {
+        name: 'Jméno, e-mail nebo reference vstupenky',
+      })
+      .fill('single');
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
+    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
+
+    expect(
+      screen.getByText('Přiřadit přístup jiné osobě'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Převést vstupenku')).not.toBeInTheDocument();
+    expect(screen.getByText(/ID cílové vstupenky/)).not.toBeInTheDocument();
+    await expect
+      .element(
+        screen.getByText(
+          'Zablokuje přístup a zruší potvrzené rezervace i čekání na uvolněná místa.',
+        ),
+      )
+      .toBeVisible();
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny' })
+      .fill('Vstupenka byla bezpečně ověřena u registrace.');
+    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Zablokovat přístup' }).click();
+
+    expect(mutationOptions).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/support/actions`,
+      cache: 'no-store',
+      body: {
+        participantId: source.participantId,
+        ticketId: source.ticketId,
+        action: 'block',
+        expectedVersion: source.version,
+        targetTicketId: null,
+      },
+    });
+    expect(
+      (mutationOptions as { idempotencyKey?: string }).idempotencyKey,
+    ).toBeTruthy();
+    await expect
+      .element(
+        screen.getByText(
+          'Přístup byl zablokován a související rezervace byly zrušeny.',
+        ),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Zobrazit v historii změn' }))
+      .toHaveAttribute('href', '/admin/audit');
+  });
+
+  it('shows the human no-match state and wipes the query after session expiry', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    let searches = 0;
+    const api = organizerApi((endpoint) => {
+      if (endpoint !== adminSupportSearchEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      searches += 1;
+      return searches === 1
+        ? success({
+            ...supportSearchFixtures.no_match!,
+            eventId: adminFixtureIds.event,
+          })
+        : failure('session_expired', 401);
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    const searchbox = screen.getByRole('searchbox', {
+      name: 'Jméno, e-mail nebo reference vstupenky',
+    });
+    await searchbox.fill('nenalezeny-clovek');
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await expect
+      .element(
+        screen.getByText(
+          'Nikoho jsme nenašli. Zkontrolujte zápis nebo zkuste jiný údaj.',
+        ),
+      )
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('nenalezeny-clovek');
+  });
+
+  it('retries an ambiguous support mutation with the exact same request', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const source = {
+      ...supportSearchFixtures.single_match!.matches[0]!,
+      eventId: adminFixtureIds.event,
+      availableActions: ['block'] as const,
+    };
+    const response = {
+      ...supportMutationFixtures.blocked!,
+      eventId: adminFixtureIds.event,
+      record: {
+        ...source,
+        ticketState: 'blocked' as const,
+        version: source.version + 1,
+        availableActions: ['reactivate'] as const,
+      },
+    };
+    const attempts: unknown[] = [];
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminSupportSearchEndpoint) {
+        return success({
+          ...supportSearchFixtures.single_match!,
+          eventId: adminFixtureIds.event,
+          matches: [source] as const,
+        });
+      }
+      if (endpoint === adminSupportMutationEndpoint) {
+        const request = options as {
+          body: unknown;
+          cache: unknown;
+          idempotencyKey: unknown;
+          path: unknown;
+        };
+        attempts.push({
+          body: request.body,
+          cache: request.cache,
+          idempotencyKey: request.idempotencyKey,
+          path: request.path,
+        });
+        return attempts.length === 1 ? failure('timeout') : success(response);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('searchbox', {
+        name: 'Jméno, e-mail nebo reference vstupenky',
+      })
+      .fill('single');
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
+    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny' })
+      .fill('Ověřený důvod pro přesné opakování požadavku.');
+    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Zablokovat přístup' }).click();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
+
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1]).toEqual(attempts[0]);
+    await expect
+      .element(
+        screen.getByText(
+          'Přístup byl zablokován a související rezervace byly zrušeny.',
+        ),
+      )
+      .toBeVisible();
+  });
+
+  it('drops the support draft and reloads current data after a stale response', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const source = {
+      ...supportSearchFixtures.single_match!.matches[0]!,
+      eventId: adminFixtureIds.event,
+      availableActions: ['block'] as const,
+    };
+    let searches = 0;
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminSupportSearchEndpoint) {
+        searches += 1;
+        return success({
+          ...supportSearchFixtures.single_match!,
+          eventId: adminFixtureIds.event,
+          matches: [
+            searches === 1
+              ? source
+              : { ...source, version: source.version + 1 },
+          ] as const,
+        });
+      }
+      if (endpoint === adminSupportMutationEndpoint) {
+        return problemFailure({
+          ...supportMutationProblemFixtures.stale!,
+          currentVersion: source.version + 1,
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('searchbox', {
+        name: 'Jméno, e-mail nebo reference vstupenky',
+      })
+      .fill('single');
+    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
+    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny' })
+      .fill('Tento důvod se po stale odpovědi musí zahodit.');
+    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Zablokovat přístup' }).click();
+
+    expect(searches).toBe(2);
+    await expect
+      .element(
+        screen.getByText(
+          'Záznam se mezitím změnil. Načetli jsme aktuální stav; změnu připravte znovu.',
+        ),
+      )
       .toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Připravit podporu' }),
+      screen.getByRole('textbox', { name: 'Důvod změny' }),
     ).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(
+      'Tento důvod se po stale odpovědi musí zahodit.',
+    );
   });
 
   it('shows reservation records to a reader without capacity or attendance mutation controls', async () => {
