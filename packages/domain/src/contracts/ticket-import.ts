@@ -207,6 +207,7 @@ export const ticketImportRowStatusSchema = z.enum([
   'new',
   'unchanged',
   'status_changed',
+  'excluded',
   'conflict',
   'unknown',
 ]);
@@ -242,6 +243,8 @@ export const ticketImportIssueCodeSchema = z.enum([
   'missing_reference',
   'missing_status',
   'unknown_status',
+  'source_status_excluded',
+  'source_status_review_required',
   'state_conflict',
   'participant_identity_manual_review',
 ]);
@@ -260,6 +263,16 @@ export const ticketImportRowSchema = z
     referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
     sourceTicketId: z.string().regex(/^\d{1,64}$/),
     sourceOrderId: z.string().regex(/^\d{1,64}$/),
+    orderTicketCount: z
+      .number()
+      .int()
+      .positive()
+      .max(TICKET_IMPORT_MAX_PREVIEW_ROWS),
+    orderTicketPosition: z
+      .number()
+      .int()
+      .positive()
+      .max(TICKET_IMPORT_MAX_PREVIEW_ROWS),
     purchasedOn: z.string().date(),
     discountCoupon: optionalContactTextSchema(100),
     contactName: optionalContactTextSchema(160),
@@ -288,6 +301,13 @@ export const ticketImportRowSchema = z
         code: 'custom',
         path: ['contactEmail'],
         message: 'Resolved participant identity requires an email address',
+      });
+    }
+    if (row.orderTicketPosition > row.orderTicketCount) {
+      context.addIssue({
+        code: 'custom',
+        path: ['orderTicketPosition'],
+        message: 'Order ticket position cannot exceed the order ticket count',
       });
     }
     if (
@@ -329,6 +349,19 @@ export const ticketImportRowSchema = z
           );
         }
         break;
+      case 'excluded':
+        if (
+          row.incomingState !== null ||
+          row.currentState !== null ||
+          row.sourceStatus === 'paid' ||
+          row.sourceStatus === 'unknown' ||
+          !row.issues.some(({ code }) => code === 'source_status_excluded')
+        ) {
+          addStateIssue(
+            'An excluded row needs a known ineligible source state and no ticket state',
+          );
+        }
+        break;
       case 'conflict':
         if (row.issues.length === 0) {
           addStateIssue('A conflict row needs at least one issue');
@@ -354,6 +387,7 @@ export const ticketImportSummarySchema = z.strictObject({
   new: z.number().int().nonnegative(),
   unchanged: z.number().int().nonnegative(),
   statusChanged: z.number().int().nonnegative(),
+  excluded: z.number().int().nonnegative(),
   conflict: z.number().int().nonnegative(),
   unknown: z.number().int().nonnegative(),
 });
@@ -368,6 +402,7 @@ const summaryForRows = (
   unchanged: rows.filter(({ status }) => status === 'unchanged').length,
   statusChanged: rows.filter(({ status }) => status === 'status_changed')
     .length,
+  excluded: rows.filter(({ status }) => status === 'excluded').length,
   conflict: rows.filter(({ status }) => status === 'conflict').length,
   unknown: rows.filter(({ status }) => status === 'unknown').length,
 });
@@ -414,6 +449,30 @@ export const ticketImportPreviewResponseSchema = z
         message: 'Import preview row IDs must be unique',
       });
     }
+    const rowsByOrder = new Map<string, typeof preview.rows>();
+    for (const row of preview.rows) {
+      const group = rowsByOrder.get(row.sourceOrderId) ?? [];
+      group.push(row);
+      rowsByOrder.set(row.sourceOrderId, group);
+    }
+    for (const [orderId, rows] of rowsByOrder) {
+      const expectedPositions = rows.map((_, index) => index + 1);
+      const actualPositions = rows
+        .map(({ orderTicketPosition }) => orderTicketPosition)
+        .sort((left, right) => left - right);
+      if (
+        rows.some(({ orderTicketCount }) => orderTicketCount !== rows.length) ||
+        actualPositions.some(
+          (position, index) => position !== expectedPositions[index],
+        )
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['rows'],
+          message: `Order ${orderId} ticket counts and positions must reconcile`,
+        });
+      }
+    }
     if (
       preview.source.kind === 'simpleshop_api' &&
       preview.source.ticketRows !== preview.rows.length
@@ -434,6 +493,7 @@ export const canApplyTicketImportPreview = (
   preview: TicketImportPreviewResponse,
 ): boolean =>
   preview.source.kind !== 'simpleshop_api' &&
+  preview.summary.excluded === 0 &&
   preview.summary.conflict === 0 &&
   preview.summary.unknown === 0;
 
@@ -448,6 +508,7 @@ export const ticketImportApplyRequestSchema = z
   .superRefine((request, context) => {
     if (
       request.expectedImpact.conflict > 0 ||
+      request.expectedImpact.excluded > 0 ||
       request.expectedImpact.unknown > 0
     ) {
       context.addIssue({

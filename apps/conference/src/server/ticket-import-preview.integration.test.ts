@@ -60,6 +60,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200001',
         sourceStatus: 'paid',
         quantity: 1,
+        orderTicketCount: 1,
+        orderTicketPosition: 1,
         purchasedOn: '2026-08-18',
         discountCoupon: 'EARLYBIRD',
         contactName: 'Existing Participant',
@@ -75,6 +77,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200002',
         sourceStatus: 'paid',
         quantity: 1,
+        orderTicketCount: 1,
+        orderTicketPosition: 1,
         purchasedOn: '2026-08-19',
         discountCoupon: null,
         contactName: 'Single Ticket Buyer',
@@ -90,6 +94,8 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
         orderExternalId: '9200003',
         sourceStatus: 'unpaid',
         quantity: 1,
+        orderTicketCount: 1,
+        orderTicketPosition: 1,
         purchasedOn: '2026-08-20',
         discountCoupon: 'PARTNER2026',
         contactName: 'Unpaid Buyer',
@@ -183,8 +189,9 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
       new: 1,
       unchanged: 0,
       statusChanged: 0,
+      excluded: 1,
       conflict: 1,
-      unknown: 1,
+      unknown: 0,
     });
 
     const batch = await client.db.query.ticketImportBatches.findFirst({

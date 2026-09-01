@@ -33,6 +33,8 @@ const cleanRows = [
     referenceSuffix: 'T001',
     sourceTicketId: '7000001',
     sourceOrderId: '8000001',
+    orderTicketCount: 1,
+    orderTicketPosition: 1,
     purchasedOn: '2026-08-18',
     discountCoupon: 'EARLYBIRD',
     contactName: 'Syntetický účastník',
@@ -53,6 +55,8 @@ const cleanRows = [
     referenceSuffix: 'T002',
     sourceTicketId: '7000002',
     sourceOrderId: '8000002',
+    orderTicketCount: 1,
+    orderTicketPosition: 1,
     purchasedOn: '2026-08-19',
     discountCoupon: null,
     contactName: 'Testovací návštěvník',
@@ -73,6 +77,8 @@ const cleanRows = [
     referenceSuffix: 'T003',
     sourceTicketId: '7000003',
     sourceOrderId: '8000003',
+    orderTicketCount: 1,
+    orderTicketPosition: 1,
     purchasedOn: '2026-08-20',
     discountCoupon: 'PARTNER2026',
     contactName: 'Ukázkový host',
@@ -95,6 +101,8 @@ const conflictRow = {
   referenceSuffix: 'T004',
   sourceTicketId: '7000004',
   sourceOrderId: '8000004',
+  orderTicketCount: 1,
+  orderTicketPosition: 1,
   purchasedOn: '2026-08-21',
   discountCoupon: null,
   contactName: 'Konfliktní příklad',
@@ -121,6 +129,8 @@ const unknownRow = {
   referenceSuffix: 'T005',
   sourceTicketId: '7000005',
   sourceOrderId: '8000005',
+  orderTicketCount: 1,
+  orderTicketPosition: 1,
   purchasedOn: '2026-08-22',
   discountCoupon: null,
   contactName: 'Neznámý příklad',
@@ -147,6 +157,7 @@ const summary = (rows: readonly TicketImportRow[]) => ({
   unchanged: rows.filter(({ status }) => status === 'unchanged').length,
   statusChanged: rows.filter(({ status }) => status === 'status_changed')
     .length,
+  excluded: rows.filter(({ status }) => status === 'excluded').length,
   conflict: rows.filter(({ status }) => status === 'conflict').length,
   unknown: rows.filter(({ status }) => status === 'unknown').length,
 });
@@ -196,8 +207,13 @@ const simpleShopRows = [
     identitySource: 'manual_review',
     referenceSuffix: 'D4E5F6',
     sourceStatus: 'unpaid' as const,
+    status: 'excluded' as const,
     issues: [
-      ...unknownRow.issues,
+      {
+        code: 'source_status_excluded' as const,
+        message:
+          'Objednávka není uhrazená. Nového účastníka neimportovat ani mu neposílat pozvánku.',
+      },
       {
         code: 'participant_identity_manual_review' as const,
         message:
@@ -221,6 +237,14 @@ const simpleShopRows = [
     identitySource: 'named_participant',
     referenceSuffix: '789ABC',
     sourceStatus: 'cancelled' as const,
+    status: 'excluded' as const,
+    issues: [
+      {
+        code: 'source_status_excluded' as const,
+        message:
+          'Vstupenka je stornovaná. Nového účastníka neimportovat ani mu neposílat pozvánku.',
+      },
+    ],
   },
 ] satisfies TicketImportRow[];
 

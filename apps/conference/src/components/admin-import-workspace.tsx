@@ -34,6 +34,7 @@ const statusLabels: Record<TicketImportRowStatus, string> = {
   new: 'Nová',
   unchanged: 'Beze změny',
   status_changed: 'Změna stavu',
+  excluded: 'Neimportovat',
   conflict: 'Konflikt',
   unknown: 'Neznámý stav',
 };
@@ -42,6 +43,7 @@ const statusClass: Record<TicketImportRowStatus, string> = {
   new: styles.statusNew!,
   unchanged: styles.statusUnchanged!,
   status_changed: styles.statusChanged!,
+  excluded: styles.statusAttention!,
   conflict: styles.statusConflict!,
   unknown: styles.statusUnknown!,
 };
@@ -51,6 +53,7 @@ const filterOptions = [
   ['new', 'Nové'],
   ['unchanged', 'Beze změny'],
   ['status_changed', 'Změny stavu'],
+  ['excluded', 'Mimo import'],
   ['conflict', 'Konflikty'],
   ['unknown', 'Neznámé'],
 ] as const;
@@ -103,6 +106,13 @@ const purchaseDateFormatter = new Intl.DateTimeFormat('cs-CZ', {
 
 const formatPurchaseDate = (value: string): string =>
   purchaseDateFormatter.format(new Date(`${value}T12:00:00Z`));
+
+const orderTicketCountLabel = (count: number): string =>
+  count === 1
+    ? '1 vstupenka v objednávce'
+    : count >= 2 && count <= 4
+      ? `${count} vstupenky v objednávce`
+      : `${count} vstupenek v objednávce`;
 
 export const AdminImportWorkspace = () => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
@@ -362,6 +372,10 @@ export const AdminImportWorkspace = () => {
               <strong>{preview.summary.statusChanged}</strong>
             </div>
             <div className={styles.metric}>
+              <small>Mimo import</small>
+              <strong>{preview.summary.excluded}</strong>
+            </div>
+            <div className={styles.metric}>
               <small>Konflikt / neznámé</small>
               <strong>
                 {preview.summary.conflict} / {preview.summary.unknown}
@@ -462,6 +476,12 @@ export const AdminImportWorkspace = () => {
                     <td className={styles.referenceCell}>
                       <span>Vstupenka {row.sourceTicketId}</span>
                       <small>Doklad {row.sourceOrderId}</small>
+                      <small>
+                        {orderTicketCountLabel(row.orderTicketCount)}
+                        {row.orderTicketCount > 1
+                          ? ` · tato ${row.orderTicketPosition} z ${row.orderTicketCount}`
+                          : ''}
+                      </small>
                       <small>Preview •{row.referenceSuffix}</small>
                     </td>
                     <td className={styles.purchaseCell}>
@@ -532,7 +552,12 @@ export const AdminImportWorkspace = () => {
                     <dt>SimpleShop reference</dt>
                     <dd>
                       Vstupenka {row.sourceTicketId} · doklad{' '}
-                      {row.sourceOrderId} · preview •{row.referenceSuffix}
+                      {row.sourceOrderId} ·{' '}
+                      {orderTicketCountLabel(row.orderTicketCount)}
+                      {row.orderTicketCount > 1
+                        ? ` · tato ${row.orderTicketPosition} z ${row.orderTicketCount}`
+                        : ''}{' '}
+                      · preview •{row.referenceSuffix}
                     </dd>
                     <dt>Datum nákupu</dt>
                     <dd>

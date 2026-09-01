@@ -55,6 +55,8 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000001',
       sourceStatus: 'paid',
       quantity: 1,
+      orderTicketCount: 1,
+      orderTicketPosition: 1,
       purchasedOn: '2026-08-18',
       discountCoupon: 'EARLYBIRD',
       contactName: 'Alice Participant',
@@ -70,6 +72,8 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000002',
       sourceStatus: 'unpaid',
       quantity: 1,
+      orderTicketCount: 1,
+      orderTicketPosition: 1,
       purchasedOn: '2026-08-19',
       discountCoupon: null,
       contactName: 'Unpaid Buyer',
@@ -85,6 +89,8 @@ const snapshot: SimpleShopTicketSourceSnapshot = {
       orderExternalId: '80000003',
       sourceStatus: 'cancelled',
       quantity: 1,
+      orderTicketCount: 1,
+      orderTicketPosition: 1,
       purchasedOn: '2026-08-20',
       discountCoupon: 'PARTNER2026',
       contactName: 'Cancelled Participant',
@@ -181,6 +187,8 @@ describe('SimpleShop ticket import preview handler', () => {
       identitySource: 'named_participant',
       sourceTicketId: '7000001',
       sourceOrderId: '80000001',
+      orderTicketCount: 1,
+      orderTicketPosition: 1,
       purchasedOn: '2026-08-18',
       discountCoupon: 'EARLYBIRD',
     });
@@ -205,7 +213,8 @@ describe('SimpleShop ticket import preview handler', () => {
       expect(serializedPersistence).not.toContain(pii);
     }
     expect(serializedResponse).toContain('simpleshop_api');
-    expect(serializedResponse).toContain('unknown_status');
+    expect(serializedResponse).toContain('source_status_excluded');
+    expect(serializedResponse).not.toContain('unknown_status');
   });
 
   it.each([
@@ -351,7 +360,7 @@ describe('SimpleShop ticket import preview handler', () => {
 });
 
 describe('SimpleShop preview mapping', () => {
-  it('maps only paid records and leaves unpaid, storno and transferred states unapproved', () => {
+  it('excludes new ineligible records and routes imported ones to manual review', () => {
     const values = [ids.rowPaid, ids.rowUnpaid, ids.rowCancelled];
     const built = buildTicketImportPreview({
       eventId: ids.event,
@@ -374,21 +383,29 @@ describe('SimpleShop preview mapping', () => {
       },
       {
         sourceStatus: 'unpaid',
-        status: 'unknown',
+        status: 'excluded',
         incomingState: null,
         currentState: null,
       },
       {
         sourceStatus: 'cancelled',
-        status: 'unknown',
+        status: 'conflict',
         incomingState: null,
         currentState: null,
       },
     ]);
     expect(built.response.summary).toMatchObject({
       unchanged: 1,
-      unknown: 2,
+      excluded: 1,
+      conflict: 1,
+      unknown: 0,
       statusChanged: 0,
     });
+    expect(built.response.rows[1]?.issues).toContainEqual(
+      expect.objectContaining({ code: 'source_status_excluded' }),
+    );
+    expect(built.response.rows[2]?.issues).toContainEqual(
+      expect.objectContaining({ code: 'source_status_review_required' }),
+    );
   });
 });

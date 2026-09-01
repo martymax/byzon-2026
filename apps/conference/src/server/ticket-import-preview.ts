@@ -279,6 +279,15 @@ const currentStateFor = (
 const referenceSuffix = (rowId: string): string =>
   rowId.replaceAll('-', '').slice(-6).toUpperCase();
 
+const excludedSourceReason = (
+  status: Exclude<TicketImportRow['sourceStatus'], 'paid' | 'unknown'>,
+): string =>
+  status === 'unpaid'
+    ? 'Objednávka není uhrazená.'
+    : status === 'cancelled'
+      ? 'Vstupenka je stornovaná.'
+      : 'Platba za vstupenku byla refundovaná.';
+
 const rowFor = (
   source: SimpleShopTicketSourceRecord,
   existing: ExistingTicketRecord | undefined,
@@ -290,6 +299,8 @@ const rowFor = (
     referenceSuffix: suffix,
     sourceTicketId: source.externalId,
     sourceOrderId: source.orderExternalId,
+    orderTicketCount: source.orderTicketCount,
+    orderTicketPosition: source.orderTicketPosition,
     purchasedOn: source.purchasedOn,
     discountCoupon: source.discountCoupon,
     contactName: source.contactName,
@@ -304,7 +315,7 @@ const rowFor = (
     message:
       'Chybí potvrzený účastnický e-mail; kontakt kupujícího slouží pouze pro ruční dořešení.',
   };
-  if (source.sourceStatus !== 'paid') {
+  if (source.sourceStatus === 'unknown') {
     return {
       rowId,
       sourceRowNumber: source.sourceRowNumber,
@@ -316,7 +327,45 @@ const rowFor = (
       issues: [
         {
           code: 'unknown_status',
-          message: 'Zdrojový stav nemá schválené mapování pro apply.',
+          message:
+            'Zdrojový stav SimpleShopu není známý; vstupenka se nesmí importovat bez ručního rozhodnutí.',
+        },
+        ...(source.identitySource === 'manual_review' ? [identityIssue] : []),
+      ],
+    };
+  }
+  if (source.sourceStatus !== 'paid') {
+    const reason = excludedSourceReason(source.sourceStatus);
+    if (existing) {
+      return {
+        rowId,
+        sourceRowNumber: source.sourceRowNumber,
+        ...participant,
+        sourceStatus: source.sourceStatus,
+        status: 'conflict',
+        incomingState: null,
+        currentState,
+        issues: [
+          {
+            code: 'source_status_review_required',
+            message: `${reason} Účastník už byl importován; neposílat další pozvánku, účet automaticky neblokovat a předat případ ke kontrole.`,
+          },
+          ...(source.identitySource === 'manual_review' ? [identityIssue] : []),
+        ],
+      };
+    }
+    return {
+      rowId,
+      sourceRowNumber: source.sourceRowNumber,
+      ...participant,
+      sourceStatus: source.sourceStatus,
+      status: 'excluded',
+      incomingState: null,
+      currentState: null,
+      issues: [
+        {
+          code: 'source_status_excluded',
+          message: `${reason} Nového účastníka neimportovat ani mu neposílat pozvánku.`,
         },
         ...(source.identitySource === 'manual_review' ? [identityIssue] : []),
       ],
@@ -381,6 +430,7 @@ const summaryFor = (rows: readonly TicketImportRow[]): TicketImportSummary => ({
   unchanged: rows.filter(({ status }) => status === 'unchanged').length,
   statusChanged: rows.filter(({ status }) => status === 'status_changed')
     .length,
+  excluded: rows.filter(({ status }) => status === 'excluded').length,
   conflict: rows.filter(({ status }) => status === 'conflict').length,
   unknown: rows.filter(({ status }) => status === 'unknown').length,
 });

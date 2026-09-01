@@ -17,6 +17,7 @@ const ids = {
   rowUnchanged: '019fa000-0000-7000-8000-000000000004',
   rowConflict: '019fa000-0000-7000-8000-000000000005',
   rowUnknown: '019fa000-0000-7000-8000-000000000006',
+  rowExcluded: '019fa000-0000-7000-8000-000000000007',
 } as const;
 
 const source = {
@@ -32,6 +33,8 @@ const newRow = {
   referenceSuffix: 'T001',
   sourceTicketId: '7000001',
   sourceOrderId: '8000001',
+  orderTicketCount: 1,
+  orderTicketPosition: 1,
   purchasedOn: '2026-08-18',
   discountCoupon: 'EARLYBIRD',
   contactName: 'Syntetický účastník',
@@ -53,6 +56,8 @@ const unchangedRow = {
   referenceSuffix: 'T002',
   sourceTicketId: '7000002',
   sourceOrderId: '8000002',
+  orderTicketCount: 1,
+  orderTicketPosition: 1,
   purchasedOn: '2026-08-19',
   discountCoupon: null,
   contactName: 'Testovací návštěvník',
@@ -81,6 +86,7 @@ const preview = {
     new: 1,
     unchanged: 1,
     statusChanged: 0,
+    excluded: 0,
     conflict: 0,
     unknown: 0,
   },
@@ -130,7 +136,7 @@ describe('CS-IMPORT-01 contracts', () => {
     ).toBe(false);
   });
 
-  it('fails closed when summary, conflict or unknown status is present', () => {
+  it('fails closed when summary, excluded, conflict or unknown status is present', () => {
     expect(
       ticketImportPreviewResponseSchema.safeParse({
         ...preview,
@@ -146,6 +152,8 @@ describe('CS-IMPORT-01 contracts', () => {
           ...newRow,
           rowId: ids.rowConflict,
           sourceRowNumber: 4,
+          sourceTicketId: '7000003',
+          sourceOrderId: '8000003',
           status: 'conflict',
           incomingState: 'active',
           currentState: 'blocked',
@@ -164,6 +172,35 @@ describe('CS-IMPORT-01 contracts', () => {
         conflict: 1,
       },
     });
+    const excluded = ticketImportPreviewResponseSchema.parse({
+      ...preview,
+      rows: [
+        ...preview.rows,
+        {
+          ...newRow,
+          rowId: ids.rowExcluded,
+          sourceRowNumber: 4,
+          sourceTicketId: '7000005',
+          sourceOrderId: '8000005',
+          sourceStatus: 'unpaid',
+          status: 'excluded',
+          incomingState: null,
+          currentState: null,
+          issues: [
+            {
+              code: 'source_status_excluded',
+              message: 'Objednávka není uhrazená a nemá se importovat.',
+            },
+          ],
+        },
+      ],
+      summary: {
+        ...preview.summary,
+        total: 3,
+        new: 1,
+        excluded: 1,
+      },
+    });
     const unknown = ticketImportPreviewResponseSchema.parse({
       ...preview,
       rows: [
@@ -172,6 +209,8 @@ describe('CS-IMPORT-01 contracts', () => {
           ...newRow,
           rowId: ids.rowUnknown,
           sourceRowNumber: 5,
+          sourceTicketId: '7000004',
+          sourceOrderId: '8000004',
           sourceStatus: 'unknown',
           status: 'unknown',
           incomingState: null,
@@ -193,6 +232,7 @@ describe('CS-IMPORT-01 contracts', () => {
     });
 
     expect(canApplyTicketImportPreview(conflict)).toBe(false);
+    expect(canApplyTicketImportPreview(excluded)).toBe(false);
     expect(canApplyTicketImportPreview(unknown)).toBe(false);
     expect(
       ticketImportApplyRequestSchema.safeParse({
@@ -201,6 +241,48 @@ describe('CS-IMPORT-01 contracts', () => {
         previewVersion: 3,
         expectedImpact: conflict.summary,
         reason: 'Potvrzený syntetický import.',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('reconciles ticket counts and positions inside every order', () => {
+    const groupedPreview = {
+      ...preview,
+      rows: [
+        {
+          ...newRow,
+          sourceOrderId: '8000010',
+          orderTicketCount: 2,
+          orderTicketPosition: 1,
+        },
+        {
+          ...unchangedRow,
+          sourceOrderId: '8000010',
+          orderTicketCount: 2,
+          orderTicketPosition: 2,
+        },
+      ],
+    };
+
+    expect(
+      ticketImportPreviewResponseSchema.safeParse(groupedPreview).success,
+    ).toBe(true);
+    expect(
+      ticketImportPreviewResponseSchema.safeParse({
+        ...groupedPreview,
+        rows: groupedPreview.rows.map((row) => ({
+          ...row,
+          orderTicketCount: 3,
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      ticketImportPreviewResponseSchema.safeParse({
+        ...groupedPreview,
+        rows: groupedPreview.rows.map((row) => ({
+          ...row,
+          orderTicketPosition: 1,
+        })),
       }).success,
     ).toBe(false);
   });

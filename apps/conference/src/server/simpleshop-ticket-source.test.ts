@@ -202,6 +202,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000001',
         sourceStatus: 'paid',
         quantity: 1,
+        orderTicketCount: 1,
+        orderTicketPosition: 1,
         purchasedOn: '2026-08-18',
         discountCoupon: 'EARLYBIRD',
         contactName: 'Alice Participant',
@@ -217,6 +219,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000002',
         sourceStatus: 'unpaid',
         quantity: 1,
+        orderTicketCount: 1,
+        orderTicketPosition: 1,
         purchasedOn: '2026-08-19',
         discountCoupon: null,
         contactName: 'Unpaid Buyer',
@@ -232,6 +236,8 @@ describe('SimpleShopTicketSourceAdapter', () => {
         orderExternalId: '80000003',
         sourceStatus: 'cancelled',
         quantity: 1,
+        orderTicketCount: 1,
+        orderTicketPosition: 1,
         purchasedOn: '2026-08-20',
         discountCoupon: 'PARTNER2026',
         contactName: 'Cancelled Participant',
@@ -332,6 +338,16 @@ describe('SimpleShopTicketSourceAdapter', () => {
     expect(
       snapshot.records.map(({ identitySource }) => identitySource),
     ).toEqual(['single_paid_ticket_buyer', 'manual_review', 'manual_review']);
+    expect(
+      snapshot.records.map(({ orderTicketCount, orderTicketPosition }) => [
+        orderTicketCount,
+        orderTicketPosition,
+      ]),
+    ).toEqual([
+      [1, 1],
+      [2, 1],
+      [2, 2],
+    ]);
   });
 
   it.each([

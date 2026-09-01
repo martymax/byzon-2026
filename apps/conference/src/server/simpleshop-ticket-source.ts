@@ -28,6 +28,8 @@ export interface SimpleShopTicketSourceRecord {
   readonly orderExternalId: string;
   readonly sourceStatus: TicketImportSourceStatus;
   readonly quantity: number;
+  readonly orderTicketCount: number;
+  readonly orderTicketPosition: number;
   readonly purchasedOn: string;
   readonly discountCoupon: string | null;
   readonly contactName: string | null;
@@ -437,7 +439,11 @@ const parseExport = (
     throw new SimpleShopTicketSourceError('invalid_payload');
   }
   const paidTicketCountByOrder = new Map<string, number>();
+  const ticketRowsByOrder = new Map<string, ParsedSimpleShopTicketRow[]>();
   for (const row of parsedTicketRows) {
+    const orderRows = ticketRowsByOrder.get(row.orderExternalId) ?? [];
+    orderRows.push(row);
+    ticketRowsByOrder.set(row.orderExternalId, orderRows);
     if (row.sourceStatus !== 'paid') continue;
     paidTicketCountByOrder.set(
       row.orderExternalId,
@@ -462,6 +468,11 @@ const parseExport = (
         orderExternalId: row.orderExternalId,
         sourceStatus: row.sourceStatus,
         quantity: row.quantity,
+        orderTicketCount: ticketRowsByOrder.get(row.orderExternalId)!.length,
+        orderTicketPosition:
+          ticketRowsByOrder
+            .get(row.orderExternalId)!
+            .findIndex(({ externalId }) => externalId === row.externalId) + 1,
         purchasedOn: row.purchasedOn,
         discountCoupon: row.discountCoupon,
         contactName:
