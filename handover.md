@@ -5,9 +5,10 @@
 - Autoritativní specifikace i jediný tracker jsou v
   `docs/admin-ux-redesign-plan.md`; hlavní plán v6.32 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
-- `AUX-00B` je dokončený na větvi
-  `track/admin-ux/aux-00b-governance`. Další nezablokovaný krok je foundation
-  `AUX-01A`/`AUX-01C`, potom primitives a shell.
+- `AUX-00B` a foundation `AUX-01A`–`C` jsou dokončené. Větev
+  `track/admin-ux/aux-01-foundation` zavádí semantické BYZON admin tokeny,
+  Inter pracovní typografii, sdílené primitives a exhaustive registry; další
+  nezablokovaný celek je `AUX-02A`–`G` shell a navigace.
 - Každý tematický celek vzniká z aktuálního `main` na větvi
   `track/admin-ux/<aux-id>-<název>`, projde security review → code review →
   opravy a testy a podle explicitního zadání se sloučí do `main`.

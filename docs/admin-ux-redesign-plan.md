@@ -3,7 +3,7 @@
 > Stav dokumentu: `specification ready`; zahájení změn kódu podmiňuje
 > governance úkol `AUX-00B`
 >
-> Verze: 1.3
+> Verze: 1.4
 >
 > Datum: 1. září 2026
 >
@@ -1371,9 +1371,9 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-00A` | U0  | [x]  | research      | Ověřený audit, IA, screen specs, gap registr a tracker                             | —                                                                                                                                           | —                                                                                      | —                                                                           | N/A                                                      | N/A               | Codex / 2026-09-01; tento dokument, baseline `d09a59d`                                                    |
 | `AUX-00B` | U0  | [x]  | governance    | Zapsat AUX→F4/P/CS mapování do hlavního plánu a založit branch/handoff pravidlo    | `AUX-00A`                                                                                                                                   | —                                                                                      | `AUX-00C`                                                                   | N/A                                                      | N/A               | Codex / `track/admin-ux/aux-00b-governance`; `AI_IMPLEMENTATION_PLAN.md` v6.32, `handover.md`; 2026-09-01 |
 | `AUX-00C` | U0  | [ ]  | protocol      | Zajistit 5 pořadatelů, syntetická data, zařízení a 25řádkový UAT formulář          | `AUX-00A`                                                                                                                                   | —                                                                                      | `AUX-00B`, `AUX-01A`                                                        | N/A                                                      | N/A               | — / protokol §1.4                                                                                         |
-| `AUX-01A` | U0  | [ ]  | UI-foundation | Zavést semantické admin tokeny, Inter scale, spacing, radius a motion              | `AUX-00B`                                                                                                                                   | —                                                                                      | `AUX-00C`, `AUX-01C`                                                        | N/A                                                      | N/A               | — / acceptance `01A` v §15.1                                                                              |
-| `AUX-01B` | U0  | [ ]  | UI-foundation | Dodat a otestovat společné primitives z §9.5                                       | `AUX-01A`                                                                                                                                   | —                                                                                      | —                                                                           | N/A                                                      | N/A               | — / acceptance `01B` v §15.1                                                                              |
-| `AUX-01C` | U1  | [ ]  | content       | Dodat contract-derived registry labelů, stavů, akcí a technical disclosure         | `AUX-00B`                                                                                                                                   | —                                                                                      | `AUX-01A`                                                                   | N/A                                                      | N/A               | — / acceptance `01C` v §15.1                                                                              |
+| `AUX-01A` | U0  | [x]  | UI-foundation | Zavést semantické admin tokeny, Inter scale, spacing, radius a motion              | `AUX-00B`                                                                                                                                   | —                                                                                      | `AUX-00C`, `AUX-01C`                                                        | N/A                                                      | N/A               | Codex / `track/admin-ux/aux-01-foundation`; `tokens.ts`, `styles.css`; 2026-09-01                         |
+| `AUX-01B` | U0  | [x]  | UI-foundation | Dodat a otestovat společné primitives z §9.5                                       | `AUX-01A`                                                                                                                                   | —                                                                                      | —                                                                           | N/A                                                      | N/A               | `packages/ui/src/admin.tsx`; UI 18/18, admin browser/axe 873/873                                          |
+| `AUX-01C` | U1  | [x]  | content       | Dodat contract-derived registry labelů, stavů, akcí a technical disclosure         | `AUX-00B`                                                                                                                                   | —                                                                                      | `AUX-01A`                                                                   | N/A                                                      | N/A               | `admin-ui-registry.ts`; unit 547/547, typecheck/lint; unknown blokuje mutaci                              |
 | `AUX-02A` | U0  | [ ]  | UI            | Route-aware chrome bez veřejného headeru a vnořeného main na `/admin`              | `AUX-00B`, `AUX-01A`                                                                                                                        | —                                                                                      | `AUX-01B`, `AUX-02C`                                                        | `ADR-013`                                                | N/A               | — / acceptance `02A`                                                                                      |
 | `AUX-02B` | U0  | [ ]  | architecture  | Oddělit shell view od preview/production adapteru a zachovat per-route fail-closed | `AUX-02A`                                                                                                                                   | —                                                                                      | `AUX-02C`                                                                   | `CS-ADMIN-01`                                            | N/A               | — / acceptance `02B`                                                                                      |
 | `AUX-02C` | U0  | [ ]  | contract      | Rozšířit context/fixtures o explicitní feature a check-in capability               | `AUX-00B`                                                                                                                                   | —                                                                                      | `AUX-02A`, `AUX-02B`                                                        | `GAP-AUX-CONTEXT-01`, `ADR-011`                          | contract ready    | — / contract + role/flag fixtures                                                                         |
@@ -1494,19 +1494,19 @@ samostatný jednorázový „sync“ úkol.
 
 **Akceptace**
 
-- [ ] **01A-1:** Hodnoty z §9.2 existují jako semantické tokeny, ne raw hex v
+- [x] **01A-1:** Hodnoty z §9.2 existují jako semantické tokeny, ne raw hex v
       page CSS.
-- [ ] **01A-2:** Admin pracovní typografie je Inter a není ovlivněna
+- [x] **01A-2:** Admin pracovní typografie je Inter a není ovlivněna
       marketingovým `h1`.
-- [ ] **01B-1:** Button variants a focus/disabled/hover/pressed splní kontrast
+- [x] **01B-1:** Button variants a focus/disabled/hover/pressed splní kontrast
       a hierarchii §9.6.
-- [ ] **01B-2:** Status používá ikonu/text a semantickou barvu.
-- [ ] **01B-3:** `AdminErrorSummary` odkazuje na konkrétní pole.
-- [ ] **01B-4:** Technical details jsou defaultně sbalené a screen-reader
+- [x] **01B-2:** Status používá ikonu/text a semantickou barvu.
+- [x] **01B-3:** `AdminErrorSummary` odkazuje na konkrétní pole.
+- [x] **01B-4:** Technical details jsou defaultně sbalené a screen-reader
       čitelné.
-- [ ] **01B-5:** Každá primitive má component test pro keyboard, accessible
+- [x] **01B-5:** Každá primitive má component test pro keyboard, accessible
       name a dlouhou češtinu.
-- [ ] **01C-1:** Každý user-facing enum/action má contract-derived exhaustive
+- [x] **01C-1:** Každý user-facing enum/action má contract-derived exhaustive
       mapování; neznámá hodnota blokuje mutaci a nikdy se nevypíše raw.
 
 **Mimo rozsah:** dark mode, nový marketingový redesign a plošná změna
@@ -1901,6 +1901,7 @@ vlastníky, ne důvod hádat produktové chování.
 
 | Verze | Datum      | Změna                                                                                                                                         | Evidence                                                                        |
 | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1.4   | 2026-09-01 | `AUX-01A`–`C`: sdílené admin tokeny, Inter pracovní typografie, povinné primitives a exhaustive prezentační registry                          | UI 18/18; conference unit 547/547; admin browser/axe 873/873; typecheck a lint  |
 | 1.3   | 2026-09-01 | `AUX-00B` synchronizoval AUX→F4/P/CS mapování, branch/handoff pravidla a založil samostatný asset backend slice `P3-13`                       | `AI_IMPLEMENTATION_PLAN.md` v6.32, `handover.md`                                |
 | 1.2   | 2026-09-01 | Importní UX sladěn se server-only SimpleShop API tokem; bez file uploadu, s integrovaným read-only preview a budoucím odděleným apply         | `ADR-015`, `P4-02`, `CS-IMPORT-01`; fact-check `main` `bfead32`                 |
 | 1.1   | 2026-09-01 | Zapracován nezávislý UX, kontraktní a tracking review: per-route integrace/UAT, lifecycle DoD, context/asset/action gaps a přesné API hranice | Review tří agentů; contract fact-check `CS-ADMIN-01`, `CS-ANN-01`, content port |

@@ -2,6 +2,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   Button,
+  AdminErrorSummary,
+  AdminAttentionList,
+  AdminDataTable,
+  AdminEmptyState,
+  AdminFilterBar,
+  AdminFormSection,
+  AdminMetricCard,
+  AdminMobileCardList,
+  AdminNavGroup,
+  AdminPageHeader,
+  AdminSkeleton,
+  AdminStatusBadge,
+  AdminTechnicalDetails,
+  AdminUnsavedBar,
   ChoiceField,
   Dialog,
   ErrorSummary,
@@ -24,6 +38,10 @@ describe('BYZON UI primitives', () => {
     expect(brandTokens.touchTarget).toBe('2.75rem');
     expect(brandTokens.typography.display).toContain('Khand');
     expect(brandTokens.typography.body).toContain('Inter');
+    expect(brandTokens.admin.color.primary).toBe('#b01365');
+    expect(brandTokens.admin.color.canvas).toBe('#faf7f9');
+    expect(brandTokens.admin.typography.family).toContain('Inter');
+    expect(brandTokens.admin.radius.control).toBe('0.625rem');
   });
 
   it('prevents a second submit while a button is loading', () => {
@@ -126,5 +144,135 @@ describe('BYZON UI primitives', () => {
     expect(titleId).toBeTruthy();
     expect(markup).toContain(`id="${titleId}"`);
     expect(markup).toContain('aria-label="Zavřít"');
+  });
+
+  it('renders an admin page header with one descriptive heading and action', () => {
+    const markup = renderToStaticMarkup(
+      <AdminPageHeader
+        action={<Button>Načíst změny ze SimpleShopu</Button>}
+        description="Načtěte, zkontrolujte a bezpečně použijte změny vstupenek."
+        meta="Aktuální k 12:04"
+        title="Aktualizace vstupenek"
+      />,
+    );
+
+    expect(markup.match(/<h1/g)).toHaveLength(1);
+    expect(markup).toContain('Aktualizace vstupenek');
+    expect(markup).toContain('Načíst změny ze SimpleShopu');
+    expect(markup).toContain('Aktuální k 12:04');
+  });
+
+  it('keeps status meaning and technical details accessible without color', () => {
+    const markup = renderToStaticMarkup(
+      <>
+        <AdminStatusBadge icon={icon} tone="warning">
+          Vyžaduje pozornost
+        </AdminStatusBadge>
+        <AdminTechnicalDetails>
+          Referenční údaj 1234567890
+        </AdminTechnicalDetails>
+      </>,
+    );
+
+    expect(markup).toContain('Vyžaduje pozornost');
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup).toContain('<details');
+    expect(markup).not.toContain('<details open');
+    expect(markup).toContain('Technické údaje');
+  });
+
+  it('groups related admin fields and links every summary error', () => {
+    const markup = renderToStaticMarkup(
+      <>
+        <AdminErrorSummary
+          errors={[
+            {
+              fieldId: 'duvod-zmeny',
+              message: 'Doplňte důvod změny, který se uloží do historie změn.',
+            },
+          ]}
+          focusOnMount={false}
+        />
+        <AdminFormSection
+          description="Zvolte hodnotu podle dopadu na účastníky."
+          legend="Nastavení rezervací"
+        >
+          <Input id="duvod-zmeny" />
+        </AdminFormSection>
+      </>,
+    );
+
+    expect(markup).toContain('href="#duvod-zmeny"');
+    expect(markup).toContain('<fieldset');
+    expect(markup).toContain('<legend>Nastavení rezervací</legend>');
+    expect(markup).toContain('aria-describedby=');
+  });
+
+  it('keeps long Czech admin data, navigation and actions semantically named', () => {
+    const markup = renderToStaticMarkup(
+      <div data-admin-root="">
+        <AdminNavGroup
+          activeItemId="tickets"
+          items={[
+            {
+              href: '/admin/vstupenky',
+              icon,
+              id: 'tickets',
+              label: 'Aktualizace vstupenek ze serverově připojeného zdroje',
+            },
+          ]}
+          label="Účastníci a vstupenky"
+        />
+        <AdminAttentionList
+          items={[
+            {
+              action: <Button>Zkontrolovat kapacitu</Button>,
+              description: 'Obsazeno je 78 z 80 dostupných míst.',
+              id: 'capacity',
+              severity: 'warning',
+              title: 'Aktivita Růst bez zkratek je téměř plná',
+            },
+          ]}
+        />
+        <AdminMetricCard
+          detail="Dvacet osm účastníků zatím přístup neaktivovalo."
+          label="Aktivace účastníků"
+          updatedAt="Aktuální k 12:04"
+          value="412 z 440"
+        />
+        <AdminFilterBar
+          clearAction={<Button variant="quiet">Vymazat filtry</Button>}
+        >
+          <Button variant="secondary">Vyžaduje pozornost</Button>
+        </AdminFilterBar>
+        <AdminDataTable caption="Zkontrolované změny vstupenek">
+          <tbody>
+            <tr>
+              <th scope="row">Vstupenka 7100001</th>
+              <td>Vyžaduje opravu ve zdroji prodeje</td>
+            </tr>
+          </tbody>
+        </AdminDataTable>
+        <AdminMobileCardList label="Změny vstupenek na malém displeji">
+          <li>Vstupenka 7100001 · vyžaduje opravu</li>
+        </AdminMobileCardList>
+        <AdminEmptyState
+          action={<Button>Načíst změny</Button>}
+          title="Od poslední kontroly nejsou žádné nové změny"
+        >
+          Zkontrolovat zdroj můžete znovu později.
+        </AdminEmptyState>
+        <AdminSkeleton />
+        <AdminUnsavedBar onDiscard={() => undefined} onSave={() => undefined} />
+      </div>,
+    );
+
+    expect(markup).toContain('aria-current="page"');
+    expect(markup).toContain('aria-label="Účastníci a vstupenky"');
+    expect(markup).toContain('role="region"');
+    expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain('aria-label="Neuložené změny"');
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain('Aktualizace vstupenek ze serverově');
   });
 });

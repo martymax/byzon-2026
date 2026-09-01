@@ -52,6 +52,7 @@ export const AdminContentWorkspace = ({
       <section
         aria-labelledby="admin-content-blocked-title"
         className={`${styles.contentWorkspace} ${styles.forbidden}`}
+        data-admin-root=""
         role="alert"
       >
         <p className={styles.eyebrow}>Přístup k obsahu uzavřen</p>
@@ -81,7 +82,11 @@ export const AdminContentWorkspace = ({
   }
 
   return (
-    <div className={styles.contentWorkspace} key={securityGeneration}>
+    <div
+      className={styles.contentWorkspace}
+      data-admin-root=""
+      key={securityGeneration}
+    >
       <PublicationControl
         contentRevision={contentRevision}
         draftDirty={editorDirty}
