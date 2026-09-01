@@ -22,7 +22,9 @@ describe('conference sign-in homepage', () => {
   it('opens the safe magic-link login without a ticket activation gate', async () => {
     const markup = renderToStaticMarkup(await HomePage({}));
 
-    expect(loginMocks.render.mock.calls[0]?.[0]).toEqual({ returnTo: '/app' });
+    expect(loginMocks.render.mock.calls[0]?.[0]).toEqual({
+      returnTo: '/po-prihlaseni',
+    });
     expect(markup).toBe('<div data-magic-link-login="true"></div>');
   });
 

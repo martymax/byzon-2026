@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 
 import { MagicLinkLogin } from '../components/magic-link-login';
-import { resolveAuthReturnTo } from '../lib/auth-return';
+import {
+  POST_LOGIN_DESTINATION,
+  resolveAuthReturnTo,
+} from '../lib/auth-return';
 
 export const metadata: Metadata = {
   title: 'Přihlášení',
@@ -17,6 +20,8 @@ export default async function HomePage({
 }) {
   const query = searchParams ? await searchParams : undefined;
   return (
-    <MagicLinkLogin returnTo={resolveAuthReturnTo(query?.returnTo, '/app')} />
+    <MagicLinkLogin
+      returnTo={resolveAuthReturnTo(query?.returnTo, POST_LOGIN_DESTINATION)}
+    />
   );
 }

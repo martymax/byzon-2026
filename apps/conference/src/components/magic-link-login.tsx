@@ -11,13 +11,13 @@ import {
 import { activationEmailSchema } from '@byzon/domain/contracts';
 import { useRef, useState } from 'react';
 
-import type { AuthReturnTo } from '../lib/auth-return';
+import { POST_LOGIN_DESTINATION, type AuthReturnTo } from '../lib/auth-return';
 
 type LoginFailure = 'offline' | 'rate_limited' | 'unavailable';
 
 export const MagicLinkLogin = ({
   fetch = globalThis.fetch,
-  returnTo = '/app',
+  returnTo = POST_LOGIN_DESTINATION,
 }: {
   readonly fetch?: typeof globalThis.fetch;
   readonly returnTo?: AuthReturnTo;

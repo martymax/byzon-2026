@@ -12,6 +12,24 @@ beforeEach(() => {
 });
 
 describe('production magic-link login', () => {
+  it('uses the role-aware destination when no protected route is explicit', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(Response.json({ status: true }, { status: 200 })),
+    );
+    const screen = await renderComponent(<MagicLinkLogin fetch={fetch} />);
+
+    await screen.getByLabelText('E-mail').fill('Admin@Example.Test');
+    await screen
+      .getByRole('button', { name: 'Poslat přihlašovací odkaz' })
+      .click();
+
+    const [, request] = fetch.mock.calls[0]!;
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      callbackURL: '/po-prihlaseni',
+      errorCallbackURL: '/prihlaseni?returnTo=%2Fpo-prihlaseni',
+    });
+  });
+
   it('submits directly to Better Auth and keeps the e-mail out of storage and the URL', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Promise.resolve(Response.json({ status: true }, { status: 200 })),
