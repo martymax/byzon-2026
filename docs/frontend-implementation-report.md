@@ -1,6 +1,6 @@
 # BYZON 2026 – report dokončení frontendu
 
-> Stav k 16. srpnu 2026: v6 scope-aligned frontendové preview nad syntetickými daty
+> Stav k 2. září 2026: v6 scope-aligned frontendové preview a probíhající AUX redesign administrace
 >
 > Lifecycle: `UI ready (mocked)`
 >
@@ -65,9 +65,12 @@ scope.
   formuláři;
 - role, export, rezervace a settings mají canonical success,
   stale, permission, idempotency a audit varianty.
-- `/admin/obsah` nabízí přepínač běžného stateful, empty, archived, stale,
-  conflict, offline, permission a session-expired scénáře pro všech osm
-  obsahových zdrojů i immutable publikaci.
+- `/admin/obsah` otevírá seznam místo formuláře, seskupuje osm obsahových
+  zdrojů do pěti lidských oblastí a používá bezpečný URL stav bez interních ID.
+  Zveřejnění ukazuje autoritativní title-level změny a technické údaje schovává
+  do disclosure; mocked asset UI kryje placeholder, krátkodobý náhled,
+  progres, chybu, výměnu, odstranění a read-only stav. Produkční asset resolver
+  zůstává záměrně nepřipojený do `P3-13`/`AUX-13L`.
 
 ### Check-in
 

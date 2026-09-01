@@ -11,6 +11,12 @@ const ids = {
   item: '019fc500-0000-7000-8000-000000000003',
 } as const;
 const checksum = 'a'.repeat(64);
+const emptyPublicationSummary = {
+  available: true as const,
+  changeCount: 0,
+  changes: [],
+  previousPublication: null,
+};
 const publicationSnapshot = {
   event: {
     endsAt: '2026-09-20T18:00:00.000Z',
@@ -286,6 +292,7 @@ describe('admin content fetch port', () => {
       itemCount: 0,
       requestId: 'admin-content-test-0001',
       significantSessionIds: [ids.item],
+      summary: emptyPublicationSummary,
       version: 5,
     };
     const fetcher = vi
@@ -293,8 +300,10 @@ describe('admin content fetch port', () => {
       .mockResolvedValueOnce(
         response({
           checksumSha256: checksum,
+          createdAt: '2026-07-26T10:00:00.000Z',
           requestId: 'admin-content-test-0001',
           significantSessionIds: [ids.item],
+          summary: emptyPublicationSummary,
           snapshot: publicationSnapshot,
           version: 5,
         }),
@@ -302,6 +311,7 @@ describe('admin content fetch port', () => {
       .mockResolvedValueOnce(
         response({
           checksumSha256: checksum,
+          publishedAt: '2026-07-26T10:05:00.000Z',
           requestId: 'admin-content-test-0001',
           version: 5,
         }),
@@ -436,6 +446,7 @@ describe('admin content fetch port', () => {
         itemCount: 8,
         requestId: 'admin-content-test-0001',
         significantSessionIds: [],
+        summary: emptyPublicationSummary,
         version: 6,
       }),
     ).resolves.toMatchObject({
@@ -452,6 +463,7 @@ describe('admin content fetch port', () => {
       itemCount: 0,
       requestId: 'admin-content-test-0001',
       significantSessionIds: [],
+      summary: emptyPublicationSummary,
       version: 1,
     };
     const fetcher = vi

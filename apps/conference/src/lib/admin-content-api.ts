@@ -1,8 +1,10 @@
 import {
+  adminPublicationSummarySchema,
   publishedContentSnapshotSchema,
   publishedFaqSchema,
   publishedPracticalPageSchema,
   publishedProgramSnapshotSchema,
+  type AdminPublicationSummary,
 } from '@byzon/domain/contracts';
 import { z } from 'zod';
 
@@ -44,11 +46,13 @@ export interface AdminPublicationPreview {
   readonly itemCount: number;
   readonly requestId: string;
   readonly significantSessionIds: readonly string[];
+  readonly summary: AdminPublicationSummary;
   readonly version: number;
 }
 
 export interface AdminPublicationResult {
   readonly checksumSha256: string;
+  readonly publishedAt: string;
   readonly requestId: string;
   readonly version: number;
 }
@@ -266,8 +270,10 @@ const publicationSnapshotSchema = publishedProgramSnapshotSchema.and(
 const publicationPreviewSchema = z
   .object({
     checksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    createdAt: z.string().datetime({ offset: true }),
     requestId: z.string().min(1),
     significantSessionIds: z.array(z.string().uuid()),
+    summary: adminPublicationSummarySchema,
     snapshot: publicationSnapshotSchema,
     version: z.number().int().positive(),
   })
@@ -276,6 +282,7 @@ const publicationPreviewSchema = z
 const publicationResultSchema = z
   .object({
     checksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    publishedAt: z.string().datetime({ offset: true }),
     requestId: z.string().min(1),
     version: z.number().int().positive(),
   })
@@ -436,7 +443,7 @@ const problemFailure = async (
   ) {
     return withMetadata({
       kind: 'stale',
-      message: 'Obsah se mezitím změnil. Načtěte nový snapshot.',
+      message: 'Obsah se mezitím změnil. Načtěte aktuální stav.',
     });
   }
   if (response.status === 409) {
@@ -643,11 +650,12 @@ export const createFetchAdminContentPort = (
         ok: true,
         data: {
           checksumSha256: result.data.checksumSha256,
-          createdAt: new Date().toISOString(),
+          createdAt: result.data.createdAt,
           expectedPreviousVersion: result.data.version - 1,
           itemCount: snapshotItemCount(result.data.snapshot),
           requestId: result.data.requestId,
           significantSessionIds: result.data.significantSessionIds,
+          summary: result.data.summary,
           version: result.data.version,
         },
       };

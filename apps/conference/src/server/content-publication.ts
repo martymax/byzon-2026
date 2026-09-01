@@ -11,6 +11,9 @@ import {
   type DatabaseTransaction,
 } from '@byzon/database';
 import {
+  type AdminContentContractResource,
+  type AdminPublicationChange,
+  type AdminPublicationSummary,
   publishedAgendaReservationWindowsSchema,
   publishedContentSnapshotSchema,
   publishedProgramAgendaSnapshotSchema,
@@ -276,6 +279,11 @@ export interface PublicationPreview {
   checksumSha256: string;
   snapshot: Record<string, unknown>;
   significantSessionIds: string[];
+  summary: AdminPublicationSummary;
+}
+
+export interface PublishedPublication extends PublicationPreview {
+  publishedAt: string;
 }
 
 const snapshotCollection = (
@@ -337,6 +345,152 @@ export const detectSignificantProgramChanges = (
   return [...changed].sort();
 };
 
+const publicationCollections = (
+  snapshot: Record<string, unknown>,
+): Readonly<
+  Record<AdminContentContractResource, readonly Record<string, unknown>[]>
+> => {
+  const program = snapshot.program as Record<string, unknown>;
+  const practical = snapshot.practical as Record<string, unknown>;
+  return {
+    days: program.days as readonly Record<string, unknown>[],
+    venues: snapshot.venues as readonly Record<string, unknown>[],
+    rooms: program.rooms as readonly Record<string, unknown>[],
+    sessions: program.sessions as readonly Record<string, unknown>[],
+    speakers: snapshot.speakers as readonly Record<string, unknown>[],
+    partners: snapshot.partners as readonly Record<string, unknown>[],
+    pages: practical.pages as readonly Record<string, unknown>[],
+    faqs: practical.faqs as readonly Record<string, unknown>[],
+  };
+};
+
+const publicationItemTitle = (
+  resource: AdminContentContractResource,
+  item: Readonly<Record<string, unknown>>,
+): string => {
+  if (resource === 'speakers') {
+    return `${String(item.firstName)} ${String(item.lastName)}`;
+  }
+  return String(
+    item.title ?? item.name ?? item.question ?? item.localDate ?? 'Obsah',
+  );
+};
+
+const publicationImpact = (
+  resource: AdminContentContractResource,
+  before: Readonly<Record<string, unknown>>,
+  after: Readonly<Record<string, unknown>>,
+): AdminPublicationChange['impact'] => {
+  const impact = new Set<AdminPublicationChange['impact'][number]>();
+  if (
+    resource === 'sessions' &&
+    (before.startsAt !== after.startsAt || before.endsAt !== after.endsAt)
+  ) {
+    impact.add('time');
+  }
+  if (
+    (resource === 'sessions' && before.roomId !== after.roomId) ||
+    (resource === 'rooms' &&
+      (before.name !== after.name || before.venueId !== after.venueId))
+  ) {
+    impact.add('location');
+  }
+  if (before.status !== after.status) impact.add('status');
+  if (before.sortOrder !== after.sortOrder) impact.add('order');
+  const covered = new Set([
+    'startsAt',
+    'endsAt',
+    'roomId',
+    'venueId',
+    'status',
+    'sortOrder',
+    'version',
+  ]);
+  if (
+    Object.keys({ ...before, ...after }).some(
+      (key) =>
+        !covered.has(key) &&
+        canonicalJson(before[key]) !== canonicalJson(after[key]),
+    )
+  ) {
+    impact.add('content');
+  }
+  return impact.size ? [...impact] : ['content'];
+};
+
+export const summarizePublicationChanges = (
+  previous: Record<string, unknown> | null,
+  current: Record<string, unknown>,
+  previousPublication: AdminPublicationSummary['previousPublication'] = null,
+): AdminPublicationSummary => {
+  const currentCollections = publicationCollections(current);
+  const previousCollections = previous
+    ? publicationCollections(previous)
+    : null;
+  const changes: AdminPublicationChange[] = [];
+
+  for (const resource of [
+    'days',
+    'sessions',
+    'speakers',
+    'venues',
+    'rooms',
+    'partners',
+    'pages',
+    'faqs',
+  ] as const) {
+    const before = new Map(
+      (previousCollections?.[resource] ?? []).map((item) => [
+        String(item.id),
+        item,
+      ]),
+    );
+    const after = new Map(
+      currentCollections[resource].map((item) => [String(item.id), item]),
+    );
+    for (const [id, item] of after) {
+      const prior = before.get(id);
+      if (!prior) {
+        changes.push({
+          kind: 'added',
+          resource,
+          title: publicationItemTitle(resource, item),
+          impact: ['content'],
+        });
+        continue;
+      }
+      if (canonicalJson(prior) === canonicalJson(item)) continue;
+      changes.push({
+        kind:
+          resource === 'sessions' &&
+          prior.status !== 'cancelled' &&
+          item.status === 'cancelled'
+            ? 'cancelled'
+            : 'updated',
+        resource,
+        title: publicationItemTitle(resource, item),
+        impact: publicationImpact(resource, prior, item),
+      });
+    }
+    for (const [id, item] of before) {
+      if (after.has(id)) continue;
+      changes.push({
+        kind: 'archived',
+        resource,
+        title: publicationItemTitle(resource, item),
+        impact: ['status'],
+      });
+    }
+  }
+
+  return {
+    available: true,
+    changeCount: changes.length,
+    changes,
+    previousPublication,
+  };
+};
+
 export const previewContentPublication = async (
   db: Database,
   eventId: string,
@@ -346,7 +500,12 @@ export const previewContentPublication = async (
     db.query.contentPublications.findFirst({
       where: eq(schema.contentPublications.eventId, eventId),
       orderBy: [desc(schema.contentPublications.version)],
-      columns: { checksumSha256: true, version: true, snapshot: true },
+      columns: {
+        checksumSha256: true,
+        version: true,
+        snapshot: true,
+        publishedAt: true,
+      },
     }),
   ]);
   const checksumSha256 = checksumSnapshot(snapshot);
@@ -358,6 +517,16 @@ export const previewContentPublication = async (
     significantSessionIds: detectSignificantProgramChanges(
       previous?.snapshot ?? null,
       snapshot,
+    ),
+    summary: summarizePublicationChanges(
+      previous?.snapshot ?? null,
+      snapshot,
+      previous
+        ? {
+            version: previous.version,
+            publishedAt: previous.publishedAt.toISOString(),
+          }
+        : null,
     ),
   };
 };
@@ -371,7 +540,7 @@ export const publishContent = async (
     expectedPreviousVersion: number;
     expectedChecksumSha256: string;
   },
-): Promise<PublicationPreview> =>
+): Promise<PublishedPublication> =>
   withTransaction(db, async (transaction) => {
     await acquireTransactionLock(
       transaction,
@@ -389,7 +558,8 @@ export const publishContent = async (
     requirePublicationChanges(previous?.checksumSha256, snapshotChecksum);
     if (snapshotChecksum !== input.expectedChecksumSha256)
       throw new ContentPublicationError('STALE_DRAFT');
-    const result: PublicationPreview = {
+    const publishedAt = new Date();
+    const result: PublishedPublication = {
       version: input.expectedPreviousVersion + 1,
       checksumSha256: snapshotChecksum,
       snapshot,
@@ -397,6 +567,17 @@ export const publishContent = async (
         previous?.snapshot ?? null,
         snapshot,
       ),
+      summary: summarizePublicationChanges(
+        previous?.snapshot ?? null,
+        snapshot,
+        previous
+          ? {
+              version: previous.version,
+              publishedAt: previous.publishedAt.toISOString(),
+            }
+          : null,
+      ),
+      publishedAt: publishedAt.toISOString(),
     };
     const publicationId = generateUuidV7();
     await transaction.insert(schema.contentPublications).values({
@@ -407,6 +588,7 @@ export const publishContent = async (
       reservationWindows: reservationWindowsForSnapshot(snapshot),
       checksumSha256: result.checksumSha256,
       publishedBy: input.actorId,
+      publishedAt,
     });
     await transaction.insert(schema.outboxEvents).values({
       id: generateUuidV7(),

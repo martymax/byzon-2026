@@ -1,6 +1,7 @@
 export * from './activation.js';
 export * from './activity-roster.js';
 export * from './admin.js';
+export * from './admin-content.js';
 export * from './agenda.js';
 export * from './announcements.js';
 export * from './content.js';

@@ -5,21 +5,27 @@ import { useCallback, useState } from 'react';
 import type {
   AdminContentFailure,
   AdminContentPort,
+  AdminContentResource,
 } from '@/lib/admin-content-api';
 
+import type { AdminContentAssetPort } from './admin-content-asset-field';
 import { AdminContentConsole } from './admin-content-console';
 import styles from './admin-workspace.module.css';
 import { PublicationControl } from './publication-control';
 
 export const AdminContentWorkspace = ({
+  assetPort,
   eventId,
+  initialResource,
   onDirtyChange,
   onSecurityFailure,
   port,
   readOnly = false,
   timezone,
 }: {
+  readonly assetPort?: AdminContentAssetPort;
   readonly eventId: string;
+  readonly initialResource?: AdminContentResource;
   readonly onDirtyChange?: (dirty: boolean) => void;
   readonly onSecurityFailure?: (failure: AdminContentFailure) => void;
   readonly port?: AdminContentPort;
@@ -87,18 +93,21 @@ export const AdminContentWorkspace = ({
       data-admin-root=""
       key={securityGeneration}
     >
+      <AdminContentConsole
+        {...(assetPort ? { assetPort } : {})}
+        eventId={eventId}
+        {...(initialResource ? { initialResource } : {})}
+        onContentChanged={() => setContentRevision((value) => value + 1)}
+        onDirtyChange={handleDirtyChange}
+        onSecurityFailure={handleSecurityFailure}
+        {...(port ? { port } : {})}
+        readOnly={readOnly}
+        timezone={timezone}
+      />
       <PublicationControl
         contentRevision={contentRevision}
         draftDirty={editorDirty}
         eventId={eventId}
-        onSecurityFailure={handleSecurityFailure}
-        {...(port ? { port } : {})}
-        readOnly={readOnly}
-      />
-      <AdminContentConsole
-        eventId={eventId}
-        onContentChanged={() => setContentRevision((value) => value + 1)}
-        onDirtyChange={handleDirtyChange}
         onSecurityFailure={handleSecurityFailure}
         {...(port ? { port } : {})}
         readOnly={readOnly}
