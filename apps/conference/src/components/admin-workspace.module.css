@@ -392,6 +392,117 @@
   gap: 1.25rem;
 }
 
+.dashboardHealthy {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--admin-success);
+  border-radius: var(--admin-radius-panel);
+  color: var(--admin-success-ink);
+  background: var(--admin-success-soft);
+}
+
+.dashboardHealthy h2,
+.dashboardHealthy p {
+  margin: 0;
+}
+
+.dashboardHealthy p {
+  margin-top: 0.25rem;
+}
+
+.dashboardFallback {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--admin-text-muted);
+}
+
+.dashboardMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.dashboardMetricCard {
+  position: relative;
+  min-width: 0;
+}
+
+.dashboardMetricCard > article {
+  height: 100%;
+  padding-right: 3.25rem;
+}
+
+.dashboardMetricCard[data-state='attention'] > article {
+  border-color: var(--admin-warning);
+}
+
+.dashboardMetricCard[data-state='degraded'] > article {
+  border-color: var(--admin-danger);
+}
+
+.dashboardMetricIcon {
+  position: absolute;
+  z-index: 1;
+  top: 1.1rem;
+  right: 1.1rem;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  color: var(--admin-primary);
+  background: var(--admin-surface-brand);
+}
+
+.dashboardMetricCard p {
+  margin: 0.65rem 0 0;
+}
+
+.dashboardTaskList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboardTaskList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.5rem;
+  padding-block: 0.65rem;
+  border-top: 1px solid var(--admin-border);
+}
+
+.dashboardTaskList a {
+  flex: none;
+  color: var(--admin-primary);
+  font-weight: 700;
+}
+
+.dashboardQueueList {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.dashboardQueueList div {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.4fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.dashboardQueueList dt {
+  color: var(--admin-ink);
+  font-weight: 700;
+}
+
+.dashboardQueueList dd {
+  margin: 0;
+}
+
 .twoColumn {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1230,8 +1341,19 @@
   .twoColumn,
   .threeColumn,
   .featureGrid,
+  .dashboardMetricGrid,
   .summaryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .dashboardTaskList li,
+  .dashboardQueueList div {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardTaskList li {
+    flex-direction: column;
   }
 
   .tableWrap {

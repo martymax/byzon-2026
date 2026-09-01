@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const gateMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
 const previewMock = vi.hoisted(() => vi.fn());
+const routeWorkspaceMocks = vi.hoisted(() => ({
+  audit: vi.fn(() => null),
+  reports: vi.fn(() => null),
+  reservations: vi.fn(() => null),
+  settings: vi.fn(() => null),
+  team: vi.fn(() => null),
+}));
 
 vi.mock('@/lib/admin-frontend-preview', () => ({
   requireAdminFrontendPreview: gateMock,
@@ -27,12 +34,17 @@ vi.mock('@/components/admin-announcement-workspace', () => ({
 }));
 vi.mock('@/components/admin-operations-workspace', () => ({
   AdminOperationsWorkspace: () => null,
+  AdminReportsWorkspace: routeWorkspaceMocks.reports,
+  AdminTeamWorkspace: routeWorkspaceMocks.team,
 }));
 vi.mock('@/components/admin-engagement-workspace', () => ({
   AdminEngagementWorkspace: () => null,
 }));
 vi.mock('@/components/admin-reservation-workspace', () => ({
   AdminReservationWorkspace: () => null,
+  AdminAuditWorkspace: routeWorkspaceMocks.audit,
+  AdminReservationsWorkspace: routeWorkspaceMocks.reservations,
+  AdminSettingsWorkspace: routeWorkspaceMocks.settings,
 }));
 
 import AdminAuditPage from './audit/page';
@@ -86,14 +98,13 @@ describe('F4 direct mock admin route boundary', () => {
     },
   );
 
-  it('selects the live-only reservation workspace in production', () => {
-    const page = AdminReservationsPage();
-
-    expect(page.props.mode).toBe('reservations');
+  it('gives each split management route its own workspace', () => {
+    expect(AdminReservationsPage().type).toBe(routeWorkspaceMocks.reservations);
+    expect(AdminRolesPage().type).toBe(routeWorkspaceMocks.team);
+    expect(AdminReportsPage().type).toBe(routeWorkspaceMocks.reports);
+    expect(AdminAuditPage().type).toBe(routeWorkspaceMocks.audit);
+    expect(AdminSettingsPage().type).toBe(routeWorkspaceMocks.settings);
     expect(gateMock).not.toHaveBeenCalled();
-
-    previewMock.mockReturnValue(true);
-    expect(AdminReservationsPage().props.mode).toBe('full');
   });
 
   it.each(mockRoutes)('keeps the %s route production-hidden', (_name, page) => {

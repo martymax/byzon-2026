@@ -3,7 +3,7 @@
 > Stav dokumentu: `specification ready`; zahájení změn kódu podmiňuje
 > governance úkol `AUX-00B`
 >
-> Verze: 1.5
+> Verze: 1.6
 >
 > Datum: 2. září 2026
 >
@@ -1381,9 +1381,9 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-02E` | U1  | [x]  | UI            | Topbar s názvem/fází, actor label a bezpečným account menu                         | `AUX-02B`, `AUX-02C`                                                                                                                        | —                                                                                      | `AUX-02D`                                                                   | `CS-ADMIN-01`                                            | N/A               | lidský event/fáze/actor, skutečné account odkazy, bez UUID/timezone                                       |
 | `AUX-02F` | U0  | [x]  | UI            | Tablet/mobile drawer se stejnou IA, focus trapem a safe area                       | `AUX-02D`                                                                                                                                   | —                                                                                      | —                                                                           | `CS-ADMIN-01`                                            | N/A               | native modal dialog, Escape, inert/focus trap, scroll lock/restore, safe-area                             |
 | `AUX-02G` | U0  | [x]  | QA            | Metadata, loading/error, route focus a úplná shell test matice                     | `AUX-02E`, `AUX-02F`                                                                                                                        | —                                                                                      | `AUX-03A`                                                                   | `CS-ADMIN-01`                                            | UI ready (mocked) | 10 canonical titles, loading/error; browser 891/891, unit 549/549, typecheck                              |
-| `AUX-03A` | U0  | [ ]  | architecture  | Rozdělit sdílené monolity na samostatné route workspaces                           | `AUX-02B`                                                                                                                                   | —                                                                                      | `AUX-02G`                                                                   | N/A                                                      | N/A               | — / role≠reporty; rezervace≠audit≠settings                                                                |
-| `AUX-03B` | U0  | [ ]  | UI            | Phase-aware přehled a permission-safe attention/CTA mapování                       | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                                      | `AUX-04A`, `AUX-05A`, `AUX-06A`                                             | `CS-ADMIN-01`                                            | N/A               | — / §10.1 bez nefunkčních CTA                                                                             |
-| `AUX-03C` | U1  | [ ]  | QA            | Dashboard happy/empty/degraded/offline/permission/archived matice                  | `AUX-03B`                                                                                                                                   | —                                                                                      | `AUX-04E`, `AUX-05C`, `AUX-06D`, `AUX-07C`, `AUX-08C`, `AUX-09C`, `AUX-10G` | `CS-ADMIN-01`                                            | UI ready (mocked) | — / axe, keyboard, role/phase fixtures                                                                    |
+| `AUX-03A` | U0  | [x]  | architecture  | Rozdělit sdílené monolity na samostatné route workspaces                           | `AUX-02B`                                                                                                                                   | —                                                                                      | `AUX-02G`                                                                   | N/A                                                      | N/A               | samostatné route exporty/h1; browser endpoint isolation pro pět rout                                      |
+| `AUX-03B` | U0  | [x]  | UI            | Phase-aware přehled a permission-safe attention/CTA mapování                       | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                                      | `AUX-04A`, `AUX-05A`, `AUX-06A`                                             | `CS-ADMIN-01`                                            | N/A               | exhaustive registry 6 metrik; odvozená attention/CTA; phase tasks                                         |
+| `AUX-03C` | U1  | [x]  | QA            | Dashboard happy/empty/degraded/offline/permission/archived matice                  | `AUX-03B`                                                                                                                                   | —                                                                                      | `AUX-04E`, `AUX-05C`, `AUX-06D`, `AUX-07C`, `AUX-08C`, `AUX-09C`, `AUX-10G` | `CS-ADMIN-01`                                            | UI ready (mocked) | browser 936/936; unit 550/550; šest metrik, pět fází, axe a responsive                                    |
 | `AUX-04A` | U1  | [ ]  | UI            | List-first obsahová IA, typ selector a lidské seskupení 8 zdrojů                   | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                                      | `AUX-03B`, `AUX-05A`, `AUX-06A`                                             | `P3-05`                                                  | N/A               | — / acceptance `04A`                                                                                      |
 | `AUX-04B` | U1  | [ ]  | UI            | Přesné labely, auto adresa, speaker picker a přístupné řazení                      | `AUX-01C`, `AUX-04A`                                                                                                                        | —                                                                                      | `AUX-04C`                                                                   | `P3-05`                                                  | N/A               | — / acceptance `04B`                                                                                      |
 | `AUX-04C` | U0  | [ ]  | contract      | Human publication summary: názvy/dopad/revision/time/change count                  | `AUX-00B`                                                                                                                                   | —                                                                                      | `AUX-04B`                                                                   | `GAP-AUX-CONTENT-01`, `P3-05`, `P3-06`, `P3-07`, `P3-08` | contract ready    | — / DTO + fixtures bez raw ID fallbacku                                                                   |
@@ -1563,17 +1563,17 @@ none` není řešení landmark problému.
 
 **Dashboard akceptace**
 
-- [ ] **03A-1:** Každá route vlastní samostatný workspace/h1; request fence,
+- [x] **03A-1:** Každá route vlastní samostatný workspace/h1; request fence,
       failure překlad a idempotence zůstávají sdílené bez kopírování.
-- [ ] **03B-1:** `metric.id` má compile-time exhaustivní label, pořadí, icon a
+- [x] **03B-1:** `metric.id` má compile-time exhaustivní label, pořadí, icon a
       permission-safe target/fallback podle §10.1.
-- [ ] **03B-2:** Attention seznam se odvozuje ze stavu, ne z hard-coded karet;
+- [x] **03B-2:** Attention seznam se odvozuje ze stavu, ne z hard-coded karet;
       bez řešitelného targetu nevyrábí CTA.
-- [ ] **03B-3:** `generatedAt` je „Aktuální k…“ v event timezone; queue raw
+- [x] **03B-3:** `generatedAt` je „Aktuální k…“ v event timezone; queue raw
       názvy a DLQ nejsou v hlavním toku.
-- [ ] **03B-4:** Fáze draft/activation/live/ended/archived mění další kroky,
+- [x] **03B-4:** Fáze draft/activation/live/ended/archived mění další kroky,
       nikoli permissions.
-- [ ] **03C-1:** Empty/healthy/degraded/offline/permission/archived, všech šest
+- [x] **03C-1:** Empty/healthy/degraded/offline/permission/archived, všech šest
       metrik a negativní CTA případy jsou testované.
 
 ### 15.4 `AUX-04` — program, obsah a publikace
@@ -1901,6 +1901,7 @@ vlastníky, ne důvod hádat produktové chování.
 
 | Verze | Datum      | Změna                                                                                                                                         | Evidence                                                                        |
 | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1.6   | 2026-09-02 | `AUX-03A`–`C`: samostatné route workspaces, phase-aware dashboard, exhaustive metric registry a permission-safe attention/CTA                 | Browser 936/936; unit 550/550; UI 19/19; typecheck a lint                       |
 | 1.5   | 2026-09-02 | `AUX-02A`–`G`: route-aware chrome, oddělený shell adapter, explicitní context capability, cílová navigace/topbar a modal drawer               | Browser 891/891; unit 549/549; 320–1440 px + 200% zoom; typecheck               |
 | 1.4   | 2026-09-01 | `AUX-01A`–`C`: sdílené admin tokeny, Inter pracovní typografie, povinné primitives a exhaustive prezentační registry                          | UI 18/18; conference unit 547/547; admin browser/axe 873/873; typecheck a lint  |
 | 1.3   | 2026-09-01 | `AUX-00B` synchronizoval AUX→F4/P/CS mapování, branch/handoff pravidla a založil samostatný asset backend slice `P3-13`                       | `AI_IMPLEMENTATION_PLAN.md` v6.32, `handover.md`                                |

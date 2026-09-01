@@ -1,15 +1,10 @@
 import type { Metadata } from 'next';
-import { AdminReservationWorkspace } from '@/components/admin-reservation-workspace';
-import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
+import { AdminReservationsWorkspace } from '@/components/admin-reservation-workspace';
 
 export const metadata: Metadata = {
   title: { absolute: 'Rezervace a kapacity | Administrace BYZON' },
 };
 
 export default function AdminReservationsPage() {
-  return (
-    <AdminReservationWorkspace
-      mode={isFrontendPreviewAvailable() ? 'full' : 'reservations'}
-    />
-  );
+  return <AdminReservationsWorkspace />;
 }
