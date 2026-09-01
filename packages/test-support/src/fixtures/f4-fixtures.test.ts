@@ -7,6 +7,7 @@ import {
   adminOperationsOverviewResponseSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminReservationSessionPageSchema,
   adminSessionCapacityListResponseSchema,
   adminRoleAssignmentMutationResponseSchema,
   supportMutationResponseSchema,
@@ -31,6 +32,7 @@ import {
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
   adminReservationMutationFixtures,
+  adminReservationSessionFixtures,
   adminSessionCapacityFixtures,
   adminRoleAssignmentFixtures,
   supportMutationFixtures,
@@ -123,6 +125,9 @@ describe('F4 canonical fixture sets', () => {
       expect(adminReservationListResponseSchema.parse(fixture)).toEqual(
         fixture,
       );
+    }
+    for (const fixture of Object.values(adminReservationSessionFixtures)) {
+      expect(adminReservationSessionPageSchema.parse(fixture)).toEqual(fixture);
     }
     for (const fixture of Object.values(adminSessionCapacityFixtures)) {
       expect(adminSessionCapacityListResponseSchema.parse(fixture)).toEqual(

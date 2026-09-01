@@ -156,9 +156,15 @@ produktového rozhodnutí o jejich rozdílu a rezervacích fail-closed skryté.
 
 Oznámení používají critical-only draft, event/affected-session audience preview
 a immutable send. Role jsou event/session/room scoped; exporty jsou
-asynchronní. Rezervační override, audit a settings vyžadují přesné oprávnění,
-expected version a canonical odpověď. Každý request je fenced podle eventu a security epoch;
-permission loss nebo 401/403 skryje P3 data a přeruší stale práci.
+asynchronní. Rezervace mají nový session-first cursor/pageInfo kontrakt s
+povinně maskovanou referencí. Kanonická stránka řadí plné a téměř plné
+aktivity, zobrazuje textovou obsazenost i progress a odděluje změnu kapacity od
+danger storna konkrétní rezervace; attendance mutace se nevrátila. Dokud
+produkční read nepřejde na nový stránkovaný kontrakt v `AUX-13F`, UI výslovně
+přiznává omezenou první stránku. Rezervační override, audit a settings vyžadují
+přesné oprávnění, expected version a canonical odpověď. Každý request je fenced
+podle eventu a security epoch; permission loss nebo 401/403 skryje P3 data a
+přeruší stale práci.
 
 Správa obsahu na `/admin/obsah` používá jedno typed port rozhraní pro dny,
 místa, místnosti, body programu, řečníky, partnery, stránky a FAQ; development
