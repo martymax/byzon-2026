@@ -140,7 +140,7 @@ describe('F4 contract-first admin journeys', () => {
     );
   });
 
-  it('loads canonical context and fails closed before a forbidden resource is mounted', async () => {
+  it('rejects a non-organizer context before a private resource is mounted', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
     const api = createApi((endpoint) => {
       if (endpoint === adminContextEndpoint) {
@@ -157,7 +157,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'K této části nemáte oprávnění',
+          name: 'Administraci nelze bezpečně zobrazit',
         }),
       )
       .toBeVisible();
@@ -170,6 +170,171 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+  });
+
+  it('fails closed per route before a forbidden organizer resource is mounted', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const limitedOrganizer = {
+      ...adminContextFixtures.organizer!,
+      actor: {
+        ...adminContextFixtures.organizer!.actor,
+        permissions: ['operations:read'] as const,
+      },
+    };
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) return success(limitedOrganizer);
+      throw new Error('A forbidden child attempted an API request.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminImportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'K této části nemáte oprávnění',
+        }),
+      )
+      .toBeVisible();
+    expect(api.request).toHaveBeenCalled();
+  });
+
+  it('renders the permission-aware grouped navigation without technical shell identifiers', async () => {
+    const screen = await renderComponent(
+      <AdminWorkspaceShell
+        api={organizerApi(() => null)}
+        environment="production"
+      >
+        <h1>Přehled akce</h1>
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Přehled akce' }))
+      .toBeVisible();
+    expect(
+      document.querySelector('aside a[href="/admin/obsah"]')?.textContent,
+    ).toContain('Program a obsah');
+    expect(
+      document.querySelector('aside a[href="/admin/vstupenky"]')?.textContent,
+    ).toContain('Aktualizace vstupenek');
+    expect(
+      document.querySelector('aside a[href="/check-in"]')?.textContent,
+    ).toContain('Odbavení');
+    expect(document.body.textContent).not.toContain(adminFixtureIds.event);
+    expect(document.body.textContent).not.toContain('Europe/Prague');
+    expect(document.querySelectorAll('main')).toHaveLength(1);
+    expect(document.querySelectorAll('a[href="#admin-main"]')).toHaveLength(1);
+  });
+
+  it('keeps a permitted feature-off destination visible and blocks its private workspace', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return success(adminContextFixtures.organizer_features_off!);
+      }
+      throw new Error('A feature-off workspace attempted a private request.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <p>Soukromý editor oznámení</p>
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Oznámení nejsou pro tuto akci dostupná',
+        }),
+      )
+      .toBeVisible();
+    expect(
+      document.querySelector('aside a[href="/admin/oznameni"]')?.textContent,
+    ).toContain('OznámeníVypnuto');
+    expect(document.body.textContent).not.toContain('Soukromý editor oznámení');
+  });
+
+  it('hides missing permissions and the explicit check-in capability independently', async () => {
+    const limitedContext = {
+      ...adminContextFixtures.organizer!,
+      capabilities: { canEnterCheckin: false },
+      actor: {
+        ...adminContextFixtures.organizer!.actor,
+        permissions: ['operations:read'] as const,
+      },
+    };
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) return success(limitedContext);
+      throw new Error('Unexpected private request.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <h1>Přehled akce</h1>
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Přehled akce' }))
+      .toBeVisible();
+    expect(document.querySelector('aside a[href="/admin"]')).not.toBeNull();
+    expect(
+      document.querySelector('aside a[href="/admin/reporty"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('aside a[href="/admin/ucastnici"]'),
+    ).toBeNull();
+    expect(document.querySelector('aside a[href="/check-in"]')).toBeNull();
+  });
+
+  it('exposes a native modal drawer contract on compact viewports', async () => {
+    const screen = await renderComponent(
+      <AdminWorkspaceShell
+        api={organizerApi(() => null)}
+        environment="production"
+      >
+        <h1>Přehled akce</h1>
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(screen.getByRole('heading', { name: 'Přehled akce' }))
+      .toBeVisible();
+    const triggerElement = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Otevřít navigaci administrace"]',
+    );
+    const dialog = document.querySelector<HTMLDialogElement>('dialog');
+    expect(triggerElement?.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute('aria-labelledby')).toBe(
+      dialog?.querySelector('h2')?.id,
+    );
+  });
+
+  it('offers human account actions and keeps the role inside the account menu', async () => {
+    const screen = await renderComponent(
+      <AdminWorkspaceShell
+        api={organizerApi(() => null)}
+        environment="production"
+      >
+        <h1>Přehled akce</h1>
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: /Demo administrátor/ }).click();
+    await expect
+      .element(screen.getByText('Administrátor', { exact: true }))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('menuitem', {
+          name: 'Přejít do aplikace účastníka',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('menuitem', { name: 'Nastavení akce' }))
+      .toBeVisible();
   });
 
   it('loads a sanitized SimpleShop preview and never offers apply', async () => {

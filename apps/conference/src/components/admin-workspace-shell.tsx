@@ -13,6 +13,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -23,7 +24,7 @@ import type { ApiPort } from '@/lib/api/endpoint';
 import { mayLeaveAdminContentDraft } from '@/lib/admin-content-dirty-guard';
 import { browserAdminApi, requestAdminContext } from '@/lib/admin-api';
 
-import { adminActorRoleLabels } from './admin-ui-registry';
+import { adminActorRoleLabels, adminPhaseLabels } from './admin-ui-registry';
 import { isAdminSecurityFailure } from './admin-workspace-runtime';
 import styles from './admin-workspace.module.css';
 
@@ -31,87 +32,157 @@ export { isAdminSecurityFailure };
 
 type AdminWorkspaceSection =
   | 'overview'
-  | 'import'
-  | 'support'
+  | 'tickets'
+  | 'participants'
   | 'announcements'
-  | 'operations'
   | 'engagement'
   | 'reservations'
-  | 'content';
+  | 'content'
+  | 'roles'
+  | 'reports'
+  | 'audit'
+  | 'settings';
 
-const navigation = [
-  { href: '/admin', integrated: true, label: 'Přehled', section: 'overview' },
-  {
-    href: '/admin/vstupenky',
-    integrated: true,
-    label: 'Import účastníků',
-    section: 'import',
-  },
-  {
-    href: '/admin/ucastnici',
-    integrated: true,
-    label: 'Podpora',
-    section: 'support',
-  },
-  {
-    href: '/admin/oznameni',
-    integrated: true,
-    label: 'Oznámení',
-    section: 'announcements',
-  },
-  {
-    href: '/admin/role',
-    integrated: true,
-    label: 'Role operátorů',
-    section: 'operations',
-  },
-  {
-    href: '/admin/reporty',
-    integrated: true,
-    label: 'Reporty',
-    section: 'operations',
-  },
-  {
-    href: '/admin/interakce',
-    integrated: true,
-    label: 'Interakce',
-    section: 'engagement',
-  },
-  {
-    href: '/admin/rezervace',
-    integrated: true,
-    label: 'Rezervace',
-    section: 'reservations',
-  },
-  {
-    href: '/admin/audit',
-    integrated: true,
-    label: 'Audit',
-    section: 'reservations',
-  },
-  {
-    href: '/admin/nastaveni',
-    integrated: true,
-    label: 'Nastavení',
-    section: 'reservations',
-  },
-  {
-    href: '/admin/obsah',
-    integrated: true,
-    label: 'Obsah akce',
-    section: 'content',
-  },
-] as const satisfies readonly {
+type AdminNavigationIcon =
+  | 'overview'
+  | 'content'
+  | 'participants'
+  | 'tickets'
+  | 'reservations'
+  | 'announcements'
+  | 'checkin'
+  | 'roles'
+  | 'reports'
+  | 'audit'
+  | 'settings';
+
+interface AdminNavigationItem {
   readonly href: string;
-  readonly integrated: boolean;
+  readonly icon: AdminNavigationIcon;
   readonly label: string;
-  readonly section: AdminWorkspaceSection;
-}[];
+  readonly permission?: AdminPermission;
+  readonly section?: AdminWorkspaceSection;
+  readonly capability?: 'canEnterCheckin';
+  readonly feature?: 'announcementsEnabled';
+}
+
+interface AdminNavigationGroup {
+  readonly label?: string;
+  readonly items: readonly AdminNavigationItem[];
+}
+
+const navigationGroups: readonly AdminNavigationGroup[] = [
+  {
+    items: [
+      {
+        href: '/admin',
+        icon: 'overview',
+        label: 'Přehled',
+        permission: 'operations:read',
+        section: 'overview',
+      },
+    ],
+  },
+  {
+    label: 'Obsah akce',
+    items: [
+      {
+        href: '/admin/obsah',
+        icon: 'content',
+        label: 'Program a obsah',
+        permission: 'program:manage',
+        section: 'content',
+      },
+    ],
+  },
+  {
+    label: 'Účastníci a vstupenky',
+    items: [
+      {
+        href: '/admin/ucastnici',
+        icon: 'participants',
+        label: 'Účastníci',
+        permission: 'participant:operational:read',
+        section: 'participants',
+      },
+      {
+        href: '/admin/vstupenky',
+        icon: 'tickets',
+        label: 'Aktualizace vstupenek',
+        permission: 'ticket:any:manage',
+        section: 'tickets',
+      },
+    ],
+  },
+  {
+    label: 'Provoz akce',
+    items: [
+      {
+        href: '/admin/rezervace',
+        icon: 'reservations',
+        label: 'Rezervace a kapacity',
+        permission: 'reservation:any:read',
+        section: 'reservations',
+      },
+      {
+        href: '/admin/oznameni',
+        icon: 'announcements',
+        label: 'Oznámení',
+        permission: 'announcement:send',
+        section: 'announcements',
+        feature: 'announcementsEnabled',
+      },
+      {
+        href: '/check-in',
+        icon: 'checkin',
+        label: 'Odbavení',
+        capability: 'canEnterCheckin',
+      },
+    ],
+  },
+  {
+    label: 'Správa',
+    items: [
+      {
+        href: '/admin/role',
+        icon: 'roles',
+        label: 'Tým a oprávnění',
+        permission: 'role:manage',
+        section: 'roles',
+      },
+      {
+        href: '/admin/reporty',
+        icon: 'reports',
+        label: 'Reporty',
+        permission: 'operations:read',
+        section: 'reports',
+      },
+      {
+        href: '/admin/audit',
+        icon: 'audit',
+        label: 'Historie změn',
+        permission: 'audit:read',
+        section: 'audit',
+      },
+      {
+        href: '/admin/nastaveni',
+        icon: 'settings',
+        label: 'Nastavení akce',
+        permission: 'event:settings:manage',
+        section: 'settings',
+      },
+    ],
+  },
+] as const;
+
+const navigation: readonly AdminNavigationItem[] = navigationGroups.flatMap(
+  ({ items }) => items,
+);
 
 const legacySections: Readonly<Record<string, AdminWorkspaceSection>> = {
-  '/admin/import': 'import',
-  '/admin/support': 'support',
-  '/admin/provoz': 'operations',
+  '/admin/import': 'tickets',
+  '/admin/support': 'participants',
+  '/admin/provoz': 'roles',
 };
 
 const legacyNavigationTargets: Readonly<Record<string, string>> = {
@@ -124,22 +195,21 @@ const sectionPermissions: Readonly<
   Record<AdminWorkspaceSection, readonly AdminPermission[]>
 > = {
   overview: ['operations:read'],
-  import: ['ticket:any:manage'],
-  support: ['participant:operational:read'],
+  tickets: ['ticket:any:manage'],
+  participants: ['participant:operational:read'],
   announcements: ['announcement:send'],
-  operations: [
-    'operations:read',
-    'role:manage',
-    'personal-data:operational:export',
-  ],
   engagement: [
     'event:settings:manage',
     'participant:operational:read',
     'program:manage',
     'role:manage',
   ],
-  reservations: ['reservation:any:read', 'audit:read', 'event:settings:manage'],
+  reservations: ['reservation:any:read'],
   content: ['program:manage'],
+  roles: ['role:manage'],
+  reports: ['operations:read'],
+  audit: ['audit:read'],
+  settings: ['event:settings:manage'],
 };
 
 const previewPersonas = {
@@ -192,35 +262,194 @@ const mayAccess = (
   context: AdminContextResponse,
   section: AdminWorkspaceSection,
 ): boolean =>
-  section === 'engagement'
-    ? sectionPermissions[section].every((permission) =>
-        context.actor.permissions.includes(permission),
-      )
-    : sectionPermissions[section].some((permission) =>
-        context.actor.permissions.includes(permission),
-      );
+  sectionPermissions[section].every((permission) =>
+    context.actor.permissions.includes(permission),
+  );
+
+const AdminNavigationIcon = ({
+  name,
+}: {
+  readonly name: AdminNavigationIcon;
+}) => {
+  const paths: Record<AdminNavigationIcon, ReactNode> = {
+    overview: (
+      <>
+        <rect height="7" width="7" x="3" y="3" />
+        <rect height="7" width="7" x="14" y="3" />
+        <rect height="7" width="7" x="3" y="14" />
+        <rect height="7" width="7" x="14" y="14" />
+      </>
+    ),
+    content: (
+      <>
+        <path d="M8 2v4M16 2v4M3 9h18" />
+        <rect height="18" rx="2" width="18" x="3" y="4" />
+      </>
+    ),
+    participants: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    tickets: (
+      <>
+        <path d="M20 12a2 2 0 0 0 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 0 0-4V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 0-2 2Z" />
+        <path d="M13 5v2M13 17v2M13 11v2" />
+      </>
+    ),
+    reservations: (
+      <>
+        <path d="M5 11V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5" />
+        <path d="M3 11h18v8H3zM5 19v2M19 19v2" />
+      </>
+    ),
+    announcements: (
+      <>
+        <path d="m3 11 18-5v12L3 13v-2Z" />
+        <path d="m11.6 15.4.9 4.1a2 2 0 0 1-3.9.9L7.5 14.3" />
+      </>
+    ),
+    checkin: (
+      <>
+        <path d="M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M7 12h10" />
+      </>
+    ),
+    roles: (
+      <>
+        <circle cx="9" cy="7" r="4" />
+        <path d="M3 21v-2a6 6 0 0 1 12 0v2M19 8v6M16 11h6" />
+      </>
+    ),
+    reports: (
+      <>
+        <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+      </>
+    ),
+    audit: (
+      <>
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+        <path d="M3 3v5h5M12 7v5l3 2" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 9 19.35a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.07 14H3v-4h.09A1.7 1.7 0 0 0 4.65 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63 1.7 1.7 0 0 0 10 3.07V3h4v.09A1.7 1.7 0 0 0 15 4.65a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9 1.7 1.7 0 0 0 20.93 10H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="20"
+      viewBox="0 0 24 24"
+      width="20"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.75"
+    >
+      {paths[name]}
+    </svg>
+  );
+};
+
+const visibleNavigationGroups = (
+  context: AdminContextResponse,
+): readonly AdminNavigationGroup[] =>
+  navigationGroups.flatMap((group) => {
+    const items = group.items.filter((item) => {
+      if (item.capability) return context.capabilities[item.capability];
+      return item.permission
+        ? context.actor.permissions.includes(item.permission)
+        : false;
+    });
+    return items.length > 0 ? [{ ...group, items }] : [];
+  });
 
 const AdminNavigation = ({
   activeHref,
-  items,
+  context,
   label,
+  onNavigate,
 }: {
   readonly activeHref: string;
-  readonly items: readonly (typeof navigation)[number][];
+  readonly context: AdminContextResponse;
   readonly label: string;
-}) => (
-  <nav className={styles.navigation} aria-label={label}>
-    {items.map((item) => (
-      <Link
-        aria-current={item.href === activeHref ? 'page' : undefined}
-        href={item.href}
-        key={item.href}
-      >
-        {item.label}
-      </Link>
-    ))}
-  </nav>
-);
+  readonly onNavigate?: () => void;
+}) => {
+  const groups = visibleNavigationGroups(context);
+  return (
+    <nav className={styles.navigation} aria-label={label}>
+      {groups.map((group, index) => (
+        <section
+          className={styles.navigationGroup}
+          key={group.label ?? `primary-${index}`}
+        >
+          {group.label ? <h2>{group.label}</h2> : null}
+          <ul>
+            {group.items.map((item) => {
+              const featureOff =
+                item.feature !== undefined && !context.features[item.feature];
+              return (
+                <li key={item.href}>
+                  <Link
+                    aria-current={item.href === activeHref ? 'page' : undefined}
+                    href={item.href}
+                    prefetch={false}
+                    {...(onNavigate ? { onClick: onNavigate } : {})}
+                  >
+                    <AdminNavigationIcon name={item.icon} />
+                    <span>{item.label}</span>
+                    {featureOff ? (
+                      <span className={styles.navigationState}>Vypnuto</span>
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </nav>
+  );
+};
+
+const AdminNavigationDrawer = ({
+  children,
+  dialogRef,
+  onClose,
+}: {
+  readonly children: ReactNode;
+  readonly dialogRef: React.RefObject<HTMLDialogElement | null>;
+  readonly onClose: () => void;
+}) => {
+  const titleId = useId();
+
+  return (
+    <dialog
+      aria-labelledby={titleId}
+      className={styles.navigationDrawer}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      ref={dialogRef}
+    >
+      <header className={styles.navigationDrawerHeader}>
+        <h2 id={titleId}>Navigace administrace</h2>
+        <button aria-label="Zavřít" onClick={onClose} type="button">
+          Zavřít
+        </button>
+      </header>
+      <div className={styles.navigationDrawerBody}>{children}</div>
+    </dialog>
+  );
+};
 
 export interface AdminWorkspaceValue {
   readonly api: ApiPort;
@@ -352,109 +581,95 @@ const failureMessage = (failure: ApiFailure<ApiProblem>): string => {
   return 'Administrační kontext se nepodařilo bezpečně ověřit. Zkuste načtení zopakovat.';
 };
 
-export const AdminWorkspaceShell = ({
-  api = browserAdminApi,
+const AdminWorkspaceView = ({
   banner,
   children,
-  environment = 'production',
+  environment,
+  onPersonaChange,
+  previewPersona,
+  refreshContext,
+  securityEpoch,
+  state,
+  value,
 }: {
-  readonly api?: ApiPort;
   readonly banner?: ReactNode;
   readonly children: ReactNode;
-  readonly environment?: 'production' | 'mocked';
+  readonly environment: 'production' | 'mocked';
+  readonly onPersonaChange: (persona: PreviewPersona) => void;
+  readonly previewPersona: PreviewPersona;
+  readonly refreshContext: () => void;
+  readonly securityEpoch: number;
+  readonly state: ShellState;
+  readonly value: AdminWorkspaceValue | null;
 }) => {
   const pathname = usePathname();
   const previousPathname = useRef(pathname);
-  const [previewPersona, setPreviewPersona] =
-    useState<PreviewPersona>('organizer');
-  const [state, setState] = useState<ShellState>({ kind: 'loading' });
-  const [reload, setReload] = useState(0);
-  const [securityEpoch, setSecurityEpoch] = useState(0);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDialogElement>(null);
+  const bodyOverflowRef = useRef('');
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
   const section = sectionForPath(pathname);
-  const activeNavigation = itemForPath(pathname) ?? navigation[0];
+  const activeNavigation = itemForPath(pathname) ?? navigation[0]!;
   const loginReturnTo = canonicalPathForNavigation(pathname);
-  const effectiveApi = useMemo(
-    () => (environment === 'mocked' ? personaApi(api, previewPersona) : api),
-    [api, environment, previewPersona],
-  );
-  const visibleNavigation = useMemo(
-    () =>
-      environment === 'mocked'
-        ? navigation
-        : navigation.filter(({ integrated }) => integrated),
-    [environment],
-  );
 
-  const invalidateSensitive = useCallback((message?: string) => {
-    setSecurityEpoch((current) => current + 1);
-    setState({
-      kind: 'blocked',
-      loginRequired: false,
-      message:
-        message ??
-        'Oprávnění nebo připojení se změnilo. Soukromá data byla odstraněna.',
-    });
+  const closeDrawer = useCallback(() => {
+    const dialog = drawerRef.current;
+    if (dialog?.open) dialog.close();
+    document.body.style.overflow = bodyOverflowRef.current;
+    menuButtonRef.current?.setAttribute('aria-expanded', 'false');
+    menuButtonRef.current?.focus();
   }, []);
 
-  const refreshContext = useCallback(() => {
-    setSecurityEpoch((current) => current + 1);
-    setState({ kind: 'loading' });
-    setReload((current) => current + 1);
+  const openDrawer = useCallback(() => {
+    const dialog = drawerRef.current;
+    if (!dialog || dialog.open) return;
+    bodyOverflowRef.current = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    menuButtonRef.current?.setAttribute('aria-expanded', 'true');
+    dialog.showModal();
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void requestAdminContext(effectiveApi, controller.signal).then((result) => {
-      if (controller.signal.aborted) return;
-      if (!result.ok) {
-        setSecurityEpoch((current) => current + 1);
-        setState({
-          kind: 'blocked',
-          loginRequired: requiresLogin(result.failure),
-          message: failureMessage(result.failure),
-        });
-        return;
-      }
-      if (result.kind === 'not_modified') {
-        setState({
-          kind: 'blocked',
-          loginRequired: false,
-          message: 'Administrační kontext neposkytl úplný bezpečný snapshot.',
-        });
-        return;
-      }
-      setState({ kind: 'ready', context: result.data });
-    });
-    return () => controller.abort();
-  }, [effectiveApi, reload]);
-
-  useEffect(() => {
+    if (
+      previousPathname.current === '/' &&
+      (pathname === '/admin' || pathname.startsWith('/admin/'))
+    ) {
+      previousPathname.current = pathname;
+      return;
+    }
     if (previousPathname.current !== pathname) {
+      closeDrawer();
+      setAccountOpen(false);
       document.getElementById('admin-main')?.focus();
       previousPathname.current = pathname;
     }
-  }, [pathname]);
+  }, [closeDrawer, pathname]);
 
-  const value = useMemo<AdminWorkspaceValue | null>(() => {
-    if (state.kind !== 'ready') return null;
-    return {
-      api: effectiveApi,
-      context: state.context,
-      eventId: state.context.event.id,
-      eventName: state.context.event.name,
-      eventTimezone: state.context.event.timezone,
-      permissions: state.context.actor.permissions,
-      assignedSessionIds: state.context.actor.assignedSessions.map(
-        ({ sessionId }) => sessionId,
-      ),
-      securityEpoch,
-      refreshContext,
-      invalidateSensitive,
+  useEffect(
+    () => () => {
+      document.body.style.overflow = bodyOverflowRef.current;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setAccountOpen(false);
+      accountButtonRef.current?.focus();
     };
-  }, [effectiveApi, invalidateSensitive, refreshContext, securityEpoch, state]);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [accountOpen]);
 
   const allowed =
     state.kind === 'ready' ? mayAccess(state.context, section) : false;
+  const featureUnavailable =
+    state.kind === 'ready' &&
+    section === 'announcements' &&
+    !state.context.features.announcementsEnabled;
   const primaryRole =
     state.kind === 'ready' ? state.context.actor.roles[0] : undefined;
 
@@ -471,81 +686,91 @@ export const AdminWorkspaceShell = ({
       {banner}
       {environment === 'mocked' && !banner ? (
         <div className={styles.mockBanner} role="status">
-          UI ready (mocked) · pouze syntetická data · scénáře obsluhuje vývojový
-          mock transport
+          <span>
+            UI ready (mocked) · pouze syntetická data · vývojový transport
+          </span>
+          <label className={styles.roleControl}>
+            Demo persona
+            <select
+              onChange={(event) => {
+                if (!mayLeaveAdminContentDraft()) return;
+                onPersonaChange(event.target.value as PreviewPersona);
+              }}
+              value={previewPersona}
+            >
+              {Object.entries(previewPersonas).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       ) : null}
       <div className={styles.shell}>
         <aside className={styles.sidebar} aria-label="Administrace akce">
-          <p className={styles.brand}>Byzon administrace</p>
-          <p className={styles.scope}>
-            {state.kind === 'ready' ? (
-              <>
-                {state.context.event.name}
-                <br />
-                Rozsah: {state.context.event.id}
-              </>
-            ) : (
-              'Bez ověřeného rozsahu'
-            )}
-          </p>
-          {environment === 'mocked' ? (
-            <label className={styles.roleControl}>
-              Demo persona
-              <select
-                onChange={(event) => {
-                  if (!mayLeaveAdminContentDraft()) return;
-                  setSecurityEpoch((current) => current + 1);
-                  setState({ kind: 'loading' });
-                  setPreviewPersona(event.target.value as PreviewPersona);
-                }}
-                value={previewPersona}
-              >
-                {Object.entries(previewPersonas).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <div className={styles.desktopNavigation}>
+          <div className={styles.sidebarBrand}>BYZON</div>
+          {state.kind === 'ready' ? (
             <AdminNavigation
               activeHref={activeNavigation.href}
-              items={visibleNavigation}
+              context={state.context}
               label="Hlavní administrace"
             />
-          </div>
-          <details className={styles.mobileNavigation}>
-            <summary>Navigace administrace</summary>
-            <AdminNavigation
-              activeHref={activeNavigation.href}
-              items={visibleNavigation}
-              label="Mobilní administrace"
-            />
-          </details>
+          ) : null}
         </aside>
         <div className={styles.mainColumn}>
           <header className={styles.topbar}>
-            <nav aria-label="Drobečková navigace">
-              <ol className={styles.breadcrumbs}>
-                <li>
-                  {section === 'overview' ? (
-                    <span>Administrace</span>
-                  ) : (
-                    <Link href="/admin">Administrace</Link>
-                  )}
-                </li>
-                {section !== 'overview' ? (
-                  <li aria-current="page">{activeNavigation.label}</li>
-                ) : null}
-              </ol>
-            </nav>
+            <button
+              aria-expanded="false"
+              aria-haspopup="dialog"
+              aria-label="Otevřít navigaci administrace"
+              className={styles.menuButton}
+              onClick={openDrawer}
+              ref={menuButtonRef}
+              type="button"
+            >
+              <span aria-hidden="true">☰</span>
+            </button>
             {state.kind === 'ready' && primaryRole ? (
-              <span className={styles.roleBadge}>
-                {adminActorRoleLabels[primaryRole]} ·{' '}
-                {state.context.event.timezone}
-              </span>
+              <>
+                <div className={styles.eventContext}>
+                  <strong>{state.context.event.name}</strong>
+                  <span>{adminPhaseLabels[state.context.event.phase]}</span>
+                </div>
+                <div className={styles.account}>
+                  <button
+                    aria-expanded={accountOpen}
+                    aria-haspopup="menu"
+                    className={styles.accountButton}
+                    onClick={() => setAccountOpen((current) => !current)}
+                    ref={accountButtonRef}
+                    type="button"
+                  >
+                    <span>{state.context.actor.displayLabel}</span>
+                    <span aria-hidden="true">⌄</span>
+                  </button>
+                  {accountOpen ? (
+                    <div className={styles.accountMenu} role="menu">
+                      <p role="none">{adminActorRoleLabels[primaryRole]}</p>
+                      <Link href="/app" prefetch={false} role="menuitem">
+                        Přejít do aplikace účastníka
+                      </Link>
+                      {state.context.actor.permissions.includes(
+                        'event:settings:manage',
+                      ) ? (
+                        <Link
+                          href="/admin/nastaveni"
+                          onClick={() => setAccountOpen(false)}
+                          prefetch={false}
+                          role="menuitem"
+                        >
+                          Nastavení akce
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </>
             ) : null}
           </header>
           <main className={styles.content} id="admin-main" tabIndex={-1}>
@@ -582,8 +807,25 @@ export const AdminWorkspaceShell = ({
             ) : (
               <AdminWorkspaceContext.Provider value={value}>
                 <Fragment key={`${state.context.event.id}-${securityEpoch}`}>
-                  {allowed ? (
+                  {allowed && !featureUnavailable ? (
                     children
+                  ) : featureUnavailable ? (
+                    <section className={styles.forbidden} role="status">
+                      <p className={styles.eyebrow}>Funkce je vypnutá</p>
+                      <h1>Oznámení nejsou pro tuto akci dostupná</h1>
+                      <p>
+                        Oprávnění máte, ale oznámení jsou v nastavení akce
+                        vypnutá. Po zapnutí této funkce se zde zpřístupní jejich
+                        příprava a odeslání.
+                      </p>
+                      {state.context.actor.permissions.includes(
+                        'event:settings:manage',
+                      ) ? (
+                        <Link href="/admin/nastaveni" prefetch={false}>
+                          Otevřít nastavení akce
+                        </Link>
+                      ) : null}
+                    </section>
                   ) : (
                     <section className={styles.forbidden} role="alert">
                       <p className={styles.eyebrow}>403 · omezený rozsah</p>
@@ -602,6 +844,135 @@ export const AdminWorkspaceShell = ({
           </main>
         </div>
       </div>
+      {state.kind === 'ready' ? (
+        <AdminNavigationDrawer dialogRef={drawerRef} onClose={closeDrawer}>
+          <AdminNavigation
+            activeHref={activeNavigation.href}
+            context={state.context}
+            label="Mobilní administrace"
+            onNavigate={closeDrawer}
+          />
+        </AdminNavigationDrawer>
+      ) : null}
     </div>
+  );
+};
+
+/**
+ * Owns transport selection and the authoritative context lifecycle. The view
+ * above receives only normalized state, so mocked preview routing cannot alter
+ * production navigation or fail-closed rendering rules.
+ */
+export const AdminWorkspaceShell = ({
+  api = browserAdminApi,
+  banner,
+  children,
+  environment = 'production',
+}: {
+  readonly api?: ApiPort;
+  readonly banner?: ReactNode;
+  readonly children: ReactNode;
+  readonly environment?: 'production' | 'mocked';
+}) => {
+  const [previewPersona, setPreviewPersona] =
+    useState<PreviewPersona>('organizer');
+  const [state, setState] = useState<ShellState>({ kind: 'loading' });
+  const [reload, setReload] = useState(0);
+  const [securityEpoch, setSecurityEpoch] = useState(0);
+  const effectiveApi = useMemo(
+    () => (environment === 'mocked' ? personaApi(api, previewPersona) : api),
+    [api, environment, previewPersona],
+  );
+
+  const invalidateSensitive = useCallback((message?: string) => {
+    setSecurityEpoch((current) => current + 1);
+    setState({
+      kind: 'blocked',
+      loginRequired: false,
+      message:
+        message ??
+        'Oprávnění nebo připojení se změnilo. Soukromá data byla odstraněna.',
+    });
+  }, []);
+
+  const refreshContext = useCallback(() => {
+    setSecurityEpoch((current) => current + 1);
+    setState({ kind: 'loading' });
+    setReload((current) => current + 1);
+  }, []);
+
+  const onPersonaChange = useCallback((persona: PreviewPersona) => {
+    setSecurityEpoch((current) => current + 1);
+    setState({ kind: 'loading' });
+    setPreviewPersona(persona);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void requestAdminContext(effectiveApi, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      if (!result.ok) {
+        setSecurityEpoch((current) => current + 1);
+        setState({
+          kind: 'blocked',
+          loginRequired: requiresLogin(result.failure),
+          message: failureMessage(result.failure),
+        });
+        return;
+      }
+      if (result.kind === 'not_modified') {
+        setState({
+          kind: 'blocked',
+          loginRequired: false,
+          message: 'Administrační kontext neposkytl úplný bezpečný snapshot.',
+        });
+        return;
+      }
+      if (!result.data.actor.roles.includes('organizer_admin')) {
+        setSecurityEpoch((current) => current + 1);
+        setState({
+          kind: 'blocked',
+          loginRequired: false,
+          message:
+            'Tento účet používá jiný provozní režim a do administrace nemá přístup.',
+        });
+        return;
+      }
+      setState({ kind: 'ready', context: result.data });
+    });
+    return () => controller.abort();
+  }, [effectiveApi, reload]);
+
+  const value = useMemo<AdminWorkspaceValue | null>(() => {
+    if (state.kind !== 'ready') return null;
+    return {
+      api: effectiveApi,
+      context: state.context,
+      eventId: state.context.event.id,
+      eventName: state.context.event.name,
+      eventTimezone: state.context.event.timezone,
+      permissions: state.context.actor.permissions,
+      assignedSessionIds: state.context.actor.assignedSessions.map(
+        ({ sessionId }) => sessionId,
+      ),
+      securityEpoch,
+      refreshContext,
+      invalidateSensitive,
+    };
+  }, [effectiveApi, invalidateSensitive, refreshContext, securityEpoch, state]);
+
+  return (
+    <AdminWorkspaceView
+      banner={banner}
+      environment={environment}
+      onPersonaChange={onPersonaChange}
+      previewPersona={previewPersona}
+      refreshContext={refreshContext}
+      securityEpoch={securityEpoch}
+      state={state}
+      value={value}
+    >
+      {children}
+    </AdminWorkspaceView>
   );
 };

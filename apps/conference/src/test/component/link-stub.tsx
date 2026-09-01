@@ -6,14 +6,18 @@ interface LinkStubProps extends Omit<
 > {
   readonly href: string;
   readonly children?: ReactNode;
+  readonly prefetch?: boolean | null;
 }
 
 const LinkStub = forwardRef<HTMLAnchorElement, LinkStubProps>(
-  ({ href, children, ...props }, ref) => (
-    <a href={href} ref={ref} {...props}>
-      {children}
-    </a>
-  ),
+  ({ href, children, prefetch, ...props }, ref) => {
+    void prefetch;
+    return (
+      <a href={href} ref={ref} {...props}>
+        {children}
+      </a>
+    );
+  },
 );
 
 LinkStub.displayName = 'LinkStub';

@@ -1,8 +1,12 @@
+import type { Metadata } from 'next';
 import { AdminContentWorkspace } from '@/components/admin-content-workspace';
 import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import { loadCurrentEvent } from '@/server/current-event';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = {
+  title: { absolute: 'Program a obsah | Administrace BYZON' },
+};
 
 export default async function AdminContentPage() {
   if (

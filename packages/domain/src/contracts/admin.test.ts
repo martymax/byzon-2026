@@ -35,6 +35,8 @@ describe('CS-ADMIN-01 contracts', () => {
         timezone: 'Europe/Prague',
         phase: 'live' as const,
       },
+      features: { announcementsEnabled: true },
+      capabilities: { canEnterCheckin: true },
       actor: {
         displayLabel: 'Administrátor akce',
         roles: ['organizer_admin'] as const,
@@ -68,6 +70,18 @@ describe('CS-ADMIN-01 contracts', () => {
           ...context.actor,
           permissions: ['reservation:any:read', 'reservation:any:read'],
         },
+      }).success,
+    ).toBe(false);
+    expect(
+      adminContextResponseSchema.safeParse({
+        ...context,
+        features: { announcementsEnabled: 'yes' },
+      }).success,
+    ).toBe(false);
+    expect(
+      adminContextResponseSchema.safeParse({
+        ...context,
+        capabilities: { canEnterCheckin: 'yes' },
       }).success,
     ).toBe(false);
   });

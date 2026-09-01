@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Khand } from 'next/font/google';
-import Image from 'next/image';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { AppMain } from '@/components/app-main';
+import { RouteAwareChrome } from '@/components/route-aware-chrome';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 import './styles.css';
 
@@ -38,23 +36,7 @@ export default function RootLayout({
   return (
     <html lang="cs" className={`${khand.variable} ${inter.variable}`}>
       <body>
-        <a className="skip-link" href="#main">
-          Přejít na obsah
-        </a>
-        <header className="app-header">
-          <Link className="brand" href="/" aria-label="BYZON – přihlášení">
-            <Image
-              alt=""
-              className="brand-logo"
-              height={451}
-              priority
-              src="/brand/logo.png"
-              unoptimized
-              width={2884}
-            />
-          </Link>
-        </header>
-        <AppMain>{children}</AppMain>
+        <RouteAwareChrome>{children}</RouteAwareChrome>
         <ServiceWorkerRegistration />
       </body>
     </html>
