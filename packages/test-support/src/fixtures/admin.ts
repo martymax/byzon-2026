@@ -12,11 +12,13 @@ import {
   adminReadProblemSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminReservationSessionPageSchema,
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationResponseSchema,
   problemTypeForCode,
   type AdminReservationRecord,
+  type AdminReservationSessionItem,
   type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts';
 
@@ -497,6 +499,98 @@ export const adminSessionCapacityFixtures = defineFixtureSet({
       eventId: adminFixtureIds.event,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
       items: [workshopCapacityRecord],
+    },
+  },
+});
+
+const reservationSessionItems = [
+  {
+    eventId: adminFixtureIds.event,
+    sessionId: adminFixtureIds.session,
+    sessionTitle: 'Růst bez zkratek',
+    localDate: '2026-09-19',
+    startsAt: '2026-09-19T09:30:00.000+02:00',
+    roomLabel: 'Sál Inspirace',
+    capacity: 40,
+    confirmedCount: 40,
+    waitingCount: 3,
+    capacityVersion: 4,
+    reservations: [
+      {
+        reservationId: adminFixtureIds.reservation,
+        maskedParticipantReference: 'Účastník •001',
+        state: 'reserved' as const,
+        version: 4,
+        availableActions: ['cancel_reservation'] as const,
+      },
+    ],
+  },
+  {
+    eventId: adminFixtureIds.event,
+    sessionId: adminFixtureIds.secondSession,
+    sessionTitle: 'Panel: firmy v pohybu',
+    localDate: '2026-09-19',
+    startsAt: '2026-09-19T11:00:00.000+02:00',
+    roomLabel: 'Hlavní sál',
+    capacity: 80,
+    confirmedCount: 65,
+    waitingCount: 0,
+    capacityVersion: 2,
+    reservations: [
+      {
+        reservationId: adminFixtureIds.secondReservation,
+        maskedParticipantReference: 'Účastník •002',
+        state: 'cancelled' as const,
+        version: 2,
+        availableActions: [] as const,
+      },
+    ],
+  },
+  {
+    eventId: adminFixtureIds.event,
+    sessionId: adminFixtureIds.networkingSession,
+    sessionTitle: 'Řízený networking',
+    localDate: '2026-09-20',
+    startsAt: '2026-09-20T10:00:00.000+02:00',
+    roomLabel: null,
+    capacity: 30,
+    confirmedCount: 10,
+    waitingCount: null,
+    capacityVersion: 1,
+    reservations: [],
+  },
+] satisfies readonly AdminReservationSessionItem[];
+
+export const adminReservationSessionFixtures = defineFixtureSet({
+  name: 'admin.reservation-sessions',
+  schema: adminReservationSessionPageSchema,
+  fixtures: {
+    first_page: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-09-02T12:00:00.000+02:00',
+      items: reservationSessionItems.slice(0, 2),
+      pageInfo: {
+        nextCursor: 'fixture-reservation-session-page-2',
+        hasMore: true,
+      },
+    },
+    last_page: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-09-02T12:00:00.000+02:00',
+      items: reservationSessionItems.slice(2),
+      pageInfo: { nextCursor: null, hasMore: false },
+    },
+    complete: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-09-02T12:00:00.000+02:00',
+      items: reservationSessionItems,
+      pageInfo: { nextCursor: null, hasMore: false },
+    },
+    empty: {
+      eventId: adminFixtureIds.event,
+      generatedAt: '2026-09-02T12:00:00.000+02:00',
+      items: [],
+      pageInfo: { nextCursor: null, hasMore: false },
     },
   },
 });

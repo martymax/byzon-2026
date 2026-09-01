@@ -3,11 +3,12 @@
 ## Aktivní navázání – redesign administrace (`AUX`, 2. 9. 2026)
 
 - Autoritativní specifikace i jediný tracker jsou v
-  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.35 obsahuje obousměrné
+  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.36 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
 - `AUX-00B`, foundation `AUX-01A`–`C`, shell `AUX-02A`–`G`, dashboard
   `AUX-03A`–`C`, obsah `AUX-04A`–`G`, vstupenky `AUX-05A`–`C` a neblokovaná
-  účastnická podpora `AUX-06A`, `B`, `D` jsou dokončené.
+  účastnická podpora `AUX-06A`, `B`, `D` a rezervace `AUX-07A`–`C` jsou
+  dokončené.
   Admin routy mají právě jeden landmark/skip link, permission/feature-aware
   cílovou IA, lidský topbar, bezpečný account menu a nativní modal drawer.
   Context rozlišuje permissions, feature stav a explicitní check-in capability;
@@ -25,7 +26,11 @@
   tok. Target picker má strict reference kontrakt bez UUID vstupu, ale
   `reassign`/`transfer` zůstávají skryté do rozhodnutí
   `GAP-AUX-SUPPORT-ACTIONS-01`; produkční integraci vlastní `P4-09`/`AUX-13E`.
-  Další nezablokovaný celek je `AUX-07` rezervací.
+  `/admin/rezervace` je aktivita-first, řadí kapacitní problémy, ukazuje text i
+  progress a odděluje změnu kapacity od danger storna. Nový session-first
+  kontrakt má cursor/pageInfo a povinně maskovanou referenci; dnešní produkční
+  read však přiznává omezenou první stránku do `AUX-13F`. Další nezablokovaný
+  celek je `AUX-08` oznámení.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.

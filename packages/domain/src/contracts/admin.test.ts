@@ -10,6 +10,8 @@ import {
   adminOperationsOverviewResponseSchema,
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
+  adminReservationSessionPageSchema,
+  adminReservationSessionQuerySchema,
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminRoleAssignmentMutationRequestSchema,
@@ -287,6 +289,61 @@ describe('CS-ADMIN-01 contracts', () => {
       adminReservationListResponseSchema.safeParse({
         ...response,
         items: [{ ...record, capacity: 100_001 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates session-first paginated reservation pages with masked references', () => {
+    expect(adminReservationSessionQuerySchema.parse({})).toEqual({ limit: 25 });
+    const page = {
+      eventId: ids.event,
+      generatedAt: '2026-09-02T12:00:00.000+02:00',
+      items: [
+        {
+          eventId: ids.event,
+          sessionId: ids.session,
+          sessionTitle: 'Růst bez zkratek',
+          localDate: '2026-09-19',
+          startsAt: '2026-09-19T09:30:00.000+02:00',
+          roomLabel: 'Sál Inspirace',
+          capacity: 40,
+          confirmedCount: 38,
+          waitingCount: 2,
+          capacityVersion: 4,
+          reservations: [
+            {
+              reservationId: ids.reservation,
+              maskedParticipantReference: 'Účastník •001',
+              state: 'reserved' as const,
+              version: 4,
+              availableActions: ['cancel_reservation'] as const,
+            },
+          ],
+        },
+      ],
+      pageInfo: { nextCursor: 'page-two', hasMore: true },
+    };
+    expect(adminReservationSessionPageSchema.parse(page)).toEqual(page);
+    expect(
+      adminReservationSessionPageSchema.safeParse({
+        ...page,
+        items: [
+          {
+            ...page.items[0],
+            reservations: [
+              {
+                ...page.items[0]!.reservations[0],
+                maskedParticipantReference: 'person@example.test',
+              },
+            ],
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      adminReservationSessionPageSchema.safeParse({
+        ...page,
+        pageInfo: { nextCursor: null, hasMore: true },
       }).success,
     ).toBe(false);
   });

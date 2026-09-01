@@ -30,6 +30,7 @@ import {
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
+import { AdminReservationsRedesign } from './admin-reservations-redesign';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -1082,9 +1083,7 @@ const AdminReservationWorkspaceView = ({
   );
 };
 
-export const AdminReservationsWorkspace = () => (
-  <AdminReservationWorkspaceView mode="reservations" />
-);
+export const AdminReservationsWorkspace = () => <AdminReservationsRedesign />;
 
 export const AdminAuditWorkspace = () => (
   <AdminReservationWorkspaceView mode="audit" />

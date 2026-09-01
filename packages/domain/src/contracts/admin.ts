@@ -518,6 +518,98 @@ export type AdminReservationListResponse = z.infer<
   typeof adminReservationListResponseSchema
 >;
 
+const maskedParticipantReferenceSchema = safeInlineTextSchema(80).refine(
+  (value) =>
+    /[*•…]/.test(value) &&
+    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
+  'Participant reference must be masked',
+);
+
+export const adminReservationSessionQuerySchema = z.strictObject({
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.number().int().min(1).max(50).default(25),
+});
+
+export type AdminReservationSessionQuery = z.infer<
+  typeof adminReservationSessionQuerySchema
+>;
+
+export const adminReservationSessionItemSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    sessionId: uuidSchema,
+    sessionTitle: safeInlineTextSchema(160),
+    localDate: z.string().date().nullable(),
+    startsAt: dateTimeSchema.nullable(),
+    roomLabel: safeInlineTextSchema(120).nullable(),
+    capacity: adminReservationCapacitySchema.nullable(),
+    confirmedCount: z.number().int().nonnegative().max(100_000),
+    waitingCount: z.number().int().nonnegative().max(100_000).nullable(),
+    capacityVersion: versionSchema,
+    reservations: z
+      .array(
+        z.strictObject({
+          reservationId: uuidSchema,
+          maskedParticipantReference: maskedParticipantReferenceSchema,
+          state: z.enum(['reserved', 'cancelled']),
+          version: versionSchema,
+          availableActions: z.array(adminReservationActionSchema).max(2),
+        }),
+      )
+      .max(100),
+  })
+  .superRefine((item, context) => {
+    if (item.capacity !== null && item.confirmedCount > item.capacity) {
+      context.addIssue({
+        code: 'custom',
+        path: ['confirmedCount'],
+        message: 'Confirmed count cannot exceed session capacity',
+      });
+    }
+    const ids = item.reservations.map(({ reservationId }) => reservationId);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['reservations'],
+        message: 'Session reservation IDs must be unique',
+      });
+    }
+  });
+
+export type AdminReservationSessionItem = z.infer<
+  typeof adminReservationSessionItemSchema
+>;
+
+export const adminReservationSessionPageSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    generatedAt: dateTimeSchema,
+    items: z.array(adminReservationSessionItemSchema).max(50),
+    pageInfo: z.strictObject({
+      nextCursor: z.string().min(1).max(200).nullable(),
+      hasMore: z.boolean(),
+    }),
+  })
+  .superRefine((page, context) => {
+    if (
+      page.items.some(({ eventId }) => eventId !== page.eventId) ||
+      new Set(page.items.map(({ sessionId }) => sessionId)).size !==
+        page.items.length ||
+      page.pageInfo.hasMore !== (page.pageInfo.nextCursor !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message:
+          'Reservation sessions must be event-scoped, unique and carry consistent page info',
+      });
+    }
+  });
+
+export type AdminReservationSessionPage = z.infer<
+  typeof adminReservationSessionPageSchema
+>;
+
 const reservationMutationBase = {
   reservationId: uuidSchema,
   expectedVersion: versionSchema,

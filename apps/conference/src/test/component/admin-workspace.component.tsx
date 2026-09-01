@@ -19,6 +19,7 @@ import {
   adminMutationProblemFixtures,
   adminOperationsOverviewFixtures,
   adminReservationFixtures,
+  adminReservationMutationFixtures,
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   supportMutationFixtures,
@@ -62,6 +63,7 @@ import {
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
   adminReservationsEndpoint,
+  adminReservationMutationEndpoint,
   adminSessionCapacitiesEndpoint,
   adminSessionCapacityMutationEndpoint,
   adminSupportMutationEndpoint,
@@ -1471,7 +1473,7 @@ describe('F4 contract-first admin journeys', () => {
     });
     const screen = await renderComponent(
       <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminReservationWorkspace />
+        <AdminReservationsWorkspace />
       </AdminWorkspaceShell>,
     );
 
@@ -1479,7 +1481,271 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByText('Růst bez zkratek', { exact: true }).last())
       .toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Připravit změnu' }),
+      screen.getByRole('button', { name: 'Upravit kapacitu' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Zrušit rezervaci účastníka' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the canonical reservation route session-first with accessible capacity progress', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const fullCapacities = {
+      ...adminSessionCapacityFixtures.list!,
+      items: adminSessionCapacityFixtures.list!.items.map((record) =>
+        record.sessionId === adminFixtureIds.session
+          ? { ...record, confirmedCount: record.capacity ?? 0 }
+          : record,
+      ),
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(fullCapacities);
+      }
+      throw new Error('The reservation overview requested a mutation.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Aktivity' }))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('progressbar', {
+          name: 'Růst bez zkratek: 40 z 40 míst',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('Plná kapacita', { exact: true }).last())
+      .toBeVisible();
+    expect(document.body.textContent).toContain(
+      'Aktuální produkční API vrací omezenou první stránku.',
+    );
+    expect(document.body.textContent).not.toContain('Docházka');
+    expect(document.body.textContent).not.toContain('attendance');
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('edits capacity from the activity detail with reserved count as the minimum', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    let mutationOptions: unknown;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacityMutationEndpoint) {
+        mutationOptions = options;
+        return success(adminSessionCapacityMutationFixtures.updated!);
+      }
+      throw new Error('Unexpected reservation endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('combobox', { name: 'Aktivita' })
+      .selectOptions(adminFixtureIds.session);
+    await screen
+      .getByRole('button', { name: 'Zobrazit aktivitu' })
+      .first()
+      .click();
+    const capacity = screen.getByRole('spinbutton', { name: 'Nová kapacita' });
+    await expect.element(capacity).toHaveAttribute('min', '38');
+    await capacity.fill('42');
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny kapacity' })
+      .fill('Vyšší kapacita byla potvrzena vedoucím sálu.');
+    await screen.getByRole('button', { name: 'Upravit kapacitu' }).click();
+    await expect
+      .element(
+        screen.getByText(
+          'Kapacita bude změněna na 42 míst; potvrzené rezervace zůstanou zachované.',
+        ),
+      )
+      .toBeVisible();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Uložit kapacitu' }).click();
+
+    expect(mutationOptions).toMatchObject({
+      body: {
+        sessionId: adminFixtureIds.session,
+        expectedVersion: 4,
+        capacity: 42,
+      },
+      cache: 'no-store',
+    });
+    await expect
+      .element(screen.getByText('Kapacita aktivity byla změněna.'))
+      .toBeVisible();
+  });
+
+  it('cancels a participant reservation separately and retries only the exact ambiguous request', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const attempts: Array<Record<string, unknown>> = [];
+    const api = organizerApi((endpoint, rawOptions) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
+      }
+      if (endpoint === adminReservationMutationEndpoint) {
+        const options = rawOptions as Record<string, unknown>;
+        attempts.push({
+          body: options.body,
+          cache: options.cache,
+          idempotencyKey: options.idempotencyKey,
+          path: options.path,
+        });
+        return attempts.length === 1
+          ? failure('timeout')
+          : success(adminReservationMutationFixtures.cancelled!);
+      }
+      throw new Error('Unexpected reservation endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('combobox', { name: 'Aktivita' })
+      .selectOptions(adminFixtureIds.session);
+    await screen
+      .getByRole('button', { name: 'Zobrazit aktivitu' })
+      .first()
+      .click();
+    await screen
+      .getByRole('button', { name: 'Zrušit rezervaci účastníka' })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod zrušení' })
+      .fill('Účastník požádal podporu o uvolnění místa.');
+    await screen.getByRole('button', { name: 'Zkontrolovat zrušení' }).click();
+    await expect
+      .element(
+        screen.getByText(
+          'Rezervace bude zrušena a místo se může uvolnit dalšímu čekajícímu.',
+        ),
+      )
+      .toBeVisible();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('button', { name: 'Zrušit rezervaci', exact: true })
+      .click();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
+
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1]).toEqual(attempts[0]);
+    expect(attempts[0]).toMatchObject({
+      body: {
+        action: 'cancel_reservation',
+        reservationId: adminFixtureIds.reservation,
+        expectedVersion: 4,
+      },
+      cache: 'no-store',
+    });
+    await expect
+      .element(screen.getByText('Rezervace účastníka byla zrušena.'))
+      .toBeVisible();
+  });
+
+  it('reloads the session overview and discards the draft after a stale capacity decision', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    let capacityReads = 0;
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminReservationsEndpoint) {
+        return success(adminReservationFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        capacityReads += 1;
+        return success(adminSessionCapacityFixtures.list!);
+      }
+      if (endpoint === adminSessionCapacityMutationEndpoint) {
+        return problemFailure(adminMutationProblemFixtures.invalid_transition!);
+      }
+      throw new Error('Unexpected reservation endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('combobox', { name: 'Aktivita' })
+      .selectOptions(adminFixtureIds.session);
+    await screen.getByRole('button', { name: 'Zobrazit aktivitu' }).click();
+    const initialCapacityReads = capacityReads;
+    await screen.getByRole('spinbutton', { name: 'Nová kapacita' }).fill('42');
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny kapacity' })
+      .fill('Tento rozpracovaný důvod se po stale odpovědi zahodí.');
+    await screen.getByRole('button', { name: 'Upravit kapacitu' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Uložit kapacitu' }).click();
+
+    await expect
+      .element(
+        screen.getByText(
+          'Data se mezitím změnila. Načetli jsme aktuální stav; změnu připravte znovu.',
+        ),
+      )
+      .toBeVisible();
+    expect(capacityReads).toBe(initialCapacityReads + 1);
+    expect(
+      screen.getByRole('textbox', { name: 'Důvod změny kapacity' }),
+    ).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(
+      'Tento rozpracovaný důvod se po stale odpovědi zahodí.',
+    );
+  });
+
+  it('wipes reservation P3 state when either canonical read reports offline', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminSessionCapacitiesEndpoint) {
+        return success(adminSessionCapacityFixtures.list!);
+      }
+      if (endpoint === adminReservationsEndpoint) return failure('offline');
+      throw new Error('Unexpected reservation endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Účastník •001');
+    expect(
+      screen.getByRole('heading', { name: 'Rezervace a kapacity' }),
     ).not.toBeInTheDocument();
   });
 

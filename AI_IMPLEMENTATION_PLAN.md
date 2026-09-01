@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.35 – UX účastnické podpory AUX-06
+> Stav: implementační plán v6.36 – UX rezervací a kapacit AUX-07
 >
 > Datum sestavení: 20. července 2026
 >
@@ -3358,3 +3358,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.33 | 2. 9. 2026 | `AUX-04A`–`G` dokončil list-first obsahovou IA a autoritativní title-level publish summary nad integrovaným content portem. `P3-13` získal storage-independent kontrakt, fixtures a mockované asset UI bez raw ID, ale zůstává otevřený do produkční storage/auth/audit integrace v `AUX-13L`. |
 | 6.34 | 2. 9. 2026 | `AUX-05A`–`C` převedl `/admin/vstupenky` na čtyřkrokový lidský tok a zachoval produkční server-only SimpleShop preview bez browserového souboru. Potvrzení/report jsou ověřené jen mockovanou file-fixture hranicí; `P4-03`/`AUX-13D` dál vlastní produkční apply. |
 | 6.35 | 2. 9. 2026 | `AUX-06A`, `B`, `D` a bezpečná část `C` převedly `/admin/ucastnici` na POST/no-store hledání bez PII v URL, lidský read-only detail a vysvětlené support akce s exact retry/stale wipe. Target-ticket picker má strict reference kontrakt a fixtures bez UUID vstupu; `reassign`/`transfer` zůstávají fail-closed skryté do produktového rozhodnutí `GAP-AUX-SUPPORT-ACTIONS-01` a produkční integrace `P4-09`/`AUX-13E`. |
+| 6.36 | 2. 9. 2026 | `AUX-07A`–`C` přidaly session-first stránkovaný kontrakt rezervací s povinně maskovanou referencí a aktivita-first `/admin/rezervace`. Kapacita a storno jsou oddělené, minimum kapacity odpovídá potvrzeným rezervacím a canonical UI testuje full/stale/exact retry/offline bez návratu attendance; dnešní produkční čtení přiznává omezenou první stránku do integrace `AUX-13F`. |
