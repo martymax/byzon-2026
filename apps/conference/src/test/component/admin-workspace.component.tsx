@@ -29,8 +29,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminAnnouncementWorkspace } from '../../components/admin-announcement-workspace';
 import { AdminImportWorkspace } from '../../components/admin-import-workspace';
 import { AdminEngagementWorkspace } from '../../components/admin-engagement-workspace';
-import { AdminOperationsWorkspace } from '../../components/admin-operations-workspace';
-import { AdminReservationWorkspace } from '../../components/admin-reservation-workspace';
+import {
+  AdminOperationsWorkspace,
+  AdminReportsWorkspace,
+  AdminTeamWorkspace,
+} from '../../components/admin-operations-workspace';
+import {
+  AdminAuditWorkspace,
+  AdminReservationsWorkspace,
+  AdminReservationWorkspace,
+  AdminSettingsWorkspace,
+} from '../../components/admin-reservation-workspace';
 import { AdminSupportWorkspace } from '../../components/admin-support-workspace';
 import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
 import {
@@ -119,6 +128,73 @@ beforeEach(() => {
 });
 
 describe('F4 contract-first admin journeys', () => {
+  it.each([
+    [
+      '/admin/role',
+      'Tým a oprávnění',
+      AdminTeamWorkspace,
+      [adminOperationsOverviewEndpoint],
+    ],
+    ['/admin/reporty', 'Reporty', AdminReportsWorkspace, []],
+    [
+      '/admin/rezervace',
+      'Rezervace a kapacity',
+      AdminReservationsWorkspace,
+      [adminReservationsEndpoint, adminSessionCapacitiesEndpoint],
+    ],
+    [
+      '/admin/audit',
+      'Historie změn',
+      AdminAuditWorkspace,
+      [adminAuditEndpoint],
+    ],
+    [
+      '/admin/nastaveni',
+      'Nastavení akce',
+      AdminSettingsWorkspace,
+      [adminEventSettingsEndpoint],
+    ],
+  ] as const)(
+    'keeps %s isolated in its own route workspace',
+    async (path, heading, Workspace, expectedEndpoints) => {
+      window.history.replaceState({}, '', path);
+      const privateRequests: unknown[] = [];
+      const api = organizerApi((endpoint) => {
+        privateRequests.push(endpoint);
+        if (endpoint === adminOperationsOverviewEndpoint) {
+          return success(adminOperationsOverviewFixtures.healthy!);
+        }
+        if (endpoint === adminReservationsEndpoint) {
+          return success(adminReservationFixtures.list!);
+        }
+        if (endpoint === adminSessionCapacitiesEndpoint) {
+          return success(adminSessionCapacityFixtures.list!);
+        }
+        if (endpoint === adminAuditEndpoint) {
+          return success(adminAuditFixtures.page!);
+        }
+        if (endpoint === adminEventSettingsEndpoint) {
+          return success(adminEventSettingsFixtures.open!);
+        }
+        throw new Error('A route workspace requested an unrelated endpoint.');
+      });
+      const screen = await renderComponent(
+        <AdminWorkspaceShell api={api} environment="production">
+          <Workspace />
+        </AdminWorkspaceShell>,
+      );
+
+      await expect
+        .element(screen.getByRole('heading', { level: 1, name: heading }))
+        .toBeVisible();
+      await vi.waitFor(() => {
+        expect(new Set(privateRequests)).toEqual(
+          new Set<unknown>(expectedEndpoints),
+        );
+      });
+    },
+  );
+
   it('offers the production login route and preserves the exact admin return', async () => {
     window.history.replaceState({}, '', '/admin/interakce');
     const api = createApi((endpoint) => {
@@ -703,7 +779,7 @@ describe('F4 contract-first admin journeys', () => {
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Rezervace a kapacitní výjimky',
+          name: 'Rezervace a kapacity',
         }),
       )
       .toBeVisible();

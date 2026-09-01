@@ -65,7 +65,13 @@ type OperationError = Readonly<{
   message: string;
 }>;
 
-export const AdminOperationsWorkspace = () => {
+type AdminOperationsMode = 'legacy' | 'reports' | 'team';
+
+const AdminOperationsWorkspaceView = ({
+  mode,
+}: {
+  readonly mode: AdminOperationsMode;
+}) => {
   const { api, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
   const requestFence = useAdminRequestFence();
@@ -87,7 +93,9 @@ export const AdminOperationsWorkspace = () => {
   const [pending, setPending] = useState<PendingOperation | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
-  const [busy, setBusy] = useState<'read' | 'mutation' | null>('read');
+  const [busy, setBusy] = useState<'read' | 'mutation' | null>(
+    mode === 'reports' ? null : 'read',
+  );
   const [error, setError] = useState<OperationError | null>(null);
   const [roleResult, setRoleResult] =
     useState<AdminRoleAssignmentMutationResponse | null>(null);
@@ -96,9 +104,12 @@ export const AdminOperationsWorkspace = () => {
   );
   const [reload, setReload] = useState(0);
 
-  const canReadOperations = permissions.includes('operations:read');
-  const canManageRoles = permissions.includes('role:manage');
-  const canExport = permissions.includes('personal-data:operational:export');
+  const canReadOperations =
+    mode !== 'reports' && permissions.includes('operations:read');
+  const canManageRoles =
+    mode !== 'reports' && permissions.includes('role:manage');
+  const canExport =
+    mode !== 'team' && permissions.includes('personal-data:operational:export');
 
   useEffect(() => {
     if (!canReadOperations) return;
@@ -290,15 +301,36 @@ export const AdminOperationsWorkspace = () => {
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · role a provoz</p>
-        <h1>Operátoři, fronty a export</h1>
+        <p className={styles.eyebrow}>Správa akce</p>
+        <h1>
+          {mode === 'team'
+            ? 'Tým a oprávnění'
+            : mode === 'reports'
+              ? 'Reporty'
+              : 'Operátoři, fronty a export'}
+        </h1>
         <p>
-          Autorita vychází pouze z eventového kontextu. Přehled front neobsahuje
-          payloady a každá změna je online-only, auditovaná a idempotentní.
+          {mode === 'team'
+            ? 'Přidělte omezenou provozní roli v přesném rozsahu a s auditním důvodem.'
+            : mode === 'reports'
+              ? 'Připravte auditovaný report; citlivý export je dostupný jen oprávněnému účtu.'
+              : 'Autorita vychází pouze z eventového kontextu. Každá změna je online-only, auditovaná a idempotentní.'}
         </p>
       </header>
 
-      {canReadOperations ? (
+      {mode === 'team' && error?.kind === 'read' ? (
+        <AdminFormErrorSummary
+          descriptionId="admin-team-read-error"
+          heading="Podklady pro správu týmu se nepodařilo načíst"
+          message={error.message}
+        />
+      ) : null}
+
+      {mode === 'team' && busy === 'read' && !overview ? (
+        <p role="status">Načítám bezpečný stav oprávnění…</p>
+      ) : null}
+
+      {mode === 'legacy' && canReadOperations ? (
         <section
           aria-busy={busy === 'read'}
           aria-labelledby="queue-title"
@@ -522,7 +554,7 @@ export const AdminOperationsWorkspace = () => {
             <p className={styles.success} role="status">
               {roleResult.outcome === 'already_applied'
                 ? 'Server potvrdil dřívější přiřazení.'
-                : `Role byla přiřazena (${roleResult.assignment?.assignmentId ?? 'bez aktivního přiřazení'}).`}
+                : 'Role byla přiřazena v potvrzeném rozsahu.'}
             </p>
           ) : null}
           <button
@@ -581,7 +613,7 @@ export const AdminOperationsWorkspace = () => {
           </label>
           {exportResult ? (
             <p className={styles.success} role="status">
-              Export {exportResult.exportId} je ve frontě (
+              Report je ve frontě (
               {exportResult.outcome === 'already_queued'
                 ? 'dříve zařazen'
                 : 'nově zařazen'}
@@ -648,3 +680,16 @@ export const AdminOperationsWorkspace = () => {
     </div>
   );
 };
+
+export const AdminTeamWorkspace = () => (
+  <AdminOperationsWorkspaceView mode="team" />
+);
+
+export const AdminReportsWorkspace = () => (
+  <AdminOperationsWorkspaceView mode="reports" />
+);
+
+/** Legacy preview only; canonical routes use dedicated workspaces above. */
+export const AdminOperationsWorkspace = () => (
+  <AdminOperationsWorkspaceView mode="legacy" />
+);

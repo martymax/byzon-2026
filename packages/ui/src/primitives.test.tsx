@@ -275,4 +275,30 @@ describe('BYZON UI primitives', () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('Aktualizace vstupenek ze serverově');
   });
+
+  it('can preserve the contract-defined attention order', () => {
+    const markup = renderToStaticMarkup(
+      <AdminAttentionList
+        items={[
+          {
+            description: 'První položka podle pořadí metrik.',
+            id: 'contract-first',
+            severity: 'warning',
+            title: 'Nejdříve podle kontraktu',
+          },
+          {
+            description: 'Druhá položka má vyšší závažnost.',
+            id: 'contract-second',
+            severity: 'danger',
+            title: 'Až poté závažnější stav',
+          },
+        ]}
+        sortBySeverity={false}
+      />,
+    );
+
+    expect(markup.indexOf('Nejdříve podle kontraktu')).toBeLessThan(
+      markup.indexOf('Až poté závažnější stav'),
+    );
+  });
 });

@@ -122,16 +122,20 @@ const attentionPriority: Record<AdminAttentionItem['severity'], number> = {
 
 export const AdminAttentionList = ({
   items,
+  sortBySeverity = true,
   title = 'Co potřebuje pozornost',
 }: {
   items: readonly AdminAttentionItem[];
+  sortBySeverity?: boolean;
   title?: string;
 }) => {
   const titleId = useId();
-  const sorted = [...items].sort(
-    (left, right) =>
-      attentionPriority[left.severity] - attentionPriority[right.severity],
-  );
+  const sorted = sortBySeverity
+    ? [...items].sort(
+        (left, right) =>
+          attentionPriority[left.severity] - attentionPriority[right.severity],
+      )
+    : items;
   return (
     <section className="ui-admin-attention" aria-labelledby={titleId}>
       <h2 id={titleId}>{title}</h2>

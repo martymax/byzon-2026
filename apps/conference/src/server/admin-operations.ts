@@ -168,6 +168,13 @@ export const handleAdminOperations = async (
             : 'Chybí publikovaný obsah aplikace.',
         },
         {
+          id: 'checkin',
+          label: 'Odbavení',
+          value: 'Mimo launch scope',
+          state: 'healthy',
+          detail: 'Odbavení se v provozním režimu 2026 nepoužívá.',
+        },
+        {
           id: 'reservation',
           label: 'Rezervace',
           value: `${reserved}/${capacityTotal}`,
@@ -180,7 +187,10 @@ export const handleAdminOperations = async (
           value: `${pending + processing} čeká`,
           state:
             failed > 0 ? 'degraded' : pending > 0 ? 'attention' : 'healthy',
-          detail: `${failed} událostí je po opakovaných pokusech ve stavu failed.`,
+          detail:
+            failed > 0
+              ? `${failed} událostí se nepodařilo dokončit ani po opakování.`
+              : 'Všechny události se zpracovávají bez známé chyby.',
         },
       ],
       queues: [

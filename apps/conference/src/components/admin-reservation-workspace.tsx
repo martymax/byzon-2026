@@ -98,10 +98,12 @@ const formatTimestamp = (value: string, timeZone: string): string => {
   }
 };
 
-export const AdminReservationWorkspace = ({
+type AdminReservationMode = 'audit' | 'full' | 'reservations' | 'settings';
+
+const AdminReservationWorkspaceView = ({
   mode = 'full',
 }: {
-  readonly mode?: 'full' | 'reservations';
+  readonly mode?: AdminReservationMode;
 }) => {
   const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
     useAdminWorkspace();
@@ -144,11 +146,15 @@ export const AdminReservationWorkspace = ({
   const [reloadReservations, setReloadReservations] = useState(0);
   const [reloadSettings, setReloadSettings] = useState(0);
 
-  const canReadReservations = permissions.includes('reservation:any:read');
+  const canReadReservations =
+    (mode === 'full' || mode === 'reservations') &&
+    permissions.includes('reservation:any:read');
   const canOverride = permissions.includes('agenda:any:override');
-  const canReadAudit = mode === 'full' && permissions.includes('audit:read');
+  const canReadAudit =
+    (mode === 'full' || mode === 'audit') && permissions.includes('audit:read');
   const canManageSettings =
-    mode === 'full' && permissions.includes('event:settings:manage');
+    (mode === 'full' || mode === 'settings') &&
+    permissions.includes('event:settings:manage');
   const canPerformReservationAction = (
     candidate?: AdminReservationAction,
   ): boolean => canOverride && candidate === 'cancel_reservation';
@@ -242,6 +248,7 @@ export const AdminReservationWorkspace = ({
     void requestAdminAudit(api, eventId, {}, request.signal).then((result) => {
       if (!request.isCurrent()) return;
       request.finish();
+      setBusy(false);
       if (!result.ok) {
         setAudits([]);
         handleReadFailure(result);
@@ -267,6 +274,7 @@ export const AdminReservationWorkspace = ({
       (result) => {
         if (!request.isCurrent()) return;
         request.finish();
+        setBusy(false);
         if (!result.ok) {
           setSettings(null);
           setSettingsDraft(null);
@@ -545,11 +553,15 @@ export const AdminReservationWorkspace = ({
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · řízené provozní změny</p>
+        <p className={styles.eyebrow}>Správa akce</p>
         <h1>
           {mode === 'full'
             ? 'Rezervace, audit a nastavení'
-            : 'Rezervace a kapacitní výjimky'}
+            : mode === 'reservations'
+              ? 'Rezervace a kapacity'
+              : mode === 'audit'
+                ? 'Historie změn'
+                : 'Nastavení akce'}
         </h1>
         <p>
           Viditelnost i mutace respektují autoritativní event scope. Stale
@@ -1069,3 +1081,22 @@ export const AdminReservationWorkspace = ({
     </div>
   );
 };
+
+export const AdminReservationsWorkspace = () => (
+  <AdminReservationWorkspaceView mode="reservations" />
+);
+
+export const AdminAuditWorkspace = () => (
+  <AdminReservationWorkspaceView mode="audit" />
+);
+
+export const AdminSettingsWorkspace = () => (
+  <AdminReservationWorkspaceView mode="settings" />
+);
+
+/** Legacy combined preview retained for regression coverage only. */
+export const AdminReservationWorkspace = ({
+  mode = 'full',
+}: {
+  readonly mode?: 'full' | 'reservations';
+}) => <AdminReservationWorkspaceView mode={mode} />;
