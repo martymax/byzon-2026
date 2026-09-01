@@ -15,8 +15,11 @@ const adminReturnToValues = [
 ] as const;
 
 export type AdminReturnTo = (typeof adminReturnToValues)[number];
+export const POST_LOGIN_DESTINATION = '/po-prihlaseni' as const;
 export type AuthReturnTo =
-  AdminReturnTo | import('@byzon/domain/contracts').ActivationReturnTo;
+  | AdminReturnTo
+  | import('@byzon/domain/contracts').ActivationReturnTo
+  | typeof POST_LOGIN_DESTINATION;
 
 const adminReturnToSet = new Set<string>(adminReturnToValues);
 
@@ -25,6 +28,7 @@ export const resolveAuthReturnTo = (
   fallback: AuthReturnTo = '/app',
 ): AuthReturnTo => {
   if (Array.isArray(value) || typeof value !== 'string') return fallback;
+  if (value === POST_LOGIN_DESTINATION) return value;
   if (adminReturnToSet.has(value)) return value as AdminReturnTo;
   const participant = activationReturnToSchema.safeParse(value);
   return participant.success ? participant.data : fallback;

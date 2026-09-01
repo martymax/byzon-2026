@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 
 import { MagicLinkLogin } from '../../components/magic-link-login';
-import { resolveAuthReturnTo } from '../../lib/auth-return';
+import {
+  POST_LOGIN_DESTINATION,
+  resolveAuthReturnTo,
+} from '../../lib/auth-return';
 
 export const metadata: Metadata = {
   title: 'Bezpečné přihlášení',
@@ -16,5 +19,9 @@ export default async function LoginPage({
   }>;
 }) {
   const query = await searchParams;
-  return <MagicLinkLogin returnTo={resolveAuthReturnTo(query.returnTo)} />;
+  return (
+    <MagicLinkLogin
+      returnTo={resolveAuthReturnTo(query.returnTo, POST_LOGIN_DESTINATION)}
+    />
+  );
 }

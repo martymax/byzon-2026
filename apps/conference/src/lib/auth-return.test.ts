@@ -9,6 +9,7 @@ describe('authentication return destination', () => {
     '/admin',
     '/admin/interakce',
     '/admin/obsah',
+    '/po-prihlaseni',
   ] as const)('accepts the exact protected destination %s', (value) => {
     expect(resolveAuthReturnTo(value)).toBe(value);
   });
