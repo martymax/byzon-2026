@@ -20,15 +20,21 @@ vi.mock('../../../components/admin-content-demo-workspace', () => ({
 vi.mock('@/components/admin-content-workspace', () => ({
   AdminContentWorkspace: ({
     eventId,
+    initialResource,
+    port,
     readOnly,
     timezone,
   }: {
     readonly eventId: string;
+    readonly initialResource?: string;
+    readonly port?: unknown;
     readonly readOnly: boolean;
     readonly timezone: string;
   }) => (
     <section
       data-event-id={eventId}
+      data-initial-resource={initialResource}
+      data-port-injected={String(Boolean(port))}
       data-read-only={String(readOnly)}
       data-testid="integrated-content-workspace"
       data-timezone={timezone}
@@ -70,6 +76,7 @@ describe('/admin/obsah preview and production branches', () => {
     expect(markup).toContain('data-event-id="event-integrated-0001"');
     expect(markup).toContain('data-timezone="Europe/Prague"');
     expect(markup).toContain('data-read-only="false"');
+    expect(markup).toContain('data-port-injected="false"');
     expect(markup).not.toContain('synthetic-content');
     expect(mocks.loadCurrentEvent).toHaveBeenCalledOnce();
   });
@@ -85,5 +92,36 @@ describe('/admin/obsah preview and production branches', () => {
     const markup = renderToStaticMarkup(await AdminContentPage());
 
     expect(markup).toContain('data-read-only="true"');
+  });
+
+  it('maps only allowlisted view and type query values into initial content state', async () => {
+    mocks.previewAvailable.mockReturnValue(false);
+    mocks.loadCurrentEvent.mockResolvedValue({
+      id: 'event-integrated-0003',
+      status: 'live',
+      timezone: 'Europe/Prague',
+    });
+
+    const selected = renderToStaticMarkup(
+      await AdminContentPage({
+        searchParams: Promise.resolve({
+          oblast: 'practical',
+          typ: 'faqs',
+          unsafe: 'participant@example.test',
+        }),
+      }),
+    );
+    const rejected = renderToStaticMarkup(
+      await AdminContentPage({
+        searchParams: Promise.resolve({
+          oblast: 'practical',
+          typ: 'sessions',
+        }),
+      }),
+    );
+
+    expect(selected).toContain('data-initial-resource="faqs"');
+    expect(selected).not.toContain('participant@example.test');
+    expect(rejected).toContain('data-initial-resource="pages"');
   });
 });

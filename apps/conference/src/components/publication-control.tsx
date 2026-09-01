@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { AdminTechnicalDetails } from '@byzon/ui';
+import Link from 'next/link';
 
 import {
   browserAdminContentPort,
@@ -14,16 +16,36 @@ import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import styles from './admin-workspace.module.css';
 
-const timestamp = (value: string): string => {
+const timestamp = (value: string, timezone: string): string => {
   try {
     return new Intl.DateTimeFormat('cs-CZ', {
       dateStyle: 'medium',
       timeStyle: 'short',
+      timeZone: timezone,
     }).format(new Date(value));
   } catch {
     return 'čas není dostupný';
   }
 };
+
+const changeImpactLabels = {
+  content: 'změna obsahu',
+  time: 'změna času',
+  location: 'změna místa',
+  status: 'změna stavu',
+  order: 'změna pořadí',
+} as const;
+
+const changeCountLabel = (count: number): string =>
+  count === 1
+    ? '1 změnu'
+    : count >= 2 && count <= 4
+      ? `${count} změny`
+      : `${count} změn`;
+
+const publicationChangeCount = (
+  summary: AdminPublicationPreview['summary'],
+): number => summary.changeCount ?? summary.changes.length;
 
 const requiresPublicationReconciliation = (
   failure: AdminContentFailure,
@@ -39,6 +61,7 @@ export const PublicationControl = ({
   onSecurityFailure,
   port = browserAdminContentPort,
   readOnly = false,
+  timezone,
 }: {
   readonly contentRevision?: number;
   readonly draftDirty?: boolean;
@@ -46,6 +69,7 @@ export const PublicationControl = ({
   readonly onSecurityFailure?: (failure: AdminContentFailure) => void;
   readonly port?: AdminContentPort;
   readonly readOnly?: boolean;
+  readonly timezone: string;
 }) => {
   const [preview, setPreview] = useState<AdminPublicationPreview | null>(null);
   const [busy, setBusy] = useState<'preview' | 'publish' | 'reconcile' | null>(
@@ -57,6 +81,7 @@ export const PublicationControl = ({
   const [blockedUntilContentRevision, setBlockedUntilContentRevision] =
     useState(false);
   const [status, setStatus] = useState('');
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
   const locked = useRef(false);
   const mountedRevision = useRef(contentRevision);
   const activeRequest = useRef<AbortController | null>(null);
@@ -83,15 +108,16 @@ export const PublicationControl = ({
       // revision; only explicit reconciliation may unlock publication.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus(
-        'Draft se změnil, ale výsledek předchozí publikace stále není potvrzen. Ověřte kanonický stav.',
+        'Uložený obsah se změnil, ale výsledek předchozího zveřejnění stále není potvrzen. Načtěte aktuální stav ze serveru.',
       );
       return;
     }
     setPreview(null);
+    setPublishedAt(null);
     setConfirming(false);
     setError(null);
     setStatus(
-      'Draft se změnil. Před publikací sestavte nový immutable náhled.',
+      'Uložený obsah se změnil. Před zveřejněním zkontrolujte nový přehled změn.',
     );
   }, [contentRevision, reconciliationRequired]);
 
@@ -106,6 +132,7 @@ export const PublicationControl = ({
     setBusy(null);
     if (reconciliationRequired) return;
     setPreview(null);
+    setPublishedAt(null);
     setConfirming(false);
     setError(null);
     setStatus(
@@ -157,7 +184,11 @@ export const PublicationControl = ({
     }
     setPreview(result.data);
     setStatus(
-      `Immutable náhled verze ${result.data.version} je připravený k samostatnému potvrzení.`,
+      result.data.summary.available
+        ? publicationChangeCount(result.data.summary) === 1
+          ? 'Obsah má 1 změnu ke kontrole.'
+          : `Obsah má ${publicationChangeCount(result.data.summary)} změn ke kontrole.`
+        : 'Obsah má změny ke kontrole.',
     );
   };
 
@@ -189,7 +220,7 @@ export const PublicationControl = ({
       if (requiresPublicationReconciliation(result.failure)) {
         setReconciliationRequired(true);
         setStatus(
-          'Výsledek publikace není potvrzen. Frozen náhled zůstává uzamčený do ověření kanonického stavu.',
+          'Výsledek zveřejnění není potvrzen. Zkontrolovaný návrh zůstává uzamčený do ověření aktuálního stavu na serveru.',
         );
         acceptFailure(result.failure, true);
       } else {
@@ -198,8 +229,9 @@ export const PublicationControl = ({
       return;
     }
     setPreview(null);
+    setPublishedAt(result.data.publishedAt);
     setStatus(
-      `Verze ${result.data.version} byla atomicky publikována. Kontrolní součet ${result.data.checksumSha256.slice(0, 12)}…`,
+      `Změny byly zveřejněné ${timestamp(result.data.publishedAt, timezone)}.`,
     );
   };
 
@@ -226,7 +258,7 @@ export const PublicationControl = ({
       if (requiresPublicationReconciliation(result.failure)) {
         setError(result.failure);
         setStatus(
-          'Kanonický stav se nepodařilo ověřit. Publikace zůstává uzamčená.',
+          'Aktuální stav na serveru se nepodařilo ověřit. Zveřejnění zůstává uzamčené.',
         );
         return;
       }
@@ -235,7 +267,7 @@ export const PublicationControl = ({
       setPreview(null);
       setError(result.failure);
       setStatus(
-        'Server potvrdil kanonický stav bez publikovatelné změny. Další publikace zůstává vypnutá, dokud se draft nezmění.',
+        'Server potvrdil aktuální stav bez změny ke zveřejnění. Další zveřejnění zůstává vypnuté, dokud se uložený obsah nezmění.',
       );
       return;
     }
@@ -250,13 +282,13 @@ export const PublicationControl = ({
       setPreview(result.data);
       setBlockedUntilContentRevision(false);
       setStatus(
-        `Kanonický stav přesně odpovídá frozen náhledu verze ${result.data.version}. Publikaci lze znovu samostatně potvrdit.`,
+        'Aktuální stav přesně odpovídá zkontrolovanému návrhu. Zveřejnění lze znovu samostatně potvrdit.',
       );
     } else {
       setPreview(null);
       setBlockedUntilContentRevision(true);
       setStatus(
-        'Kanonický stav se posunul nebo změnil. Frozen náhled byl zneplatněn; další publikace vyžaduje skutečnou změnu draftu a nový ručně sestavený náhled.',
+        'Obsah na serveru se mezitím změnil. Před dalším zveřejněním uložte změnu a zkontrolujte nový přehled.',
       );
     }
   };
@@ -270,13 +302,11 @@ export const PublicationControl = ({
     >
       <div className={styles.panelHeader}>
         <div>
-          <p className={styles.eyebrow}>Publikační gate</p>
-          <h2 id="admin-publication-title">Immutable náhled a publikace</h2>
+          <p className={styles.eyebrow}>Poslední krok</p>
+          <h2 id="admin-publication-title">Zveřejnění</h2>
         </div>
         {visiblePreview ? (
-          <span className={styles.statusBadge}>
-            Preview v{visiblePreview.version}
-          </span>
+          <span className={styles.statusBadge}>Připraveno ke kontrole</span>
         ) : null}
       </div>
 
@@ -302,47 +332,87 @@ export const PublicationControl = ({
       <p aria-live="polite" className={status ? styles.callout : styles.muted}>
         {status ||
           (readOnly
-            ? 'Archivovaný event je pouze ke čtení.'
-            : 'Nejprve sestavte náhled aktuálního draftu. Publikace vyžaduje další výslovné potvrzení.')}
+            ? 'Archivovaná akce je pouze ke čtení.'
+            : 'Obsah má změny ke kontrole. Zveřejnění vždy vyžaduje samostatné potvrzení.')}
       </p>
+
+      {publishedAt ? (
+        <p className={styles.success} role="status">
+          <Link href="/app/program" prefetch={false}>
+            Zobrazit publikovaný obsah
+          </Link>
+        </p>
+      ) : null}
 
       {reconciliationRequired ? (
         <p className={styles.warning} role="status">
-          Frozen preview, cílová verze i očekávaná předchozí verze zůstávají
-          zachované. Opakovaný publish je blokovaný, dokud server nepotvrdí
-          kanonický stav.
+          Kontrolovaný návrh zůstává uzamčený. Další zveřejnění je blokované,
+          dokud server nepotvrdí aktuální stav.
         </p>
       ) : null}
 
       {visiblePreview ? (
-        <dl className={styles.detailList}>
-          <dt>Cílová verze</dt>
-          <dd>{visiblePreview.version}</dd>
-          <dt>Předchozí verze</dt>
-          <dd>{visiblePreview.expectedPreviousVersion}</dd>
-          <dt>Kontrolní součet</dt>
-          <dd className={styles.checksum}>
-            <code>{visiblePreview.checksumSha256}</code>
-          </dd>
-          <dt>Vytvořeno</dt>
-          <dd>{timestamp(visiblePreview.createdAt)}</dd>
-          <dt>Položek</dt>
-          <dd>{visiblePreview.itemCount}</dd>
-          <dt>Významně změněné body programu</dt>
-          <dd>
-            {visiblePreview.significantSessionIds.length ? (
-              <ul className={styles.compactList}>
-                {visiblePreview.significantSessionIds.map((sessionId) => (
-                  <li key={sessionId}>
-                    <code>{sessionId}</code>
+        <div className={styles.publicationReview}>
+          {visiblePreview.summary.previousPublication ? (
+            <p className={styles.muted}>
+              Naposledy zveřejněno{' '}
+              {timestamp(
+                visiblePreview.summary.previousPublication.publishedAt,
+                timezone,
+              )}
+              .
+            </p>
+          ) : (
+            <p className={styles.muted}>Půjde o první zveřejnění obsahu.</p>
+          )}
+          {visiblePreview.summary.available ? (
+            visiblePreview.summary.changes.length ? (
+              <ul className={styles.publicationChangeList}>
+                {visiblePreview.summary.changes.map((change, index) => (
+                  <li key={`${change.resource}:${change.title}:${index}`}>
+                    <strong>{change.title}</strong>
+                    <span>
+                      {change.kind === 'added'
+                        ? 'Přidáno'
+                        : change.kind === 'updated'
+                          ? 'Upraveno'
+                          : change.kind === 'cancelled'
+                            ? 'Zrušeno'
+                            : 'Archivováno'}
+                      {' · '}
+                      {change.impact
+                        .map((impact) => changeImpactLabels[impact])
+                        .join(' · ')}
+                    </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              'Žádné'
-            )}
-          </dd>
-        </dl>
+              <p>V uloženém obsahu nejsou žádné nezveřejněné změny.</p>
+            )
+          ) : (
+            <p>
+              Podrobný seznam změn není dostupný. Před zveřejněním zkontrolujte
+              obsah ručně.
+            </p>
+          )}
+          <AdminTechnicalDetails>
+            <dl className={styles.detailList}>
+              <dt>Cílová verze</dt>
+              <dd>{visiblePreview.version}</dd>
+              <dt>Předchozí verze</dt>
+              <dd>{visiblePreview.expectedPreviousVersion}</dd>
+              <dt>Kontrolní součet</dt>
+              <dd className={styles.checksum}>
+                <code>{visiblePreview.checksumSha256}</code>
+              </dd>
+              <dt>Náhled vytvořen</dt>
+              <dd>{timestamp(visiblePreview.createdAt, timezone)}</dd>
+              <dt>Položek v obsahu</dt>
+              <dd>{visiblePreview.itemCount}</dd>
+            </dl>
+          </AdminTechnicalDetails>
+        </div>
       ) : null}
 
       {!readOnly ? (
@@ -358,10 +428,10 @@ export const PublicationControl = ({
             onClick={() => void createPreview()}
             type="button"
           >
-            {busy === 'preview' ? 'Sestavuji náhled…' : 'Sestavit nový náhled'}
+            {busy === 'preview' ? 'Načítám změny…' : 'Zkontrolovat změny'}
           </button>
           <button
-            className={styles.dangerButton}
+            className={styles.button}
             disabled={
               !visiblePreview ||
               busy !== null ||
@@ -372,7 +442,7 @@ export const PublicationControl = ({
             onClick={() => setConfirming(true)}
             type="button"
           >
-            {busy === 'publish' ? 'Publikuji…' : 'Zkontrolovat a publikovat'}
+            {busy === 'publish' ? 'Zveřejňuji…' : 'Pokračovat ke zveřejnění'}
           </button>
           {reconciliationRequired ? (
             <button
@@ -382,8 +452,8 @@ export const PublicationControl = ({
               type="button"
             >
               {busy === 'reconcile'
-                ? 'Ověřuji kanonický stav…'
-                : 'Ověřit kanonický stav'}
+                ? 'Ověřuji aktuální stav…'
+                : 'Načíst aktuální stav'}
             </button>
           ) : null}
         </div>
@@ -391,24 +461,23 @@ export const PublicationControl = ({
 
       {confirming && visiblePreview ? (
         <AdminConfirmDialog
-          acknowledgement="Ověřil/a jsem cílovou verzi, kontrolní součet a dopad publikace."
-          confirmLabel={`Publikovat verzi ${visiblePreview.version}`}
-          danger
-          description="Server atomicky publikuje právě tento immutable snapshot. Pokud se draft změnil, operaci odmítne."
+          acknowledgement="Zkontroloval/a jsem uvedené změny a jejich dopad v aplikaci a na webu."
+          confirmLabel="Zveřejnit změny"
+          description="Uložené změny se současně zobrazí účastníkům v aplikaci a na webu. Pokud se obsah mezitím změnil, server operaci bezpečně odmítne."
           impact={
             <p>
-              Předchozí verze {visiblePreview.expectedPreviousVersion} → nová
-              verze {visiblePreview.version}. {visiblePreview.itemCount}{' '}
-              položek, {visiblePreview.significantSessionIds.length} významně
-              změněných bodů. Kontrolní součet{' '}
-              <code className={styles.checksum}>
-                {visiblePreview.checksumSha256}
-              </code>
+              {visiblePreview.summary.available
+                ? `${publicationChangeCount(visiblePreview.summary)} změn se zobrazí účastníkům.`
+                : 'Změny se zobrazí účastníkům v aplikaci a na webu.'}
             </p>
           }
           onConfirm={() => void publish()}
           onDismiss={() => setConfirming(false)}
-          title="Publikovat obsah akce?"
+          title={
+            visiblePreview.summary.available
+              ? `Zveřejnit ${changeCountLabel(publicationChangeCount(visiblePreview.summary))}?`
+              : 'Zveřejnit změny?'
+          }
         />
       ) : null}
     </section>

@@ -10,6 +10,7 @@ import {
 } from '@/lib/admin-content-preview-port';
 import { mayLeaveAdminContentDraft } from '@/lib/admin-content-dirty-guard';
 
+import { createAdminContentAssetPreviewPort } from './admin-content-asset-field';
 import { AdminContentWorkspace } from './admin-content-workspace';
 import { useAdminWorkspace } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
@@ -32,6 +33,7 @@ export const AdminContentDemoWorkspace = () => {
   const { context, eventId, eventTimezone, invalidateSensitive, permissions } =
     useAdminWorkspace();
   const [port] = useState(() => createAdminContentPreviewPort({ eventId }));
+  const [assetPort] = useState(() => createAdminContentAssetPreviewPort());
   const [mode, setMode] = useState<AdminContentPreviewMode>('ready');
   const [generation, setGeneration] = useState(0);
   const archived = context.event.phase === 'archived';
@@ -43,7 +45,7 @@ export const AdminContentDemoWorkspace = () => {
     >
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>Obsah akce · bezpečný preview</p>
-        <h1>Program a publikovaný obsah</h1>
+        <h1>Program a obsah</h1>
         <p>
           Stejný editor a publikační gate jako v produkčním adapteru, napájený
           pouze stateful syntetickými daty. Žádná akce nemění produkční obsah.
@@ -81,6 +83,7 @@ export const AdminContentDemoWorkspace = () => {
       </section>
 
       <AdminContentWorkspace
+        assetPort={assetPort}
         eventId={eventId}
         key={generation}
         onSecurityFailure={(failure) => invalidateSensitive(failure.message)}

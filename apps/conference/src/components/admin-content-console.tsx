@@ -9,7 +9,6 @@ import {
 } from 'react';
 
 import {
-  adminContentResources,
   browserAdminContentPort,
   isAdminContentSecurityFailure,
   type AdminContentFailure,
@@ -20,19 +19,86 @@ import {
 import { ADMIN_CONTENT_SCOPE_CHANGE_EVENT } from '../lib/admin-content-dirty-guard';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import {
+  AdminContentAssetField,
+  type AdminContentAssetPort,
+} from './admin-content-asset-field';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import styles from './admin-workspace.module.css';
 
 const resourceLabels: Record<AdminContentResource, string> = {
-  days: 'Dny',
+  days: 'Dny akce',
   venues: 'Místa',
   rooms: 'Místnosti',
-  sessions: 'Program',
+  sessions: 'Body programu',
   speakers: 'Řečníci',
   partners: 'Partneři',
   pages: 'Stránky',
-  faqs: 'FAQ',
+  faqs: 'Časté dotazy',
 };
+
+type AdminContentArea =
+  'program' | 'speakers' | 'places' | 'partners' | 'practical';
+
+const contentAreas = [
+  'program',
+  'speakers',
+  'places',
+  'partners',
+  'practical',
+] as const satisfies readonly AdminContentArea[];
+
+const contentAreaLabels: Record<AdminContentArea, string> = {
+  program: 'Program',
+  speakers: 'Řečníci',
+  places: 'Místa a místnosti',
+  partners: 'Partneři',
+  practical: 'Praktické informace',
+};
+
+const contentAreaResources: Record<
+  AdminContentArea,
+  readonly AdminContentResource[]
+> = {
+  program: ['sessions', 'days'],
+  speakers: ['speakers'],
+  places: ['venues', 'rooms'],
+  partners: ['partners'],
+  practical: ['pages', 'faqs'],
+};
+
+const resourceArea = Object.fromEntries(
+  contentAreas.flatMap((area) =>
+    contentAreaResources[area].map((resource) => [resource, area]),
+  ),
+) as Record<AdminContentResource, AdminContentArea>;
+
+const createLabels: Record<AdminContentResource, string> = {
+  sessions: 'Přidat bod programu',
+  days: 'Přidat den',
+  speakers: 'Přidat řečníka',
+  venues: 'Přidat místo',
+  rooms: 'Přidat místnost',
+  partners: 'Přidat partnera',
+  pages: 'Přidat stránku',
+  faqs: 'Přidat otázku',
+};
+
+const contentStatusLabels: Readonly<Record<string, string>> = {
+  draft: 'Rozpracováno',
+  published: 'Zveřejněno',
+  cancelled: 'Zrušeno',
+  archived: 'Archivováno',
+};
+
+const slugFromTitle = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 128);
 
 const bodyFieldNames: Partial<Record<AdminContentResource, string>> = {
   venues: 'mapQuery',
@@ -274,13 +340,15 @@ export const adminContentBodyFromForm = (
 };
 
 const itemLabel = (item: AdminContentItem): string =>
-  String(
-    item.title ??
-      item.name ??
-      item.question ??
-      item.localDate ??
-      'Položka bez názvu',
-  );
+  item.firstName && item.lastName
+    ? `${String(item.firstName)} ${String(item.lastName)}`
+    : String(
+        item.title ??
+          item.name ??
+          item.question ??
+          item.localDate ??
+          'Položka bez názvu',
+      );
 
 const failureMessage = (failure: AdminContentFailure): string =>
   failure.requestId
@@ -290,7 +358,7 @@ const failureMessage = (failure: AdminContentFailure): string =>
 const fieldLabels: Readonly<Record<string, string>> = {
   answerMarkdown: 'Odpověď',
   bioMarkdown: 'Bio',
-  bodyMarkdown: 'Text stránky',
+  bodyMarkdown: 'Obsah stránky',
   capacity: 'Kapacita',
   category: 'Kategorie',
   company: 'Firma',
@@ -300,10 +368,10 @@ const fieldLabels: Readonly<Record<string, string>> = {
   endsAt: 'Konec',
   linkedinUrl: 'LinkedIn URL',
   localDate: 'Datum',
-  mapQuery: 'Mapa',
+  mapQuery: 'Místo pro mapu',
   navigationMarkdown: 'Navigační pokyny',
   roomId: 'Místnost',
-  slug: 'Slug',
+  slug: 'Adresa stránky',
   sortOrder: 'Pořadí',
   speakerIds: 'Řečníci',
   startsAt: 'Začátek',
@@ -492,7 +560,9 @@ const nativeFieldErrors = (
 };
 
 export const AdminContentConsole = ({
+  assetPort,
   eventId,
+  initialResource = 'sessions',
   onContentChanged,
   onDirtyChange,
   onSecurityFailure,
@@ -500,7 +570,9 @@ export const AdminContentConsole = ({
   readOnly = false,
   timezone,
 }: {
+  readonly assetPort?: AdminContentAssetPort;
   readonly eventId: string;
+  readonly initialResource?: AdminContentResource;
   readonly onContentChanged?: () => void;
   readonly onDirtyChange?: (dirty: boolean) => void;
   readonly onSecurityFailure?: (failure: AdminContentFailure) => void;
@@ -508,12 +580,22 @@ export const AdminContentConsole = ({
   readonly readOnly?: boolean;
   readonly timezone: string;
 }) => {
-  const [resource, setResource] = useState<AdminContentResource>('sessions');
+  const [resource, setResource] =
+    useState<AdminContentResource>(initialResource);
   const [selectedResource, setSelectedResource] =
-    useState<AdminContentResource>('sessions');
+    useState<AdminContentResource>(initialResource);
   const [items, setItems] = useState<readonly AdminContentItem[]>([]);
   const [references, setReferences] = useState(emptyReferences);
   const [editing, setEditing] = useState<AdminContentItem | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [listFilter, setListFilter] = useState<'active' | 'archived'>('active');
+  const [slugValue, setSlugValue] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [sortOrder, setSortOrder] = useState(0);
+  const [speakerSearch, setSpeakerSearch] = useState('');
+  const [speakerSelection, setSpeakerSelection] = useState<readonly string[]>(
+    [],
+  );
   const [archiveCandidate, setArchiveCandidate] =
     useState<AdminContentItem | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -523,7 +605,7 @@ export const AdminContentConsole = ({
   const [error, setError] = useState<AdminContentFailure | null>(null);
   const [message, setMessage] = useState('');
   const [loadRequest, setLoadRequest] = useState({
-    resource: 'sessions' as AdminContentResource,
+    resource: initialResource,
     sequence: 0,
   });
   const [reconciliationRequired, setReconciliationRequired] = useState(false);
@@ -531,9 +613,31 @@ export const AdminContentConsole = ({
   const [localFormAvailable, setLocalFormAvailable] = useState(false);
   const operationLocked = useRef(false);
   const activeMutation = useRef<AbortController | null>(null);
-  const activeResource = useRef<AdminContentResource>('sessions');
+  const activeResource = useRef<AdminContentResource>(initialResource);
+  const editorHistoryActive = useRef(false);
+  const listScrollPosition = useRef(0);
 
   useUnsavedContentGuard(dirty);
+
+  useEffect(() => {
+    const closeFromHistory = () => {
+      if (
+        !editorHistoryActive.current ||
+        window.history.state?.__byzonAdminContentEditor
+      ) {
+        return;
+      }
+      editorHistoryActive.current = false;
+      setEditorOpen(false);
+      setEditing(null);
+      setDirty(false);
+      window.requestAnimationFrame(() =>
+        window.scrollTo({ top: listScrollPosition.current }),
+      );
+    };
+    window.addEventListener('popstate', closeFromHistory);
+    return () => window.removeEventListener('popstate', closeFromHistory);
+  }, []);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -559,6 +663,7 @@ export const AdminContentConsole = ({
     setItems([]);
     setReferences(emptyReferences());
     setEditing(null);
+    setEditorOpen(false);
     setArchiveCandidate(null);
     setDirty(false);
     setMessage('');
@@ -625,6 +730,7 @@ export const AdminContentConsole = ({
       });
       setReferences(next);
       setEditing(null);
+      setEditorOpen(false);
       setDirty(false);
       setReconciliationRequired(false);
       setSnapshotReady(true);
@@ -643,12 +749,75 @@ export const AdminContentConsole = ({
       return;
     }
     setSelectedResource(next);
+    setEditorOpen(false);
+    setEditing(null);
+    setListFilter('active');
+    editorHistoryActive.current = false;
     setError(null);
     setMessage('');
     setLoadRequest(({ sequence }) => ({
       resource: next,
       sequence: sequence + 1,
     }));
+    const query = new URLSearchParams();
+    query.set('oblast', resourceArea[next]);
+    if (contentAreaResources[resourceArea[next]].length > 1) {
+      query.set('typ', next);
+    }
+    window.history.replaceState(
+      { ...window.history.state, __byzonAdminContentEditor: undefined },
+      '',
+      `${window.location.pathname}?${query.toString()}`,
+    );
+  };
+
+  const openEditor = (item: AdminContentItem | null) => {
+    listScrollPosition.current = window.scrollY;
+    editorHistoryActive.current = true;
+    window.history.pushState(
+      { ...window.history.state, __byzonAdminContentEditor: true },
+      '',
+      `${window.location.pathname}${window.location.search}#uprava`,
+    );
+    setEditing(item);
+    setEditorOpen(true);
+    setError(null);
+    setDirty(false);
+    setSlugValue(String(item?.slug ?? ''));
+    setSlugTouched(Boolean(item));
+    setSortOrder(
+      Number(
+        item?.sortOrder ??
+          Math.max(
+            -1,
+            ...items.map((candidate) => Number(candidate.sortOrder)),
+          ) + 1,
+      ),
+    );
+    setSpeakerSearch('');
+    setSpeakerSelection(
+      Array.isArray(item?.speakerIds)
+        ? item.speakerIds.filter(
+            (value): value is string => typeof value === 'string',
+          )
+        : [],
+    );
+  };
+
+  const closeEditor = () => {
+    editorHistoryActive.current = false;
+    setEditorOpen(false);
+    setEditing(null);
+    setDirty(false);
+    setError(null);
+    window.history.replaceState(
+      { ...window.history.state, __byzonAdminContentEditor: undefined },
+      '',
+      `${window.location.pathname}${window.location.search}`,
+    );
+    window.requestAnimationFrame(() =>
+      window.scrollTo({ top: listScrollPosition.current }),
+    );
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -730,8 +899,7 @@ export const AdminContentConsole = ({
         ? 'Položka byla vytvořena a potvrzena serverem.'
         : 'Položka byla upravena a potvrzena serverem.',
     );
-    setEditing(null);
-    setDirty(false);
+    closeEditor();
     onContentChanged?.();
     setLoadRequest(({ sequence }) => ({
       resource,
@@ -781,11 +949,8 @@ export const AdminContentConsole = ({
       }
       return;
     }
-    setMessage(
-      resource === 'days'
-        ? 'Den byl trvale smazán a změna byla potvrzena serverem.'
-        : 'Položka byla archivována a potvrzena serverem.',
-    );
+    setMessage('Položka byla archivována a potvrzena serverem.');
+    setEditorOpen(false);
     onContentChanged?.();
     setLoadRequest(({ sequence }) => ({
       resource,
@@ -797,6 +962,22 @@ export const AdminContentConsole = ({
   const working = busy !== null;
   const writesBlocked = working || reconciliationRequired || !snapshotReady;
   const bodyFieldName = bodyFieldNames[resource];
+  const area = resourceArea[selectedResource];
+  const areaResources = contentAreaResources[area];
+  const visibleItems = items.filter((item) =>
+    listFilter === 'archived'
+      ? item.status === 'archived'
+      : item.status !== 'archived',
+  );
+  const visibleSpeakers = references.speakers.filter((speaker) => {
+    const query = speakerSearch.trim().toLocaleLowerCase('cs-CZ');
+    return (
+      !query ||
+      `${String(speaker.firstName)} ${String(speaker.lastName)}`
+        .toLocaleLowerCase('cs-CZ')
+        .includes(query)
+    );
+  });
 
   const requestReload = () => {
     if (
@@ -831,23 +1012,64 @@ export const AdminContentConsole = ({
         ) : null}
       </div>
 
-      <label className={styles.field}>
+      <nav aria-label="Oblasti obsahu" className={styles.contentAreaTabs}>
+        {contentAreas.map((item) => (
+          <button
+            aria-current={area === item ? 'page' : undefined}
+            className={
+              area === item ? styles.filterActive : styles.filterButton
+            }
+            disabled={working}
+            key={item}
+            onClick={() => changeResource(contentAreaResources[item][0]!)}
+            type="button"
+          >
+            {contentAreaLabels[item]}
+          </button>
+        ))}
+      </nav>
+      <label className={`${styles.field} ${styles.contentAreaSelect}`}>
         <span>Oblast obsahu</span>
         <select
-          aria-label="Oblast obsahu"
           disabled={working}
           onChange={(event) =>
-            changeResource(event.target.value as AdminContentResource)
+            changeResource(
+              contentAreaResources[event.target.value as AdminContentArea][0]!,
+            )
           }
-          value={selectedResource}
+          value={area}
         >
-          {adminContentResources.map((item) => (
+          {contentAreas.map((item) => (
             <option key={item} value={item}>
-              {resourceLabels[item]}
+              {contentAreaLabels[item]}
             </option>
           ))}
         </select>
       </label>
+
+      {areaResources.length > 1 ? (
+        <fieldset className={styles.contentTypeSelector}>
+          <legend>Typ obsahu</legend>
+          <div>
+            {areaResources.map((item) => (
+              <button
+                aria-pressed={selectedResource === item}
+                className={
+                  selectedResource === item
+                    ? styles.filterActive
+                    : styles.filterButton
+                }
+                disabled={working}
+                key={item}
+                onClick={() => changeResource(item)}
+                type="button"
+              >
+                {resourceLabels[item]}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
 
       {error ? (
         <AdminFormErrorSummary
@@ -855,7 +1077,7 @@ export const AdminContentConsole = ({
           details={failureDetails(fieldErrors)}
           heading={
             error.kind === 'stale'
-              ? 'Snapshot obsahu se změnil'
+              ? 'Obsah na serveru se změnil'
               : reconciliationRequired
                 ? 'Výsledek změny není potvrzen'
                 : error.kind === 'conflict'
@@ -875,8 +1097,8 @@ export const AdminContentConsole = ({
       {reconciliationRequired ? (
         <p className={styles.warning} role="status">
           {error?.kind === 'stale'
-            ? 'Další zápisy jsou zamčené. Lokální formulář zůstal zachovaný; před načtením kanonického stavu potvrďte jeho zahození.'
-            : 'Další zápisy jsou zamčené. Nejdřív načtěte kanonický stav; rozepsaný formulář zůstane zachovaný, dokud načtení nepotvrdíte.'}
+            ? 'Další zápisy jsou zamčené. Rozepsaný formulář zůstal zachovaný; před načtením aktuálního stavu potvrďte jeho zahození.'
+            : 'Další zápisy jsou zamčené. Nejdřív načtěte aktuální stav ze serveru; rozepsaný formulář zůstane zachovaný, dokud načtení nepotvrdíte.'}
         </p>
       ) : null}
 
@@ -885,13 +1107,125 @@ export const AdminContentConsole = ({
       localFormAvailable &&
       error ? (
         <p className={styles.warning} role="status">
-          Nový snapshot se nepodařilo potvrdit. Lokální formulář zůstal
+          Nový stav obsahu se nepodařilo potvrdit. Rozepsaný formulář zůstal
           zachovaný pouze pro kontrolu; zápisy jsou uzamčené, dokud nenačtete
           aktuální stav.
         </p>
       ) : null}
 
-      {!readOnly && localFormAvailable ? (
+      <section
+        aria-busy={busy === 'loading'}
+        aria-labelledby="content-list-title"
+        className={styles.contentListPanel}
+      >
+        <div className={styles.panelHeader}>
+          <div>
+            <h3 id="content-list-title">{resourceLabels[resource]}</h3>
+            <p className={styles.muted}>
+              Nejdřív vyberte existující položku, nebo přidejte novou.
+            </p>
+          </div>
+          <div className={styles.contentListHeaderActions}>
+            {!readOnly && snapshotReady ? (
+              <button
+                className={styles.button}
+                disabled={writesBlocked}
+                onClick={() => openEditor(null)}
+                type="button"
+              >
+                {createLabels[resource]}
+              </button>
+            ) : null}
+            <button
+              className={styles.secondaryButton}
+              disabled={working}
+              onClick={requestReload}
+              type="button"
+            >
+              Obnovit seznam
+            </button>
+          </div>
+        </div>
+        <div aria-label="Zobrazené položky" className={styles.contentFilters}>
+          <button
+            aria-pressed={listFilter === 'active'}
+            className={
+              listFilter === 'active'
+                ? styles.filterActive
+                : styles.filterButton
+            }
+            onClick={() => setListFilter('active')}
+            type="button"
+          >
+            Aktivní
+          </button>
+          <button
+            aria-pressed={listFilter === 'archived'}
+            className={
+              listFilter === 'archived'
+                ? styles.filterActive
+                : styles.filterButton
+            }
+            onClick={() => setListFilter('archived')}
+            type="button"
+          >
+            Archiv
+          </button>
+        </div>
+        {busy === 'loading' ? (
+          <p role="status">Načítám obsah…</p>
+        ) : !snapshotReady ? (
+          <p className={styles.empty} role="status">
+            Aktuální seznam není dostupný. Zkuste znovu načíst obsah.
+          </p>
+        ) : visibleItems.length === 0 ? (
+          <p className={styles.empty} role="status">
+            {listFilter === 'archived'
+              ? 'V archivu nejsou žádné položky.'
+              : 'V této oblasti zatím není žádná položka.'}
+          </p>
+        ) : (
+          <ul className={styles.contentList}>
+            {visibleItems.map((item) => (
+              <li data-archived={item.status === 'archived'} key={item.id}>
+                <span>
+                  <strong>{itemLabel(item)}</strong>
+                  <small>
+                    {contentStatusLabels[String(item.status)] ??
+                      'Bez stavového příznaku'}
+                  </small>
+                </span>
+                {!readOnly && item.status !== 'archived' ? (
+                  <span className={styles.contentActions}>
+                    <button
+                      aria-label={`Upravit: ${itemLabel(item)}`}
+                      className={styles.secondaryButton}
+                      disabled={writesBlocked}
+                      onClick={() => openEditor(item)}
+                      type="button"
+                    >
+                      Upravit
+                    </button>
+                    {resource !== 'days' ? (
+                      <button
+                        aria-label={`Archivovat: ${itemLabel(item)}`}
+                        className={styles.dangerButton}
+                        disabled={writesBlocked || dirty}
+                        onClick={() => setArchiveCandidate(item)}
+                        type="button"
+                      >
+                        Archivovat
+                      </button>
+                    ) : null}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {!readOnly && localFormAvailable && editorOpen ? (
         <form
           aria-busy={busy === 'loading'}
           className={styles.contentForm}
@@ -906,10 +1240,32 @@ export const AdminContentConsole = ({
           onSubmit={submit}
         >
           <div className={styles.panelHeader}>
-            <h3>{editing ? 'Upravit položku' : 'Nová položka'}</h3>
-            {dirty ? (
-              <span className={styles.badge}>Neuložené změny</span>
-            ) : null}
+            <div>
+              <p className={styles.eyebrow}>
+                {editing ? 'Úprava obsahu' : 'Nový obsah'}
+              </p>
+              <h3>{editing ? itemLabel(editing) : createLabels[resource]}</h3>
+            </div>
+            <div className={styles.actionRow}>
+              {dirty ? (
+                <span className={styles.badge}>Neuložené změny</span>
+              ) : null}
+              <button
+                className={styles.secondaryButton}
+                onClick={() => {
+                  if (
+                    dirty &&
+                    !window.confirm('Zahodit neuložené změny formuláře?')
+                  ) {
+                    return;
+                  }
+                  closeEditor();
+                }}
+                type="button"
+              >
+                Zpět na seznam
+              </button>
+            </div>
           </div>
           {resource === 'days' ? (
             <label className={styles.field}>
@@ -922,19 +1278,6 @@ export const AdminContentConsole = ({
                 {...fieldA11y(fieldErrors, 'localDate')}
               />
               <FieldError errors={fieldErrors} name="localDate" />
-            </label>
-          ) : null}
-          {resource !== 'days' && resource !== 'faqs' ? (
-            <label className={styles.field}>
-              <span>Slug</span>
-              <input
-                defaultValue={String(editing?.slug ?? '')}
-                name="slug"
-                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-                required
-                {...fieldA11y(fieldErrors, 'slug')}
-              />
-              <FieldError errors={fieldErrors} name="slug" />
             </label>
           ) : null}
           {resource === 'rooms' ? (
@@ -1033,24 +1376,68 @@ export const AdminContentConsole = ({
                 </select>
                 <FieldError errors={fieldErrors} name="type" />
               </label>
-              <label className={styles.field}>
-                <span>Řečníci</span>
-                <select
-                  defaultValue={
-                    (editing?.speakerIds as string[] | undefined) ?? []
-                  }
-                  multiple
-                  name="speakerIds"
-                  {...fieldA11y(fieldErrors, 'speakerIds')}
-                >
-                  {references.speakers.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {`${String(item.firstName)} ${String(item.lastName)}`}
-                    </option>
-                  ))}
-                </select>
+              <fieldset
+                className={`${styles.speakerPicker} ${styles.contentWide}`}
+                {...fieldA11y(fieldErrors, 'speakerIds')}
+              >
+                <legend>Řečníci</legend>
+                <label className={styles.field}>
+                  <span>Najít řečníka</span>
+                  <input
+                    onChange={(event) => setSpeakerSearch(event.target.value)}
+                    placeholder="Začněte psát jméno"
+                    type="search"
+                    value={speakerSearch}
+                  />
+                </label>
+                {speakerSelection.length ? (
+                  <ul
+                    aria-label="Vybraní řečníci"
+                    className={styles.speakerChips}
+                  >
+                    {speakerSelection.map((id) => {
+                      const speaker = references.speakers.find(
+                        (candidate) => candidate.id === id,
+                      );
+                      return speaker ? (
+                        <li key={id}>
+                          {String(speaker.firstName)} {String(speaker.lastName)}
+                        </li>
+                      ) : null;
+                    })}
+                  </ul>
+                ) : (
+                  <p className={styles.helper}>
+                    Zatím není vybraný žádný řečník.
+                  </p>
+                )}
+                <div className={styles.speakerOptions}>
+                  {visibleSpeakers.map((item) => {
+                    const selected = speakerSelection.includes(item.id);
+                    return (
+                      <label key={item.id}>
+                        <input
+                          checked={selected}
+                          name="speakerIds"
+                          onChange={(event) =>
+                            setSpeakerSelection((current) =>
+                              event.target.checked
+                                ? [...current, item.id]
+                                : current.filter((id) => id !== item.id),
+                            )
+                          }
+                          type="checkbox"
+                          value={item.id}
+                        />
+                        <span>
+                          {String(item.firstName)} {String(item.lastName)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
                 <FieldError errors={fieldErrors} name="speakerIds" />
-              </label>
+              </fieldset>
             </>
           ) : null}
           {resource === 'rooms' ? (
@@ -1088,6 +1475,16 @@ export const AdminContentConsole = ({
                     : ''),
               )}
               name="title"
+              onChange={(event) => {
+                if (
+                  !editing &&
+                  !slugTouched &&
+                  resource !== 'days' &&
+                  resource !== 'faqs'
+                ) {
+                  setSlugValue(slugFromTitle(event.target.value));
+                }
+              }}
               required
               {...fieldA11y(fieldErrors, 'title')}
             />
@@ -1095,7 +1492,17 @@ export const AdminContentConsole = ({
           </label>
           {bodyFieldName ? (
             <label className={`${styles.field} ${styles.contentWide}`}>
-              <span>{resource === 'faqs' ? 'Odpověď' : 'Text'}</span>
+              <span>
+                {resource === 'faqs'
+                  ? 'Odpověď'
+                  : resource === 'pages'
+                    ? 'Obsah stránky'
+                    : resource === 'partners'
+                      ? 'Popis partnera'
+                      : resource === 'speakers'
+                        ? 'Pozice nebo role'
+                        : 'Místo pro mapu'}
+              </span>
               <textarea
                 defaultValue={String(
                   editing?.bodyMarkdown ??
@@ -1158,6 +1565,27 @@ export const AdminContentConsole = ({
           ) : null}
           {resource === 'speakers' ? (
             <>
+              {editing ? (
+                <AdminContentAssetField
+                  eventId={eventId}
+                  owner={{ kind: 'speaker', id: editing.id }}
+                  ownerVersion={Number(editing.version ?? 1)}
+                  {...(assetPort ? { port: assetPort } : {})}
+                  purpose="speaker_photo"
+                  readOnly={readOnly}
+                />
+              ) : (
+                <section
+                  aria-label="Fotografie řečníka"
+                  className={`${styles.assetPlaceholder} ${styles.contentWide}`}
+                >
+                  <div aria-hidden="true">Foto</div>
+                  <p>
+                    <strong>Fotografii lze přidat po uložení řečníka</strong>
+                    <span>Nejdřív vyplňte a uložte základní údaje.</span>
+                  </p>
+                </section>
+              )}
               <label className={styles.field}>
                 <span>Firma</span>
                 <input
@@ -1200,6 +1628,27 @@ export const AdminContentConsole = ({
           ) : null}
           {resource === 'partners' ? (
             <>
+              {editing ? (
+                <AdminContentAssetField
+                  eventId={eventId}
+                  owner={{ kind: 'partner', id: editing.id }}
+                  ownerVersion={Number(editing.version ?? 1)}
+                  {...(assetPort ? { port: assetPort } : {})}
+                  purpose="partner_logo"
+                  readOnly={readOnly}
+                />
+              ) : (
+                <section
+                  aria-label="Logo partnera"
+                  className={`${styles.assetPlaceholder} ${styles.contentWide}`}
+                >
+                  <div aria-hidden="true">Logo</div>
+                  <p>
+                    <strong>Logo lze přidat po uložení partnera</strong>
+                    <span>Nejdřív vyplňte a uložte základní údaje.</span>
+                  </p>
+                </section>
+              )}
               <label className={styles.field}>
                 <span>Web URL</span>
                 <input
@@ -1275,8 +1724,8 @@ export const AdminContentConsole = ({
                 name="status"
                 {...fieldA11y(fieldErrors, 'status')}
               >
-                <option value="draft">Draft</option>
-                <option value="published">Publikováno</option>
+                <option value="draft">Rozpracováno</option>
+                <option value="published">Zveřejněno</option>
                 {resource === 'sessions' ? (
                   <option value="cancelled">Zrušeno</option>
                 ) : null}
@@ -1284,17 +1733,61 @@ export const AdminContentConsole = ({
               <FieldError errors={fieldErrors} name="status" />
             </label>
           ) : null}
-          <label className={styles.field}>
-            <span>Pořadí</span>
-            <input
-              defaultValue={String(editing?.sortOrder ?? 0)}
-              min="0"
-              name="sortOrder"
-              type="number"
-              {...fieldA11y(fieldErrors, 'sortOrder')}
-            />
-            <FieldError errors={fieldErrors} name="sortOrder" />
-          </label>
+          <details className={`${styles.advancedFields} ${styles.contentWide}`}>
+            <summary>Pokročilé</summary>
+            <div>
+              {resource !== 'days' && resource !== 'faqs' ? (
+                <label className={styles.field}>
+                  <span>Adresa stránky</span>
+                  <input
+                    name="slug"
+                    onChange={(event) => {
+                      setSlugTouched(true);
+                      setSlugValue(event.target.value);
+                    }}
+                    pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                    required
+                    value={slugValue}
+                    {...fieldA11y(fieldErrors, 'slug')}
+                  />
+                  <small>
+                    Vytváří se automaticky z názvu. Měňte ji jen kvůli stálému
+                    odkazu.
+                  </small>
+                  <FieldError errors={fieldErrors} name="slug" />
+                </label>
+              ) : null}
+              <div className={styles.field}>
+                <span>Pořadí</span>
+                <input name="sortOrder" type="hidden" value={sortOrder} />
+                <output aria-live="polite">Pozice {sortOrder + 1}</output>
+                <div className={styles.actionRow}>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={sortOrder === 0}
+                    onClick={() => {
+                      setSortOrder((value) => Math.max(0, value - 1));
+                      setDirty(true);
+                    }}
+                    type="button"
+                  >
+                    Posunout nahoru
+                  </button>
+                  <button
+                    className={styles.secondaryButton}
+                    onClick={() => {
+                      setSortOrder((value) => value + 1);
+                      setDirty(true);
+                    }}
+                    type="button"
+                  >
+                    Posunout dolů
+                  </button>
+                </div>
+                <FieldError errors={fieldErrors} name="sortOrder" />
+              </div>
+            </div>
+          </details>
           {busy === 'loading' ? null : (
             <div className={`${styles.actionRow} ${styles.contentWide}`}>
               <button
@@ -1306,150 +1799,49 @@ export const AdminContentConsole = ({
                   ? 'Ukládám…'
                   : editing
                     ? 'Uložit změny'
-                    : 'Vytvořit položku'}
+                    : 'Uložit novou položku'}
               </button>
-              {editing || dirty ? (
-                <button
-                  className={styles.secondaryButton}
-                  disabled={writesBlocked}
-                  onClick={() => {
-                    if (
-                      dirty &&
-                      !window.confirm('Zahodit neuložené změny formuláře?')
-                    ) {
-                      return;
-                    }
-                    setEditing(null);
-                    setDirty(false);
-                    setError(null);
-                  }}
-                  type="button"
-                >
-                  Zrušit úpravy
-                </button>
-              ) : null}
+              <button
+                className={styles.secondaryButton}
+                disabled={working}
+                onClick={() => {
+                  if (
+                    dirty &&
+                    !window.confirm('Zahodit neuložené změny formuláře?')
+                  ) {
+                    return;
+                  }
+                  closeEditor();
+                }}
+                type="button"
+              >
+                Zrušit úpravy
+              </button>
             </div>
           )}
         </form>
       ) : readOnly ? (
         <p className={styles.callout}>
-          Archivovaný event je pouze ke čtení. Obsah ani publikaci nelze měnit.
+          Archivovaná akce je pouze ke čtení. Obsah ani zveřejnění nelze měnit.
         </p>
-      ) : (
+      ) : !localFormAvailable ? (
         <p className={styles.muted} role="status">
           {busy === 'loading'
-            ? 'Editor se připravuje z aktuálního snapshotu…'
-            : 'Editor zůstává uzamčený, dokud se nenačte úplný aktuální snapshot.'}
+            ? 'Editor se připravuje z aktuálního obsahu…'
+            : 'Editor zůstává uzamčený, dokud se nenačte úplný aktuální stav.'}
         </p>
-      )}
-
-      <section
-        aria-busy={busy === 'loading'}
-        aria-labelledby="content-list-title"
-      >
-        <div className={styles.panelHeader}>
-          <h3 id="content-list-title">{resourceLabels[resource]}</h3>
-          <button
-            className={styles.secondaryButton}
-            disabled={working}
-            onClick={requestReload}
-            type="button"
-          >
-            Načíst aktuální stav
-          </button>
-        </div>
-        {busy === 'loading' ? (
-          <p role="status">Načítám obsah…</p>
-        ) : !snapshotReady ? (
-          <p className={styles.empty} role="status">
-            Aktuální seznam není dostupný. Zkuste znovu načíst celý snapshot.
-          </p>
-        ) : items.length === 0 ? (
-          <p className={styles.empty} role="status">
-            V této oblasti zatím není žádná položka.
-          </p>
-        ) : (
-          <ul className={styles.contentList}>
-            {items.map((item) => (
-              <li key={item.id}>
-                <span>
-                  <strong>{itemLabel(item)}</strong>
-                  <small>
-                    {String(item.status ?? 'bez stavového příznaku')} · verze{' '}
-                    {String(item.version ?? '—')}
-                  </small>
-                </span>
-                {!readOnly ? (
-                  <span className={styles.contentActions}>
-                    <button
-                      aria-label={`Upravit: ${itemLabel(item)}`}
-                      className={styles.secondaryButton}
-                      disabled={writesBlocked || item.status === 'archived'}
-                      onClick={() => {
-                        if (
-                          dirty &&
-                          !window.confirm(
-                            'Otevřít jinou položku a zahodit neuložené změny?',
-                          )
-                        ) {
-                          return;
-                        }
-                        setEditing(item);
-                        setDirty(false);
-                        setError(null);
-                      }}
-                      type="button"
-                    >
-                      Upravit
-                    </button>
-                    <button
-                      aria-label={`${
-                        resource === 'days' ? 'Trvale smazat den' : 'Archivovat'
-                      }: ${itemLabel(item)}`}
-                      className={styles.dangerButton}
-                      disabled={
-                        writesBlocked || dirty || item.status === 'archived'
-                      }
-                      onClick={() => setArchiveCandidate(item)}
-                      type="button"
-                    >
-                      {resource === 'days' ? 'Smazat' : 'Archivovat'}
-                    </button>
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      ) : null}
 
       {archiveCandidate ? (
         <AdminConfirmDialog
-          acknowledgement={
-            resource === 'days'
-              ? 'Ověřil/a jsem den a rozumím tomu, že smazání je trvalé.'
-              : 'Ověřil/a jsem položku, její aktuální verzi a dopad archivace.'
-          }
-          confirmLabel={
-            resource === 'days' ? 'Trvale smazat den' : 'Archivovat položku'
-          }
+          acknowledgement="Ověřil/a jsem položku a rozumím tomu, že po archivaci zmizí z aktivního obsahu."
+          confirmLabel="Archivovat položku"
           danger
-          description={
-            resource === 'days'
-              ? 'Den bude trvale odstraněn. Pokud na něj odkazuje program, server smazání bezpečně odmítne.'
-              : 'Položka se skryje z aktivního obsahu. Server před změnou znovu ověří event scope a verzi.'
-          }
-          impact={
-            <p>
-              {itemLabel(archiveCandidate)} · verze{' '}
-              {String(archiveCandidate.version ?? '—')}
-            </p>
-          }
+          description="Položka se skryje z aktivního obsahu. Lze ji dál najít ve filtru Archiv."
+          impact={<p>{itemLabel(archiveCandidate)}</p>}
           onConfirm={() => void archive()}
           onDismiss={() => setArchiveCandidate(null)}
-          title={
-            resource === 'days' ? 'Trvale smazat den?' : 'Archivovat obsah?'
-          }
+          title="Archivovat obsah?"
         />
       ) : null}
     </section>

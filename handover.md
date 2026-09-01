@@ -5,15 +5,19 @@
 - Autoritativní specifikace i jediný tracker jsou v
   `docs/admin-ux-redesign-plan.md`; hlavní plán v6.32 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
-- `AUX-00B`, foundation `AUX-01A`–`C`, shell `AUX-02A`–`G` a dashboard
-  `AUX-03A`–`C` jsou dokončené.
+- `AUX-00B`, foundation `AUX-01A`–`C`, shell `AUX-02A`–`G`, dashboard
+  `AUX-03A`–`C` a obsah `AUX-04A`–`G` jsou dokončené.
   Admin routy mají právě jeden landmark/skip link, permission/feature-aware
   cílovou IA, lidský topbar, bezpečný account menu a nativní modal drawer.
   Context rozlišuje permissions, feature stav a explicitní check-in capability;
   produkční capability zůstává pro launch scope 2026 vypnutá. Canonical role,
   reporty, rezervace, audit a nastavení vlastní samostatný workspace, h1 a
   endpointy. Dashboard zobrazuje šest kontraktních metrik, phase-aware úkoly a
-  jen permission-safe akce. Další nezablokovaný celek je `AUX-04A`–`E` obsah.
+  jen permission-safe akce. `/admin/obsah` je list-first, seskupuje osm zdrojů
+  do pěti oblastí a zveřejňuje přes autoritativní title-level přehled změn.
+  Asset contract a mockované foto/logo UI jsou hotové bez raw ID; produkční
+  storage/auth integraci dál vlastní `P3-13`/`AUX-13L`. Další nezablokované
+  celky jsou `AUX-05` aktualizace vstupenek a `AUX-06` účastnická podpora.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.

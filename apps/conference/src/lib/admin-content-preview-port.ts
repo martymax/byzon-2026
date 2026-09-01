@@ -1,6 +1,7 @@
 import {
   publishedContentSnapshotSchema,
   publishedProgramSnapshotSchema,
+  type AdminPublicationChange,
 } from '@byzon/domain/contracts';
 
 import {
@@ -165,6 +166,26 @@ const initialContent = (
 });
 
 const clone = <Value>(value: Value): Value => structuredClone(value);
+const previewItemTitle = (item: AdminContentItem): string =>
+  item.firstName && item.lastName
+    ? `${String(item.firstName)} ${String(item.lastName)}`
+    : String(
+        item.title ?? item.name ?? item.question ?? item.localDate ?? 'Obsah',
+      );
+const previewChangeImpact = (
+  resource: AdminContentResource,
+  body: Readonly<Record<string, unknown>>,
+  current: AdminContentItem,
+): AdminPublicationChange['impact'] => {
+  if (resource !== 'sessions') return ['content'];
+  const impact: AdminPublicationChange['impact'][number][] = [];
+  if (body.startsAt !== current.startsAt || body.endsAt !== current.endsAt) {
+    impact.push('time');
+  }
+  if (body.roomId !== current.roomId) impact.push('location');
+  if (body.status !== current.status) impact.push('status');
+  return impact.length ? impact : ['content'];
+};
 const success = <Value>(data: Value): AdminContentResult<Value> => ({
   ok: true,
   data: clone(data),
@@ -203,7 +224,7 @@ const modeFailure = (
   if (operation === 'write' && mode === 'stale') {
     return failure(
       'stale',
-      'Syntetický snapshot se mezitím změnil. Načtěte aktuální obsah.',
+      'Syntetický obsah se mezitím změnil. Načtěte aktuální stav.',
     );
   }
   if (operation === 'write' && mode === 'conflict') {
@@ -403,7 +424,9 @@ export const createAdminContentPreviewPort = ({
   let contentRevision = 1;
   let publishedVersion = 0;
   let publishedChecksum: string | null = null;
+  let lastPublishedAt: string | null = null;
   const significantSessionIds = new Set<string>();
+  const pendingChanges = new Map<string, AdminPublicationChange>();
   let preview:
     (AdminPublicationPreview & { readonly sourceRevision: number }) | null =
     null;
@@ -501,7 +524,7 @@ export const createAdminContentPreviewPort = ({
         ) {
           return failure(
             'stale',
-            'Verze položky se změnila. Načtěte aktuální snapshot.',
+            'Verze položky se změnila. Načtěte aktuální stav.',
           );
         }
         if (
@@ -537,6 +560,15 @@ export const createAdminContentPreviewPort = ({
                 id,
                 version: (current.version ?? 0) + 1,
               };
+        pendingChanges.set(`${resource}:${id}`, {
+          kind:
+            resource === 'sessions' && body.status === 'cancelled'
+              ? 'cancelled'
+              : 'updated',
+          resource,
+          title: previewItemTitle(content[resource][index]!),
+          impact: previewChangeImpact(resource, body, current),
+        });
         changed();
         return success({
           id,
@@ -551,6 +583,12 @@ export const createAdminContentPreviewPort = ({
         eventId,
         id: createdId,
         ...(resource === 'days' ? {} : { version: 1 }),
+      });
+      pendingChanges.set(`${resource}:${createdId}`, {
+        kind: 'added',
+        resource,
+        title: previewItemTitle(content[resource].at(-1)!),
+        impact: ['content'],
       });
       changed();
       return success({
@@ -604,6 +642,12 @@ export const createAdminContentPreviewPort = ({
         };
       }
       if (resource === 'sessions') significantSessionIds.add(id);
+      pendingChanges.set(`${resource}:${id}`, {
+        kind: 'archived',
+        resource,
+        title: previewItemTitle(current),
+        impact: ['status'],
+      });
       changed();
       return success({
         id,
@@ -645,6 +689,19 @@ export const createAdminContentPreviewPort = ({
           { content: 'Bez změny obsahu nelze vytvořit další verzi.' },
         );
       }
+      const changes =
+        publishedVersion === 0
+          ? adminContentResources.flatMap((resource) =>
+              content[resource]
+                .filter((item) => item.status !== 'archived')
+                .map((item): AdminPublicationChange => ({
+                  kind: 'added',
+                  resource,
+                  title: previewItemTitle(item),
+                  impact: ['content'],
+                })),
+            )
+          : [...pendingChanges.values()];
       preview = {
         checksumSha256,
         createdAt: '2026-07-26T08:00:00.000+02:00',
@@ -652,6 +709,15 @@ export const createAdminContentPreviewPort = ({
         itemCount,
         requestId: 'preview-content-publication',
         significantSessionIds: [...significantSessionIds].sort(),
+        summary: {
+          available: true,
+          changeCount: changes.length,
+          changes,
+          previousPublication:
+            publishedVersion > 0 && lastPublishedAt
+              ? { version: publishedVersion, publishedAt: lastPublishedAt }
+              : null,
+        },
         sourceRevision: contentRevision,
         version: publishedVersion + 1,
       };
@@ -680,13 +746,16 @@ export const createAdminContentPreviewPort = ({
       }
       publishedVersion = preview.version;
       publishedChecksum = preview.checksumSha256;
+      lastPublishedAt = '2026-07-26T08:05:00.000+02:00';
       const result = {
         checksumSha256: preview.checksumSha256,
+        publishedAt: lastPublishedAt,
         requestId: 'preview-content-published',
         version: publishedVersion,
       };
       preview = null;
       significantSessionIds.clear();
+      pendingChanges.clear();
       return success(result);
     },
   };

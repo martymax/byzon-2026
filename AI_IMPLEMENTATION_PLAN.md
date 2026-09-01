@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.32 – převzetí AUX redesignu administrace
+> Stav: implementační plán v6.33 – obsahový a asset-contract řez AUX-04
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1938,6 +1938,10 @@ fixtures.
   storage URL. `P3-01` je pouze schema metadata a `P3-05` tento asset endpoint
   nenahrazuje. Produkční integraci blokuje schválení storage hranice
   `BLOCKER-INFRA-01`; do té doby UI používá neutrální placeholder bez raw ID.
+  Přípravné `AUX-04F`/`AUX-04G` dokončily storage-independent doménový
+  kontrakt, syntetické fixtures a mockované preview/replace/remove UI včetně
+  read-only varianty. Produkční endpoint, audit, storage/auth integrace a E2E
+  zůstávají otevřené a smí je uzavřít až `AUX-13L`.
 
 **Akceptace:** participant nikdy nevidí draft; publish je atomický; stejná
 version vrací deterministický JSON; významná změna vytváří cílitelnou událost;
@@ -3345,3 +3349,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.30 | 31. 8. 2026 | Uzavřen `BLOCKER-TKT-02`: pouze `Uhrazeno` opravňuje k participant apply, ostatní/unknown stavy nového účastníka neimportují a pozdější downgrade existujícího účastníka jde k ruční kontrole bez automatického lockoutu. Identita preferuje e-mail „prodej na jméno“; kupující je fallback jen pro objednávku s jedinou způsobilou vstupenkou a nejednoznačný skupinový nákup se neaplikuje. |
 | 6.31 | 31. 8. 2026 | `/` a produkčně dostupné `/prihlaseni` používají přímo pětiminutový jednorázový Better Auth magic link bez ticket activation gate; sign-up je zakázaný a callbacky mají explicitní bezpečný allowlist. Přidán Resend adapter s bounded timeoutem/idempotency klíčem, fail-closed produkční konfigurace a přístupný responzivní login. Bootstrap CLI umí výslovně provisionovat první neověřenou identitu, event membership a `organizer_admin` s auditem bez PII. Skutečný login čeká jen na potvrzený admin e-mail a kompletní schválené mail secrets/sender. |
 | 6.32 | 1. 9. 2026 | `AUX-00B` převzal redesign administrace jako autoritativní refaktor prezentační/IA vrstvy `F4`, zapsal per-route vlastníky integrace a jednotné branch/handoff pravidlo. Samostatný `P3-13` vlastní asset read/resolver/upload/replace/remove slice; `P3-01` ani `P3-05` se za něj nevydávají. |
+| 6.33 | 2. 9. 2026 | `AUX-04A`–`G` dokončil list-first obsahovou IA a autoritativní title-level publish summary nad integrovaným content portem. `P3-13` získal storage-independent kontrakt, fixtures a mockované asset UI bez raw ID, ale zůstává otevřený do produkční storage/auth/audit integrace v `AUX-13L`. |

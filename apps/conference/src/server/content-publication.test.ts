@@ -4,6 +4,7 @@ import {
   detectSignificantProgramChanges,
   parseContentPublicationSnapshot,
   requirePublicationChanges,
+  summarizePublicationChanges,
 } from './content-publication';
 
 const emptySnapshot = {
@@ -68,6 +69,55 @@ describe('content publication projection', () => {
       'kept',
       'removed',
     ]);
+  });
+
+  it('builds a title-level publication summary without exposing identifiers', () => {
+    const previous = {
+      ...emptySnapshot,
+      program: {
+        days: [],
+        rooms: [{ id: 'room', name: 'Sál A', venueId: 'venue', sortOrder: 0 }],
+        sessions: [
+          {
+            id: 'internal-session-id',
+            title: 'Růst bez zkratek',
+            roomId: 'internal-room-id' as string | null,
+            startsAt: '2026-09-18T08:00:00.000Z',
+            endsAt: '2026-09-18T09:00:00.000Z',
+            status: 'published',
+            sortOrder: 0,
+            speakerIds: ['internal-speaker-id'],
+          },
+        ],
+      },
+    };
+    const current = structuredClone(previous);
+    current.program.sessions[0]!.startsAt = '2026-09-18T08:30:00.000Z';
+    current.program.sessions[0]!.roomId = null;
+
+    const summary = summarizePublicationChanges(previous, current, {
+      version: 2,
+      publishedAt: '2026-09-01T10:00:00.000Z',
+    });
+
+    expect(summary).toEqual({
+      available: true,
+      changeCount: 1,
+      changes: [
+        {
+          kind: 'updated',
+          resource: 'sessions',
+          title: 'Růst bez zkratek',
+          impact: ['time', 'location'],
+        },
+      ],
+      previousPublication: {
+        version: 2,
+        publishedAt: '2026-09-01T10:00:00.000Z',
+      },
+    });
+    expect(JSON.stringify(summary)).not.toContain('internal-session-id');
+    expect(JSON.stringify(summary)).not.toContain('internal-room-id');
   });
 
   it('turns a non-publishable field into an actionable invalid-draft error', () => {

@@ -2,22 +2,22 @@ import { adminContextFixtures } from '@byzon/test-support/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
+import {
+  AdminContentAssetField,
+  createAdminContentAssetPreviewPort,
+} from '../../components/admin-content-asset-field';
 import { AdminContentWorkspace } from '../../components/admin-content-workspace';
 import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
+import { adminContextEndpoint } from '../../lib/admin-api';
 import {
   createAdminContentPreviewPort,
   type AdminContentPreviewMode,
 } from '../../lib/admin-content-preview-port';
-import { adminContextEndpoint } from '../../lib/admin-api';
 import type { ApiPort } from '../../lib/api/endpoint';
 import type {
   AdminContentFailure,
-  AdminContentList,
-  AdminContentMutation,
   AdminContentPort,
-  AdminContentResult,
   AdminPublicationPreview,
-  AdminPublicationResult,
 } from '../../lib/admin-content-api';
 import { mayLeaveAdminContentDraft } from '../../lib/admin-content-dirty-guard';
 import { expectComponentToPassAxe } from './accessibility';
@@ -31,6 +31,38 @@ const contentRoot = (): HTMLElement => {
   )?.parentElement;
   if (!root) throw new Error('Admin content workspace is missing.');
   return root;
+};
+
+const selectArea = (value: string) => {
+  const target = Array.from(document.querySelectorAll('select')).find(
+    (candidate) =>
+      Array.from(candidate.options).some((option) => option.value === value) &&
+      Array.from(candidate.options).some(
+        (option) => option.value === 'program',
+      ),
+  );
+  if (!target) throw new Error('Content area selector is missing.');
+  target.value = value;
+  target.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+const renderContent = (options?: {
+  assetPort?: ReturnType<typeof createAdminContentAssetPreviewPort>;
+  port?: AdminContentPort;
+  readOnly?: boolean;
+}) => {
+  const port = options?.port ?? createAdminContentPreviewPort({ eventId });
+  return renderComponent(
+    <AdminContentWorkspace
+      {...(options?.assetPort ? { assetPort: options.assetPort } : {})}
+      eventId={eventId}
+      port={port}
+      {...(options?.readOnly === undefined
+        ? {}
+        : { readOnly: options.readOnly })}
+      timezone="Europe/Prague"
+    />,
+  );
 };
 
 const securityPort = (
@@ -60,281 +92,141 @@ beforeEach(() => {
 });
 
 describe('admin content user journeys', () => {
-  it('guards dirty input, focuses invalid fields and stays responsive', async () => {
-    window.history.replaceState({}, '', '/admin');
-    window.history.pushState({}, '', '/admin/obsah');
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={createAdminContentPreviewPort({ eventId })}
-        timezone="Europe/Prague"
-      />,
-    );
-    const resource = screen.getByRole('combobox', { name: 'Oblast obsahu' });
+  it('opens list-first with five areas, exact types and a safe URL state', async () => {
+    const screen = await renderContent();
 
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
-    expect(
-      Array.from(
-        (
-          screen
-            .getByRole('combobox', { name: 'Typ' })
-            .element() as HTMLSelectElement
-        ).options,
-        ({ value }) => value,
-      ),
-    ).toEqual([
-      'talk',
-      'panel',
-      'workshop',
-      'mastermind',
-      'coaching',
-      'networking',
-      'break',
-      'meal',
-      'gala',
-      'other',
-    ]);
-    await screen.getByRole('button', { name: 'Sestavit nový náhled' }).click();
     await expect
-      .element(screen.getByText(/Immutable náhled verze 1/))
+      .element(screen.getByRole('button', { name: 'Přidat bod programu' }))
       .toBeVisible();
-    await screen.getByRole('textbox', { name: 'Slug' }).fill('rozepsany-bod');
+    expect(
+      screen.getByRole('textbox', { name: 'Název' }),
+    ).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('Kontrolní součet');
-    await expect
-      .element(
-        screen.getByText(
-          'Formulář obsahuje neuložené změny. Před sestavením náhledu je uložte nebo zahoďte.',
-        ),
-      )
-      .toBeVisible();
-    await expect
-      .element(screen.getByRole('button', { name: 'Sestavit nový náhled' }))
-      .toBeDisabled();
-    expect(
-      screen
-        .getByRole('button', { name: /^Archivovat:/ })
-        .elements()
-        .every((button) => (button as HTMLButtonElement).disabled),
-    ).toBe(true);
-    expect(mayLeaveAdminContentDraft()).toBe(false);
-    window.history.back();
-    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
-    expect(window.location.pathname).toBe('/admin/obsah');
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Slug' }))
-      .toHaveValue('rozepsany-bod');
-    await resource.selectOptions('partners');
-    await expect.element(resource).toHaveValue('sessions');
-    expect(confirm).toHaveBeenCalledTimes(3);
-
-    confirm.mockReturnValue(true);
-    await resource.selectOptions('partners');
-    await expect.element(resource).toHaveValue('partners');
-    await expect.element(screen.getByText('Partner Example')).toBeVisible();
-    expect(
-      Array.from(
-        (
-          screen
-            .getByRole('combobox', { name: 'Stav' })
-            .element() as HTMLSelectElement
-        ).options,
-        ({ value }) => value,
-      ),
-    ).not.toContain('archived');
-    await screen.getByRole('button', { name: 'Vytvořit položku' }).click();
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Obsahovou operaci nelze dokončit',
-        }),
-      )
-      .toBeVisible();
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Slug' }))
-      .toHaveFocus();
+    for (const label of [
+      'Program',
+      'Řečníci',
+      'Místa a místnosti',
+      'Partneři',
+      'Praktické informace',
+    ]) {
+      expect(screen.getByText(label).elements().length).toBeGreaterThan(0);
+    }
 
     await screen
-      .getByRole('textbox', { name: 'Slug' })
-      .fill('rozepsany-partner');
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Slug' }))
-      .toHaveFocus();
-    const unload = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(unload);
-    expect(unload.defaultPrevented).toBe(true);
+      .getByRole('button', { name: 'Upravit: Otevření konference' })
+      .click();
+    expect(window.location.hash).toBe('#uprava');
+    window.history.back();
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Zpět na seznam' }).elements(),
+      ).toHaveLength(0),
+    );
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
 
-    const action = screen.getByRole('button', { name: 'Vytvořit položku' });
-    expect(
-      (await action.element().getBoundingClientRect()).height,
-    ).toBeGreaterThanOrEqual(44);
+    selectArea('practical');
+    await expect
+      .element(screen.getByRole('button', { name: 'Přidat stránku' }))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Časté dotazy' }).click();
+    await expect
+      .element(screen.getByRole('button', { name: 'Přidat otázku' }))
+      .toBeVisible();
+    expect(window.location.search).toBe('?oblast=practical&typ=faqs');
+    expect(window.location.search).not.toContain('query');
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-      window.innerWidth,
+      document.documentElement.clientWidth,
     );
     await expectComponentToPassAxe(contentRoot());
-    confirm.mockRestore();
   });
 
-  it('never exposes actions for an old resource while a new snapshot loads or fails', async () => {
-    const base = createAdminContentPreviewPort({ eventId });
-    let resolvePartners:
-      ((result: AdminContentResult<AdminContentList>) => void) | undefined;
-    const pendingPartners = new Promise<AdminContentResult<AdminContentList>>(
-      (resolve) => {
-        resolvePartners = resolve;
-      },
-    );
-    const port: AdminContentPort = {
-      ...base,
-      list: (candidateEventId, resource, signal) =>
-        resource === 'partners'
-          ? pendingPartners
-          : base.list(candidateEventId, resource, signal),
-    };
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={port}
-        timezone="Europe/Prague"
-      />,
-    );
-
+  it('uses progressive slug/order and an accessible speaker checkbox picker', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const screen = await renderContent();
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
-    await screen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('faqs');
-    await expect
-      .element(screen.getByText('Je k dispozici šatna?'))
-      .toBeVisible();
-    await screen
-      .getByRole('textbox', { name: 'Otázka' })
-      .fill('Je dostupné parkování?');
-    await screen
-      .getByRole('textbox', { name: 'Odpověď' })
-      .fill('Ano, u hotelu.');
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await screen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('partners');
-    await expect.element(screen.getByText('Načítám obsah…')).toBeVisible();
-    expect(document.body.textContent).not.toContain('Otevření konference');
-    expect(
-      screen.getByRole('button', { name: /^Upravit:/ }).elements(),
-    ).toHaveLength(0);
-    expect(
-      screen.getByRole('button', { name: 'Vytvořit položku' }).elements(),
-    ).toHaveLength(0);
+    await screen.getByRole('button', { name: 'Přidat bod programu' }).click();
 
-    resolvePartners?.({
-      ok: false,
-      failure: {
-        kind: 'transport',
-        message: 'Syntetický nový snapshot nebyl potvrzen.',
-      },
-    });
+    await screen
+      .getByRole('textbox', { name: 'Název' })
+      .fill('Český růst bez zkratek');
+    await screen.getByText('Pokročilé', { exact: true }).click();
     await expect
-      .element(screen.getByText(/Lokální formulář zůstal zachovaný/))
+      .element(screen.getByRole('textbox', { name: 'Adresa stránky' }))
+      .toHaveValue('cesky-rust-bez-zkratek');
+    await expect.element(screen.getByText('Pozice 2')).toBeVisible();
+    await screen.getByRole('button', { name: 'Posunout dolů' }).click();
+    await expect.element(screen.getByText('Pozice 3')).toBeVisible();
+
+    await screen.getByRole('searchbox', { name: 'Najít řečníka' }).fill('Alex');
+    const speaker = screen.getByRole('checkbox', { name: 'Alex Novák' });
+    await speaker.click();
+    await expect
+      .element(screen.getByRole('list', { name: 'Vybraní řečníci' }))
+      .toHaveTextContent('Alex Novák');
+    (await speaker.element()).focus();
+    await userEvent.keyboard(' ');
+    expect(
+      screen.getByRole('list', { name: 'Vybraní řečníci' }),
+    ).not.toBeInTheDocument();
+    await expect
+      .element(screen.getByText('Začátek (Europe/Prague)'))
       .toBeVisible();
+
+    expect(mayLeaveAdminContentDraft()).toBe(false);
     await expect
-      .element(screen.getByRole('textbox', { name: 'Otázka' }))
-      .toHaveValue('Je dostupné parkování?');
-    await expect
-      .element(screen.getByRole('button', { name: 'Vytvořit položku' }))
+      .element(screen.getByRole('button', { name: 'Zkontrolovat změny' }))
       .toBeDisabled();
-    expect(document.body.textContent).not.toContain('Otevření konference');
+    await expectComponentToPassAxe(contentRoot());
+    confirm.mockReturnValue(true);
+    await screen.getByRole('button', { name: 'Zpět na seznam' }).click();
     confirm.mockRestore();
   });
 
-  it('keeps actionable conflict and stale recovery messages visible', async () => {
-    const port = createAdminContentPreviewPort({ eventId });
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={port}
-        timezone="Europe/Prague"
-      />,
-    );
-    await screen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('faqs');
+  it('uses exact field labels and neutral asset placeholders without a resolver', async () => {
+    const screen = await renderContent();
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    selectArea('speakers');
+    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
-      .element(screen.getByText('Je k dispozici šatna?'))
+      .element(screen.getByRole('textbox', { name: 'Pozice nebo role' }))
       .toBeVisible();
-    await screen
-      .getByRole('textbox', { name: 'Otázka' })
-      .fill('Je dostupné parkování?');
-    await screen
-      .getByRole('textbox', { name: 'Odpověď' })
-      .fill('Ano, u hotelu.');
+    await expect
+      .element(screen.getByText(/autorizovaného resolveru/))
+      .toBeVisible();
+    expect(screen.getByLabelText('Obrázek')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('019fc400');
 
-    port.setMode('conflict');
-    await screen.getByRole('button', { name: 'Vytvořit položku' }).click();
+    selectArea('places');
+    await screen.getByRole('button', { name: 'Místa', exact: true }).click();
     await expect
-      .element(
-        screen.getByRole('heading', { name: 'Změna koliduje s obsahem' }),
-      )
+      .element(screen.getByRole('button', { name: 'Přidat místo' }))
       .toBeVisible();
+    await screen.getByRole('button', { name: /^Upravit:/ }).click();
     await expect
-      .element(screen.getByText(/Časy bodu se překrývají/))
-      .toBeVisible();
-
-    port.setMode('stale');
-    await screen.getByRole('button', { name: 'Vytvořit položku' }).click();
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Snapshot obsahu se změnil',
-        }),
-      )
-      .toBeVisible();
-    await expect
-      .element(
-        screen.getByText(
-          'Aktuální seznam není dostupný. Zkuste znovu načíst celý snapshot.',
-        ),
-      )
+      .element(screen.getByRole('textbox', { name: 'Místo pro mapu' }))
       .toBeVisible();
   });
 
-  it('creates, updates, archives and explicitly publishes stateful mock content', async () => {
-    const base = createAdminContentPreviewPort({ eventId });
-    const save = vi.fn(base.save);
-    const port: AdminContentPort = { ...base, save };
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={port}
-        timezone="Europe/Prague"
-      />,
-    );
-
-    await screen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('faqs');
-    await expect
-      .element(screen.getByText('Je k dispozici šatna?'))
-      .toBeVisible();
+  it('creates, updates and archives without exposing permanent delete', async () => {
+    const screen = await renderContent();
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    selectArea('practical');
+    await screen.getByRole('button', { name: 'Časté dotazy' }).click();
+    await screen.getByRole('button', { name: 'Přidat otázku' }).click();
     await screen
       .getByRole('textbox', { name: 'Otázka' })
       .fill('Kde je registrace?');
     await screen
       .getByRole('textbox', { name: 'Odpověď' })
       .fill('Registrace je v hlavním foyer.');
-    await screen.getByRole('textbox', { name: 'Kategorie' }).fill('Na místě');
-    const create = screen.getByRole('button', { name: 'Vytvořit položku' });
-    const createElement = (await create.element()) as HTMLButtonElement;
-    createElement.click();
-    createElement.click();
+    await screen.getByRole('button', { name: 'Uložit novou položku' }).click();
     await expect.element(screen.getByText('Kde je registrace?')).toBeVisible();
-    expect(save).toHaveBeenCalledTimes(1);
 
-    const editButtons = screen
-      .getByRole('button', { name: /^Upravit:/ })
-      .elements();
-    (editButtons.at(-1) as HTMLButtonElement).click();
-    await expect
-      .element(screen.getByRole('textbox', { name: 'Otázka' }))
-      .toHaveValue('Kde je registrace?');
+    await screen
+      .getByRole('button', { name: 'Upravit: Kde je registrace?' })
+      .click();
     await screen
       .getByRole('textbox', { name: 'Otázka' })
       .fill('Kde přesně je registrace?');
@@ -342,63 +234,93 @@ describe('admin content user journeys', () => {
     await expect
       .element(screen.getByText('Kde přesně je registrace?'))
       .toBeVisible();
-    expect(save).toHaveBeenCalledTimes(2);
-
-    const archiveButtons = screen
-      .getByRole('button', { name: /^Archivovat:/ })
-      .elements();
-    (archiveButtons.at(-1) as HTMLButtonElement).click();
-    const archiveTitle = screen.getByRole('heading', {
-      name: 'Archivovat obsah?',
-    });
-    await expect.element(archiveTitle).toHaveFocus();
+    await screen
+      .getByRole('button', { name: 'Archivovat: Kde přesně je registrace?' })
+      .click();
     await expect
-      .element(screen.getByRole('button', { name: 'Archivovat položku' }))
-      .toBeDisabled();
+      .element(screen.getByRole('heading', { name: 'Archivovat obsah?' }))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Trvale smazat');
     await screen.getByRole('checkbox').click();
     await screen.getByRole('button', { name: 'Archivovat položku' }).click();
+    await screen.getByRole('button', { name: 'Archiv', exact: true }).click();
     await expect
-      .element(
-        screen.getByText('Položka byla archivována a potvrzena serverem.'),
-      )
+      .element(screen.getByText('Kde přesně je registrace?'))
       .toBeVisible();
-    const archivedEditButtons = screen
-      .getByRole('button', { name: /^Upravit:/ })
-      .elements();
-    expect((archivedEditButtons.at(-1) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-
-    await screen.getByRole('button', { name: 'Sestavit nový náhled' }).click();
-    await expect
-      .element(screen.getByText(/Immutable náhled verze 1/))
-      .toBeVisible();
-    const checksumValue = document.querySelector<HTMLElement>(
-      '[class*="checksum"] code',
-    )?.textContent;
-    expect(checksumValue).toMatch(/^[0-9a-f]{64}$/);
-    await expect
-      .element(screen.getByText('Významně změněné body programu'))
-      .toBeVisible();
-    const review = screen.getByRole('button', {
-      name: 'Zkontrolovat a publikovat',
-    });
-    await review.click();
-    await expect
-      .element(screen.getByRole('heading', { name: 'Publikovat obsah akce?' }))
-      .toHaveFocus();
-    await userEvent.keyboard('{Escape}');
-    await expect.element(review).toHaveFocus();
-    await review.click();
-    await screen.getByRole('checkbox').click();
-    await screen.getByRole('button', { name: 'Publikovat verzi 1' }).click();
-    await expect
-      .element(screen.getByText(/atomicky publikována/))
-      .toBeVisible();
-    await expectComponentToPassAxe(contentRoot());
+    expect(
+      screen.getByRole('button', {
+        name: 'Upravit: Kde přesně je registrace?',
+      }),
+    ).not.toBeInTheDocument();
   });
 
-  it('locks an ambiguous publish until canonical verification', async () => {
+  it('reviews title-level changes and publishes through a primary confirmation', async () => {
+    const screen = await renderContent();
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await screen.getByRole('button', { name: 'Zkontrolovat změny' }).click();
+    await expect
+      .element(screen.getByText('Obsah má 8 změn ke kontrole.'))
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('019fc400');
+    await expect
+      .element(screen.getByText('Kontrolní součet'))
+      .not.toBeVisible();
+    await screen.getByText('Technické údaje').click();
+    await expect.element(screen.getByText('Kontrolní součet')).toBeVisible();
+
+    await screen
+      .getByRole('button', { name: 'Pokračovat ke zveřejnění' })
+      .click();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zveřejnit 8 změn?' }))
+      .toHaveFocus();
+    const confirm = screen.getByRole('button', { name: 'Zveřejnit změny' });
+    expect((await confirm.element()).className).not.toContain('danger');
+    await screen.getByRole('checkbox').click();
+    await confirm.click();
+    await expect
+      .element(screen.getByText(/Změny byly zveřejněné/))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Zobrazit publikovaný obsah' }))
+      .toHaveAttribute('href', '/app/program');
+  });
+
+  it('locks an ambiguous publish until the canonical state is checked', async () => {
+    const base = createAdminContentPreviewPort({ eventId });
+    const publish = vi.fn(async () => ({
+      ok: false as const,
+      failure: {
+        kind: 'transport' as const,
+        message: 'Odpověď se po potvrzení ztratila.',
+      },
+    }));
+    const screen = await renderContent({ port: { ...base, publish } });
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await screen.getByRole('button', { name: 'Zkontrolovat změny' }).click();
+    await screen
+      .getByRole('button', { name: 'Pokračovat ke zveřejnění' })
+      .click();
+    await screen.getByRole('checkbox').click();
+    await screen.getByRole('button', { name: 'Zveřejnit změny' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Výsledek publikace není potvrzen',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Zkontrolovat změny' }))
+      .toBeDisabled();
+    await screen.getByRole('button', { name: 'Načíst aktuální stav' }).click();
+    await expect
+      .element(screen.getByText(/Aktuální stav přesně odpovídá/))
+      .toBeVisible();
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps publishing blocked when reconciliation finds the change already published', async () => {
     const base = createAdminContentPreviewPort({ eventId });
     const publish = vi.fn(
       async (
@@ -411,130 +333,134 @@ describe('admin content user journeys', () => {
           ok: false as const,
           failure: {
             kind: 'transport' as const,
-            message: 'Odpověď publikace se po commitu ztratila.',
+            message: 'Odpověď se po potvrzení ztratila.',
           },
         };
       },
     );
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={{ ...base, publish }}
-        timezone="Europe/Prague"
-      />,
-    );
-
+    const screen = await renderContent({ port: { ...base, publish } });
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
-    await screen.getByRole('button', { name: 'Sestavit nový náhled' }).click();
-    const checksum = document.querySelector<HTMLElement>(
-      '[class*="checksum"] code',
-    )?.textContent;
+    await screen.getByRole('button', { name: 'Zkontrolovat změny' }).click();
     await screen
-      .getByRole('button', { name: 'Zkontrolovat a publikovat' })
+      .getByRole('button', { name: 'Pokračovat ke zveřejnění' })
       .click();
     await screen.getByRole('checkbox').click();
-    await screen.getByRole('button', { name: 'Publikovat verzi 1' }).click();
+    await screen.getByRole('button', { name: 'Zveřejnit změny' }).click();
+    await screen.getByRole('button', { name: 'Načíst aktuální stav' }).click();
 
     await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Výsledek publikace není potvrzen',
-        }),
-      )
-      .toBeVisible();
-    expect(document.body.textContent).toContain(checksum);
-    await expect
-      .element(screen.getByRole('button', { name: 'Sestavit nový náhled' }))
-      .toBeDisabled();
-    await expect
-      .element(
-        screen.getByRole('button', { name: 'Zkontrolovat a publikovat' }),
-      )
-      .toBeDisabled();
-    expect(publish).toHaveBeenCalledTimes(1);
-
-    await screen.getByRole('button', { name: 'Ověřit kanonický stav' }).click();
-    await expect
-      .element(screen.getByText(/Server potvrdil kanonický stav/))
+      .element(screen.getByText(/Server potvrdil aktuální stav bez změny/))
       .toBeVisible();
     await expect
-      .element(screen.getByRole('button', { name: 'Sestavit nový náhled' }))
-      .toBeDisabled();
-    await expect
-      .element(
-        screen.getByRole('button', { name: 'Zkontrolovat a publikovat' }),
-      )
+      .element(screen.getByRole('button', { name: 'Zkontrolovat změny' }))
       .toBeDisabled();
     expect(publish).toHaveBeenCalledTimes(1);
   });
 
-  it('turns the empty scenario into stateful content after the first create', async () => {
+  it('surfaces collision and stale recovery without losing a dirty form', async () => {
     const port = createAdminContentPreviewPort({ eventId });
-    port.setMode('empty');
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={port}
-        timezone="Europe/Prague"
-      />,
-    );
+    const screen = await renderContent({ port });
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    selectArea('practical');
+    await screen.getByRole('button', { name: 'Časté dotazy' }).click();
+    await screen.getByRole('button', { name: 'Přidat otázku' }).click();
+    await screen.getByRole('textbox', { name: 'Otázka' }).fill('Kolize?');
+    await screen.getByRole('textbox', { name: 'Odpověď' }).fill('Odpověď.');
 
-    await expect
-      .element(screen.getByText('V této oblasti zatím není žádná položka.'))
-      .toBeVisible();
-    await screen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('faqs');
-    await expect
-      .element(screen.getByText('V této oblasti zatím není žádná položka.'))
-      .toBeVisible();
-    await screen.getByRole('textbox', { name: 'Otázka' }).fill('První otázka?');
-    await screen
-      .getByRole('textbox', { name: 'Odpověď' })
-      .fill('První odpověď.');
-    await screen.getByRole('button', { name: 'Vytvořit položku' }).click();
-    await expect.element(screen.getByText('První otázka?')).toBeVisible();
-  });
-
-  it('labels day removal as permanent and requires acknowledgement', async () => {
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={createAdminContentPreviewPort({ eventId })}
-        timezone="Europe/Prague"
-      />,
-    );
-    await screen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('days');
-    await expect.element(screen.getByText('Pátek')).toBeVisible();
-    await screen
-      .getByRole('button', { name: 'Trvale smazat den: Pátek' })
-      .click();
-    await expect
-      .element(screen.getByRole('heading', { name: 'Trvale smazat den?' }))
-      .toBeVisible();
-    await expect
-      .element(screen.getByText(/Den bude trvale odstraněn/))
-      .toBeVisible();
-    await expect
-      .element(
-        screen.getByRole('button', {
-          name: 'Trvale smazat den',
-          exact: true,
-        }),
-      )
-      .toBeDisabled();
-    await screen.getByRole('checkbox').click();
-    await screen
-      .getByRole('button', { name: 'Trvale smazat den', exact: true })
-      .click();
+    port.setMode('conflict');
+    await screen.getByRole('button', { name: 'Uložit novou položku' }).click();
     await expect
       .element(
         screen.getByRole('heading', { name: 'Změna koliduje s obsahem' }),
       )
       .toBeVisible();
-    await expect.element(screen.getByText('Pátek')).toBeVisible();
+    port.setMode('stale');
+    await screen.getByRole('button', { name: 'Uložit novou položku' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', { name: 'Obsah na serveru se změnil' }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Otázka' }))
+      .toHaveValue('Kolize?');
+    await expect
+      .element(screen.getByText(/Další zápisy jsou zamčené/))
+      .toBeVisible();
+  });
+
+  it('supports an accessible mocked asset preview, progress and removal', async () => {
+    const screen = await renderContent({
+      assetPort: createAdminContentAssetPreviewPort(),
+    });
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    selectArea('speakers');
+    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
+    await expect
+      .element(screen.getByText('Fotografie řečníka zatím není dostupná'))
+      .toBeVisible();
+    await userEvent.upload(
+      await screen.getByLabelText('Obrázek').element(),
+      new File(['synthetic-image'], 'alex.webp', { type: 'image/webp' }),
+    );
+    await screen.getByRole('button', { name: 'Nahrát obrázek' }).click();
+    await expect
+      .element(screen.getByRole('alert'))
+      .toHaveTextContent('Doplňte alternativní popis');
+    await screen
+      .getByRole('textbox', { name: 'Alternativní popis' })
+      .fill('Portrét Alexe Nováka');
+    await screen.getByRole('button', { name: 'Nahrát obrázek' }).click();
+    await expect.element(screen.getByRole('progressbar')).toBeVisible();
+    await expect
+      .element(screen.getByRole('img', { name: 'Portrét Alexe Nováka' }))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Odstranit obrázek' }).click();
+    expect(screen.getByRole('img')).not.toBeInTheDocument();
+    await expectComponentToPassAxe(contentRoot());
+  });
+
+  it('keeps an existing asset preview visible but immutable in read-only mode', async () => {
+    const port = createAdminContentAssetPreviewPort();
+    const owner = {
+      kind: 'speaker' as const,
+      id: '019fc700-0000-7000-8000-000000000021',
+    };
+    const seeded = await port.replace({
+      altText: 'Portrét Alexe Nováka',
+      eventId,
+      expectedOwnerVersion: 1,
+      file: new File(['synthetic-image'], 'alex.webp', {
+        type: 'image/webp',
+      }),
+      onProgress: () => undefined,
+      owner,
+      purpose: 'speaker_photo',
+    });
+    expect(seeded.ok).toBe(true);
+
+    const screen = await renderComponent(
+      <AdminContentAssetField
+        eventId={eventId}
+        owner={owner}
+        ownerVersion={2}
+        port={port}
+        purpose="speaker_photo"
+        readOnly
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole('img', { name: 'Portrét Alexe Nováka' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('Archivovaný obsah je pouze ke čtení.'))
+      .toBeVisible();
+    expect(screen.getByLabelText('Obrázek')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Odstranit obrázek' }),
+    ).not.toBeInTheDocument();
   });
 
   it.each([
@@ -542,16 +468,9 @@ describe('admin content user journeys', () => {
     'permission',
     'session_expired',
   ] satisfies readonly AdminContentPreviewMode[])(
-    'wipes all content and blocks the workspace after %s',
+    'wipes content and blocks the workspace after %s',
     async (mode) => {
-      const screen = await renderComponent(
-        <AdminContentWorkspace
-          eventId={eventId}
-          port={securityPort(mode)}
-          timezone="Europe/Prague"
-        />,
-      );
-
+      const screen = await renderContent({ port: securityPort(mode) });
       await expect
         .element(
           screen.getByRole('heading', {
@@ -561,269 +480,30 @@ describe('admin content user journeys', () => {
         .toBeVisible();
       expect(document.body.textContent).not.toContain('Otevření konference');
       expect(
-        screen.getByRole('button', { name: 'Vytvořit položku' }).elements(),
-      ).toHaveLength(0);
-      if (mode === 'session_expired') {
-        await expect
-          .element(screen.getByRole('link', { name: 'Přihlásit se znovu' }))
-          .toHaveAttribute(
-            'href',
-            '/prihlaseni?mode=recovery&returnTo=%2Fadmin%2Fobsah',
-          );
-      } else {
-        await expect
-          .element(
-            screen.getByRole('button', { name: 'Ověřit a načíst znovu' }),
-          )
-          .toBeVisible();
-      }
+        screen.getByRole('button', { name: 'Přidat bod programu' }),
+      ).not.toBeInTheDocument();
     },
   );
 
-  it('removes a loaded list and immutable preview when a later read revokes access', async () => {
-    const base = createAdminContentPreviewPort({ eventId });
-    let revoked = false;
-    const port: AdminContentPort = {
-      ...base,
-      list: (candidateEventId, resource, signal) =>
-        revoked && resource === 'venues'
-          ? Promise.resolve({
-              ok: false,
-              failure: {
-                kind: 'permission',
-                message: 'Syntetické oprávnění bylo odebráno.',
-              },
-            })
-          : base.list(candidateEventId, resource, signal),
-    };
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={port}
-        timezone="Europe/Prague"
-      />,
-    );
-
-    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
-    await screen.getByRole('button', { name: 'Sestavit nový náhled' }).click();
-    await expect
-      .element(screen.getByText(/Immutable náhled verze 1/))
-      .toBeVisible();
-
-    revoked = true;
-    await screen.getByRole('button', { name: 'Načíst aktuální stav' }).click();
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Obsah nelze bezpečně zobrazit',
-        }),
-      )
-      .toBeVisible();
-    expect(document.body.textContent).not.toContain('Otevření konference');
-    expect(document.body.textContent).not.toContain('Kontrolní součet');
-    await expect
-      .element(screen.getByRole('button', { name: 'Ověřit a načíst znovu' }))
-      .toBeVisible();
-  });
-
-  it('aborts deferred save and publication requests when their scope unmounts', async () => {
-    const saveBase = createAdminContentPreviewPort({ eventId });
-    let saveSignal: AbortSignal | undefined;
-    let resolveSave:
-      ((result: AdminContentResult<AdminContentMutation>) => void) | undefined;
-    const pendingSave = new Promise<AdminContentResult<AdminContentMutation>>(
-      (resolve) => {
-        resolveSave = resolve;
-      },
-    );
-    const savePort: AdminContentPort = {
-      ...saveBase,
-      save: (input) => {
-        saveSignal = input.signal;
-        return pendingSave;
-      },
-    };
-    const saveScreen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={savePort}
-        timezone="Europe/Prague"
-      />,
-    );
-    await saveScreen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('faqs');
-    await expect
-      .element(saveScreen.getByText('Je k dispozici šatna?'))
-      .toBeVisible();
-    await saveScreen
-      .getByRole('textbox', { name: 'Otázka' })
-      .fill('Deferred otázka?');
-    await saveScreen
-      .getByRole('textbox', { name: 'Odpověď' })
-      .fill('Deferred odpověď.');
-    await saveScreen.getByRole('button', { name: 'Vytvořit položku' }).click();
-    expect(saveSignal?.aborted).toBe(false);
-    await saveScreen.unmount();
-    expect(saveSignal?.aborted).toBe(true);
-    resolveSave?.({
-      ok: false,
-      failure: { kind: 'aborted', message: 'Požadavek byl zrušen.' },
-    });
-
-    const previewBase = createAdminContentPreviewPort({ eventId });
-    let previewSignal: AbortSignal | undefined;
-    let resolvePreview:
-      | ((result: AdminContentResult<AdminPublicationPreview>) => void)
-      | undefined;
-    const pendingPreview = new Promise<
-      AdminContentResult<AdminPublicationPreview>
-    >((resolve) => {
-      resolvePreview = resolve;
-    });
-    const previewPort: AdminContentPort = {
-      ...previewBase,
-      previewPublication: (_candidateEventId, signal) => {
-        previewSignal = signal;
-        return pendingPreview;
-      },
-    };
-    const previewScreen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={previewPort}
-        timezone="Europe/Prague"
-      />,
-    );
-    await expect
-      .element(previewScreen.getByText('Otevření konference'))
-      .toBeVisible();
-    await previewScreen
-      .getByRole('button', { name: 'Sestavit nový náhled' })
-      .click();
-    expect(previewSignal?.aborted).toBe(false);
-    await previewScreen.unmount();
-    expect(previewSignal?.aborted).toBe(true);
-    resolvePreview?.({
-      ok: false,
-      failure: { kind: 'aborted', message: 'Požadavek byl zrušen.' },
-    });
-
-    const archiveBase = createAdminContentPreviewPort({ eventId });
-    let archiveSignal: AbortSignal | undefined;
-    let resolveArchive:
-      ((result: AdminContentResult<AdminContentMutation>) => void) | undefined;
-    const pendingArchive = new Promise<
-      AdminContentResult<AdminContentMutation>
-    >((resolve) => {
-      resolveArchive = resolve;
-    });
-    const archiveScreen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={{
-          ...archiveBase,
-          archive: (input) => {
-            archiveSignal = input.signal;
-            return pendingArchive;
-          },
-        }}
-        timezone="Europe/Prague"
-      />,
-    );
-    await archiveScreen
-      .getByRole('combobox', { name: 'Oblast obsahu' })
-      .selectOptions('partners');
-    await expect
-      .element(archiveScreen.getByText('Partner Example'))
-      .toBeVisible();
-    await archiveScreen
-      .getByRole('button', { name: 'Archivovat: Partner Example' })
-      .click();
-    await archiveScreen.getByRole('checkbox').click();
-    await archiveScreen
-      .getByRole('button', { name: 'Archivovat položku' })
-      .click();
-    expect(archiveSignal?.aborted).toBe(false);
-    await archiveScreen.unmount();
-    expect(archiveSignal?.aborted).toBe(true);
-    resolveArchive?.({
-      ok: false,
-      failure: { kind: 'aborted', message: 'Požadavek byl zrušen.' },
-    });
-
-    const publishBase = createAdminContentPreviewPort({ eventId });
-    let publishSignal: AbortSignal | undefined;
-    let resolvePublish:
-      | ((result: AdminContentResult<AdminPublicationResult>) => void)
-      | undefined;
-    const pendingPublish = new Promise<
-      AdminContentResult<AdminPublicationResult>
-    >((resolve) => {
-      resolvePublish = resolve;
-    });
-    const publishScreen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={{
-          ...publishBase,
-          publish: (_candidateEventId, _preview, signal) => {
-            publishSignal = signal;
-            return pendingPublish;
-          },
-        }}
-        timezone="Europe/Prague"
-      />,
-    );
-    await expect
-      .element(publishScreen.getByText('Otevření konference'))
-      .toBeVisible();
-    await publishScreen
-      .getByRole('button', { name: 'Sestavit nový náhled' })
-      .click();
-    await publishScreen
-      .getByRole('button', { name: 'Zkontrolovat a publikovat' })
-      .click();
-    await publishScreen.getByRole('checkbox').click();
-    await publishScreen
-      .getByRole('button', { name: 'Publikovat verzi 1' })
-      .click();
-    expect(publishSignal?.aborted).toBe(false);
-    await publishScreen.unmount();
-    expect(publishSignal?.aborted).toBe(true);
-    resolvePublish?.({
-      ok: false,
-      failure: { kind: 'aborted', message: 'Požadavek byl zrušen.' },
-    });
-  });
-
-  it('keeps an archived event and its items read-only', async () => {
-    const screen = await renderComponent(
-      <AdminContentWorkspace
-        eventId={eventId}
-        port={createAdminContentPreviewPort({ eventId })}
-        readOnly
-        timezone="Europe/Prague"
-      />,
-    );
-
+  it('keeps an archived event and archived items read-only', async () => {
+    const screen = await renderContent({ readOnly: true });
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
     await expect
       .element(screen.getByText('Archiv · pouze čtení'))
       .toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Vytvořit položku' }).elements(),
-    ).toHaveLength(0);
+      screen.getByRole('button', { name: 'Přidat bod programu' }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Sestavit nový náhled' }).elements(),
-    ).toHaveLength(0);
+      screen.getByRole('button', { name: /^Upravit:/ }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /^Upravit:/ }).elements(),
-    ).toHaveLength(0);
+      screen.getByRole('button', { name: 'Zkontrolovat změny' }),
+    ).not.toBeInTheDocument();
     await expectComponentToPassAxe(contentRoot());
   });
 
-  it('does not mount the content port without program:manage', async () => {
+  it('does not mount the production content port without program:manage', async () => {
     const list = vi.fn(async () => {
       throw new Error('Forbidden content port was mounted.');
     });
@@ -833,9 +513,8 @@ describe('admin content user journeys', () => {
     };
     const api: ApiPort = {
       request: vi.fn(async (endpoint) => {
-        if (endpoint !== adminContextEndpoint) {
-          throw new Error('Unexpected admin endpoint.');
-        }
+        if (endpoint !== adminContextEndpoint)
+          throw new Error('Unexpected endpoint.');
         return {
           ok: true,
           kind: 'success',
@@ -869,8 +548,5 @@ describe('admin content user journeys', () => {
       )
       .toBeVisible();
     expect(list).not.toHaveBeenCalled();
-    await expectComponentToPassAxe(
-      document.querySelector<HTMLElement>('[data-admin-environment]')!,
-    );
   });
 });

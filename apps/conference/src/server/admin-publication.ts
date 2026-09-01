@@ -54,7 +54,7 @@ export const handleAdminPublication = async (
     if (request.method === 'GET') {
       const preview = await previewContentPublication(dependencies.db, eventId);
       return Response.json(
-        { ...preview, requestId },
+        { ...preview, createdAt: new Date().toISOString(), requestId },
         { headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },
       );
     }
@@ -107,6 +107,7 @@ export const handleAdminPublication = async (
       {
         version: publication.version,
         checksumSha256: publication.checksumSha256,
+        publishedAt: publication.publishedAt,
         requestId,
       },
       {
