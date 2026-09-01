@@ -57,9 +57,9 @@ V levém panelu lze přepnout personu `Administrátor`, `Vedoucí aktivity` nebo
 `Účet bez přístupu`. Přepnutí okamžitě invaliduje předchozí event/permission
 scope.
 
-- importní scénář se volí názvem bezpečného `.csv`/`.xlsx` souboru; klíčová
-  slova `conflict`, `unknown`, `stale` a `collision` vyvolají odpovídající
-  syntetický stav;
+- aktualizace vstupenek používá serverový SimpleShop preview bez file inputu;
+  cílené fixture testy kryjí no-change, conflict, unknown, stale, ambiguous,
+  offline a session-expired stavy i mockované potvrzení/report;
 - support hledání: `single`, `ambiguous`, `none`, `error`;
 - oznámení umožňuje scénáře stale/expired/timeout podle nápovědy přímo ve
   formuláři;
@@ -141,11 +141,13 @@ support, kritická oznámení, role, report/export, rezervace, audit, event
 settings a správu obsahu. Desktop používá sidebar, úzký viewport jednu
 ekvivalentní navigaci; breadcrumbs nevytvářejí paralelní systém.
 
-Import provádí bezpečný typ/MIME sniff, upload progress, staging validation,
-diff `new/unchanged/status changed/conflict/unknown`, immutable SHA-256 preview,
-explicitní impact confirmation a report. Support pracuje s maskovanými PII,
-POST search body, odděleným read/write oprávněním, reason, potvrzením,
-idempotencí a výsledným auditem.
+Aktualizace vstupenek načítá změny výhradně serverovým SimpleShop API
+preview, automaticky ukáže problematické záznamy a používá stejné lidské labely
+v desktopové tabulce i mobilních kartách. Browser nevytváří `File`, `FormData`
+ani multipart request. Potvrzení/report jsou připravené a testované nad
+oddělenou mock fixture hranicí; produkční route je do `P4-03`/`AUX-13D`
+nezobrazuje. Support pracuje s maskovanými PII, POST search body, odděleným
+read/write oprávněním, reason, potvrzením, idempotencí a výsledným auditem.
 
 Oznámení používají critical-only draft, event/affected-session audience preview
 a immutable send. Role jsou event/session/room scoped; exporty jsou
@@ -158,10 +160,11 @@ místa, místnosti, body programu, řečníky, partnery, stránky a FAQ; develop
 injektuje stateful preview port a produkce používá výchozí fetch port. Dny lze
 po potvrzení bezpečně trvale odstranit, ostatních sedm typů archivovat.
 Archivované položky zůstávají v admin seznamu read-only a jsou vyloučené z
-publication snapshotu; celý archivovaný event uzamkne workspace. Neuložené
+publikovaného obsahu; dny nemají permanentní delete akci a celý archivovaný
+event uzamkne workspace. Neuložené
 změny mají dirty guard a změna scope, permission loss nebo session expiry
-formulář bezpečně vymaže. Publikace vždy vzniká z immutable preview, vyžaduje
-potvrzení a koreluje verzi i request.
+formulář bezpečně vymaže. Zveřejnění vždy vzniká z přesně zkontrolované verze,
+vyžaduje potvrzení a koreluje verzi i request.
 
 Samostatné development/test preview `/host/aktivity` používá minimální
 `CS-ROSTER-01`: vedoucí aktivity vidí pouze přiřazené sessions, jméno, firmu a

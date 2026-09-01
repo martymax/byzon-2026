@@ -9,6 +9,8 @@ import {
   type TicketImportPreviewResponse,
   type TicketImportRowStatus,
 } from '@byzon/domain/contracts/ticket-import';
+import { AdminTechnicalDetails } from '@byzon/ui';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -31,12 +33,12 @@ import {
 import styles from './admin-workspace.module.css';
 
 const statusLabels: Record<TicketImportRowStatus, string> = {
-  new: 'Nová',
+  new: 'Nová vstupenka',
   unchanged: 'Beze změny',
-  status_changed: 'Změna stavu',
-  excluded: 'Neimportovat',
-  conflict: 'Konflikt',
-  unknown: 'Neznámý stav',
+  status_changed: 'Změněný stav',
+  excluded: 'Vyžaduje opravu',
+  conflict: 'Vyžaduje opravu',
+  unknown: 'Nerozpoznáno',
 };
 
 const statusClass: Record<TicketImportRowStatus, string> = {
@@ -49,13 +51,14 @@ const statusClass: Record<TicketImportRowStatus, string> = {
 };
 
 const filterOptions = [
+  ['needs_attention', 'Vyžaduje opravu'],
   ['all', 'Vše'],
   ['new', 'Nové'],
   ['unchanged', 'Beze změny'],
   ['status_changed', 'Změny stavu'],
-  ['excluded', 'Mimo import'],
-  ['conflict', 'Konflikty'],
-  ['unknown', 'Neznámé'],
+  ['excluded', 'Nebude použito'],
+  ['conflict', 'Konflikt'],
+  ['unknown', 'Nerozpoznáno'],
 ] as const;
 
 type ImportFilter = (typeof filterOptions)[number][0];
@@ -107,20 +110,47 @@ const purchaseDateFormatter = new Intl.DateTimeFormat('cs-CZ', {
 const formatPurchaseDate = (value: string): string =>
   purchaseDateFormatter.format(new Date(`${value}T12:00:00Z`));
 
-const orderTicketCountLabel = (count: number): string =>
-  count === 1
-    ? '1 vstupenka v objednávce'
-    : count >= 2 && count <= 4
-      ? `${count} vstupenky v objednávce`
-      : `${count} vstupenek v objednávce`;
+const checkedAtFormatter = new Intl.DateTimeFormat('cs-CZ', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Europe/Prague',
+});
 
-export const AdminImportWorkspace = () => {
+const addedTicketLabel = (count: number): string =>
+  count === 1
+    ? '1 vstupenku'
+    : count >= 2 && count <= 4
+      ? `${count} vstupenky`
+      : `${count} vstupenek`;
+
+const unchangedTicketLabel = (count: number): string =>
+  count === 1 ? '1 zůstane beze změny' : `${count} zůstane beze změny`;
+
+const changedTicketLabel = (count: number): string =>
+  count === 1 ? '1 vstupenky' : `${count} vstupenek`;
+
+export interface AdminTicketUpdatePort {
+  readonly preview: typeof requestAdminTicketImportPreview;
+  readonly apply: typeof requestAdminTicketImportApply;
+}
+
+const productionTicketUpdatePort: AdminTicketUpdatePort = {
+  preview: requestAdminTicketImportPreview,
+  apply: requestAdminTicketImportApply,
+};
+
+export const AdminImportWorkspace = ({
+  port = productionTicketUpdatePort,
+}: {
+  readonly port?: AdminTicketUpdatePort;
+} = {}) => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const applyErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [preview, setPreview] = useState<TicketImportPreviewResponse | null>(
     null,
   );
+  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
   const [filter, setFilter] = useState<ImportFilter>('all');
   const [reason, setReason] = useState('');
@@ -138,7 +168,11 @@ export const AdminImportWorkspace = () => {
   const visibleRows = useMemo(
     () =>
       preview?.rows.filter(
-        ({ status }) => filter === 'all' || status === filter,
+        ({ status }) =>
+          filter === 'all' ||
+          (filter === 'needs_attention'
+            ? ['excluded', 'conflict', 'unknown'].includes(status)
+            : status === filter),
       ) ?? [],
     [filter, preview],
   );
@@ -174,11 +208,7 @@ export const AdminImportWorkspace = () => {
     setPending(null);
     setAmbiguous(false);
     try {
-      const result = await requestAdminTicketImportPreview(
-        api,
-        eventId,
-        request.signal,
-      );
+      const result = await port.preview(api, eventId, request.signal);
       if (!request.isCurrent()) return;
       if (!result.ok) {
         if (isAdminSecurityFailure(result)) {
@@ -196,8 +226,16 @@ export const AdminImportWorkspace = () => {
       }
       if (result.kind === 'success') {
         setPreview(result.data);
+        setLastCheckedAt(result.data.createdAt);
         setPreviewState('validated');
-        setFilter('all');
+        setFilter(
+          result.data.summary.excluded +
+            result.data.summary.conflict +
+            result.data.summary.unknown >
+            0
+            ? 'needs_attention'
+            : 'all',
+        );
         setReason('');
         setAttempted(false);
         if (staleMessage) {
@@ -208,7 +246,7 @@ export const AdminImportWorkspace = () => {
     } catch {
       if (!request.isCurrent()) return;
       setError(
-        'SimpleShop preview se nepodařilo bezpečně načíst. Zkuste akci zopakovat.',
+        'Změny ze SimpleShopu se nepodařilo bezpečně načíst. Zkuste akci zopakovat.',
       );
       setErrorScope('upload');
       setPreviewState('error');
@@ -239,7 +277,7 @@ export const AdminImportWorkspace = () => {
     setConfirming(false);
     setError(null);
     setErrorScope(null);
-    const result = await requestAdminTicketImportApply(
+    const result = await port.apply(
       api,
       eventId,
       attempt.body,
@@ -282,29 +320,102 @@ export const AdminImportWorkspace = () => {
     }
   };
 
+  const backToSource = () => {
+    setPreview(null);
+    setReport(null);
+    setPending(null);
+    setConfirming(false);
+    setAmbiguous(false);
+    setReason('');
+    setAttempted(false);
+    setError(null);
+    setErrorScope(null);
+    setFilter('all');
+    setPreviewState('idle');
+  };
+
+  const currentStep = report
+    ? 4
+    : preview?.source.kind === 'file'
+      ? 3
+      : preview
+        ? 2
+        : 1;
+  const blockingCount = preview
+    ? preview.summary.excluded +
+      preview.summary.conflict +
+      preview.summary.unknown
+    : 0;
+  const noChanges = preview
+    ? preview.summary.new === 0 && preview.summary.statusChanged === 0
+    : false;
+  const impactText = preview
+    ? `Přidá ${addedTicketLabel(preview.summary.new)}, změní stav u ${changedTicketLabel(preview.summary.statusChanged)}, ${unchangedTicketLabel(preview.summary.unchanged)}.`
+    : '';
+
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · bezpečný import</p>
-        <h1>Import účastníků</h1>
+        <p className={styles.eyebrow}>Účastníci a vstupenky</p>
+        <h1>Aktualizace vstupenek</h1>
         <p>
-          Načtěte účastníky serverovým read-only API spojením se SimpleShopem.
-          Chráněné provozní preview zobrazuje organizátorovi identifikační a
-          kontaktní údaje, ale v tomto kroku nevytváří účty, přístupy ani
-          e-mailové pozvánky.
+          Načtěte změny ze SimpleShopu, zkontrolujte jejich dopad a použijte jen
+          přesně ověřenou dávku. Samotné načtení nic nemění.
         </p>
       </header>
 
-      <section className={styles.panel} aria-labelledby="import-upload-title">
+      <nav aria-label="Postup aktualizace vstupenek">
+        <ol className={styles.importSteps}>
+          {[
+            'Načíst ze SimpleShopu',
+            'Zkontrolovat změny',
+            'Potvrdit změny',
+            'Výsledek',
+          ].map((label, index) => {
+            const step = index + 1;
+            const state =
+              step === currentStep
+                ? 'current'
+                : step < currentStep
+                  ? 'complete'
+                  : 'pending';
+            return (
+              <li
+                aria-current={state === 'current' ? 'step' : undefined}
+                data-state={state}
+                key={label}
+              >
+                <span>{step}</span>
+                <strong>{label}</strong>
+                <small>
+                  {state === 'complete'
+                    ? 'Dokončeno'
+                    : state === 'current'
+                      ? 'Právě řešíte'
+                      : 'Následuje'}
+                </small>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+
+      <section className={styles.panel} aria-labelledby="ticket-source-title">
         <div className={styles.panelHeader}>
           <div>
-            <h2 id="import-upload-title">1. Read-only načtení a validace</h2>
+            <p className={styles.eyebrow}>Krok 1</p>
+            <h2 id="ticket-source-title">Zdroj vstupenek</h2>
             <p className={styles.muted}>
-              Přístupové údaje zůstávají na serveru. SimpleShop obdrží pouze
-              allowlistované GET požadavky na produkt a export Kdo koupil.
+              Připojený zdroj: <strong>SimpleShop</strong>. Přístupové údaje
+              zůstávají bezpečně na serveru.
+            </p>
+            <p className={styles.muted}>
+              {lastCheckedAt
+                ? `Poslední kontrola ${checkedAtFormatter.format(new Date(lastCheckedAt))}.`
+                : 'V této relaci zatím neproběhla žádná kontrola.'}
             </p>
           </div>
-          <span className={styles.badge}>SimpleShop · pouze GET</span>
+          <span className={styles.badge}>Načtení pouze pro kontrolu</span>
         </div>
         <div className={styles.actionRow}>
           <button
@@ -315,7 +426,9 @@ export const AdminImportWorkspace = () => {
           >
             {busy === 'preview'
               ? 'SimpleShop se načítá…'
-              : 'Načíst ze SimpleShopu'}
+              : previewState === 'error'
+                ? 'Zkusit načíst znovu'
+                : 'Načíst ze SimpleShopu'}
           </button>
         </div>
         <div
@@ -326,15 +439,15 @@ export const AdminImportWorkspace = () => {
         >
           {previewState === 'loading' ? (
             <>
-              <progress aria-label="Read-only načítání SimpleShop preview" />
-              <span>Server načítá a sanitizuje SimpleShop preview…</span>
+              <progress aria-label="Načítání změn ze SimpleShopu" />
+              <span>Server načítá a bezpečně kontroluje změny…</span>
             </>
           ) : previewState === 'validated' ? (
-            <span>Sanitizované serverové preview je připravené.</span>
+            <span>Změny jsou načtené a připravené ke kontrole.</span>
           ) : previewState === 'error' ? (
-            <span>Načtení nebo validace SimpleShop dat selhaly.</span>
+            <span>Změny se nepodařilo načíst nebo ověřit.</span>
           ) : (
-            <span>Načtení proběhne až po výslovném stisknutí tlačítka.</span>
+            <span>Načtení začne až po stisknutí tlačítka.</span>
           )}
         </div>
         {error && errorScope === 'upload' ? (
@@ -351,16 +464,35 @@ export const AdminImportWorkspace = () => {
         >
           <div className={styles.summaryHeader}>
             <div>
-              <h2 id="import-preview-title">2. Staging diff preview</h2>
-              <p className={styles.muted}>
-                Preview {preview.previewId} · verze {preview.previewVersion}
-              </p>
+              <p className={styles.eyebrow}>Krok 2</p>
+              <h2 id="import-preview-title">Zkontrolovat změny</h2>
             </div>
-            <span className={styles.badge}>{preview.summary.total} řádků</span>
+            <span className={styles.badge}>
+              {preview.summary.total} záznamů
+            </span>
           </div>
+
+          {blockingCount > 0 ? (
+            <div className={styles.warning} role="alert">
+              <strong>
+                {blockingCount} záznamů vyžaduje opravu ve zdroji prodeje.
+              </strong>{' '}
+              Dokud je neopravíte a změny znovu nenačtete, dávku nelze použít.
+            </div>
+          ) : noChanges ? (
+            <p className={styles.callout} role="status">
+              Od poslední kontroly nejsou žádné nové změny.
+            </p>
+          ) : (
+            <p className={styles.callout} role="status">
+              Kontrola je hotová. Před pokračováním projděte souhrn i jednotlivé
+              záznamy.
+            </p>
+          )}
+
           <div className={styles.summaryGrid} aria-label="Souhrn změn">
             <div className={styles.metric}>
-              <small>Nové</small>
+              <small>Nové vstupenky</small>
               <strong>{preview.summary.new}</strong>
             </div>
             <div className={styles.metric}>
@@ -368,57 +500,23 @@ export const AdminImportWorkspace = () => {
               <strong>{preview.summary.unchanged}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Změna stavu</small>
+              <small>Změněný stav</small>
               <strong>{preview.summary.statusChanged}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Mimo import</small>
+              <small>Vyžaduje opravu</small>
               <strong>{preview.summary.excluded}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Konflikt / neznámé</small>
+              <small>Konflikt / nerozpoznáno</small>
               <strong>
                 {preview.summary.conflict} / {preview.summary.unknown}
               </strong>
             </div>
           </div>
-          {preview.source.kind === 'simpleshop_api' ? (
-            <div
-              className={styles.summaryGrid}
-              aria-label="Sanitizovaný souhrn SimpleShop zdroje"
-            >
-              <div className={styles.metric}>
-                <small>Zdroj / účastnické řádky</small>
-                <strong>
-                  {preview.source.sourceRows} / {preview.source.ticketRows}
-                </strong>
-              </div>
-              <div className={styles.metric}>
-                <small>Souhrnné řádky / množství &gt; 1</small>
-                <strong>
-                  {preview.source.ignoredSummaryRows} /{' '}
-                  {preview.source.multipleQuantitySummaryRows}
-                </strong>
-              </div>
-              <div className={styles.metric}>
-                <small>Uhrazeno / neuhrazeno</small>
-                <strong>
-                  {preview.source.observedStatuses.paid} /{' '}
-                  {preview.source.observedStatuses.unpaid}
-                </strong>
-              </div>
-              <div className={styles.metric}>
-                <small>Storno / refund / neznámé</small>
-                <strong>
-                  {preview.source.observedStatuses.cancelled} /{' '}
-                  {preview.source.observedStatuses.refunded} /{' '}
-                  {preview.source.observedStatuses.unknown}
-                </strong>
-              </div>
-            </div>
-          ) : null}
+
           <label className={styles.field}>
-            <span>Filtrovat řádky</span>
+            <span>Filtrovat záznamy</span>
             <select
               onChange={(event) =>
                 setFilter(event.target.value as ImportFilter)
@@ -433,35 +531,32 @@ export const AdminImportWorkspace = () => {
             </select>
           </label>
           <p className={styles.callout}>
-            Preview obsahuje osobní údaje pro troubleshooting. Je dostupné jen
-            oprávněnému administrátorovi, neposílá se do cache ani browserového
-            úložiště a jeho načtení se zapisuje do auditu.
+            Údaje slouží pouze ke kontrole oprávněným administrátorem.
+            Neukládají se do cache prohlížeče a načtení se zapisuje do historie
+            změn.
           </p>
           <div
-            aria-label="Tabulka chráněného preview importu; vodorovně posouvatelná"
+            aria-label="Tabulka kontroly změn vstupenek"
             className={styles.tableWrap}
             tabIndex={0}
           >
             <table className={`${styles.table} ${styles.importTable}`}>
-              <caption>
-                Chráněný immutable rozdíl importu se jmény a kontakty.
-              </caption>
+              <caption>Záznamy načtené ze SimpleShopu ke kontrole.</caption>
               <thead>
                 <tr>
-                  <th scope="col">Řádek</th>
+                  <th scope="col">Záznam</th>
                   <th scope="col">Účastník</th>
-                  <th scope="col">SimpleShop reference</th>
-                  <th scope="col">Nákup</th>
-                  <th scope="col">Zdrojový stav</th>
-                  <th scope="col">Stav</th>
-                  <th scope="col">Původní → nový</th>
+                  <th scope="col">Co se změní</th>
+                  <th scope="col">Výsledek kontroly</th>
                   <th scope="col">Poznámka</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((row) => (
                   <tr key={row.rowId}>
-                    <td>{row.sourceRowNumber}</td>
+                    <td>
+                      #{row.sourceRowNumber} · •{row.referenceSuffix}
+                    </td>
                     <td className={styles.identityCell}>
                       <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
                       <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
@@ -473,40 +568,17 @@ export const AdminImportWorkspace = () => {
                         <small>{row.contactPhone}</small>
                       ) : null}
                     </td>
-                    <td className={styles.referenceCell}>
-                      <span>Vstupenka {row.sourceTicketId}</span>
-                      <small>Doklad {row.sourceOrderId}</small>
-                      <small>
-                        {orderTicketCountLabel(row.orderTicketCount)}
-                        {row.orderTicketCount > 1
-                          ? ` · tato ${row.orderTicketPosition} z ${row.orderTicketCount}`
-                          : ''}
-                      </small>
-                      <small>Preview •{row.referenceSuffix}</small>
+                    <td>
+                      {formatTicketState(row.currentState)} →{' '}
+                      {formatTicketState(row.incomingState)}
                     </td>
-                    <td className={styles.purchaseCell}>
-                      <strong>
-                        <time dateTime={row.purchasedOn}>
-                          {formatPurchaseDate(row.purchasedOn)}
-                        </time>
-                      </strong>
-                      <small>
-                        {row.discountCoupon
-                          ? `Kupón ${row.discountCoupon}`
-                          : 'Bez slevového kupónu'}
-                      </small>
-                    </td>
-                    <td>{sourceStatusLabels[row.sourceStatus]}</td>
                     <td>
                       <span
                         className={`${styles.statusBadge} ${statusClass[row.status]}`}
                       >
                         {statusLabels[row.status]}
                       </span>
-                    </td>
-                    <td>
-                      {formatTicketState(row.currentState)} →{' '}
-                      {formatTicketState(row.incomingState)}
+                      <small>{sourceStatusLabels[row.sourceStatus]}</small>
                     </td>
                     <td>
                       {row.issues.map(({ message }) => message).join('; ') ||
@@ -518,12 +590,12 @@ export const AdminImportWorkspace = () => {
             </table>
           </div>
           <div className={styles.cards}>
-            <ul className={styles.cardList} aria-label="Řádky importu">
+            <ul className={styles.cardList} aria-label="Záznamy změn vstupenek">
               {visibleRows.map((row) => (
                 <li className={styles.dataCard} key={row.rowId}>
                   <div className={styles.panelHeader}>
                     <strong>
-                      Řádek {row.sourceRowNumber} ·{' '}
+                      Záznam #{row.sourceRowNumber} ·{' '}
                       {row.contactName ?? 'Jméno neuvedeno'}
                     </strong>
                     <span
@@ -549,31 +621,24 @@ export const AdminImportWorkspace = () => {
                         <dd>{row.contactPhone}</dd>
                       </>
                     ) : null}
-                    <dt>SimpleShop reference</dt>
-                    <dd>
-                      Vstupenka {row.sourceTicketId} · doklad{' '}
-                      {row.sourceOrderId} ·{' '}
-                      {orderTicketCountLabel(row.orderTicketCount)}
-                      {row.orderTicketCount > 1
-                        ? ` · tato ${row.orderTicketPosition} z ${row.orderTicketCount}`
-                        : ''}{' '}
-                      · preview •{row.referenceSuffix}
-                    </dd>
+                    <dt>Reference</dt>
+                    <dd>•{row.referenceSuffix}</dd>
                     <dt>Datum nákupu</dt>
                     <dd>
                       <time dateTime={row.purchasedOn}>
                         {formatPurchaseDate(row.purchasedOn)}
                       </time>
                     </dd>
-                    <dt>Slevový kupón</dt>
-                    <dd>{row.discountCoupon ?? 'Bez slevového kupónu'}</dd>
-                    <dt>Stav</dt>
+                    <dt>Co se změní</dt>
                     <dd>
                       {formatTicketState(row.currentState)} →{' '}
                       {formatTicketState(row.incomingState)}
                     </dd>
-                    <dt>Zdrojový stav</dt>
-                    <dd>{sourceStatusLabels[row.sourceStatus]}</dd>
+                    <dt>Výsledek kontroly</dt>
+                    <dd>
+                      {statusLabels[row.status]} ·{' '}
+                      {sourceStatusLabels[row.sourceStatus]}
+                    </dd>
                     <dt>Poznámka</dt>
                     <dd>
                       {row.issues.map(({ message }) => message).join('; ') ||
@@ -584,15 +649,62 @@ export const AdminImportWorkspace = () => {
               ))}
             </ul>
           </div>
+
+          <div className={styles.actionRow}>
+            <button
+              className={styles.secondaryButton}
+              disabled={busy !== null || pending !== null}
+              onClick={backToSource}
+              type="button"
+            >
+              Zpět ke zdroji
+            </button>
+            <button
+              className={styles.secondaryButton}
+              disabled={busy !== null || pending !== null}
+              onClick={() => void loadPreview()}
+              type="button"
+            >
+              Načíst změny znovu
+            </button>
+          </div>
+
+          <AdminTechnicalDetails>
+            <dl className={styles.detailList}>
+              <dt>ID kontroly</dt>
+              <dd>{preview.previewId}</dd>
+              <dt>Verze kontroly</dt>
+              <dd>{preview.previewVersion}</dd>
+              <dt>Vytvořeno</dt>
+              <dd>{checkedAtFormatter.format(new Date(preview.createdAt))}</dd>
+              {preview.source.kind === 'simpleshop_api' ? (
+                <>
+                  <dt>Zdrojových / účastnických záznamů</dt>
+                  <dd>
+                    {preview.source.sourceRows} / {preview.source.ticketRows}
+                  </dd>
+                  <dt>Přeskočených souhrnných záznamů</dt>
+                  <dd>{preview.source.ignoredSummaryRows}</dd>
+                </>
+              ) : null}
+            </dl>
+          </AdminTechnicalDetails>
+
           {!canApplyTicketImportPreview(preview) ? (
             <p className={styles.warning} role="alert">
               {preview.source.kind === 'simpleshop_api'
-                ? 'Toto je výhradně read-only SimpleShop preview. Apply není součástí P4-02 a server jej nenabízí.'
-                : 'Preview obsahuje konflikt nebo neznámý stav. Opravte zdroj; apply je fail-closed.'}
+                ? 'Kontrola ze SimpleShopu je bezpečně dostupná. Použití změn se zobrazí až po dokončení navazujícího serverového propojení.'
+                : 'Dávka obsahuje záznam, který vyžaduje opravu. Opravte jej ve zdroji a změny znovu načtěte.'}
             </p>
           ) : null}
-          {preview.source.kind === 'file' ? (
-            <>
+          {preview.source.kind === 'file' && !report ? (
+            <section
+              aria-labelledby="ticket-confirm-title"
+              className={styles.importConfirmSection}
+            >
+              <p className={styles.eyebrow}>Krok 3</p>
+              <h2 id="ticket-confirm-title">Potvrdit změny</h2>
+              <p>{impactText}</p>
               {applyValidationFailed || (error && errorScope === 'apply') ? (
                 <section
                   className={styles.errorSummary}
@@ -600,7 +712,7 @@ export const AdminImportWorkspace = () => {
                   role="alert"
                   tabIndex={-1}
                 >
-                  <h2>Apply zatím nelze potvrdit</h2>
+                  <h3>Změny zatím nelze potvrdit</h3>
                   <p id="admin-import-apply-error">
                     {error && errorScope === 'apply'
                       ? error
@@ -609,7 +721,7 @@ export const AdminImportWorkspace = () => {
                 </section>
               ) : null}
               <label className={styles.field} htmlFor="admin-import-reason">
-                <span>Auditní důvod</span>
+                <span>Důvod aktualizace</span>
                 <textarea
                   aria-describedby={
                     applyValidationFailed || errorScope === 'apply'
@@ -623,16 +735,16 @@ export const AdminImportWorkspace = () => {
                   value={reason}
                 />
                 <span className={styles.helper} id="admin-import-reason-help">
-                  Nejméně 8 viditelných znaků; důvod bude součástí auditu.
+                  Uloží se do historie změn. Napište alespoň 8 znaků.
                 </span>
               </label>
               <button
-                className={styles.dangerButton}
+                className={styles.button}
                 disabled={!canPrepareApply || busy !== null || pending !== null}
                 onClick={prepareApply}
                 type="button"
               >
-                Zkontrolovat a potvrdit apply
+                Použít změny
               </button>
               {ambiguous && pending ? (
                 <button
@@ -644,44 +756,49 @@ export const AdminImportWorkspace = () => {
                   Zopakovat přesně stejný pokus
                 </button>
               ) : null}
-            </>
+            </section>
           ) : null}
         </section>
       ) : null}
 
       {report && preview?.source.kind === 'file' ? (
         <section className={styles.success} role="status">
+          <p className={styles.eyebrow}>Krok 4</p>
           <h2>
             {report.outcome === 'already_applied'
-              ? 'Server potvrdil dříve dokončený import'
-              : 'Import byl aplikován'}
+              ? 'Server potvrdil dříve dokončenou aktualizaci'
+              : 'Změny vstupenek byly použity'}
           </h2>
           <p>
-            Vytvořeno {report.result.created}, změněno{' '}
+            Přidáno {report.result.created}, změněn stav{' '}
             {report.result.statusChanged}, beze změny {report.result.unchanged}.
-            Audit: <code>{report.audit.auditId}</code>
           </p>
+          <Link href="/admin/ucastnici" prefetch={false}>
+            Zobrazit účastníky
+          </Link>
+          <AdminTechnicalDetails>
+            <dl className={styles.detailList}>
+              <dt>Reference historie změn</dt>
+              <dd>{report.audit.auditId}</dd>
+              <dt>Verze kontroly</dt>
+              <dd>{report.previewVersion}</dd>
+            </dl>
+          </AdminTechnicalDetails>
         </section>
       ) : null}
 
       {confirming && pending && preview?.source.kind === 'file' ? (
         <AdminConfirmDialog
-          acknowledgement="Ověřil/a jsem immutable preview, jeho verzi a uvedený dopad."
-          confirmLabel="Aplikovat import"
-          danger
-          description="Server aplikuje přesně tuto verzi preview. Opakování stejného pokusu používá stejný idempotency klíč."
-          impact={
-            <p>
-              {pending.body.expectedImpact.new} nových ·{' '}
-              {pending.body.expectedImpact.statusChanged} změn stavu
-            </p>
-          }
+          acknowledgement="Zkontroloval/a jsem uvedený dopad a správnost změn."
+          confirmLabel="Použít změny"
+          description="Server použije právě zkontrolovanou verzi změn. Pokud už není aktuální, operaci bezpečně odmítne."
+          impact={<p>{impactText}</p>}
           onConfirm={() => void submitPending(pending)}
           onDismiss={() => {
             setConfirming(false);
             setPending(null);
           }}
-          title="Aplikovat import vstupenek?"
+          title="Použít tyto změny vstupenek?"
         />
       ) : null}
     </div>

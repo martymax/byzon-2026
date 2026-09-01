@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.33 – obsahový a asset-contract řez AUX-04
+> Stav: implementační plán v6.34 – UX aktualizace vstupenek AUX-05
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2532,6 +2532,10 @@ claim a check-in vyřazuje
 - [ ] `P4-03` Transakční idempotentní apply: upsert identity a event
   membershipu pro způsobilé importované účastníky, bez automatického
   odeslání e-mailu a bez uložení ticket credentialu.
+  `AUX-05` dokončil čtyřkrokovou UI vrstvu, problem-first kontrolu a mockované
+  potvrzení/report s exact idempotency retry. Produkční route dál nabízí pouze
+  integrované `P4-02` SimpleShop preview; potvrzení se v ní nesmí zobrazit,
+  dokud tento úkol a `AUX-13D` nedodají serverový apply/report.
 - [–] `P4-04` Manual code claim – mimo rozsah 2026 (`SCOPE-2026-13`).
 - [–] `P4-05` Scanner a ruční ticket kód – mimo rozsah 2026
   (`SCOPE-2026-13`/`14`).
@@ -3350,3 +3354,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.31 | 31. 8. 2026 | `/` a produkčně dostupné `/prihlaseni` používají přímo pětiminutový jednorázový Better Auth magic link bez ticket activation gate; sign-up je zakázaný a callbacky mají explicitní bezpečný allowlist. Přidán Resend adapter s bounded timeoutem/idempotency klíčem, fail-closed produkční konfigurace a přístupný responzivní login. Bootstrap CLI umí výslovně provisionovat první neověřenou identitu, event membership a `organizer_admin` s auditem bez PII. Skutečný login čeká jen na potvrzený admin e-mail a kompletní schválené mail secrets/sender. |
 | 6.32 | 1. 9. 2026 | `AUX-00B` převzal redesign administrace jako autoritativní refaktor prezentační/IA vrstvy `F4`, zapsal per-route vlastníky integrace a jednotné branch/handoff pravidlo. Samostatný `P3-13` vlastní asset read/resolver/upload/replace/remove slice; `P3-01` ani `P3-05` se za něj nevydávají. |
 | 6.33 | 2. 9. 2026 | `AUX-04A`–`G` dokončil list-first obsahovou IA a autoritativní title-level publish summary nad integrovaným content portem. `P3-13` získal storage-independent kontrakt, fixtures a mockované asset UI bez raw ID, ale zůstává otevřený do produkční storage/auth/audit integrace v `AUX-13L`. |
+| 6.34 | 2. 9. 2026 | `AUX-05A`–`C` převedl `/admin/vstupenky` na čtyřkrokový lidský tok a zachoval produkční server-only SimpleShop preview bez browserového souboru. Potvrzení/report jsou ověřené jen mockovanou file-fixture hranicí; `P4-03`/`AUX-13D` dál vlastní produkční apply. |
