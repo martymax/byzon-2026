@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.31 – přímý Better Auth admin login
+> Stav: implementační plán v6.32 – převzetí AUX redesignu administrace
 >
 > Datum sestavení: 20. července 2026
 >
@@ -1931,6 +1931,13 @@ fixtures.
   jednotlivé SVG a dávkový balík pro každý publikovaný bod programu. QR vede na
   `/app/program/[sessionId]`, neobsahuje credential a funguje i bez Priority B;
   u podporované session detail případně nabídne položení dotazu.
+- [ ] `P3-13` Dodat samostatný autorizovaný event-scoped asset read/resolver a
+  mutation slice pro fotografie řečníků a loga partnerů. Kontrakt musí určit
+  purpose, povolený typ a velikost, krátkodobý náhled, upload, replace/remove,
+  alt text, optimistic version, audit a bezpečné problem větve bez trvalé
+  storage URL. `P3-01` je pouze schema metadata a `P3-05` tento asset endpoint
+  nenahrazuje. Produkční integraci blokuje schválení storage hranice
+  `BLOCKER-INFRA-01`; do té doby UI používá neutrální placeholder bez raw ID.
 
 **Akceptace:** participant nikdy nevidí draft; publish je atomický; stejná
 version vrací deterministický JSON; významná změna vytváří cílitelnou událost;
@@ -2371,6 +2378,35 @@ obsahu, archivní režim, immutable publish a opravy z opakovaného review jsou 
 serverovým kontraktem a `cf63bb4` uzavřel oboustranný limitní test pro stránky
 i FAQ. Cílený gate prošel v unit/contract/server sadě i ve všech třech browser
 viewports.
+
+#### AUX – redesign UX/UI administrace
+
+Autoritativní specifikace, živý tracker a detailní akceptace jsou výhradně v
+[`docs/admin-ux-redesign-plan.md`](docs/admin-ux-redesign-plan.md). AUX
+refaktoruje prezentační a informační vrstvu dokončeného `F4`; neruší jeho
+kontrakty, validované fixtures, bezpečnostní invarianty ani per-route
+production preview boundary. Stav capability se mění jen přes příslušný
+`AUX-13*` integrační řez, ne samotným vzhledem.
+
+| AUX oblast | Routy | Nahrazuje prezentační část | Produkční/kontraktní vlastník |
+| --- | --- | --- | --- |
+| `AUX-01`–`AUX-03` | celý `/admin/*` shell a `/admin` | `F4-01`, `F4-07`, `F4-09` | `CS-ADMIN-01`, `P9-01`, `P9-08` |
+| `AUX-04` | `/admin/obsah` | obsahový řez `F4` po `F4-10` | `P3-05`–`P3-08`; asset slice `P3-13` |
+| `AUX-05` | `/admin/vstupenky` | `F4-02`–`F4-04` | `ADR-015`, `CS-IMPORT-01`, `P4-02`/`P4-03` |
+| `AUX-06` | `/admin/ucastnici` | `F4-05` | `CS-SUPPORT-01`, `P4-09`, `P9-03` |
+| `AUX-07` | `/admin/rezervace` | `F4-08`, `F4-10` | `CS-ADMIN-01`, `P5-05`, `P9-01` |
+| `AUX-08` | `/admin/oznameni` | `F4-06`, `F4-10` | `CS-ANN-01`, `P8-05`, `P8-10` |
+| `AUX-09` | `/admin/role` | `F4-07`, `F4-10` | `CS-ADMIN-01`, `P9-02` |
+| `AUX-10` | `/admin/reporty`, `/admin/audit`, `/admin/nastaveni` | `F4-07`, `F4-08`, `F4-10` | `CS-ADMIN-01`, `P9-04`–`P9-09` |
+
+Každý tematický AUX celek používá větev `track/admin-ux/<aux-id>-<název>`
+založenou z aktuálního schváleného `main`. V jednom checkoutu smí být právě
+jedna aktivní AUX větev; po testech, security review a code review se
+tematický commit sloučí do `main` podle explicitního uživatelského zadání.
+Handoff uvádí větev, cílový lifecycle, testy a otevřené blockery, ale
+nezavádí druhý AUX tracker. Sdílené hotspoty `packages/ui`, root chrome,
+admin shell a společný admin CSS modul mají po dobu foundations jediného
+vlastníka. Po route splitu vlastní lane své route-local komponenty a styly.
 
 #### F5 – check-in operátor
 
@@ -3308,3 +3344,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.29 | 31. 8. 2026 | Nedestruktivně vytvořeno oddělené Railway prostředí `production-2026`, protože starší prostředí `production` už existovalo a zůstalo nedotčené. Web, worker, vlastní PostgreSQL a Redis běží na releasu `9ddeec7`; produkční DB bez stagingové PII dostala baseline a kanonický draftový obsah 82 sessions. Readiness/smoke a 200 požadavků při concurrency 10 prošly, stejně jako post-import backup/restore kontrola 48 tabulek, 20 migrací, 2 eventů a 82 sessions. Před skutečným provozem zbývá rotace dočasně klonovaných aplikačních secrets, bootstrap organizer admina, auditovaná publikace, klikací UAT a rollback drill. |
 | 6.30 | 31. 8. 2026 | Uzavřen `BLOCKER-TKT-02`: pouze `Uhrazeno` opravňuje k participant apply, ostatní/unknown stavy nového účastníka neimportují a pozdější downgrade existujícího účastníka jde k ruční kontrole bez automatického lockoutu. Identita preferuje e-mail „prodej na jméno“; kupující je fallback jen pro objednávku s jedinou způsobilou vstupenkou a nejednoznačný skupinový nákup se neaplikuje. |
 | 6.31 | 31. 8. 2026 | `/` a produkčně dostupné `/prihlaseni` používají přímo pětiminutový jednorázový Better Auth magic link bez ticket activation gate; sign-up je zakázaný a callbacky mají explicitní bezpečný allowlist. Přidán Resend adapter s bounded timeoutem/idempotency klíčem, fail-closed produkční konfigurace a přístupný responzivní login. Bootstrap CLI umí výslovně provisionovat první neověřenou identitu, event membership a `organizer_admin` s auditem bez PII. Skutečný login čeká jen na potvrzený admin e-mail a kompletní schválené mail secrets/sender. |
+| 6.32 | 1. 9. 2026 | `AUX-00B` převzal redesign administrace jako autoritativní refaktor prezentační/IA vrstvy `F4`, zapsal per-route vlastníky integrace a jednotné branch/handoff pravidlo. Samostatný `P3-13` vlastní asset read/resolver/upload/replace/remove slice; `P3-01` ani `P3-05` se za něj nevydávají. |
