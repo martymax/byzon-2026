@@ -840,7 +840,13 @@ describe('admin content user journeys', () => {
           ok: true,
           kind: 'success',
           status: 200,
-          data: adminContextFixtures.room_operator!,
+          data: {
+            ...adminContextFixtures.organizer!,
+            actor: {
+              ...adminContextFixtures.organizer!.actor,
+              permissions: ['operations:read'],
+            },
+          },
           metadata: { requestId: 'admin-content-component-0001' },
         };
       }) as unknown as ApiPort['request'],

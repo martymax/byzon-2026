@@ -1,6 +1,11 @@
+import type { Metadata } from 'next';
 import { AdminOverviewWorkspace } from '@/components/admin-overview-workspace';
 import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: { absolute: 'Přehled akce | Administrace BYZON' },
+};
 
 export default function AdminOverviewPage() {
   if (isFrontendPreviewAvailable()) return <AdminOverviewWorkspace />;

@@ -5,10 +5,15 @@
 - Autoritativní specifikace i jediný tracker jsou v
   `docs/admin-ux-redesign-plan.md`; hlavní plán v6.32 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
-- `AUX-00B` a foundation `AUX-01A`–`C` jsou dokončené. Větev
-  `track/admin-ux/aux-01-foundation` zavádí semantické BYZON admin tokeny,
-  Inter pracovní typografii, sdílené primitives a exhaustive registry; další
-  nezablokovaný celek je `AUX-02A`–`G` shell a navigace.
+- `AUX-00B`, foundation `AUX-01A`–`C` a shell `AUX-02A`–`G` jsou dokončené.
+  Admin routy mají právě jeden landmark/skip link, permission/feature-aware
+  cílovou IA, lidský topbar, bezpečný account menu a nativní modal drawer.
+  Context rozlišuje permissions, feature stav a explicitní check-in capability;
+  produkční capability zůstává pro launch scope 2026 vypnutá. Další
+  nezablokovaný celek je `AUX-03A`–`C` route ownership a dashboard.
+- `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
+  320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
+  zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.
 - Každý tematický celek vzniká z aktuálního `main` na větvi
   `track/admin-ux/<aux-id>-<název>`, projde security review → code review →
   opravy a testy a podle explicitního zadání se sloučí do `main`.

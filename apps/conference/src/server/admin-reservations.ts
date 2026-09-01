@@ -391,7 +391,7 @@ export const readAdminContext = async (
     rateLimitDecision =
       (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
     const event = await loadCurrentAdminEvent(dependencies.db, dependencies);
-    const [membership, user, roleRows] = await Promise.all([
+    const [membership, user, roleRows, features] = await Promise.all([
       dependencies.db.query.eventMemberships.findFirst({
         columns: { userId: true },
         where: and(
@@ -412,9 +412,14 @@ export const readAdminContext = async (
           isNull(schema.eventRoles.revokedAt),
         ),
       }),
+      dependencies.db.query.eventFeatures.findFirst({
+        columns: { announcementsEnabled: true },
+        where: eq(schema.eventFeatures.eventId, event.id),
+      }),
     ]);
     if (!membership || !user) throw eventAccessDenied();
     const roles = roleRows.map(({ role }) => role);
+    if (!roles.includes('organizer_admin')) throw eventAccessDenied();
     const adminRoles = roles.filter(
       (
         role,
@@ -466,6 +471,14 @@ export const readAdminContext = async (
         name: safeLabel(event.name, 'Byzon 2026', 160),
         timezone: event.timezone,
         phase: event.status,
+      },
+      features: {
+        announcementsEnabled: features?.announcementsEnabled ?? false,
+      },
+      capabilities: {
+        // Check-in remains outside the 2026 launch scope. The explicit false
+        // prevents clients from inferring entry from an otherwise capable role.
+        canEnterCheckin: false,
       },
       actor: {
         displayLabel: safeLabel(user.name, 'Přihlášený uživatel', 120),

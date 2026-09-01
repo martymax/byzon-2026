@@ -50,6 +50,8 @@ export const adminContextFixtures = defineFixtureSet({
         timezone: 'Europe/Prague',
         phase: 'live',
       },
+      features: { announcementsEnabled: true },
+      capabilities: { canEnterCheckin: true },
       actor: {
         displayLabel: 'Demo administrátor',
         roles: ['organizer_admin'],
@@ -76,6 +78,8 @@ export const adminContextFixtures = defineFixtureSet({
         timezone: 'Europe/Prague',
         phase: 'live',
       },
+      features: { announcementsEnabled: false },
+      capabilities: { canEnterCheckin: false },
       actor: {
         displayLabel: 'Demo vedoucí aktivity',
         roles: ['room_operator'],
@@ -86,6 +90,22 @@ export const adminContextFixtures = defineFixtureSet({
             title: 'Růst bez zkratek',
           },
         ],
+      },
+    },
+    organizer_features_off: {
+      event: {
+        id: adminFixtureIds.event,
+        name: 'BYZON 2026 — syntetická ukázka',
+        timezone: 'Europe/Prague',
+        phase: 'draft',
+      },
+      features: { announcementsEnabled: false },
+      capabilities: { canEnterCheckin: true },
+      actor: {
+        displayLabel: 'Demo správce přípravy',
+        roles: ['organizer_admin'],
+        permissions: ['program:manage', 'operations:read', 'announcement:send'],
+        assignedSessions: [],
       },
     },
   },

@@ -112,6 +112,12 @@ export const adminContextResponseSchema = z
       timezone: timezoneSchema,
       phase: z.enum(['draft', 'activation_open', 'live', 'ended', 'archived']),
     }),
+    features: z.strictObject({
+      announcementsEnabled: z.boolean(),
+    }),
+    capabilities: z.strictObject({
+      canEnterCheckin: z.boolean(),
+    }),
     actor: z.strictObject({
       displayLabel: safeInlineTextSchema(120),
       roles: z.array(adminActorRoleSchema).min(1).max(4),

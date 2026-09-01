@@ -47,6 +47,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
   const participantId = crypto.randomUUID();
   const secondParticipantId = crypto.randomUUID();
   const unrelatedUserId = crypto.randomUUID();
+  const roomOperatorId = crypto.randomUUID();
   const revokedAdminId = crypto.randomUUID();
   const isolationAdminId = crypto.randomUUID();
   const reservationId = crypto.randomUUID();
@@ -143,6 +144,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
       participantId,
       secondParticipantId,
       unrelatedUserId,
+      roomOperatorId,
       revokedAdminId,
       isolationAdminId,
     ];
@@ -159,6 +161,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
         participantId,
         secondParticipantId,
         unrelatedUserId,
+        roomOperatorId,
         revokedAdminId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
@@ -190,6 +193,13 @@ integration('P5-05 admin reservation HTTP integration', () => {
         eventId,
         userId: secondParticipantId,
         role: 'participant',
+      },
+      {
+        id: crypto.randomUUID(),
+        eventId,
+        userId: roomOperatorId,
+        role: 'room_operator',
+        scope: { sessionIds: [sessionId] },
       },
       {
         id: crypto.randomUUID(),
@@ -334,6 +344,11 @@ integration('P5-05 admin reservation HTTP integration', () => {
       dependencies(unrelatedUserId),
     );
     expect(participant.status).toBe(403);
+    const roomOperator = await readAdminContext(
+      contextRequest(),
+      dependencies(roomOperatorId),
+    );
+    expect(roomOperator.status).toBe(403);
     const revoked = await readAdminContext(
       contextRequest(),
       dependencies(revokedAdminId),
@@ -360,6 +375,8 @@ integration('P5-05 admin reservation HTTP integration', () => {
       adminContextResponseSchema.parse(await response.json()),
     ).toMatchObject({
       event: { id: eventId, phase: 'live', timezone: 'Europe/Prague' },
+      features: { announcementsEnabled: false },
+      capabilities: { canEnterCheckin: false },
       actor: {
         displayLabel: 'Admin Byzon',
         roles: ['organizer_admin'],

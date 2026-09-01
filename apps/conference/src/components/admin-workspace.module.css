@@ -78,11 +78,13 @@
   font-size: 0.875rem;
   font-weight: 700;
   text-align: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(14.5rem, 17rem) minmax(0, 1fr);
+  grid-template-columns: 16rem minmax(0, 1fr);
   min-height: calc(100dvh - 2.75rem);
 }
 
@@ -91,7 +93,9 @@
   top: 0;
   align-self: start;
   min-height: calc(100dvh - 2.75rem);
-  padding: 1.5rem 1rem;
+  height: calc(100dvh - 2.75rem);
+  padding: 0 1rem 1.5rem;
+  overflow-y: auto;
   border-right: 1px solid var(--admin-border);
   color: var(--admin-text);
   background: var(--admin-sidebar);
@@ -104,6 +108,20 @@
   font-weight: 800;
 }
 
+.sidebarBrand {
+  display: flex;
+  align-items: center;
+  height: 4rem;
+  margin: 0 -1rem 1.25rem;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-ink);
+  font-family: var(--byzon-font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 .scope {
   margin: 0;
   color: var(--admin-sidebar-muted);
@@ -112,16 +130,17 @@
 }
 
 .roleControl {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 0.35rem;
-  margin: 1.25rem 0;
+  margin: 0;
   font-size: 0.8125rem;
   font-weight: 700;
 }
 
 .roleControl select {
-  width: 100%;
-  min-height: 2.75rem;
+  width: auto;
+  min-height: 2.25rem;
   padding: 0.5rem 2rem 0.5rem 0.65rem;
   border: 1px solid var(--admin-select-border);
   border-radius: 0.5rem;
@@ -132,12 +151,29 @@
 
 .navigation {
   display: grid;
-  gap: 0.35rem;
+  gap: 1.5rem;
 }
 
-.navigation a {
+.navigationGroup h2 {
+  margin: 0 0 0.5rem;
+  color: var(--admin-text-muted);
+  font: 650 0.75rem/1rem var(--byzon-font-body);
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.navigationGroup ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navigationGroup a {
   display: flex;
   align-items: center;
+  gap: 0.75rem;
   min-height: 2.75rem;
   padding: 0.55rem 0.75rem;
   border-radius: 0.5rem;
@@ -146,13 +182,20 @@
   text-decoration: none;
 }
 
-.navigation a:hover {
+.navigationGroup a:hover {
   background: var(--admin-sidebar-hover);
 }
 
-.navigation a[aria-current='page'] {
+.navigationGroup a[aria-current='page'] {
   color: var(--admin-primary);
   background: var(--admin-surface-brand);
+}
+
+.navigationState {
+  margin-left: auto;
+  color: var(--admin-warning);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .mainColumn {
@@ -164,10 +207,103 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-height: 4.5rem;
-  padding: 1rem clamp(1rem, 3vw, 2.5rem);
+  height: 4rem;
+  padding: 0 2rem;
   border-bottom: 1px solid var(--admin-border);
   background: var(--admin-topbar-bg);
+}
+
+.eventContext {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.eventContext strong {
+  overflow: hidden;
+  color: var(--admin-ink);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventContext span {
+  flex: none;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  color: var(--admin-text-muted);
+  background: var(--admin-canvas);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.menuButton {
+  display: none;
+}
+
+.account {
+  position: relative;
+  flex: none;
+  margin-left: auto;
+}
+
+.accountButton,
+.menuButton {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  color: var(--admin-text);
+  background: transparent;
+  font: 650 0.875rem/1.25rem var(--byzon-font-body);
+  cursor: pointer;
+}
+
+.accountButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accountButton:hover,
+.menuButton:hover {
+  background: var(--admin-surface-brand);
+}
+
+.accountMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: min(19rem, calc(100vw - 2rem));
+  padding: 0.5rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.75rem;
+  background: var(--admin-surface);
+  box-shadow: var(--byzon-shadow-md);
+}
+
+.accountMenu p {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--admin-text-muted);
+  font-size: 0.8125rem;
+}
+
+.accountMenu a {
+  display: block;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--admin-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.accountMenu a:hover {
+  background: var(--admin-surface-brand);
 }
 
 .breadcrumbs {
@@ -213,9 +349,9 @@
 }
 
 .content {
-  width: min(100%, 90rem);
+  width: min(100%, 80rem);
   margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2.5rem);
+  padding: 2rem;
 }
 
 .pageHeader {
@@ -949,49 +1085,87 @@
   border: 0;
 }
 
-.mobileNavigation {
-  display: none;
-}
-
-.mobileNavigation summary {
-  min-height: 44px;
-  padding: 0.7rem 0.85rem;
-  color: var(--admin-ink);
-  font-weight: 800;
-  cursor: pointer;
+.navigationDrawer {
+  width: min(90vw, 20rem);
+  height: 100dvh;
+  max-height: none;
+  margin: 0 auto 0 0;
+  padding: 0 0 env(safe-area-inset-bottom);
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0 1rem 1rem 0;
+  color: var(--admin-text);
   background: var(--admin-surface);
-  border: 1px solid var(--admin-border);
-  border-radius: 0.75rem;
+  box-shadow: var(--byzon-shadow-overlay);
 }
 
-@media (max-width: 70rem) {
+.navigationDrawer::backdrop {
+  background: var(--admin-dialog-scrim);
+}
+
+.navigationDrawerHeader {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+
+.navigationDrawerHeader h2 {
+  margin: 0;
+  color: var(--admin-ink);
+  font: 700 1.125rem/1.5rem var(--byzon-font-body);
+}
+
+.navigationDrawerHeader button {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.625rem;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  font: 650 0.875rem/1.25rem var(--byzon-font-body);
+  cursor: pointer;
+}
+
+.navigationDrawerBody {
+  padding: 1rem;
+}
+
+.navigationDrawer .navigation {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 63.99rem) {
   .shell {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
-    position: static;
-    min-height: auto;
-    padding: 1rem;
+    display: none;
   }
 
-  .navigation {
-    display: flex;
-    max-width: 100%;
-    margin-top: 1rem;
-    padding-bottom: 0.25rem;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
+  .menuButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    font-size: 1.25rem;
   }
 
-  .navigation a {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
+  .topbar {
+    height: 3.5rem;
+    padding: 0 1.5rem;
   }
 
-  .roleControl {
-    max-width: 24rem;
-    margin: 1rem 0 0;
+  .content {
+    padding: 1.5rem;
   }
 
   .summaryGrid {
@@ -1000,39 +1174,57 @@
 }
 
 @media (max-width: 48rem) {
-  .desktopNavigation {
-    display: none;
+  .mockBanner {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .mobileNavigation {
-    display: block;
-    margin-top: 1rem;
-  }
-
-  .mobileNavigation .navigation {
-    display: grid;
-    grid-template-columns: 1fr;
-    max-height: min(65vh, 32rem);
-    margin-top: 0.5rem;
-    padding: 0.35rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    background: var(--admin-surface);
-    border: 1px solid var(--admin-border);
-    border-radius: 0.75rem;
-    box-shadow: var(--byzon-shadow-md);
-    scroll-snap-type: none;
-  }
-
-  .mobileNavigation .navigation a {
-    min-width: 0;
-    white-space: normal;
-    overflow-wrap: anywhere;
+  .roleControl {
+    justify-content: space-between;
   }
 
   .topbar {
+    gap: 0.25rem;
+    padding: 0 0.5rem;
+  }
+
+  .eventContext {
     align-items: flex-start;
+    flex: 1;
     flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .eventContext strong {
+    max-width: 100%;
+    font-size: 0.875rem;
+  }
+
+  .eventContext span {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.75rem;
+  }
+
+  .account {
+    max-width: 7.25rem;
+  }
+
+  .accountButton {
+    max-width: 100%;
+    padding-inline: 0.5rem;
+  }
+
+  .accountButton span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .content {
+    padding: 1rem;
   }
 
   .twoColumn,
