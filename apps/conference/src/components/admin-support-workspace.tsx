@@ -7,7 +7,9 @@ import {
   type SupportMutationRequest,
   type SupportRecord,
 } from '@byzon/domain/contracts/support';
-import { useEffect, useRef, useState } from 'react';
+import { AdminTechnicalDetails } from '@byzon/ui';
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   requestAdminSupportMutation,
@@ -15,6 +17,11 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import {
+  supportAccessStateLabels,
+  supportActionLabels,
+  ticketStateLabels,
+} from './admin-ui-registry';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -28,13 +35,56 @@ import {
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-const actionLabels: Record<SupportAction, string> = {
-  resend: 'Znovu odeslat aktivační výzvu',
-  reassign: 'Přiřadit jinou vstupenku',
-  block: 'Zablokovat vstupenku',
-  reactivate: 'Znovu aktivovat vstupenku',
-  transfer: 'Převést vstupenku',
+const visibleSupportActions = [
+  'resend',
+  'block',
+  'reactivate',
+] as const satisfies readonly SupportAction[];
+
+const actionGuidance: Record<
+  (typeof visibleSupportActions)[number],
+  Readonly<{
+    when: string;
+    impact: string;
+    success: string;
+    recovery: string;
+    danger: boolean;
+  }>
+> = {
+  resend: {
+    when: 'Účastník aktivační výzvu nedostal nebo její platnost skončila.',
+    impact:
+      'Odešle novou aktivační výzvu. Stav vstupenky ani rezervace se nezmění.',
+    success: 'Aktivační výzva byla znovu odeslána.',
+    recovery:
+      'Pokud zpráva nedorazí, ověřte maskovaný kontakt a zkuste akci později.',
+    danger: false,
+  },
+  block: {
+    when: 'Vstupenka nesmí dál umožnit vstup do aplikace ani na akci.',
+    impact:
+      'Zablokuje přístup a zruší potvrzené rezervace i čekání na uvolněná místa.',
+    success: 'Přístup byl zablokován a související rezervace byly zrušeny.',
+    recovery:
+      'Přístup lze později obnovit; zrušené rezervace se samy neobnoví.',
+    danger: true,
+  },
+  reactivate: {
+    when: 'Dříve zablokovaná vstupenka má znovu umožnit přístup.',
+    impact:
+      'Obnoví přístup. Dříve zrušené rezervace ani místo na čekací listině se neobnoví.',
+    success: 'Přístup byl obnoven.',
+    recovery: 'Pokud účastník potřebuje aktivity, musí si je znovu rezervovat.',
+    danger: false,
+  },
 };
+
+const isVisibleSupportAction = (
+  action: SupportAction,
+): action is (typeof visibleSupportActions)[number] =>
+  visibleSupportActions.includes(
+    action as (typeof visibleSupportActions)[number],
+  );
 
 type PendingMutation = Readonly<{
   body: SupportMutationRequest;
@@ -51,10 +101,12 @@ export const AdminSupportWorkspace = () => {
   const searchErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [records, setRecords] = useState<readonly SupportRecord[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [searchOutcome, setSearchOutcome] = useState<
+    'idle' | 'no_match' | 'single_match' | 'ambiguous'
+  >('idle');
   const [selected, setSelected] = useState<SupportRecord | null>(null);
+  const [solving, setSolving] = useState(false);
   const [action, setAction] = useState<SupportAction>('resend');
-  const [targetTicketId, setTargetTicketId] = useState('');
   const [reason, setReason] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -63,9 +115,21 @@ export const AdminSupportWorkspace = () => {
   const [busy, setBusy] = useState<'search' | 'mutation' | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{
+    message: string;
+    auditId: string;
+  } | null>(null);
   const [searchInvalid, setSearchInvalid] = useState(false);
 
+  const availableActions = useMemo<
+    readonly (typeof visibleSupportActions)[number][]
+  >(
+    () => selected?.availableActions.filter(isVisibleSupportAction) ?? [],
+    [selected],
+  );
+  const selectedGuidance = isVisibleSupportAction(action)
+    ? actionGuidance[action]
+    : null;
   const requestCandidate = selected
     ? supportMutationRequestSchema.safeParse({
         participantId: selected.participantId,
@@ -73,10 +137,7 @@ export const AdminSupportWorkspace = () => {
         action,
         expectedVersion: selected.version,
         reason,
-        targetTicketId:
-          action === 'reassign' || action === 'transfer'
-            ? targetTicketId
-            : null,
+        targetTicketId: null,
       })
     : null;
   const mutationValidationFailed =
@@ -95,12 +156,28 @@ export const AdminSupportWorkspace = () => {
     }
   }, [mutationError, mutationValidationFailed, searchInvalid]);
 
+  const clearMutationDraft = () => {
+    setSelected(null);
+    setSolving(false);
+    setReason('');
+    setAttempted(false);
+    setPending(null);
+    setConfirming(false);
+    setAmbiguous(false);
+    setMutationError(null);
+    setSuccess(null);
+  };
+
+  const wipeSensitiveState = () => {
+    setQuery('');
+    setRecords([]);
+    setSearchOutcome('idle');
+    clearMutationDraft();
+  };
+
   const search = async (staleMessage?: string) => {
     if (!canReadSupport) return;
-    const validated = supportSearchQuerySchema.safeParse({
-      query,
-      limit: 5,
-    });
+    const validated = supportSearchQuerySchema.safeParse({ query, limit: 5 });
     if (!validated.success) {
       setSearchInvalid(true);
       setSearchError('Zadejte 2 až 80 bezpečných znaků.');
@@ -110,12 +187,7 @@ export const AdminSupportWorkspace = () => {
     setSearchInvalid(false);
     setBusy('search');
     setSearchError(null);
-    setMutationError(null);
-    setSuccess(null);
-    setSelected(null);
-    setPending(null);
-    setConfirming(false);
-    setAmbiguous(false);
+    clearMutationDraft();
     const result = await requestAdminSupportSearch(
       api,
       eventId,
@@ -125,10 +197,11 @@ export const AdminSupportWorkspace = () => {
     if (!request.isCurrent()) return;
     request.finish();
     setBusy(null);
-    setSearched(true);
     if (!result.ok) {
       setRecords([]);
+      setSearchOutcome('idle');
       if (isAdminSecurityFailure(result)) {
+        wipeSensitiveState();
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -141,15 +214,15 @@ export const AdminSupportWorkspace = () => {
     }
     if (result.kind === 'success') {
       setRecords(result.data.matches);
+      setSearchOutcome(result.data.outcome);
       if (staleMessage) setSearchError(staleMessage);
     }
   };
 
   const selectRecord = (record: SupportRecord) => {
-    if (!canMutateSupport) return;
     setSelected(record);
-    setAction(record.availableActions[0] ?? 'resend');
-    setTargetTicketId('');
+    setSolving(false);
+    setAction(record.availableActions.find(isVisibleSupportAction) ?? 'resend');
     setReason('');
     setAttempted(false);
     setPending(null);
@@ -160,20 +233,34 @@ export const AdminSupportWorkspace = () => {
     setSuccess(null);
   };
 
+  const openActions = () => {
+    if (!canMutateSupport || availableActions.length === 0) return;
+    setAction(availableActions[0]!);
+    setSolving(true);
+  };
+
   const prepare = () => {
     setAttempted(true);
-    if (!canMutateSupport || !requestCandidate?.success) return;
-    const attempt = {
+    if (
+      !canMutateSupport ||
+      !isVisibleSupportAction(action) ||
+      !availableActions.includes(action) ||
+      !requestCandidate?.success
+    ) {
+      return;
+    }
+    setPending({
       body: requestCandidate.data,
       idempotencyKey: createAdminIdempotencyKey('support'),
-    };
-    setPending(attempt);
+    });
     setConfirming(true);
     setAmbiguous(false);
   };
 
   const mutate = async (attempt: PendingMutation) => {
-    if (!canMutateSupport) return;
+    if (!canMutateSupport || !isVisibleSupportAction(attempt.body.action)) {
+      return;
+    }
     const request = requestFence.begin('support-mutation');
     setBusy('mutation');
     setConfirming(false);
@@ -190,9 +277,7 @@ export const AdminSupportWorkspace = () => {
     setBusy(null);
     if (!result.ok) {
       if (isAdminSecurityFailure(result)) {
-        setRecords([]);
-        setSelected(null);
-        setPending(null);
+        wipeSensitiveState();
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -201,8 +286,10 @@ export const AdminSupportWorkspace = () => {
       if (isStaleAdminFailure(result.failure)) {
         setPending(null);
         setAmbiguous(false);
+        setReason('');
+        setSolving(false);
         await search(
-          adminFailureMessage(result.failure, result.metadata?.requestId),
+          'Záznam se mezitím změnil. Načetli jsme aktuální stav; změnu připravte znovu.',
         );
         return;
       }
@@ -227,28 +314,29 @@ export const AdminSupportWorkspace = () => {
       setAmbiguous(false);
       setAttempted(false);
       setReason('');
-      setTargetTicketId('');
-      setSuccess(
-        result.data.outcome === 'already_applied'
-          ? `Server potvrdil dříve dokončenou operaci · audit ${result.data.audit.auditId}`
-          : `Změna byla provedena · audit ${result.data.audit.auditId}`,
-      );
+      setSolving(false);
+      setSuccess({
+        message:
+          result.data.outcome === 'already_applied'
+            ? `Server potvrdil dříve dokončenou změnu. ${actionGuidance[attempt.body.action].success}`
+            : actionGuidance[attempt.body.action].success,
+        auditId: result.data.audit.auditId,
+      });
     }
   };
 
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · omezená podpora</p>
-        <h1>Podpora účastníků a vstupenek</h1>
+        <h1>Účastníci</h1>
         <p>
-          Vyhledávání vrací jen maskované minimum. Každá změna používá
-          očekávanou verzi, auditní důvod a samostatný idempotency klíč.
+          Najděte člověka a vyřešte jen problém, který jeho aktuální stav
+          dovoluje.
         </p>
       </header>
 
       <section className={styles.panel} aria-labelledby="support-search-title">
-        <h2 id="support-search-title">1. Najít záznam</h2>
+        <h2 id="support-search-title">Najít účastníka</h2>
         <form
           className={styles.toolbar}
           onSubmit={(event) => {
@@ -258,7 +346,7 @@ export const AdminSupportWorkspace = () => {
           role="search"
         >
           <label className={styles.field}>
-            <span>Reference nebo jméno</span>
+            <span>Jméno, e-mail nebo reference vstupenky</span>
             <input
               autoComplete="off"
               aria-describedby={
@@ -278,7 +366,7 @@ export const AdminSupportWorkspace = () => {
               value={query}
             />
             <span className={styles.helper} id="admin-support-search-help">
-              V mocked režimu zkuste „single“, „ambiguous“, „none“ nebo „error“.
+              Zadejte alespoň 2 znaky. Vyhledávání se neukládá do historie.
             </span>
           </label>
           <button
@@ -286,7 +374,7 @@ export const AdminSupportWorkspace = () => {
             disabled={busy !== null || !canReadSupport || pending !== null}
             type="submit"
           >
-            {busy === 'search' ? 'Hledám…' : 'Vyhledat'}
+            {busy === 'search' ? 'Vyhledávám…' : 'Vyhledat účastníka'}
           </button>
         </form>
         {searchError ? (
@@ -299,170 +387,278 @@ export const AdminSupportWorkspace = () => {
             <p id="admin-support-search-error">{searchError}</p>
           </section>
         ) : null}
-        {searched && records.length === 0 && !searchError ? (
-          <p role="status">Nenalezen žádný odpovídající záznam.</p>
+        {searchOutcome === 'no_match' && !searchError ? (
+          <p role="status">
+            Nikoho jsme nenašli. Zkontrolujte zápis nebo zkuste jiný údaj.
+          </p>
         ) : null}
-        <ul className={styles.cardList}>
-          {records.map((record) => (
-            <li className={styles.dataCard} key={record.participantId}>
-              <div className={styles.panelHeader}>
-                <strong>{record.displayName}</strong>
-                <span className={styles.statusBadge}>{record.ticketState}</span>
-              </div>
-              <dl>
-                <dt>Kontakt</dt>
-                <dd>{record.maskedContact}</dd>
-                <dt>Reference</dt>
-                <dd>••{record.referenceSuffix}</dd>
-                <dt>Přístup</dt>
-                <dd>{record.accessState}</dd>
-                <dt>Verze</dt>
-                <dd>{record.version}</dd>
-              </dl>
-              {canMutateSupport ? (
-                <button
-                  className={styles.secondaryButton}
-                  disabled={pending !== null}
-                  onClick={() => selectRecord(record)}
-                  type="button"
-                >
-                  Připravit podporu
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        {searchOutcome === 'ambiguous' ? (
+          <p className={styles.callout} role="status">
+            Našli jsme více lidí. Vyberte správný záznam podle maskovaného
+            kontaktu nebo reference.
+          </p>
+        ) : null}
+
+        {records.length > 0 ? (
+          <>
+            <div className={styles.tableWrap} tabIndex={0}>
+              <table className={styles.table}>
+                <caption>Výsledky vyhledávání účastníků</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Účastník</th>
+                    <th scope="col">Kontakt</th>
+                    <th scope="col">Reference</th>
+                    <th scope="col">Vstupenka</th>
+                    <th scope="col">Přístup</th>
+                    <th scope="col">Akce</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((record) => (
+                    <tr key={record.participantId}>
+                      <td>
+                        <strong>{record.displayName}</strong>
+                      </td>
+                      <td>{record.maskedContact}</td>
+                      <td>••{record.referenceSuffix}</td>
+                      <td>{ticketStateLabels[record.ticketState]}</td>
+                      <td>{supportAccessStateLabels[record.accessState]}</td>
+                      <td>
+                        <button
+                          className={styles.secondaryButton}
+                          disabled={pending !== null}
+                          onClick={() => selectRecord(record)}
+                          type="button"
+                        >
+                          Zobrazit detail
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={styles.cards}>
+              <ul className={styles.cardList}>
+                {records.map((record) => (
+                  <li className={styles.dataCard} key={record.participantId}>
+                    <div className={styles.panelHeader}>
+                      <strong>{record.displayName}</strong>
+                      <span className={styles.statusBadge}>
+                        {ticketStateLabels[record.ticketState]}
+                      </span>
+                    </div>
+                    <dl>
+                      <dt>Kontakt</dt>
+                      <dd>{record.maskedContact}</dd>
+                      <dt>Reference</dt>
+                      <dd>••{record.referenceSuffix}</dd>
+                      <dt>Přístup</dt>
+                      <dd>{supportAccessStateLabels[record.accessState]}</dd>
+                    </dl>
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={pending !== null}
+                      onClick={() => selectRecord(record)}
+                      type="button"
+                    >
+                      Zobrazit detail
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        ) : null}
       </section>
 
       {selected ? (
         <section
           className={styles.panel}
-          aria-labelledby="support-action-title"
+          aria-labelledby="support-detail-title"
         >
-          <h2 id="support-action-title">2. Zkontrolovat změnu</h2>
-          <p>
-            {selected.displayName} · vstupenka ••{selected.referenceSuffix} ·
-            snapshot v{selected.version}
-          </p>
-          {mutationValidationFailed || mutationError ? (
-            <section
-              className={styles.errorSummary}
-              ref={mutationErrorSummaryRef}
-              role="alert"
-              tabIndex={-1}
-            >
-              <h2>Změnu zatím nelze potvrdit</h2>
-              <p id="admin-support-mutation-error">
-                {mutationError ??
-                  'Zkontrolujte auditní důvod a případné ID cílové vstupenky.'}
+          <div className={styles.panelHeader}>
+            <div>
+              <p className={styles.eyebrow}>Detail účastníka</p>
+              <h2 id="support-detail-title">{selected.displayName}</h2>
+            </div>
+            <span className={styles.statusBadge}>
+              {ticketStateLabels[selected.ticketState]}
+            </span>
+          </div>
+          <div className={styles.supportRecordSummary}>
+            <span>{selected.maskedContact}</span>
+            <span>••{selected.referenceSuffix}</span>
+            <span>{ticketStateLabels[selected.ticketState]}</span>
+            <span>{supportAccessStateLabels[selected.accessState]}</span>
+          </div>
+
+          {success ? (
+            <section className={styles.success} role="status">
+              <p>
+                <strong>{success.message}</strong>
               </p>
+              <p>
+                <Link href="/admin/audit">Zobrazit v historii změn</Link>
+              </p>
+              <AdminTechnicalDetails>
+                <dl className={styles.detailList}>
+                  <dt>ID auditu</dt>
+                  <dd>{success.auditId}</dd>
+                </dl>
+              </AdminTechnicalDetails>
             </section>
           ) : null}
-          <label className={styles.field}>
-            <span>Akce</span>
-            <select
-              aria-describedby={
-                mutationValidationFailed
-                  ? 'admin-support-mutation-error'
-                  : undefined
-              }
-              disabled={pending !== null}
-              onChange={(event) => {
-                setAction(event.target.value as SupportAction);
-                setPending(null);
-                setAmbiguous(false);
-              }}
-              value={action}
-            >
-              {selected.availableActions.map((availableAction) => (
-                <option key={availableAction} value={availableAction}>
-                  {actionLabels[availableAction]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {action === 'reassign' || action === 'transfer' ? (
-            <label className={styles.field}>
-              <span>ID cílové vstupenky</span>
-              <input
-                autoComplete="off"
-                aria-describedby={
-                  mutationInvalidPaths.has('targetTicketId')
-                    ? 'admin-support-target-error'
-                    : undefined
-                }
-                aria-invalid={mutationInvalidPaths.has('targetTicketId')}
-                disabled={pending !== null}
-                onChange={(event) => setTargetTicketId(event.target.value)}
-                value={targetTicketId}
-              />
-              {mutationInvalidPaths.has('targetTicketId') ? (
-                <span className={styles.helper} id="admin-support-target-error">
-                  Zadejte jiné platné ID cílové vstupenky.
-                </span>
-              ) : null}
-            </label>
-          ) : null}
-          <label className={styles.field}>
-            <span>Auditní důvod</span>
-            <textarea
-              aria-describedby={
-                mutationInvalidPaths.has('reason')
-                  ? 'admin-support-reason-error'
-                  : 'admin-support-reason-help'
-              }
-              aria-invalid={mutationInvalidPaths.has('reason')}
-              disabled={pending !== null}
-              onChange={(event) => setReason(event.target.value)}
-              value={reason}
-            />
-            <span className={styles.helper} id="admin-support-reason-help">
-              Nejméně 8 znaků. Pro mocked chybové scénáře lze do důvodu přidat
-              „stale“, „timeout“ nebo „collision“.
-            </span>
-            {mutationInvalidPaths.has('reason') ? (
-              <span className={styles.helper} id="admin-support-reason-error">
-                Auditní důvod musí mít nejméně 8 viditelných znaků.
-              </span>
-            ) : null}
-          </label>
-          <div className={styles.actionRow}>
+
+          {canMutateSupport && availableActions.length > 0 && !solving ? (
             <button
-              className={styles.dangerButton}
-              disabled={busy !== null || pending !== null}
-              onClick={prepare}
+              className={styles.button}
+              onClick={openActions}
               type="button"
             >
-              Zkontrolovat a potvrdit
+              Vyřešit problém
             </button>
-            {ambiguous && pending ? (
-              <button
-                className={styles.secondaryButton}
-                disabled={busy !== null}
-                onClick={() => void mutate(pending)}
-                type="button"
-              >
-                Zopakovat přesně stejný pokus
-              </button>
-            ) : null}
-          </div>
-          {success ? (
-            <p className={styles.success} role="status">
-              {success}
+          ) : null}
+          {canMutateSupport && availableActions.length === 0 ? (
+            <p className={styles.callout}>
+              Pro aktuální stav není dostupná žádná bezpečná akce.
             </p>
+          ) : null}
+
+          {canMutateSupport && solving ? (
+            <div className={styles.stack}>
+              <fieldset className={styles.supportActionPicker}>
+                <legend>Co potřebujete vyřešit?</legend>
+                {availableActions.map((availableAction) => (
+                  <label key={availableAction}>
+                    <input
+                      checked={action === availableAction}
+                      disabled={pending !== null}
+                      name="support-action"
+                      onChange={() => {
+                        setAction(availableAction);
+                        setAttempted(false);
+                        setPending(null);
+                        setAmbiguous(false);
+                      }}
+                      type="radio"
+                      value={availableAction}
+                    />
+                    <span>
+                      <strong>{supportActionLabels[availableAction]}</strong>
+                      <small>
+                        <b>Kdy použít:</b>{' '}
+                        {actionGuidance[availableAction].when}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              {selectedGuidance ? (
+                <section
+                  className={
+                    selectedGuidance.danger ? styles.warning : styles.callout
+                  }
+                >
+                  <h3>Dopad změny</h3>
+                  <p>{selectedGuidance.impact}</p>
+                  <p>
+                    <strong>Co dělat potom:</strong> {selectedGuidance.recovery}
+                  </p>
+                </section>
+              ) : null}
+              {mutationValidationFailed || mutationError ? (
+                <section
+                  className={styles.errorSummary}
+                  ref={mutationErrorSummaryRef}
+                  role="alert"
+                  tabIndex={-1}
+                >
+                  <h2>Změnu zatím nelze potvrdit</h2>
+                  <p id="admin-support-mutation-error">
+                    {mutationError ??
+                      'Doplňte důvod změny o nejméně 8 viditelných znaků.'}
+                  </p>
+                </section>
+              ) : null}
+              <label className={styles.field}>
+                <span>Důvod změny</span>
+                <textarea
+                  aria-describedby={
+                    mutationInvalidPaths.has('reason')
+                      ? 'admin-support-reason-error'
+                      : 'admin-support-reason-help'
+                  }
+                  aria-invalid={mutationInvalidPaths.has('reason')}
+                  disabled={pending !== null}
+                  onChange={(event) => setReason(event.target.value)}
+                  value={reason}
+                />
+                <span className={styles.helper} id="admin-support-reason-help">
+                  Nejméně 8 znaků. Důvod se uloží do historie změn.
+                </span>
+                {mutationInvalidPaths.has('reason') ? (
+                  <span
+                    className={styles.helper}
+                    id="admin-support-reason-error"
+                  >
+                    Důvod změny musí mít nejméně 8 viditelných znaků.
+                  </span>
+                ) : null}
+              </label>
+              <div className={styles.actionRow}>
+                <button
+                  className={
+                    selectedGuidance?.danger
+                      ? styles.dangerButton
+                      : styles.button
+                  }
+                  disabled={busy !== null || pending !== null}
+                  onClick={prepare}
+                  type="button"
+                >
+                  Zkontrolovat změnu
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy !== null || pending !== null}
+                  onClick={() => {
+                    setSolving(false);
+                    setReason('');
+                    setAttempted(false);
+                    setMutationError(null);
+                  }}
+                  type="button"
+                >
+                  Zrušit
+                </button>
+                {ambiguous && pending ? (
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={busy !== null}
+                    onClick={() => void mutate(pending)}
+                    type="button"
+                  >
+                    Zopakovat přesně stejný pokus
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
         </section>
       ) : null}
 
-      {confirming && pending ? (
+      {confirming && pending && isVisibleSupportAction(pending.body.action) ? (
         <AdminConfirmDialog
-          acknowledgement="Ověřil/a jsem maskovaný záznam, akci, verzi a auditní důvod."
-          confirmLabel={actionLabels[pending.body.action]}
-          danger={pending.body.action !== 'resend'}
-          description="Server znovu ověří oprávnění, dostupnou akci i očekávanou verzi."
+          acknowledgement="Ověřil/a jsem správného účastníka, dopad změny a uložený důvod."
+          confirmLabel={supportActionLabels[pending.body.action]}
+          danger={actionGuidance[pending.body.action].danger}
+          description={actionGuidance[pending.body.action].impact}
           impact={
             <p>
-              {selected?.displayName} · snapshot v{pending.body.expectedVersion}
+              <strong>{selected?.displayName}</strong> · vstupenka ••
+              {selected?.referenceSuffix}
             </p>
           }
           onConfirm={() => void mutate(pending)}
@@ -470,7 +666,7 @@ export const AdminSupportWorkspace = () => {
             setConfirming(false);
             setPending(null);
           }}
-          title="Provést podporu nad vstupenkou?"
+          title={`${supportActionLabels[pending.body.action]}?`}
         />
       ) : null}
     </div>

@@ -201,6 +201,92 @@ export const supportSearchResponseSchema = z
 
 export type SupportSearchResponse = z.infer<typeof supportSearchResponseSchema>;
 
+/**
+ * A target picker accepts a human reference, never a ticket UUID. The source
+ * identity/version are carried only to bind the result to the record currently
+ * being reviewed and to fail closed when that record changed meanwhile.
+ */
+export const supportTargetTicketSearchRequestSchema = z.strictObject({
+  sourceTicketId: uuidSchema,
+  sourceExpectedVersion: versionSchema,
+  reference: supportSearchQuerySchema.shape.query,
+  limit: z.literal(SUPPORT_SEARCH_RESULT_LIMIT).optional(),
+});
+
+export type SupportTargetTicketSearchRequest = z.infer<
+  typeof supportTargetTicketSearchRequestSchema
+>;
+
+export const supportTargetTicketCandidateSchema = z.strictObject({
+  eventId: uuidSchema,
+  ticketId: uuidSchema,
+  maskedContact: maskedContactSchema,
+  referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
+  ticketState: supportTicketStateSchema,
+  accessState: supportAccessStateSchema,
+  version: versionSchema,
+});
+
+export type SupportTargetTicketCandidate = z.infer<
+  typeof supportTargetTicketCandidateSchema
+>;
+
+const supportTargetTicketSearchBaseShape = {
+  eventId: uuidSchema,
+  sourceTicketId: uuidSchema,
+  sourceVersion: versionSchema,
+  limitedTo: z.literal(SUPPORT_SEARCH_RESULT_LIMIT),
+} as const;
+
+export const supportTargetTicketSearchResponseSchema = z
+  .discriminatedUnion('outcome', [
+    z.strictObject({
+      ...supportTargetTicketSearchBaseShape,
+      outcome: z.literal('no_match'),
+      candidates: z.tuple([]),
+    }),
+    z.strictObject({
+      ...supportTargetTicketSearchBaseShape,
+      outcome: z.literal('single_match'),
+      candidates: z.tuple([supportTargetTicketCandidateSchema]),
+    }),
+    z.strictObject({
+      ...supportTargetTicketSearchBaseShape,
+      outcome: z.literal('ambiguous'),
+      candidates: z
+        .array(supportTargetTicketCandidateSchema)
+        .min(2)
+        .max(SUPPORT_SEARCH_RESULT_LIMIT),
+    }),
+  ])
+  .superRefine((response, context) => {
+    if (
+      response.candidates.some(
+        ({ eventId, ticketId }) =>
+          eventId !== response.eventId || ticketId === response.sourceTicketId,
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['candidates'],
+        message:
+          'Target candidates must belong to the event and differ from the source ticket',
+      });
+    }
+    const ticketIds = response.candidates.map(({ ticketId }) => ticketId);
+    if (new Set(ticketIds).size !== ticketIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['candidates'],
+        message: 'Target ticket candidates must be distinct',
+      });
+    }
+  });
+
+export type SupportTargetTicketSearchResponse = z.infer<
+  typeof supportTargetTicketSearchResponseSchema
+>;
+
 export const supportMutationRequestSchema = z
   .strictObject({
     participantId: uuidSchema,
@@ -321,6 +407,15 @@ export const supportSearchProblemSchema = z.discriminatedUnion(
   supportReadProblems,
 );
 
+export const supportTargetTicketSearchProblemSchema = z.discriminatedUnion(
+  'code',
+  [
+    ...supportReadProblems,
+    supportRecordNotFoundProblemSchema,
+    supportStaleVersionProblemSchema,
+  ],
+);
+
 export const supportMutationProblemSchema = z.discriminatedUnion('code', [
   ...supportReadProblems,
   supportRecordNotFoundProblemSchema,
@@ -332,6 +427,9 @@ export const supportMutationProblemSchema = z.discriminatedUnion('code', [
 ]);
 
 export type SupportSearchProblem = z.infer<typeof supportSearchProblemSchema>;
+export type SupportTargetTicketSearchProblem = z.infer<
+  typeof supportTargetTicketSearchProblemSchema
+>;
 export type SupportMutationProblem = z.infer<
   typeof supportMutationProblemSchema
 >;

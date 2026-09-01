@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.34 – UX aktualizace vstupenek AUX-05
+> Stav: implementační plán v6.35 – UX účastnické podpory AUX-06
 >
 > Datum sestavení: 20. července 2026
 >
@@ -2337,7 +2337,9 @@ záměrně odmítá historické offer/TTL stavy.
   v mock režimu musí být apply viditelně neprodukční.
 - [x] `F4-05` Implementovat participant/ticket search a support akce
   resend/reassign/block/reactivate/transfer s minimem PII, reason polem,
-  potvrzením a zobrazením výsledného auditu.
+  potvrzením a zobrazením výsledného auditu. `AUX-06` zpřesňuje bezpečnou
+  produkční hranici: `reassign` a `transfer` jsou do rozhodnutí jejich rozdílu
+  a dopadu na rezervace skryté; UI ani contract picker nevyžadují raw UUID.
 - [x] `F4-06` Implementovat Priority A minimum oznámení: in-app draft,
   audience preview, immutable confirmation a stav odeslání; pokročilé cílení,
   e-mail a reporting zůstávají v Priority B.
@@ -3355,3 +3357,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.32 | 1. 9. 2026 | `AUX-00B` převzal redesign administrace jako autoritativní refaktor prezentační/IA vrstvy `F4`, zapsal per-route vlastníky integrace a jednotné branch/handoff pravidlo. Samostatný `P3-13` vlastní asset read/resolver/upload/replace/remove slice; `P3-01` ani `P3-05` se za něj nevydávají. |
 | 6.33 | 2. 9. 2026 | `AUX-04A`–`G` dokončil list-first obsahovou IA a autoritativní title-level publish summary nad integrovaným content portem. `P3-13` získal storage-independent kontrakt, fixtures a mockované asset UI bez raw ID, ale zůstává otevřený do produkční storage/auth/audit integrace v `AUX-13L`. |
 | 6.34 | 2. 9. 2026 | `AUX-05A`–`C` převedl `/admin/vstupenky` na čtyřkrokový lidský tok a zachoval produkční server-only SimpleShop preview bez browserového souboru. Potvrzení/report jsou ověřené jen mockovanou file-fixture hranicí; `P4-03`/`AUX-13D` dál vlastní produkční apply. |
+| 6.35 | 2. 9. 2026 | `AUX-06A`, `B`, `D` a bezpečná část `C` převedly `/admin/ucastnici` na POST/no-store hledání bez PII v URL, lidský read-only detail a vysvětlené support akce s exact retry/stale wipe. Target-ticket picker má strict reference kontrakt a fixtures bez UUID vstupu; `reassign`/`transfer` zůstávají fail-closed skryté do produktového rozhodnutí `GAP-AUX-SUPPORT-ACTIONS-01` a produkční integrace `P4-09`/`AUX-13E`. |
