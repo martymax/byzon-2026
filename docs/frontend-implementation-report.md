@@ -62,8 +62,9 @@ scope.
   offline a session-expired stavy i mockované potvrzení/report;
 - support hledání používá syntetické `single`, `ambiguous`, `none`, `error`;
   vstup se posílá jen POST/no-store body a neukládá se do URL/historie;
-- oznámení umožňuje scénáře stale/expired/timeout podle nápovědy přímo ve
-  formuláři;
+- oznámení má testované event/session, zero-audience, stale, duplicate,
+  ambiguous retry, offline a session-expired scénáře bez technických hesel v
+  produkční nápovědě;
 - role, export, rezervace a settings mají canonical success,
   stale, permission, idempotency a audit varianty.
 - `/admin/obsah` otevírá seznam místo formuláře, seskupuje osm obsahových
@@ -154,8 +155,13 @@ povolený `resend` vysvětlují použití, dopad i recovery. Target-ticket picke
 má strict reference kontrakt bez UUID vstupu; `reassign` a `transfer` jsou do
 produktového rozhodnutí o jejich rozdílu a rezervacích fail-closed skryté.
 
-Oznámení používají critical-only draft, event/affected-session audience preview
-a immutable send. Role jsou event/session/room scoped; exporty jsou
+Oznámení používají čtyřkrokový critical-only tok s live participant kartou,
+počítadly, dirty guardem a event/právě-jedna-session audience preview. Session
+se vybírá pouze z pojmenovaného event-scoped DTO s časem a místností, nikdy
+ručním UUID nebo assignment seznamem. Kontrola uvádí recipient/excluded count
+bez tvrzení o doručení a canonical `sent`/`already_sent` receipt schovává audit
+i preview verzi do technických údajů; produkční options endpoint zůstává v
+`AUX-13G`. Role jsou event/session/room scoped; exporty jsou
 asynchronní. Rezervace mají nový session-first cursor/pageInfo kontrakt s
 povinně maskovanou referencí. Kanonická stránka řadí plné a téměř plné
 aktivity, zobrazuje textovou obsazenost i progress a odděluje změnu kapacity od

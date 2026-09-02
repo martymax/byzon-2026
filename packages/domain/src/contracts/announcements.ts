@@ -357,6 +357,37 @@ export type AdminAnnouncementAudience = z.infer<
   typeof adminAnnouncementAudienceSchema
 >;
 
+export const adminAnnouncementTargetSchema = z.strictObject({
+  sessionId: uuidSchema,
+  title: safeInlineTextSchema(160),
+  startsAt: dateTimeSchema,
+  roomLabel: safeInlineTextSchema(120).nullable(),
+});
+
+export type AdminAnnouncementTarget = z.infer<
+  typeof adminAnnouncementTargetSchema
+>;
+
+export const adminAnnouncementTargetListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    options: z.array(adminAnnouncementTargetSchema).max(200),
+  })
+  .superRefine((response, context) => {
+    const sessionIds = response.options.map(({ sessionId }) => sessionId);
+    if (new Set(sessionIds).size !== sessionIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: 'Announcement target sessions must be unique',
+      });
+    }
+  });
+
+export type AdminAnnouncementTargetListResponse = z.infer<
+  typeof adminAnnouncementTargetListResponseSchema
+>;
+
 export const adminAnnouncementDraftSchema = z.strictObject({
   title: safeInlineTextSchema(160),
   bodyText: adminAnnouncementBodySchema,
@@ -498,6 +529,11 @@ export const adminAnnouncementPreviewProblemSchema = z.discriminatedUnion(
   [...adminAnnouncementReadProblems, announcementEmptyAudienceProblemSchema],
 );
 
+export const adminAnnouncementTargetProblemSchema = z.discriminatedUnion(
+  'code',
+  adminAnnouncementReadProblems,
+);
+
 export const adminAnnouncementSendProblemSchema = z.discriminatedUnion('code', [
   ...adminAnnouncementReadProblems,
   announcementEmptyAudienceProblemSchema,
@@ -509,6 +545,9 @@ export const adminAnnouncementSendProblemSchema = z.discriminatedUnion('code', [
 
 export type AdminAnnouncementPreviewProblem = z.infer<
   typeof adminAnnouncementPreviewProblemSchema
+>;
+export type AdminAnnouncementTargetProblem = z.infer<
+  typeof adminAnnouncementTargetProblemSchema
 >;
 export type AdminAnnouncementSendProblem = z.infer<
   typeof adminAnnouncementSendProblemSchema

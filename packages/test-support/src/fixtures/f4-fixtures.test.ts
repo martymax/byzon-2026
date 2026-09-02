@@ -1,6 +1,7 @@
 import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendResponseSchema,
+  adminAnnouncementTargetListResponseSchema,
   adminAuditResponseSchema,
   adminContextResponseSchema,
   adminEventSettingsSchema,
@@ -23,6 +24,8 @@ import {
   adminAnnouncementPreviewProblemFixtures,
   adminAnnouncementSendFixtures,
   adminAnnouncementSendProblemFixtures,
+  adminAnnouncementTargetFixtures,
+  adminAnnouncementTargetProblemFixtures,
   adminAuditFixtures,
   adminContextFixtures,
   adminEventSettingsFixtures,
@@ -159,6 +162,11 @@ describe('F4 canonical fixture sets', () => {
   });
 
   it('validates immutable admin announcement preview/send and failures', () => {
+    for (const fixture of Object.values(adminAnnouncementTargetFixtures)) {
+      expect(adminAnnouncementTargetListResponseSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+    }
     for (const fixture of Object.values(adminAnnouncementPreviewFixtures)) {
       expect(adminAnnouncementPreviewResponseSchema.parse(fixture)).toEqual(
         fixture,
@@ -184,6 +192,9 @@ describe('F4 canonical fixture sets', () => {
       code: 'ANNOUNCEMENT_PREVIEW_STALE',
       currentPreviewVersion: 3,
     });
+    expect(adminAnnouncementTargetProblemFixtures.permission?.code).toBe(
+      'EVENT_ACCESS_DENIED',
+    );
   });
 
   it('contains no canonical mock state, raw ticket credential or actor input', () => {

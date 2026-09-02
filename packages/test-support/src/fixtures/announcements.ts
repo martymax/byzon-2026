@@ -3,6 +3,8 @@ import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendProblemSchema,
   adminAnnouncementSendResponseSchema,
+  adminAnnouncementTargetListResponseSchema,
+  adminAnnouncementTargetProblemSchema,
   participantAnnouncementDetailProblemSchema,
   participantAnnouncementDetailResponseSchema,
   participantAnnouncementInboxProblemSchema,
@@ -137,6 +139,28 @@ export const participantAnnouncementInboxFixtures = defineFixtureSet({
       items: [longSummary],
       pageInfo: { nextCursor: null, hasMore: false },
       unreadCount: 1,
+    },
+  },
+});
+
+export const adminAnnouncementTargetFixtures = defineFixtureSet({
+  name: 'announcements.admin-targets',
+  schema: adminAnnouncementTargetListResponseSchema,
+  fixtures: {
+    available: {
+      eventId: announcementFixtureIds.event,
+      options: [
+        {
+          sessionId: announcementFixtureIds.session,
+          title: 'Růst bez zkratek',
+          startsAt: '2026-09-19T09:30:00.000+02:00',
+          roomLabel: 'Sál Vltava',
+        },
+      ],
+    },
+    empty: {
+      eventId: announcementFixtureIds.event,
+      options: [],
     },
   },
 });
@@ -353,6 +377,19 @@ export const adminAnnouncementPreviewProblemFixtures = defineFixtureSet({
     permission: problem('EVENT_ACCESS_DENIED', 403),
     disabled: problem('ANNOUNCEMENTS_DISABLED', 409),
     empty_audience: problem('ANNOUNCEMENT_EMPTY_AUDIENCE', 409),
+    validation: problem('VALIDATION_FAILED', 422),
+    internal_error: problem('INTERNAL_ERROR', 500),
+  },
+});
+
+export const adminAnnouncementTargetProblemFixtures = defineFixtureSet({
+  name: 'announcements.admin-target-problem',
+  schema: adminAnnouncementTargetProblemSchema,
+  fixtures: {
+    authentication: problem('AUTHENTICATION_REQUIRED', 401),
+    session_expired: problem('AUTH_SESSION_EXPIRED', 401),
+    permission: problem('EVENT_ACCESS_DENIED', 403),
+    disabled: problem('ANNOUNCEMENTS_DISABLED', 409),
     validation: problem('VALIDATION_FAILED', 422),
     internal_error: problem('INTERNAL_ERROR', 500),
   },

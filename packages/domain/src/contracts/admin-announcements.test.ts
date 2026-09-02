@@ -7,6 +7,7 @@ import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendHeadersSchema,
   adminAnnouncementSendRequestSchema,
+  adminAnnouncementTargetListResponseSchema,
   problemTypeForCode,
 } from './index.js';
 
@@ -27,6 +28,36 @@ const draft = {
 };
 
 describe('CS-ANN-01 admin contracts', () => {
+  it('validates named session targets and rejects duplicate identifiers', () => {
+    const targets = {
+      eventId: ids.event,
+      options: [
+        {
+          sessionId: ids.session,
+          title: 'Růst bez zkratek',
+          startsAt: '2026-07-25T09:30:00.000+02:00',
+          roomLabel: 'Sál Vltava',
+        },
+      ],
+    };
+
+    expect(adminAnnouncementTargetListResponseSchema.parse(targets)).toEqual(
+      targets,
+    );
+    expect(
+      adminAnnouncementTargetListResponseSchema.safeParse({
+        ...targets,
+        options: [...targets.options, targets.options[0]],
+      }).success,
+    ).toBe(false);
+    expect(
+      adminAnnouncementTargetListResponseSchema.safeParse({
+        ...targets,
+        assignedSessions: targets.options,
+      }).success,
+    ).toBe(false);
+  });
+
   it('validates in-app-only draft and immutable audience preview', () => {
     expect(adminAnnouncementPreviewRequestSchema.parse({ draft })).toEqual({
       draft,
