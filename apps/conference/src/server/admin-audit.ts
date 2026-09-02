@@ -34,6 +34,8 @@ const actionCategories = {
   'support.block': 'support',
   'support.reactivate': 'support',
   'support.resend': 'support',
+  'participant.invitation_sent': 'support',
+  'participant.profile_updated': 'support',
   'ticket_import.preview_created': 'import',
   'ticket_import.applied': 'import',
   'announcement.send': 'announcement',

@@ -55,19 +55,27 @@ const selectArea = (value: string) => {
 
 const renderContent = (options?: {
   assetPort?: ReturnType<typeof createAdminContentAssetPreviewPort>;
+  initialResource?: 'speakers';
   port?: AdminContentPort;
   readOnly?: boolean;
+  showAreaNavigation?: boolean;
 }) => {
   const port = options?.port ?? createAdminContentPreviewPort({ eventId });
   return renderComponent(
     <AdminContentWorkspace
       {...(options?.assetPort ? { assetPort: options.assetPort } : {})}
       eventId={eventId}
+      {...(options?.initialResource
+        ? { initialResource: options.initialResource }
+        : {})}
       port={port}
       {...(options?.readOnly === undefined
         ? {}
         : { readOnly: options.readOnly })}
       timezone="Europe/Prague"
+      {...(options?.showAreaNavigation === undefined
+        ? {}
+        : { showAreaNavigation: options.showAreaNavigation })}
     />,
   );
 };
@@ -99,6 +107,36 @@ beforeEach(() => {
 });
 
 describe('admin content user journeys', () => {
+  it('opens a focused speaker environment with profiles and program pairing', async () => {
+    window.history.replaceState({}, '', '/admin/recnici');
+    const screen = await renderContent({
+      initialResource: 'speakers',
+      showAreaNavigation: false,
+    });
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Správa řečníků' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Přidat řečníka' }))
+      .toBeVisible();
+    expect(
+      screen.getByRole('navigation', { name: 'Oblasti obsahu' }),
+    ).not.toBeInTheDocument();
+    await screen
+      .getByRole('searchbox', { name: 'Filtrovat řečníky' })
+      .fill('Example');
+    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Medailonek' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('checkbox', { name: /Otevření konference/ }))
+      .toBeChecked();
+    await expectComponentToPassAxe(contentRoot());
+  });
+
   it('opens list-first with five areas, exact types and a safe URL state', async () => {
     const screen = await renderContent();
 
@@ -200,6 +238,14 @@ describe('admin content user journeys', () => {
     await expect
       .element(screen.getByRole('textbox', { name: 'Pozice nebo role' }))
       .toBeVisible();
+    const assignedSession = screen.getByRole('checkbox', {
+      name: /Otevření konference/,
+    });
+    await expect.element(assignedSession).toBeChecked();
+    await assignedSession.click();
+    await screen.getByRole('button', { name: 'Uložit změny' }).click();
+    await expect.element(screen.getByText(/0 vystoupení/)).toBeVisible();
+    await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByText(/autorizovaného resolveru/))
       .toBeVisible();

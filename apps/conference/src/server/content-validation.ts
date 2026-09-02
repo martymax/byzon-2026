@@ -191,6 +191,26 @@ export const validateContentMutation = async (
     }
   }
 
+  if (input.resource === 'speakers' && Array.isArray(input.data.sessionIds)) {
+    const requestedSessionIds = [
+      ...new Set(input.data.sessionIds.map((value) => String(value))),
+    ];
+    if (requestedSessionIds.length !== input.data.sessionIds.length) {
+      issues.push('sessions:duplicate');
+    }
+    const sessions = await db.query.programSessions.findMany({
+      where: and(
+        eq(schema.programSessions.eventId, input.eventId),
+        ne(schema.programSessions.status, 'archived'),
+      ),
+      columns: { id: true },
+    });
+    const available = new Set(sessions.map(({ id }) => id));
+    if (requestedSessionIds.some((id) => !available.has(id))) {
+      issues.push('sessions:not_in_event');
+    }
+  }
+
   const slugValue = input.data.slug;
   if (typeof slugValue === 'string') {
     let conflictingId: string | undefined;

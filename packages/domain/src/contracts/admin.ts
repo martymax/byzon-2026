@@ -954,6 +954,8 @@ export const adminAuditActionSchema = z.enum([
   'support.block',
   'support.reactivate',
   'support.resend',
+  'participant.invitation_sent',
+  'participant.profile_updated',
   'ticket_import.preview_created',
   'ticket_import.applied',
   'announcement.send',

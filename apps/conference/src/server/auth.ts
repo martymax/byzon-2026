@@ -20,6 +20,7 @@ export const createAuth = (
   mailProvider: AuthMailProvider,
   db: Database = database.db,
   environment: NodeJS.ProcessEnv | Record<string, unknown> = process.env,
+  options: { readonly magicLinkRateLimitMax?: number } = {},
 ) => {
   const env = readConferenceEnv(environment);
   const appOrigin = getAuthAppOrigin(environment);
@@ -53,9 +54,19 @@ export const createAuth = (
         disableSignUp: true,
         expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
         storeToken: 'hashed',
-        rateLimit: { window: 60, max: 5 },
-        sendMagicLink: ({ email, url }) =>
-          mailProvider.sendMagicLink({ to: email, url }),
+        rateLimit: { window: 60, max: options.magicLinkRateLimitMax ?? 5 },
+        sendMagicLink: ({ email, url, metadata }) => {
+          const invitation =
+            metadata?.purpose === 'participant-invitation'
+              ? {
+                  purpose: 'participant-invitation' as const,
+                  ...(typeof metadata.recipientName === 'string'
+                    ? { recipientName: metadata.recipientName.slice(0, 257) }
+                    : {}),
+                }
+              : {};
+          return mailProvider.sendMagicLink({ to: email, url, ...invitation });
+        },
       }),
     ],
   });

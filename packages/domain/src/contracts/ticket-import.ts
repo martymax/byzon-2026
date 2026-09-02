@@ -489,30 +489,34 @@ export type TicketImportPreviewResponse = z.infer<
   typeof ticketImportPreviewResponseSchema
 >;
 
+export const isTicketImportRowSelectable = (row: TicketImportRow): boolean =>
+  row.status === 'new';
+
 export const canApplyTicketImportPreview = (
   preview: TicketImportPreviewResponse,
-): boolean => preview.summary.conflict === 0 && preview.summary.unknown === 0;
+): boolean => preview.rows.some(isTicketImportRowSelectable);
 
-export const ticketImportApplyRequestSchema = z
-  .strictObject({
-    eventId: uuidSchema,
-    previewId: uuidSchema,
-    previewVersion: versionSchema,
-    expectedImpact: ticketImportSummarySchema,
-    reason: reasonSchema,
-  })
-  .superRefine((request, context) => {
-    if (
-      request.expectedImpact.conflict > 0 ||
-      request.expectedImpact.unknown > 0
-    ) {
+const selectedTicketImportRowIdsSchema = z
+  .array(uuidSchema)
+  .min(1)
+  .max(TICKET_IMPORT_MAX_PREVIEW_ROWS)
+  .superRefine((rowIds, context) => {
+    if (new Set(rowIds).size !== rowIds.length) {
       context.addIssue({
         code: 'custom',
-        path: ['expectedImpact'],
-        message: 'Conflicted or unknown import previews cannot be applied',
+        message: 'Selected import row IDs must be unique',
       });
     }
   });
+
+export const ticketImportApplyRequestSchema = z.strictObject({
+  eventId: uuidSchema,
+  previewId: uuidSchema,
+  previewVersion: versionSchema,
+  expectedImpact: ticketImportSummarySchema,
+  selectedRowIds: selectedTicketImportRowIdsSchema,
+  reason: reasonSchema,
+});
 
 export type TicketImportApplyRequest = z.infer<
   typeof ticketImportApplyRequestSchema
@@ -529,22 +533,38 @@ export type TicketImportApplyHeaders = z.infer<
   typeof ticketImportApplyHeadersSchema
 >;
 
-export const ticketImportApplyResponseSchema = z.strictObject({
-  eventId: uuidSchema,
-  batchId: uuidSchema,
-  previewId: uuidSchema,
-  previewVersion: versionSchema,
-  outcome: z.enum(['applied', 'already_applied']),
-  result: z.strictObject({
-    created: z.number().int().nonnegative(),
-    statusChanged: z.number().int().nonnegative(),
-    unchanged: z.number().int().nonnegative(),
-  }),
-  completedAt: dateTimeSchema,
-  audit: z.strictObject({
-    auditId: uuidSchema,
-  }),
-});
+export const ticketImportApplyResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    batchId: uuidSchema,
+    previewId: uuidSchema,
+    previewVersion: versionSchema,
+    selectedRowIds: selectedTicketImportRowIdsSchema,
+    outcome: z.enum(['applied', 'already_applied']),
+    result: z.strictObject({
+      created: z.number().int().nonnegative(),
+      statusChanged: z.number().int().nonnegative(),
+      unchanged: z.number().int().nonnegative(),
+    }),
+    completedAt: dateTimeSchema,
+    audit: z.strictObject({
+      auditId: uuidSchema,
+    }),
+  })
+  .superRefine((response, context) => {
+    if (
+      response.result.created +
+        response.result.statusChanged +
+        response.result.unchanged !==
+      response.selectedRowIds.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['result'],
+        message: 'Import result must account for every selected row',
+      });
+    }
+  });
 
 export type TicketImportApplyResponse = z.infer<
   typeof ticketImportApplyResponseSchema

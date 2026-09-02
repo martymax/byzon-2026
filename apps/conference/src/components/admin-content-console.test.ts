@@ -11,6 +11,7 @@ const ids = {
   room: '019fc800-0000-7000-8000-000000000002',
   speaker: '019fc800-0000-7000-8000-000000000003',
   venue: '019fc800-0000-7000-8000-000000000004',
+  session: '019fc800-0000-7000-8000-000000000005',
 } as const;
 
 const formData = (
@@ -162,22 +163,29 @@ describe('admin content form contract mapping', () => {
       'speakers',
       {
         bioMarkdown: 'Bio řečnice.',
+        firstName: 'Dana',
         jobTitle: 'Facilitátorka',
         company: 'Example.test',
+        facebookUrl: 'https://www.facebook.com/dana',
+        instagramUrl: 'https://www.instagram.com/dana',
+        lastName: 'Nová',
         linkedinUrl: 'https://example.test/linkedin',
+        sessionIds: [ids.session],
         slug: 'dana-nova',
         sortOrder: '5',
         status: 'draft',
-        title: 'Dana Nová',
         websiteUrl: 'https://example.test/dana',
       },
       {
         bioMarkdown: 'Bio řečnice.',
         company: 'Example.test',
+        facebookUrl: 'https://www.facebook.com/dana',
         firstName: 'Dana',
+        instagramUrl: 'https://www.instagram.com/dana',
         jobTitle: 'Facilitátorka',
         lastName: 'Nová',
         linkedinUrl: 'https://example.test/linkedin',
+        sessionIds: [ids.session],
         slug: 'dana-nova',
         sortOrder: 5,
         status: 'draft',

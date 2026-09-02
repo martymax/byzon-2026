@@ -111,9 +111,10 @@ const bodyFieldNames: Partial<Record<AdminContentResource, string>> = {
 const emptyReferences = (): {
   days: readonly AdminContentItem[];
   rooms: readonly AdminContentItem[];
+  sessions: readonly AdminContentItem[];
   speakers: readonly AdminContentItem[];
   venues: readonly AdminContentItem[];
-} => ({ days: [], rooms: [], speakers: [], venues: [] });
+} => ({ days: [], rooms: [], sessions: [], speakers: [], venues: [] });
 
 export const localInputValue = (value: unknown, timezone: string) => {
   if (!value) return '';
@@ -130,6 +131,13 @@ export const localInputValue = (value: unknown, timezone: string) => {
     parts.find((item) => item.type === type)?.value ?? '';
   return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
 };
+
+const programSlotLabel = (value: unknown, timezone: string) =>
+  new Intl.DateTimeFormat('cs-CZ', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(new Date(String(value)));
 
 export const zonedLocalToIso = (value: string, timezone: string) => {
   const [date, time] = value.split('T');
@@ -285,22 +293,19 @@ export const adminContentBodyFromForm = (
     };
   }
   if (resource === 'speakers') {
-    const names = value('title').split(/\s+/).filter(Boolean);
-    if (names.length < 2) {
-      throw new AdminContentFormError({
-        title: 'Zadejte jméno i příjmení.',
-      });
-    }
     body = {
       ...body,
       slug: value('slug'),
-      firstName: names.slice(0, -1).join(' '),
-      lastName: names.at(-1),
+      firstName: value('firstName'),
+      lastName: value('lastName'),
       jobTitle: value('jobTitle') || null,
       company: value('company') || null,
       bioMarkdown: value('bioMarkdown') || null,
       linkedinUrl: value('linkedinUrl') || null,
+      instagramUrl: value('instagramUrl') || null,
+      facebookUrl: value('facebookUrl') || null,
       websiteUrl: value('websiteUrl') || null,
+      sessionIds: form.getAll('sessionIds').map(String),
     };
   }
   if (resource === 'partners') {
@@ -357,7 +362,7 @@ const failureMessage = (failure: AdminContentFailure): string =>
 
 const fieldLabels: Readonly<Record<string, string>> = {
   answerMarkdown: 'Odpověď',
-  bioMarkdown: 'Bio',
+  bioMarkdown: 'Medailonek',
   bodyMarkdown: 'Obsah stránky',
   capacity: 'Kapacita',
   category: 'Kategorie',
@@ -366,7 +371,11 @@ const fieldLabels: Readonly<Record<string, string>> = {
   dayId: 'Den',
   description: 'Popis',
   endsAt: 'Konec',
+  firstName: 'Jméno',
+  facebookUrl: 'Facebook URL',
   linkedinUrl: 'LinkedIn URL',
+  instagramUrl: 'Instagram URL',
+  lastName: 'Příjmení',
   localDate: 'Datum',
   mapQuery: 'Místo pro mapu',
   navigationMarkdown: 'Navigační pokyny',
@@ -374,6 +383,7 @@ const fieldLabels: Readonly<Record<string, string>> = {
   slug: 'Adresa stránky',
   sortOrder: 'Pořadí',
   speakerIds: 'Řečníci',
+  sessionIds: 'Body programu',
   startsAt: 'Začátek',
   status: 'Stav',
   summary: 'Shrnutí',
@@ -563,6 +573,7 @@ export const AdminContentConsole = ({
   assetPort,
   eventId,
   initialResource = 'sessions',
+  showAreaNavigation = true,
   onContentChanged,
   onDirtyChange,
   onSecurityFailure,
@@ -573,6 +584,7 @@ export const AdminContentConsole = ({
   readonly assetPort?: AdminContentAssetPort;
   readonly eventId: string;
   readonly initialResource?: AdminContentResource;
+  readonly showAreaNavigation?: boolean;
   readonly onContentChanged?: () => void;
   readonly onDirtyChange?: (dirty: boolean) => void;
   readonly onSecurityFailure?: (failure: AdminContentFailure) => void;
@@ -589,6 +601,7 @@ export const AdminContentConsole = ({
   const [editing, setEditing] = useState<AdminContentItem | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [listFilter, setListFilter] = useState<'active' | 'archived'>('active');
+  const [speakerListQuery, setSpeakerListQuery] = useState('');
   const [slugValue, setSlugValue] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [sortOrder, setSortOrder] = useState(0);
@@ -696,7 +709,13 @@ export const AdminContentConsole = ({
     setItems([]);
     setReferences(emptyReferences());
     setSnapshotReady(false);
-    const referenceResources = ['days', 'venues', 'rooms', 'speakers'] as const;
+    const referenceResources = [
+      'days',
+      'venues',
+      'rooms',
+      'sessions',
+      'speakers',
+    ] as const;
     void Promise.all([
       port.list(eventId, targetResource, controller.signal),
       ...referenceResources.map((reference) =>
@@ -752,6 +771,7 @@ export const AdminContentConsole = ({
     setEditorOpen(false);
     setEditing(null);
     setListFilter('active');
+    setSpeakerListQuery('');
     editorHistoryActive.current = false;
     setError(null);
     setMessage('');
@@ -964,11 +984,22 @@ export const AdminContentConsole = ({
   const bodyFieldName = bodyFieldNames[resource];
   const area = resourceArea[selectedResource];
   const areaResources = contentAreaResources[area];
-  const visibleItems = items.filter((item) =>
-    listFilter === 'archived'
-      ? item.status === 'archived'
-      : item.status !== 'archived',
-  );
+  const visibleItems = items.filter((item) => {
+    const statusMatches =
+      listFilter === 'archived'
+        ? item.status === 'archived'
+        : item.status !== 'archived';
+    if (!statusMatches || resource !== 'speakers') return statusMatches;
+    const query = speakerListQuery.trim().toLocaleLowerCase('cs-CZ');
+    return (
+      !query ||
+      [item.firstName, item.lastName, item.company, item.jobTitle]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase('cs-CZ')
+        .includes(query)
+    );
+  });
   const visibleSpeakers = references.speakers.filter((speaker) => {
     const query = speakerSearch.trim().toLocaleLowerCase('cs-CZ');
     return (
@@ -978,6 +1009,10 @@ export const AdminContentConsole = ({
         .includes(query)
     );
   });
+  const activeSpeakers =
+    resource === 'speakers'
+      ? items.filter((item) => item.status !== 'archived')
+      : [];
 
   const requestReload = () => {
     if (
@@ -1002,9 +1037,15 @@ export const AdminContentConsole = ({
     >
       <div className={styles.panelHeader}>
         <div>
-          <p className={styles.eyebrow}>Jediný editor obsahu</p>
+          <p className={styles.eyebrow}>
+            {resource === 'speakers'
+              ? 'Profily, medailonky a vystoupení'
+              : 'Jediný editor obsahu'}
+          </p>
           <h2 id="admin-content-editor-title">
-            Program a publikované informace
+            {resource === 'speakers'
+              ? 'Správa řečníků'
+              : 'Program a publikované informace'}
           </h2>
         </div>
         {readOnly ? (
@@ -1012,42 +1053,48 @@ export const AdminContentConsole = ({
         ) : null}
       </div>
 
-      <nav aria-label="Oblasti obsahu" className={styles.contentAreaTabs}>
-        {contentAreas.map((item) => (
-          <button
-            aria-current={area === item ? 'page' : undefined}
-            className={
-              area === item ? styles.filterActive : styles.filterButton
-            }
-            disabled={working}
-            key={item}
-            onClick={() => changeResource(contentAreaResources[item][0]!)}
-            type="button"
-          >
-            {contentAreaLabels[item]}
-          </button>
-        ))}
-      </nav>
-      <label className={`${styles.field} ${styles.contentAreaSelect}`}>
-        <span>Oblast obsahu</span>
-        <select
-          disabled={working}
-          onChange={(event) =>
-            changeResource(
-              contentAreaResources[event.target.value as AdminContentArea][0]!,
-            )
-          }
-          value={area}
-        >
-          {contentAreas.map((item) => (
-            <option key={item} value={item}>
-              {contentAreaLabels[item]}
-            </option>
-          ))}
-        </select>
-      </label>
+      {showAreaNavigation ? (
+        <>
+          <nav aria-label="Oblasti obsahu" className={styles.contentAreaTabs}>
+            {contentAreas.map((item) => (
+              <button
+                aria-current={area === item ? 'page' : undefined}
+                className={
+                  area === item ? styles.filterActive : styles.filterButton
+                }
+                disabled={working}
+                key={item}
+                onClick={() => changeResource(contentAreaResources[item][0]!)}
+                type="button"
+              >
+                {contentAreaLabels[item]}
+              </button>
+            ))}
+          </nav>
+          <label className={`${styles.field} ${styles.contentAreaSelect}`}>
+            <span>Oblast obsahu</span>
+            <select
+              disabled={working}
+              onChange={(event) =>
+                changeResource(
+                  contentAreaResources[
+                    event.target.value as AdminContentArea
+                  ][0]!,
+                )
+              }
+              value={area}
+            >
+              {contentAreas.map((item) => (
+                <option key={item} value={item}>
+                  {contentAreaLabels[item]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      ) : null}
 
-      {areaResources.length > 1 ? (
+      {showAreaNavigation && areaResources.length > 1 ? (
         <fieldset className={styles.contentTypeSelector}>
           <legend>Typ obsahu</legend>
           <div>
@@ -1113,6 +1160,39 @@ export const AdminContentConsole = ({
         </p>
       ) : null}
 
+      {resource === 'speakers' && snapshotReady ? (
+        <section
+          aria-label="Souhrn řečníků"
+          className={styles.speakerAdminSummary}
+        >
+          <article>
+            <span>Aktivní profily</span>
+            <strong>{activeSpeakers.length}</strong>
+          </article>
+          <article>
+            <span>Zveřejněné</span>
+            <strong>
+              {
+                activeSpeakers.filter((item) => item.status === 'published')
+                  .length
+              }
+            </strong>
+          </article>
+          <article>
+            <span>Bez programu</span>
+            <strong>
+              {
+                activeSpeakers.filter(
+                  (item) =>
+                    !Array.isArray(item.sessionIds) ||
+                    item.sessionIds.length === 0,
+                ).length
+              }
+            </strong>
+          </article>
+        </section>
+      ) : null}
+
       <section
         aria-busy={busy === 'loading'}
         aria-labelledby="content-list-title"
@@ -1147,6 +1227,17 @@ export const AdminContentConsole = ({
           </div>
         </div>
         <div aria-label="Zobrazené položky" className={styles.contentFilters}>
+          {resource === 'speakers' ? (
+            <label className={styles.contentListSearch}>
+              <span>Filtrovat řečníky</span>
+              <input
+                onChange={(event) => setSpeakerListQuery(event.target.value)}
+                placeholder="Jméno, firma nebo role"
+                type="search"
+                value={speakerListQuery}
+              />
+            </label>
+          ) : null}
           <button
             aria-pressed={listFilter === 'active'}
             className={
@@ -1191,6 +1282,19 @@ export const AdminContentConsole = ({
                 <span>
                   <strong>{itemLabel(item)}</strong>
                   <small>
+                    {resource === 'speakers' ? (
+                      <>
+                        {[item.jobTitle, item.company]
+                          .filter(Boolean)
+                          .map(String)
+                          .join(' · ') || 'Bez uvedené role'}
+                        {' · '}
+                        {Array.isArray(item.sessionIds)
+                          ? `${item.sessionIds.length} vystoupení`
+                          : '0 vystoupení'}
+                        {' · '}
+                      </>
+                    ) : null}
                     {contentStatusLabels[String(item.status)] ??
                       'Bez stavového příznaku'}
                   </small>
@@ -1455,41 +1559,73 @@ export const AdminContentConsole = ({
               <FieldError errors={fieldErrors} name="capacity" />
             </label>
           ) : null}
-          <label className={styles.field}>
-            <span>
-              {resource === 'faqs'
-                ? 'Otázka'
-                : resource === 'speakers'
-                  ? 'Celé jméno'
-                  : 'Název'}
-            </span>
-            <input
-              defaultValue={String(
-                editing?.title ??
-                  editing?.name ??
-                  editing?.question ??
-                  (resource === 'speakers'
-                    ? `${String(editing?.firstName ?? '')} ${String(
-                        editing?.lastName ?? '',
-                      )}`.trim()
-                    : ''),
-              )}
-              name="title"
-              onChange={(event) => {
-                if (
-                  !editing &&
-                  !slugTouched &&
-                  resource !== 'days' &&
-                  resource !== 'faqs'
-                ) {
-                  setSlugValue(slugFromTitle(event.target.value));
-                }
-              }}
-              required
-              {...fieldA11y(fieldErrors, 'title')}
-            />
-            <FieldError errors={fieldErrors} name="title" />
-          </label>
+          {resource === 'speakers' ? (
+            <>
+              <label className={styles.field}>
+                <span>Jméno</span>
+                <input
+                  defaultValue={String(editing?.firstName ?? '')}
+                  name="firstName"
+                  onChange={(event) => {
+                    if (!editing && !slugTouched && event.currentTarget.form) {
+                      const values = new FormData(event.currentTarget.form);
+                      setSlugValue(
+                        slugFromTitle(
+                          `${String(values.get('firstName') ?? '')} ${String(values.get('lastName') ?? '')}`,
+                        ),
+                      );
+                    }
+                  }}
+                  required
+                  {...fieldA11y(fieldErrors, 'firstName')}
+                />
+                <FieldError errors={fieldErrors} name="firstName" />
+              </label>
+              <label className={styles.field}>
+                <span>Příjmení</span>
+                <input
+                  defaultValue={String(editing?.lastName ?? '')}
+                  name="lastName"
+                  onChange={(event) => {
+                    if (!editing && !slugTouched && event.currentTarget.form) {
+                      const values = new FormData(event.currentTarget.form);
+                      setSlugValue(
+                        slugFromTitle(
+                          `${String(values.get('firstName') ?? '')} ${String(values.get('lastName') ?? '')}`,
+                        ),
+                      );
+                    }
+                  }}
+                  required
+                  {...fieldA11y(fieldErrors, 'lastName')}
+                />
+                <FieldError errors={fieldErrors} name="lastName" />
+              </label>
+            </>
+          ) : (
+            <label className={styles.field}>
+              <span>{resource === 'faqs' ? 'Otázka' : 'Název'}</span>
+              <input
+                defaultValue={String(
+                  editing?.title ?? editing?.name ?? editing?.question ?? '',
+                )}
+                name="title"
+                onChange={(event) => {
+                  if (
+                    !editing &&
+                    !slugTouched &&
+                    resource !== 'days' &&
+                    resource !== 'faqs'
+                  ) {
+                    setSlugValue(slugFromTitle(event.target.value));
+                  }
+                }}
+                required
+                {...fieldA11y(fieldErrors, 'title')}
+              />
+              <FieldError errors={fieldErrors} name="title" />
+            </label>
+          )}
           {bodyFieldName ? (
             <label className={`${styles.field} ${styles.contentWide}`}>
               <span>
@@ -1596,7 +1732,7 @@ export const AdminContentConsole = ({
                 <FieldError errors={fieldErrors} name="company" />
               </label>
               <label className={`${styles.field} ${styles.contentWide}`}>
-                <span>Bio</span>
+                <span>Medailonek</span>
                 <textarea
                   defaultValue={String(editing?.bioMarkdown ?? '')}
                   name="bioMarkdown"
@@ -1605,7 +1741,7 @@ export const AdminContentConsole = ({
                 <FieldError errors={fieldErrors} name="bioMarkdown" />
               </label>
               <label className={styles.field}>
-                <span>LinkedIn URL</span>
+                <span>LinkedIn</span>
                 <input
                   defaultValue={String(editing?.linkedinUrl ?? '')}
                   name="linkedinUrl"
@@ -1615,7 +1751,29 @@ export const AdminContentConsole = ({
                 <FieldError errors={fieldErrors} name="linkedinUrl" />
               </label>
               <label className={styles.field}>
-                <span>Web URL</span>
+                <span>Instagram</span>
+                <input
+                  defaultValue={String(editing?.instagramUrl ?? '')}
+                  name="instagramUrl"
+                  placeholder="https://www.instagram.com/…"
+                  type="url"
+                  {...fieldA11y(fieldErrors, 'instagramUrl')}
+                />
+                <FieldError errors={fieldErrors} name="instagramUrl" />
+              </label>
+              <label className={styles.field}>
+                <span>Facebook</span>
+                <input
+                  defaultValue={String(editing?.facebookUrl ?? '')}
+                  name="facebookUrl"
+                  placeholder="https://www.facebook.com/…"
+                  type="url"
+                  {...fieldA11y(fieldErrors, 'facebookUrl')}
+                />
+                <FieldError errors={fieldErrors} name="facebookUrl" />
+              </label>
+              <label className={styles.field}>
+                <span>Osobní web</span>
                 <input
                   defaultValue={String(editing?.websiteUrl ?? '')}
                   name="websiteUrl"
@@ -1624,6 +1782,66 @@ export const AdminContentConsole = ({
                 />
                 <FieldError errors={fieldErrors} name="websiteUrl" />
               </label>
+              <fieldset
+                className={`${styles.speakerProgramPicker} ${styles.contentWide}`}
+                {...fieldA11y(fieldErrors, 'sessionIds')}
+              >
+                <legend>Vystoupení v programu</legend>
+                <p className={styles.helper}>
+                  Vyberte všechny body programu, ve kterých řečník vystupuje.
+                  Vazba se projeví v programu i veřejném profilu.
+                </p>
+                {references.sessions
+                  .filter(
+                    (session) =>
+                      session.status === 'archived' &&
+                      Array.isArray(editing?.sessionIds) &&
+                      editing.sessionIds.includes(session.id),
+                  )
+                  .map((session) => (
+                    <input
+                      key={session.id}
+                      name="sessionIds"
+                      type="hidden"
+                      value={session.id}
+                    />
+                  ))}
+                {references.sessions.filter(
+                  (session) => session.status !== 'archived',
+                ).length ? (
+                  <div className={styles.speakerProgramOptions}>
+                    {references.sessions
+                      .filter((session) => session.status !== 'archived')
+                      .map((session) => (
+                        <label key={session.id}>
+                          <input
+                            defaultChecked={
+                              Array.isArray(editing?.sessionIds) &&
+                              editing.sessionIds.includes(session.id)
+                            }
+                            name="sessionIds"
+                            type="checkbox"
+                            value={session.id}
+                          />
+                          <span>
+                            <strong>{String(session.title)}</strong>
+                            <small>
+                              {programSlotLabel(session.startsAt, timezone)}
+                              {session.status === 'cancelled'
+                                ? ' · Zrušeno'
+                                : ''}
+                            </small>
+                          </span>
+                        </label>
+                      ))}
+                  </div>
+                ) : (
+                  <p className={styles.empty}>
+                    Nejdřív vytvořte alespoň jeden bod programu.
+                  </p>
+                )}
+                <FieldError errors={fieldErrors} name="sessionIds" />
+              </fieldset>
             </>
           ) : null}
           {resource === 'partners' ? (

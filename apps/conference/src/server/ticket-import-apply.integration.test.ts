@@ -4,10 +4,20 @@ import {
   ticketImportApplyResponseSchema,
   ticketImportPreviewResponseSchema,
 } from '@byzon/domain/contracts/ticket-import';
+import {
+  adminParticipantDetailSchema,
+  adminParticipantInviteResponseSchema,
+  adminParticipantListResponseSchema,
+} from '@byzon/domain/contracts/support';
 import { and, count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { SimpleShopTicketSourceSnapshot } from './simpleshop-ticket-source';
+import {
+  handleAdminParticipantDetail,
+  handleAdminParticipantInvite,
+  handleAdminParticipantList,
+} from './admin-support';
 import { applySimpleShopTicketImport } from './ticket-import-apply';
 import {
   createDatabaseTicketImportPreviewStore,
@@ -236,6 +246,9 @@ integration('P4-03 SimpleShop participant apply integration', () => {
       previewId: snapshotPreview.previewId,
       previewVersion: snapshotPreview.previewVersion,
       expectedImpact: snapshotPreview.summary,
+      selectedRowIds: snapshotPreview.rows
+        .filter(({ status }) => status === 'new')
+        .map(({ rowId }) => rowId),
       reason: 'Potvrzený import dvou uhrazených účastníků.',
     };
     const response = await applyRequest(body, 'simpleshop-apply-clean-0001');
@@ -275,6 +288,123 @@ integration('P4-03 SimpleShop participant apply integration', () => {
         'jediny-kupujici@example.test',
       ]),
     );
+    const importedProfiles = await client.db.query.participantProfiles.findMany(
+      {
+        where: eq(schema.participantProfiles.eventId, eventId),
+      },
+    );
+    expect(importedProfiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          firstName: 'Nová',
+          lastName: 'účastnice',
+          contactEmail: 'nova-ucastnice@example.test',
+          company: 'Example s.r.o.',
+          jobTitle: 'CEO',
+        }),
+        expect.objectContaining({
+          firstName: 'Jediný',
+          lastName: 'kupující',
+          contactEmail: 'jediny-kupujici@example.test',
+        }),
+      ]),
+    );
+    const participantListResponse = await handleAdminParticipantList(
+      new Request(
+        `${appOrigin}/api/v1/admin/events/${eventId}/participants/list`,
+        {
+          method: 'POST',
+          headers: { origin: appOrigin, 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        },
+      ),
+      eventId,
+      {
+        db: client.db,
+        allowedOrigin: appOrigin,
+        currentEventSlug: eventSlug,
+        getSession: vi.fn(async () => ({ user: { id: adminId } })),
+      },
+    );
+    expect(participantListResponse.status).toBe(200);
+    const participantList = adminParticipantListResponseSchema.parse(
+      await participantListResponse.json(),
+    );
+    expect(participantList.items).toHaveLength(2);
+    expect(participantList.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          contactEmail: 'nova-ucastnice@example.test',
+          ticketState: 'active',
+          invitation: { status: 'not_sent', lastSentAt: null },
+          availableActions: [],
+        }),
+      ]),
+    );
+    const invitedParticipant = participantList.items.find(
+      ({ contactEmail }) => contactEmail === 'nova-ucastnice@example.test',
+    )!;
+    const sendParticipantInvitation = vi.fn(async () => undefined);
+    const invitationResponse = await handleAdminParticipantInvite(
+      new Request(
+        `${appOrigin}/api/v1/admin/events/${eventId}/participants/${invitedParticipant.participantId}/invite`,
+        {
+          method: 'POST',
+          headers: {
+            origin: appOrigin,
+            'content-type': 'application/json',
+            'idempotency-key': 'simpleshop-participant-invite-0001',
+          },
+          body: JSON.stringify({
+            participantId: invitedParticipant.participantId,
+          }),
+        },
+      ),
+      eventId,
+      invitedParticipant.participantId,
+      {
+        db: client.db,
+        allowedOrigin: appOrigin,
+        currentEventSlug: eventSlug,
+        getSession: vi.fn(async () => ({ user: { id: adminId } })),
+        now: () => fixedNow,
+        sendParticipantInvitation,
+      },
+    );
+    expect(invitationResponse.status).toBe(200);
+    expect(
+      adminParticipantInviteResponseSchema.parse(
+        await invitationResponse.json(),
+      ),
+    ).toMatchObject({
+      participantId: invitedParticipant.participantId,
+      invitation: { status: 'sent', lastSentAt: fixedNow.toISOString() },
+    });
+    expect(sendParticipantInvitation).toHaveBeenCalledWith({
+      email: 'nova-ucastnice@example.test',
+      recipientName: 'Nová účastnice',
+    });
+    const detailResponse = await handleAdminParticipantDetail(
+      new Request(
+        `${appOrigin}/api/v1/admin/events/${eventId}/participants/${invitedParticipant.participantId}`,
+      ),
+      eventId,
+      invitedParticipant.participantId,
+      {
+        db: client.db,
+        allowedOrigin: appOrigin,
+        currentEventSlug: eventSlug,
+        getSession: vi.fn(async () => ({ user: { id: adminId } })),
+      },
+    );
+    expect(detailResponse.status).toBe(200);
+    expect(
+      adminParticipantDetailSchema.parse(await detailResponse.json()),
+    ).toMatchObject({
+      contactEmail: 'nova-ucastnice@example.test',
+      ticket: { source: 'simpleshop', state: 'active', claimedAt: null },
+      invitation: { status: 'sent' },
+    });
     const ticketCount = await client.db
       .select({ value: count() })
       .from(schema.tickets)
@@ -301,7 +431,9 @@ integration('P4-03 SimpleShop participant apply integration', () => {
       reason: body.reason,
       after: expect.objectContaining({
         created: 2,
-        excluded: 1,
+        selectedCount: 2,
+        selectedRowIds: body.selectedRowIds,
+        skipped: 1,
         emailSent: false,
         ticketCredentialCreated: false,
       }),
@@ -326,7 +458,7 @@ integration('P4-03 SimpleShop participant apply integration', () => {
     expect(auditCount[0]?.value).toBe(1);
   });
 
-  it('returns unchanged rows on the next immutable preview and rejects unauthorized apply', async () => {
+  it('returns unchanged rows on the next immutable preview and refuses to re-import them', async () => {
     const nextPreview = await preview();
     expect(nextPreview.summary).toMatchObject({
       new: 0,
@@ -340,6 +472,7 @@ integration('P4-03 SimpleShop participant apply integration', () => {
       previewId: nextPreview.previewId,
       previewVersion: nextPreview.previewVersion,
       expectedImpact: nextPreview.summary,
+      selectedRowIds: [nextPreview.rows[0]!.rowId],
       reason: 'Kontrolní opakování beze změny.',
     };
     const denied = await applyRequest(
@@ -353,12 +486,11 @@ integration('P4-03 SimpleShop participant apply integration', () => {
     );
 
     const response = await applyRequest(body, 'simpleshop-apply-repeat-0001');
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(409);
     expect(
-      ticketImportApplyResponseSchema.parse(await response.json()),
+      ticketImportApplyProblemSchema.parse(await response.json()),
     ).toMatchObject({
-      outcome: 'applied',
-      result: { created: 0, statusChanged: 0, unchanged: 2 },
+      code: 'IMPORT_PREVIEW_BLOCKED',
     });
   });
 
@@ -370,6 +502,7 @@ integration('P4-03 SimpleShop participant apply integration', () => {
         previewId: stalePreview.previewId,
         previewVersion: stalePreview.previewVersion,
         expectedImpact: stalePreview.summary,
+        selectedRowIds: [stalePreview.rows[0]!.rowId],
         reason: 'Tento preview je záměrně po expiraci.',
       },
       'simpleshop-apply-stale-0001',
@@ -402,6 +535,7 @@ integration('P4-03 SimpleShop participant apply integration', () => {
         previewId: stalePreview.previewId,
         previewVersion: stalePreview.previewVersion,
         expectedImpact: stalePreview.summary,
+        selectedRowIds: [stalePreview.rows[0]!.rowId],
         reason: 'Zdroj se po náhledu změnil.',
       },
       'simpleshop-apply-source-stale-0001',

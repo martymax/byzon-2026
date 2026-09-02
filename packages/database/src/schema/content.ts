@@ -399,6 +399,8 @@ export const speakerProfiles = pgTable(
     jobTitle: text('job_title'),
     bioMarkdown: text('bio_markdown'),
     linkedinUrl: text('linkedin_url'),
+    instagramUrl: text('instagram_url'),
+    facebookUrl: text('facebook_url'),
     websiteUrl: text('website_url'),
     photoAssetId: uuid('photo_asset_id'),
     status: contentStatus('status').default('draft').notNull(),

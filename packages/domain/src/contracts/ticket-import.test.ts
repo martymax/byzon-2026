@@ -136,7 +136,7 @@ describe('CS-IMPORT-01 contracts', () => {
     ).toBe(false);
   });
 
-  it('fails closed when summary, excluded, conflict or unknown status is present', () => {
+  it('keeps safe new rows selectable beside excluded, conflict or unknown rows', () => {
     expect(
       ticketImportPreviewResponseSchema.safeParse({
         ...preview,
@@ -231,18 +231,19 @@ describe('CS-IMPORT-01 contracts', () => {
       },
     });
 
-    expect(canApplyTicketImportPreview(conflict)).toBe(false);
+    expect(canApplyTicketImportPreview(conflict)).toBe(true);
     expect(canApplyTicketImportPreview(excluded)).toBe(true);
-    expect(canApplyTicketImportPreview(unknown)).toBe(false);
+    expect(canApplyTicketImportPreview(unknown)).toBe(true);
     expect(
       ticketImportApplyRequestSchema.safeParse({
         eventId: ids.event,
         previewId: ids.preview,
         previewVersion: 3,
         expectedImpact: conflict.summary,
+        selectedRowIds: [newRow.rowId],
         reason: 'Potvrzený syntetický import.',
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('reconciles ticket counts and positions inside every order', () => {
@@ -334,10 +335,23 @@ describe('CS-IMPORT-01 contracts', () => {
       previewId: ids.preview,
       previewVersion: 3,
       expectedImpact: preview.summary,
+      selectedRowIds: [newRow.rowId],
       reason: 'Potvrzený syntetický import.',
     };
 
     expect(ticketImportApplyRequestSchema.parse(request)).toEqual(request);
+    expect(
+      ticketImportApplyRequestSchema.safeParse({
+        ...request,
+        selectedRowIds: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      ticketImportApplyRequestSchema.safeParse({
+        ...request,
+        selectedRowIds: [newRow.rowId, newRow.rowId],
+      }).success,
+    ).toBe(false);
     expect(
       ticketImportApplyHeadersSchema.parse({
         idempotencyKey: 'ticket-import-apply-0001',

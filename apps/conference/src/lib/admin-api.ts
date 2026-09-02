@@ -64,12 +64,24 @@ import {
 } from '@byzon/domain/contracts';
 import {
   SUPPORT_SEARCH_RESULT_LIMIT,
+  adminParticipantDetailSchema,
+  adminParticipantInviteProblemSchema,
+  adminParticipantInviteRequestSchema,
+  adminParticipantInviteResponseSchema,
+  adminParticipantListRequestSchema,
+  adminParticipantListResponseSchema,
+  adminParticipantReadProblemSchema,
+  adminParticipantUpdateRequestSchema,
+  adminParticipantUpdateResponseSchema,
   supportMutationProblemSchema,
   supportMutationRequestSchema,
   supportMutationResponseSchema,
   supportSearchProblemSchema,
   supportSearchQuerySchema,
   supportSearchResponseSchema,
+  type AdminParticipantListRequest,
+  type AdminParticipantInviteRequest,
+  type AdminParticipantUpdateRequest,
   type SupportMutationRequest,
   type SupportMutationResponse,
 } from '@byzon/domain/contracts/support';
@@ -236,6 +248,89 @@ export const adminSupportMutationEndpoint = defineApiEndpoint({
     'SUPPORT_TARGET_NOT_FOUND',
     'STALE_VERSION',
     'SUPPORT_INVALID_TRANSITION',
+    'IDEMPOTENCY_KEY_REUSED',
+    'IDEMPOTENCY_IN_PROGRESS',
+  ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
+export const adminParticipantListEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminParticipantListRequestSchema,
+  successSchema: adminParticipantListResponseSchema,
+  problemSchema: supportSearchProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'SUPPORT_RATE_LIMITED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+  ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'forbidden',
+});
+
+export const adminParticipantDetailEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminParticipantDetailSchema,
+  problemSchema: adminParticipantReadProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'SUPPORT_RATE_LIMITED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+    'SUPPORT_RECORD_NOT_FOUND',
+  ],
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+
+export const adminParticipantUpdateEndpoint = defineApiEndpoint({
+  method: 'PATCH',
+  requestSchema: adminParticipantUpdateRequestSchema,
+  successSchema: adminParticipantUpdateResponseSchema,
+  problemSchema: supportMutationProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'SUPPORT_RATE_LIMITED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+    'SUPPORT_RECORD_NOT_FOUND',
+    'STALE_VERSION',
+    'SUPPORT_INVALID_TRANSITION',
+    'IDEMPOTENCY_KEY_REUSED',
+    'IDEMPOTENCY_IN_PROGRESS',
+  ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
+export const adminParticipantInviteEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminParticipantInviteRequestSchema,
+  successSchema: adminParticipantInviteResponseSchema,
+  problemSchema: adminParticipantInviteProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'SUPPORT_RATE_LIMITED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+    'SUPPORT_RECORD_NOT_FOUND',
+    'SUPPORT_INVALID_TRANSITION',
+    'INVITATION_DELIVERY_UNAVAILABLE',
     'IDEMPOTENCY_KEY_REUSED',
     'IDEMPOTENCY_IN_PROGRESS',
   ],
@@ -674,9 +769,8 @@ export const requestAdminTicketImportApply = async (
       data.eventId === eventId &&
       data.previewId === body.previewId &&
       data.previewVersion === body.previewVersion &&
-      data.result.created === body.expectedImpact.new &&
-      data.result.statusChanged === body.expectedImpact.statusChanged &&
-      data.result.unchanged === body.expectedImpact.unchanged,
+      data.selectedRowIds.length === body.selectedRowIds.length &&
+      data.selectedRowIds.every((rowId) => body.selectedRowIds.includes(rowId)),
   );
 
 export const requestAdminSupportSearch = async (
@@ -719,6 +813,90 @@ export const requestAdminSupportMutation = async (
       data.eventId === eventId &&
       data.record.eventId === eventId &&
       matchesSupportMutation(data, body),
+  );
+
+export const requestAdminParticipantList = async (
+  api: ApiPort,
+  eventId: string,
+  request: AdminParticipantListRequest,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantListEndpoint, {
+      path: eventPath(eventId, '/participants/list'),
+      body: adminParticipantListRequestSchema.parse(request),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminParticipantDetail = async (
+  api: ApiPort,
+  eventId: string,
+  participantId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantDetailEndpoint, {
+      path: eventPath(
+        eventId,
+        `/participants/${encodeURIComponent(participantId)}`,
+      ),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId && data.participantId === participantId,
+  );
+
+export const requestAdminParticipantUpdate = async (
+  api: ApiPort,
+  eventId: string,
+  participantId: string,
+  body: AdminParticipantUpdateRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantUpdateEndpoint, {
+      path: eventPath(
+        eventId,
+        `/participants/${encodeURIComponent(participantId)}`,
+      ),
+      body: adminParticipantUpdateRequestSchema.parse(body),
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.detail.participantId === participantId &&
+      body.participantId === participantId,
+  );
+
+export const requestAdminParticipantInvite = async (
+  api: ApiPort,
+  eventId: string,
+  participantId: string,
+  body: AdminParticipantInviteRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantInviteEndpoint, {
+      path: eventPath(
+        eventId,
+        `/participants/${encodeURIComponent(participantId)}/invite`,
+      ),
+      body: adminParticipantInviteRequestSchema.parse(body),
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.participantId === participantId &&
+      body.participantId === participantId,
   );
 
 export const requestAdminAnnouncementPreview = async (

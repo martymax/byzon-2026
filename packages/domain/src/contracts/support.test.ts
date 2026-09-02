@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  adminParticipantDetailSchema,
+  adminParticipantInviteRequestSchema,
+  adminParticipantInviteResponseSchema,
+  adminParticipantListRequestSchema,
+  adminParticipantListResponseSchema,
+  adminParticipantUpdateRequestSchema,
   problemTypeForCode,
   supportCachePolicy,
   supportMutationHeadersSchema,
@@ -35,6 +41,142 @@ const activeRecord = {
 };
 
 describe('CS-SUPPORT-01 contracts', () => {
+  it('supports an initial participant list, filters and complete editable detail', () => {
+    const listItem = {
+      eventId: ids.event,
+      participantId: ids.participant,
+      ticketId: ids.ticket,
+      displayName: 'Syntetický účastník',
+      contactEmail: 'synteticky@example.test',
+      company: 'Future Works',
+      jobTitle: 'CEO',
+      referenceSuffix: 'T001',
+      ticketState: 'active' as const,
+      accessState: 'claimed' as const,
+      networkingState: 'enabled' as const,
+      invitation: {
+        status: 'accepted' as const,
+        lastSentAt: '2026-08-20T09:55:00.000Z',
+      },
+      checkedIn: true,
+      reservationCount: 2,
+      profileVersion: 1,
+      ticketVersion: 3,
+      updatedAt: '2026-09-02T10:00:00.000Z',
+      availableActions: ['block'] as const,
+    };
+    expect(adminParticipantListRequestSchema.parse({})).toEqual({
+      query: '',
+      ticketStates: [],
+      networkingStates: [],
+      limit: 100,
+      offset: 0,
+    });
+    expect(
+      adminParticipantListResponseSchema.parse({
+        eventId: ids.event,
+        generatedAt: '2026-09-02T10:00:00.000Z',
+        items: [listItem],
+        pageInfo: { total: 1, offset: 0, hasMore: false },
+        summary: {
+          total: 1,
+          active: 1,
+          networkingEnabled: 1,
+          checkedIn: 1,
+        },
+      }).items,
+    ).toHaveLength(1);
+
+    const detail = adminParticipantDetailSchema.parse({
+      eventId: ids.event,
+      participantId: ids.participant,
+      ticketId: ids.ticket,
+      firstName: 'Syntetický',
+      lastName: 'Účastník',
+      contactEmail: 'synteticky@example.test',
+      phone: '+420777123456',
+      company: 'Future Works',
+      jobTitle: 'CEO',
+      introduction: 'Hledám nové obchodní partnery.',
+      linkedinUrl: 'https://www.linkedin.com/in/synthetic',
+      todayHunting: ['business_partners'],
+      networkingEnabled: true,
+      moderationStatus: 'visible',
+      onboardingCompleted: true,
+      membershipStatus: 'active',
+      invitation: {
+        status: 'accepted',
+        lastSentAt: '2026-08-20T09:55:00.000Z',
+      },
+      ticket: {
+        source: 'ticket',
+        referenceSuffix: 'T001',
+        externalId: 'ticket-1',
+        orderExternalId: 'order-1',
+        state: 'active',
+        claimedAt: '2026-08-20T10:00:00.000Z',
+        version: 3,
+        availableActions: ['block'],
+      },
+      checkIn: { occurredAt: '2026-09-02T08:00:00.000Z' },
+      reservations: [],
+      profileVersion: 1,
+      createdAt: '2026-08-20T10:00:00.000Z',
+      updatedAt: '2026-09-02T10:00:00.000Z',
+    });
+    expect(
+      adminParticipantUpdateRequestSchema.parse({
+        participantId: ids.participant,
+        expectedProfileVersion: detail.profileVersion,
+        reason: 'Oprava na žádost účastníka.',
+        profile: {
+          firstName: detail.firstName,
+          lastName: detail.lastName,
+          contactEmail: detail.contactEmail,
+          phone: detail.phone,
+          company: detail.company,
+          jobTitle: detail.jobTitle,
+          introduction: detail.introduction,
+          linkedinUrl: detail.linkedinUrl,
+          todayHunting: detail.todayHunting,
+          networkingEnabled: detail.networkingEnabled,
+          moderationStatus: detail.moderationStatus,
+        },
+      }).profile.networkingEnabled,
+    ).toBe(true);
+  });
+
+  it('binds a sent invitation receipt to one participant and delivery time', () => {
+    expect(
+      adminParticipantInviteRequestSchema.parse({
+        participantId: ids.participant,
+      }),
+    ).toEqual({ participantId: ids.participant });
+    expect(
+      adminParticipantInviteResponseSchema.parse({
+        eventId: ids.event,
+        participantId: ids.participant,
+        outcome: 'sent',
+        sentAt: '2026-09-02T10:00:00.000Z',
+        invitation: {
+          status: 'sent',
+          lastSentAt: '2026-09-02T10:00:00.000Z',
+        },
+        audit: { auditId: ids.ticketTwo },
+      }).invitation.status,
+    ).toBe('sent');
+    expect(
+      adminParticipantInviteResponseSchema.safeParse({
+        eventId: ids.event,
+        participantId: ids.participant,
+        outcome: 'sent',
+        sentAt: '2026-09-02T10:00:00.000Z',
+        invitation: { status: 'not_sent', lastSentAt: null },
+        audit: { auditId: ids.ticketTwo },
+      }).success,
+    ).toBe(false);
+  });
+
   it('validates bounded no/single/ambiguous search outcomes', () => {
     expect(
       supportSearchQuerySchema.parse({ query: 'syntetický', limit: 5 }),

@@ -152,6 +152,276 @@ export const supportRecordSchema = z
 
 export type SupportRecord = z.infer<typeof supportRecordSchema>;
 
+export const adminParticipantNetworkingStateSchema = z.enum([
+  'enabled',
+  'disabled',
+  'moderated',
+]);
+
+export type AdminParticipantNetworkingState = z.infer<
+  typeof adminParticipantNetworkingStateSchema
+>;
+
+export const adminParticipantInvitationStatusSchema = z.enum([
+  'not_sent',
+  'sent',
+  'accepted',
+]);
+
+export type AdminParticipantInvitationStatus = z.infer<
+  typeof adminParticipantInvitationStatusSchema
+>;
+
+export const adminParticipantInvitationSchema = z.strictObject({
+  status: adminParticipantInvitationStatusSchema,
+  lastSentAt: dateTimeSchema.nullable(),
+});
+
+export const adminParticipantListRequestSchema = z.strictObject({
+  query: z
+    .string()
+    .trim()
+    .max(SUPPORT_SEARCH_MAX_LENGTH)
+    .refine((value) => !unsafeInlineTextPattern.test(value), {
+      message: 'Search query contains unsafe characters',
+    })
+    .default(''),
+  ticketStates: z
+    .array(supportTicketStateSchema)
+    .max(4)
+    .refine((values) => new Set(values).size === values.length)
+    .default([]),
+  networkingStates: z
+    .array(adminParticipantNetworkingStateSchema)
+    .max(3)
+    .refine((values) => new Set(values).size === values.length)
+    .default([]),
+  limit: z.number().int().min(1).max(100).default(100),
+  offset: z.number().int().min(0).max(10_000).default(0),
+});
+
+export type AdminParticipantListRequest = z.infer<
+  typeof adminParticipantListRequestSchema
+>;
+
+export const adminParticipantListItemSchema = z.strictObject({
+  eventId: uuidSchema,
+  participantId: uuidSchema,
+  ticketId: uuidSchema,
+  displayName: safeInlineTextSchema(257),
+  contactEmail: z.string().email().max(320),
+  company: z.string().max(160),
+  jobTitle: z.string().max(160),
+  referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,16}$/),
+  ticketState: supportTicketStateSchema,
+  accessState: supportAccessStateSchema,
+  networkingState: adminParticipantNetworkingStateSchema,
+  invitation: adminParticipantInvitationSchema,
+  checkedIn: z.boolean(),
+  reservationCount: z.number().int().nonnegative(),
+  profileVersion: versionSchema,
+  ticketVersion: versionSchema,
+  updatedAt: dateTimeSchema,
+  availableActions: z.array(supportActionSchema).max(5),
+});
+
+export type AdminParticipantListItem = z.infer<
+  typeof adminParticipantListItemSchema
+>;
+
+export const adminParticipantListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    generatedAt: dateTimeSchema,
+    items: z.array(adminParticipantListItemSchema).max(100),
+    pageInfo: z.strictObject({
+      total: z.number().int().nonnegative(),
+      offset: z.number().int().nonnegative(),
+      hasMore: z.boolean(),
+    }),
+    summary: z.strictObject({
+      total: z.number().int().nonnegative(),
+      active: z.number().int().nonnegative(),
+      networkingEnabled: z.number().int().nonnegative(),
+      checkedIn: z.number().int().nonnegative(),
+    }),
+  })
+  .superRefine((response, context) => {
+    if (
+      response.items.some(({ eventId }) => eventId !== response.eventId) ||
+      new Set(response.items.map(({ participantId }) => participantId)).size !==
+        response.items.length ||
+      response.pageInfo.hasMore !==
+        response.pageInfo.offset + response.items.length <
+          response.pageInfo.total
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message: 'Participant list must be event-scoped and consistently paged',
+      });
+    }
+  });
+
+export type AdminParticipantListResponse = z.infer<
+  typeof adminParticipantListResponseSchema
+>;
+
+export const adminParticipantReservationSchema = z.strictObject({
+  reservationId: uuidSchema,
+  sessionId: uuidSchema,
+  title: safeInlineTextSchema(160),
+  startsAt: dateTimeSchema,
+  status: z.enum(['confirmed', 'cancelled']),
+  source: safeInlineTextSchema(32),
+});
+
+export const adminParticipantDetailSchema = z.strictObject({
+  eventId: uuidSchema,
+  participantId: uuidSchema,
+  ticketId: uuidSchema,
+  firstName: safeInlineTextSchema(128),
+  lastName: safeInlineTextSchema(128),
+  contactEmail: z.string().email().max(320),
+  phone: z.string().max(16).nullable(),
+  company: z.string().max(160),
+  jobTitle: z.string().max(160),
+  introduction: z.string().max(1_000),
+  linkedinUrl: z.string().url().max(2_048).nullable(),
+  todayHunting: z
+    .array(
+      z.enum([
+        'know_how',
+        'team',
+        'investors',
+        'business_partners',
+        'suppliers',
+        'clients',
+      ]),
+    )
+    .max(6),
+  networkingEnabled: z.boolean(),
+  moderationStatus: z.enum(['visible', 'hidden']),
+  onboardingCompleted: z.boolean(),
+  membershipStatus: z.enum(['active', 'suspended', 'revoked']),
+  invitation: adminParticipantInvitationSchema,
+  ticket: z.strictObject({
+    source: z.enum(['ticket', 'simpleshop']),
+    referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,16}$/),
+    externalId: z.string().max(256).nullable(),
+    orderExternalId: z.string().max(256).nullable(),
+    state: supportTicketStateSchema,
+    claimedAt: dateTimeSchema.nullable(),
+    version: versionSchema,
+    availableActions: z.array(supportActionSchema).max(5),
+  }),
+  checkIn: z.strictObject({ occurredAt: dateTimeSchema }).nullable(),
+  reservations: z.array(adminParticipantReservationSchema).max(100),
+  profileVersion: versionSchema,
+  createdAt: dateTimeSchema,
+  updatedAt: dateTimeSchema,
+});
+
+export type AdminParticipantDetail = z.infer<
+  typeof adminParticipantDetailSchema
+>;
+
+export const adminParticipantInviteRequestSchema = z.strictObject({
+  participantId: uuidSchema,
+});
+
+export type AdminParticipantInviteRequest = z.infer<
+  typeof adminParticipantInviteRequestSchema
+>;
+
+export const adminParticipantInviteResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    participantId: uuidSchema,
+    outcome: z.enum(['sent', 'already_sent']),
+    sentAt: dateTimeSchema,
+    invitation: adminParticipantInvitationSchema,
+    audit: z.strictObject({ auditId: uuidSchema }),
+  })
+  .superRefine((response, context) => {
+    if (
+      response.invitation.status === 'not_sent' ||
+      response.invitation.lastSentAt !== response.sentAt
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['invitation'],
+        message: 'A sent invitation must expose its delivery timestamp',
+      });
+    }
+  });
+
+export type AdminParticipantInviteResponse = z.infer<
+  typeof adminParticipantInviteResponseSchema
+>;
+
+const adminParticipantProfileFields = {
+  firstName: safeInlineTextSchema(128),
+  lastName: safeInlineTextSchema(128),
+  contactEmail: z.string().trim().toLowerCase().email().max(320),
+  phone: z
+    .string()
+    .regex(/^\+[1-9]\d{7,14}$/)
+    .nullable(),
+  company: z.string().trim().max(160),
+  jobTitle: z.string().trim().max(160),
+  introduction: z.string().trim().max(1_000),
+  linkedinUrl: z
+    .string()
+    .url()
+    .max(2_048)
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        url.protocol === 'https:' && /(^|\.)linkedin\.com$/i.test(url.hostname)
+      );
+    })
+    .nullable(),
+  todayHunting: z
+    .array(
+      z.enum([
+        'know_how',
+        'team',
+        'investors',
+        'business_partners',
+        'suppliers',
+        'clients',
+      ]),
+    )
+    .max(6)
+    .refine((values) => new Set(values).size === values.length),
+  networkingEnabled: z.boolean(),
+  moderationStatus: z.enum(['visible', 'hidden']),
+} as const;
+
+export const adminParticipantUpdateRequestSchema = z.strictObject({
+  participantId: uuidSchema,
+  expectedProfileVersion: versionSchema,
+  reason: mutationReasonSchema,
+  profile: z.strictObject(adminParticipantProfileFields),
+});
+
+export type AdminParticipantUpdateRequest = z.infer<
+  typeof adminParticipantUpdateRequestSchema
+>;
+
+export const adminParticipantUpdateResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  outcome: z.enum(['updated', 'already_applied']),
+  detail: adminParticipantDetailSchema,
+  changedAt: dateTimeSchema,
+  audit: z.strictObject({ auditId: uuidSchema }),
+});
+
+export type AdminParticipantUpdateResponse = z.infer<
+  typeof adminParticipantUpdateResponseSchema
+>;
+
 const supportSearchBaseShape = {
   eventId: uuidSchema,
   limitedTo: z.literal(SUPPORT_SEARCH_RESULT_LIMIT),
@@ -392,6 +662,8 @@ export const supportInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
 );
+export const participantInvitationDeliveryUnavailableProblemSchema =
+  defineApiProblemSchema('INVITATION_DELIVERY_UNAVAILABLE', 503);
 
 const supportReadProblems = [
   supportAuthenticationRequiredProblemSchema,
@@ -406,6 +678,11 @@ export const supportSearchProblemSchema = z.discriminatedUnion(
   'code',
   supportReadProblems,
 );
+
+export const adminParticipantReadProblemSchema = z.discriminatedUnion('code', [
+  ...supportReadProblems,
+  supportRecordNotFoundProblemSchema,
+]);
 
 export const supportTargetTicketSearchProblemSchema = z.discriminatedUnion(
   'code',
@@ -426,10 +703,28 @@ export const supportMutationProblemSchema = z.discriminatedUnion('code', [
   idempotencyInProgressProblemSchema,
 ]);
 
+export const adminParticipantInviteProblemSchema = z.discriminatedUnion(
+  'code',
+  [
+    ...supportReadProblems,
+    supportRecordNotFoundProblemSchema,
+    supportInvalidTransitionProblemSchema,
+    participantInvitationDeliveryUnavailableProblemSchema,
+    idempotencyKeyReusedProblemSchema,
+    idempotencyInProgressProblemSchema,
+  ],
+);
+
 export type SupportSearchProblem = z.infer<typeof supportSearchProblemSchema>;
+export type AdminParticipantReadProblem = z.infer<
+  typeof adminParticipantReadProblemSchema
+>;
 export type SupportTargetTicketSearchProblem = z.infer<
   typeof supportTargetTicketSearchProblemSchema
 >;
 export type SupportMutationProblem = z.infer<
   typeof supportMutationProblemSchema
+>;
+export type AdminParticipantInviteProblem = z.infer<
+  typeof adminParticipantInviteProblemSchema
 >;

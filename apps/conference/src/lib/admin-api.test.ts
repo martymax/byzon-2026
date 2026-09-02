@@ -33,6 +33,9 @@ import {
   adminEngagementMutationEndpoint,
   adminEngagementOverviewEndpoint,
   adminOperationsOverviewEndpoint,
+  adminParticipantDetailEndpoint,
+  adminParticipantListEndpoint,
+  adminParticipantUpdateEndpoint,
   adminReservationSessionsEndpoint,
   adminRoleAssignmentListEndpoint,
   adminRolePersonSearchEndpoint,
@@ -45,6 +48,7 @@ import {
   requestAdminEngagementMutation,
   requestAdminEngagementOverview,
   requestAdminOperationsOverview,
+  requestAdminParticipantList,
   requestAdminReservationMutation,
   requestAdminReservationSessions,
   requestAdminSessionCapacities,
@@ -98,6 +102,21 @@ describe('admin API contract policies', () => {
       method: 'POST',
       retry: 'never',
       idempotency: 'forbidden',
+    });
+    expect(adminParticipantListEndpoint).toMatchObject({
+      method: 'POST',
+      retry: 'never',
+      idempotency: 'forbidden',
+    });
+    expect(adminParticipantDetailEndpoint).toMatchObject({
+      method: 'GET',
+      retry: 'safe-read',
+      idempotency: 'forbidden',
+    });
+    expect(adminParticipantUpdateEndpoint).toMatchObject({
+      method: 'PATCH',
+      retry: 'never',
+      idempotency: 'required',
     });
     expect(adminTicketImportApplyEndpoint).toMatchObject({
       method: 'POST',
@@ -318,6 +337,51 @@ describe('admin API contract policies', () => {
     expect(JSON.stringify(request.mock.calls[0]?.[1])).not.toContain('?');
   });
 
+  it('loads the participant directory without a required query and keeps filters in a no-store body', async () => {
+    const request = vi.fn(async () =>
+      success({
+        eventId: supportFixtureIds.event,
+        generatedAt: '2026-09-02T10:00:00.000Z',
+        items: [],
+        pageInfo: { total: 0, offset: 0, hasMore: false },
+        summary: {
+          total: 0,
+          active: 0,
+          networkingEnabled: 0,
+          checkedIn: 0,
+        },
+      }),
+    );
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
+
+    await expect(
+      requestAdminParticipantList(api, supportFixtureIds.event, {
+        query: '',
+        ticketStates: [],
+        networkingStates: [],
+        limit: 100,
+        offset: 0,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(request).toHaveBeenCalledWith(
+      adminParticipantListEndpoint,
+      expect.objectContaining({
+        path: `/api/v1/admin/events/${supportFixtureIds.event}/participants/list`,
+        cache: 'no-store',
+        body: {
+          query: '',
+          ticketStates: [],
+          networkingStates: [],
+          limit: 100,
+          offset: 0,
+        },
+      }),
+    );
+  });
+
   it('rejects success payloads that do not match the exact mutation intent', async () => {
     const importPreview = ticketImportPreviewFixtures.clean!;
     const importBody = {
@@ -325,14 +389,12 @@ describe('admin API contract policies', () => {
       previewId: importPreview.previewId,
       previewVersion: importPreview.previewVersion,
       expectedImpact: importPreview.summary,
+      selectedRowIds: [ticketImportFixtureIds.rowNew],
       reason: 'Bezpečný test přesné korelace importu.',
     };
     const importApi = apiReturning({
       ...ticketImportApplyFixtures.applied!,
-      result: {
-        ...ticketImportApplyFixtures.applied!.result,
-        created: ticketImportApplyFixtures.applied!.result.created + 1,
-      },
+      selectedRowIds: [ticketImportFixtureIds.rowUnchanged],
     });
 
     const supportRecord = supportSearchFixtures.single_match!.matches[0]!;

@@ -82,6 +82,10 @@ const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
       return 'Přihlášení vypršelo. Citlivá rozpracovaná data jsme skryli. Přihlaste se znovu a změnu znovu připravte a zkontrolujte.';
     case 'SUPPORT_RATE_LIMITED':
       return 'Vyhledávání je dočasně omezené. Zkuste to později.';
+    case 'INVITATION_DELIVERY_UNAVAILABLE':
+      return 'Pozvánku se nepodařilo odeslat. Zkontrolujte nastavení e-mailové služby a zkuste to znovu.';
+    case 'SUPPORT_INVALID_TRANSITION':
+      return 'Pozvánku lze poslat pouze účastníkovi s aktivním přístupem.';
     case 'EXPORT_UNAVAILABLE':
       return 'Export nyní není dostupný.';
     case 'SELF_LOCKOUT_GUARD':

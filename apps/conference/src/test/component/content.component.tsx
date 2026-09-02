@@ -231,6 +231,31 @@ describe('CS-CONTENT-01 participant UI', () => {
       );
   });
 
+  it('shows the published speaker medallion and all configured social links', async () => {
+    const speaker = participantContentFixtures.happy!.content.speakers[0]!;
+    const screen = await renderComponent(
+      <SpeakerDetail
+        eventId={participantContentFixtures.happy!.eventId}
+        slug={speaker.slug}
+        api={apiFor(participantContentFixtures.happy)}
+      />,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: `${speaker.firstName} ${speaker.lastName}`,
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Instagram' }))
+      .toHaveAttribute('href', speaker.instagramUrl!);
+    await expect
+      .element(screen.getByRole('link', { name: 'Facebook' }))
+      .toHaveAttribute('href', speaker.facebookUrl!);
+  });
+
   it('wraps long Czech practical content without horizontal overflow', async () => {
     const screen = await renderComponent(
       <PracticalContent

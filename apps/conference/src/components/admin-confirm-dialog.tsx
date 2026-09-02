@@ -11,6 +11,7 @@ export const AdminConfirmDialog = ({
   confirmLabel,
   acknowledgement,
   danger = false,
+  confirmDisabled = false,
   onConfirm,
   onDismiss,
 }: {
@@ -20,6 +21,7 @@ export const AdminConfirmDialog = ({
   readonly confirmLabel: string;
   readonly acknowledgement: string;
   readonly danger?: boolean;
+  readonly confirmDisabled?: boolean;
   readonly onConfirm: () => void;
   readonly onDismiss: () => void;
 }) => {
@@ -103,7 +105,7 @@ export const AdminConfirmDialog = ({
           </button>
           <button
             className={danger ? styles.dangerButton : styles.button}
-            disabled={!acknowledged}
+            disabled={!acknowledged || confirmDisabled}
             onClick={() => {
               if (confirmLocked.current) return;
               confirmLocked.current = true;

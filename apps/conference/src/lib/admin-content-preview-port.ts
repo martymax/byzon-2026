@@ -116,6 +116,9 @@ const initialContent = (
       jobTitle: 'Průvodce programem',
       lastName: 'Novák',
       linkedinUrl: null,
+      instagramUrl: null,
+      facebookUrl: null,
+      sessionIds: [ids.session],
       slug: 'alex-novak',
       sortOrder: 0,
       status: 'published',
@@ -305,7 +308,12 @@ const validateBody = (
       errors.endsAt = 'Konec musí následovat po začátku.';
     }
   }
-  for (const field of ['websiteUrl', 'linkedinUrl'] as const) {
+  for (const field of [
+    'websiteUrl',
+    'linkedinUrl',
+    'instagramUrl',
+    'facebookUrl',
+  ] as const) {
     const value = text(field);
     if (!value) continue;
     try {
@@ -373,21 +381,35 @@ const publicationSnapshot = (
       .map((session) => ({
         ...session,
         roomId: session.roomId ?? null,
+        speakerIds: content.speakers
+          .filter(
+            (speaker) =>
+              speaker.status !== 'archived' &&
+              Array.isArray(speaker.sessionIds) &&
+              speaker.sessionIds.includes(session.id),
+          )
+          .map((speaker) => speaker.id),
         status: session.status === 'cancelled' ? 'cancelled' : 'published',
       })),
   },
   speakers: content.speakers
     .filter((speaker) => speaker.status !== 'archived')
-    .map((speaker) => ({
-      ...speaker,
-      bioMarkdown: speaker.bioMarkdown ?? null,
-      company: speaker.company ?? null,
-      jobTitle: speaker.jobTitle ?? null,
-      linkedinUrl: speaker.linkedinUrl ?? null,
-      photoAssetId: null,
-      status: 'published',
-      websiteUrl: speaker.websiteUrl ?? null,
-    })),
+    .map((speaker) => {
+      const publicSpeaker = { ...speaker };
+      delete publicSpeaker.sessionIds;
+      return {
+        ...publicSpeaker,
+        bioMarkdown: speaker.bioMarkdown ?? null,
+        company: speaker.company ?? null,
+        jobTitle: speaker.jobTitle ?? null,
+        linkedinUrl: speaker.linkedinUrl ?? null,
+        instagramUrl: speaker.instagramUrl ?? null,
+        facebookUrl: speaker.facebookUrl ?? null,
+        photoAssetId: null,
+        status: 'published',
+        websiteUrl: speaker.websiteUrl ?? null,
+      };
+    }),
   venues: content.venues
     .filter((venue) => venue.status !== 'archived')
     .map((venue) => ({

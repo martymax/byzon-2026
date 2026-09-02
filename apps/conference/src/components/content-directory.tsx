@@ -100,6 +100,16 @@ export const SpeakerDetail = ({
             LinkedIn
           </a>
         ) : null}
+        {speaker.instagramUrl ? (
+          <a href={speaker.instagramUrl} rel="noreferrer">
+            Instagram
+          </a>
+        ) : null}
+        {speaker.facebookUrl ? (
+          <a href={speaker.facebookUrl} rel="noreferrer">
+            Facebook
+          </a>
+        ) : null}
         {speaker.websiteUrl ? (
           <a href={speaker.websiteUrl} rel="noreferrer">
             Web

@@ -111,6 +111,8 @@ export const adminAuditActionLabels = {
   'support.block': 'Zablokoval přístup účastníka',
   'support.reactivate': 'Obnovil přístup účastníka',
   'support.resend': 'Znovu odeslal pozvánku',
+  'participant.invitation_sent': 'Odeslal pozvánku účastníkovi',
+  'participant.profile_updated': 'Upravil profil účastníka',
   'ticket_import.preview_created': 'Načetl změny vstupenek',
   'ticket_import.applied': 'Použil změny vstupenek',
   'announcement.send': 'Odeslal kritické oznámení',

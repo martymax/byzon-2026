@@ -254,6 +254,8 @@ const content = {
       bioMarkdown:
         'Jana vede syntetický tým a sdílí zkušenosti s odpovědným růstem.\n\nProfil nepopisuje skutečnou osobu.',
       linkedinUrl: 'https://www.linkedin.com/in/synthetic-profile',
+      instagramUrl: 'https://www.instagram.com/synthetic-profile',
+      facebookUrl: 'https://www.facebook.com/synthetic-profile',
       websiteUrl: 'https://example.test/jana',
       photoAssetId: null,
       status: 'published' as const,

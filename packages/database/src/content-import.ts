@@ -43,7 +43,12 @@ interface SourceSpeaker {
   photo: string;
   role?: string;
   bio: string[];
-  links?: { linkedin?: string; web?: string; instagram?: string };
+  links?: {
+    linkedin?: string;
+    web?: string;
+    instagram?: string;
+    facebook?: string;
+  };
 }
 
 interface SourceEvent {
@@ -671,14 +676,6 @@ export async function importContentJson(options: {
         `speakers.list[${index}].role`,
         'Speaker role is missing and remains null.',
       );
-    if (speaker.links?.instagram)
-      addFinding(
-        findings,
-        'unmapped_field',
-        `speakers.list[${index}].links.instagram`,
-        'Instagram is not represented by the current speaker schema.',
-        speaker.links.instagram,
-      );
   });
   source.partners.logos.forEach((partner, index) => {
     for (const field of ['description', 'websiteUrl', 'category', 'tier'])
@@ -802,6 +799,8 @@ export async function importContentJson(options: {
           jobTitle: speaker.role?.trim() || null,
           bioMarkdown: speaker.bio.join('\n\n'),
           linkedinUrl: speaker.links?.linkedin ?? null,
+          instagramUrl: speaker.links?.instagram ?? null,
+          facebookUrl: speaker.links?.facebook ?? null,
           websiteUrl: speaker.links?.web ?? null,
           photoAssetId: assetIds.get(speaker.photo),
           status: 'draft',
@@ -815,6 +814,8 @@ export async function importContentJson(options: {
             jobTitle: speaker.role?.trim() || null,
             bioMarkdown: speaker.bio.join('\n\n'),
             linkedinUrl: speaker.links?.linkedin ?? null,
+            instagramUrl: speaker.links?.instagram ?? null,
+            facebookUrl: speaker.links?.facebook ?? null,
             websiteUrl: speaker.links?.web ?? null,
             photoAssetId: assetIds.get(speaker.photo),
             sortOrder: index,

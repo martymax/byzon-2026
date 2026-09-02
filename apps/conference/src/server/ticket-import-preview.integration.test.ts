@@ -253,7 +253,7 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
     expect(audit?.after).toMatchObject({
       source: 'simpleshop_api',
       productId: 143_958,
-      applyAvailable: false,
+      applyAvailable: true,
     });
     expect(JSON.stringify({ batch, rows, audit })).not.toContain('SAFE01');
     expect(JSON.stringify({ batch, rows, audit })).not.toContain(

@@ -234,6 +234,8 @@ const speakerShape = {
   jobTitle: z.string().max(256).nullable(),
   bioMarkdown: markdownSchema.nullable(),
   linkedinUrl: safeExternalUrlSchema.nullable(),
+  instagramUrl: safeExternalUrlSchema.nullable().optional(),
+  facebookUrl: safeExternalUrlSchema.nullable().optional(),
   websiteUrl: safeExternalUrlSchema.nullable(),
   photoAssetId: uuidSchema.nullable(),
   status: publishedStatusSchema,

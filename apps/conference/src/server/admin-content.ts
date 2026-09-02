@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -107,6 +107,8 @@ export const adminContentListColumns = {
     jobTitle: true,
     lastName: true,
     linkedinUrl: true,
+    instagramUrl: true,
+    facebookUrl: true,
     slug: true,
     sortOrder: true,
     status: true,
@@ -197,7 +199,10 @@ const schemas = {
     jobTitle: publishedSpeakerSchema.shape.jobTitle.optional(),
     bioMarkdown: publishedSpeakerSchema.shape.bioMarkdown.optional(),
     linkedinUrl: publishedSpeakerSchema.shape.linkedinUrl.optional(),
+    instagramUrl: publishedSpeakerSchema.shape.instagramUrl,
+    facebookUrl: publishedSpeakerSchema.shape.facebookUrl,
     websiteUrl: publishedSpeakerSchema.shape.websiteUrl.optional(),
+    sessionIds: z.array(uuid).max(50).optional(),
     sortOrder,
     status,
   }),
@@ -338,12 +343,26 @@ const listRows = async (
           .map((link) => link.speakerProfileId),
       }));
     }
-    case 'speakers':
-      return db.query.speakerProfiles.findMany({
-        columns: adminContentListColumns.speakers,
-        where: eq(schema.speakerProfiles.eventId, eventId),
-        orderBy: [asc(schema.speakerProfiles.sortOrder)],
-      });
+    case 'speakers': {
+      const [speakers, links] = await Promise.all([
+        db.query.speakerProfiles.findMany({
+          columns: adminContentListColumns.speakers,
+          where: eq(schema.speakerProfiles.eventId, eventId),
+          orderBy: [asc(schema.speakerProfiles.sortOrder)],
+        }),
+        db.query.sessionSpeakers.findMany({
+          columns: { sessionId: true, speakerProfileId: true },
+          where: eq(schema.sessionSpeakers.eventId, eventId),
+          orderBy: [asc(schema.sessionSpeakers.sortOrder)],
+        }),
+      ]);
+      return speakers.map((speaker) => ({
+        ...speaker,
+        sessionIds: links
+          .filter((link) => link.speakerProfileId === speaker.id)
+          .map((link) => link.sessionId),
+      }));
+    }
     case 'partners':
       return db.query.partners.findMany({
         columns: adminContentListColumns.partners,
@@ -365,6 +384,79 @@ const listRows = async (
   }
 };
 
+const syncSpeakerSessions = async (
+  db: Database,
+  eventId: string,
+  speakerProfileId: string,
+  sessionIds: readonly string[],
+) => {
+  const previous = await db.query.sessionSpeakers.findMany({
+    columns: { role: true, sessionId: true },
+    where: and(
+      eq(schema.sessionSpeakers.eventId, eventId),
+      eq(schema.sessionSpeakers.speakerProfileId, speakerProfileId),
+    ),
+  });
+  const affectedSessionIds = [
+    ...new Set([...previous.map(({ sessionId }) => sessionId), ...sessionIds]),
+  ];
+  if (affectedSessionIds.length === 0) return;
+  const existing = await db.query.sessionSpeakers.findMany({
+    columns: {
+      role: true,
+      sessionId: true,
+      speakerProfileId: true,
+      sortOrder: true,
+    },
+    where: and(
+      eq(schema.sessionSpeakers.eventId, eventId),
+      inArray(schema.sessionSpeakers.sessionId, affectedSessionIds),
+    ),
+    orderBy: [
+      asc(schema.sessionSpeakers.sessionId),
+      asc(schema.sessionSpeakers.sortOrder),
+    ],
+  });
+  await db
+    .delete(schema.sessionSpeakers)
+    .where(
+      and(
+        eq(schema.sessionSpeakers.eventId, eventId),
+        inArray(schema.sessionSpeakers.sessionId, affectedSessionIds),
+      ),
+    );
+  const selected = new Set(sessionIds);
+  const replacements = affectedSessionIds.flatMap((sessionId) => {
+    const links = existing
+      .filter((link) => link.sessionId === sessionId)
+      .map(({ role, speakerProfileId: linkedSpeakerId }) => ({
+        role,
+        speakerProfileId: linkedSpeakerId,
+      }));
+    const currentIndex = links.findIndex(
+      (link) => link.speakerProfileId === speakerProfileId,
+    );
+    if (selected.has(sessionId) && currentIndex === -1) {
+      links.push({
+        role: null,
+        speakerProfileId,
+      });
+    } else if (!selected.has(sessionId) && currentIndex !== -1) {
+      links.splice(currentIndex, 1);
+    }
+    return links.map((link, sortOrder) => ({
+      eventId,
+      sessionId,
+      speakerProfileId: link.speakerProfileId,
+      sortOrder,
+      role: link.role,
+    }));
+  });
+  if (replacements.length) {
+    await db.insert(schema.sessionSpeakers).values(replacements);
+  }
+};
+
 const createRow = async (
   db: Database,
   eventId: string,
@@ -372,7 +464,7 @@ const createRow = async (
   data: Record<string, unknown>,
 ) => {
   const id = generateUuidV7();
-  const { speakerIds, ...persistedData } = data;
+  const { sessionIds, speakerIds, ...persistedData } = data;
   switch (resource) {
     case 'days':
       await db
@@ -408,9 +500,14 @@ const createRow = async (
         );
       break;
     case 'speakers':
-      await db
-        .insert(schema.speakerProfiles)
-        .values({ id, eventId, ...(data as z.infer<typeof schemas.speakers>) });
+      await db.insert(schema.speakerProfiles).values({
+        id,
+        eventId,
+        ...(persistedData as z.infer<typeof schemas.speakers>),
+      });
+      if (Array.isArray(sessionIds)) {
+        await syncSpeakerSessions(db, eventId, id, sessionIds.map(String));
+      }
       break;
     case 'partners':
       await db
@@ -440,7 +537,7 @@ const updateRow = async (
   expectedVersion?: number,
 ) => {
   const updatedAt = new Date();
-  const { speakerIds, ...persistedData } = data;
+  const { sessionIds, speakerIds, ...persistedData } = data;
   let rows: Array<{ id: string }>;
   switch (resource) {
     case 'days':
@@ -497,7 +594,7 @@ const updateRow = async (
     case 'speakers':
       rows = await db
         .update(schema.speakerProfiles)
-        .set({ ...data, version: expectedVersion! + 1, updatedAt })
+        .set({ ...persistedData, version: expectedVersion! + 1, updatedAt })
         .where(
           and(
             eq(schema.speakerProfiles.eventId, eventId),
@@ -572,6 +669,9 @@ const updateRow = async (
           sortOrder,
         })),
       );
+  }
+  if (resource === 'speakers' && Array.isArray(sessionIds)) {
+    await syncSpeakerSessions(db, eventId, id, sessionIds.map(String));
   }
 };
 

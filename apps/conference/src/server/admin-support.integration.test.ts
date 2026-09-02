@@ -1,5 +1,6 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import {
+  adminParticipantInviteResponseSchema,
   supportMutationResponseSchema,
   supportSearchResponseSchema,
 } from '@byzon/domain/contracts/support';
@@ -7,6 +8,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  handleAdminParticipantInvite,
   handleAdminSupportMutation,
   handleAdminSupportSearch,
 } from './admin-support';
@@ -33,6 +35,7 @@ integration('admin participant support integration', () => {
   const olderTicketId = crypto.randomUUID();
   const searchUrl = `${origin}/api/v1/admin/events/${eventId}/support/search`;
   const mutationUrl = `${origin}/api/v1/admin/events/${eventId}/support/actions`;
+  const inviteUrl = `${origin}/api/v1/admin/events/${eventId}/participants/${participantId}/invite`;
 
   beforeAll(async () => {
     await client.db.insert(schema.events).values({
@@ -213,6 +216,91 @@ integration('admin participant support integration', () => {
       dependencies(participantId),
     );
     expect(missingPermission.status).toBe(403);
+  });
+
+  it('sends one audited participant invitation and replays it without another email', async () => {
+    const sendParticipantInvitation = vi.fn(async () => undefined);
+    const idempotencyKey = crypto.randomUUID();
+    const send = () =>
+      handleAdminParticipantInvite(
+        new Request(inviteUrl, {
+          method: 'POST',
+          headers: {
+            origin,
+            'content-type': 'application/json',
+            'idempotency-key': idempotencyKey,
+          },
+          body: JSON.stringify({ participantId }),
+        }),
+        eventId,
+        participantId,
+        { ...dependencies(), sendParticipantInvitation },
+      );
+
+    const first = await send();
+    expect(first.status).toBe(200);
+    expect(
+      adminParticipantInviteResponseSchema.parse(await first.json()),
+    ).toMatchObject({
+      eventId,
+      participantId,
+      outcome: 'sent',
+      invitation: { status: 'sent', lastSentAt: now.toISOString() },
+    });
+    expect(sendParticipantInvitation).toHaveBeenCalledWith({
+      email: `private-${participantId}@example.invalid`,
+      recipientName: 'Citlivý Účastník',
+    });
+
+    const replay = await send();
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      adminParticipantInviteResponseSchema.parse(await replay.json()).outcome,
+    ).toBe('already_sent');
+    expect(sendParticipantInvitation).toHaveBeenCalledTimes(1);
+    const audits = await client.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'participant.invitation_sent'),
+        eq(schema.auditLogs.targetId, participantId),
+      ),
+    });
+    expect(audits).toHaveLength(1);
+    expect(JSON.stringify(audits)).not.toContain(`private-${participantId}@`);
+  });
+
+  it('fails closed without an audit when invitation delivery is unavailable', async () => {
+    const response = await handleAdminParticipantInvite(
+      new Request(inviteUrl, {
+        method: 'POST',
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'idempotency-key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ participantId }),
+      }),
+      eventId,
+      participantId,
+      {
+        ...dependencies(),
+        sendParticipantInvitation: vi.fn(async () => {
+          throw new Error('synthetic delivery failure');
+        }),
+      },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      code: 'INVITATION_DELIVERY_UNAVAILABLE',
+    });
+    const audits = await client.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'participant.invitation_sent'),
+        eq(schema.auditLogs.targetId, participantId),
+      ),
+    });
+    expect(audits).toHaveLength(1);
   });
 
   it('blocks with manage permission, audit and exact idempotent replay', async () => {

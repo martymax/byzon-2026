@@ -5,6 +5,8 @@ import { readConferenceEnv } from '@byzon/config';
 export interface MagicLinkMessage {
   to: string;
   url: string;
+  purpose?: 'sign-in' | 'participant-invitation';
+  recipientName?: string;
 }
 
 export interface AuthMailProvider {
@@ -61,11 +63,26 @@ const escapeHtml = (value: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
-const createMagicLinkContent = (message: MagicLinkMessage) => ({
-  subject: 'Přihlášení do aplikace BYZON 2026',
-  text: `Přihlaste se jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.`,
-  html: `<p>Přihlaste se do aplikace BYZON 2026:</p><p><a href="${escapeHtml(message.url)}">Otevřít bezpečné přihlášení</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.</p>`,
-});
+const createMagicLinkContent = (message: MagicLinkMessage) => {
+  if (message.purpose === 'participant-invitation') {
+    const greeting = message.recipientName?.trim()
+      ? `Dobrý den, ${message.recipientName.trim()},\n\n`
+      : 'Dobrý den,\n\n';
+    const htmlGreeting = message.recipientName?.trim()
+      ? `<p>Dobrý den, ${escapeHtml(message.recipientName.trim())},</p>`
+      : '<p>Dobrý den,</p>';
+    return {
+      subject: 'Pozvánka do účastnické aplikace BYZON 2026',
+      text: `${greeting}organizátor vás zve do účastnické aplikace BYZON 2026. Svůj přístup otevřete jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Poté se dostanete ke svému programu a dalším konferenčním funkcím.`,
+      html: `${htmlGreeting}<p>Organizátor vás zve do účastnické aplikace BYZON 2026.</p><p><a href="${escapeHtml(message.url)}">Otevřít účastnickou aplikaci</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Poté se dostanete ke svému programu a dalším konferenčním funkcím.</p>`,
+    };
+  }
+  return {
+    subject: 'Přihlášení do aplikace BYZON 2026',
+    text: `Přihlaste se jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.`,
+    html: `<p>Přihlaste se do aplikace BYZON 2026:</p><p><a href="${escapeHtml(message.url)}">Otevřít bezpečné přihlášení</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.</p>`,
+  };
+};
 
 export class ResendAuthMailProvider implements AuthMailProvider {
   readonly #apiKey: string;

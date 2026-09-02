@@ -54,12 +54,22 @@ import {
   type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts/admin';
 import {
+  adminParticipantDetailSchema,
+  adminParticipantInviteProblemSchema,
+  adminParticipantInviteRequestSchema,
+  adminParticipantInviteResponseSchema,
+  adminParticipantListRequestSchema,
+  adminParticipantListResponseSchema,
+  adminParticipantReadProblemSchema,
+  adminParticipantUpdateRequestSchema,
+  adminParticipantUpdateResponseSchema,
   supportMutationProblemSchema,
   supportMutationRequestSchema,
   supportMutationResponseSchema,
   supportSearchProblemSchema,
   supportSearchQuerySchema,
   supportSearchResponseSchema,
+  type AdminParticipantDetail,
   type SupportRecord,
 } from '@byzon/domain/contracts/support';
 import {
@@ -148,6 +158,7 @@ interface AdminMockState {
   overview: AdminOperationsOverviewResponse;
   engagement: AdminEngagementOverview;
   supportRecords: SupportRecord[];
+  participantDetails: AdminParticipantDetail[];
   reservations: AdminReservationRecord[];
   reservationSessions: AdminReservationSessionItem[];
   sessionCapacities: AdminSessionCapacityRecord[];
@@ -167,27 +178,80 @@ const eventScopedSupportRecord = (record: SupportRecord): SupportRecord => ({
   eventId: adminFixtureIds.event,
 });
 
-const initialState = (): AdminMockState => ({
-  persona: 'organizer',
-  overview: {
-    ...clone(adminOperationsOverviewFixtures.healthy!),
+const participantDetailFor = (
+  record: SupportRecord,
+  index: number,
+): AdminParticipantDetail =>
+  adminParticipantDetailSchema.parse({
     eventId: adminFixtureIds.event,
-  },
-  engagement: clone(adminEngagementOverviewFixtures.default!),
-  supportRecords: supportSearchFixtures.ambiguous!.matches.map(
+    participantId: record.participantId,
+    ticketId: record.ticketId,
+    firstName: index === 0 ? 'Kateřina' : 'Martin',
+    lastName: index === 0 ? 'Novotná' : 'Dvořák',
+    contactEmail: index === 0 ? 'katerina@example.test' : 'martin@example.test',
+    phone: index === 0 ? '+420777123456' : null,
+    company: index === 0 ? 'Future Works' : 'Northstar Studio',
+    jobTitle: index === 0 ? 'CEO' : 'Product designer',
+    introduction:
+      index === 0
+        ? 'Propojuji technologické firmy s novými obchodními příležitostmi.'
+        : 'Navrhuji digitální produkty a hledám inspirativní spolupráce.',
+    linkedinUrl:
+      index === 0 ? 'https://www.linkedin.com/in/katerina-novotna' : null,
+    todayHunting: index === 0 ? ['business_partners', 'clients'] : ['know_how'],
+    networkingEnabled: index === 0,
+    moderationStatus: 'visible',
+    onboardingCompleted: true,
+    membershipStatus: 'active',
+    invitation:
+      index === 0
+        ? {
+            status: 'accepted',
+            lastSentAt: '2026-08-20T09:55:00.000Z',
+          }
+        : { status: 'not_sent', lastSentAt: null },
+    ticket: {
+      source: 'ticket',
+      referenceSuffix: record.referenceSuffix,
+      externalId: `TICKET-${index + 101}`,
+      orderExternalId: `ORDER-${index + 51}`,
+      state: record.ticketState,
+      claimedAt: '2026-08-20T10:00:00.000Z',
+      version: record.version,
+      availableActions: record.availableActions,
+    },
+    checkIn: index === 0 ? { occurredAt: '2026-10-16T07:45:00.000Z' } : null,
+    reservations: [],
+    profileVersion: 1,
+    createdAt: '2026-08-20T10:00:00.000Z',
+    updatedAt: '2026-08-20T10:00:00.000Z',
+  });
+
+const initialState = (): AdminMockState => {
+  const supportRecords = supportSearchFixtures.ambiguous!.matches.map(
     eventScopedSupportRecord,
-  ),
-  reservations: clone(adminReservationFixtures.list!.items),
-  reservationSessions: clone(adminReservationSessionFixtures.complete!.items),
-  sessionCapacities: clone(adminSessionCapacityFixtures.list!.items),
-  settings: clone(adminEventSettingsFixtures.open!),
-  announcementPreviewId: null,
-  announcementPreviewVersion: 1,
-  announcementRecipientCount: 0,
-  importPreviews: new Map(),
-  mutations: new Map(),
-  staleScenarios: new Set(),
-});
+  );
+  return {
+    persona: 'organizer',
+    overview: {
+      ...clone(adminOperationsOverviewFixtures.healthy!),
+      eventId: adminFixtureIds.event,
+    },
+    engagement: clone(adminEngagementOverviewFixtures.default!),
+    supportRecords,
+    participantDetails: supportRecords.map(participantDetailFor),
+    reservations: clone(adminReservationFixtures.list!.items),
+    reservationSessions: clone(adminReservationSessionFixtures.complete!.items),
+    sessionCapacities: clone(adminSessionCapacityFixtures.list!.items),
+    settings: clone(adminEventSettingsFixtures.open!),
+    announcementPreviewId: null,
+    announcementPreviewVersion: 1,
+    announcementRecipientCount: 0,
+    importPreviews: new Map(),
+    mutations: new Map(),
+    staleScenarios: new Set(),
+  };
+};
 
 let state = initialState();
 
@@ -1117,9 +1181,17 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.import-apply-impact' },
         );
       }
+      const selectedRows = body.data.selectedRowIds.map((rowId) =>
+        storedPreview.preview.rows.find((row) => row.rowId === rowId),
+      );
       if (
-        storedPreview.preview.summary.conflict > 0 ||
-        storedPreview.preview.summary.unknown > 0
+        selectedRows.some(
+          (row) =>
+            !row ||
+            row.status !== 'new' ||
+            row.sourceStatus !== 'paid' ||
+            row.issues.length > 0,
+        )
       ) {
         return mockProblemResponse(
           ticketImportApplyProblemSchema,
@@ -1150,10 +1222,11 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         eventId: adminFixtureIds.event,
         previewId: body.data.previewId,
         previewVersion: body.data.previewVersion,
+        selectedRowIds: body.data.selectedRowIds,
         result: {
-          created: body.data.expectedImpact.new,
-          statusChanged: body.data.expectedImpact.statusChanged,
-          unchanged: body.data.expectedImpact.unchanged,
+          created: selectedRows.length,
+          statusChanged: 0,
+          unchanged: 0,
         },
       });
       const transient = transientFailure(
@@ -1168,6 +1241,314 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         ticketImportApplyResponseSchema,
         response,
         successOptions('admin.mock.import-apply'),
+      );
+    },
+  ),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/participants/list',
+    async ({ params, request }) => {
+      const denied = authorize(
+        supportSearchProblemSchema,
+        ['participant:operational:read'],
+        'admin.mock.participant-list',
+      );
+      if (denied) return denied;
+      const body = adminParticipantListRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      if (!routeMatchesEvent(params.eventId) || !body.success) {
+        return mockProblemResponse(
+          supportSearchProblemSchema,
+          supportSearchProblemFixtures.validation,
+          { fixtureName: 'admin.mock.participant-list-validation' },
+        );
+      }
+      const normalizedQuery = body.data.query.toLocaleLowerCase('cs');
+      const candidates = state.participantDetails.flatMap((detail) => {
+        const ticket = state.supportRecords.find(
+          ({ participantId }) => participantId === detail.participantId,
+        );
+        if (!ticket) return [];
+        const networkingState =
+          detail.moderationStatus === 'hidden'
+            ? ('moderated' as const)
+            : detail.networkingEnabled
+              ? ('enabled' as const)
+              : ('disabled' as const);
+        const searchable = [
+          detail.firstName,
+          detail.lastName,
+          detail.contactEmail,
+          detail.company,
+          detail.jobTitle,
+          ticket.referenceSuffix,
+        ]
+          .join(' ')
+          .toLocaleLowerCase('cs');
+        if (
+          (normalizedQuery && !searchable.includes(normalizedQuery)) ||
+          (body.data.ticketStates.length > 0 &&
+            !body.data.ticketStates.includes(ticket.ticketState)) ||
+          (body.data.networkingStates.length > 0 &&
+            !body.data.networkingStates.includes(networkingState))
+        ) {
+          return [];
+        }
+        return [
+          {
+            eventId: adminFixtureIds.event,
+            participantId: detail.participantId,
+            ticketId: detail.ticketId,
+            displayName: `${detail.firstName} ${detail.lastName}`,
+            contactEmail: detail.contactEmail,
+            company: detail.company,
+            jobTitle: detail.jobTitle,
+            referenceSuffix: ticket.referenceSuffix,
+            ticketState: ticket.ticketState,
+            accessState: ticket.accessState,
+            networkingState,
+            invitation: detail.invitation,
+            checkedIn: detail.checkIn !== null,
+            reservationCount: detail.reservations.filter(
+              ({ status }) => status === 'confirmed',
+            ).length,
+            profileVersion: detail.profileVersion,
+            ticketVersion: ticket.version,
+            updatedAt: detail.updatedAt,
+            availableActions: ticket.availableActions,
+          },
+        ];
+      });
+      const page = candidates.slice(
+        body.data.offset,
+        body.data.offset + body.data.limit,
+      );
+      return mockJsonResponse(
+        adminParticipantListResponseSchema,
+        {
+          eventId: adminFixtureIds.event,
+          generatedAt: '2026-09-02T10:00:00.000Z',
+          items: page,
+          pageInfo: {
+            total: candidates.length,
+            offset: body.data.offset,
+            hasMore: body.data.offset + page.length < candidates.length,
+          },
+          summary: {
+            total: state.participantDetails.length,
+            active: state.supportRecords.filter(
+              ({ ticketState }) => ticketState === 'active',
+            ).length,
+            networkingEnabled: state.participantDetails.filter(
+              ({ networkingEnabled, moderationStatus }) =>
+                networkingEnabled && moderationStatus === 'visible',
+            ).length,
+            checkedIn: state.participantDetails.filter(
+              ({ checkIn }) => checkIn !== null,
+            ).length,
+          },
+        },
+        successOptions('admin.mock.participant-list'),
+      );
+    },
+  ),
+
+  http.get(
+    '*/api/v1/admin/events/:eventId/participants/:participantId',
+    ({ params }) => {
+      const denied = authorize(
+        adminParticipantReadProblemSchema,
+        ['participant:operational:read'],
+        'admin.mock.participant-detail',
+      );
+      if (denied) return denied;
+      const detail = state.participantDetails.find(
+        ({ participantId }) => participantId === params.participantId,
+      );
+      const ticket = state.supportRecords.find(
+        ({ participantId }) => participantId === params.participantId,
+      );
+      if (!routeMatchesEvent(params.eventId) || !detail || !ticket) {
+        return mockProblemResponse(
+          adminParticipantReadProblemSchema,
+          supportMutationProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.participant-detail-not-found' },
+        );
+      }
+      return mockJsonResponse(
+        adminParticipantDetailSchema,
+        {
+          ...detail,
+          ticket: {
+            ...detail.ticket,
+            state: ticket.ticketState,
+            version: ticket.version,
+            availableActions: ticket.availableActions,
+          },
+        },
+        successOptions('admin.mock.participant-detail'),
+      );
+    },
+  ),
+
+  http.patch(
+    '*/api/v1/admin/events/:eventId/participants/:participantId',
+    async ({ params, request }) => {
+      const denied = authorize(
+        supportMutationProblemSchema,
+        ['ticket:any:manage'],
+        'admin.mock.participant-update',
+      );
+      if (denied) return denied;
+      const body = adminParticipantUpdateRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'participant-update', body.data)
+        : null;
+      const index = state.participantDetails.findIndex(
+        ({ participantId }) => participantId === params.participantId,
+      );
+      const current = state.participantDetails[index];
+      if (
+        !routeMatchesEvent(params.eventId) ||
+        !body.success ||
+        !attempt ||
+        !current ||
+        body.data.participantId !== params.participantId
+      ) {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportMutationProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.participant-update-invalid' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminParticipantUpdateResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.participant-update-replay'),
+        );
+      }
+      if (attempt.kind === 'collision') {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.participant-update-collision' },
+        );
+      }
+      if (body.data.expectedProfileVersion !== current.profileVersion) {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          {
+            ...supportMutationProblemFixtures.stale,
+            currentVersion: current.profileVersion,
+          },
+          { fixtureName: 'admin.mock.participant-update-stale' },
+        );
+      }
+      const next = adminParticipantDetailSchema.parse({
+        ...current,
+        ...body.data.profile,
+        introduction: body.data.profile.introduction,
+        profileVersion: current.profileVersion + 1,
+        updatedAt: '2026-09-02T10:01:00.000Z',
+      });
+      state.participantDetails[index] = next;
+      const supportIndex = state.supportRecords.findIndex(
+        ({ participantId }) => participantId === next.participantId,
+      );
+      if (supportIndex >= 0) {
+        state.supportRecords[supportIndex] = {
+          ...state.supportRecords[supportIndex]!,
+          displayName: `${next.firstName} ${next.lastName}`,
+        };
+      }
+      const response = adminParticipantUpdateResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        outcome: 'updated',
+        detail: next,
+        changedAt: '2026-09-02T10:01:00.000Z',
+        audit: supportMutationFixtures.blocked!.audit,
+      });
+      storeMutation(attempt, 'participant-update', response);
+      return mockJsonResponse(
+        adminParticipantUpdateResponseSchema,
+        response,
+        successOptions('admin.mock.participant-update'),
+      );
+    },
+  ),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/participants/:participantId/invite',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminParticipantInviteProblemSchema,
+        ['ticket:any:manage'],
+        'admin.mock.participant-invite',
+      );
+      if (denied) return denied;
+      const body = adminParticipantInviteRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'participant-invite', body.data)
+        : null;
+      const index = state.participantDetails.findIndex(
+        ({ participantId }) => participantId === params.participantId,
+      );
+      const current = state.participantDetails[index];
+      if (
+        !routeMatchesEvent(params.eventId) ||
+        !body.success ||
+        !attempt ||
+        !current ||
+        body.data.participantId !== params.participantId
+      ) {
+        return mockProblemResponse(
+          adminParticipantInviteProblemSchema,
+          supportMutationProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.participant-invite-invalid' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminParticipantInviteResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.participant-invite-replay'),
+        );
+      }
+      if (attempt.kind === 'collision') {
+        return mockProblemResponse(
+          adminParticipantInviteProblemSchema,
+          supportMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.participant-invite-collision' },
+        );
+      }
+      const sentAt = '2026-09-02T10:02:00.000Z';
+      const invitation = {
+        status:
+          current.invitation.status === 'accepted'
+            ? ('accepted' as const)
+            : ('sent' as const),
+        lastSentAt: sentAt,
+      };
+      state.participantDetails[index] = { ...current, invitation };
+      const response = adminParticipantInviteResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        participantId: current.participantId,
+        outcome: 'sent',
+        sentAt,
+        invitation,
+        audit: supportMutationFixtures.blocked!.audit,
+      });
+      storeMutation(attempt, 'participant-invite', response);
+      return mockJsonResponse(
+        adminParticipantInviteResponseSchema,
+        response,
+        successOptions('admin.mock.participant-invite'),
       );
     },
   ),
