@@ -24,8 +24,10 @@ Hotový frontend neznamená hotový backend, produkční přihlášení, skuteč
 vstupenky, staging UAT ani provozní schválení. UI tyto hranice výslovně
 označuje a u neintegrovaných autoritativních funkcí failne zavřeně.
 Produkční participant shell proto nabízí jen trasy se skutečným serverovým
-protějškem; agenda, oznámení a účetní hub se zpřístupní pouze v explicitním
-frontendovém preview. Stejná hranice platí pro odkazy archivovaného účtu.
+protějškem. Účetní hub, správa osobních údajů, soukromí, relací a dobrovolného
+networkingu jsou produkčně dostupné; agenda a oznámení zůstávají v navigaci
+podle samostatného rollout rozhodnutí. Správa soukromí a relací zůstává
+dostupná i po archivaci akce.
 
 ## 2. Spuštění mockovaného preview
 
@@ -302,6 +304,7 @@ operátorský check-in má jedinou route `/check-in`.
 - `/app/vstupenka`, `/app/informace`
 - `/app/recnici`, `/app/recnici/[slug]`, `/app/partneri`
 - `/app/vice`, `/app/profil`, `/app/soukromi`, `/app/nastaveni`
+- `/app/networking`, `/app/networking/[profileId]`
 
 ### Admin, vedoucí aktivity a operátor
 

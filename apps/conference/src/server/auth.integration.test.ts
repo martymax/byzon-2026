@@ -3,7 +3,10 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
   createAuth,
+  LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
+  magicLinkPurposeForAccount,
   SESSION_EXPIRES_IN_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
 } from './auth';
@@ -16,6 +19,17 @@ const integration = databaseUrl ? describe : describe.skip;
 const email = 'magic-link-integration@example.com';
 
 describe('authentication session policy', () => {
+  it('gives activation links 24 hours and subsequent login links 30 minutes', () => {
+    expect(ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS).toBe(24 * 60 * 60);
+    expect(LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS).toBe(30 * 60);
+  });
+
+  it('selects activation only for a known unverified account', () => {
+    expect(magicLinkPurposeForAccount(false)).toBe('account-activation');
+    expect(magicLinkPurposeForAccount(true)).toBe('sign-in');
+    expect(magicLinkPurposeForAccount(undefined)).toBe('sign-in');
+  });
+
   it('keeps an inactive login valid for 48 hours and refreshes active sessions sooner', () => {
     expect(SESSION_EXPIRES_IN_SECONDS).toBe(48 * 60 * 60);
     expect(SESSION_UPDATE_AGE_SECONDS).toBeLessThan(SESSION_EXPIRES_IN_SECONDS);
@@ -41,9 +55,27 @@ integration('magic-link authentication integration', () => {
       databaseUrl ?? 'postgresql://postgres:postgres@localhost:5432/byzon',
     BETTER_AUTH_SECRET: 'integration-test-secret-at-least-32-characters',
   });
+  const activationAuth = createAuth(
+    mail,
+    client.db,
+    {
+      NODE_ENV: 'test',
+      APP_ENV: 'test',
+      APP_BASE_URL: 'http://localhost:3000',
+      PUBLIC_SITE_URL: 'http://localhost:8000',
+      DATABASE_URL:
+        databaseUrl ?? 'postgresql://postgres:postgres@localhost:5432/byzon',
+      BETTER_AUTH_SECRET: 'integration-test-secret-at-least-32-characters',
+    },
+    { magicLinkExpiresInSeconds: ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS },
+  );
 
   beforeEach(async () => {
     mail.clear();
+    await client.pool.query(
+      `delete from "verification" where "value"::jsonb ->> 'email' = $1`,
+      [email],
+    );
     await client.pool.query('delete from "user" where email = $1', [email]);
     await client.db.insert(schema.users).values({
       id: crypto.randomUUID(),
@@ -54,6 +86,10 @@ integration('magic-link authentication integration', () => {
   });
 
   afterAll(async () => {
+    await client.pool.query(
+      `delete from "verification" where "value"::jsonb ->> 'email' = $1`,
+      [email],
+    );
     await client.pool.query('delete from "user" where email = $1', [email]);
     await client.close();
   });
@@ -81,6 +117,44 @@ integration('magic-link authentication integration', () => {
     expect(setCookie).toBeTruthy();
     return setCookie!.split(';', 1)[0]!;
   };
+
+  it('persists the configured 30-minute login and 24-hour activation expirations', async () => {
+    const requestLink = async (
+      instance: typeof auth,
+      expectedSeconds: number,
+    ) => {
+      const response = await instance.handler(
+        new Request('http://localhost:3000/api/auth/sign-in/magic-link', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, callbackURL: '/' }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const stored = await client.pool.query<{
+        created_at: Date;
+        expires_at: Date;
+      }>(
+        `select "created_at", "expires_at"
+         from "verification"
+         where "value"::jsonb ->> 'email' = $1
+         order by "created_at" desc
+         limit 1`,
+        [email],
+      );
+      expect(stored.rows).toHaveLength(1);
+      const row = stored.rows[0]!;
+      expect(
+        Math.abs(
+          (row.expires_at.getTime() - row.created_at.getTime()) / 1_000 -
+            expectedSeconds,
+        ),
+      ).toBeLessThan(2);
+    };
+
+    await requestLink(auth, LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS);
+    await requestLink(activationAuth, ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS);
+  });
 
   it('stores a hashed token and consumes it on first use', async () => {
     const requested = await auth.handler(

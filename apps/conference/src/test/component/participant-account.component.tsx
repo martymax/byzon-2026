@@ -485,7 +485,7 @@ describe('F2-07 participant account, profile and privacy', () => {
     );
     await expect.element(screen.getByText('Alex Novák')).toBeVisible();
 
-    await screen.getByRole('link', { name: 'Profilové údaje' }).click();
+    await screen.getByRole('link', { name: 'Moje osobní údaje' }).click();
 
     await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
     expect(screen.container.textContent).not.toContain('alex@example.test');
@@ -512,8 +512,11 @@ describe('F2-07 participant account, profile and privacy', () => {
       .toHaveFocus();
     await expect.element(screen.getByText('Alex Novák')).toBeVisible();
     await expect
-      .element(screen.getByRole('link', { name: 'Profilové údaje' }))
+      .element(screen.getByRole('link', { name: 'Moje osobní údaje' }))
       .toHaveAttribute('href', '/app/profil');
+    await expect
+      .element(screen.getByRole('link', { name: 'Networking a kontakty' }))
+      .toHaveAttribute('href', '/app/networking');
 
     for (const target of screen.container.querySelectorAll('a, button')) {
       const bounds = target.getBoundingClientRect();
@@ -1204,7 +1207,7 @@ describe('F2-07 participant account, profile and privacy', () => {
           }),
         )
         .toBeVisible();
-      await screen.getByRole('link', { name: 'Profilové údaje' }).click();
+      await screen.getByRole('link', { name: 'Moje osobní údaje' }).click();
       await expect
         .element(screen.getByRole('heading', { level: 1, name: 'Profil' }))
         .toBeVisible();
@@ -1282,7 +1285,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       <AccountJourney api={accountApi()} onMount={providerMounted} />,
     );
 
-    await screen.getByRole('link', { name: 'Profilové údaje' }).click();
+    await screen.getByRole('link', { name: 'Moje osobní údaje' }).click();
     await expect
       .element(screen.getByRole('heading', { level: 1, name: 'Profil' }))
       .toBeVisible();

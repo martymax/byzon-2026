@@ -1,5 +1,10 @@
 import { handleAdminTeamInvitation } from '@/server/admin-team-members';
-import { auth, createAuth, getAuthAppOrigin } from '@/server/auth';
+import {
+  ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
+  auth,
+  createAuth,
+  getAuthAppOrigin,
+} from '@/server/auth';
 import { database } from '@/server/database';
 import { authMailProvider } from '@/server/mail';
 
@@ -11,7 +16,10 @@ const teamInvitationAuth = createAuth(
   authMailProvider,
   database.db,
   process.env,
-  { magicLinkRateLimitMax: 30 },
+  {
+    magicLinkExpiresInSeconds: ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
+    magicLinkRateLimitMax: 30,
+  },
 );
 
 export const POST = (request: Request, context: Context) =>

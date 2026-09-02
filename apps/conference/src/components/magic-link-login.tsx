@@ -17,9 +17,11 @@ type LoginFailure = 'offline' | 'rate_limited' | 'unavailable';
 
 export const MagicLinkLogin = ({
   fetch = globalThis.fetch,
+  invalidLink = false,
   returnTo = POST_LOGIN_DESTINATION,
 }: {
   readonly fetch?: typeof globalThis.fetch;
+  readonly invalidLink?: boolean;
   readonly returnTo?: AuthReturnTo;
 }) => {
   const [email, setEmail] = useState('');
@@ -101,8 +103,8 @@ export const MagicLinkLogin = ({
             title="Pokud je účet připravený, odkaz byl odeslán"
           >
             <p data-login-feedback tabIndex={-1}>
-              Jednorázový odkaz platí 5 minut. Odpověď je stejná pro existující
-              i neexistující účet.
+              Odpověď je stejná pro existující i neexistující účet. Aktivační
+              odkaz platí 24 hodin, odkaz pro další přihlášení 30 minut.
             </p>
           </StatePanel>
         </div>
@@ -118,11 +120,22 @@ export const MagicLinkLogin = ({
           Přihlaste se do BYZON
         </h1>
         <p className="lead">
-          Pošleme vám jednorázový přihlašovací odkaz. Heslo nepotřebujete.
+          Pošleme vám jednorázový odkaz. Pro nový účet platí 24 hodin, pro další
+          přihlášení 30 minut. Heslo nepotřebujete.
         </p>
       </header>
 
       <div ref={feedback}>
+        {invalidLink ? (
+          <div data-login-feedback tabIndex={-1}>
+            <Alert title="Odkaz už není platný" tone="warning">
+              <p>
+                Odkaz vypršel nebo už byl použit. Zadejte svůj e-mail a pošleme
+                vám nový; stav účtu přitom nikomu neprozradíme.
+              </p>
+            </Alert>
+          </div>
+        ) : null}
         <ErrorSummary
           errors={
             fieldError ? [{ fieldId: 'login-email', message: fieldError }] : []

@@ -1835,6 +1835,79 @@ main > .ui-participant-nav-spacer {
   border-style: dashed;
   background: var(--byzon-surface-soft);
 }
+.networking-settings-card > header,
+.networking-directory-card > header {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.networking-form > .ui-choice {
+  border: 1px solid var(--byzon-border);
+  background: var(--byzon-surface-soft);
+}
+.networking-hunting {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.networking-hunting legend {
+  margin-block-end: var(--byzon-space-2);
+  color: var(--byzon-ink);
+  font-weight: 750;
+}
+.networking-choice-grid,
+.networking-directory-filters {
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-3);
+}
+.networking-choice-grid .ui-choice {
+  min-width: 0;
+  border: 1px solid var(--byzon-border);
+}
+.networking-directory-list {
+  display: grid;
+  gap: var(--byzon-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.networking-directory-list a {
+  min-height: var(--byzon-touch-target);
+  display: grid;
+  gap: var(--byzon-space-1);
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-sm);
+  color: var(--byzon-ink);
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.networking-directory-list a:hover {
+  border-color: var(--byzon-brand);
+  background: var(--byzon-surface-soft);
+}
+.networking-directory-list a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.networking-directory-list span {
+  color: var(--byzon-text-muted);
+}
+.networking-profile-card {
+  max-width: 48rem;
+  display: grid;
+  gap: var(--byzon-space-4);
+}
+.networking-profile-card address {
+  display: grid;
+  gap: var(--byzon-space-2);
+  font-style: normal;
+}
 .participant-account-details {
   min-width: 0;
   display: grid;
@@ -1953,7 +2026,15 @@ main > .ui-participant-nav-spacer {
   }
   .participant-account-details,
   .participant-more-grid,
-  .participant-privacy-request-grid {
+  .participant-privacy-request-grid,
+  .networking-choice-grid,
+  .networking-directory-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .networking-directory-list a {
+    transition: none;
   }
 }

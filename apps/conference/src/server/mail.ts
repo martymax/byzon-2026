@@ -5,7 +5,11 @@ import { readConferenceEnv } from '@byzon/config';
 export interface MagicLinkMessage {
   to: string;
   url: string;
-  purpose?: 'sign-in' | 'participant-invitation' | 'team-invitation';
+  purpose?:
+    | 'sign-in'
+    | 'account-activation'
+    | 'participant-invitation'
+    | 'team-invitation';
   recipientName?: string;
 }
 
@@ -73,8 +77,8 @@ const createMagicLinkContent = (message: MagicLinkMessage) => {
       : '<p>Dobrý den,</p>';
     return {
       subject: 'Pozvánka do administrace BYZON 2026',
-      text: `${greeting}organizátor vás zve do týmu BYZON 2026. Administraci otevřete jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Po přihlášení uvidíte pouze funkce odpovídající vašim oprávněním.`,
-      html: `${htmlGreeting}<p>Organizátor vás zve do týmu BYZON 2026.</p><p><a href="${escapeHtml(message.url)}">Otevřít administraci</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Po přihlášení uvidíte pouze funkce odpovídající vašim oprávněním.</p>`,
+      text: `${greeting}organizátor vás zve do týmu BYZON 2026. Administraci otevřete jednorázovým odkazem:\n\n${message.url}\n\nAktivační odkaz platí 24 hodin a lze jej použít pouze jednou. Po přihlášení uvidíte pouze funkce odpovídající vašim oprávněním.`,
+      html: `${htmlGreeting}<p>Organizátor vás zve do týmu BYZON 2026.</p><p><a href="${escapeHtml(message.url)}">Otevřít administraci</a></p><p>Aktivační odkaz platí 24 hodin a lze jej použít pouze jednou. Po přihlášení uvidíte pouze funkce odpovídající vašim oprávněním.</p>`,
     };
   }
   if (message.purpose === 'participant-invitation') {
@@ -86,14 +90,21 @@ const createMagicLinkContent = (message: MagicLinkMessage) => {
       : '<p>Dobrý den,</p>';
     return {
       subject: 'Pozvánka do účastnické aplikace BYZON 2026',
-      text: `${greeting}organizátor vás zve do účastnické aplikace BYZON 2026. Svůj přístup otevřete jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Poté se dostanete ke svému programu a dalším konferenčním funkcím.`,
-      html: `${htmlGreeting}<p>Organizátor vás zve do účastnické aplikace BYZON 2026.</p><p><a href="${escapeHtml(message.url)}">Otevřít účastnickou aplikaci</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Poté se dostanete ke svému programu a dalším konferenčním funkcím.</p>`,
+      text: `${greeting}organizátor vás zve do účastnické aplikace BYZON 2026. Svůj přístup otevřete jednorázovým odkazem:\n\n${message.url}\n\nAktivační odkaz platí 24 hodin a lze jej použít pouze jednou. Poté se dostanete ke svému programu a dalším konferenčním funkcím.`,
+      html: `${htmlGreeting}<p>Organizátor vás zve do účastnické aplikace BYZON 2026.</p><p><a href="${escapeHtml(message.url)}">Otevřít účastnickou aplikaci</a></p><p>Aktivační odkaz platí 24 hodin a lze jej použít pouze jednou. Poté se dostanete ke svému programu a dalším konferenčním funkcím.</p>`,
+    };
+  }
+  if (message.purpose === 'account-activation') {
+    return {
+      subject: 'Aktivace účtu BYZON 2026',
+      text: `Dokončete aktivaci účtu jednorázovým odkazem:\n\n${message.url}\n\nAktivační odkaz platí 24 hodin a lze jej použít pouze jednou. Pokud jste o nový odkaz nežádali, e-mail ignorujte.`,
+      html: `<p>Dokončete aktivaci účtu BYZON 2026:</p><p><a href="${escapeHtml(message.url)}">Aktivovat účet</a></p><p>Aktivační odkaz platí 24 hodin a lze jej použít pouze jednou. Pokud jste o nový odkaz nežádali, e-mail ignorujte.</p>`,
     };
   }
   return {
     subject: 'Přihlášení do aplikace BYZON 2026',
-    text: `Přihlaste se jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.`,
-    html: `<p>Přihlaste se do aplikace BYZON 2026:</p><p><a href="${escapeHtml(message.url)}">Otevřít bezpečné přihlášení</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.</p>`,
+    text: `Přihlaste se jednorázovým odkazem:\n\n${message.url}\n\nPřihlašovací odkaz platí 30 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.`,
+    html: `<p>Přihlaste se do aplikace BYZON 2026:</p><p><a href="${escapeHtml(message.url)}">Otevřít bezpečné přihlášení</a></p><p>Přihlašovací odkaz platí 30 minut a lze jej použít pouze jednou. Pokud jste o přihlášení nežádali, e-mail ignorujte.</p>`,
   };
 };
 

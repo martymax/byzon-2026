@@ -28,18 +28,17 @@ Frontendový guard nesmí být jedinou ochranou route ani dat.
 ### 1.1 Zahrnutý rozsah
 
 - 9 veřejných, aktivačních a recovery routes;
-- 15 participant routes včetně stávajícího Priority A speaker/partner obsahu,
+- 17 participant routes včetně stávajícího Priority A speaker/partner obsahu,
   detailu minimálního in-app inboxu z `F2-05` a kanonického hubu `Více`;
 - 12 organizačních, roster a check-in routes;
-- celkem 36 kanonických Priority A routes, tři kompatibilní admin redirecty a
+- celkem 38 kanonických routes, tři kompatibilní admin redirecty a
   jedna dynamická varianta obecné chyby přístupu.
 
 ### 1.2 Vyloučený rozsah
 
-Následující routes nejsou v Priority A grafu. Networkingový adresář a prostý
-session question flow lze přidat jako Priority B až po Gate A:
+Následující routes nejsou v Priority A grafu. Prostý session question flow lze
+přidat jako Priority B až po Gate A:
 
-- `/app/networking`, `/app/networking/[profileId]`;
 - `/app/interakce/[sessionId]`;
 - `/moderator/[sessionId]`.
 
@@ -66,22 +65,23 @@ Fáze se nikdy neodvozuje jen z času zařízení. Autoritativní je serverový
 
 ### 2.2 Feature flags a rozhodovací gate
 
-| Flag nebo gate             | Routes                           | Pravidlo                                                                                                                                            |
-| -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `announcementsEnabled`     | participant a admin oznámení     | Při vypnutí zobrazit vysvětlený nedostupný stav oprávněným uživatelům; participant navigation položku lze skrýt, pokud není unread deep link.       |
-| `offlineCheckinEnabled`    | `/check-in`                      | Nezapíná samotný online check-in. Povoluje pouze později schválený offline adapter po `BLOCKER-TKT-04` a provozním gate; výchozí stav je vypnuto.   |
-| `publicContentSyncEnabled` | admin dashboard a obsah          | Ovlivňuje pouze sync status/akci veřejného webu, ne čtení publikovaného obsahu v aplikaci.                                                          |
-| `BLOCKER-TKT-05`           | `/app/vstupenka`                 | Do uzavření gate se nesmí zobrazit skutečný skenovatelný credential. Route smí ukázat stav vstupenky a bezpečný nedostupný stav prezentační plochy. |
-| `BLOCKER-AUTH-01`          | aktivace/onboarding handoff      | Do uzavření gate nesmí UI tvrdit, že pending claim vytvořil membership nebo session.                                                                |
-| session reservation policy | agenda/rezervace/admin rezervace | Dostupnost akce vrací server pro konkrétní session; neexistuje globální klientský boolean, který by nahrazoval uzávěrky a kapacitu.                 |
+| Flag nebo gate             | Routes                             | Pravidlo                                                                                                                                            |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `announcementsEnabled`     | participant a admin oznámení       | Při vypnutí zobrazit vysvětlený nedostupný stav oprávněným uživatelům; participant navigation položku lze skrýt, pokud není unread deep link.       |
+| `networkingEnabled`        | `/app/networking` a detail profilu | Adresář je dostupný jen přihlášeným účastníkům. Každý profil je výchozí skrytý a zveřejní se až výslovným opt-inem jeho vlastníka.                  |
+| `offlineCheckinEnabled`    | `/check-in`                        | Nezapíná samotný online check-in. Povoluje pouze později schválený offline adapter po `BLOCKER-TKT-04` a provozním gate; výchozí stav je vypnuto.   |
+| `publicContentSyncEnabled` | admin dashboard a obsah            | Ovlivňuje pouze sync status/akci veřejného webu, ne čtení publikovaného obsahu v aplikaci.                                                          |
+| `BLOCKER-TKT-05`           | `/app/vstupenka`                   | Do uzavření gate se nesmí zobrazit skutečný skenovatelný credential. Route smí ukázat stav vstupenky a bezpečný nedostupný stav prezentační plochy. |
+| `BLOCKER-AUTH-01`          | aktivace/onboarding handoff        | Do uzavření gate nesmí UI tvrdit, že pending claim vytvořil membership nebo session.                                                                |
+| session reservation policy | agenda/rezervace/admin rezervace   | Dostupnost akce vrací server pro konkrétní session; neexistuje globální klientský boolean, který by nahrazoval uzávěrky a kapacitu.                 |
 
 Pro kanonickou akci `byzon-2026` je `announcementsEnabled` zapnutý verzovanou
 datovou migrací. Toto rozhodnutí zpřístupňuje administrační tvorbu a serverové
 doručení oznámení, ale samo nemění produkční klientskou navigaci; její umístění
 bude rozhodnuto samostatně.
 
-Priority A route nesmí být podmíněna Priority B/C flagem
-(`networkingEnabled`, `speakerPortalEnabled`, `questionsEnabled`,
+Priority A route nesmí být podmíněna nesouvisejícím Priority B/C flagem
+(`speakerPortalEnabled`, `questionsEnabled`,
 `pollsEnabled`, `ratingsEnabled`, `socialWallEnabled`).
 
 ### 2.3 Stavy identity a přístupu
@@ -213,6 +213,8 @@ minimum, nikoli náhrada těchto podmínek.
 | `/app/oznameni/[announcementId]` | stejné jako inbox; server ověří audience membership                                      | `A/L/E`; `announcementsEnabled`                    | Přečíst oznámení → kontextový odkaz na dotčenou session                                             | Přímý deep link z notifikace; Back obnoví inbox, fallback `/app/oznameni`. ID je opaque, ne audience údaj.             | audience-scoped `P1/P2`; read mutace je online-only bez queue                          | `MEM-W` + audience denied jako bezpečné `404` a expired/removed                              |
 | `/app/vstupenka`                 | `participant`; `checkin:own-code:read` s `ownsResource`; `BLOCKER-TKT-05`                | `A/L`; `E` pouze stav bez aktivního credentialu    | Prezentovat vlastní vstup → `Zobrazit vstupenku`, pouze po serverovém kontraktu                     | Deep link z `/app` a menu; Back na zdroj nebo `/app`. Po background/timeout credential skrýt.                          | ticket stav `P2`, credential `S`; credential bez schválené offline politiky necachovat | `MEM-R` + valid/cancelled/refunded/blocked, skrytý credential, screenshot/privacy upozornění |
 | `/app/profil`                    | `participant`; `profile:own:write` s `ownsResource`                                      | `A/L/E`; `R` read-only nebo odstraněno dle retence | Upravit jméno, kontaktní e-mail a dobrovolný telefon → `Uložit změny`                               | Deep link z menu/settings; Back `/app/nastaveni`, neuložené změny potvrdit.                                            | vlastní profil `P2`; online-only write, telefon E.164, žádná networkingová pole        | `MEM-W` + field errors, stale version, retained/deleted field state                          |
+| `/app/networking`                | `participant`; vlastní nastavení a adresář pouze v event scope                           | `A/L/E`; `networkingEnabled`                       | Zapnout nebo skrýt vlastní profil, nastavit veřejné údaje a procházet opt-in adresář                | Deep link z `/app/vice`; Back `/app/vice`. Filtr není citlivý a nemusí přežít opuštění obrazovky.                      | vlastní nastavení a kontakty `P2`; adresář pouze online, žádný opt-in není výchozí     | `MEM-W` + disabled/loading/validation/stale/session-expired, okamžitý opt-out                |
+| `/app/networking/[profileId]`    | `participant`; server ověří stejný event a opt-in cílového profilu                       | `A/L/E`; `networkingEnabled`                       | Přečíst dobrovolně zveřejněný profil a použít jeho zveřejněný kontakt                               | Deep link jen z adresáře; Back `/app/networking`. ID je opaque a nesmí obejít skrytí profilu.                          | zveřejněná podmnožina `P2`; network-only                                               | `MEM-R` + profil skrytý/odebraný/cizí event jako bezpečný nedostupný stav                    |
 | `/app/soukromi`                  | `participant`; `privacy:own:write` s `ownsResource` pro deletion request                 | `A/L/E/R` podle retence                            | Přečíst právní evidenci; opravu/kopii řešit zveřejněným support kontaktem, případně požádat o výmaz | Deep link z onboarding/legal/settings; Back na zdroj nebo `/app/nastaveni`. Self-export CTA ani export job neexistuje. | consent/deletion request `P2`; online-only submit, dokumenty `P0`                      | `MEM-W` + support mailto, chybějící právní verze a deletion pending/completed/rejected       |
 | `/app/nastaveni`                 | ověřený vlastník účtu; Better Auth session ownership, event role jen pro event část      | `D/A/L/E/R`                                        | Spravovat relaci a účet → kontextově `Odhlásit se` nebo `Odhlásit všechna zařízení`                 | Deep link z menu; Back `/app` nebo `/` po archivaci. Switch-account zahodí osobní cache před navigací.                 | session metadata/profil minimum `P2`; online-only mutace                               | `MEM-W` + logout/logout-all/switch-account, wipe success/error a nedostupný event            |
 | `/app/vice`                      | `participant`; jednotlivé cíle ověřují vlastní minimum                                   | `A/L/E/R` podle cíle                               | Najít sekundární participant funkci → otevřít zvolený bezpečný cíl                                  | Deep link z bottom nav; Back `/app`. Hub nedrží citlivý stav a necachuje data cílových obrazovek.                      | navigační metadata `P0`; cílové obrazovky podle vlastní klasifikace                    | `MEM-R` + permission/phase-aware cíle bez naznačení nepovolených funkcí                      |

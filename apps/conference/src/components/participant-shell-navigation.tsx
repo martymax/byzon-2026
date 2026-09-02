@@ -46,6 +46,19 @@ const programNavigationItem: NavigationItem = {
   ),
 };
 
+const moreNavigationItem: NavigationItem = {
+  id: 'more',
+  href: '/app/vice',
+  label: 'Více',
+  icon: (
+    <NavigationIcon>
+      <circle cx="5" cy="12" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="19" cy="12" r="1.5" />
+    </NavigationIcon>
+  ),
+};
+
 const participantNavigationItems: NavigationItem[] = [
   overviewNavigationItem,
   programNavigationItem,
@@ -72,23 +85,13 @@ const participantNavigationItems: NavigationItem[] = [
       </NavigationIcon>
     ),
   },
-  {
-    id: 'more',
-    href: '/app/vice',
-    label: 'Více',
-    icon: (
-      <NavigationIcon>
-        <circle cx="5" cy="12" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="19" cy="12" r="1.5" />
-      </NavigationIcon>
-    ),
-  },
+  moreNavigationItem,
 ];
 
 const productionNavigationItems: NavigationItem[] = [
   overviewNavigationItem,
   programNavigationItem,
+  moreNavigationItem,
 ];
 
 const archivedPreviewNavigationItems: NavigationItem[] = [
@@ -126,6 +129,7 @@ const moreDestinations = [
   '/app/recnici',
   '/app/partneri',
   '/app/informace',
+  '/app/networking',
 ] as const;
 
 const isDestination = (pathname: string, href: string): boolean =>
@@ -144,8 +148,9 @@ export const participantNavigationActiveId = (pathname: string): string => {
 export const participantNavigationItemsForMode = (
   mode: ParticipantShellNavigationMode,
 ): NavigationItem[] => {
-  if (mode === 'archived-preview') return archivedPreviewNavigationItems;
-  if (mode === 'archived') return [overviewNavigationItem];
+  if (mode === 'archived-preview' || mode === 'archived') {
+    return archivedPreviewNavigationItems;
+  }
   if (mode === 'unavailable') return [];
   return mode === 'active-preview'
     ? participantNavigationItems

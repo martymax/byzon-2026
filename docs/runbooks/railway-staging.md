@@ -123,6 +123,12 @@ jen v dev/test. Neúplná staging/produkční konfigurace failne zavřeně a mag
 link neodešle. `/` i `/prihlaseni` posílají požadavek přímo do Better Auth,
 nepoužívají ticketovou aktivaci a neznámá identita se sama nevytvoří.
 
+První aktivace neověřeného, předem provisionovaného účtu a pozvánky účastníků
+i členů týmu mají platnost 24 hodin. Pokud odkaz vyprší nebo už byl použit,
+uživatel na `/prihlaseni` zadá stejný e-mail a bezpečně si vyžádá nový;
+odpověď nesmí prozradit existenci účtu. U již aktivovaného účtu má nový
+přihlašovací odkaz platnost 30 minut. Všechny odkazy jsou jednorázové.
+
 Staging používá samostatnou Railway službu `mailpit` na připnutém image
 `axllent/mailpit:v1.31.0`. Zprávy se zachytávají do volume `/data`, po sedmi
 dnech expirují a nikam se nepřeposílají. Web posílá přes chráněné privátní API

@@ -2,17 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const pageMocks = vi.hoisted(() => ({
-  frontendPreviewAvailable: vi.fn(),
   loadParticipantCurrentEvent: vi.fn(),
   participantHome: vi.fn(),
 }));
 
 vi.mock('@/server/current-event', () => ({
   loadParticipantCurrentEvent: pageMocks.loadParticipantCurrentEvent,
-}));
-
-vi.mock('@/lib/frontend-preview', () => ({
-  isFrontendPreviewAvailable: pageMocks.frontendPreviewAvailable,
 }));
 
 vi.mock('@/components/participant-home', () => ({
@@ -33,8 +28,6 @@ const sensitiveMarkers = [
 
 describe('participant home server boundary', () => {
   beforeEach(() => {
-    pageMocks.frontendPreviewAvailable.mockReset();
-    pageMocks.frontendPreviewAvailable.mockReturnValue(false);
     pageMocks.loadParticipantCurrentEvent.mockReset();
     pageMocks.participantHome.mockReset();
   });
@@ -64,7 +57,7 @@ describe('participant home server boundary', () => {
     expect(pageMocks.participantHome).not.toHaveBeenCalled();
   });
 
-  it('renders a metadata-free production archive without mock-only routes', async () => {
+  it('renders a metadata-free archive with persistent account routes', async () => {
     pageMocks.loadParticipantCurrentEvent.mockResolvedValueOnce({
       kind: 'archived',
     });
@@ -74,7 +67,8 @@ describe('participant home server boundary', () => {
     expect(markup).toContain('Akce byla archivována');
     expect(
       [...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
-    ).toEqual([]);
+    ).toEqual(['/app/soukromi', '/app/nastaveni']);
+    expect(markup).toContain('dál spravovat v účtu');
     for (const marker of sensitiveMarkers) {
       expect(markup).not.toContain(marker);
     }
@@ -82,44 +76,22 @@ describe('participant home server boundary', () => {
     expect(pageMocks.participantHome).not.toHaveBeenCalled();
   });
 
-  it('exposes archived account routes only in frontend preview', async () => {
-    pageMocks.frontendPreviewAvailable.mockReturnValueOnce(true);
+  it('keeps the live agenda available in production', async () => {
     pageMocks.loadParticipantCurrentEvent.mockResolvedValueOnce({
-      kind: 'archived',
+      kind: 'available',
+      event: {
+        endsAt: new Date('2026-09-20T15:00:00.000Z'),
+        id: '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
+        startsAt: new Date('2026-09-18T07:00:00.000Z'),
+        status: 'live',
+        timezone: 'Europe/Prague',
+      },
     });
 
-    const markup = renderToStaticMarkup(await ParticipantHomePage());
+    renderToStaticMarkup(await ParticipantHomePage());
 
-    expect(
-      [...markup.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
-    ).toEqual(['/app/soukromi', '/app/nastaveni']);
-    expect(markup).toContain('dál spravovat v účtu');
-    expect(pageMocks.participantHome).not.toHaveBeenCalled();
+    expect(pageMocks.participantHome).toHaveBeenCalledWith(
+      expect.objectContaining({ enableAgendaJourney: true }),
+    );
   });
-
-  it.each([
-    [false, true],
-    [true, true],
-  ])(
-    'keeps the live agenda available when preview availability is %s',
-    async (previewAvailable, expected) => {
-      pageMocks.frontendPreviewAvailable.mockReturnValueOnce(previewAvailable);
-      pageMocks.loadParticipantCurrentEvent.mockResolvedValueOnce({
-        kind: 'available',
-        event: {
-          endsAt: new Date('2026-09-20T15:00:00.000Z'),
-          id: '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
-          startsAt: new Date('2026-09-18T07:00:00.000Z'),
-          status: 'live',
-          timezone: 'Europe/Prague',
-        },
-      });
-
-      renderToStaticMarkup(await ParticipantHomePage());
-
-      expect(pageMocks.participantHome).toHaveBeenCalledWith(
-        expect.objectContaining({ enableAgendaJourney: expected }),
-      );
-    },
-  );
 });

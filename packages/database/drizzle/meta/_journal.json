@@ -169,6 +169,13 @@
       "when": 1788370200000,
       "tag": "0023_enable_byzon_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788383454000,
+      "tag": "0024_enable_byzon_networking",
+      "breakpoints": true
     }
   ]
 }

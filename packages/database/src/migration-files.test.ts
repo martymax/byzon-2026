@@ -50,6 +50,10 @@ const announcementRolloutMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0023_enable_byzon_announcements.sql'),
   'utf8',
 );
+const networkingRolloutMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0024_enable_byzon_networking.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -92,6 +96,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0023_enable_byzon_announcements',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0024_enable_byzon_networking',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -222,7 +229,7 @@ describe('versioned database artifacts', () => {
     );
   });
 
-  it('seeds both event scopes idempotently, enables current announcements and keeps isolation disabled', () => {
+  it('seeds both event scopes idempotently, enables current participant features and keeps isolation disabled', () => {
     expect(seed).toContain("'byzon-2026'");
     expect(seed).toContain("'byzon-isolation-test'");
     expect(seed).toContain("'archived'");
@@ -231,6 +238,9 @@ describe('versioned database artifacts', () => {
     );
     expect(seed).toContain(
       '"announcements_enabled" = EXCLUDED."announcements_enabled"',
+    );
+    expect(seed).toContain(
+      '"networking_enabled" = EXCLUDED."networking_enabled"',
     );
     expect(seed.match(/ON CONFLICT/g)).toHaveLength(4);
   });
@@ -243,5 +253,11 @@ describe('versioned database artifacts', () => {
       '"announcements_enabled" = true',
     );
     expect(announcementRolloutMigration).not.toContain('byzon-isolation-test');
+  });
+
+  it('rolls networking out only to the canonical BYZON 2026 event', () => {
+    expect(networkingRolloutMigration).toContain(`WHERE "slug" = 'byzon-2026'`);
+    expect(networkingRolloutMigration).toContain('"networking_enabled" = true');
+    expect(networkingRolloutMigration).not.toContain('byzon-isolation-test');
   });
 });

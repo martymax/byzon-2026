@@ -94,6 +94,30 @@ describe('production magic-link login', () => {
     expect(document.body.textContent).not.toContain('neexistuje');
   });
 
+  it('offers a new link after an expired or already used link', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(Response.json({ status: true }, { status: 200 })),
+    );
+    const screen = await renderComponent(
+      <MagicLinkLogin fetch={fetch} invalidLink returnTo="/app" />,
+    );
+
+    await expect
+      .element(screen.getByText('Odkaz už není platný'))
+      .toBeVisible();
+    await screen.getByLabelText('E-mail').fill('participant@example.test');
+    await screen
+      .getByRole('button', { name: 'Poslat přihlašovací odkaz' })
+      .click();
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByText(/Aktivační odkaz platí 24 hodin/))
+      .toBeVisible();
+  });
+
   it('passes accessibility checks in the form and confirmation states', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Promise.resolve(Response.json({ status: true }, { status: 200 })),

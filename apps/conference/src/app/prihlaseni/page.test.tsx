@@ -40,4 +40,29 @@ describe('dedicated sign-in page', () => {
       returnTo: '/admin/interakce',
     });
   });
+
+  it('marks an expired or consumed link without reflecting unknown errors', async () => {
+    renderToStaticMarkup(
+      await LoginPage({
+        searchParams: Promise.resolve({
+          error: 'INVALID_TOKEN',
+          returnTo: '/app',
+        }),
+      }),
+    );
+    expect(loginMocks.render).toHaveBeenLastCalledWith({
+      invalidLink: true,
+      returnTo: '/app',
+    });
+
+    loginMocks.render.mockReset();
+    renderToStaticMarkup(
+      await LoginPage({
+        searchParams: Promise.resolve({ error: 'unexpected' }),
+      }),
+    );
+    expect(loginMocks.render).toHaveBeenLastCalledWith({
+      returnTo: '/po-prihlaseni',
+    });
+  });
 });

@@ -6,6 +6,8 @@ describe('authentication return destination', () => {
   it.each([
     '/app',
     '/app/agenda',
+    '/app/networking',
+    '/app/networking/20000000-0000-4000-8000-000000000001',
     '/admin',
     '/admin/interakce',
     '/admin/obsah',

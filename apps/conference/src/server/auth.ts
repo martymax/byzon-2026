@@ -7,10 +7,16 @@ import { magicLink } from 'better-auth/plugins';
 import { database } from './database';
 import { authMailProvider, type AuthMailProvider } from './mail';
 
-export const MAGIC_LINK_EXPIRES_IN_SECONDS = 5 * 60;
+export const ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS = 24 * 60 * 60;
+export const LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS = 30 * 60;
 export const SESSION_EXPIRES_IN_SECONDS = 48 * 60 * 60;
 export const SESSION_UPDATE_AGE_SECONDS = 24 * 60 * 60;
 export const SESSION_FRESH_AGE_SECONDS = 24 * 60 * 60;
+
+export const magicLinkPurposeForAccount = (
+  emailVerified: boolean | undefined,
+): 'account-activation' | 'sign-in' =>
+  emailVerified === false ? 'account-activation' : 'sign-in';
 
 export const getAuthAppOrigin = (
   environment: NodeJS.ProcessEnv | Record<string, unknown> = process.env,
@@ -20,7 +26,10 @@ export const createAuth = (
   mailProvider: AuthMailProvider,
   db: Database = database.db,
   environment: NodeJS.ProcessEnv | Record<string, unknown> = process.env,
-  options: { readonly magicLinkRateLimitMax?: number } = {},
+  options: {
+    readonly magicLinkExpiresInSeconds?: number;
+    readonly magicLinkRateLimitMax?: number;
+  } = {},
 ) => {
   const env = readConferenceEnv(environment);
   const appOrigin = getAuthAppOrigin(environment);
@@ -52,11 +61,14 @@ export const createAuth = (
     plugins: [
       magicLink({
         disableSignUp: true,
-        expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
+        expiresIn:
+          options.magicLinkExpiresInSeconds ??
+          LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
         storeToken: 'hashed',
         rateLimit: { window: 60, max: options.magicLinkRateLimitMax ?? 5 },
         sendMagicLink: ({ email, url, metadata }) => {
           const invitation =
+            metadata?.purpose === 'account-activation' ||
             metadata?.purpose === 'participant-invitation' ||
             metadata?.purpose === 'team-invitation'
               ? {

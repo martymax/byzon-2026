@@ -18,8 +18,7 @@ export const ParticipantMoreHub = () => (
         Účet a informace
       </h1>
       <p className="lead">
-        Spravujte jen nezbytné údaje, právní dokumenty, soukromí a přihlášení na
-        jednom místě.
+        Spravujte své údaje, networking, soukromí a přihlášení na jednom místě.
       </p>
     </header>
 
@@ -44,16 +43,16 @@ export const ParticipantMoreHub = () => (
             className="participant-more-grid"
           >
             <ActionLink block href="/app/profil">
-              Profilové údaje
+              Moje osobní údaje
+            </ActionLink>
+            <ActionLink block href="/app/networking" variant="secondary">
+              Networking a kontakty
             </ActionLink>
             <ActionLink block href="/app/soukromi" variant="secondary">
               Soukromí a právní dokumenty
             </ActionLink>
             <ActionLink block href="/app/nastaveni" variant="secondary">
               Nastavení a přihlášení
-            </ActionLink>
-            <ActionLink block href="/app/vstupenka" variant="secondary">
-              Vstupenka
             </ActionLink>
             <ActionLink block href="/app/informace" variant="secondary">
               Praktické informace
@@ -63,9 +62,6 @@ export const ParticipantMoreHub = () => (
             </ActionLink>
             <ActionLink block href="/app/partneri" variant="secondary">
               Partneři
-            </ActionLink>
-            <ActionLink block href="/app/networking" variant="secondary">
-              Networkingový adresář
             </ActionLink>
           </nav>
 

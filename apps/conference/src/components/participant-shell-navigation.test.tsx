@@ -22,6 +22,8 @@ describe('participant shell navigation', () => {
     ['/app/recnici/jana-novakova', 'more'],
     ['/app/partneri', 'more'],
     ['/app/informace', 'more'],
+    ['/app/networking', 'more'],
+    ['/app/networking/01910000-0000-7000-8000-000000000301', 'more'],
   ])('maps %s to its parent destination', (pathname, expected) => {
     expect(participantNavigationActiveId(pathname)).toBe(expected);
   });
@@ -32,13 +34,13 @@ describe('participant shell navigation', () => {
     expect(participantNavigationActiveId('/application')).toBe('');
   });
 
-  it('keeps production archive navigation on backed destinations', () => {
+  it('keeps account and privacy controls available after archival', () => {
     expect(
       participantNavigationItemsForMode('archived').map(({ href }) => href),
-    ).toEqual(['/app']);
+    ).toEqual(['/app', '/app/soukromi', '/app/nastaveni']);
   });
 
-  it('exposes mocked account destinations only in archived preview', () => {
+  it('keeps the same archived account destinations in preview', () => {
     expect(
       participantNavigationItemsForMode('archived-preview').map(
         ({ href }) => href,
@@ -51,10 +53,10 @@ describe('participant shell navigation', () => {
     ).toEqual(['Přehled', 'Soukromí', 'Nastavení']);
   });
 
-  it('exposes only production-backed destinations by default', () => {
+  it('exposes the production account hub alongside the core destinations', () => {
     expect(
       participantNavigationItemsForMode('active').map(({ href }) => href),
-    ).toEqual(['/app', '/app/program']);
+    ).toEqual(['/app', '/app/program', '/app/vice']);
   });
 
   it('exposes all mocked participant journeys only in frontend preview', () => {
