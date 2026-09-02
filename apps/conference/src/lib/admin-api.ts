@@ -21,6 +21,8 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminReservationSessionPageSchema,
+  adminReservationSessionQuerySchema,
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
@@ -31,6 +33,7 @@ import {
   type AdminExportRequest,
   type AdminReservationMutationRequest,
   type AdminReservationMutationResponse,
+  type AdminReservationSessionQuery,
   type AdminSessionCapacityMutationRequest,
   type AdminSessionCapacityMutationResponse,
   type AdminRoleAssignmentMutationRequest,
@@ -316,6 +319,17 @@ export const adminReservationsEndpoint = defineApiEndpoint({
   method: 'GET',
   requestSchema: null,
   successSchema: adminReservationListResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+
+export const adminReservationSessionsEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminReservationSessionPageSchema,
   problemSchema: adminReadProblemSchema,
   problemCodes: adminReadProblemCodes,
   responseKind: 'json',
@@ -750,6 +764,25 @@ export const requestAdminReservations = async (
     }),
     (data) => data.eventId === eventId,
   );
+
+export const requestAdminReservationSessions = async (
+  api: ApiPort,
+  eventId: string,
+  query: AdminReservationSessionQuery,
+  signal?: AbortSignal,
+) => {
+  const parsed = adminReservationSessionQuerySchema.parse(query);
+  const search = new URLSearchParams({ limit: String(parsed.limit) });
+  if (parsed.cursor) search.set('cursor', parsed.cursor);
+  return correlated(
+    await api.request(adminReservationSessionsEndpoint, {
+      path: `${eventPath(eventId, '/reservation-sessions')}?${search.toString()}`,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+};
 
 export const requestAdminReservationMutation = async (
   api: ApiPort,

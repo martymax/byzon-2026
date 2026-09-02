@@ -4,17 +4,15 @@ import {
   adminReservationMutationRequestSchema,
   adminSessionCapacityMutationRequestSchema,
   type AdminReservationMutationRequest,
-  type AdminReservationRecord,
+  type AdminReservationSessionItem,
   type AdminSessionCapacityMutationRequest,
-  type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts/admin';
 import { AdminTechnicalDetails } from '@byzon/ui';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
   requestAdminReservationMutation,
-  requestAdminReservations,
-  requestAdminSessionCapacities,
+  requestAdminReservationSessions,
   requestAdminSessionCapacityMutation,
 } from '@/lib/admin-api';
 
@@ -47,7 +45,9 @@ type PendingChange =
       idempotencyKey: string;
     }>;
 
-const capacityState = (record: AdminSessionCapacityRecord): CapacityState => {
+type ReservationItem = AdminReservationSessionItem['reservations'][number];
+
+const capacityState = (record: AdminReservationSessionItem): CapacityState => {
   if (record.capacity === null) return 'not_configured';
   if (record.confirmedCount >= record.capacity) return 'full';
   if (record.confirmedCount / record.capacity >= 0.8) return 'nearly_full';
@@ -68,11 +68,10 @@ const stateRank: Record<CapacityState, number> = {
   healthy: 3,
 };
 
-const reservationStateLabels: Record<AdminReservationRecord['state'], string> =
-  {
-    reserved: 'Rezervováno',
-    cancelled: 'Zrušeno',
-  };
+const reservationStateLabels: Record<ReservationItem['state'], string> = {
+  reserved: 'Rezervováno',
+  cancelled: 'Zrušeno',
+};
 
 const safeParticipantReference = (value: string): string =>
   /[*•…]/.test(value) && !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)
@@ -86,23 +85,22 @@ export const AdminReservationsRedesign = () => {
   const canRead = permissions.includes('reservation:any:read');
   const canManage = permissions.includes('agenda:any:override');
   const [sessions, setSessions] = useState<
-    readonly AdminSessionCapacityRecord[]
+    readonly AdminReservationSessionItem[]
   >([]);
-  const [reservations, setReservations] = useState<
-    readonly AdminReservationRecord[]
-  >([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
   );
   const [capacityFilter, setCapacityFilter] = useState<CapacityState | 'all'>(
     'all',
   );
+  const [dayFilter, setDayFilter] = useState('all');
   const [activityFilter, setActivityFilter] = useState('all');
   const [referenceFilter, setReferenceFilter] = useState('');
   const [capacityDraft, setCapacityDraft] = useState(1);
   const [capacityReason, setCapacityReason] = useState('');
   const [selectedReservation, setSelectedReservation] =
-    useState<AdminReservationRecord | null>(null);
+    useState<ReservationItem | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [attempted, setAttempted] = useState<'capacity' | 'reservation' | null>(
     null,
@@ -111,6 +109,7 @@ export const AdminReservationsRedesign = () => {
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [busy, setBusy] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
@@ -121,7 +120,7 @@ export const AdminReservationsRedesign = () => {
 
   const wipe = () => {
     setSessions([]);
-    setReservations([]);
+    setNextCursor(null);
     setSelectedSessionId(null);
     setReferenceFilter('');
     setCapacityReason('');
@@ -136,62 +135,37 @@ export const AdminReservationsRedesign = () => {
   useEffect(() => {
     if (!canRead) return;
     const request = requestFence.begin('reservation-session-overview');
-    void Promise.all([
-      requestAdminSessionCapacities(api, eventId, request.signal),
-      requestAdminReservations(api, eventId, request.signal),
-    ]).then(([capacityResult, reservationResult]) => {
+    void requestAdminReservationSessions(
+      api,
+      eventId,
+      { limit: 25 },
+      request.signal,
+    ).then((result) => {
       if (!request.isCurrent()) return;
       request.finish();
       setBusy(false);
-      const securityFailure =
-        !capacityResult.ok && isAdminSecurityFailure(capacityResult)
-          ? capacityResult
-          : !reservationResult.ok && isAdminSecurityFailure(reservationResult)
-            ? reservationResult
-            : null;
-      if (securityFailure) {
+      if (!result.ok && isAdminSecurityFailure(result)) {
         wipe();
         invalidateSensitive(
-          adminFailureMessage(
-            securityFailure.failure,
-            securityFailure.metadata?.requestId,
-          ),
+          adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
       }
-      if (!capacityResult.ok) {
+      if (!result.ok) {
         setSessions([]);
-        setReservations([]);
+        setNextCursor(null);
         setError(
-          adminFailureMessage(
-            capacityResult.failure,
-            capacityResult.metadata?.requestId,
-          ),
+          adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
       }
-      if (!reservationResult.ok) {
-        setSessions([]);
-        setReservations([]);
-        setError(
-          adminFailureMessage(
-            reservationResult.failure,
-            reservationResult.metadata?.requestId,
-          ),
-        );
-        return;
-      }
-      if (
-        capacityResult.kind === 'success' &&
-        reservationResult.kind === 'success'
-      ) {
-        setSessions(capacityResult.data.items);
-        setReservations(reservationResult.data.items);
+      if (result.kind === 'success') {
+        setError(null);
+        setSessions(result.data.items);
+        setNextCursor(result.data.pageInfo.nextCursor);
         setSelectedSessionId((current) =>
           current &&
-          capacityResult.data.items.some(
-            ({ sessionId }) => sessionId === current,
-          )
+          result.data.items.some(({ sessionId }) => sessionId === current)
             ? current
             : null,
         );
@@ -200,6 +174,43 @@ export const AdminReservationsRedesign = () => {
     return () => requestFence.cancel('reservation-session-overview');
   }, [api, canRead, eventId, invalidateSensitive, reload, requestFence]);
 
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    const request = requestFence.begin('reservation-session-overview');
+    setLoadingMore(true);
+    setError(null);
+    const result = await requestAdminReservationSessions(
+      api,
+      eventId,
+      { cursor: nextCursor, limit: 25 },
+      request.signal,
+    );
+    if (!request.isCurrent()) return;
+    request.finish();
+    setLoadingMore(false);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        wipe();
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      return;
+    }
+    if (result.kind === 'success') {
+      setSessions((current) => [
+        ...current,
+        ...result.data.items.filter(
+          (item) =>
+            !current.some(({ sessionId }) => sessionId === item.sessionId),
+        ),
+      ]);
+      setNextCursor(result.data.pageInfo.nextCursor);
+    }
+  };
+
   const sortedSessions = useMemo(
     () =>
       [...sessions]
@@ -207,6 +218,7 @@ export const AdminReservationsRedesign = () => {
           (session) =>
             (capacityFilter === 'all' ||
               capacityState(session) === capacityFilter) &&
+            (dayFilter === 'all' || session.localDate === dayFilter) &&
             (activityFilter === 'all' || session.sessionId === activityFilter),
         )
         .sort(
@@ -214,17 +226,21 @@ export const AdminReservationsRedesign = () => {
             stateRank[capacityState(left)] - stateRank[capacityState(right)] ||
             left.sessionTitle.localeCompare(right.sessionTitle, 'cs'),
         ),
-    [activityFilter, capacityFilter, sessions],
+    [activityFilter, capacityFilter, dayFilter, sessions],
+  );
+  const availableDays = useMemo(
+    () =>
+      [...new Set(sessions.flatMap(({ localDate }) => localDate ?? []))].sort(),
+    [sessions],
   );
   const selectedSession =
     sessions.find(({ sessionId }) => sessionId === selectedSessionId) ?? null;
-  const selectedReservations = reservations.filter(
+  const selectedReservations = (selectedSession?.reservations ?? []).filter(
     (record) =>
-      record.sessionId === selectedSessionId &&
-      (referenceFilter.trim() === '' ||
-        record.participantReference
-          .toLocaleLowerCase('cs')
-          .includes(referenceFilter.trim().toLocaleLowerCase('cs'))),
+      referenceFilter.trim() === '' ||
+      record.maskedParticipantReference
+        .toLocaleLowerCase('cs')
+        .includes(referenceFilter.trim().toLocaleLowerCase('cs')),
   );
   const summary = sessions.reduce(
     (current, session) => {
@@ -237,7 +253,7 @@ export const AdminReservationsRedesign = () => {
   const capacityCandidate = selectedSession
     ? adminSessionCapacityMutationRequestSchema.safeParse({
         sessionId: selectedSession.sessionId,
-        expectedVersion: selectedSession.version,
+        expectedVersion: selectedSession.capacityVersion,
         capacity: capacityDraft,
         reason: capacityReason,
       })
@@ -251,7 +267,7 @@ export const AdminReservationsRedesign = () => {
       })
     : null;
 
-  const chooseSession = (session: AdminSessionCapacityRecord) => {
+  const chooseSession = (session: AdminReservationSessionItem) => {
     setSelectedSessionId(session.sessionId);
     setCapacityDraft(session.capacity ?? Math.max(1, session.confirmedCount));
     setCapacityReason('');
@@ -434,15 +450,29 @@ export const AdminReservationsRedesign = () => {
           <div>
             <h2 id="reservation-activities-title">Aktivity</h2>
             <p className={styles.muted}>
-              Aktuální produkční API vrací omezenou první stránku. Úplnost
-              přehledu bude potvrzena až serverovým stránkováním.
+              Aktivity se načítají po stránkách v pořadí programu. Souhrn
+              odpovídá všem dosud načteným aktivitám.
             </p>
           </div>
           <span className={styles.badge}>
             {formatCzechCount(sessions.length, adminCountForms.activity)}
           </span>
         </div>
-        <div className={styles.twoColumn}>
+        <div className={styles.threeColumn}>
+          <label className={styles.field}>
+            <span>Den</span>
+            <select
+              onChange={(event) => setDayFilter(event.target.value)}
+              value={dayFilter}
+            >
+              <option value="all">Všechny načtené dny</option>
+              {availableDays.map((day) => (
+                <option key={day} value={day}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className={styles.field}>
             <span>Aktivita</span>
             <select
@@ -499,6 +529,17 @@ export const AdminReservationsRedesign = () => {
                     ? 'Kapacita není nastavená'
                     : `${session.confirmedCount} z ${session.capacity} míst`}
                 </p>
+                {session.localDate || session.startsAt || session.roomLabel ? (
+                  <p className={styles.muted}>
+                    {[
+                      session.localDate,
+                      session.startsAt?.slice(11, 16),
+                      session.roomLabel,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                ) : null}
                 <progress
                   aria-label={`${session.sessionTitle}: ${session.confirmedCount} z ${session.capacity ?? 0} míst`}
                   max={maximum}
@@ -515,6 +556,20 @@ export const AdminReservationsRedesign = () => {
             );
           })}
         </ul>
+        {nextCursor ? (
+          <button
+            className={styles.secondaryButton}
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+            type="button"
+          >
+            {loadingMore ? 'Načítám další aktivity…' : 'Načíst další aktivity'}
+          </button>
+        ) : sessions.length > 0 ? (
+          <p className={styles.muted} role="status">
+            Všechny aktivity jsou načtené.
+          </p>
+        ) : null}
       </section>
 
       {selectedSession ? (
@@ -542,6 +597,12 @@ export const AdminReservationsRedesign = () => {
                   {selectedSession.capacity ?? '—'} míst
                 </strong>
               </p>
+              {selectedSession.waitingCount !== null ? (
+                <p>
+                  Na uvolnění místa čeká {selectedSession.waitingCount}{' '}
+                  účastníků.
+                </p>
+              ) : null}
               {canManage && !selectedReservation ? (
                 <div className={styles.stack}>
                   <label className={styles.field}>
@@ -608,7 +669,9 @@ export const AdminReservationsRedesign = () => {
                   <li className={styles.dataCard} key={record.reservationId}>
                     <div className={styles.panelHeader}>
                       <strong>
-                        {safeParticipantReference(record.participantReference)}
+                        {safeParticipantReference(
+                          record.maskedParticipantReference,
+                        )}
                       </strong>
                       <span className={styles.statusBadge}>
                         {reservationStateLabels[record.state]}
@@ -646,7 +709,7 @@ export const AdminReservationsRedesign = () => {
               <p>
                 <strong>
                   {safeParticipantReference(
-                    selectedReservation.participantReference,
+                    selectedReservation.maskedParticipantReference,
                   )}
                 </strong>{' '}
                 ztratí rezervaci na aktivitu {selectedSession.sessionTitle}.
@@ -709,7 +772,7 @@ export const AdminReservationsRedesign = () => {
                 {selectedSession?.sessionTitle ?? 'Vybraná aktivita'}
               </strong>
               {pending.kind === 'reservation'
-                ? ` · ${selectedReservation ? safeParticipantReference(selectedReservation.participantReference) : ''}`
+                ? ` · ${selectedReservation ? safeParticipantReference(selectedReservation.maskedParticipantReference) : ''}`
                 : ''}
             </p>
           }

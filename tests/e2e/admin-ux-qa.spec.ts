@@ -340,6 +340,13 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
       '/admin/rezervace?adminQa=max-page',
       'Rezervace a kapacity',
     );
+    const loadMoreReservations = page.getByRole('button', {
+      name: 'Načíst další aktivity',
+    });
+    for (let pageIndex = 0; pageIndex < 3; pageIndex += 1) {
+      await expect(loadMoreReservations).toBeVisible();
+      await loadMoreReservations.click();
+    }
     await expect(page.getByText('100 aktivit')).toBeVisible();
     await capture('reservations-100', 'filter', async () => {
       await page

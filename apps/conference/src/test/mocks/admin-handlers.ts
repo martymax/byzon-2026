@@ -32,6 +32,8 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminReservationSessionPageSchema,
+  adminReservationSessionQuerySchema,
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
@@ -42,6 +44,7 @@ import {
   type AdminOperationsOverviewResponse,
   type AdminPermission,
   type AdminReservationRecord,
+  type AdminReservationSessionItem,
   type AdminSessionCapacityRecord,
 } from '@byzon/domain/contracts/admin';
 import {
@@ -83,6 +86,7 @@ import {
   adminOperationsOverviewFixtures,
   adminReadProblemFixtures,
   adminReservationFixtures,
+  adminReservationSessionFixtures,
   adminSessionCapacityFixtures,
   adminReservationMutationFixtures,
   adminSessionCapacityMutationFixtures,
@@ -135,6 +139,7 @@ interface AdminMockState {
   engagement: AdminEngagementOverview;
   supportRecords: SupportRecord[];
   reservations: AdminReservationRecord[];
+  reservationSessions: AdminReservationSessionItem[];
   sessionCapacities: AdminSessionCapacityRecord[];
   settings: AdminEventSettings;
   announcementPreviewId: string | null;
@@ -163,6 +168,7 @@ const initialState = (): AdminMockState => ({
     eventScopedSupportRecord,
   ),
   reservations: clone(adminReservationFixtures.list!.items),
+  reservationSessions: clone(adminReservationSessionFixtures.complete!.items),
   sessionCapacities: clone(adminSessionCapacityFixtures.list!.items),
   settings: clone(adminEventSettingsFixtures.open!),
   announcementPreviewId: null,
@@ -324,6 +330,7 @@ const maxPageUuid = (group: number, index: number): string =>
 const maxPageReservations = () => {
   const reservation = adminReservationFixtures.list!.items[0]!;
   const capacity = adminSessionCapacityFixtures.list!.items[0]!;
+  const session = adminReservationSessionFixtures.complete!.items[0]!;
   return Array.from({ length: 100 }, (_, index) => {
     const serial = index + 1;
     const sessionId = maxPageUuid(1, serial);
@@ -344,6 +351,24 @@ const maxPageReservations = () => {
         sessionTitle,
         capacity: 100,
         confirmedCount: 50 + (serial % 50),
+      },
+      session: {
+        ...session,
+        sessionId,
+        sessionTitle,
+        startsAt: new Date(
+          Date.UTC(2026, 8, 18, 7, 0) + index * 60_000,
+        ).toISOString(),
+        roomLabel: `Sál ${String((index % 8) + 1)}`,
+        capacity: 100,
+        confirmedCount: 50 + (serial % 50),
+        reservations: [
+          {
+            ...session.reservations[0]!,
+            reservationId: maxPageUuid(2, serial),
+            maskedParticipantReference: `Účastník •${String(serial).padStart(3, '0')}`,
+          },
+        ],
       },
     };
   });
@@ -937,6 +962,15 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         version: record.version + 1,
       };
       state.sessionCapacities[index] = next;
+      state.reservationSessions = state.reservationSessions.map((session) =>
+        session.sessionId === record.sessionId
+          ? {
+              ...session,
+              capacity: body.data.capacity,
+              capacityVersion: next.version,
+            }
+          : session,
+      );
       state.reservations = state.reservations.map((reservation) =>
         reservation.sessionId === record.sessionId
           ? {
@@ -1617,6 +1651,59 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
   ),
 
   http.get(
+    '*/api/v1/admin/events/:eventId/reservation-sessions',
+    ({ params, request }) => {
+      const denied = authorize(
+        adminReadProblemSchema,
+        ['reservation:any:read'],
+        'admin.mock.reservation-sessions',
+      );
+      if (denied) return denied;
+      const url = new URL(request.url);
+      const query = adminReservationSessionQuerySchema.safeParse({
+        ...(url.searchParams.get('cursor')
+          ? { cursor: url.searchParams.get('cursor') }
+          : {}),
+        ...(url.searchParams.get('limit')
+          ? { limit: Number(url.searchParams.get('limit')) }
+          : {}),
+      });
+      if (!routeMatchesEvent(params.eventId) || !query.success) {
+        return mockProblemResponse(
+          adminReadProblemSchema,
+          adminReadProblemFixtures.validation,
+          { fixtureName: 'admin.mock.reservation-sessions-validation' },
+        );
+      }
+      const allItems = maxPageRequested(request)
+        ? maxPageReservations().map(({ session }) => session)
+        : state.reservationSessions;
+      const cursorMatch = /^mock-reservation-session-(\d+)$/.exec(
+        query.data.cursor ?? '',
+      );
+      const offset = cursorMatch ? Number(cursorMatch[1]) : 0;
+      const items = allItems.slice(offset, offset + query.data.limit);
+      const nextOffset = offset + items.length;
+      const hasMore = nextOffset < allItems.length;
+      return mockJsonResponse(
+        adminReservationSessionPageSchema,
+        {
+          eventId: adminFixtureIds.event,
+          generatedAt: '2026-09-02T12:00:00.000+02:00',
+          items,
+          pageInfo: {
+            hasMore,
+            nextCursor: hasMore
+              ? `mock-reservation-session-${nextOffset}`
+              : null,
+          },
+        },
+        successOptions('admin.mock.reservation-sessions'),
+      );
+    },
+  ),
+
+  http.get(
     '*/api/v1/admin/events/:eventId/reservations',
     ({ params, request }) => {
       const denied = authorize(
@@ -1800,6 +1887,23 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         next = state.reservations[index]!;
       } else {
         state.reservations[index] = next;
+        state.reservationSessions = state.reservationSessions.map((session) =>
+          session.sessionId === record.sessionId
+            ? {
+                ...session,
+                reservations: session.reservations.map((reservation) =>
+                  reservation.reservationId === record.reservationId
+                    ? {
+                        ...reservation,
+                        state: 'cancelled' as const,
+                        version: next.version,
+                        availableActions: [] as const,
+                      }
+                    : reservation,
+                ),
+              }
+            : session,
+        );
       }
       const response = adminReservationMutationResponseSchema.parse({
         ...clone(adminReservationMutationFixtures.cancelled!),
