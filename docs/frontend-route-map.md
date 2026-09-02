@@ -75,6 +75,11 @@ Fáze se nikdy neodvozuje jen z času zařízení. Autoritativní je serverový
 | `BLOCKER-AUTH-01`          | aktivace/onboarding handoff      | Do uzavření gate nesmí UI tvrdit, že pending claim vytvořil membership nebo session.                                                                |
 | session reservation policy | agenda/rezervace/admin rezervace | Dostupnost akce vrací server pro konkrétní session; neexistuje globální klientský boolean, který by nahrazoval uzávěrky a kapacitu.                 |
 
+Pro kanonickou akci `byzon-2026` je `announcementsEnabled` zapnutý verzovanou
+datovou migrací. Toto rozhodnutí zpřístupňuje administrační tvorbu a serverové
+doručení oznámení, ale samo nemění produkční klientskou navigaci; její umístění
+bude rozhodnuto samostatně.
+
 Priority A route nesmí být podmíněna Priority B/C flagem
 (`networkingEnabled`, `speakerPortalEnabled`, `questionsEnabled`,
 `pollsEnabled`, `ratingsEnabled`, `socialWallEnabled`).

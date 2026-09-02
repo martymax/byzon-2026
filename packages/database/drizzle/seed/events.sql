@@ -30,11 +30,16 @@ VALUES
   )
 ON CONFLICT ("slug") DO NOTHING;
 
-INSERT INTO "event_features" ("event_id")
-SELECT "id"
+INSERT INTO "event_features" ("event_id", "announcements_enabled")
+SELECT
+  "id",
+  CASE WHEN "slug" = 'byzon-2026' THEN true ELSE false END
 FROM "events"
 WHERE "slug" IN ('byzon-2026', 'byzon-isolation-test')
-ON CONFLICT ("event_id") DO NOTHING;
+ON CONFLICT ("event_id") DO UPDATE
+SET
+  "announcements_enabled" = EXCLUDED."announcements_enabled",
+  "updated_at" = now();
 
 INSERT INTO "event_operational_settings" ("event_id")
 SELECT "id"

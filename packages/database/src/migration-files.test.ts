@@ -46,6 +46,10 @@ const ticketParticipantProfileBackfillMigration = readFileSync(
   ),
   'utf8',
 );
+const announcementRolloutMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0023_enable_byzon_announcements.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -85,6 +89,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0022_backfill_simpleshop_participant_profiles',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0023_enable_byzon_announcements',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -215,10 +222,26 @@ describe('versioned database artifacts', () => {
     );
   });
 
-  it('seeds both event scopes idempotently and keeps the test event archived', () => {
+  it('seeds both event scopes idempotently, enables current announcements and keeps isolation disabled', () => {
     expect(seed).toContain("'byzon-2026'");
     expect(seed).toContain("'byzon-isolation-test'");
     expect(seed).toContain("'archived'");
+    expect(seed).toContain(
+      `CASE WHEN "slug" = 'byzon-2026' THEN true ELSE false END`,
+    );
+    expect(seed).toContain(
+      '"announcements_enabled" = EXCLUDED."announcements_enabled"',
+    );
     expect(seed.match(/ON CONFLICT/g)).toHaveLength(4);
+  });
+
+  it('rolls announcements out only to the canonical BYZON 2026 event', () => {
+    expect(announcementRolloutMigration).toContain(
+      `WHERE "slug" = 'byzon-2026'`,
+    );
+    expect(announcementRolloutMigration).toContain(
+      '"announcements_enabled" = true',
+    );
+    expect(announcementRolloutMigration).not.toContain('byzon-isolation-test');
   });
 });

@@ -58,6 +58,12 @@ nesmí spustit.
 6. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
    restart loopu a aktuální release SHA.
 
+Oznámení jsou pro event `byzon-2026` zapnutá migrací
+`0023_enable_byzon_announcements`. Seed stejnou hodnotu idempotentně zachovává
+na stagingu a současně nechává `byzon-isolation-test` vypnutý. Zapnutí flagu
+nemění klientskou navigaci; v tomto kroku se ověřuje pouze dostupnost
+administračního announcement flow a serverových endpointů.
+
 ## Proměnné webu
 
 | Proměnná                    | Staging hodnota / zdroj                            |
