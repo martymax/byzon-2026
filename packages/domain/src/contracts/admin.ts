@@ -936,15 +936,53 @@ export const adminAuditCategorySchema = z.enum([
 
 export type AdminAuditCategory = z.infer<typeof adminAuditCategorySchema>;
 
+export const adminAuditActorSchema = z.enum(['user', 'system']);
+
+export type AdminAuditActor = z.infer<typeof adminAuditActorSchema>;
+
+export const adminAuditOutcomeSchema = z.enum([
+  'succeeded',
+  'rejected',
+  'queued',
+]);
+
+export type AdminAuditOutcome = z.infer<typeof adminAuditOutcomeSchema>;
+
+export const adminAuditActionSchema = z.enum([
+  'update_settings',
+  'cancel_reservation',
+  'support.block',
+  'support.reactivate',
+  'support.resend',
+  'ticket_import.preview_created',
+  'ticket_import.applied',
+  'announcement.send',
+  'role.grant',
+  'role.revoke',
+  'role.moderator.assign',
+  'role.moderator.remove',
+  'reservation.admin_cancelled',
+  'session.capacity_updated',
+  'waitlist.auto_cancelled',
+  'waitlist.auto_promoted',
+  'settings.update',
+  'settings.engagement.update',
+  'settings.session-questions.update',
+  'export.queued',
+  'export.download',
+]);
+
+export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
+
 export const adminAuditEntrySchema = z.strictObject({
   auditId: uuidSchema,
   eventId: uuidSchema,
   actorLabel: safeInlineTextSchema(120),
   category: adminAuditCategorySchema,
-  action: safeInlineTextSchema(100),
+  action: adminAuditActionSchema,
   targetReference: safeInlineTextSchema(120),
   reason: safeMultilineTextSchema(1, 500),
-  outcome: z.enum(['succeeded', 'rejected', 'queued']),
+  outcome: adminAuditOutcomeSchema,
   createdAt: dateTimeSchema,
   resultingVersion: versionSchema.nullable(),
   redacted: z.boolean(),
@@ -955,7 +993,9 @@ export type AdminAuditEntry = z.infer<typeof adminAuditEntrySchema>;
 export const adminAuditQuerySchema = z
   .strictObject({
     category: adminAuditCategorySchema.optional(),
-    action: safeInlineTextSchema(100).optional(),
+    action: adminAuditActionSchema.optional(),
+    actor: adminAuditActorSchema.optional(),
+    outcome: adminAuditOutcomeSchema.optional(),
     requestId: requestIdSchema.optional(),
     from: dateTimeSchema.optional(),
     to: dateTimeSchema.optional(),

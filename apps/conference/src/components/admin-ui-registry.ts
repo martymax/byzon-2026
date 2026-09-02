@@ -1,6 +1,8 @@
 import type {
   AdminActorRole,
   AdminAssignmentRole,
+  AdminAuditAction,
+  AdminAuditActor,
   AdminAuditCategory,
   AdminAuditEntry,
   AdminContextResponse,
@@ -97,6 +99,35 @@ export const adminAuditCategoryLabels = {
   settings: 'Nastavení',
   export: 'Reporty',
 } satisfies Record<AdminAuditCategory, string>;
+
+export const adminAuditActorLabels = {
+  user: 'Oprávněný uživatel',
+  system: 'Systém BYZON',
+} satisfies Record<AdminAuditActor, string>;
+
+export const adminAuditActionLabels = {
+  update_settings: 'Upravil nastavení akce',
+  cancel_reservation: 'Zrušil rezervaci',
+  'support.block': 'Zablokoval přístup účastníka',
+  'support.reactivate': 'Obnovil přístup účastníka',
+  'support.resend': 'Znovu odeslal pozvánku',
+  'ticket_import.preview_created': 'Načetl změny vstupenek',
+  'ticket_import.applied': 'Použil změny vstupenek',
+  'announcement.send': 'Odeslal kritické oznámení',
+  'role.grant': 'Přiřadil provozní roli',
+  'role.revoke': 'Odebral provozní roli',
+  'role.moderator.assign': 'Přiřadil moderátora',
+  'role.moderator.remove': 'Odebral moderátora',
+  'reservation.admin_cancelled': 'Zrušil rezervaci',
+  'session.capacity_updated': 'Změnil kapacitu aktivity',
+  'waitlist.auto_cancelled': 'Automaticky zrušil čekání',
+  'waitlist.auto_promoted': 'Automaticky potvrdil rezervaci',
+  'settings.update': 'Upravil nastavení akce',
+  'settings.engagement.update': 'Upravil interaktivní funkce',
+  'settings.session-questions.update': 'Upravil otázky k aktivitě',
+  'export.queued': 'Zařadil report ke zpracování',
+  'export.download': 'Stáhl report',
+} satisfies Record<AdminAuditAction, string>;
 
 export const adminAuditOutcomeLabels = {
   succeeded: 'Provedeno',

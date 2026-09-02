@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   adminActorRoleLabels,
+  adminAuditActionLabels,
+  adminAuditActorLabels,
   adminAuditCategoryLabels,
   adminContentResourceLabels,
   adminEngagementFeatureLabels,
@@ -20,6 +22,10 @@ describe('admin presentation registry', () => {
     expect(adminActorRoleLabels.room_operator).toBe('Vedoucí aktivity');
     expect(adminMetricLabels.import).toBe('Aktualizace vstupenek');
     expect(adminAuditCategoryLabels.support).toBe('Účastníci');
+    expect(adminAuditActorLabels.system).toBe('Systém BYZON');
+    expect(adminAuditActionLabels['ticket_import.applied']).toBe(
+      'Použil změny vstupenek',
+    );
     expect(ticketImportRowStatusLabels.conflict).toBe('Vyžaduje opravu');
     expect(supportActionLabels.resend).toContain('aktivační výzvu');
     expect(adminQueueLabels.notifications).toBe('Oznámení');

@@ -109,6 +109,30 @@ integration('admin audit integration', () => {
       },
       {
         id: generateUuidV7(),
+        eventId,
+        actorId: null,
+        actorType: 'system',
+        action: 'waitlist.auto_promoted',
+        targetType: 'reservation',
+        targetId: generateUuidV7(),
+        requestId: 'audit-system-promotion',
+        reason: 'Automatické potvrzení rezervace.',
+        createdAt: new Date('2026-09-02T10:30:00.000Z'),
+      },
+      {
+        id: generateUuidV7(),
+        eventId,
+        actorId: organizerId,
+        actorType: 'user',
+        action: 'export.queued',
+        targetType: 'export_job',
+        targetId: generateUuidV7(),
+        requestId: 'audit-export-queued',
+        reason: 'Schválené vytvoření reportu.',
+        createdAt: new Date('2026-09-02T10:00:00.000Z'),
+      },
+      {
+        id: generateUuidV7(),
         eventId: isolationEventId,
         actorId: null,
         actorType: 'system',
@@ -177,5 +201,46 @@ integration('admin audit integration', () => {
     expect(serialized).not.toContain('audit-reservation-between');
     expect(serialized).not.toContain('email');
     expect(serialized).not.toContain('secret');
+  });
+
+  it('applies actor and derived outcome filters before pagination', async () => {
+    const systemResponse = await handleAdminAudit(
+      request('?actor=system'),
+      eventId,
+      dependencies,
+    );
+    expect(systemResponse.status).toBe(200);
+    const system = adminAuditResponseSchema.parse(await systemResponse.json());
+    expect(system.items).toHaveLength(1);
+    expect(system.items[0]).toMatchObject({
+      action: 'waitlist.auto_promoted',
+      actorLabel: 'Systém BYZON',
+      outcome: 'succeeded',
+    });
+
+    const queuedResponse = await handleAdminAudit(
+      request('?outcome=queued'),
+      eventId,
+      dependencies,
+    );
+    expect(queuedResponse.status).toBe(200);
+    const queued = adminAuditResponseSchema.parse(await queuedResponse.json());
+    expect(queued.items).toHaveLength(1);
+    expect(queued.items[0]).toMatchObject({
+      action: 'export.queued',
+      actorLabel: 'Oprávněný uživatel',
+      outcome: 'queued',
+    });
+
+    const rejectedResponse = await handleAdminAudit(
+      request('?outcome=rejected'),
+      eventId,
+      dependencies,
+    );
+    expect(rejectedResponse.status).toBe(200);
+    const rejected = adminAuditResponseSchema.parse(
+      await rejectedResponse.json(),
+    );
+    expect(rejected.items).toEqual([]);
   });
 });
