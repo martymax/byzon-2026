@@ -726,10 +726,6 @@
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
 }
 
 .button {

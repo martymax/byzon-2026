@@ -14,8 +14,13 @@ interface AxeViolationLike {
   readonly impact: string | null;
   readonly help: string;
   readonly helpUrl: string;
-  readonly nodes: readonly unknown[];
+  readonly nodes: readonly {
+    readonly target?: readonly string[];
+  }[];
 }
+
+const redactAttributeValues = (selector: string): string =>
+  selector.replace(/\[([^\]=\s]+)[^\]]*\]/g, '[$1]');
 
 export const summarizeAxeViolations = (
   violations: readonly AxeViolationLike[],
@@ -26,6 +31,9 @@ export const summarizeAxeViolations = (
     help,
     helpUrl,
     nodeCount: nodes.length,
+    selectors: nodes.flatMap(({ target = [] }) =>
+      target.map(redactAttributeValues),
+    ),
   }));
 
 export const expectPageToPassAxe = async (page: Page): Promise<void> => {

@@ -14,6 +14,7 @@ describe('axe report redaction', () => {
           {
             html: '<input value="private@example.test">',
             failureSummary: 'Private text',
+            target: ['input[value="private@example.test"]'],
           },
         ],
       },
@@ -26,6 +27,7 @@ describe('axe report redaction', () => {
         help: 'Form elements must have labels',
         helpUrl: 'https://dequeuniversity.com/rules/axe/4.12/label',
         nodeCount: 1,
+        selectors: ['input[value]'],
       },
     ]);
     expect(JSON.stringify(report)).not.toContain('private@example.test');
