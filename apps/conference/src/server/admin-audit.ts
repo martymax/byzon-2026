@@ -4,7 +4,7 @@ import {
   adminAuditResponseSchema,
   type AdminAuditCategory,
 } from '@byzon/domain/contracts';
-import { and, desc, eq, gte, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -35,6 +35,29 @@ const categoryFor = (action: string): AdminAuditCategory | null => {
   if (/^export\./.test(action)) return 'export';
   return null;
 };
+
+const categoryPrefixes: Readonly<
+  Record<AdminAuditCategory, readonly string[]>
+> = {
+  support: ['support.', 'ticket.'],
+  import: ['import.', 'ticket_import.'],
+  announcement: ['announcement.'],
+  role: ['role.'],
+  reservation: ['reservation.', 'session.capacity.', 'waitlist.'],
+  settings: ['settings.'],
+  export: ['export.'],
+};
+
+const categoryCondition = (category?: AdminAuditCategory) =>
+  or(
+    ...(category ? [category] : Object.keys(categoryPrefixes)).flatMap(
+      (value) =>
+        categoryPrefixes[value as AdminAuditCategory].map(
+          (prefix) =>
+            sql`left(${schema.auditLogs.action}, ${prefix.length}) = ${prefix}`,
+        ),
+    ),
+  );
 
 const encodeCursor = (createdAt: Date, id: string): string =>
   Buffer.from(
@@ -139,12 +162,33 @@ export const handleAdminAudit = async (
         detail: 'The audit filters are invalid.',
       });
     }
+    const cursor = query.data.cursor ? decodeCursor(query.data.cursor) : null;
+    const cursorCondition = cursor
+      ? or(
+          lt(schema.auditLogs.createdAt, new Date(cursor.createdAt)),
+          and(
+            eq(schema.auditLogs.createdAt, new Date(cursor.createdAt)),
+            lt(schema.auditLogs.id, cursor.id),
+          ),
+        )
+      : undefined;
+    const limit = query.data.limit ?? 50;
     const rows = await dependencies.db
-      .select()
+      .select({
+        id: schema.auditLogs.id,
+        action: schema.auditLogs.action,
+        targetType: schema.auditLogs.targetType,
+        targetId: schema.auditLogs.targetId,
+        actorType: schema.auditLogs.actorType,
+        reason: schema.auditLogs.reason,
+        afterVersion: sql<unknown>`${schema.auditLogs.after} -> 'version'`,
+        createdAt: schema.auditLogs.createdAt,
+      })
       .from(schema.auditLogs)
       .where(
         and(
           eq(schema.auditLogs.eventId, eventId),
+          categoryCondition(query.data.category),
           query.data.action
             ? eq(schema.auditLogs.action, query.data.action)
             : undefined,
@@ -157,39 +201,22 @@ export const handleAdminAudit = async (
           query.data.to
             ? lte(schema.auditLogs.createdAt, new Date(query.data.to))
             : undefined,
+          cursorCondition,
         ),
       )
       .orderBy(desc(schema.auditLogs.createdAt), desc(schema.auditLogs.id))
-      .limit(500);
-    const cursor = query.data.cursor ? decodeCursor(query.data.cursor) : null;
-    const filtered = rows.filter((row) => {
-      const category = categoryFor(row.action);
-      if (
-        !category ||
-        (query.data.category && category !== query.data.category)
-      ) {
-        return false;
-      }
-      if (!cursor) return true;
-      const createdAt = row.createdAt.toISOString();
-      return (
-        createdAt < cursor.createdAt ||
-        (createdAt === cursor.createdAt && row.id < cursor.id)
-      );
-    });
-    const limit = query.data.limit ?? 50;
-    const page = filtered.slice(0, limit);
-    const hasMore = filtered.length > limit;
+      .limit(limit + 1);
+    const page = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
     const last = page.at(-1);
     const body = adminAuditResponseSchema.parse({
       eventId,
       items: page.map((row) => {
         const version =
-          row.after &&
-          typeof row.after.version === 'number' &&
-          Number.isInteger(row.after.version) &&
-          row.after.version > 0
-            ? row.after.version
+          typeof row.afterVersion === 'number' &&
+          Number.isInteger(row.afterVersion) &&
+          row.afterVersion > 0
+            ? row.afterVersion
             : null;
         return {
           auditId: row.id,

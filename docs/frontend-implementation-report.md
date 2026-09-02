@@ -315,6 +315,14 @@ Společné invarianty:
 - source boundary zakazuje MSW, fixtures a preview scénáře v produkčním
   dependency graphu.
 
+`AUX-13J` napojil `/admin/audit` na produkční serverové keyset stránkování.
+Event/category/action/time/request/cursor filtry se aplikují před SQL limitem,
+`limit + 1` určuje přesné `pageInfo` a response nečte ani nevrací auditní
+`before`, celé `after`, actor ID nebo request ID; z JSON vybírá jen výslednou
+verzi. UI zachovává stejné filtry pro další stránku, ukazuje lidské action
+labely a přiznává redakci; actor/outcome filtry zůstávají pravdivě skryté do
+`GAP-AUX-AUDIT-01`.
+
 ## 7. Responsive, accessibility a UX
 
 Component testy běží v phone, tablet a desktop Chromium projektech. Pokrytí

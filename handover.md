@@ -3,7 +3,7 @@
 ## Aktivní navázání – redesign administrace (`AUX`, 2. 9. 2026)
 
 - Autoritativní specifikace i jediný tracker jsou v
-  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.41 obsahuje obousměrné
+  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.44 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
 - `AUX-00B`, foundation `AUX-01A`–`C`, shell `AUX-02A`–`G`, dashboard
   `AUX-03A`–`C`, obsah `AUX-04A`–`G`, vstupenky `AUX-05A`–`C` a neblokovaná
@@ -44,9 +44,11 @@
   guardy, stale stav i exact retry; produkční read/search/options napojení
   vlastní `AUX-13H`. `/admin/reporty` má CSV-default request, pravdivé async
   potvrzení a strict queued/ready/failed/expired historii; produkční job list
-  vlastní `AUX-13I`. `/admin/audit` lokalizuje podporované změny a při cursoru
-  zachovává category/action/time/request filtry; rozšířený backend vlastní
-  `AUX-13J`. `/admin/nastaveni` začíná read-only, core volby upravuje přes
+  vlastní `AUX-13I`. `/admin/audit` po `AUX-13J` aplikuje
+  event/category/action/time/request/cursor filtry před SQL limitem, používá
+  stabilní `limit + 1` keyset stránkování a vrací minimální redigovaný DTO;
+  finální stav čeká na staging auth/context E2E `AUX-13A`.
+  `/admin/nastaveni` začíná read-only, core volby upravuje přes
   dirty bar a archiv je read-only; `supportMessage` zůstává skrytý do
   `GAP-AUX-SETTINGS-01`. Rendered-copy scan chrání hlavní UI před technickým
   slovníkem, společné chyby odpovídají §6.4, request reference je jen v
@@ -57,8 +59,9 @@
   produkční build; finální stav čeká na staging auth/context E2E `AUX-13A`.
   AUX-12 má reprodukovatelný sedmibodový Chromium gate všech 11 rout, bundle
   budget a mock security review. Fyzický screen-reader smoke a max-page trace
-  zůstávají otevřené; další neblokovaný integrační celek je `AUX-13J`
-  produkční audit s cursor stránkováním.
+  zůstávají otevřené. Ostatní integrační celky `AUX-13B`, `D`–`F`, `H`, `I`,
+  `K`, `L` mají explicitní produktové, auth, rezervační, provozní nebo
+  infrastrukturní blockery; společné route/staging ověření vlastní `AUX-13A`.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.

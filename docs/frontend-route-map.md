@@ -239,6 +239,10 @@ součástí společného `AUX-13A`; asset operace zůstávají oddělené v `AUX
 `AUX-13G` doplnil pro `/admin/oznameni` autorizovaný target options endpoint a
 produkční event/one-session preview/send cestu. Staging session evidence dál
 patří `AUX-13A`.
+`AUX-13J` přesunul event/category/action/time/request/cursor filtry auditu do
+produkčního SQL dotazu před limit, používá stabilní keyset stránkování
+`limit + 1` a vrací jen minimální redigovaný DTO. Staging session evidence dál
+patří `AUX-13A`.
 
 ## 7. Permission matrix a zbývající gap
 
