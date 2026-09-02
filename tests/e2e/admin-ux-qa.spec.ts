@@ -293,8 +293,8 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
     page,
   }, testInfo) => {
     test.skip(
-      (page.viewportSize()?.width ?? 0) !== 1280,
-      'The reproducible max-page trace uses the stable 1280 × 800 project.',
+      testInfo.project.name !== 'admin-1280',
+      'The max-page trace runs separately in the stable single-worker project.',
     );
     await installPerformanceObservers(page);
     const evidence: Record<
