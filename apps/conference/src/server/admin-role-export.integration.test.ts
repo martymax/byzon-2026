@@ -171,6 +171,9 @@ integration('admin role and export integration', () => {
     await client.db
       .delete(schema.auditLogs)
       .where(eq(schema.auditLogs.eventId, eventId));
+    await client.db
+      .delete(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.eventId, eventId));
     await client.db.delete(schema.events).where(eq(schema.events.id, eventId));
     await client.db
       .delete(schema.users)
