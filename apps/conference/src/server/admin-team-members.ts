@@ -176,7 +176,7 @@ const loadTeamRows = async (db: TeamDb, eventId: string) =>
         from ${schema.auditLogs}
         where ${schema.auditLogs.eventId} = ${eventId}
           and ${schema.auditLogs.action} = 'team.invitation_sent'
-          and ${schema.auditLogs.targetId} = ${schema.users.id}
+          and ${schema.auditLogs.targetId} = cast(${schema.users.id} as text)
       )`,
     })
     .from(schema.eventMemberships)

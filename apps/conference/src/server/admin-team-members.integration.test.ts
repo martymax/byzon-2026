@@ -176,12 +176,40 @@ integration('admin team member integration', () => {
         },
       },
     );
-    expect(
-      adminTeamInvitationResponseSchema.parse(await invitationResponse.json()),
-    ).toMatchObject({ memberId: invitedId, outcome: 'sent' });
+    const invitation = adminTeamInvitationResponseSchema.parse(
+      await invitationResponse.json(),
+    );
+    expect(invitation).toMatchObject({
+      memberId: invitedId,
+      outcome: 'sent',
+      invitation: {
+        status: 'sent',
+        lastSentAt: '2026-09-02T10:00:00.000Z',
+      },
+    });
     expect(deliveries).toEqual([
       { email: invitedEmail, recipientName: 'Upravená administrátorka' },
     ]);
+
+    const listedAfterInvitationResponse = await handleAdminTeamMemberList(
+      new Request(url),
+      eventId,
+      dependencies(),
+    );
+    const listedAfterInvitation = adminTeamMemberListResponseSchema.parse(
+      await listedAfterInvitationResponse.json(),
+    );
+    expect(listedAfterInvitation.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          memberId: invitedId,
+          invitation: {
+            status: 'sent',
+            lastSentAt: '2026-09-02T10:00:00.000Z',
+          },
+        }),
+      ]),
+    );
 
     const removedResponse = await handleAdminTeamMemberMutation(
       mutationRequest({
