@@ -10,7 +10,7 @@ import {
   type AdminAuditQuery,
 } from '@byzon/domain/contracts/admin';
 import { AdminTechnicalDetails } from '@byzon/ui';
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 
 import { requestAdminAudit } from '@/lib/admin-api';
 
@@ -54,6 +54,15 @@ export const AdminAuditRedesign = () => {
   const [busy, setBusy] = useState(canRead);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const momentFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('cs-CZ', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: eventTimezone,
+      }),
+    [eventTimezone],
+  );
 
   const query = useMemo<AdminAuditQuery | null>(() => {
     try {
@@ -80,8 +89,8 @@ export const AdminAuditRedesign = () => {
       (result) => {
         if (!request.isCurrent()) return;
         request.finish();
-        setBusy(false);
         if (!result.ok) {
+          setBusy(false);
           setItems([]);
           setNextCursor(null);
           if (isAdminSecurityFailure(result)) {
@@ -96,9 +105,12 @@ export const AdminAuditRedesign = () => {
           return;
         }
         if (result.kind === 'success') {
-          setItems(result.data.items);
-          setNextCursor(result.data.pageInfo.nextCursor);
-          setError(null);
+          startTransition(() => {
+            setBusy(false);
+            setItems(result.data.items);
+            setNextCursor(result.data.pageInfo.nextCursor);
+            setError(null);
+          });
         }
       },
     );
@@ -125,8 +137,8 @@ export const AdminAuditRedesign = () => {
     );
     if (!request.isCurrent()) return;
     request.finish();
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       if (isAdminSecurityFailure(result)) {
         setItems([]);
         setNextCursor(null);
@@ -139,8 +151,11 @@ export const AdminAuditRedesign = () => {
       return;
     }
     if (result.kind === 'success') {
-      setItems((current) => [...current, ...result.data.items]);
-      setNextCursor(result.data.pageInfo.nextCursor);
+      startTransition(() => {
+        setBusy(false);
+        setItems((current) => [...current, ...result.data.items]);
+        setNextCursor(result.data.pageInfo.nextCursor);
+      });
     }
   };
 
@@ -345,12 +360,8 @@ export const AdminAuditRedesign = () => {
                   </span>
                 </div>
                 <p>
-                  {new Intl.DateTimeFormat('cs-CZ', {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                    timeZone: eventTimezone,
-                  }).format(new Date(entry.createdAt))}{' '}
-                  · {targetReferenceLabel(entry.targetReference)}
+                  {momentFormatter.format(new Date(entry.createdAt))} ·{' '}
+                  {targetReferenceLabel(entry.targetReference)}
                 </p>
                 <details>
                   <summary>Zobrazit důvod a podrobnosti</summary>
