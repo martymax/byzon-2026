@@ -12,8 +12,8 @@ describe('participant shell navigation', () => {
     ['/app/program', 'program'],
     ['/app/program/session-1', 'program'],
     ['/app/agenda', 'agenda'],
-    ['/app/oznameni', 'announcements'],
-    ['/app/oznameni/announcement-1', 'announcements'],
+    ['/app/oznameni', ''],
+    ['/app/oznameni/announcement-1', ''],
     ['/app/vice', 'more'],
     ['/app/profil', 'more'],
     ['/app/soukromi', 'more'],
@@ -64,13 +64,7 @@ describe('participant shell navigation', () => {
       participantNavigationItemsForMode('active-preview').map(
         ({ href }) => href,
       ),
-    ).toEqual([
-      '/app',
-      '/app/program',
-      '/app/agenda',
-      '/app/oznameni',
-      '/app/vice',
-    ]);
+    ).toEqual(['/app', '/app/program', '/app/agenda', '/app/vice']);
   });
 
   it('does not expose participant destinations while the event is unavailable', () => {

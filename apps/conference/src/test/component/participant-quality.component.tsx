@@ -168,7 +168,7 @@ describe('F2-06 participant shell and program quality gate', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
-    expect(navigationElement.querySelectorAll('a')).toHaveLength(5);
+    expect(navigationElement.querySelectorAll('a')).toHaveLength(4);
     for (const link of navigationElement.querySelectorAll('a')) {
       const bounds = link.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);
@@ -178,9 +178,9 @@ describe('F2-06 participant shell and program quality gate', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Program', exact: true }))
       .toHaveAttribute('aria-current', 'page');
-    await expect
-      .element(screen.getByRole('link', { name: 'Oznámení', exact: true }))
-      .toHaveAttribute('href', '/app/oznameni');
+    expect(
+      navigationElement.querySelector('a[href="/app/oznameni"]'),
+    ).toBeNull();
     expect(filters).toHaveLength(1);
     for (const filter of filters) {
       expect(filter.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

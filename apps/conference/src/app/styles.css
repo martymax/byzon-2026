@@ -123,6 +123,134 @@ h1 span {
   min-width: 0;
   padding-bottom: calc(4.5rem + var(--byzon-safe-bottom));
 }
+.participant-notification-link {
+  position: fixed;
+  z-index: 40;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  right: max(clamp(1.25rem, 5vw, 3rem), calc((100vw - 76rem) / 2 + 3rem));
+  width: var(--byzon-touch-target);
+  height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-ink);
+  background: var(--byzon-surface-translucent);
+  box-shadow: var(--byzon-shadow-sm);
+  text-decoration: none;
+  backdrop-filter: blur(14px);
+  touch-action: manipulation;
+  transition:
+    color var(--byzon-motion-fast) var(--byzon-ease),
+    border-color var(--byzon-motion-fast) var(--byzon-ease),
+    background-color var(--byzon-motion-fast) var(--byzon-ease);
+}
+.participant-notification-link:hover,
+.participant-notification-link[aria-current='page'] {
+  border-color: var(--byzon-brand);
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+}
+.participant-notification-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.participant-notification-icon,
+.participant-notification-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: block;
+}
+.participant-notification-badge {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.35rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.25rem;
+  border: 2px solid var(--byzon-surface);
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-surface);
+  background: var(--byzon-danger);
+  font: 750 0.6875rem/1 var(--byzon-font-body);
+  font-variant-numeric: tabular-nums;
+}
+.announcement-toast {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-2);
+  padding: var(--byzon-space-4) 3.75rem var(--byzon-space-4)
+    var(--byzon-space-5);
+  border: 1px solid var(--byzon-border);
+  border-inline-start: 0.35rem solid var(--byzon-brand);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-text);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-overlay);
+  overflow-wrap: anywhere;
+}
+.announcement-toast-label {
+  color: var(--byzon-brand-active);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.announcement-toast h2 {
+  color: var(--byzon-ink);
+  font-size: 1.25rem;
+  line-height: 1.15;
+}
+.announcement-toast-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.announcement-toast-link {
+  width: fit-content;
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--byzon-brand-active);
+  font-weight: 750;
+}
+.announcement-toast-close {
+  position: absolute;
+  top: var(--byzon-space-2);
+  right: var(--byzon-space-2);
+  width: var(--byzon-touch-target);
+  height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-text-muted);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.announcement-toast-close:hover {
+  color: var(--byzon-ink);
+  background: var(--byzon-surface-soft);
+}
+.announcement-toast-link:focus-visible,
+.announcement-toast-close:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
+}
+.announcement-toast-close svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
 main > .ui-participant-nav-spacer {
   display: none;
 }
@@ -1920,6 +2048,20 @@ main > .ui-participant-nav-spacer {
   }
 }
 @media (prefers-reduced-motion: no-preference) {
+  @keyframes announcement-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .announcement-toast {
+    animation: announcement-toast-in var(--byzon-motion-normal)
+      var(--byzon-ease);
+  }
   @keyframes content-progress {
     from {
       background-position: 100% 0;

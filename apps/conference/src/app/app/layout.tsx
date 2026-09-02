@@ -43,6 +43,10 @@ export default async function ParticipantLayout({
 }) {
   const context = await loadParticipantLayoutEventContext();
   const { currentEvent } = context;
+  const navigationMode = participantShellNavigationMode(
+    currentEvent,
+    isFrontendPreviewAvailable(),
+  );
 
   return (
     <ParticipantLayoutShell
@@ -50,10 +54,8 @@ export default async function ParticipantLayout({
         currentEvent,
         'eventFingerprint' in context ? context.eventFingerprint : undefined,
       )}
-      navigationMode={participantShellNavigationMode(
-        currentEvent,
-        isFrontendPreviewAvailable(),
-      )}
+      navigationMode={navigationMode}
+      notificationsEnabled={currentEvent.kind === 'available'}
     >
       {children}
     </ParticipantLayoutShell>

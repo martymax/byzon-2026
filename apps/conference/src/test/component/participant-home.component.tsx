@@ -162,7 +162,7 @@ describe('F2-02 participant home overview', () => {
     const navigation = screen.getByRole('navigation', {
       name: 'Hlavní navigace',
     });
-    expect(navigation.element().querySelectorAll('a')).toHaveLength(5);
+    expect(navigation.element().querySelectorAll('a')).toHaveLength(4);
     await expect
       .element(navigation.getByRole('link', { name: 'Přehled', exact: true }))
       .toHaveAttribute('aria-current', 'page');

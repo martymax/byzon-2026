@@ -17,6 +17,7 @@ import {
 } from '@/lib/announcement-api';
 import { clearAnnouncementReturnContext } from '@/lib/announcement-return-context';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import { publishParticipantAnnouncementRefresh } from '@/lib/participant-announcement-events';
 import {
   invalidateParticipantPrivateResources,
   privateResourceInvalidationReason,
@@ -222,6 +223,7 @@ const ReadReceipt = ({
           }
           attempt.current = undefined;
           onRead(result.data.readAt);
+          publishParticipantAnnouncementRefresh();
           setState({
             status: 'read',
             readAt: result.data.readAt,
