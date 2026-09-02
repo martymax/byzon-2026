@@ -9,7 +9,7 @@ import {
   adminEventSettingsUpdateRequestSchema,
   adminEventSettingsUpdateResponseSchema,
 } from '@byzon/domain/contracts';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -18,6 +18,7 @@ import {
   readIdempotencyKey,
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const uuidSchema = z.string().uuid();
@@ -26,6 +27,7 @@ const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 export interface AdminSettingsDependencies {
   db: Database;
   allowedOrigin: string;
+  currentEventSlug?: string;
   getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
   now?: () => Date;
 }
@@ -67,6 +69,24 @@ const authorize = async (
       'A valid session is required.',
     );
   }
+  const event = await dependencies.db.query.events.findFirst({
+    columns: { status: true },
+    where: and(
+      eq(schema.events.id, eventId),
+      eq(
+        schema.events.slug,
+        dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
+      ),
+    ),
+  });
+  if (!event) {
+    throw problem(
+      403,
+      'EVENT_ACCESS_DENIED',
+      'Event access denied',
+      'Settings are unavailable.',
+    );
+  }
   try {
     await requireEventPermission(
       dependencies.db,
@@ -83,7 +103,7 @@ const authorize = async (
       'Settings are unavailable.',
     );
   }
-  return identity.user.id;
+  return { actorId: identity.user.id, eventStatus: event.status };
 };
 
 const loadSettings = async (db: Database, eventId: string) => {
@@ -111,8 +131,20 @@ export const handleAdminSettings = async (
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
   try {
-    const actorId = await authorize(request, eventId, dependencies);
+    const { actorId, eventStatus } = await authorize(
+      request,
+      eventId,
+      dependencies,
+    );
     if (request.method === 'GET') {
+      if (new URL(request.url).search.length > 0) {
+        throw problem(
+          422,
+          'VALIDATION_FAILED',
+          'Invalid settings request',
+          'Settings do not accept query parameters.',
+        );
+      }
       const settings = await loadSettings(dependencies.db, eventId);
       return Response.json(
         adminEventSettingsSchema.parse({
@@ -189,6 +221,14 @@ export const handleAdminSettings = async (
             'The event settings are unavailable.',
           );
         }
+        if (eventStatus === 'archived') {
+          throw problem(
+            409,
+            'ADMIN_INVALID_TRANSITION',
+            'Archived event',
+            'Archived event settings are read-only.',
+          );
+        }
         if (current.version !== parsed.data.expectedVersion) {
           throw problem(
             409,
@@ -198,10 +238,20 @@ export const handleAdminSettings = async (
             { currentVersion: current.version },
           );
         }
+        if (parsed.data.settings.supportMessage !== current.supportMessage) {
+          throw problem(
+            409,
+            'ADMIN_INVALID_TRANSITION',
+            'Unsupported setting',
+            'The support message cannot be changed until its product placement is approved.',
+          );
+        }
         await transaction
           .update(schema.eventOperationalSettings)
           .set({
-            ...parsed.data.settings,
+            registrationMode: parsed.data.settings.registrationMode,
+            reservationChangesAllowed:
+              parsed.data.settings.reservationChangesAllowed,
             updatedAt: changedAt,
             updatedBy: actorId,
             version: sql`${schema.eventOperationalSettings.version} + 1`,
@@ -221,14 +271,22 @@ export const handleAdminSettings = async (
             reservationChangesAllowed: current.reservationChangesAllowed,
             version: current.version,
           },
-          after: { ...parsed.data.settings, version: current.version + 1 },
+          after: {
+            registrationMode: parsed.data.settings.registrationMode,
+            reservationChangesAllowed:
+              parsed.data.settings.reservationChangesAllowed,
+            version: current.version + 1,
+          },
         });
         const response = adminEventSettingsUpdateResponseSchema.parse({
           eventId,
           outcome: 'updated',
           settings: {
             eventId,
-            ...parsed.data.settings,
+            registrationMode: parsed.data.settings.registrationMode,
+            reservationChangesAllowed:
+              parsed.data.settings.reservationChangesAllowed,
+            supportMessage: current.supportMessage,
             version: current.version + 1,
           },
           changedAt: changedAt.toISOString(),

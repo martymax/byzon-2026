@@ -192,7 +192,9 @@ category/action/time/request filtry a cursor bez klientského předstírání
 Core nastavení začíná read-only, vysvětluje dopad registrace a rezervací,
 zamyká exact-retry draft a archiv nevykreslí edit controls. Neověřený
 `supportMessage` se zachová beze změny, ale nezobrazuje se ani neupravuje do
-produktového rozhodnutí. Rezervace používají produkční session-first
+produktového rozhodnutí. `AUX-13K` stejný invariant nově vynucuje serverově:
+current-event core update v archivu odmítne, skryté pole nelze podvrhnout a
+audit diff obsahuje jen registration/reservation volby. Rezervace používají produkční session-first
 cursor/pageInfo kontrakt s povinně maskovanou referencí. Kanonická stránka
 řadí plné a téměř plné aktivity, zobrazuje datum, čas, místnost,
 obsazenost, čekající i progress a odděluje změnu kapacity od danger storna
