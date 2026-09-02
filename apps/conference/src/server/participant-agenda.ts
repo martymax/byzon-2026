@@ -646,15 +646,15 @@ const loadParticipantAgendaSnapshotUnlocked = async (
   if (requestedSessionIds.length > MAX_AGENDA_ITEMS) {
     throw new Error('Participant agenda item limit exceeded');
   }
-  const visibleSessionIds = requestedSessionIds;
   const operationalRows =
-    visibleSessionIds.length === 0
+    publishedSessionIds.length === 0
       ? []
       : await db
           .select({
             id: schema.programSessions.id,
             capacity: schema.programSessions.capacity,
             capacityMode: schema.programSessions.capacityMode,
+            reservationGroupId: schema.programSessions.reservationGroupId,
             reservationClosesAt: schema.programSessions.reservationClosesAt,
             reservationOpensAt: schema.programSessions.reservationOpensAt,
             startsAt: schema.programSessions.startsAt,
@@ -666,13 +666,38 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           .where(
             and(
               eq(schema.programSessions.eventId, context.event.id),
-              inArray(schema.programSessions.id, visibleSessionIds),
+              inArray(schema.programSessions.id, publishedSessionIds),
               ne(schema.programSessions.status, 'archived'),
             ),
           );
   const operationalById = new Map(operationalRows.map((row) => [row.id, row]));
+  const activeReservationTargets = new Set([
+    ...reservationBySession.keys(),
+    ...waitingBySession.keys(),
+  ]);
+  const visibleSessionIds = [
+    ...new Set([
+      ...requestedSessionIds,
+      ...operationalRows
+        .filter((row) =>
+          activeReservationTargets.has(row.reservationGroupId ?? row.id),
+        )
+        .map(({ id }) => id),
+    ]),
+  ];
+  if (visibleSessionIds.length > MAX_AGENDA_ITEMS) {
+    throw new Error('Participant agenda item limit exceeded');
+  }
+  const reservationTargetIds = [
+    ...new Set(
+      visibleSessionIds.map((sessionId) => {
+        const operational = operationalById.get(sessionId);
+        return operational?.reservationGroupId ?? sessionId;
+      }),
+    ),
+  ];
   const capacityRows =
-    visibleSessionIds.length === 0
+    reservationTargetIds.length === 0
       ? []
       : await db
           .select({
@@ -684,7 +709,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
             and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.status, 'confirmed'),
-              inArray(schema.reservations.sessionId, visibleSessionIds),
+              inArray(schema.reservations.sessionId, reservationTargetIds),
             ),
           )
           .groupBy(schema.reservations.sessionId);
@@ -699,10 +724,14 @@ const loadParticipantAgendaSnapshotUnlocked = async (
     if (!published || !operational) continue;
     const day = context.program.days.find(({ id }) => id === published.dayId);
     if (!day) continue;
-    const confirmed = confirmedBySession.get(sessionId) ?? 0;
+    const reservationTargetId =
+      operational.reservationGroupId ?? operational.id;
+    const reservationPublished =
+      publishedById.get(reservationTargetId) ?? published;
+    const confirmed = confirmedBySession.get(reservationTargetId) ?? 0;
     const operationalState = capacityProjection(
       operational,
-      published,
+      reservationPublished,
       confirmed,
       now,
     );
@@ -729,7 +758,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
       ),
       ...state,
     };
-    const reservation = reservationBySession.get(sessionId);
+    const reservation = reservationBySession.get(reservationTargetId);
     if (reservation) {
       if (state.capacity.mode !== 'reservation') {
         onOperationalDrift?.({
@@ -773,14 +802,14 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           confirmedAt: reservation.createdAt.toISOString(),
           cancellation:
             common.session.status === 'published' &&
-            now.getTime() < Date.parse(published.startsAt)
+            now.getTime() < Date.parse(reservationPublished.startsAt)
               ? { state: 'available' }
               : { state: 'unavailable', reason: 'closed' },
         },
       });
       continue;
     }
-    const waiting = waitingBySession.get(sessionId);
+    const waiting = waitingBySession.get(reservationTargetId);
     if (waiting) {
       if (state.capacity.mode !== 'reservation') {
         onOperationalDrift?.({
@@ -1326,24 +1355,24 @@ export const mutateParticipantAgenda = async (
         }
 
         const operationalTarget =
-          action === 'remove'
-            ? undefined
-            : await transaction.query.programSessions.findFirst({
-                columns: {
-                  capacity: true,
-                  capacityMode: true,
-                  reservationClosesAt: true,
-                  reservationOpensAt: true,
-                  startsAt: true,
-                  status: true,
-                  type: true,
-                  waitlistMode: true,
-                },
-                where: and(
-                  eq(schema.programSessions.eventId, context.event.id),
-                  eq(schema.programSessions.id, parsed.data.sessionId),
-                ),
-              });
+          await transaction.query.programSessions.findFirst({
+            columns: {
+              id: true,
+              capacity: true,
+              capacityMode: true,
+              reservationGroupId: true,
+              reservationClosesAt: true,
+              reservationOpensAt: true,
+              startsAt: true,
+              status: true,
+              type: true,
+              waitlistMode: true,
+            },
+            where: and(
+              eq(schema.programSessions.eventId, context.event.id),
+              eq(schema.programSessions.id, parsed.data.sessionId),
+            ),
+          });
         if (
           action !== 'remove' &&
           action !== 'leave_waitlist' &&
@@ -1353,6 +1382,48 @@ export const mutateParticipantAgenda = async (
         ) {
           throw sessionNotFound();
         }
+        const reservationTargetId =
+          operationalTarget?.reservationGroupId ?? parsed.data.sessionId;
+        if (reservationTargetId !== parsed.data.sessionId) {
+          await acquireTransactionLock(
+            transaction,
+            `participant-reservation:${context.event.id}:${reservationTargetId}`,
+          );
+        }
+        const reservationOperationalTarget =
+          reservationTargetId === parsed.data.sessionId
+            ? operationalTarget
+            : await transaction.query.programSessions.findFirst({
+                columns: {
+                  id: true,
+                  capacity: true,
+                  capacityMode: true,
+                  reservationGroupId: true,
+                  reservationClosesAt: true,
+                  reservationOpensAt: true,
+                  startsAt: true,
+                  status: true,
+                  type: true,
+                  waitlistMode: true,
+                },
+                where: and(
+                  eq(schema.programSessions.eventId, context.event.id),
+                  eq(schema.programSessions.id, reservationTargetId),
+                ),
+              });
+        if (
+          action !== 'remove' &&
+          action !== 'leave_waitlist' &&
+          (!reservationOperationalTarget ||
+            reservationOperationalTarget.status === 'archived' ||
+            reservationOperationalTarget.status === 'cancelled')
+        ) {
+          throw sessionNotFound();
+        }
+        const reservationPublishedTarget =
+          lockedContext.program.sessions.find(
+            ({ id }) => id === reservationTargetId,
+          ) ?? publishedTarget;
 
         let outcome: 'applied' | 'already_applied' = 'already_applied';
         if (parsed.data.action === 'add') {
@@ -1396,7 +1467,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.userId, session.user.id),
-              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.sessionId, reservationTargetId),
               eq(schema.reservations.status, 'confirmed'),
             ),
           });
@@ -1405,7 +1476,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.waitlistEntries.eventId, context.event.id),
               eq(schema.waitlistEntries.userId, session.user.id),
-              eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+              eq(schema.waitlistEntries.sessionId, reservationTargetId),
               eq(schema.waitlistEntries.status, 'waiting'),
             ),
           });
@@ -1428,8 +1499,13 @@ export const mutateParticipantAgenda = async (
             .returning({ sessionId: schema.agendaItems.sessionId });
           if (deleted.length === 1) outcome = 'applied';
         } else if (parsed.data.action === 'cancel') {
-          if (!operationalTarget || !publishedTarget) throw sessionNotFound();
-          if (mutationNow.getTime() >= Date.parse(publishedTarget.startsAt)) {
+          if (!reservationOperationalTarget || !reservationPublishedTarget) {
+            throw sessionNotFound();
+          }
+          if (
+            mutationNow.getTime() >=
+            Date.parse(reservationPublishedTarget.startsAt)
+          ) {
             throw new AgendaReservationClosedError(parsed.data.sessionId);
           }
           const existing = await transaction.query.reservations.findFirst({
@@ -1437,7 +1513,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.userId, session.user.id),
-              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.sessionId, reservationTargetId),
               eq(schema.reservations.status, 'confirmed'),
             ),
           });
@@ -1462,7 +1538,7 @@ export const mutateParticipantAgenda = async (
               await promoteAutomaticWaitlist({
                 transaction,
                 eventId: context.event.id,
-                sessionId: parsed.data.sessionId,
+                sessionId: reservationTargetId,
                 now: mutationNow,
                 requestId: uuidSchema.safeParse(requestId).success
                   ? requestId
@@ -1479,14 +1555,16 @@ export const mutateParticipantAgenda = async (
               and(
                 eq(schema.waitlistEntries.eventId, context.event.id),
                 eq(schema.waitlistEntries.userId, session.user.id),
-                eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                eq(schema.waitlistEntries.sessionId, reservationTargetId),
                 eq(schema.waitlistEntries.status, 'waiting'),
               ),
             )
             .returning({ id: schema.waitlistEntries.id });
           if (cancelled.length === 1) outcome = 'applied';
         } else {
-          if (!operationalTarget || !publishedTarget) throw sessionNotFound();
+          if (!reservationOperationalTarget || !reservationPublishedTarget) {
+            throw sessionNotFound();
+          }
           const saved = await transaction.query.agendaItems.findFirst({
             columns: { sessionId: true },
             where: and(
@@ -1512,27 +1590,27 @@ export const mutateParticipantAgenda = async (
             throw new AgendaTicketInactiveError(parsed.data.sessionId);
           }
           if (
-            operationalTarget.capacityMode !== 'reservation' ||
-            operationalTarget.capacity === null ||
+            reservationOperationalTarget.capacityMode !== 'reservation' ||
+            reservationOperationalTarget.capacity === null ||
             (parsed.data.action === 'join_waitlist' &&
-              operationalTarget.waitlistMode !== 'auto_confirm')
+              reservationOperationalTarget.waitlistMode !== 'auto_confirm')
           ) {
             throw sessionNotFound();
           }
           const opensAt =
-            publishedTarget.reservationOpensAt === undefined
-              ? (operationalTarget.reservationOpensAt?.getTime() ??
+            reservationPublishedTarget.reservationOpensAt === undefined
+              ? (reservationOperationalTarget.reservationOpensAt?.getTime() ??
                 Number.NEGATIVE_INFINITY)
-              : publishedTarget.reservationOpensAt === null
+              : reservationPublishedTarget.reservationOpensAt === null
                 ? Number.NEGATIVE_INFINITY
-                : Date.parse(publishedTarget.reservationOpensAt);
+                : Date.parse(reservationPublishedTarget.reservationOpensAt);
           const closesAt =
-            publishedTarget.reservationClosesAt === undefined
-              ? (operationalTarget.reservationClosesAt?.getTime() ??
-                operationalTarget.startsAt.getTime())
-              : publishedTarget.reservationClosesAt === null
-                ? Date.parse(publishedTarget.startsAt)
-                : Date.parse(publishedTarget.reservationClosesAt);
+            reservationPublishedTarget.reservationClosesAt === undefined
+              ? (reservationOperationalTarget.reservationClosesAt?.getTime() ??
+                reservationOperationalTarget.startsAt.getTime())
+              : reservationPublishedTarget.reservationClosesAt === null
+                ? Date.parse(reservationPublishedTarget.startsAt)
+                : Date.parse(reservationPublishedTarget.reservationClosesAt);
           if (
             mutationNow.getTime() < opensAt ||
             mutationNow.getTime() >= closesAt
@@ -1544,7 +1622,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.userId, session.user.id),
-              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.sessionId, reservationTargetId),
               eq(schema.reservations.status, 'confirmed'),
             ),
           });
@@ -1554,7 +1632,7 @@ export const mutateParticipantAgenda = async (
               where: and(
                 eq(schema.waitlistEntries.eventId, context.event.id),
                 eq(schema.waitlistEntries.userId, session.user.id),
-                eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                eq(schema.waitlistEntries.sessionId, reservationTargetId),
                 eq(schema.waitlistEntries.status, 'waiting'),
               ),
             });
@@ -1571,12 +1649,13 @@ export const mutateParticipantAgenda = async (
               .where(
                 and(
                   eq(schema.reservations.eventId, context.event.id),
-                  eq(schema.reservations.sessionId, parsed.data.sessionId),
+                  eq(schema.reservations.sessionId, reservationTargetId),
                   eq(schema.reservations.status, 'confirmed'),
                 ),
               );
             const capacityIsFull =
-              (capacityRows[0]?.confirmed ?? 0) >= operationalTarget.capacity;
+              (capacityRows[0]?.confirmed ?? 0) >=
+              reservationOperationalTarget.capacity;
             if (capacityIsFull && parsed.data.action === 'reserve') {
               throw new AgendaCapacityFullError(parsed.data.sessionId);
             }
@@ -1593,14 +1672,14 @@ export const mutateParticipantAgenda = async (
                 .where(
                   and(
                     eq(schema.waitlistEntries.eventId, context.event.id),
-                    eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                    eq(schema.waitlistEntries.sessionId, reservationTargetId),
                   ),
                 );
               await transaction.insert(schema.waitlistEntries).values({
                 id: generateId(),
                 eventId: context.event.id,
                 userId: session.user.id,
-                sessionId: parsed.data.sessionId,
+                sessionId: reservationTargetId,
                 status: 'waiting',
                 positionSequence: (lastPosition?.value ?? 0) + 1,
                 createdAt: mutationNow,
@@ -1611,7 +1690,7 @@ export const mutateParticipantAgenda = async (
                 id: generateId(),
                 eventId: context.event.id,
                 userId: session.user.id,
-                sessionId: parsed.data.sessionId,
+                sessionId: reservationTargetId,
                 source:
                   parsed.data.action === 'join_waitlist'
                     ? 'waitlist_join'

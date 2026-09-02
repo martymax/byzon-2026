@@ -209,6 +209,7 @@ export const loadActivityRoster = async (
           .select({
             sessionId: schema.programSessions.id,
             capacity: schema.programSessions.capacity,
+            reservationGroupId: schema.programSessions.reservationGroupId,
           })
           .from(schema.programSessions)
           .where(
@@ -227,6 +228,7 @@ export const loadActivityRoster = async (
       programSession,
     ]),
   );
+  const assignedSessionTargets = new Set<string>();
   const assignedSessions = publishedSessionIds
     .flatMap((sessionId) => {
       const publishedSession = publishedById.get(sessionId);
@@ -238,11 +240,17 @@ export const loadActivityRoster = async (
       ) {
         return [];
       }
+      const reservationTargetId =
+        operationalSession.reservationGroupId ?? sessionId;
+      if (assignedSessionTargets.has(reservationTargetId)) return [];
+      const reservationTarget =
+        publishedById.get(reservationTargetId) ?? publishedSession;
+      assignedSessionTargets.add(reservationTargetId);
       return [
         {
-          sessionId,
-          title: publishedSession.title,
-          startsAt: new Date(publishedSession.startsAt),
+          sessionId: reservationTargetId,
+          title: reservationTarget.title,
+          startsAt: new Date(reservationTarget.startsAt),
           capacity: operationalSession.capacity,
         },
       ];

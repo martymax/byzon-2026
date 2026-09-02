@@ -44,6 +44,8 @@ integration('P5-05 admin reservation HTTP integration', () => {
   const sessionId = crypto.randomUUID();
   const emptySessionId = crypto.randomUUID();
   const networkingSessionId = crypto.randomUUID();
+  const mastermindGroupSessionId = crypto.randomUUID();
+  const mastermindGroupPartTwoSessionId = crypto.randomUUID();
   const isolationSessionId = crypto.randomUUID();
   const adminId = crypto.randomUUID();
   const participantId = crypto.randomUUID();
@@ -295,6 +297,36 @@ integration('P5-05 admin reservation HTTP integration', () => {
         capacity: 1,
         sortOrder: 0,
       },
+      {
+        id: mastermindGroupSessionId,
+        eventId,
+        dayId,
+        slug: `admin-mastermind-one-${mastermindGroupSessionId}`,
+        title: 'Mastermind část 1',
+        type: 'mastermind',
+        startsAt: new Date('2026-09-18T14:00:00Z'),
+        endsAt: new Date('2026-09-18T15:00:00Z'),
+        status: 'draft',
+        reservationGroupId: mastermindGroupSessionId,
+        capacityMode: 'reservation',
+        capacity: 6,
+        sortOrder: 3,
+      },
+      {
+        id: mastermindGroupPartTwoSessionId,
+        eventId,
+        dayId,
+        slug: `admin-mastermind-two-${mastermindGroupPartTwoSessionId}`,
+        title: 'Mastermind část 2',
+        type: 'mastermind',
+        startsAt: new Date('2026-09-18T15:15:00Z'),
+        endsAt: new Date('2026-09-18T16:15:00Z'),
+        status: 'draft',
+        reservationGroupId: mastermindGroupSessionId,
+        capacityMode: 'reservation',
+        capacity: 6,
+        sortOrder: 4,
+      },
     ]);
     await client.db.insert(schema.participantAgendas).values([
       { eventId, userId: participantId },
@@ -451,9 +483,15 @@ integration('P5-05 admin reservation HTTP integration', () => {
           capacity: null,
           confirmedCount: 0,
         }),
+        expect.objectContaining({
+          sessionId: mastermindGroupSessionId,
+          sessionTitle: 'Mastermind část 1 + Mastermind část 2',
+          capacity: 6,
+          confirmedCount: 0,
+        }),
       ]),
     );
-    expect(capacityBody.items).toHaveLength(3);
+    expect(capacityBody.items).toHaveLength(4);
     expect(body.items[0]).toMatchObject({
       state: 'reserved',
       capacity: 2,
@@ -545,6 +583,32 @@ integration('P5-05 admin reservation HTTP integration', () => {
     expect(adminReadProblemSchema.parse(await invalidCursor.json()).code).toBe(
       'VALIDATION_FAILED',
     );
+
+    const completeResponse = await readAdminReservationSessions(
+      sessionPageRequest('?limit=50'),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(completeResponse.status).toBe(200);
+    const complete = adminReservationSessionPageSchema.parse(
+      await completeResponse.json(),
+    );
+    expect(
+      complete.items.find(
+        ({ sessionId: itemSessionId }) =>
+          itemSessionId === mastermindGroupSessionId,
+      ),
+    ).toMatchObject({
+      sessionTitle: 'Mastermind část 1 + Mastermind část 2',
+      capacity: 6,
+      confirmedCount: 0,
+    });
+    expect(
+      complete.items.some(
+        ({ sessionId: itemSessionId }) =>
+          itemSessionId === mastermindGroupPartTwoSessionId,
+      ),
+    ).toBe(false);
   });
 
   it('opens networking reservations only after an administrator sets capacity', async () => {
@@ -623,6 +687,65 @@ integration('P5-05 admin reservation HTTP integration', () => {
       where: eq(schema.programSessions.id, emptySessionId),
     });
     expect(persisted).toEqual({ capacity: 9, version: 2 });
+  });
+
+  it('edits grouped mastermind capacity once and synchronizes both program parts', async () => {
+    const response = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
+        {
+          sessionId: mastermindGroupSessionId,
+          capacity: 8,
+          expectedVersion: 1,
+          reason: 'Společná kapacita obou částí mastermindu.',
+        },
+        'admin-mastermind-group-capacity-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      adminSessionCapacityMutationResponseSchema.parse(await response.json()),
+    ).toMatchObject({
+      record: {
+        sessionId: mastermindGroupSessionId,
+        capacity: 8,
+        confirmedCount: 0,
+        version: 2,
+      },
+    });
+
+    const persisted = await client.db.query.programSessions.findMany({
+      columns: { id: true, capacity: true, version: true },
+      where: eq(
+        schema.programSessions.reservationGroupId,
+        mastermindGroupSessionId,
+      ),
+    });
+    expect(persisted).toEqual(
+      expect.arrayContaining([
+        { id: mastermindGroupSessionId, capacity: 8, version: 2 },
+        { id: mastermindGroupPartTwoSessionId, capacity: 8, version: 2 },
+      ]),
+    );
+
+    const aliasResponse = await mutateAdminSessionCapacity(
+      capacityMutationRequest(
+        {
+          sessionId: mastermindGroupPartTwoSessionId,
+          capacity: 9,
+          expectedVersion: 2,
+          reason: 'Alias nesmí rozdělit společnou kapacitu skupiny.',
+        },
+        'admin-mastermind-group-alias-capacity-0001',
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(aliasResponse.status).toBe(409);
+    expect(
+      adminMutationProblemSchema.parse(await aliasResponse.json()).code,
+    ).toBe('ADMIN_INVALID_TRANSITION');
   });
 
   it('guards capacity with the confirmed count and versions every same-session admin snapshot', async () => {

@@ -54,6 +54,10 @@ const networkingRolloutMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0024_enable_byzon_networking.sql'),
   'utf8',
 );
+const mastermindGroupMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0025_group_tomas_ryza_mastermind.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -99,6 +103,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0024_enable_byzon_networking',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0025_group_tomas_ryza_mastermind',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -212,6 +219,20 @@ describe('versioned database artifacts', () => {
     expect(ticketParticipantProfileBackfillMigration).toContain(
       'ON CONFLICT ("event_id", "user_id") DO NOTHING',
     );
+    expect(mastermindGroupMigration).toContain('"reservation_group_id" uuid');
+    expect(mastermindGroupMigration).toContain(
+      'sessions_reservation_group_event_fk',
+    );
+    expect(mastermindGroupMigration).toContain(
+      "'program.days[1].stages[1].events[1]'",
+    );
+    expect(mastermindGroupMigration).toContain(
+      "'program.days[1].stages[1].events[3]'",
+    );
+    expect(mastermindGroupMigration).toContain('"capacity" = 6');
+    expect(mastermindGroupMigration).toContain(
+      'Mastermind reservation group contains participant state for event %',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -227,6 +248,7 @@ describe('versioned database artifacts', () => {
     expect(ticketParticipantProfileBackfillMigration).not.toContain(
       'gen_random_uuid()',
     );
+    expect(mastermindGroupMigration).not.toContain('gen_random_uuid()');
   });
 
   it('seeds both event scopes idempotently, enables current participant features and keeps isolation disabled', () => {

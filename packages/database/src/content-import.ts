@@ -100,6 +100,7 @@ interface PreparedSession {
   type: 'break' | 'coaching' | 'mastermind' | 'meal' | 'other' | 'workshop';
   capacityMode: 'none' | 'reservation';
   capacity: number | null;
+  reservationGroupKey: string | null;
   roomSlug: string;
   sortOrder: number;
   speakerSlugs: string[];
@@ -128,6 +129,7 @@ const confirmedReservationPolicies = new Map<
   string,
   {
     capacity: number;
+    reservationGroupKey?: string;
     time: string;
     title: string;
     type: 'mastermind' | 'workshop';
@@ -159,6 +161,26 @@ const confirmedReservationPolicies = new Map<
       time: '11:15 - 12:45',
       title: 'Workshop: Blanka Mrázková',
       type: 'workshop',
+    },
+  ],
+  [
+    'program.days[1].stages[1].events[1]',
+    {
+      capacity: 6,
+      reservationGroupKey: 'tomas-ryza-saturday-mastermind',
+      time: '9:30 - 11:00',
+      title: 'Mastermind část 1',
+      type: 'mastermind',
+    },
+  ],
+  [
+    'program.days[1].stages[1].events[3]',
+    {
+      capacity: 6,
+      reservationGroupKey: 'tomas-ryza-saturday-mastermind',
+      time: '11:15 - 12:45',
+      title: 'Mastermind část 2',
+      type: 'mastermind',
     },
   ],
 ]);
@@ -614,6 +636,7 @@ export async function importContentJson(options: {
           type,
           capacityMode: reservationPolicy ? 'reservation' : 'none',
           capacity: reservationPolicy?.capacity ?? null,
+          reservationGroupKey: reservationPolicy?.reservationGroupKey ?? null,
           roomSlug,
           sortOrder: stageIndex * 100 + eventIndex,
           speakerSlugs: [...speakerSlugs],
@@ -667,6 +690,7 @@ export async function importContentJson(options: {
       type: 'coaching',
       capacityMode: 'reservation',
       capacity: coachingSchedule.capacity,
+      reservationGroupKey: null,
       roomSlug,
       sortOrder: slot.sortOrder,
       speakerSlugs: [],
@@ -1086,6 +1110,10 @@ export async function importContentJson(options: {
       );
     }
 
+    const importedReservationGroups = new Map<
+      string,
+      Array<{ id: string; startsAt: Date }>
+    >();
     for (const session of preparedSessions) {
       const existing = await transaction.query.programSessions.findFirst({
         where: and(
@@ -1098,6 +1126,12 @@ export async function importContentJson(options: {
           `refusing to overwrite non-draft session: ${session.slug}`,
         );
       const id = existing?.id ?? generateUuidV7();
+      if (session.reservationGroupKey) {
+        const members =
+          importedReservationGroups.get(session.reservationGroupKey) ?? [];
+        members.push({ id, startsAt: session.startsAt });
+        importedReservationGroups.set(session.reservationGroupKey, members);
+      }
       let importedCapacity = session.capacity;
       if (session.capacityMode === 'reservation') {
         if (session.capacity === null) {
@@ -1137,6 +1171,7 @@ export async function importContentJson(options: {
           startsAt: session.startsAt,
           endsAt: session.endsAt,
           status: 'draft',
+          reservationGroupId: null,
           capacityMode: session.capacityMode,
           capacity: importedCapacity,
           reservationClosesAt:
@@ -1158,6 +1193,7 @@ export async function importContentJson(options: {
             type: session.type,
             startsAt: session.startsAt,
             endsAt: session.endsAt,
+            reservationGroupId: null,
             capacityMode: session.capacityMode,
             capacity: importedCapacity,
             reservationClosesAt:
@@ -1195,6 +1231,50 @@ export async function importContentJson(options: {
           })),
         );
       }
+    }
+
+    for (const [groupKey, unsortedMembers] of importedReservationGroups) {
+      const members = [...unsortedMembers].sort(
+        (left, right) =>
+          left.startsAt.getTime() - right.startsAt.getTime() ||
+          left.id.localeCompare(right.id),
+      );
+      if (members.length < 2) {
+        throw new Error(
+          `reservation group requires at least two sessions: ${groupKey}`,
+        );
+      }
+      const root = members[0]!;
+      const canonical = await transaction.query.programSessions.findFirst({
+        columns: { capacity: true },
+        where: and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.id, root.id),
+        ),
+      });
+      if (canonical?.capacity === null || canonical?.capacity === undefined) {
+        throw new Error(`reservation group is missing capacity: ${groupKey}`);
+      }
+      await transaction
+        .update(schema.programSessions)
+        .set({
+          reservationGroupId: root.id,
+          capacityMode: 'reservation',
+          capacity: canonical.capacity,
+          reservationClosesAt: root.startsAt,
+          waitlistMode: 'disabled',
+          waitlistOfferTtlMinutes: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.programSessions.eventId, eventId),
+            inArray(
+              schema.programSessions.id,
+              members.map(({ id }) => id),
+            ),
+          ),
+        );
     }
   });
   return {

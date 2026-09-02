@@ -69,6 +69,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const waitlistOwnerId = crypto.randomUUID();
   const waitlistFirstId = crypto.randomUUID();
   const waitlistSecondId = crypto.randomUUID();
+  const mastermindGroupUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -84,6 +85,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const participantCancelSessionId = crypto.randomUUID();
   const coachingSessionId = crypto.randomUUID();
   const waitlistSessionId = crypto.randomUUID();
+  const mastermindGroupSessionId = crypto.randomUUID();
+  const mastermindGroupPartTwoSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
 
@@ -198,6 +201,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       waitlistOwnerId,
       waitlistFirstId,
       waitlistSecondId,
+      mastermindGroupUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -235,6 +239,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         waitlistOwnerId,
         waitlistFirstId,
         waitlistSecondId,
+        mastermindGroupUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -270,6 +275,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         waitlistOwnerId,
         waitlistFirstId,
         waitlistSecondId,
+        mastermindGroupUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -302,6 +308,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         waitlistOwnerId,
         waitlistFirstId,
         waitlistSecondId,
+        mastermindGroupUserId,
       ].map((userId, index) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -496,6 +503,29 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'workshop' as const,
         capacityMode: 'reservation' as const,
         capacity: 1,
+      },
+      {
+        id: mastermindGroupSessionId,
+        slug: `mastermind-group-one-${mastermindGroupSessionId}`,
+        title: 'Mastermind část 1',
+        startsAt: new Date('2026-09-18T12:30:00Z'),
+        endsAt: new Date('2026-09-18T13:30:00Z'),
+        type: 'mastermind' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 6,
+        reservationGroupId: mastermindGroupSessionId,
+      },
+      {
+        id: mastermindGroupPartTwoSessionId,
+        slug: `mastermind-group-two-${mastermindGroupPartTwoSessionId}`,
+        title: 'Mastermind část 2',
+        startsAt: new Date('2026-09-18T14:00:00Z'),
+        endsAt: new Date('2026-09-18T15:00:00Z'),
+        type: 'mastermind' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 6,
+        reservationGroupId: mastermindGroupSessionId,
+        reservationClosesAt: new Date('2026-09-18T12:30:00Z'),
       },
     ];
     await client.db.insert(schema.programSessions).values(
@@ -1855,6 +1885,67 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(
       participantAgendaMutationProblemSchema.parse(await reused.json()).code,
     ).toBe('IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('uses one reservation and one shared capacity projection for both mastermind parts', async () => {
+    const added = await mutate(
+      mastermindGroupUserId,
+      {
+        action: 'add',
+        sessionId: mastermindGroupPartTwoSessionId,
+        expectedVersion: 1,
+      },
+      'agenda-mastermind-group-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    const reserved = await mutate(
+      mastermindGroupUserId,
+      {
+        action: 'reserve',
+        sessionId: mastermindGroupPartTwoSessionId,
+        expectedVersion: 2,
+      },
+      'agenda-mastermind-group-reserve-0001',
+    );
+    const body = participantAgendaMutationResponseSchema.parse(
+      await reserved.json(),
+    );
+    expect(reserved.status).toBe(200);
+    const projectedParts = body.items.filter(({ session }) =>
+      [mastermindGroupSessionId, mastermindGroupPartTwoSessionId].includes(
+        session.id,
+      ),
+    );
+    expect(projectedParts).toHaveLength(2);
+    expect(
+      projectedParts.every(
+        (item) =>
+          item.state === 'reserved' &&
+          item.capacity.mode === 'reservation' &&
+          item.capacity.capacity === 6 &&
+          item.capacity.confirmed === 1,
+      ),
+    ).toBe(true);
+    expect(
+      new Set(
+        projectedParts.flatMap((item) =>
+          item.state === 'reserved' ? [item.reservation.id] : [],
+        ),
+      ).size,
+    ).toBe(1);
+
+    const storedReservations = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, mastermindGroupUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(storedReservations).toEqual([
+      { sessionId: mastermindGroupSessionId },
+    ]);
   });
 
   it('cancels before the session starts, audits once and supersedes an old replay after re-reservation', async () => {

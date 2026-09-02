@@ -152,6 +152,7 @@ integration('content import integration', () => {
         endsAt: schema.programSessions.endsAt,
         id: schema.programSessions.id,
         reservationClosesAt: schema.programSessions.reservationClosesAt,
+        reservationGroupId: schema.programSessions.reservationGroupId,
         slug: schema.programSessions.slug,
         startsAt: schema.programSessions.startsAt,
         title: schema.programSessions.title,
@@ -200,16 +201,30 @@ integration('content import integration', () => {
         }),
         expect.objectContaining({
           title: 'Mastermind část 1',
-          capacityMode: 'none',
-          capacity: null,
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
         expect.objectContaining({
           title: 'Mastermind část 2',
-          capacityMode: 'none',
-          capacity: null,
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
       ]),
     );
+    const firstMastermindParts = firstSessions.filter(({ title }) =>
+      title.startsWith('Mastermind část'),
+    );
+    expect(firstMastermindParts).toHaveLength(2);
+    expect(
+      firstMastermindParts.every(
+        ({ reservationGroupId }) =>
+          reservationGroupId === firstMastermindParts[0]!.id,
+      ),
+    ).toBe(true);
     const firstCoachingSessions = firstSessions.filter(
       ({ type }) => type === 'coaching',
     );
@@ -302,6 +317,7 @@ integration('content import integration', () => {
         capacityMode: schema.programSessions.capacityMode,
         capacity: schema.programSessions.capacity,
         reservationClosesAt: schema.programSessions.reservationClosesAt,
+        reservationGroupId: schema.programSessions.reservationGroupId,
         waitlistMode: schema.programSessions.waitlistMode,
         type: schema.programSessions.type,
       })
@@ -389,12 +405,36 @@ integration('content import integration', () => {
           reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
         expect.objectContaining({
+          title: 'Mastermind část 1',
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+        }),
+        expect.objectContaining({
+          title: 'Mastermind část 2',
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+        }),
+        expect.objectContaining({
           title: 'Volný program',
           startsAt: new Date('2026-09-19T11:00:00.000Z'),
           endsAt: new Date('2026-09-19T13:15:00.000Z'),
         }),
       ]),
     );
+    const secondMastermindParts = secondSessions.filter(({ title }) =>
+      title.startsWith('Mastermind část'),
+    );
+    expect(secondMastermindParts).toHaveLength(2);
+    expect(
+      secondMastermindParts.every(
+        ({ reservationGroupId }) =>
+          reservationGroupId === secondMastermindParts[0]!.id,
+      ),
+    ).toBe(true);
     const coachingSessions = secondSessions.filter(
       ({ type }) => type === 'coaching',
     );
