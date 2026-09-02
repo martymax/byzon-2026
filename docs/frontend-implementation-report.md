@@ -143,6 +143,16 @@ support, kritická oznámení, role, report/export, rezervace, audit, event
 settings a správu obsahu. Desktop používá sidebar, úzký viewport jednu
 ekvivalentní navigaci; breadcrumbs nevytvářejí paralelní systém.
 
+Produkční `/admin` už otevírá stejný dashboard workspace jako ověřené preview.
+Šest karet čte pouze event-scoped agregace: aktivovaný e-mailový přístup
+unikátních importovaných účastníků, stav poslední dávky, publikaci a její sync,
+kapacitu po jednotlivých aktivitách, scope status odbavení a počet kritických
+oznámení. Worker fronta je oddělená v lidském technickém souhrnu bez raw chyb;
+sync failure a překročená kapacita jsou degraded. Aktivace, import a oznámení
+bez bezpečného řešitelného targetu nevyrábějí CTA, ostatní odkazy ověřují
+permission/capability a archiv je read-only. Finální staging auth/context E2E
+zůstává společným gate `AUX-13A`.
+
 Aktualizace vstupenek načítá změny výhradně serverovým SimpleShop API
 preview, automaticky ukáže problematické záznamy a používá stejné lidské labely
 v desktopové tabulce i mobilních kartách. Browser nevytváří `File`, `FormData`
