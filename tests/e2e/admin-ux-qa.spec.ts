@@ -328,6 +328,20 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
         .getByRole('textbox', { name: 'Request ID' })
         .fill('admin-qa-max-page');
       await expect(page.getByText('100 položek')).toBeVisible();
+      await expect(
+        page.locator('section[aria-labelledby="audit-results-title"] li'),
+      ).toHaveCount(25);
+    });
+    await capture('audit-100', 'show-all-client-pages', async () => {
+      const auditItems = page.locator(
+        'section[aria-labelledby="audit-results-title"] li',
+      );
+      for (const expectedCount of [50, 75, 100]) {
+        await page
+          .getByRole('button', { name: /^Zobrazit dalších \d+ změn$/ })
+          .click();
+        await expect(auditItems).toHaveCount(expectedCount);
+      }
     });
     await capture('audit-100', 'open-detail', async () => {
       await page.getByText('Zobrazit důvod a podrobnosti').first().click();
