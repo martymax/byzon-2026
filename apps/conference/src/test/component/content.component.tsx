@@ -1,4 +1,5 @@
 import {
+  contentFixtureIds,
   participantContentProblemFixtures,
   participantContentFixtures,
   participantProgramFixtures,
@@ -43,20 +44,43 @@ describe('CS-CONTENT-01 participant UI', () => {
       />,
     );
 
-    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Detail programu: Otevření konference',
+        }),
+      )
+      .toBeVisible();
+    await screen.getByRole('tab', { name: 'Sobota' }).click();
     await screen
       .getByRole('combobox', { name: 'Typ' })
       .selectOptions('workshop');
 
     const workshopCount =
       participantProgramFixtures.happy!.program.sessions.filter(
-        ({ type }) => type === 'workshop',
+        ({ dayId, type }) =>
+          dayId === contentFixtureIds.saturday && type === 'workshop',
       ).length;
     await expect
       .element(screen.getByText(`${String(workshopCount)} bodů programu`))
       .toBeVisible();
-    await expect.element(screen.getByText('Růst bez zkratek')).toBeVisible();
-    expect(screen.getByText('Otevření konference').elements()).toHaveLength(0);
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Detail programu: Růst bez zkratek',
+        }),
+      )
+      .toBeVisible();
+    expect(
+      screen
+        .getByRole('link', {
+          name: 'Detail programu: Otevření konference',
+        })
+        .elements(),
+    ).toHaveLength(0);
+    expect(new URL(window.location.href).searchParams.get('day')).toBe(
+      contentFixtureIds.saturday,
+    );
     expect(new URL(window.location.href).searchParams.get('type')).toBe(
       'workshop',
     );

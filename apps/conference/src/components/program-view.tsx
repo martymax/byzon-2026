@@ -15,6 +15,10 @@ import {
   useParticipantProgram,
 } from './content-state';
 import { SessionRating } from './live-interactions';
+import {
+  ParticipantProgramSchedule,
+  participantProgramDateLabel,
+} from './participant-program-schedule';
 import { ParticipantSessionAgendaAction } from './participant-session-agenda-action';
 
 const time = (value: string) =>
@@ -170,14 +174,23 @@ export const ProgramView = ({
   const state = useParticipantProgram(eventId, api);
   const data = state.status === 'ready' ? state.data : null;
   const continuity = useProgramContinuity(eventId, data);
+  const days = useMemo(
+    () =>
+      [...(data?.program.days ?? [])].sort(
+        (first, second) => first.sortOrder - second.sortOrder,
+      ),
+    [data],
+  );
+  const activeDay =
+    days.find(({ id }) => id === continuity.day) ?? days.at(0) ?? null;
   const sessions = useMemo(
     () =>
       data?.program.sessions.filter(
         (session) =>
-          (!continuity.day || session.dayId === continuity.day) &&
+          (!activeDay || session.dayId === activeDay.id) &&
           (!continuity.type || session.type === continuity.type),
       ) ?? [],
-    [continuity.day, continuity.type, data],
+    [activeDay, continuity.type, data],
   );
 
   if (state.status !== 'ready') {
@@ -201,79 +214,104 @@ export const ProgramView = ({
 
   return (
     <>
-      <fieldset className="filter-bar">
-        <legend className="ui-visually-hidden">Filtry programu</legend>
-        <label>
-          Den
-          <select
-            value={continuity.day}
-            onChange={(event) => continuity.setDay(event.target.value)}
-          >
-            <option value="">Všechny dny</option>
-            {state.data.program.days.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Typ
-          <select
-            value={continuity.type}
-            onChange={(event) => continuity.setType(event.target.value)}
-          >
-            <option value="">Všechny typy</option>
-            {[
-              ...new Set(
-                state.data.program.sessions.map((session) => session.type),
-              ),
-            ].map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
-      <p className="result-count" aria-live="polite">
-        {sessions.length} bodů programu
-      </p>
+      <div aria-label="Dny programu" className="program-tabs" role="tablist">
+        {days.map((day, index) => {
+          const selected = day.id === activeDay?.id;
+          return (
+            <button
+              aria-controls="program-day-panel"
+              aria-selected={selected}
+              className="program-tab"
+              id={`program-day-tab-${day.id}`}
+              key={day.id}
+              onClick={() => continuity.setDay(index === 0 ? '' : day.id)}
+              onKeyDown={(event) => {
+                if (
+                  !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(
+                    event.key,
+                  )
+                )
+                  return;
+                event.preventDefault();
+                const tabs = Array.from(
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                    '[role="tab"]',
+                  ) ?? [],
+                );
+                const current = tabs.indexOf(event.currentTarget);
+                const next =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? tabs.length - 1
+                      : (current +
+                          (event.key === 'ArrowRight' ? 1 : -1) +
+                          tabs.length) %
+                        tabs.length;
+                tabs[next]?.focus();
+                tabs[next]?.click();
+              }}
+              role="tab"
+              tabIndex={selected ? 0 : -1}
+              type="button"
+            >
+              {day.title}
+            </button>
+          );
+        })}
+      </div>
+      <div className="program-day-toolbar">
+        {activeDay ? (
+          <p className="program-day-meta">
+            {participantProgramDateLabel(activeDay.localDate)}
+          </p>
+        ) : null}
+        <fieldset className="filter-bar program-type-filter">
+          <legend className="ui-visually-hidden">Filtry programu</legend>
+          <label>
+            Typ
+            <select
+              value={continuity.type}
+              onChange={(event) => continuity.setType(event.target.value)}
+            >
+              <option value="">Všechny typy</option>
+              {[
+                ...new Set(
+                  state.data.program.sessions.map((session) => session.type),
+                ),
+              ].map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+        <p className="result-count" aria-live="polite">
+          {sessions.length} bodů programu
+        </p>
+      </div>
       {sessions.length === 0 ? (
         <EmptyContent
           title="Tomuto filtru nic neodpovídá"
           detail="Zrušte filtry a zobrazte celý publikovaný program."
           action={{ label: 'Zrušit filtry', onClick: continuity.reset }}
         />
-      ) : (
-        <ol className="session-list">
-          {sessions.map((session) => {
-            const room = state.data.program.rooms.find(
-              ({ id }) => id === session.roomId,
-            );
-            return (
-              <li key={session.id}>
-                <Link
-                  href={sessionHref(session.id, continuity)}
-                  onClick={continuity.rememberScroll}
-                >
-                  <span className="session-meta">
-                    <time dateTime={session.startsAt}>
-                      {time(session.startsAt)}–{time(session.endsAt)}
-                    </time>
-                    {room ? <span>{room.name}</span> : null}
-                    {session.status === 'cancelled' ? (
-                      <span className="status-label">Zrušeno</span>
-                    ) : null}
-                  </span>
-                  <strong>{session.title}</strong>
-                  {session.summary ? <span>{session.summary}</span> : null}
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      ) : activeDay ? (
+        <div
+          aria-labelledby={`program-day-tab-${activeDay.id}`}
+          id="program-day-panel"
+          role="tabpanel"
+        >
+          <ParticipantProgramSchedule
+            day={activeDay}
+            onOpenSession={continuity.rememberScroll}
+            rooms={state.data.program.rooms}
+            sessions={sessions}
+            sessionHref={(sessionId) => sessionHref(sessionId, continuity)}
+          />
+        </div>
+      ) : null}
     </>
   );
 };

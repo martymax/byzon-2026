@@ -126,14 +126,26 @@ describe('F2-06 participant shell and program quality gate', () => {
   it('passes the automatic WCAG A/AA component baseline', async () => {
     const screen = await renderComponent(<ParticipantProgramProbe />);
 
-    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Detail programu: Otevření konference',
+        }),
+      )
+      .toBeVisible();
     await expectComponentToPassAxe(screen.container);
   });
 
   it('preserves the approved responsive layout and visual baseline', async () => {
     const screen = await renderComponent(<ParticipantProgramProbe />);
 
-    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Detail programu: Otevření konference',
+        }),
+      )
+      .toBeVisible();
     await expect
       .element(screen.getByRole('heading', { level: 1, name: 'Program' }))
       .toHaveFocus();
@@ -144,6 +156,14 @@ describe('F2-06 participant shell and program quality gate', () => {
     const navigationElement = navigation.element();
     const pageElement = screen.getByTestId('participant-program').element();
     const filters = pageElement.querySelectorAll('select');
+    const tabs =
+      pageElement.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    const calendar = pageElement.querySelector<HTMLElement>(
+      '.program-calendar-wrap',
+    );
+    const mobileAgenda = pageElement.querySelector<HTMLElement>(
+      '.program-mobile-agenda',
+    );
 
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
@@ -161,17 +181,22 @@ describe('F2-06 participant shell and program quality gate', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Oznámení', exact: true }))
       .toHaveAttribute('href', '/app/oznameni');
-    expect(filters).toHaveLength(2);
+    expect(filters).toHaveLength(1);
     for (const filter of filters) {
       expect(filter.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     }
-
-    const firstFilter = filters[0]!.getBoundingClientRect();
-    const secondFilter = filters[1]!.getBoundingClientRect();
-    if (window.innerWidth <= 576) {
-      expect(secondFilter.top).toBeGreaterThanOrEqual(firstFilter.bottom);
+    expect(tabs).toHaveLength(2);
+    for (const tab of tabs) {
+      expect(tab.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    }
+    expect(calendar).not.toBeNull();
+    expect(mobileAgenda).not.toBeNull();
+    if (window.innerWidth <= 640) {
+      expect(getComputedStyle(calendar!).display).toBe('none');
+      expect(getComputedStyle(mobileAgenda!).display).toBe('block');
     } else {
-      expect(Math.abs(secondFilter.top - firstFilter.top)).toBeLessThan(2);
+      expect(getComputedStyle(calendar!).display).toBe('block');
+      expect(getComputedStyle(mobileAgenda!).display).toBe('none');
     }
 
     const shellContent = pageElement.closest<HTMLElement>(
