@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import type { AdminContentResource } from '@/lib/admin-content-api';
-import { AdminContentWorkspace } from '@/components/admin-content-workspace';
+import { AdminContentProductionWorkspace } from '@/components/admin-content-production-workspace';
 import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
-import { loadCurrentEvent } from '@/server/current-event';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -45,22 +44,10 @@ export default async function AdminContentPage({
       return <AdminContentDemoWorkspace />;
     }
   }
-  const event = await loadCurrentEvent();
   const query = await searchParams;
   return (
-    <section className="app-page">
-      <p className="eyebrow">Administrace</p>
-      <h1>Program a obsah</h1>
-      {event ? (
-        <AdminContentWorkspace
-          eventId={event.id}
-          initialResource={resourceForQuery(query.oblast, query.typ)}
-          readOnly={event.status === 'archived'}
-          timezone={event.timezone}
-        />
-      ) : (
-        <p role="alert">Akce není dostupná.</p>
-      )}
-    </section>
+    <AdminContentProductionWorkspace
+      initialResource={resourceForQuery(query.oblast, query.typ)}
+    />
   );
 }

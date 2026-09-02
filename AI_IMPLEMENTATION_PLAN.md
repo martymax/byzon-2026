@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.41 – cross-route QA AUX-12
+> Stav: implementační plán v6.42 – produkční integrace obsahu AUX-13C
 >
 > Datum sestavení: 20. července 2026
 >
@@ -3364,3 +3364,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.39 | 2. 9. 2026 | `AUX-10A`–`E`,`G` převedly `/admin/reporty` na pravdivý async flow s CSV defaultem, obdobím v timezone akce a strict job kontraktem queued/ready/failed/expired, `/admin/audit` na lidské serverové filtry s request ID a cursor invariantem a `/admin/nastaveni` na read→edit core volby s dirty/exact retry a archivním read-only stavem. Download se ukazuje jen pro přesnou same-event ready cestu; neověřený `supportMessage` se zachová beze změny, ale netvrdí dopad ani se nezobrazuje. Produkční job-list integraci dál vlastní `AUX-13I`, audit `AUX-13J` a settings bez blokovaného support textu `AUX-13K`. |
 | 6.40 | 2. 9. 2026 | `AUX-11A`–`B` dokončily plain-language průchod adminem: rendered-copy regrese blokuje technické výrazy mimo sbalené údaje, serverové reference se lokalizují, společné security/stale/ambiguous chyby odpovídají předepsaným textům a request reference se z hlavní chyby přesunula do `Technických údajů`. Sdílená česká pluralizace používá `Intl` a má regresi pro 0/1/2/4/5/21 i lokalizované tisíce. |
 | 6.41 | 2. 9. 2026 | `AUX-12` přidal samostatnou sedmibodovou Chromium matici všech 11 admin rout s axe, landmarky, logickou strukturou nadpisů, keyboard smokes, overflow, 200% reflow a reduced motion. Route bundle budget odstranil nechtěné legacy barrel bundly a drží shared admin gzip na +315 B/+0,24 %; CLS je 0.03246 a měřené interakce nevytvořily long task. Mock privacy/security review je uzavřený, fyzický screen-reader UAT a browser trace nad kontraktními maximy zůstávají výslovně otevřené. |
+| 6.42 | 2. 9. 2026 | `AUX-13C` odstranil z produkčního `/admin/obsah` druhý participant event lookup: production workspace nyní čte event, timezone, phase a permissions pouze z ověřeného admin shell contextu, používá výchozí content fetch port a při security failure invaliduje celý scope. Preview adapter zůstává za jediným development/test dynamickým importem a produkční build boundary jej odmítá; finální `[x]` čeká na staging auth/context E2E společného `AUX-13A`. |
