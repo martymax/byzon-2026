@@ -444,7 +444,8 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
       await expect(
         page.getByText('100 odpovídá aktuálním filtrům'),
       ).toBeVisible();
-      await expect(page.locator('table tbody tr')).toHaveCount(100);
+      await expect(page.locator('table tbody tr')).toHaveCount(20);
+      await expect(page.getByText('20 z 100 načtených')).toBeVisible();
     });
     await capture('participant-list-100', 'filter', async () => {
       await page

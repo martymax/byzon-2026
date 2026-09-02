@@ -45,8 +45,7 @@ import styles from './admin-workspace.module.css';
 
 const participantPageSize = 100;
 const participantBulkInvitationLimit = 25;
-const participantRenderChunkSize = 5;
-const participantRemovalChunkSize = 20;
+const participantRenderChunkSize = 20;
 const participantCompactDataViewQuery = '(max-width: 48rem)';
 type ParticipantBulkAction = 'invite' | 'block' | 'reactivate';
 const bulkActions = [
@@ -291,6 +290,7 @@ const ParticipantDataView = memo(
     compact,
     items,
     onAllSelectionChange,
+    onScrollEnd,
     onSelectionChange,
     selectedCount,
     selectedIds,
@@ -299,6 +299,7 @@ const ParticipantDataView = memo(
     readonly compact: boolean;
     readonly items: readonly AdminParticipantListItem[];
     readonly onAllSelectionChange: (checked: boolean) => void;
+    readonly onScrollEnd: () => void;
     readonly onSelectionChange: (
       participantId: string,
       checked: boolean,
@@ -322,7 +323,18 @@ const ParticipantDataView = memo(
     }
 
     return (
-      <div className={styles.participantTableWrap}>
+      <div
+        className={styles.participantTableWrap}
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          if (
+            element.scrollTop + element.clientHeight >=
+            element.scrollHeight - 64
+          ) {
+            onScrollEnd();
+          }
+        }}
+      >
         <table className={styles.participantTable}>
           <caption className={styles.visuallyHidden}>Účastníci akce</caption>
           <thead>
@@ -406,10 +418,9 @@ export const AdminSupportWorkspace = () => {
   );
   const [bulkReason, setBulkReason] = useState('');
   const compactDataView = useCompactDataView();
-  const renderedItemsRef = useRef<readonly AdminParticipantListItem[]>([]);
-  const [renderedItems, setRenderedItems] = useState<
-    readonly AdminParticipantListItem[]
-  >([]);
+  const [renderedItemCount, setRenderedItemCount] = useState(
+    participantRenderChunkSize,
+  );
 
   const load = async (append = false) => {
     const offset = append ? items.length : 0;
@@ -454,6 +465,9 @@ export const AdminSupportWorkspace = () => {
       setFilteredTotal(result.data.pageInfo.total);
       setHasMore(result.data.pageInfo.hasMore);
       if (!append) {
+        setRenderedItemCount(
+          Math.min(participantRenderChunkSize, result.data.items.length),
+        );
         setSelectedIds((current) => {
           const visible = new Set(
             result.data.items.map(({ participantId }) => participantId),
@@ -470,62 +484,15 @@ export const AdminSupportWorkspace = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, ticketState, networkingState, eventId]);
 
-  useEffect(() => {
-    const targetIds = new Set(items.map(({ participantId }) => participantId));
-    let displayed = renderedItemsRef.current;
-    let frame: number | null = null;
-
-    const commit = (next: readonly AdminParticipantListItem[]) => {
-      displayed = next;
-      renderedItemsRef.current = next;
-      setRenderedItems(next);
-    };
-    const reconcileNextChunk = () => {
-      const displayedIds = new Set(
-        displayed.map(({ participantId }) => participantId),
-      );
-      const missing = items.filter(
-        ({ participantId }) => !displayedIds.has(participantId),
-      );
-      if (missing.length > 0) {
-        commit([...displayed, ...missing.slice(0, participantRenderChunkSize)]);
-        frame = window.requestAnimationFrame(reconcileNextChunk);
-        return;
-      }
-
-      let removed = 0;
-      const withoutNextOutgoingChunk = [...displayed];
-      for (
-        let index = withoutNextOutgoingChunk.length - 1;
-        index >= 0 && removed < participantRemovalChunkSize;
-        index -= 1
-      ) {
-        const participant = withoutNextOutgoingChunk[index];
-        if (participant && !targetIds.has(participant.participantId)) {
-          withoutNextOutgoingChunk.splice(index, 1);
-          removed += 1;
-        }
-      }
-      if (removed > 0) {
-        commit(withoutNextOutgoingChunk);
-        frame = window.requestAnimationFrame(reconcileNextChunk);
-        return;
-      }
-
-      commit(items);
-    };
-
-    frame = window.requestAnimationFrame(reconcileNextChunk);
-    return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-    };
-  }, [items]);
-
   const selected = useMemo(
     () => items.filter(({ participantId }) => selectedIds.has(participantId)),
     [items, selectedIds],
   );
   const allSelected = items.length > 0 && selected.length === items.length;
+  const renderedItems = useMemo(
+    () => items.slice(0, renderedItemCount),
+    [items, renderedItemCount],
+  );
   const changeParticipantSelection = useCallback(
     (participantId: string, checked: boolean) =>
       setSelectedIds((current) => {
@@ -544,6 +511,15 @@ export const AdminSupportWorkspace = () => {
           : new Set(),
       ),
     [items],
+  );
+  const revealMoreParticipants = useCallback(
+    () =>
+      startTransition(() =>
+        setRenderedItemCount((current) =>
+          Math.min(items.length, current + participantRenderChunkSize),
+        ),
+      ),
+    [items.length],
   );
   const commonActions = bulkActions.filter((action) =>
     selected.every((participant) =>
@@ -787,23 +763,39 @@ export const AdminSupportWorkspace = () => {
             Načítám účastníky…
           </p>
         ) : null}
-        {!busy && !error && items.length === 0 && renderedItems.length === 0 ? (
+        {!busy && !error && items.length === 0 ? (
           <div className={styles.participantEmpty}>
             <strong>Žádný účastník neodpovídá filtrům.</strong>
             <span>Zkuste filtry zrušit nebo upravit hledaný výraz.</span>
           </div>
         ) : null}
 
-        {items.length > 0 || renderedItems.length > 0 ? (
+        {items.length > 0 ? (
           <ParticipantDataView
             allSelected={allSelected}
             compact={compactDataView}
             items={renderedItems}
             onAllSelectionChange={changeAllParticipantSelection}
+            onScrollEnd={revealMoreParticipants}
             onSelectionChange={changeParticipantSelection}
             selectedCount={selected.length}
             selectedIds={selectedIds}
           />
+        ) : null}
+        {renderedItems.length < items.length ? (
+          <div className={styles.participantLoadMore}>
+            <p>
+              V seznamu je zobrazeno {renderedItems.length} z {items.length}{' '}
+              načtených účastníků.
+            </p>
+            <button
+              className={styles.secondaryButton}
+              onClick={revealMoreParticipants}
+              type="button"
+            >
+              Zobrazit další v seznamu
+            </button>
+          </div>
         ) : null}
         {hasMore ? (
           <div className={styles.participantLoadMore}>
