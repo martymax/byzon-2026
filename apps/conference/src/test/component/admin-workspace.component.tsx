@@ -9,6 +9,8 @@ import {
 import {
   adminAnnouncementPreviewFixtures,
   adminAnnouncementSendFixtures,
+  adminAnnouncementSendProblemFixtures,
+  adminAnnouncementTargetFixtures,
   adminAuditFixtures,
   adminContextFixtures,
   adminEngagementMutationFixtures,
@@ -2043,31 +2045,335 @@ describe('F4 contract-first admin journeys', () => {
       </AdminWorkspaceShell>,
     );
 
-    const title = screen.getByRole('textbox', { name: 'Název' });
+    const title = screen.getByRole('textbox', { name: 'Nadpis' });
     await title.fill('Změna sálu workshopu');
     await screen
-      .getByRole('textbox', { name: 'Text oznámení' })
+      .getByRole('textbox', { name: 'Zpráva' })
       .fill('Workshop se přesouvá do sálu Vltava.');
-    await screen.getByRole('button', { name: 'Vytvořit preview' }).click();
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
     await expect
-      .element(screen.getByRole('heading', { name: '2. Immutable preview' }))
+      .element(screen.getByRole('heading', { name: 'Kontrola' }))
       .toBeVisible();
     await title.fill('Změna sálu workshopu – aktualizace');
     await expect
-      .element(screen.getByRole('heading', { name: '2. Immutable preview' }))
+      .element(screen.getByRole('heading', { name: 'Kontrola' }))
       .not.toBeInTheDocument();
-    await screen.getByRole('button', { name: 'Vytvořit preview' }).click();
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
     await screen
-      .getByRole('textbox', { name: 'Auditní důvod odeslání' })
+      .getByRole('textbox', { name: 'Důvod odeslání' })
       .fill('Informování přímo dotčené skupiny.');
     await screen.getByRole('button', { name: 'Zkontrolovat odeslání' }).click();
     await acknowledgeDialog(screen);
     await screen.getByRole('button', { name: 'Odeslat oznámení' }).click();
     await expect
-      .element(screen.getByRole('heading', { name: 'Oznámení bylo odesláno' }))
+      .element(
+        screen.getByRole('heading', {
+          name: 'Oznámení bylo odesláno 37 příjemcům.',
+        }),
+      )
       .toBeVisible();
     await expectComponentToPassAxe(adminRoot());
   });
+
+  it('uses a named session target without exposing or accepting a raw identifier', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    let receivedAudience: unknown;
+    const api = organizerApi((endpoint, rawOptions) => {
+      if (endpoint !== adminAnnouncementPreviewEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      const options = rawOptions as {
+        readonly body: { readonly draft: { readonly audience: unknown } };
+      };
+      receivedAudience = options.body.draft.audience;
+      return success(
+        adminAnnouncementPreviewResponseSchema.parse({
+          ...adminAnnouncementPreviewFixtures.session_audience!,
+          eventId: adminFixtureIds.event,
+          draft: options.body.draft,
+        }),
+      );
+    });
+    const targets = adminAnnouncementTargetFixtures.available!.options;
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAnnouncementWorkspace targets={targets} />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('textbox', { name: 'Nadpis' })
+      .fill('Změna sálu workshopu');
+    await screen
+      .getByRole('textbox', { name: 'Zpráva' })
+      .fill('Workshop se přesouvá do sálu Vltava.');
+    expect(
+      window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
+    ).toBe(false);
+    await screen
+      .getByRole('combobox', { name: 'Komu' })
+      .selectOptions('session');
+    await expect
+      .element(screen.getByRole('combobox', { name: 'Aktivita' }))
+      .toHaveValue(targets[0]!.sessionId);
+    expect(document.body.textContent).toContain('Růst bez zkratek');
+    expect(document.body.textContent).toContain('Sál Vltava');
+    expect(document.body.textContent).not.toContain(targets[0]!.sessionId);
+
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
+    expect(receivedAudience).toEqual({
+      kind: 'session',
+      sessionId: targets[0]!.sessionId,
+    });
+    await expect.element(screen.getByText(/Oznámení uvidí/)).toBeVisible();
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('blocks a zero-recipient announcement before the send confirmation', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    const api = organizerApi((endpoint, rawOptions) => {
+      if (endpoint !== adminAnnouncementPreviewEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      const options = rawOptions as {
+        readonly body: { readonly draft: unknown };
+      };
+      return success(
+        adminAnnouncementPreviewResponseSchema.parse({
+          ...adminAnnouncementPreviewFixtures.empty_audience!,
+          eventId: adminFixtureIds.event,
+          draft: options.body.draft,
+        }),
+      );
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAnnouncementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('textbox', { name: 'Nadpis' })
+      .fill('Prázdné publikum');
+    await screen
+      .getByRole('textbox', { name: 'Zpráva' })
+      .fill('Bezpečné ověření prázdného publika.');
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
+
+    await expect
+      .element(screen.getByText('Publikum je prázdné. Oznámení nelze odeslat.'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Zkontrolovat odeslání' }))
+      .toBeDisabled();
+  });
+
+  it('shows the canonical already-sent receipt without claiming delivery', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as {
+        readonly body: { readonly draft?: unknown };
+      };
+      if (endpoint === adminAnnouncementPreviewEndpoint) {
+        return success(
+          adminAnnouncementPreviewResponseSchema.parse({
+            ...adminAnnouncementPreviewFixtures.session_audience!,
+            eventId: adminFixtureIds.event,
+            draft: options.body.draft,
+          }),
+        );
+      }
+      if (endpoint === adminAnnouncementSendEndpoint) {
+        return success(
+          adminAnnouncementSendResponseSchema.parse({
+            ...adminAnnouncementSendFixtures.idempotent_replay!,
+            eventId: adminFixtureIds.event,
+          }),
+        );
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAnnouncementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('textbox', { name: 'Nadpis' })
+      .fill('Změna programu');
+    await screen
+      .getByRole('textbox', { name: 'Zpráva' })
+      .fill('Program se změnil, zkontrolujte prosím aktuální přehled.');
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod odeslání' })
+      .fill('Opakované ověření stejného oznámení.');
+    await screen.getByRole('button', { name: 'Zkontrolovat odeslání' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Odeslat oznámení' }).click();
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Toto oznámení už bylo odesláno 37 příjemcům. Další kopie nevznikla.',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('doručeno');
+  });
+
+  it('retries an ambiguous announcement send with the exact same request', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    const sendCalls: unknown[] = [];
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as Record<string, unknown>;
+      if (endpoint === adminAnnouncementPreviewEndpoint) {
+        const body = options.body as { readonly draft: unknown };
+        return success(
+          adminAnnouncementPreviewResponseSchema.parse({
+            ...adminAnnouncementPreviewFixtures.session_audience!,
+            eventId: adminFixtureIds.event,
+            draft: body.draft,
+          }),
+        );
+      }
+      if (endpoint === adminAnnouncementSendEndpoint) {
+        const { signal, ...stableRequest } = options;
+        expect(signal).toBeInstanceOf(AbortSignal);
+        sendCalls.push(structuredClone(stableRequest));
+        return sendCalls.length === 1
+          ? failure('timeout')
+          : success(
+              adminAnnouncementSendResponseSchema.parse({
+                ...adminAnnouncementSendFixtures.sent!,
+                eventId: adminFixtureIds.event,
+              }),
+            );
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAnnouncementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('textbox', { name: 'Nadpis' }).fill('Změna sálu');
+    await screen
+      .getByRole('textbox', { name: 'Zpráva' })
+      .fill('Aktivita se přesouvá do sálu Vltava.');
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod odeslání' })
+      .fill('Informování všech dotčených účastníků.');
+    await screen.getByRole('button', { name: 'Zkontrolovat odeslání' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Odeslat oznámení' }).click();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
+
+    expect(sendCalls).toHaveLength(2);
+    expect(sendCalls[1]).toEqual(sendCalls[0]);
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Oznámení bylo odesláno 37 příjemcům.',
+        }),
+      )
+      .toBeVisible();
+  });
+
+  it('rebuilds a stale preview and requires a fresh confirmation', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    let previewCalls = 0;
+    let sendCalls = 0;
+    const api = organizerApi((endpoint, rawOptions) => {
+      const options = rawOptions as {
+        readonly body: { readonly draft?: unknown };
+      };
+      if (endpoint === adminAnnouncementPreviewEndpoint) {
+        previewCalls += 1;
+        return success(
+          adminAnnouncementPreviewResponseSchema.parse({
+            ...adminAnnouncementPreviewFixtures.session_audience!,
+            eventId: adminFixtureIds.event,
+            previewVersion: previewCalls + 1,
+            draft: options.body.draft,
+          }),
+        );
+      }
+      if (endpoint === adminAnnouncementSendEndpoint) {
+        sendCalls += 1;
+        return problemFailure({
+          ...adminAnnouncementSendProblemFixtures.stale_preview!,
+          currentPreviewVersion: 3,
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAnnouncementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('textbox', { name: 'Nadpis' }).fill('Změna sálu');
+    await screen
+      .getByRole('textbox', { name: 'Zpráva' })
+      .fill('Aktivita se přesouvá do sálu Vltava.');
+    await screen.getByRole('button', { name: 'Zkontrolovat oznámení' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod odeslání' })
+      .fill('Informování všech dotčených účastníků.');
+    await screen.getByRole('button', { name: 'Zkontrolovat odeslání' }).click();
+    await acknowledgeDialog(screen);
+    await screen.getByRole('button', { name: 'Odeslat oznámení' }).click();
+
+    expect(previewCalls).toBe(2);
+    expect(sendCalls).toBe(1);
+    await expect
+      .element(screen.getByRole('heading', { name: 'Kontrola' }))
+      .toBeVisible();
+    await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Důvod odeslání' }))
+      .toHaveValue('');
+  });
+
+  it.each(['offline', 'session_expired'] as const)(
+    'wipes the announcement draft after a %s preview failure',
+    async (kind) => {
+      window.history.replaceState({}, '', '/admin/oznameni');
+      const api = organizerApi((endpoint) => {
+        if (endpoint === adminAnnouncementPreviewEndpoint) {
+          return failure(kind, kind === 'session_expired' ? 401 : 0);
+        }
+        throw new Error('Unexpected admin endpoint.');
+      });
+      const screen = await renderComponent(
+        <AdminWorkspaceShell api={api} environment="mocked">
+          <AdminAnnouncementWorkspace />
+        </AdminWorkspaceShell>,
+      );
+
+      await screen
+        .getByRole('textbox', { name: 'Nadpis' })
+        .fill('Citlivý návrh');
+      await screen
+        .getByRole('textbox', { name: 'Zpráva' })
+        .fill('Tento návrh musí být po bezpečnostní chybě odstraněn.');
+      await screen
+        .getByRole('button', { name: 'Zkontrolovat oznámení' })
+        .click();
+
+      await expect
+        .element(screen.getByRole('textbox', { name: 'Nadpis' }))
+        .not.toBeInTheDocument();
+      expect(document.body.textContent).not.toContain('Citlivý návrh');
+    },
+  );
 
   it('freezes every visible settings field while an ambiguous exact retry is pending', async () => {
     window.history.replaceState({}, '', '/admin/nastaveni');

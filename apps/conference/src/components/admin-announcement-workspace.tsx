@@ -8,9 +8,11 @@ import {
   type AdminAnnouncementPreviewResponse,
   type AdminAnnouncementSendRequest,
   type AdminAnnouncementSendResponse,
+  type AdminAnnouncementTarget,
   type AnnouncementSeverity,
 } from '@byzon/domain/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { AdminTechnicalDetails } from '@byzon/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   requestAdminAnnouncementPreview,
@@ -36,12 +38,19 @@ type PendingSend = Readonly<{
   idempotencyKey: string;
 }>;
 
+type AdminAnnouncementWorkspaceProps = Readonly<{
+  targets?: readonly AdminAnnouncementTarget[];
+}>;
+
 const severityLabels: Record<AnnouncementSeverity, string> = {
   critical: 'Kritické',
 };
 
-export const AdminAnnouncementWorkspace = () => {
-  const { api, eventId, invalidateSensitive } = useAdminWorkspace();
+export const AdminAnnouncementWorkspace = ({
+  targets = [],
+}: AdminAnnouncementWorkspaceProps) => {
+  const { api, eventId, eventTimezone, invalidateSensitive } =
+    useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const draftErrorSummaryRef = useRef<HTMLElement | null>(null);
   const sendErrorSummaryRef = useRef<HTMLElement | null>(null);
@@ -62,7 +71,40 @@ export const AdminAnnouncementWorkspace = () => {
   const [busy, setBusy] = useState<'preview' | 'send' | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [sent, setSent] = useState<AdminAnnouncementSendResponse | null>(null);
+
+  const targetDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('cs-CZ', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: eventTimezone,
+      }),
+    [eventTimezone],
+  );
+  const targetLabel = (target: AdminAnnouncementTarget) =>
+    `${target.title} · ${targetDateFormatter.format(new Date(target.startsAt))}${
+      target.roomLabel ? ` · ${target.roomLabel}` : ''
+    }`;
+  const selectedTarget = targets.find(
+    (target) => target.sessionId === sessionId,
+  );
+  const dirty =
+    title.length > 0 ||
+    bodyText.length > 0 ||
+    reason.length > 0 ||
+    audienceKind === 'session';
+
+  useEffect(() => {
+    if (!dirty) return;
+    const protectDraft = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protectDraft);
+    return () => window.removeEventListener('beforeunload', protectDraft);
+  }, [dirty]);
 
   const draftCandidate = adminAnnouncementPreviewRequestSchema.safeParse({
     draft: {
@@ -83,6 +125,23 @@ export const AdminAnnouncementWorkspace = () => {
     setConfirming(false);
     setAmbiguous(false);
     setSent(null);
+    setSendError(null);
+    setRecoveryMessage(null);
+  };
+
+  const wipe = () => {
+    setTitle('');
+    setBodyText('');
+    setAudienceKind('event');
+    setSessionId('');
+    setPreview(null);
+    setReason('');
+    setPending(null);
+    setConfirming(false);
+    setAmbiguous(false);
+    setAttempted(false);
+    setSent(null);
+    setRecoveryMessage(null);
   };
 
   const createPreview = async (
@@ -93,6 +152,7 @@ export const AdminAnnouncementWorkspace = () => {
     setBusy('preview');
     setDraftError(null);
     setSendError(null);
+    setRecoveryMessage(null);
     setPending(null);
     setConfirming(false);
     setAmbiguous(false);
@@ -108,6 +168,7 @@ export const AdminAnnouncementWorkspace = () => {
     if (!result.ok) {
       setPreview(null);
       if (isAdminSecurityFailure(result)) {
+        wipe();
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -122,7 +183,11 @@ export const AdminAnnouncementWorkspace = () => {
       setPreview(result.data);
       setReason('');
       setAttempted(false);
-      if (staleMessage) setDraftError(staleMessage);
+      if (staleMessage) {
+        setRecoveryMessage(
+          `${staleMessage} Načetli jsme novou kontrolu; před odesláním ji znovu potvrďte.`,
+        );
+      }
     }
   };
 
@@ -130,7 +195,7 @@ export const AdminAnnouncementWorkspace = () => {
     setAttempted(true);
     if (!draftCandidate.success) {
       setDraftError(
-        'Doplňte bezpečný název, text a platné publikum bez HTML značek.',
+        'Doplňte nadpis, zprávu a platné publikum bez HTML značek.',
       );
       return;
     }
@@ -184,8 +249,7 @@ export const AdminAnnouncementWorkspace = () => {
     setBusy(null);
     if (!result.ok) {
       if (isAdminSecurityFailure(result)) {
-        setPreview(null);
-        setPending(null);
+        wipe();
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -213,27 +277,71 @@ export const AdminAnnouncementWorkspace = () => {
       return;
     }
     if (result.kind === 'success') {
-      setSent(result.data);
-      setPending(null);
-      setAmbiguous(false);
-      setReason('');
-      setAttempted(false);
+      const receipt = result.data;
+      wipe();
+      setSent(receipt);
     }
   };
+
+  const previewSessionId =
+    preview?.draft.audience.kind === 'session'
+      ? preview.draft.audience.sessionId
+      : null;
+  const previewTarget = previewSessionId
+    ? targets.find((target) => target.sessionId === previewSessionId)
+    : undefined;
+  const previewAudienceLabel = preview
+    ? preview.draft.audience.kind === 'event'
+      ? 'Všichni účastníci akce'
+      : previewTarget
+        ? targetLabel(previewTarget)
+        : 'Účastníci vybrané aktivity'
+    : '';
 
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · oznámení v aplikaci</p>
         <h1>Oznámení účastníkům</h1>
         <p>
-          Náhled uzamkne text, publikum i verzi. Odeslání používá pouze in-app
-          kanál, vyžaduje důvod a je bezpečně idempotentní.
+          Připravte kritickou provozní zprávu, zkontrolujte její publikum a až
+          potom ji odešlete do aplikace.
         </p>
       </header>
 
+      <ol className={styles.importSteps} aria-label="Postup odeslání oznámení">
+        {[
+          ['Text', title.trim() && bodyText.trim() ? 'complete' : 'current'],
+          [
+            'Komu',
+            preview
+              ? 'complete'
+              : title.trim() && bodyText.trim()
+                ? 'current'
+                : undefined,
+          ],
+          ['Kontrola', preview ? 'current' : undefined],
+          ['Odeslání', sent ? 'complete' : undefined],
+        ].map(([label, state], index) => (
+          <li data-state={state} key={label}>
+            <span>{index + 1}</span>
+            <strong>{label}</strong>
+          </li>
+        ))}
+      </ol>
+
+      {dirty && !sent ? (
+        <p className={styles.warning} role="status">
+          Máte rozpracované změny. Před odchodem je dokončete nebo smažte.
+        </p>
+      ) : null}
+      {recoveryMessage ? (
+        <p className={styles.warning} role="status">
+          {recoveryMessage}
+        </p>
+      ) : null}
+
       <section className={styles.panel} aria-labelledby="announcement-draft">
-        <h2 id="announcement-draft">1. Návrh</h2>
+        <h2 id="announcement-draft">Text a publikum</h2>
         {draftValidationFailed || draftError ? (
           <section
             className={styles.errorSummary}
@@ -241,22 +349,18 @@ export const AdminAnnouncementWorkspace = () => {
             role="alert"
             tabIndex={-1}
           >
-            <h2>Preview zatím nelze vytvořit</h2>
+            <h2>Oznámení zatím nelze zkontrolovat</h2>
             <p id="admin-announcement-draft-error">
               {draftError ??
-                'Doplňte bezpečný název, text a platné publikum bez HTML značek.'}
+                'Doplňte nadpis, zprávu a platné publikum bez HTML značek.'}
             </p>
           </section>
         ) : null}
         <div className={styles.twoColumn}>
           <label className={styles.field}>
-            <span>Název</span>
+            <span>Nadpis</span>
             <input
-              aria-describedby={
-                draftValidationFailed
-                  ? 'admin-announcement-draft-error'
-                  : undefined
-              }
+              aria-describedby="admin-announcement-title-count"
               aria-invalid={draftValidationFailed}
               disabled={pending !== null}
               maxLength={160}
@@ -266,23 +370,20 @@ export const AdminAnnouncementWorkspace = () => {
               }}
               value={title}
             />
+            <span className={styles.helper} id="admin-announcement-title-count">
+              {title.length}/160 znaků
+            </span>
           </label>
           <div className={styles.field}>
             <span>Závažnost</span>
             <strong>{severityLabels.critical}</strong>
-            <small>
-              Ročník 2026 povoluje pouze kritická provozní oznámení.
-            </small>
+            <small>Povolena jsou pouze kritická provozní oznámení.</small>
           </div>
         </div>
         <label className={styles.field}>
-          <span>Text oznámení</span>
+          <span>Zpráva</span>
           <textarea
-            aria-describedby={
-              draftValidationFailed
-                ? 'admin-announcement-draft-error'
-                : 'admin-announcement-body-help'
-            }
+            aria-describedby="admin-announcement-body-help"
             aria-invalid={draftValidationFailed}
             disabled={pending !== null}
             maxLength={4000}
@@ -293,34 +394,34 @@ export const AdminAnnouncementWorkspace = () => {
             value={bodyText}
           />
           <span className={styles.helper} id="admin-announcement-body-help">
-            Prostý text; HTML značky ani nebezpečné řídicí znaky nejsou
-            povolené.
+            {bodyText.length}/4000 znaků · prostý text bez HTML
           </span>
         </label>
         <div className={styles.twoColumn}>
           <label className={styles.field}>
-            <span>Publikum</span>
+            <span>Komu</span>
             <select
               disabled={pending !== null}
               onChange={(event) => {
-                setAudienceKind(event.target.value as 'event' | 'session');
+                const nextKind = event.target.value as 'event' | 'session';
+                setAudienceKind(nextKind);
+                setSessionId(
+                  nextKind === 'session' ? (targets[0]?.sessionId ?? '') : '',
+                );
                 resetImmutablePreview();
               }}
               value={audienceKind}
             >
-              <option value="event">Celá akce</option>
-              <option value="session">Konkrétní session</option>
+              <option value="event">Všem účastníkům akce</option>
+              {targets.length > 0 ? (
+                <option value="session">Účastníkům jedné aktivity</option>
+              ) : null}
             </select>
           </label>
           {audienceKind === 'session' ? (
             <label className={styles.field}>
-              <span>ID session</span>
-              <input
-                aria-describedby={
-                  draftValidationFailed
-                    ? 'admin-announcement-draft-error'
-                    : undefined
-                }
+              <span>Aktivita</span>
+              <select
                 aria-invalid={draftValidationFailed}
                 disabled={pending !== null}
                 onChange={(event) => {
@@ -328,17 +429,42 @@ export const AdminAnnouncementWorkspace = () => {
                   resetImmutablePreview();
                 }}
                 value={sessionId}
-              />
+              >
+                {targets.map((target) => (
+                  <option key={target.sessionId} value={target.sessionId}>
+                    {targetLabel(target)}
+                  </option>
+                ))}
+              </select>
             </label>
-          ) : null}
+          ) : (
+            <p className={styles.helper}>
+              Volba jedné aktivity se zobrazí, až server nabídne pojmenovaný
+              seznam aktivit pro tuto akci.
+            </p>
+          )}
         </div>
+
+        <article className={styles.dataCard} aria-label="Náhled pro účastníka">
+          <span className={styles.statusBadge}>Kritické oznámení</span>
+          <h3>{title.trim() || 'Nadpis oznámení'}</h3>
+          <p>{bodyText.trim() || 'Zpráva se zobrazí účastníkům zde.'}</p>
+          <small>
+            {audienceKind === 'event'
+              ? 'Všichni účastníci akce'
+              : selectedTarget
+                ? targetLabel(selectedTarget)
+                : 'Vyberte aktivitu'}
+          </small>
+        </article>
+
         <button
           className={styles.button}
           disabled={busy !== null || pending !== null}
           onClick={previewDraft}
           type="button"
         >
-          {busy === 'preview' ? 'Počítám publikum…' : 'Vytvořit preview'}
+          {busy === 'preview' ? 'Počítám publikum…' : 'Zkontrolovat oznámení'}
         </button>
       </section>
 
@@ -349,10 +475,8 @@ export const AdminAnnouncementWorkspace = () => {
         >
           <div className={styles.panelHeader}>
             <div>
-              <h2 id="announcement-preview">2. Immutable preview</h2>
-              <p className={styles.muted}>
-                {preview.previewId} · verze {preview.previewVersion}
-              </p>
+              <h2 id="announcement-preview">Kontrola</h2>
+              <p className={styles.muted}>{previewAudienceLabel}</p>
             </div>
             <span className={styles.badge}>
               {preview.audience.recipientCount} příjemců
@@ -366,11 +490,21 @@ export const AdminAnnouncementWorkspace = () => {
             <p>{preview.draft.bodyText}</p>
           </article>
           <p>
-            Vyloučeno: {preview.audience.excludedCount}. Maskovaný vzorek:{' '}
-            {preview.audience.sample
-              .map(({ participantReference }) => participantReference)
-              .join(', ') || 'bez vzorku'}
+            Oznámení uvidí <strong>{preview.audience.recipientCount}</strong>{' '}
+            účastníků.
           </p>
+          <p className={styles.muted}>
+            {preview.audience.excludedCount} účastníků je z publika vyloučeno.
+            Současný přehled neuvádí jednotlivé důvody.
+          </p>
+          <AdminTechnicalDetails>
+            <dl className={styles.detailList}>
+              <dt>ID kontroly</dt>
+              <dd>{preview.previewId}</dd>
+              <dt>Verze kontroly</dt>
+              <dd>{preview.previewVersion}</dd>
+            </dl>
+          </AdminTechnicalDetails>
           {sendValidationFailed || sendError ? (
             <section
               className={styles.errorSummary}
@@ -381,31 +515,26 @@ export const AdminAnnouncementWorkspace = () => {
               <h2>Odeslání zatím nelze potvrdit</h2>
               <p id="admin-announcement-send-error">
                 {sendError ??
-                  'Doplňte auditní důvod o nejméně 8 viditelných znaků.'}
+                  'Doplňte důvod odeslání o nejméně 8 viditelných znaků.'}
               </p>
             </section>
           ) : null}
           {preview.audience.recipientCount === 0 ? (
             <p className={styles.warning} role="alert">
-              Prázdné publikum nelze odeslat.
+              Publikum je prázdné. Oznámení nelze odeslat.
             </p>
           ) : null}
           <label className={styles.field}>
-            <span>Auditní důvod odeslání</span>
+            <span>Důvod odeslání</span>
             <textarea
-              aria-describedby={
-                sendValidationFailed
-                  ? 'admin-announcement-send-error'
-                  : 'admin-announcement-reason-help'
-              }
+              aria-describedby="admin-announcement-reason-help"
               aria-invalid={sendValidationFailed}
               disabled={pending !== null}
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
             <span className={styles.helper} id="admin-announcement-reason-help">
-              Pro mocked scénáře lze přidat „stale“, „expired“, „timeout“ nebo
-              „collision“.
+              Důvod se uloží do auditní historie pro pozdější dohledání.
             </span>
           </label>
           <div className={styles.actionRow}>
@@ -439,22 +568,26 @@ export const AdminAnnouncementWorkspace = () => {
         <section className={styles.success} role="status">
           <h2>
             {sent.outcome === 'already_sent'
-              ? 'Server potvrdil dřívější odeslání'
-              : 'Oznámení bylo odesláno'}
+              ? `Toto oznámení už bylo odesláno ${sent.recipientCount} příjemcům. Další kopie nevznikla.`
+              : `Oznámení bylo odesláno ${sent.recipientCount} příjemcům.`}
           </h2>
-          <p>
-            {sent.recipientCount} příjemců · audit{' '}
-            <code>{sent.audit.auditId}</code>
-          </p>
+          <AdminTechnicalDetails>
+            <dl className={styles.detailList}>
+              <dt>ID auditu</dt>
+              <dd>{sent.audit.auditId}</dd>
+              <dt>Verze kontroly</dt>
+              <dd>{sent.previewVersion}</dd>
+            </dl>
+          </AdminTechnicalDetails>
         </section>
       ) : null}
 
       {confirming && pending && preview ? (
         <AdminConfirmDialog
-          acknowledgement="Ověřil/a jsem text, závažnost, immutable verzi a počet příjemců."
+          acknowledgement="Ověřil/a jsem text, publikum a počet příjemců."
           confirmLabel="Odeslat oznámení"
-          danger={preview.draft.severity === 'critical'}
-          description="Po odeslání nelze oznámení upravit. Server znovu ověří preview i oprávnění."
+          danger
+          description="Po odeslání už oznámení nelze upravit. Server znovu ověří kontrolu i vaše oprávnění."
           impact={
             <p>
               {preview.audience.recipientCount} příjemců ·{' '}
@@ -466,7 +599,7 @@ export const AdminAnnouncementWorkspace = () => {
             setConfirming(false);
             setPending(null);
           }}
-          title="Odeslat oznámení do aplikace?"
+          title="Odeslat kritické oznámení do aplikace?"
         />
       ) : null}
     </div>
