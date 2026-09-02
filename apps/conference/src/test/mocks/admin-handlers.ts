@@ -39,6 +39,11 @@ import {
   adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
   adminRoleAssignmentMutationResponseSchema,
+  adminRoleAssignmentListResponseSchema,
+  adminRolePersonSearchRequestSchema,
+  adminRolePersonSearchResponseSchema,
+  adminRoleScopeOptionsRequestSchema,
+  adminRoleScopeOptionsResponseSchema,
   type AdminContextResponse,
   type AdminEventSettings,
   type AdminOperationsOverviewResponse,
@@ -91,6 +96,9 @@ import {
   adminReservationMutationFixtures,
   adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
+  adminRoleAssignmentListFixtures,
+  adminRolePersonSearchFixtures,
+  adminRoleScopeOptionsFixtures,
 } from '@byzon/test-support/fixtures/admin';
 import {
   supportFixtureIds,
@@ -1585,6 +1593,89 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         adminRoleAssignmentMutationResponseSchema,
         response,
         successOptions('admin.mock.role'),
+      );
+    },
+  ),
+
+  http.get('*/api/v1/admin/events/:eventId/role-assignments', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['role:manage'],
+      'admin.mock.role-list',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
+        adminReadProblemSchema,
+        adminReadProblemFixtures.permission,
+        { fixtureName: 'admin.mock.role-list-event' },
+      );
+    }
+    return mockJsonResponse(
+      adminRoleAssignmentListResponseSchema,
+      adminRoleAssignmentListFixtures.list!,
+      successOptions('admin.mock.role-list'),
+    );
+  }),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/role-assignments/search',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminReadProblemSchema,
+        ['role:manage'],
+        'admin.mock.role-search',
+      );
+      if (denied) return denied;
+      const body = adminRolePersonSearchRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      if (!routeMatchesEvent(params.eventId) || !body.success) {
+        return mockProblemResponse(
+          adminReadProblemSchema,
+          adminReadProblemFixtures.validation,
+          { fixtureName: 'admin.mock.role-search-invalid' },
+        );
+      }
+      return mockJsonResponse(
+        adminRolePersonSearchResponseSchema,
+        body.data.query.toLocaleLowerCase('cs-CZ').includes('nikdo')
+          ? adminRolePersonSearchFixtures.empty!
+          : adminRolePersonSearchFixtures.found!,
+        successOptions('admin.mock.role-search'),
+      );
+    },
+  ),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/role-assignments/scope-options',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminReadProblemSchema,
+        ['role:manage'],
+        'admin.mock.role-scopes',
+      );
+      if (denied) return denied;
+      const body = adminRoleScopeOptionsRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      if (!routeMatchesEvent(params.eventId) || !body.success) {
+        return mockProblemResponse(
+          adminReadProblemSchema,
+          adminReadProblemFixtures.validation,
+          { fixtureName: 'admin.mock.role-scopes-invalid' },
+        );
+      }
+      const fixture =
+        body.data.role === 'checkin_operator'
+          ? adminRoleScopeOptionsFixtures.checkin!
+          : body.data.role === 'moderator'
+            ? adminRoleScopeOptionsFixtures.moderator!
+            : adminRoleScopeOptionsFixtures.activity_leader!;
+      return mockJsonResponse(
+        adminRoleScopeOptionsResponseSchema,
+        fixture,
+        successOptions('admin.mock.role-scopes'),
       );
     },
   ),

@@ -13,6 +13,9 @@ import {
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
+  adminRoleAssignmentListFixtures,
+  adminRolePersonSearchFixtures,
+  adminRoleScopeOptionsFixtures,
   supportFixtureIds,
   supportMutationFixtures,
   supportSearchFixtures,
@@ -31,6 +34,9 @@ import {
   adminEngagementOverviewEndpoint,
   adminOperationsOverviewEndpoint,
   adminReservationSessionsEndpoint,
+  adminRoleAssignmentListEndpoint,
+  adminRolePersonSearchEndpoint,
+  adminRoleScopeOptionsEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
@@ -44,6 +50,9 @@ import {
   requestAdminSessionCapacities,
   requestAdminSessionCapacityMutation,
   requestAdminRoleAssignment,
+  requestAdminRoleAssignments,
+  requestAdminRolePeople,
+  requestAdminRoleScopes,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
   requestAdminTicketImportApply,
@@ -110,6 +119,59 @@ describe('admin API contract policies', () => {
       retry: 'safe-read',
       idempotency: 'forbidden',
     });
+    expect(adminRoleAssignmentListEndpoint).toMatchObject({
+      method: 'GET',
+      retry: 'safe-read',
+      idempotency: 'forbidden',
+    });
+    for (const endpoint of [
+      adminRolePersonSearchEndpoint,
+      adminRoleScopeOptionsEndpoint,
+    ]) {
+      expect(endpoint).toMatchObject({
+        method: 'POST',
+        retry: 'never',
+        idempotency: 'forbidden',
+      });
+    }
+  });
+
+  it('uses a bounded URL only for non-PII role filters and POST bodies for people and scopes', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(success(adminRoleAssignmentListFixtures.list!))
+      .mockResolvedValueOnce(success(adminRolePersonSearchFixtures.found!))
+      .mockResolvedValueOnce(success(adminRoleScopeOptionsFixtures.moderator!));
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
+
+    await requestAdminRoleAssignments(api, adminFixtureIds.event, {
+      role: 'moderator',
+      state: 'active',
+    });
+    await requestAdminRolePeople(api, adminFixtureIds.event, {
+      query: 'patrik@example.test',
+    });
+    await requestAdminRoleScopes(api, adminFixtureIds.event, {
+      role: 'moderator',
+    });
+
+    expect(request.mock.calls[0]?.[1]).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/role-assignments?role=moderator&state=active`,
+      cache: 'no-store',
+    });
+    expect(request.mock.calls[1]?.[1]).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/role-assignments/search`,
+      body: { query: 'patrik@example.test' },
+      cache: 'no-store',
+    });
+    expect(request.mock.calls[2]?.[1]).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/role-assignments/scope-options`,
+      body: { role: 'moderator' },
+      cache: 'no-store',
+    });
+    expect(JSON.stringify(request.mock.calls[1]?.[1])).not.toContain('?');
   });
 
   it('loads named announcement targets through a correlated no-store read', async () => {

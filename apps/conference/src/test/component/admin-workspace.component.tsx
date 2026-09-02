@@ -4,6 +4,7 @@ import {
 } from '@byzon/domain/contracts';
 import {
   adminOperationsOverviewResponseSchema,
+  type AdminContextResponse,
   type AdminRoleScopeOptionsRequest,
   adminSessionCapacityMutationResponseSchema,
 } from '@byzon/domain/contracts/admin';
@@ -75,6 +76,7 @@ import {
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
   adminRoleAssignmentEndpoint,
+  adminRoleAssignmentListEndpoint,
   adminReservationsEndpoint,
   adminReservationSessionsEndpoint,
   adminReservationMutationEndpoint,
@@ -166,10 +168,13 @@ const acknowledgeDialog = async (
   await screen.getByRole('checkbox').click();
 };
 
-const organizerApi = (handler: RequestHandler): ApiPort =>
+const organizerApi = (
+  handler: RequestHandler,
+  context: AdminContextResponse = adminContextFixtures.organizer!,
+): ApiPort =>
   createApi((endpoint, options) =>
     endpoint === adminContextEndpoint
-      ? success(adminContextFixtures.organizer!)
+      ? success(context)
       : endpoint === adminAnnouncementTargetsEndpoint
         ? success({
             ...adminAnnouncementTargetFixtures.available!,
@@ -184,7 +189,12 @@ beforeEach(() => {
 
 describe('F4 contract-first admin journeys', () => {
   it.each([
-    ['/admin/role', 'Tým a oprávnění', AdminTeamWorkspace, []],
+    [
+      '/admin/role',
+      'Tým a oprávnění',
+      AdminTeamWorkspace,
+      [adminRoleAssignmentListEndpoint],
+    ],
     ['/admin/reporty', 'Reporty', AdminReportsWorkspace, []],
     [
       '/admin/rezervace',
@@ -214,6 +224,9 @@ describe('F4 contract-first admin journeys', () => {
         if (endpoint === adminOperationsOverviewEndpoint) {
           return success(adminOperationsOverviewFixtures.healthy!);
         }
+        if (endpoint === adminRoleAssignmentListEndpoint) {
+          return success(adminRoleAssignmentListFixtures.list!);
+        }
         if (endpoint === adminReservationSessionsEndpoint) {
           return success(adminReservationSessionFixtures.complete!);
         }
@@ -242,6 +255,45 @@ describe('F4 contract-first admin journeys', () => {
       });
     },
   );
+
+  it('keeps archived team assignments read-only while preserving the list', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const dataPort = {
+      loadAssignments: vi.fn(async () => adminRoleAssignmentListFixtures.list!),
+      searchPeople: vi.fn(async () => adminRolePersonSearchFixtures.empty!),
+      loadScopeOptions: vi.fn(
+        async () => adminRoleScopeOptionsFixtures.checkin!,
+      ),
+    };
+    const context: AdminContextResponse = {
+      ...adminContextFixtures.organizer!,
+      event: {
+        ...adminContextFixtures.organizer!.event,
+        phase: 'archived',
+      },
+    };
+    const api = organizerApi(() => {
+      throw new Error('Archived role view requested an unexpected endpoint.');
+    }, context);
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminTeamWorkspace dataPort={dataPort} />
+      </AdminWorkspaceShell>,
+    );
+
+    expect(screen.getByText('Operátor #27').elements().length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Přiřadit roli' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Odebrat oprávnění' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Důvod změny oprávnění' }),
+    ).not.toBeInTheDocument();
+  });
 
   it('assigns a role through named people and scope options without raw identifier fields', async () => {
     window.history.replaceState({}, '', '/admin/role');
