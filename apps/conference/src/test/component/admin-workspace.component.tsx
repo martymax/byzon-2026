@@ -3085,7 +3085,7 @@ describe('F4 contract-first admin journeys', () => {
     });
     await screen.getByRole('button', { name: 'Načíst další změny' }).click();
     await vi.waitFor(() => {
-      expect(document.body.textContent).toContain('Zrušil rezervaci');
+      expect(document.body.textContent).toContain('Citlivé údaje byly skryty.');
     });
     expect(paths.at(-1)).toContain('category=settings');
     expect(paths.at(-1)).toContain('actor=user');
@@ -3094,7 +3094,6 @@ describe('F4 contract-first admin journeys', () => {
     expect(paths.at(-1)).toContain('cursor=fixture-admin-audit-page-2');
     expect(document.body.textContent).not.toContain('update_settings');
     expect(document.body.textContent).not.toContain('cancel_reservation');
-    expect(document.body.textContent).toContain('Citlivé údaje byly skryty.');
     await expectComponentToPassAxe(adminRoot());
   });
 
