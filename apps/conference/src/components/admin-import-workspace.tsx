@@ -12,7 +12,7 @@ import {
 } from '@byzon/domain/contracts/ticket-import';
 import { AdminTechnicalDetails } from '@byzon/ui';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   requestAdminTicketImportApply,
@@ -891,7 +891,9 @@ export const AdminImportWorkspace = ({
               <button
                 className={styles.secondaryButton}
                 disabled={pageIndex === 0}
-                onClick={() => setPageIndex((current) => current - 1)}
+                onClick={() =>
+                  startTransition(() => setPageIndex((current) => current - 1))
+                }
                 type="button"
               >
                 Předchozí záznamy
@@ -903,7 +905,9 @@ export const AdminImportWorkspace = ({
               <button
                 className={styles.secondaryButton}
                 disabled={pageIndex >= pageCount - 1}
-                onClick={() => setPageIndex((current) => current + 1)}
+                onClick={() =>
+                  startTransition(() => setPageIndex((current) => current + 1))
+                }
                 type="button"
               >
                 Další záznamy
