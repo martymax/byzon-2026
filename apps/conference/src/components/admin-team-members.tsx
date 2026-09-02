@@ -528,10 +528,7 @@ export const AdminTeamMembers = ({
                             {editable ? (
                               <button
                                 className={styles.secondaryButton}
-                                disabled={
-                                  busy !== null &&
-                                  invitingId === member.memberId
-                                }
+                                disabled={busy !== null}
                                 onClick={() => void sendInvitation(member)}
                                 type="button"
                               >
@@ -585,7 +582,7 @@ export const AdminTeamMembers = ({
                         {editable ? (
                           <button
                             className={styles.secondaryButton}
-                            disabled={invitingId === member.memberId}
+                            disabled={busy !== null}
                             onClick={() => void sendInvitation(member)}
                             type="button"
                           >
