@@ -1,6 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ServiceWorkerRegistration } from '../../components/service-worker-registration';
+import {
+  INSTALL_PROMPT_DISMISSAL_STORAGE_KEY,
+  ServiceWorkerRegistration,
+} from '../../components/service-worker-registration';
+import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
 const registration = (
@@ -17,6 +21,21 @@ const registration = (
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
+const installPromptEvent = (): Event => {
+  const event = new Event('beforeinstallprompt', { cancelable: true });
+  Object.defineProperties(event, {
+    prompt: { value: vi.fn(async () => undefined) },
+    userChoice: {
+      value: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+    },
+  });
+  return event;
+};
 
 describe('service worker registration environment boundary', () => {
   it('unregisters only the owned app worker when the component mounts outside production', async () => {
@@ -41,6 +60,30 @@ describe('service worker registration environment boundary', () => {
       expect(unregisterOwned).toHaveBeenCalled();
     });
     expect(unregisterMock).not.toHaveBeenCalled();
+    await screen.unmount();
+  });
+
+  it('lets the user close the install prompt and remembers that choice', async () => {
+    const screen = await renderComponent(<ServiceWorkerRegistration />);
+    window.dispatchEvent(installPromptEvent());
+
+    await expect
+      .element(screen.getByText('Mějte program po ruce'))
+      .toBeVisible();
+    await expectComponentToPassAxe(screen.container);
+    await screen.getByRole('button', { name: 'Zavřít' }).click();
+
+    await expect
+      .element(screen.getByText('Mějte program po ruce'))
+      .not.toBeInTheDocument();
+    expect(
+      Number(window.localStorage.getItem(INSTALL_PROMPT_DISMISSAL_STORAGE_KEY)),
+    ).toBeGreaterThan(Date.now());
+
+    window.dispatchEvent(installPromptEvent());
+    await expect
+      .element(screen.getByText('Mějte program po ruce'))
+      .not.toBeInTheDocument();
     await screen.unmount();
   });
 });

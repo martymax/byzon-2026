@@ -16,6 +16,37 @@ const APP_SERVICE_WORKER_PATH = '/sw.js';
 export const APP_SERVICE_WORKER_VERSION = '2026.07.26.1';
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1_000;
+export const INSTALL_PROMPT_DISMISSAL_MS = 30 * 24 * 60 * 60 * 1_000;
+export const INSTALL_PROMPT_DISMISSAL_STORAGE_KEY =
+  'byzon:pwa-install-dismissed-until:v1';
+
+export const isInstallPromptDismissed = (
+  storage: Pick<Storage, 'getItem'>,
+  now = Date.now(),
+): boolean => {
+  try {
+    const dismissedUntil = Number(
+      storage.getItem(INSTALL_PROMPT_DISMISSAL_STORAGE_KEY),
+    );
+    return Number.isFinite(dismissedUntil) && dismissedUntil > now;
+  } catch {
+    return false;
+  }
+};
+
+export const rememberInstallPromptDismissal = (
+  storage: Pick<Storage, 'setItem'>,
+  now = Date.now(),
+): void => {
+  try {
+    storage.setItem(
+      INSTALL_PROMPT_DISMISSAL_STORAGE_KEY,
+      String(now + INSTALL_PROMPT_DISMISSAL_MS),
+    );
+  } catch {
+    // The prompt still closes when browser storage is unavailable.
+  }
+};
 
 export const shouldEnableAppServiceWorker = (
   nodeEnvironment: string | undefined,
@@ -169,6 +200,7 @@ export function ServiceWorkerRegistration() {
     const onBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as DeferredInstallPromptEvent;
       promptEvent.preventDefault();
+      if (isInstallPromptDismissed(window.localStorage)) return;
       setInstallPrompt(promptEvent);
     };
     const onAppInstalled = () => setInstallPrompt(null);
@@ -325,8 +357,16 @@ export function ServiceWorkerRegistration() {
     if (!prompt) return;
     setInstallPrompt(null);
     await prompt.prompt();
-    await prompt.userChoice;
+    const choice = await prompt.userChoice;
+    if (choice.outcome === 'dismissed') {
+      rememberInstallPromptDismissal(window.localStorage);
+    }
   }, [installPrompt]);
+
+  const dismissInstallPrompt = useCallback(() => {
+    rememberInstallPromptDismissal(window.localStorage);
+    setInstallPrompt(null);
+  }, []);
 
   const notice = serviceWorkerNotice({
     failed,
@@ -386,13 +426,22 @@ export function ServiceWorkerRegistration() {
             </button>
           </>
         ) : notice === 'install' ? (
-          <button
-            className={styles.action}
-            onClick={() => void installApplication()}
-            type="button"
-          >
-            Nainstalovat
-          </button>
+          <>
+            <button
+              className={styles.action}
+              onClick={() => void installApplication()}
+              type="button"
+            >
+              Nainstalovat
+            </button>
+            <button
+              className={styles.quietAction}
+              onClick={dismissInstallPrompt}
+              type="button"
+            >
+              Zavřít
+            </button>
+          </>
         ) : (
           <button
             className={styles.quietAction}
