@@ -141,6 +141,13 @@
       "when": 1788129752906,
       "tag": "0019_remarkable_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788316966440,
+      "tag": "0020_goofy_green_goblin",
+      "breakpoints": true
     }
   ]
 }

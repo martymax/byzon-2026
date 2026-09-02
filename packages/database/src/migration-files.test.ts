@@ -35,6 +35,10 @@ const coachingMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0010_coaching_slots.sql'),
   'utf8',
 );
+const ticketParticipantApplyMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0020_goofy_green_goblin.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -68,6 +72,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0010_coaching_slots',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0020_goofy_green_goblin',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -161,6 +168,17 @@ describe('versioned database artifacts', () => {
     expect(coachingMigration).toContain(
       'b2743415963f645c11815d582f4a800a83094d78bb6c83763f06e56ec3822e48',
     );
+    expect(ticketParticipantApplyMigration).toContain(
+      'CREATE TABLE "ticket_source_participants"',
+    );
+    expect(ticketParticipantApplyMigration).toContain(
+      'ADD COLUMN "preview_status"',
+    );
+    expect(ticketParticipantApplyMigration).toContain(
+      'ticket_import_rows_preview_status_check',
+    );
+    expect(ticketParticipantApplyMigration).not.toContain('contact_email');
+    expect(ticketParticipantApplyMigration).not.toContain('code_hmac');
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -172,6 +190,7 @@ describe('versioned database artifacts', () => {
     expect(agendaWriteMigration).not.toContain('gen_random_uuid()');
     expect(reservationWindowMigration).not.toContain('gen_random_uuid()');
     expect(coachingMigration).not.toContain('gen_random_uuid()');
+    expect(ticketParticipantApplyMigration).not.toContain('gen_random_uuid()');
   });
 
   it('seeds both event scopes idempotently and keeps the test event archived', () => {

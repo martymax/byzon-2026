@@ -244,20 +244,22 @@ advanced targeting and reporting remain server work in `P8-05`/`P8-06`.
 
 ## Ticket import (`CS-IMPORT-01`)
 
-`ticket-import.ts` currently defines the vendor-neutral staging, preview and
-apply boundary originally exercised with CSV/XLSX fixtures. The SimpleShop
-production source will be a server-only, admin-triggered API adapter according
-to ADR-015; it reuses the canonical row/diff model without uploading or
-exporting a SimpleShop file. Raw API responses, previews and operational PII
+`ticket-import.ts` defines the vendor-neutral staging, preview and apply
+boundary originally exercised with CSV/XLSX fixtures. The production
+SimpleShop source is a server-only, admin-triggered API adapter according to
+ADR-015; it reuses the canonical row/diff model without uploading or exporting
+a SimpleShop file. Raw API responses, previews and operational PII
 are forbidden from browser persistence and shared/service-worker caches. Rows
 expose masked contacts and one of `new`, `unchanged`, `status_changed`,
 `conflict` or `unknown`, with totals validated against the complete preview.
 
-Apply binds the exact event, preview ID/version and immutable SHA-256 digest,
+Apply binds the exact event, preview ID/version and immutable snapshot digest,
 requires a visible reason and transport idempotency key, and is rejected while
-any conflict or unknown row remains. Success returns the correlated impact and
-report reference; ambiguous transport outcomes may retry only the exact frozen
-request.
+any conflict or unknown row remains. The server re-fetches the source before
+writing, then atomically upserts eligible identities, memberships, participant
+roles and source references without ticket credentials or email delivery.
+Success returns the correlated impact and audit reference; ambiguous transport
+outcomes may retry only the exact frozen request.
 
 ## Operational support (`CS-SUPPORT-01`)
 

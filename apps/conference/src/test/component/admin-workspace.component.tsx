@@ -748,15 +748,29 @@ describe('F4 contract-first admin journeys', () => {
       .toBeVisible();
   });
 
-  it('loads a sanitized SimpleShop preview and never offers apply', async () => {
+  it('loads a sanitized SimpleShop preview and applies the exact confirmed impact', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
     const preview = {
       ...ticketImportPreviewFixtures.simpleshop_readonly!,
       eventId: adminFixtureIds.event,
     };
+    const report = {
+      ...ticketImportApplyFixtures.applied!,
+      eventId: adminFixtureIds.event,
+      previewId: preview.previewId,
+      previewVersion: preview.previewVersion,
+      result: {
+        created: preview.summary.new,
+        statusChanged: preview.summary.statusChanged,
+        unchanged: preview.summary.unchanged,
+      },
+    };
     const api = organizerApi((endpoint) => {
       if (endpoint === adminTicketImportPreviewEndpoint) {
         return success(preview);
+      }
+      if (endpoint === adminTicketImportApplyEndpoint) {
+        return success(report);
       }
       throw new Error('Unexpected admin endpoint.');
     });
@@ -771,18 +785,11 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByRole('heading', { name: 'Zkontrolovat změny' }))
       .toBeVisible();
     await expect
-      .element(
-        screen.getByText(
-          /Použití změn se zobrazí až po dokončení navazujícího serverového propojení/,
-        ),
-      )
+      .element(screen.getByRole('textbox', { name: 'Důvod aktualizace' }))
       .toBeVisible();
     await expect
-      .element(screen.getByRole('textbox', { name: 'Důvod aktualizace' }))
-      .not.toBeInTheDocument();
-    await expect
       .element(screen.getByRole('button', { name: 'Použít změny' }))
-      .not.toBeInTheDocument();
+      .toBeVisible();
     expect(document.body.textContent).not.toContain('Alice Participant');
     await screen
       .getByRole('combobox', { name: 'Filtrovat záznamy' })
@@ -809,13 +816,38 @@ describe('F4 contract-first admin journeys', () => {
       body: { source: 'simpleshop' },
       cache: 'no-store',
     });
-    expect(
-      vi
-        .mocked(api.request)
-        .mock.calls.some(
-          ([endpoint]) => endpoint === adminTicketImportApplyEndpoint,
-        ),
-    ).toBe(false);
+    await screen
+      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .fill('Potvrzený import účastníků ze SimpleShopu.');
+    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Použít změny' })
+      .click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Změny vstupenek byly použity',
+        }),
+      )
+      .toBeVisible();
+    const applyCall = vi
+      .mocked(api.request)
+      .mock.calls.find(
+        ([endpoint]) => endpoint === adminTicketImportApplyEndpoint,
+      );
+    expect(applyCall?.[1]).toMatchObject({
+      body: {
+        eventId: adminFixtureIds.event,
+        previewId: preview.previewId,
+        previewVersion: preview.previewVersion,
+        expectedImpact: preview.summary,
+        reason: 'Potvrzený import účastníků ze SimpleShopu.',
+      },
+      cache: 'no-store',
+    });
+    expect(applyCall?.[1]).toHaveProperty('idempotencyKey');
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
@@ -1104,7 +1136,7 @@ describe('F4 contract-first admin journeys', () => {
       expect(document.body.textContent).toContain(problemRow?.contactName);
       await expect
         .element(screen.getByRole('button', { name: 'Použít změny' }))
-        .toBeDisabled();
+        .not.toBeInTheDocument();
       expect(port.apply).not.toHaveBeenCalled();
     },
   );

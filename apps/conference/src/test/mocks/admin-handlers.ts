@@ -1108,7 +1108,6 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         );
       }
       if (
-        storedPreview.preview.source.kind === 'simpleshop_api' ||
         storedPreview.preview.summary.conflict > 0 ||
         storedPreview.preview.summary.unknown > 0
       ) {

@@ -30,8 +30,8 @@ pomocí `GET`, proti oficiálnímu OpenAPI a skutečným odpovědím pro BYZON p
    ticket.
 4. `P4-02` načte jedinou dokumentovanou exportní odpověď, uloží sanitizovaný
    staging batch, validuje schéma a připraví diff `new / unchanged / conflict /
-   unknown`. SimpleShop preview nemá apply cestu. Budoucí `P4-03` smí přidat
-   samostatný idempotentní apply až po schválení otevřených stavových mapování.
+   unknown`. `P4-03` přidává samostatný reasoned a idempotentní participant
+   apply po schválení stavového a identitního mapování.
 5. Neznámý status, chybějící stabilní externí ID, nejednoznačný počet kusů,
    duplicitní kód nebo překročený limit zastaví celý batch. Neznámá hodnota
    nikdy automaticky neaktivuje ani nestornuje vstupenku.
@@ -114,8 +114,12 @@ Dne 31. 8. 2026 organizátor schválil konzervativní participant apply:
 2. Server provede read-only discovery/fetch a vrátí sanitizované preview.
 3. Administrace zobrazí sanitizované počty, konflikty a význam každého
    zdrojového statusu. Tím tok `P4-02` končí bez apply a bez změny ticketů.
-4. Případný budoucí apply je samostatný rozsah `P4-03` a nesmí být zpřístupněn,
-   dokud nejsou schválena mapování pending/storno/refund a práce s kódem.
+4. Po explicitním potvrzení a důvodu `P4-03` znovu načte SimpleShop snapshot,
+   porovná jeho otisk s immutable preview a atomicky vytvoří pouze způsobilé
+   identity, aktivní membershipy a participant role.
+5. Apply ukládá oddělenou source referenci, nevytváří ticket credential ani
+   neposílá e-mail. Expirovaný/změněný snapshot, unknown nebo konflikt skončí
+   bez částečného zápisu; exact idempotency retry vrátí původní audit receipt.
 
 ## Otevřené integrační vstupy
 

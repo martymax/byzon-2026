@@ -366,9 +366,7 @@ export const AdminImportWorkspace = ({
         ? 2
         : 1;
   const blockingCount = preview
-    ? preview.summary.excluded +
-      preview.summary.conflict +
-      preview.summary.unknown
+    ? preview.summary.conflict + preview.summary.unknown
     : 0;
   const noChanges = preview
     ? preview.summary.new === 0 && preview.summary.statusChanged === 0
@@ -746,12 +744,11 @@ export const AdminImportWorkspace = ({
 
           {!canApplyTicketImportPreview(preview) ? (
             <p className={styles.warning} role="alert">
-              {preview.source.kind === 'simpleshop_api'
-                ? 'Kontrola ze SimpleShopu je bezpečně dostupná. Použití změn se zobrazí až po dokončení navazujícího serverového propojení.'
-                : 'Dávka obsahuje záznam, který vyžaduje opravu. Opravte jej ve zdroji a změny znovu načtěte.'}
+              Dávka obsahuje konflikt nebo nerozpoznaný stav. Opravte jej ve
+              zdroji a změny znovu načtěte.
             </p>
           ) : null}
-          {preview.source.kind === 'file' && !report ? (
+          {canApplyTicketImportPreview(preview) && !report ? (
             <section
               aria-labelledby="ticket-confirm-title"
               className={styles.importConfirmSection}
@@ -815,7 +812,7 @@ export const AdminImportWorkspace = ({
         </section>
       ) : null}
 
-      {report && preview?.source.kind === 'file' ? (
+      {report && preview ? (
         <section className={styles.success} role="status">
           <p className={styles.eyebrow}>Krok 4</p>
           <h2>
@@ -841,7 +838,7 @@ export const AdminImportWorkspace = ({
         </section>
       ) : null}
 
-      {confirming && pending && preview?.source.kind === 'file' ? (
+      {confirming && pending && preview ? (
         <AdminConfirmDialog
           acknowledgement="Zkontroloval/a jsem uvedený dopad a správnost změn."
           confirmLabel="Použít změny"

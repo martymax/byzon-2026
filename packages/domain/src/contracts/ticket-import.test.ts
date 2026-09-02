@@ -232,7 +232,7 @@ describe('CS-IMPORT-01 contracts', () => {
     });
 
     expect(canApplyTicketImportPreview(conflict)).toBe(false);
-    expect(canApplyTicketImportPreview(excluded)).toBe(false);
+    expect(canApplyTicketImportPreview(excluded)).toBe(true);
     expect(canApplyTicketImportPreview(unknown)).toBe(false);
     expect(
       ticketImportApplyRequestSchema.safeParse({
@@ -287,7 +287,7 @@ describe('CS-IMPORT-01 contracts', () => {
     ).toBe(false);
   });
 
-  it('validates the bounded SimpleShop source envelope and never enables apply', () => {
+  it('validates the bounded SimpleShop source envelope and enables safe apply', () => {
     const simpleShopPreview = ticketImportPreviewResponseSchema.parse({
       ...preview,
       source: {
@@ -316,7 +316,7 @@ describe('CS-IMPORT-01 contracts', () => {
       },
     });
 
-    expect(canApplyTicketImportPreview(simpleShopPreview)).toBe(false);
+    expect(canApplyTicketImportPreview(simpleShopPreview)).toBe(true);
     expect(
       ticketImportPreviewResponseSchema.safeParse({
         ...simpleShopPreview,
@@ -364,6 +364,27 @@ describe('CS-IMPORT-01 contracts', () => {
     };
 
     expect(ticketImportApplyProblemSchema.parse(stale)).toEqual(stale);
+    for (const problem of [
+      {
+        code: 'IMPORT_SOURCE_TIMEOUT',
+        status: 504,
+      },
+      {
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        status: 400,
+      },
+    ] as const) {
+      expect(
+        ticketImportApplyProblemSchema.parse({
+          type: problemTypeForCode(problem.code),
+          title: 'Apply unavailable',
+          status: problem.status,
+          code: problem.code,
+          detail: 'Retry from a current preview.',
+          requestId: 'request-ticket-import-0002',
+        }).code,
+      ).toBe(problem.code);
+    }
     expect(
       ticketImportApplyProblemSchema.safeParse({
         ...stale,

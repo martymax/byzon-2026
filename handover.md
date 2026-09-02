@@ -23,7 +23,8 @@
   Asset contract a mockované foto/logo UI jsou hotové bez raw ID; produkční
   storage/auth integraci dál vlastní `P3-13`/`AUX-13L`. Aktualizace vstupenek
   má čtyři lidské kroky a v produkci zachovává pouze integrované server-only
-  SimpleShop preview; apply/report dál vlastní `P4-03`/`AUX-13D`.
+  SimpleShop preview i participant apply/report jsou integrovány v
+  `P4-03`/`AUX-13D`; invitation dál vlastní `P4-06`.
   `/admin/ucastnici` hledá PII jen přes POST/no-store body, má maskovaný
   desktop/mobile výsledek, read-only detail a lidský block/reactivate/resend
   tok. Target picker má strict reference kontrakt bez UUID vstupu, ale
@@ -101,12 +102,12 @@ konfliktu přednost.
 - Závazné rozhodnutí je v
   `docs/adr/016-participant-access-and-2026-operations-scope.md` a plánu v6.28.
 
-## Autoritativní navázání – SimpleShop API (`P0-02` / `P4-02`, 30. 8. 2026)
+## Autoritativní navázání – SimpleShop API (`P0-02` / `P4-02` / `P4-03`)
 
 Tato sekce je novější než starší stavové poznámky níže a má při konfliktu
 přednost.
 
-### Stav implementace `P4-02`
+### Stav implementace `P4-02` a `P4-03`
 
 - Read-only discovery a implementace `P0-02`/`P4-02`/`F4-02` jsou dokončené
   na větvi `agent/p4-02-simpleshop-preview` v
@@ -122,7 +123,11 @@ přednost.
   čte SimpleShop. Odpověď i audit jsou private/no-store a bez PII/raw kódu.
 - Preview ukládá pouze stabilní ticket/order ID, zdrojový stav a sanitizovaný
   diff do staging batch/rows. Nemění `tickets`, nevytváří HMAC z kódu a pro
-  SimpleShop zdroj nikdy nezpřístupní apply.
+  SimpleShop zdroj samo nic neaplikuje.
+- Oddělený `P4-03` apply je reasoned a idempotentní. Znovu načte a porovná
+  celý normalizovaný source snapshot a v jedné transakci vytvoří jen způsobilé
+  identity, aktivní event membershipy, participant role a source reference.
+  Ticket credential ani e-mail nevytváří; PII z preview nepersistuje.
 - Security/code review opravil bounded stream čtení requestu i rozbalené HTTP
   odpovědi, deadline přes celé streamované tělo, přesný JSON media type, limit
   délky externích ID a explicitní `unknown/unapproved` místo domnělého mapování
@@ -148,9 +153,10 @@ přednost.
 - Voucher pole nebylo přítomné. Všech 67 ticket kódů bylo unikátních, 6 bytů,
   jen číslice/velká ASCII písmena; žádná raw hodnota nebyla vypsána ani
   uložena. Refund nebyl přítomen.
-- Pouze `Uhrazeno` je kandidát `active` v preview. `Neuhrazeno`, `STORNO`,
-  refund a nový stav zůstávají bez schváleného apply mapování. `TKT-01` je
-  uzavřen; `TKT-02` a `TKT-04` zůstávají otevřené pro `P4-03`/claim.
+- Pouze `Uhrazeno` je kandidát `active` v preview/apply. `Neuhrazeno`,
+  `STORNO` a refund novou identitu nevytvoří; unknown nebo downgrade již
+  importované identity blokuje batch k ruční kontrole. `TKT-01`, `TKT-02` i
+  `TKT-04` jsou pro scope 2026 uzavřené.
 
 ### Ověření před publikací
 

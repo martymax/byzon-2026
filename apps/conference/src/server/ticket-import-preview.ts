@@ -50,7 +50,10 @@ interface PersistedPreviewRow {
     SimpleShopTicketSourceRecord,
     'sourceRowNumber' | 'externalId' | 'orderExternalId' | 'sourceStatus'
   >;
-  readonly preview: Pick<TicketImportRow, 'incomingState' | 'issues'>;
+  readonly preview: Pick<
+    TicketImportRow,
+    'incomingState' | 'issues' | 'status'
+  >;
 }
 
 export interface TicketImportPreviewStore {
@@ -490,6 +493,7 @@ export const buildTicketImportPreview = (input: {
       preview: {
         incomingState: preview.incomingState,
         issues: preview.issues,
+        status: preview.status,
       },
     })),
   };
@@ -538,21 +542,39 @@ export const createDatabaseTicketImportPreviewStore = (
       requireDatabaseAccess(db, eventId, actorId, currentEventSlug),
     loadExisting: async (eventId, externalIds) => {
       if (externalIds.length === 0) return [];
-      const rows = await db
-        .select({
-          externalId: schema.tickets.externalId,
-          status: schema.tickets.status,
-        })
-        .from(schema.tickets)
-        .where(
-          and(
-            eq(schema.tickets.eventId, eventId),
-            inArray(schema.tickets.externalId, externalIds),
+      const [ticketRows, importedRows] = await Promise.all([
+        db
+          .select({
+            externalId: schema.tickets.externalId,
+            status: schema.tickets.status,
+          })
+          .from(schema.tickets)
+          .where(
+            and(
+              eq(schema.tickets.eventId, eventId),
+              inArray(schema.tickets.externalId, externalIds),
+            ),
           ),
-        );
-      return rows.flatMap(({ externalId, status }) =>
-        externalId === null ? [] : [{ externalId, status }],
+        db
+          .select({ externalId: schema.ticketSourceParticipants.externalId })
+          .from(schema.ticketSourceParticipants)
+          .where(
+            and(
+              eq(schema.ticketSourceParticipants.eventId, eventId),
+              inArray(schema.ticketSourceParticipants.externalId, externalIds),
+            ),
+          ),
+      ]);
+      const existing = new Map<string, ExistingTicketStatus>(
+        importedRows.map(({ externalId }) => [externalId, 'valid']),
       );
+      for (const { externalId, status } of ticketRows) {
+        if (externalId !== null) existing.set(externalId, status);
+      }
+      return [...existing].map(([externalId, status]) => ({
+        externalId,
+        status,
+      }));
     },
     savePreview: async (input) => {
       await withTransaction(db, async (transaction) => {
@@ -605,6 +627,7 @@ export const createDatabaseTicketImportPreviewStore = (
             sourceStatus: source.sourceStatus,
             mappedStatus:
               preview.incomingState === 'active' ? ('valid' as const) : null,
+            previewStatus: preview.status,
             validationErrors: preview.issues.map(({ code }) => code),
             createdAt: input.createdAt,
           })),
@@ -626,7 +649,8 @@ export const createDatabaseTicketImportPreviewStore = (
               ticketRows: input.snapshot.source.ticketRows,
               observedStatuses: input.snapshot.source.observedStatuses,
               summary: input.summary,
-              applyAvailable: false,
+              applyAvailable:
+                input.summary.conflict === 0 && input.summary.unknown === 0,
             },
           },
           { generateId },
