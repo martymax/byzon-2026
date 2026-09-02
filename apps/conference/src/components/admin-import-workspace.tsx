@@ -65,6 +65,7 @@ const filterOptions = [
 
 type ImportFilter = (typeof filterOptions)[number][0];
 const importPageSize = 25;
+const compactDataViewQuery = '(max-width: 48rem)';
 type PendingApply = Readonly<{
   body: TicketImportApplyRequest;
   idempotencyKey: string;
@@ -134,6 +135,20 @@ const checkedAtFormatter = new Intl.DateTimeFormat('cs-CZ', {
   timeZone: 'Europe/Prague',
 });
 
+const useCompactDataView = (): boolean => {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia(compactDataViewQuery);
+    const update = () => setCompact(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
+};
+
 export interface AdminTicketUpdatePort {
   readonly preview: typeof requestAdminTicketImportPreview;
   readonly apply: typeof requestAdminTicketImportApply;
@@ -171,6 +186,7 @@ export const AdminImportWorkspace = ({
   const [previewState, setPreviewState] = useState<
     'idle' | 'loading' | 'validated' | 'error'
   >('idle');
+  const compactDataView = useCompactDataView();
 
   const filteredRows = useMemo(
     () =>
@@ -652,25 +668,12 @@ export const AdminImportWorkspace = ({
             Neukládají se do cache prohlížeče a načtení se zapisuje do historie
             změn.
           </p>
-          <div
-            aria-label="Tabulka kontroly změn vstupenek"
-            className={styles.tableWrap}
-            tabIndex={0}
-          >
-            <table className={`${styles.table} ${styles.importTable}`}>
-              <caption>Záznamy načtené ze SimpleShopu ke kontrole.</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Importovat</th>
-                  <th scope="col">Záznam</th>
-                  <th scope="col">Účastník</th>
-                  <th scope="col">Nákup</th>
-                  <th scope="col">Co se změní</th>
-                  <th scope="col">Výsledek kontroly</th>
-                  <th scope="col">Poznámka</th>
-                </tr>
-              </thead>
-              <tbody>
+          {compactDataView ? (
+            <div className={styles.cards}>
+              <ul
+                className={styles.cardList}
+                aria-label="Záznamy změn vstupenek"
+              >
                 {displayRows.map(
                   ({
                     companyPosition,
@@ -679,181 +682,206 @@ export const AdminImportWorkspace = ({
                     purchaseDate,
                     row,
                   }) => (
-                    <tr
+                    <li
+                      className={styles.dataCard}
                       data-selected={
                         selectedRowIdSet.has(row.rowId) || undefined
                       }
                       key={row.rowId}
                     >
-                      <td className={styles.importSelectionCell}>
-                        {isTicketImportRowSelectable(row) ? (
-                          <label className={styles.importRowChoice}>
-                            <input
-                              aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
-                              checked={selectedRowIdSet.has(row.rowId)}
-                              disabled={
-                                busy !== null ||
-                                pending !== null ||
-                                report !== null
-                              }
-                              onChange={() => toggleRowSelection(row.rowId)}
-                              type="checkbox"
-                            />
-                            <span className={styles.visuallyHidden}>
-                              Importovat
-                            </span>
-                          </label>
-                        ) : (
-                          <small>
-                            {row.status === 'unchanged'
-                              ? 'Již importováno'
-                              : 'Nelze importovat'}
-                          </small>
-                        )}
-                      </td>
-                      <td className={styles.referenceCell}>
-                        <span>
-                          #{row.sourceRowNumber} · •{row.referenceSuffix}
-                        </span>
-                        <small>
-                          Vstupenka {row.sourceTicketId} · Doklad{' '}
-                          {row.sourceOrderId} · {orderSummary}
-                        </small>
-                      </td>
-                      <td className={styles.identityCell}>
-                        <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
-                        <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
-                        <small>
-                          {identitySourceLabels[row.identitySource]}
-                        </small>
-                        {companyPosition ? (
-                          <small>{companyPosition}</small>
-                        ) : null}
-                        {row.contactPhone ? (
-                          <small>{row.contactPhone}</small>
-                        ) : null}
-                      </td>
-                      <td className={styles.purchaseCell}>
-                        <time dateTime={row.purchasedOn}>{purchaseDate}</time>
-                        <small>
-                          {row.discountCoupon
-                            ? `Kupón ${row.discountCoupon}`
-                            : 'Bez slevového kupónu'}
-                        </small>
-                      </td>
-                      <td>
-                        {formatTicketState(row.currentState)} →{' '}
-                        {formatTicketState(row.incomingState)}
-                      </td>
-                      <td>
+                      <div className={styles.panelHeader}>
+                        <strong>
+                          Záznam #{row.sourceRowNumber} ·{' '}
+                          {row.contactName ?? 'Jméno neuvedeno'}
+                        </strong>
                         <span
                           className={`${styles.statusBadge} ${statusClass[row.status]}`}
                         >
                           {statusLabels[row.status]}
                         </span>
-                        <small>{sourceStatusLabels[row.sourceStatus]}</small>
-                      </td>
-                      <td>{issueMessage}</td>
-                    </tr>
+                      </div>
+                      {isTicketImportRowSelectable(row) ? (
+                        <label className={styles.importCardChoice}>
+                          <input
+                            aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
+                            checked={selectedRowIdSet.has(row.rowId)}
+                            disabled={
+                              busy !== null ||
+                              pending !== null ||
+                              report !== null
+                            }
+                            onChange={() => toggleRowSelection(row.rowId)}
+                            type="checkbox"
+                          />
+                          <span>Importovat tohoto účastníka</span>
+                        </label>
+                      ) : (
+                        <p className={styles.helper}>
+                          {row.status === 'unchanged'
+                            ? 'Účastník už byl importován.'
+                            : 'Tento záznam nelze importovat.'}
+                        </p>
+                      )}
+                      <dl>
+                        <dt>E-mail</dt>
+                        <dd>{row.contactEmail ?? 'Neuveden'}</dd>
+                        <dt>Zdroj identity</dt>
+                        <dd>{identitySourceLabels[row.identitySource]}</dd>
+                        {companyPosition ? (
+                          <>
+                            <dt>Firma / pozice</dt>
+                            <dd>{companyPosition}</dd>
+                          </>
+                        ) : null}
+                        {row.contactPhone ? (
+                          <>
+                            <dt>Telefon</dt>
+                            <dd>{row.contactPhone}</dd>
+                          </>
+                        ) : null}
+                        <dt>Vstupenka / doklad</dt>
+                        <dd>
+                          {row.sourceTicketId} · {row.sourceOrderId} ·{' '}
+                          {orderSummary} · kontrola •{row.referenceSuffix}
+                        </dd>
+                        <dt>Nákup</dt>
+                        <dd>
+                          <time dateTime={row.purchasedOn}>{purchaseDate}</time>
+                          {' · '}
+                          {row.discountCoupon
+                            ? `Kupón ${row.discountCoupon}`
+                            : 'Bez slevového kupónu'}
+                        </dd>
+                        <dt>Co se změní</dt>
+                        <dd>
+                          {formatTicketState(row.currentState)} →{' '}
+                          {formatTicketState(row.incomingState)}
+                        </dd>
+                        <dt>Výsledek kontroly</dt>
+                        <dd>
+                          {statusLabels[row.status]} ·{' '}
+                          {sourceStatusLabels[row.sourceStatus]}
+                        </dd>
+                        <dt>Poznámka</dt>
+                        <dd>{issueMessage}</dd>
+                      </dl>
+                    </li>
                   ),
                 )}
-              </tbody>
-            </table>
-          </div>
-          <div className={styles.cards}>
-            <ul className={styles.cardList} aria-label="Záznamy změn vstupenek">
-              {displayRows.map(
-                ({
-                  companyPosition,
-                  issueMessage,
-                  orderSummary,
-                  purchaseDate,
-                  row,
-                }) => (
-                  <li
-                    className={styles.dataCard}
-                    data-selected={selectedRowIdSet.has(row.rowId) || undefined}
-                    key={row.rowId}
-                  >
-                    <div className={styles.panelHeader}>
-                      <strong>
-                        Záznam #{row.sourceRowNumber} ·{' '}
-                        {row.contactName ?? 'Jméno neuvedeno'}
-                      </strong>
-                      <span
-                        className={`${styles.statusBadge} ${statusClass[row.status]}`}
+              </ul>
+            </div>
+          ) : (
+            <div
+              aria-label="Tabulka kontroly změn vstupenek"
+              className={styles.tableWrap}
+              tabIndex={0}
+            >
+              <table className={`${styles.table} ${styles.importTable}`}>
+                <caption>Záznamy načtené ze SimpleShopu ke kontrole.</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Importovat</th>
+                    <th scope="col">Záznam</th>
+                    <th scope="col">Účastník</th>
+                    <th scope="col">Nákup</th>
+                    <th scope="col">Co se změní</th>
+                    <th scope="col">Výsledek kontroly</th>
+                    <th scope="col">Poznámka</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayRows.map(
+                    ({
+                      companyPosition,
+                      issueMessage,
+                      orderSummary,
+                      purchaseDate,
+                      row,
+                    }) => (
+                      <tr
+                        data-selected={
+                          selectedRowIdSet.has(row.rowId) || undefined
+                        }
+                        key={row.rowId}
                       >
-                        {statusLabels[row.status]}
-                      </span>
-                    </div>
-                    {isTicketImportRowSelectable(row) ? (
-                      <label className={styles.importCardChoice}>
-                        <input
-                          aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
-                          checked={selectedRowIdSet.has(row.rowId)}
-                          disabled={
-                            busy !== null || pending !== null || report !== null
-                          }
-                          onChange={() => toggleRowSelection(row.rowId)}
-                          type="checkbox"
-                        />
-                        <span>Importovat tohoto účastníka</span>
-                      </label>
-                    ) : (
-                      <p className={styles.helper}>
-                        {row.status === 'unchanged'
-                          ? 'Účastník už byl importován.'
-                          : 'Tento záznam nelze importovat.'}
-                      </p>
-                    )}
-                    <dl>
-                      <dt>E-mail</dt>
-                      <dd>{row.contactEmail ?? 'Neuveden'}</dd>
-                      <dt>Zdroj identity</dt>
-                      <dd>{identitySourceLabels[row.identitySource]}</dd>
-                      {companyPosition ? (
-                        <>
-                          <dt>Firma / pozice</dt>
-                          <dd>{companyPosition}</dd>
-                        </>
-                      ) : null}
-                      {row.contactPhone ? (
-                        <>
-                          <dt>Telefon</dt>
-                          <dd>{row.contactPhone}</dd>
-                        </>
-                      ) : null}
-                      <dt>Vstupenka / doklad</dt>
-                      <dd>
-                        {row.sourceTicketId} · {row.sourceOrderId} ·{' '}
-                        {orderSummary} · kontrola •{row.referenceSuffix}
-                      </dd>
-                      <dt>Nákup</dt>
-                      <dd>
-                        <time dateTime={row.purchasedOn}>{purchaseDate}</time>
-                        {' · '}
-                        {row.discountCoupon
-                          ? `Kupón ${row.discountCoupon}`
-                          : 'Bez slevového kupónu'}
-                      </dd>
-                      <dt>Co se změní</dt>
-                      <dd>
-                        {formatTicketState(row.currentState)} →{' '}
-                        {formatTicketState(row.incomingState)}
-                      </dd>
-                      <dt>Výsledek kontroly</dt>
-                      <dd>
-                        {statusLabels[row.status]} ·{' '}
-                        {sourceStatusLabels[row.sourceStatus]}
-                      </dd>
-                      <dt>Poznámka</dt>
-                      <dd>{issueMessage}</dd>
-                    </dl>
-                  </li>
-                ),
-              )}
-            </ul>
-          </div>
+                        <td className={styles.importSelectionCell}>
+                          {isTicketImportRowSelectable(row) ? (
+                            <label className={styles.importRowChoice}>
+                              <input
+                                aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
+                                checked={selectedRowIdSet.has(row.rowId)}
+                                disabled={
+                                  busy !== null ||
+                                  pending !== null ||
+                                  report !== null
+                                }
+                                onChange={() => toggleRowSelection(row.rowId)}
+                                type="checkbox"
+                              />
+                              <span className={styles.visuallyHidden}>
+                                Importovat
+                              </span>
+                            </label>
+                          ) : (
+                            <small>
+                              {row.status === 'unchanged'
+                                ? 'Již importováno'
+                                : 'Nelze importovat'}
+                            </small>
+                          )}
+                        </td>
+                        <td className={styles.referenceCell}>
+                          <span>
+                            #{row.sourceRowNumber} · •{row.referenceSuffix}
+                          </span>
+                          <small>
+                            Vstupenka {row.sourceTicketId} · Doklad{' '}
+                            {row.sourceOrderId} · {orderSummary}
+                          </small>
+                        </td>
+                        <td className={styles.identityCell}>
+                          <strong>
+                            {row.contactName ?? 'Jméno neuvedeno'}
+                          </strong>
+                          <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
+                          <small>
+                            {identitySourceLabels[row.identitySource]}
+                          </small>
+                          {companyPosition ? (
+                            <small>{companyPosition}</small>
+                          ) : null}
+                          {row.contactPhone ? (
+                            <small>{row.contactPhone}</small>
+                          ) : null}
+                        </td>
+                        <td className={styles.purchaseCell}>
+                          <time dateTime={row.purchasedOn}>{purchaseDate}</time>
+                          <small>
+                            {row.discountCoupon
+                              ? `Kupón ${row.discountCoupon}`
+                              : 'Bez slevového kupónu'}
+                          </small>
+                        </td>
+                        <td>
+                          {formatTicketState(row.currentState)} →{' '}
+                          {formatTicketState(row.incomingState)}
+                        </td>
+                        <td>
+                          <span
+                            className={`${styles.statusBadge} ${statusClass[row.status]}`}
+                          >
+                            {statusLabels[row.status]}
+                          </span>
+                          <small>{sourceStatusLabels[row.sourceStatus]}</small>
+                        </td>
+                        <td>{issueMessage}</td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {filteredRows.length > importPageSize ? (
             <nav
