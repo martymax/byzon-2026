@@ -92,7 +92,7 @@ const problem = (
   });
 
 class StaleProfileVersionError extends ApiProblemError {
-  constructor(readonly currentVersion: number) {
+  constructor(override readonly currentVersion: number) {
     super({
       status: 409,
       code: 'STALE_VERSION',
