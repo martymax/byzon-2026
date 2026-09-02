@@ -1,4 +1,5 @@
 import { handleAdminSupportMutation } from '@/server/admin-support';
+import { adminSupportRateLimit } from '@/server/admin-support-rate-limit';
 import { auth, getAuthAppOrigin } from '@/server/auth';
 import { database } from '@/server/database';
 
@@ -11,5 +12,6 @@ export const POST = (
       db: database.db,
       allowedOrigin: getAuthAppOrigin(),
       getSession: (headers) => auth.api.getSession({ headers }),
+      rateLimit: adminSupportRateLimit,
     }),
   );

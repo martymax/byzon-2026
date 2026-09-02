@@ -22,6 +22,9 @@ import {
   readIdempotencyKey,
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
+import type { AdminSupportRateLimiter } from './admin-support-rate-limit';
+import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 import { promoteAutomaticWaitlist } from './reservation-waitlist';
 
@@ -31,8 +34,10 @@ const uuidSchema = z.string().uuid();
 export interface AdminSupportDependencies {
   db: Database;
   allowedOrigin: string;
+  currentEventSlug?: string;
   getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
   now?: () => Date;
+  rateLimit?: AdminSupportRateLimiter;
 }
 
 const privateHeaders = (requestId: string) => ({
@@ -53,6 +58,7 @@ const problem = (
 const authorize = async (
   request: Request,
   eventId: string,
+  permission: 'participant:operational:read' | 'ticket:any:manage',
   dependencies: AdminSupportDependencies,
 ) => {
   if (!uuidSchema.safeParse(eventId).success) {
@@ -72,12 +78,30 @@ const authorize = async (
       'A valid session is required.',
     );
   }
+  const event = await dependencies.db.query.events.findFirst({
+    columns: { id: true },
+    where: and(
+      eq(schema.events.id, eventId),
+      eq(
+        schema.events.slug,
+        dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
+      ),
+    ),
+  });
+  if (!event) {
+    throw problem(
+      403,
+      'EVENT_ACCESS_DENIED',
+      'Event access denied',
+      'Support data is unavailable.',
+    );
+  }
   try {
     await requireEventPermission(
       dependencies.db,
       { userId: identity.user.id },
       eventId,
-      'participant:operational:read',
+      permission,
     );
   } catch (error) {
     if (!(error instanceof EventAccessDeniedError)) throw error;
@@ -89,6 +113,32 @@ const authorize = async (
     );
   }
   return identity.user.id;
+};
+
+const requireSameOrigin = (
+  request: Request,
+  dependencies: AdminSupportDependencies,
+): void => {
+  if (request.headers.get('origin') !== dependencies.allowedOrigin) {
+    throw problem(
+      403,
+      'EVENT_ACCESS_DENIED',
+      'Event access denied',
+      'The request origin is not allowed.',
+    );
+  }
+};
+
+const withRateLimitHeaders = (
+  response: Response,
+  decision: RateLimitDecision | null,
+): Response => {
+  if (decision) {
+    Object.entries(rateLimitHeaders(decision)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+  }
+  return response;
 };
 
 const maskEmail = (email: string) => {
@@ -112,6 +162,14 @@ const suffix = (value: string) => {
   return safe.length >= 2 ? safe : `XX${safe}`.slice(-2);
 };
 
+const safeLabel = (value: string, fallback: string): string => {
+  const normalized = value
+    .replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/g, '')
+    .trim()
+    .slice(0, 80);
+  return normalized || fallback;
+};
+
 const recordFrom = (row: {
   eventId: string;
   ticketId: string;
@@ -128,7 +186,10 @@ const recordFrom = (row: {
     eventId: row.eventId,
     participantId: row.userId,
     ticketId: row.ticketId,
-    displayName: `${row.firstName} ${row.lastName}`,
+    displayName: safeLabel(
+      `${row.firstName} ${row.lastName}`,
+      'Účastník bez uvedeného jména',
+    ),
     maskedContact: maskEmail(row.email),
     referenceSuffix: suffix(row.suffix),
     ticketState: state,
@@ -182,6 +243,7 @@ export const handleAdminSupportSearch = async (
   dependencies: AdminSupportDependencies,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
   try {
     if (request.method !== 'POST') {
       throw problem(
@@ -191,7 +253,15 @@ export const handleAdminSupportSearch = async (
         'The method is not supported.',
       );
     }
-    await authorize(request, eventId, dependencies);
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'participant:operational:read',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('search', actorId)) ?? null;
     let raw: unknown;
     try {
       raw = await request.json();
@@ -213,7 +283,7 @@ export const handleAdminSupportSearch = async (
     );
     const pattern = `%${escaped}%`;
     const rows = await dependencies.db
-      .select({
+      .selectDistinctOn([schema.tickets.holderUserId], {
         eventId: schema.tickets.eventId,
         ticketId: schema.tickets.id,
         userId: schema.tickets.holderUserId,
@@ -249,7 +319,7 @@ export const handleAdminSupportSearch = async (
           ),
         ),
       )
-      .orderBy(desc(schema.tickets.updatedAt))
+      .orderBy(schema.tickets.holderUserId, desc(schema.tickets.updatedAt))
       .limit(5);
     const matches = rows.flatMap((row) =>
       row.userId ? [recordFrom({ ...row, userId: row.userId })] : [],
@@ -265,13 +335,16 @@ export const handleAdminSupportSearch = async (
             : 'ambiguous',
       matches,
     });
-    return Response.json(body, { headers: privateHeaders(requestId) });
+    return withRateLimitHeaders(
+      Response.json(body, { headers: privateHeaders(requestId) }),
+      rateLimitDecision,
+    );
   } catch (error) {
     const response = problemResponse(error, requestId);
     Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
       response.headers.set(name, value),
     );
-    return response;
+    return withRateLimitHeaders(response, rateLimitDecision);
   }
 };
 
@@ -281,6 +354,7 @@ export const handleAdminSupportMutation = async (
   dependencies: AdminSupportDependencies,
 ): Promise<Response> => {
   const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
   try {
     if (request.method !== 'POST') {
       throw problem(
@@ -290,15 +364,15 @@ export const handleAdminSupportMutation = async (
         'The method is not supported.',
       );
     }
-    if (request.headers.get('origin') !== dependencies.allowedOrigin) {
-      throw problem(
-        403,
-        'EVENT_ACCESS_DENIED',
-        'Event access denied',
-        'The request origin is not allowed.',
-      );
-    }
-    const actorId = await authorize(request, eventId, dependencies);
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'ticket:any:manage',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', actorId)) ?? null;
     const rawBody = await request.text();
     let raw: unknown;
     try {
@@ -502,18 +576,27 @@ export const handleAdminSupportMutation = async (
         return { status: 200, body: response };
       },
     );
-    return Response.json(result.body, {
-      status: result.status,
-      headers: {
-        ...privateHeaders(requestId),
-        'idempotency-replayed': String(result.replayed),
-      },
-    });
+    return withRateLimitHeaders(
+      Response.json(
+        supportMutationResponseSchema.parse({
+          ...result.body,
+          outcome: result.replayed ? 'already_applied' : result.body.outcome,
+        }),
+        {
+          status: result.status,
+          headers: {
+            ...privateHeaders(requestId),
+            'idempotency-replayed': String(result.replayed),
+          },
+        },
+      ),
+      rateLimitDecision,
+    );
   } catch (error) {
     const response = problemResponse(error, requestId);
     Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
       response.headers.set(name, value),
     );
-    return response;
+    return withRateLimitHeaders(response, rateLimitDecision);
   }
 };
