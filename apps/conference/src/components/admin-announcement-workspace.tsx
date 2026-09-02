@@ -20,6 +20,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { adminCountForms, formatCzechCount } from './admin-copy';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -479,7 +480,10 @@ export const AdminAnnouncementWorkspace = ({
               <p className={styles.muted}>{previewAudienceLabel}</p>
             </div>
             <span className={styles.badge}>
-              {preview.audience.recipientCount} příjemců
+              {formatCzechCount(
+                preview.audience.recipientCount,
+                adminCountForms.recipient,
+              )}
             </span>
           </div>
           <article className={styles.dataCard}>
@@ -490,12 +494,22 @@ export const AdminAnnouncementWorkspace = ({
             <p>{preview.draft.bodyText}</p>
           </article>
           <p>
-            Oznámení uvidí <strong>{preview.audience.recipientCount}</strong>{' '}
-            účastníků.
+            Oznámení uvidí{' '}
+            <strong>
+              {formatCzechCount(
+                preview.audience.recipientCount,
+                adminCountForms.attendee,
+              )}
+            </strong>
+            .
           </p>
           <p className={styles.muted}>
-            {preview.audience.excludedCount} účastníků je z publika vyloučeno.
-            Současný přehled neuvádí jednotlivé důvody.
+            Mimo vybrané publikum:{' '}
+            {formatCzechCount(
+              preview.audience.excludedCount,
+              adminCountForms.attendee,
+            )}
+            . Současný přehled neuvádí jednotlivé důvody.
           </p>
           <AdminTechnicalDetails>
             <dl className={styles.detailList}>
@@ -534,7 +548,7 @@ export const AdminAnnouncementWorkspace = ({
               value={reason}
             />
             <span className={styles.helper} id="admin-announcement-reason-help">
-              Důvod se uloží do auditní historie pro pozdější dohledání.
+              Důvod se uloží do historie změn pro pozdější dohledání.
             </span>
           </label>
           <div className={styles.actionRow}>
@@ -568,8 +582,8 @@ export const AdminAnnouncementWorkspace = ({
         <section className={styles.success} role="status">
           <h2>
             {sent.outcome === 'already_sent'
-              ? `Toto oznámení už bylo odesláno ${sent.recipientCount} příjemcům. Další kopie nevznikla.`
-              : `Oznámení bylo odesláno ${sent.recipientCount} příjemcům.`}
+              ? `Toto oznámení už bylo odesláno. Počet příjemců: ${sent.recipientCount}. Další kopie nevznikla.`
+              : `Oznámení bylo odesláno. Počet příjemců: ${sent.recipientCount}.`}
           </h2>
           <AdminTechnicalDetails>
             <dl className={styles.detailList}>
@@ -590,8 +604,11 @@ export const AdminAnnouncementWorkspace = ({
           description="Po odeslání už oznámení nelze upravit. Server znovu ověří kontrolu i vaše oprávnění."
           impact={
             <p>
-              {preview.audience.recipientCount} příjemců ·{' '}
-              {severityLabels[preview.draft.severity]}
+              {formatCzechCount(
+                preview.audience.recipientCount,
+                adminCountForms.recipient,
+              )}{' '}
+              · {severityLabels[preview.draft.severity]}
             </p>
           }
           onConfirm={() => void send(pending)}

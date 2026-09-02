@@ -13,6 +13,7 @@ import {
 } from '@/lib/admin-content-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { adminCountForms, formatCzechCount } from './admin-copy';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import styles from './admin-workspace.module.css';
 
@@ -467,7 +468,10 @@ export const PublicationControl = ({
           impact={
             <p>
               {visiblePreview.summary.available
-                ? `${publicationChangeCount(visiblePreview.summary)} změn se zobrazí účastníkům.`
+                ? `${formatCzechCount(
+                    publicationChangeCount(visiblePreview.summary),
+                    adminCountForms.change,
+                  )} se zobrazí účastníkům.`
                 : 'Změny se zobrazí účastníkům v aplikaci a na webu.'}
             </p>
           }

@@ -398,7 +398,7 @@ export const AdminSettingsRedesign = () => {
                   Účastníci mohou měnit své rezervace
                   <small>
                     Vypnutí uzamkne participant změny; administrátorské zásahy
-                    zůstávají samostatně auditované.
+                    se samostatně zapíšou do historie změn.
                   </small>
                 </span>
               </label>

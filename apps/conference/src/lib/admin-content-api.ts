@@ -419,7 +419,8 @@ const problemFailure = async (
   if (response.status === 401) {
     return withMetadata({
       kind: 'session_expired',
-      message: 'Relace vypršela. Obsah byl z rozhraní odstraněn.',
+      message:
+        'Přihlášení vypršelo. Citlivá rozpracovaná data jsme skryli. Přihlaste se znovu a změnu znovu připravte a zkontrolujte.',
     });
   }
   if (
@@ -473,7 +474,8 @@ const transportFailure = (error: unknown): AdminContentFailure => {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return {
       kind: 'offline',
-      message: 'Správa obsahu je online-only. Obnovte připojení.',
+      message:
+        'Tato část administrace vyžaduje připojení. Citlivá data jsme skryli. Zkontrolujte internet a zkuste to znovu.',
     };
   }
   return {

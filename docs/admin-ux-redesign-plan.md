@@ -3,7 +3,7 @@
 > Stav dokumentu: `specification ready`; zahájení změn kódu podmiňuje
 > governance úkol `AUX-00B`
 >
-> Verze: 2.3
+> Verze: 2.4
 >
 > Datum: 2. září 2026
 >
@@ -1418,8 +1418,8 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-10E` | U1  | [x]  | UI            | Core nastavení: read→Upravit, dopad, dirty/save, archiv                            | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10A`, `AUX-10D`                                                        | `CS-ADMIN-01`                                            | N/A               | focus read→edit, radio dopad, dirty/exact retry a archiv read-only; supportMessage skrytý                 |
 | `AUX-10F` | U2  | [!]  | product/UI    | Finální `supportMessage` label, preview a místo dopadu                             | `AUX-10E`                                                                                                                                   | `GAP-AUX-SETTINGS-01`                                             | —                                                                           | `GAP-AUX-SETTINGS-01`, `P9-09`                           | UI ready (mocked) | — / otevřený blocker §17.2                                                                                |
 | `AUX-10G` | U1  | [x]  | QA            | Reports/audit/core-settings stavová a accessibility matice                         | `AUX-10C`, `AUX-10D`, `AUX-10E`                                                                                                             | —                                                                 | `AUX-11A`                                                                   | `CS-ADMIN-01`                                            | UI ready (mocked) | browser 1041/1041; 3 viewporty, axe, focus, exact retry, archive, cursor a route permission/P3 wipe gate  |
-| `AUX-11A` | U0  | [ ]  | content-QA    | Plain-language pass produkční user-facing copy                                     | `AUX-01C`, `AUX-02G`, `AUX-03C`, `AUX-04E`, `AUX-05C`, `AUX-06D`, `AUX-07C`, `AUX-08C`, `AUX-09C`, `AUX-10G`                                | —                                                                 | —                                                                           | N/A                                                      | N/A               | — / scan jen rendered production copy; allowlist technical/dev                                            |
-| `AUX-11B` | U1  | [ ]  | QA            | Sjednotit dirty/error/stale/pending/success/technical patterns                     | `AUX-01B`, `AUX-11A`                                                                                                                        | —                                                                 | `AUX-12C`                                                                   | N/A                                                      | N/A               | — / texty §6.4 a matice §11                                                                               |
+| `AUX-11A` | U0  | [x]  | content-QA    | Plain-language pass produkční user-facing copy                                     | `AUX-01C`, `AUX-02G`, `AUX-03C`, `AUX-04E`, `AUX-05C`, `AUX-06D`, `AUX-07C`, `AUX-08C`, `AUX-09C`, `AUX-10G`                                | —                                                                 | —                                                                           | N/A                                                      | N/A               | rendered-copy scan canonical rout; technical/dev allowlist jen přes odstraněné `details`; unit 578/578    |
+| `AUX-11B` | U1  | [x]  | QA            | Sjednotit dirty/error/stale/pending/success/technical patterns                     | `AUX-01B`, `AUX-11A`                                                                                                                        | —                                                                 | `AUX-12C`                                                                   | N/A                                                      | N/A               | přesné texty §6.4, technická reference v `details`, Intl plural/date/number; browser 1041/1041            |
 | `AUX-12A` | U0  | [ ]  | QA            | Cross-route axe, keyboard a screen-reader smoke                                    | `AUX-11B`                                                                                                                                   | —                                                                 | `AUX-12C`                                                                   | N/A                                                      | N/A               | — / §1.4, §12.2 evidence                                                                                  |
 | `AUX-12B` | U0  | [ ]  | QA            | Visual/responsive 320–1440, 200% zoom a reduced motion                             | `AUX-12A`                                                                                                                                   | —                                                                 | `AUX-12C`                                                                   | N/A                                                      | N/A               | — / screenshot matrix všech rout                                                                          |
 | `AUX-12C` | U2  | [ ]  | QA            | Bundle, max-page list performance a CLS audit                                      | `AUX-02G`, `AUX-03C`, `AUX-04E`, `AUX-05C`, `AUX-06D`, `AUX-07C`, `AUX-08C`, `AUX-09C`, `AUX-10G`                                           | —                                                                 | `AUX-11B`, `AUX-12A`                                                        | N/A                                                      | N/A               | — / numeric budgets §12.3                                                                                 |
@@ -1707,11 +1707,11 @@ none` není řešení landmark problému.
 
 **Copy QA**
 
-- [ ] **11A-1:** Projít rendered produkční copy; scan se nevztahuje na type/
+- [x] **11A-1:** Projít rendered produkční copy; scan se nevztahuje na type/
       function names, sbalené technical details ani jednoznačně dev-only mock.
-- [ ] **11A-2:** Zakázané výrazy z §6.2 nejsou v main UI, aria-labelu ani
+- [x] **11A-2:** Zakázané výrazy z §6.2 nejsou v main UI, aria-labelu ani
       uživatelské chybě.
-- [ ] **11B-1:** Dlouhá čeština, pluralizace, locale date/number a všechny
+- [x] **11B-1:** Dlouhá čeština, pluralizace, locale date/number a všechny
       shared feedback vzory jsou testované.
 
 **Automatické minimum pro každý slice**
@@ -1904,6 +1904,7 @@ vlastníky, ne důvod hádat produktové chování.
 
 | Verze | Datum      | Změna                                                                                                                                           | Evidence                                                                        |
 | ----- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 2.4   | 2026-09-02 | `AUX-11A`–`B`: rendered plain-language scan, předepsané shared chyby, technické reference v disclosure a česká Intl pluralizace                 | Unit 578/578; browser 1041/1041; typecheck, lint a production build             |
 | 2.3   | 2026-09-02 | `AUX-10A`–`E`,`G`: reporty s pravdivými job stavy, serverově filtrovaný audit a read→edit core nastavení; neověřený support text zůstává skrytý | Browser 1041/1041; domain 195/195; test-support 37/37; typecheck a lint         |
 | 2.2   | 2026-09-02 | `AUX-09A`–`C`: seznam týmových rolí, vyhledání existující osoby, pojmenované rozsahy a oddělené grant/revoke flow bez ručních ID                | Browser 1029/1029; domain 194/194; test-support 37/37; typecheck                |
 | 2.1   | 2026-09-02 | `AUX-08A`–`D`: čtyřkroková critical-only oznámení, pojmenovaný session target kontrakt, poctivá kontrola publika a canonical send receipt       | Browser 1014/1014; domain 193/193; test-support 37/37; typecheck                |

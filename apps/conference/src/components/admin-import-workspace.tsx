@@ -19,6 +19,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { adminCountForms, formatCzechCount } from './admin-copy';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -468,14 +469,15 @@ export const AdminImportWorkspace = ({
               <h2 id="import-preview-title">Zkontrolovat změny</h2>
             </div>
             <span className={styles.badge}>
-              {preview.summary.total} záznamů
+              {formatCzechCount(preview.summary.total, adminCountForms.record)}
             </span>
           </div>
 
           {blockingCount > 0 ? (
             <div className={styles.warning} role="alert">
               <strong>
-                {blockingCount} záznamů vyžaduje opravu ve zdroji prodeje.
+                Opravu ve zdroji prodeje vyžaduje:{' '}
+                {formatCzechCount(blockingCount, adminCountForms.record)}.
               </strong>{' '}
               Dokud je neopravíte a změny znovu nenačtete, dávku nelze použít.
             </div>
@@ -716,7 +718,7 @@ export const AdminImportWorkspace = ({
                   <p id="admin-import-apply-error">
                     {error && errorScope === 'apply'
                       ? error
-                      : 'Doplňte auditní důvod o nejméně 8 viditelných znaků.'}
+                      : 'Doplňte důvod změny o nejméně 8 viditelných znaků.'}
                   </p>
                 </section>
               ) : null}

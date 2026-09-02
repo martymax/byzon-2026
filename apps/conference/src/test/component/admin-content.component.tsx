@@ -6,6 +6,7 @@ import {
   AdminContentAssetField,
   createAdminContentAssetPreviewPort,
 } from '../../components/admin-content-asset-field';
+import { findForbiddenAdminMainCopy } from '../../components/admin-copy';
 import { AdminContentWorkspace } from '../../components/admin-content-workspace';
 import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
 import { adminContextEndpoint } from '../../lib/admin-api';
@@ -31,6 +32,12 @@ const contentRoot = (): HTMLElement => {
   )?.parentElement;
   if (!root) throw new Error('Admin content workspace is missing.');
   return root;
+};
+
+const expectPlainContentCopy = () => {
+  const copy = contentRoot().cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('details').forEach((details) => details.remove());
+  expect(findForbiddenAdminMainCopy(copy.textContent ?? '')).toBeNull();
 };
 
 const selectArea = (value: string) => {
@@ -138,6 +145,7 @@ describe('admin content user journeys', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    expectPlainContentCopy();
     await expectComponentToPassAxe(contentRoot());
   });
 
@@ -543,7 +551,7 @@ describe('admin content user journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'K této části nemáte oprávnění',
+          name: 'K této části nemáte přístup',
         }),
       )
       .toBeVisible();

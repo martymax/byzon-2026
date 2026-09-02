@@ -185,6 +185,13 @@ přesné oprávnění, expected version a canonical odpověď. Každý request j
 podle eventu a security epoch; permission loss nebo 401/403 skryje P3 data a
 přeruší stale práci.
 
+Cross-route copy QA nyní nad vykresleným hlavním obsahem blokuje technické
+výrazy; sbalené `Technické údaje` a jednoznačně vývojové fixture zůstávají
+mimo tento scan. Backendová reference historie se překládá na „akce“, společné
+offline, relace, oprávnění, změněná data a nejistý výsledek používají jednotné
+texty. Reference požadavku se v chybovém souhrnu zobrazí až po otevření
+technických údajů. Počty používají česká `Intl` pravidla a lokalizované tisíce.
+
 Správa obsahu na `/admin/obsah` používá jedno typed port rozhraní pro dny,
 místa, místnosti, body programu, řečníky, partnery, stránky a FAQ; development
 injektuje stateful preview port a produkce používá výchozí fetch port. Dny lze

@@ -544,7 +544,7 @@ export const AdminTeamRedesign = ({
               value={reason}
             />
             <span className={styles.helper}>
-              Důvod se uloží do auditní historie. Je potřeba i pro odebrání.
+              Důvod se uloží do historie změn. Je potřeba i pro odebrání.
             </span>
           </label>
 
