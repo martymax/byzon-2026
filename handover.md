@@ -3,12 +3,13 @@
 ## Aktivní navázání – redesign administrace (`AUX`, 2. 9. 2026)
 
 - Autoritativní specifikace i jediný tracker jsou v
-  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.38 obsahuje obousměrné
+  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.39 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
 - `AUX-00B`, foundation `AUX-01A`–`C`, shell `AUX-02A`–`G`, dashboard
   `AUX-03A`–`C`, obsah `AUX-04A`–`G`, vstupenky `AUX-05A`–`C` a neblokovaná
   účastnická podpora `AUX-06A`, `B`, `D`, rezervace `AUX-07A`–`C` a oznámení
-  `AUX-08A`–`D` a tým `AUX-09A`–`C` jsou
+  `AUX-08A`–`D`, tým `AUX-09A`–`C` a neblokovaná část reportů, auditu a
+  nastavení `AUX-10A`–`E`,`G` jsou
   dokončené.
   Admin routy mají právě jeden landmark/skip link, permission/feature-aware
   cílovou IA, lidský topbar, bezpečný account menu a nativní modal drawer.
@@ -39,8 +40,14 @@
   seznam, POST vyhledání existující osoby, popsané provozní role a pojmenované
   event/station/session rozsahy. Grant a danger revoke překládají serverové
   guardy, stale stav i exact retry; produkční read/search/options napojení
-  vlastní `AUX-13H`. Další nezablokovaný celek je `AUX-10` reporty, historie a
-  nastavení.
+  vlastní `AUX-13H`. `/admin/reporty` má CSV-default request, pravdivé async
+  potvrzení a strict queued/ready/failed/expired historii; produkční job list
+  vlastní `AUX-13I`. `/admin/audit` lokalizuje podporované změny a při cursoru
+  zachovává category/action/time/request filtry; rozšířený backend vlastní
+  `AUX-13J`. `/admin/nastaveni` začíná read-only, core volby upravuje přes
+  dirty bar a archiv je read-only; `supportMessage` zůstává skrytý do
+  `GAP-AUX-SETTINGS-01`. Další nezablokovaný celek je `AUX-11` copy a feedback
+  QA.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.

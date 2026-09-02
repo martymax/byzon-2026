@@ -499,6 +499,102 @@ export const adminExportResponseSchema = z.strictObject({
 
 export type AdminExportResponse = z.infer<typeof adminExportResponseSchema>;
 
+export const adminExportJobStateSchema = z.enum([
+  'queued',
+  'ready',
+  'failed',
+  'expired',
+]);
+
+export type AdminExportJobState = z.infer<typeof adminExportJobStateSchema>;
+
+export const adminExportJobListQuerySchema = z.strictObject({
+  state: adminExportJobStateSchema.optional(),
+  cursor: opaqueCursorSchema.optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+
+export type AdminExportJobListQuery = z.infer<
+  typeof adminExportJobListQuerySchema
+>;
+
+export const adminExportJobSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    exportId: uuidSchema,
+    report: adminExportReportSchema,
+    format: z.enum(['csv', 'json']),
+    range: z
+      .strictObject({ from: dateTimeSchema, to: dateTimeSchema })
+      .nullable(),
+    createdByLabel: safeInlineTextSchema(120),
+    state: adminExportJobStateSchema,
+    createdAt: dateTimeSchema,
+    expiresAt: dateTimeSchema,
+    downloadPath: z.string().max(300).nullable(),
+  })
+  .superRefine((job, context) => {
+    const expectedPath = `/api/v1/admin/events/${job.eventId}/exports/${job.exportId}`;
+    if (
+      (job.state === 'ready' && job.downloadPath !== expectedPath) ||
+      (job.state !== 'ready' && job.downloadPath !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['downloadPath'],
+        message: 'Only a ready export may expose its exact same-event path',
+      });
+    }
+    if (Date.parse(job.expiresAt) <= Date.parse(job.createdAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expiresAt'],
+        message: 'Export expiry must follow creation',
+      });
+    }
+    if (
+      job.range !== null &&
+      Date.parse(job.range.to) < Date.parse(job.range.from)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['range', 'to'],
+        message: 'Export range end cannot precede its start',
+      });
+    }
+  });
+
+export type AdminExportJob = z.infer<typeof adminExportJobSchema>;
+
+export const adminExportJobListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    items: z.array(adminExportJobSchema).max(100),
+    pageInfo: z.strictObject({
+      nextCursor: opaqueCursorSchema.nullable(),
+      hasMore: z.boolean(),
+    }),
+  })
+  .superRefine((response, context) => {
+    const ids = response.items.map(({ exportId }) => exportId);
+    if (
+      response.items.some(({ eventId }) => eventId !== response.eventId) ||
+      new Set(ids).size !== ids.length ||
+      response.pageInfo.hasMore !== (response.pageInfo.nextCursor !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message:
+          'Export jobs must be event-scoped, unique and carry consistent page info',
+      });
+    }
+  });
+
+export type AdminExportJobListResponse = z.infer<
+  typeof adminExportJobListResponseSchema
+>;
+
 export const adminReservationActionSchema = z.enum([
   'capacity_override',
   'cancel_reservation',

@@ -3,7 +3,7 @@
 > Stav dokumentu: `specification ready`; zahájení změn kódu podmiňuje
 > governance úkol `AUX-00B`
 >
-> Verze: 2.2
+> Verze: 2.3
 >
 > Datum: 2. září 2026
 >
@@ -1174,8 +1174,9 @@ můžete pokračovat v práci.“
 - Stavy: Připravuje se, Připraven ke stažení, Nepodařilo se, Odkaz vypršel.
 - Export ID jen v technických údajích.
 
-Současný kontrakt končí stavem `queued`; job list, ready/download a expiry jsou
-blokované `GAP-AUX-EXPORT-01`.
+Strict job kontrakt po `AUX-10B` rozlišuje všechny čtyři stavy a dovolí jen
+přesnou same-event download cestu pro `ready`. Produkční job-list endpoint a
+expiring download E2E dál vlastní `AUX-13I` za `BLOCKER-INFRA-01`.
 
 ### 10.9 Historie změn — `/admin/audit`
 
@@ -1351,7 +1352,7 @@ pokud nefixují neznámé produkční chování.
 | `GAP-AUX-ASSET-01`           | [!]  | Autorizovaný asset read/resolver i picker/upload/výměna fotek řečníků a log partnerů                                   | `AUX-00B`, `AUX-04F`, `AUX-13L`, `P3-01`, `BLOCKER-INFRA-01` / 2026-09-01 | asset read/mutation `integrated`    | Placeholder bez raw ID; zavře nový backend slice, storage gate, auth a E2E                          |
 | `GAP-AUX-RES-01`             | [x]  | Session agregace, cursor pagination a smluvně maskovaná participant reference                                          | `AUX-07A`, `P5-05`, `P9-01` / 2026-09-02                                  | —                                   | Session-first pageInfo DTO, cursor query, fixtures a PII test; produkční endpoint čeká na `AUX-13F` |
 | `GAP-AUX-ROLE-01`            | [x]  | Assignment list, person directory, scope options a revoke flow                                                         | `AUX-09A`, `P9-02` / 2026-09-02                                           | —                                   | Strict cursor list, POST person search, role-compatible named options, revoke a guard fixtures      |
-| `GAP-AUX-EXPORT-01`          | [ ]  | Export job list, ready/download/expired/failed                                                                         | `AUX-10B`, `P9-05`, `P9-06`, `P9-07` / 2026-09-01                         | historie exportů `contract ready`   | Request může skončit queued; zavře job/download DTO + expiry/CSV injection test                     |
+| `GAP-AUX-EXPORT-01`          | [x]  | Export job list, ready/download/expired/failed                                                                         | `AUX-10B`, `P9-05`, `P9-06`, `P9-07` / 2026-09-02                         | —                                   | Strict event-scoped job DTO, exact ready-only download path, expiry/range a CSV-injection regrese   |
 | `GAP-AUX-AUDIT-01`           | [ ]  | Actor/outcome server filtry a úplný action label registry                                                              | `AUX-10D`, `P9-04` / 2026-09-01                                           | tyto filtry `contract ready`        | Použít category/action/time/request/cursor; zavře query schema + exhaustive labels                  |
 | `GAP-AUX-SETTINGS-01`        | [!]  | Potvrdit konzumenta, label a umístění `supportMessage`                                                                 | `AUX-10F`, `P9-09`, product owner / 2026-09-01                            | support-message copy/UAT            | Ostatní settings lze navrhnout; zavře zapsané rozhodnutí, route evidence a test                     |
 | `GAP-AUX-EVENT-01`           | [–]  | Případný multi-event switch                                                                                            | samostatné rozhodnutí, ADR-012 / 2026-09-01                               | nic v baseline 2026                 | Zobrazit jedinou serverem zvolenou akci; nový switch jen samostatným ADR/úkolem                     |
@@ -1410,13 +1411,13 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-09A` | U2  | [x]  | contract      | Assignment list, person directory a pojmenované scope options                      | `AUX-00B`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-07A`, `AUX-08A`                                                        | `GAP-AUX-ROLE-01`, `CS-ADMIN-01`                         | contract ready    | cursor list, POST person search, masked contact, compatible event/station/session options                 |
 | `AUX-09B` | U2  | [x]  | UI            | Přidání a odebrání role s lidským impact review                                    | `AUX-01B`, `AUX-09A`                                                                                                                        | —                                                                 | `AUX-07B`, `AUX-08B`                                                        | `CS-ADMIN-01`                                            | N/A               | existující osoba, popis dopadu, named scope, revoke danger a lidské guard chyby                           |
 | `AUX-09C` | U2  | [x]  | QA            | Team list/grant/revoke/stale/permission test matice                                | `AUX-09B`                                                                                                                                   | —                                                                 | `AUX-07C`, `AUX-08C`                                                        | `CS-ADMIN-01`                                            | UI ready (mocked) | browser 1029/1029; grant/revoke/guard/stale/permission/exact retry, axe a responsive                      |
-| `AUX-10A` | U1  | [ ]  | UI            | Report cards, období/formát a bezpečný request flow                                | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10D`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | — / CSV default, reason, P3 vysvětlení                                                                    |
-| `AUX-10B` | U2  | [ ]  | contract      | Export jobs: queued/ready/download/expired/failed                                  | `AUX-00B`                                                                                                                                   | —                                                                 | `AUX-10A`, `AUX-10D`                                                        | `GAP-AUX-EXPORT-01`, `CS-ADMIN-01`                       | contract ready    | — / job/download/expiry schemas                                                                           |
-| `AUX-10C` | U2  | [ ]  | UI            | Historie exportů a download nad `AUX-10B`                                          | `AUX-01C`, `AUX-10A`, `AUX-10B`                                                                                                             | —                                                                 | `AUX-10D`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | — / queued nikdy nepředstírá hotový soubor                                                                |
-| `AUX-10D` | U1  | [ ]  | UI            | Samostatná historie změn, bezpečné filtry, registry a cursor                       | `AUX-01C`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10A`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | — / jen kontraktem podporované filtry                                                                     |
-| `AUX-10E` | U1  | [ ]  | UI            | Core nastavení: read→Upravit, dopad, dirty/save, archiv                            | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10A`, `AUX-10D`                                                        | `CS-ADMIN-01`                                            | N/A               | — / bez neověřené support-message copy                                                                    |
+| `AUX-10A` | U1  | [x]  | UI            | Report cards, období/formát a bezpečný request flow                                | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10D`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | CSV default, event-timezone období, reason, P3 dopad a pravdivý queued receipt                            |
+| `AUX-10B` | U2  | [x]  | contract      | Export jobs: queued/ready/download/expired/failed                                  | `AUX-00B`                                                                                                                                   | —                                                                 | `AUX-10A`, `AUX-10D`                                                        | `GAP-AUX-EXPORT-01`, `CS-ADMIN-01`                       | contract ready    | strict event-scoped jobs, exact ready-only path, expiry/range a CSV-injection test                        |
+| `AUX-10C` | U2  | [x]  | UI            | Historie exportů a download nad `AUX-10B`                                          | `AUX-01C`, `AUX-10A`, `AUX-10B`                                                                                                             | —                                                                 | `AUX-10D`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | čtyři lidské stavy; download pouze ready, bez persistence staré URL                                       |
+| `AUX-10D` | U1  | [x]  | UI            | Samostatná historie změn, bezpečné filtry, registry a cursor                       | `AUX-01C`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10A`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | category/action/time/request filtry, cursor zachová query, redacted detail bez raw action                 |
+| `AUX-10E` | U1  | [x]  | UI            | Core nastavení: read→Upravit, dopad, dirty/save, archiv                            | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                                                 | `AUX-10A`, `AUX-10D`                                                        | `CS-ADMIN-01`                                            | N/A               | focus read→edit, radio dopad, dirty/exact retry a archiv read-only; supportMessage skrytý                 |
 | `AUX-10F` | U2  | [!]  | product/UI    | Finální `supportMessage` label, preview a místo dopadu                             | `AUX-10E`                                                                                                                                   | `GAP-AUX-SETTINGS-01`                                             | —                                                                           | `GAP-AUX-SETTINGS-01`, `P9-09`                           | UI ready (mocked) | — / otevřený blocker §17.2                                                                                |
-| `AUX-10G` | U1  | [ ]  | QA            | Reports/audit/core-settings stavová a accessibility matice                         | `AUX-10C`, `AUX-10D`, `AUX-10E`                                                                                                             | —                                                                 | `AUX-11A`                                                                   | `CS-ADMIN-01`                                            | UI ready (mocked) | — / route h1, permission, P3 tests                                                                        |
+| `AUX-10G` | U1  | [x]  | QA            | Reports/audit/core-settings stavová a accessibility matice                         | `AUX-10C`, `AUX-10D`, `AUX-10E`                                                                                                             | —                                                                 | `AUX-11A`                                                                   | `CS-ADMIN-01`                                            | UI ready (mocked) | browser 1041/1041; 3 viewporty, axe, focus, exact retry, archive, cursor a route permission/P3 wipe gate  |
 | `AUX-11A` | U0  | [ ]  | content-QA    | Plain-language pass produkční user-facing copy                                     | `AUX-01C`, `AUX-02G`, `AUX-03C`, `AUX-04E`, `AUX-05C`, `AUX-06D`, `AUX-07C`, `AUX-08C`, `AUX-09C`, `AUX-10G`                                | —                                                                 | —                                                                           | N/A                                                      | N/A               | — / scan jen rendered production copy; allowlist technical/dev                                            |
 | `AUX-11B` | U1  | [ ]  | QA            | Sjednotit dirty/error/stale/pending/success/technical patterns                     | `AUX-01B`, `AUX-11A`                                                                                                                        | —                                                                 | `AUX-12C`                                                                   | N/A                                                      | N/A               | — / texty §6.4 a matice §11                                                                               |
 | `AUX-12A` | U0  | [ ]  | QA            | Cross-route axe, keyboard a screen-reader smoke                                    | `AUX-11B`                                                                                                                                   | —                                                                 | `AUX-12C`                                                                   | N/A                                                      | N/A               | — / §1.4, §12.2 evidence                                                                                  |
@@ -1431,7 +1432,7 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-13F` | U1  | [!]  | integration   | `/admin/rezervace` session kapacity a storno                                       | `AUX-07C`, `AUX-13A`, `P5-05`, `P9-01`                                                                                                      | `BLOCKER-RES-03`                                                  | `AUX-13G`, `AUX-13H`                                                        | `CS-ADMIN-01`                                            | integrated        | — / produkční session-page endpoint, canonical capacity E2E + docs sync                                   |
 | `AUX-13G` | U1  | [ ]  | integration   | `/admin/oznameni` preview/send                                                     | `AUX-08C`, `AUX-08D`, `AUX-13A`, `P8-05`                                                                                                    | —                                                                 | `AUX-13F`, `AUX-13H`                                                        | `CS-ANN-01`                                              | integrated        | — / options endpoint, event/one-session, duplicate send E2E + docs sync                                   |
 | `AUX-13H` | U2  | [!]  | integration   | `/admin/role` assignments                                                          | `AUX-09C`, `AUX-13A`, `P9-02`                                                                                                               | `BLOCKER-OPS-01`                                                  | `AUX-13F`, `AUX-13G`                                                        | `CS-ADMIN-01`                                            | integrated        | — / list/search/options endpointy, scope/guard E2E + docs sync                                            |
-| `AUX-13I` | U1  | [!]  | integration   | `/admin/reporty` request, jobs a expiring download                                 | `AUX-10G`, `AUX-13A`, `P9-05`, `P9-06`, `P9-07`                                                                                             | `GAP-AUX-EXPORT-01`, `BLOCKER-INFRA-01`                           | `AUX-13J`, `AUX-13K`                                                        | `CS-ADMIN-01`                                            | integrated        | — / download audit/expiry/CSV tests + docs sync                                                           |
+| `AUX-13I` | U1  | [!]  | integration   | `/admin/reporty` request, jobs a expiring download                                 | `AUX-10G`, `AUX-13A`, `P9-05`, `P9-06`, `P9-07`                                                                                             | `BLOCKER-INFRA-01`                                                | `AUX-13J`, `AUX-13K`                                                        | `CS-ADMIN-01`                                            | integrated        | — / download audit/expiry/CSV tests + docs sync                                                           |
 | `AUX-13J` | U1  | [ ]  | integration   | `/admin/audit` query a cursor                                                      | `AUX-10G`, `AUX-13A`, `P9-04`                                                                                                               | —                                                                 | `AUX-13I`, `AUX-13K`                                                        | `CS-ADMIN-01`                                            | integrated        | — / redaction/filter/pagination E2E + docs sync                                                           |
 | `AUX-13K` | U1  | [!]  | integration   | `/admin/nastaveni` read/update                                                     | `AUX-10F`, `AUX-10G`, `AUX-13A`, `P9-09`                                                                                                    | `GAP-AUX-SETTINGS-01`                                             | `AUX-13I`, `AUX-13J`                                                        | `CS-ADMIN-01`                                            | integrated        | — / stale/archive/audit E2E + docs sync                                                                   |
 | `AUX-13L` | U2  | [!]  | integration   | `/admin/obsah` asset read/upload/replace/remove                                    | `AUX-00B`, `AUX-04G`, `AUX-13C`                                                                                                             | `GAP-AUX-ASSET-01`, `BLOCKER-INFRA-01`                            | `AUX-13I`                                                                   | `GAP-AUX-ASSET-01`, `ADR-007`, `P3-01`                   | integrated        | — / nový backend slice, storage, auth, alt-text a asset E2E                                               |
@@ -1652,15 +1653,15 @@ none` není řešení landmark problému.
 
 **Oznámení akceptace**
 
-- [ ] **08A-1:** Kritická severity je pevná; publikum je event nebo právě jedna
+- [x] **08A-1:** Kritická severity je pevná; publikum je event nebo právě jedna
       serverem povolená pojmenovaná aktivita.
-- [ ] **08A-2:** Změna textu/publika zneplatní preview a send vyžádá novou
+- [x] **08A-2:** Změna textu/publika zneplatní preview a send vyžádá novou
       kontrolu; recipient/excluded count jsou pravdivě vysvětlené.
-- [ ] **08B-1:** `sent` a `already_sent` mají kanonický receipt; žádný delivery
+- [x] **08B-1:** `sent` a `already_sent` mají kanonický receipt; žádný delivery
       stav ani historie se neodvozují z audience preview.
-- [ ] **08C-1:** Dirty, feature-off, zero-audience, stale, duplicate, offline a
+- [x] **08C-1:** Dirty, feature-off, zero-audience, stale, duplicate, offline a
       session-expired jsou otestované pro event i jednu session.
-- [ ] **08D-1:** Picker načte event-scoped, pojmenované a serverem povolené
+- [x] **08D-1:** Picker načte event-scoped, pojmenované a serverem povolené
       sessions z výslovného options kontraktu nebo schváleného
       `program:published:read` reuse; `assignedSessions` ani raw ID nepoužije.
 
@@ -1668,38 +1669,38 @@ none` není řešení landmark problému.
 
 **Tým**
 
-- [ ] **09A-1:** Kontrakt načte/paginuje assignments a poskytne person + scope
+- [x] **09A-1:** Kontrakt načte/paginuje assignments a poskytne person + scope
       options bez raw ID vstupu.
-- [ ] **09B-1:** Člověk, role a scope jsou pojmenované selectory;
+- [x] **09B-1:** Člověk, role a scope jsou pojmenované selectory;
       `organizer_admin` se nepřidává mimo schválený kontrakt.
-- [ ] **09C-1:** Grant/revoke/stale/permission a serverové self-lockout/
+- [x] **09C-1:** Grant/revoke/stale/permission a serverové self-lockout/
       last-admin problems mají test a lidskou recovery copy.
 
 **Reporty**
 
-- [ ] **10A-1:** Typ reportu, období, formát, PII dopad a reason jsou v jednom
+- [x] **10A-1:** Typ reportu, období, formát, PII dopad a reason jsou v jednom
       souvislém request flow; queued nepředstírá stažení.
-- [ ] **10B-1:** Job contract rozlišuje queued/ready/failed/expired a expiring
+- [x] **10B-1:** Job contract rozlišuje queued/ready/failed/expired a expiring
       download s auditem i CSV injection ochranou.
-- [ ] **10C-1:** Historie exportů tyto stavy zobrazí; stará download URL se
+- [x] **10C-1:** Historie exportů tyto stavy zobrazí; stará download URL se
       nikdy neobnoví z klientské persistence.
 
 **Historie změn**
 
-- [ ] **10D-1:** Kategorie/action/outcome se lokalizují exhaustivně; UI nabízí
+- [x] **10D-1:** Kategorie/action/outcome se lokalizují exhaustivně; UI nabízí
       jen filtry podporované serverovým query.
-- [ ] **10D-2:** Cursor pagination zachová bezpečné filtry; redacted detail
+- [x] **10D-2:** Cursor pagination zachová bezpečné filtry; redacted detail
       neodhalí before/after a request ID/version jsou technical details.
 
 **Nastavení**
 
-- [ ] **10E-1:** Read stav má „Upravit nastavení“; každá core volba vysvětlí
+- [x] **10E-1:** Read stav má „Upravit nastavení“; každá core volba vysvětlí
       dopad a archiv je semanticky read-only.
-- [ ] **10E-2:** Dirty bar vznikne jen po změně; save zmrazí visible draft při
+- [x] **10E-2:** Dirty bar vznikne jen po změně; save zmrazí visible draft při
       ambiguous retry.
 - [ ] **10F-1:** `supportMessage` má až po rozhodnutí ověřený label, místo
       zobrazení a preview; do té doby se dopad netvrdí.
-- [ ] **10G-1:** Reporty, audit a core settings projdou celou maticí §11,
+- [x] **10G-1:** Reporty, audit a core settings projdou celou maticí §11,
       keyboard/axe, permissions a P3 wipe.
 
 ### 15.8 `AUX-11` až `AUX-14` — copy, QA, integrace a UAT
@@ -1901,18 +1902,19 @@ vlastníky, ne důvod hádat produktové chování.
 
 ## 18. Changelog
 
-| Verze | Datum      | Změna                                                                                                                                         | Evidence                                                                        |
-| ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 2.2   | 2026-09-02 | `AUX-09A`–`C`: seznam týmových rolí, vyhledání existující osoby, pojmenované rozsahy a oddělené grant/revoke flow bez ručních ID              | Browser 1029/1029; domain 194/194; test-support 37/37; typecheck                |
-| 2.1   | 2026-09-02 | `AUX-08A`–`D`: čtyřkroková critical-only oznámení, pojmenovaný session target kontrakt, poctivá kontrola publika a canonical send receipt     | Browser 1014/1014; domain 193/193; test-support 37/37; typecheck                |
-| 2.0   | 2026-09-02 | `AUX-07A`–`C`: session-first kontrakt a aktivita-first kapacity/rezervace se samostatnou změnou a poctivým omezením první stránky             | Browser 993/993; domain 192/192; test-support 37/37; typecheck                  |
-| 1.9   | 2026-09-02 | `AUX-06A`, `B`, `D` a bezpečná část `C`: účastnické hledání, target-picker contract a lidské support akce; nejasné transfery zůstávají skryté | Browser 978/978; domain 191/191; test-support 37/37; typecheck                  |
-| 1.8   | 2026-09-02 | `AUX-05A`–`C`: čtyřkroková aktualizace vstupenek, problem-first kontrola a bezpečná SimpleShop/server-only hranice bez uploadu                | Browser 963/963; unit 552/552; typecheck, lint a build                          |
-| 1.7   | 2026-09-02 | `AUX-04A`–`G`: list-first obsah, lidský publish diff, bezpečný asset kontrakt a mockované foto/logo UI bez raw ID                             | Browser 939/939; unit 552/552; domain 190/190; typecheck, lint a build          |
-| 1.6   | 2026-09-02 | `AUX-03A`–`C`: samostatné route workspaces, phase-aware dashboard, exhaustive metric registry a permission-safe attention/CTA                 | Browser 936/936; unit 550/550; UI 19/19; typecheck a lint                       |
-| 1.5   | 2026-09-02 | `AUX-02A`–`G`: route-aware chrome, oddělený shell adapter, explicitní context capability, cílová navigace/topbar a modal drawer               | Browser 891/891; unit 549/549; 320–1440 px + 200% zoom; typecheck               |
-| 1.4   | 2026-09-01 | `AUX-01A`–`C`: sdílené admin tokeny, Inter pracovní typografie, povinné primitives a exhaustive prezentační registry                          | UI 18/18; conference unit 547/547; admin browser/axe 873/873; typecheck a lint  |
-| 1.3   | 2026-09-01 | `AUX-00B` synchronizoval AUX→F4/P/CS mapování, branch/handoff pravidla a založil samostatný asset backend slice `P3-13`                       | `AI_IMPLEMENTATION_PLAN.md` v6.32, `handover.md`                                |
-| 1.2   | 2026-09-01 | Importní UX sladěn se server-only SimpleShop API tokem; bez file uploadu, s integrovaným read-only preview a budoucím odděleným apply         | `ADR-015`, `P4-02`, `CS-IMPORT-01`; fact-check `main` `bfead32`                 |
-| 1.1   | 2026-09-01 | Zapracován nezávislý UX, kontraktní a tracking review: per-route integrace/UAT, lifecycle DoD, context/asset/action gaps a přesné API hranice | Review tří agentů; contract fact-check `CS-ADMIN-01`, `CS-ANN-01`, content port |
-| 1.0   | 2026-09-01 | Vytvořen kompletní audit, cílová IA, slovník, design systém, screen specs, API gap register, tracker a DoD                                    | Baseline `d09a59d`; audit zdrojů uvedených v §3                                 |
+| Verze | Datum      | Změna                                                                                                                                           | Evidence                                                                        |
+| ----- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 2.3   | 2026-09-02 | `AUX-10A`–`E`,`G`: reporty s pravdivými job stavy, serverově filtrovaný audit a read→edit core nastavení; neověřený support text zůstává skrytý | Browser 1041/1041; domain 195/195; test-support 37/37; typecheck a lint         |
+| 2.2   | 2026-09-02 | `AUX-09A`–`C`: seznam týmových rolí, vyhledání existující osoby, pojmenované rozsahy a oddělené grant/revoke flow bez ručních ID                | Browser 1029/1029; domain 194/194; test-support 37/37; typecheck                |
+| 2.1   | 2026-09-02 | `AUX-08A`–`D`: čtyřkroková critical-only oznámení, pojmenovaný session target kontrakt, poctivá kontrola publika a canonical send receipt       | Browser 1014/1014; domain 193/193; test-support 37/37; typecheck                |
+| 2.0   | 2026-09-02 | `AUX-07A`–`C`: session-first kontrakt a aktivita-first kapacity/rezervace se samostatnou změnou a poctivým omezením první stránky               | Browser 993/993; domain 192/192; test-support 37/37; typecheck                  |
+| 1.9   | 2026-09-02 | `AUX-06A`, `B`, `D` a bezpečná část `C`: účastnické hledání, target-picker contract a lidské support akce; nejasné transfery zůstávají skryté   | Browser 978/978; domain 191/191; test-support 37/37; typecheck                  |
+| 1.8   | 2026-09-02 | `AUX-05A`–`C`: čtyřkroková aktualizace vstupenek, problem-first kontrola a bezpečná SimpleShop/server-only hranice bez uploadu                  | Browser 963/963; unit 552/552; typecheck, lint a build                          |
+| 1.7   | 2026-09-02 | `AUX-04A`–`G`: list-first obsah, lidský publish diff, bezpečný asset kontrakt a mockované foto/logo UI bez raw ID                               | Browser 939/939; unit 552/552; domain 190/190; typecheck, lint a build          |
+| 1.6   | 2026-09-02 | `AUX-03A`–`C`: samostatné route workspaces, phase-aware dashboard, exhaustive metric registry a permission-safe attention/CTA                   | Browser 936/936; unit 550/550; UI 19/19; typecheck a lint                       |
+| 1.5   | 2026-09-02 | `AUX-02A`–`G`: route-aware chrome, oddělený shell adapter, explicitní context capability, cílová navigace/topbar a modal drawer                 | Browser 891/891; unit 549/549; 320–1440 px + 200% zoom; typecheck               |
+| 1.4   | 2026-09-01 | `AUX-01A`–`C`: sdílené admin tokeny, Inter pracovní typografie, povinné primitives a exhaustive prezentační registry                            | UI 18/18; conference unit 547/547; admin browser/axe 873/873; typecheck a lint  |
+| 1.3   | 2026-09-01 | `AUX-00B` synchronizoval AUX→F4/P/CS mapování, branch/handoff pravidla a založil samostatný asset backend slice `P3-13`                         | `AI_IMPLEMENTATION_PLAN.md` v6.32, `handover.md`                                |
+| 1.2   | 2026-09-01 | Importní UX sladěn se server-only SimpleShop API tokem; bez file uploadu, s integrovaným read-only preview a budoucím odděleným apply           | `ADR-015`, `P4-02`, `CS-IMPORT-01`; fact-check `main` `bfead32`                 |
+| 1.1   | 2026-09-01 | Zapracován nezávislý UX, kontraktní a tracking review: per-route integrace/UAT, lifecycle DoD, context/asset/action gaps a přesné API hranice   | Review tří agentů; contract fact-check `CS-ADMIN-01`, `CS-ANN-01`, content port |
+| 1.0   | 2026-09-01 | Vytvořen kompletní audit, cílová IA, slovník, design systém, screen specs, API gap register, tracker a DoD                                      | Baseline `d09a59d`; audit zdrojů uvedených v §3                                 |

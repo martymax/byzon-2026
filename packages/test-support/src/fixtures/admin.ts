@@ -6,6 +6,7 @@ import {
   adminEventSettingsSchema,
   adminEventSettingsUpdateResponseSchema,
   adminExportProblemSchema,
+  adminExportJobListResponseSchema,
   adminExportResponseSchema,
   adminMutationProblemSchema,
   adminOperationsOverviewResponseSchema,
@@ -43,6 +44,9 @@ export const adminFixtureIds = Object.freeze({
   moderator: '019fb200-0000-7000-8000-000000000013',
   moderatorAssignment: '019fb200-0000-7000-8000-000000000014',
   station: '019fb200-0000-7000-8000-000000000015',
+  readyExport: '019fb200-0000-7000-8000-000000000016',
+  failedExport: '019fb200-0000-7000-8000-000000000017',
+  expiredExport: '019fb200-0000-7000-8000-000000000018',
 } as const);
 
 export const adminContextFixtures = defineFixtureSet({
@@ -504,6 +508,61 @@ export const adminExportFixtures = defineFixtureSet({
       state: 'queued',
       queuedAt: '2026-07-25T12:15:00.000+02:00',
       audit: { auditId: adminFixtureIds.auditMutation },
+    },
+  },
+});
+
+const exportJobBase = {
+  eventId: adminFixtureIds.event,
+  format: 'csv' as const,
+  range: null,
+  createdByLabel: 'Demo administrátor',
+  createdAt: '2026-07-25T12:15:00.000+02:00',
+  expiresAt: '2026-07-26T12:15:00.000+02:00',
+};
+
+export const adminExportJobListFixtures = defineFixtureSet({
+  name: 'admin.export-job-list',
+  schema: adminExportJobListResponseSchema,
+  fixtures: {
+    mixed: {
+      eventId: adminFixtureIds.event,
+      items: [
+        {
+          ...exportJobBase,
+          exportId: adminFixtureIds.export,
+          report: 'reservation_summary',
+          state: 'queued',
+          downloadPath: null,
+        },
+        {
+          ...exportJobBase,
+          exportId: adminFixtureIds.readyExport,
+          report: 'participant_summary',
+          state: 'ready',
+          downloadPath: `/api/v1/admin/events/${adminFixtureIds.event}/exports/${adminFixtureIds.readyExport}`,
+        },
+        {
+          ...exportJobBase,
+          exportId: adminFixtureIds.failedExport,
+          report: 'checkin_summary',
+          state: 'failed',
+          downloadPath: null,
+        },
+        {
+          ...exportJobBase,
+          exportId: adminFixtureIds.expiredExport,
+          report: 'audit_log',
+          state: 'expired',
+          downloadPath: null,
+        },
+      ],
+      pageInfo: { nextCursor: null, hasMore: false },
+    },
+    empty: {
+      eventId: adminFixtureIds.event,
+      items: [],
+      pageInfo: { nextCursor: null, hasMore: false },
     },
   },
 });
