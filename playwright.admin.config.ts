@@ -20,7 +20,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3000',
     browserName: 'chromium',
-    trace: 'retain-on-failure',
+    trace: process.env.ADMIN_QA_MAX_TRACE === '1' ? 'on' : 'retain-on-failure',
   },
   projects: adminQaViewports.map(({ name, width, height }) => ({
     name,

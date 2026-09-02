@@ -4,9 +4,9 @@
   "node": "v24.18.0",
   "shared": {
     "chunks": 5,
-    "gzipBytes": 129409,
-    "rawBytes": 540849,
-    "gzipDeltaBytes": 315
+    "gzipBytes": 129454,
+    "rawBytes": 541488,
+    "gzipDeltaBytes": 360
   },
   "routes": {
     "overview": {
@@ -17,15 +17,15 @@
     },
     "content": {
       "chunks": 2,
-      "gzipBytes": 18131,
-      "rawBytes": 58893,
-      "gzipDeltaBytes": 0
+      "gzipBytes": 18362,
+      "rawBytes": 59589,
+      "gzipDeltaBytes": 231
     },
     "tickets": {
       "chunks": 1,
-      "gzipBytes": 6091,
-      "rawBytes": 19604,
-      "gzipDeltaBytes": 0
+      "gzipBytes": 6308,
+      "rawBytes": 20318,
+      "gzipDeltaBytes": 217
     },
     "participants": {
       "chunks": 1,
@@ -41,9 +41,9 @@
     },
     "announcements": {
       "chunks": 1,
-      "gzipBytes": 4503,
-      "rawBytes": 14020,
-      "gzipDeltaBytes": 0
+      "gzipBytes": 4827,
+      "rawBytes": 15240,
+      "gzipDeltaBytes": 324
     },
     "engagement": {
       "chunks": 1,

@@ -286,4 +286,158 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
       contentType: 'application/json',
     });
   });
+
+  test('keeps contract-maximum admin pages within interaction budgets', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      (page.viewportSize()?.width ?? 0) !== 1280,
+      'The reproducible max-page trace uses the stable 1280 × 800 project.',
+    );
+    await installPerformanceObservers(page);
+    const evidence: Record<
+      string,
+      { cls: number; interactions: Record<string, number> }
+    > = {};
+    const capture = async (
+      route: string,
+      interaction: string,
+      action: () => Promise<void>,
+    ) => {
+      await resetLongTasks(page);
+      await action();
+      await page.waitForTimeout(300);
+      const performance = await readPerformance(page);
+      expect(performance.cls).toBeLessThan(0.1);
+      expect(performance.maxLongTask).toBeLessThanOrEqual(50);
+      const current = evidence[route] ?? {
+        cls: performance.cls,
+        interactions: {},
+      };
+      current.cls = Math.max(current.cls, performance.cls);
+      current.interactions[interaction] = performance.maxLongTask;
+      evidence[route] = current;
+    };
+
+    await waitForAdminRoute(page, '/admin/audit', 'Historie změn');
+    await page.getByText('Technické údaje').first().click();
+    await capture('audit-100', 'server-filter-and-render', async () => {
+      await page
+        .getByRole('textbox', { name: 'Request ID' })
+        .fill('admin-qa-max-page');
+      await expect(page.getByText('100 položek')).toBeVisible();
+    });
+    await capture('audit-100', 'open-detail', async () => {
+      await page.getByText('Zobrazit důvod a podrobnosti').first().click();
+      await expect(
+        page.getByText('Syntetický redigovaný důvod pro max-page QA.').first(),
+      ).toBeVisible();
+    });
+    await expectNoPageOverflow(page);
+
+    await waitForAdminRoute(
+      page,
+      '/admin/rezervace?adminQa=max-page',
+      'Rezervace a kapacity',
+    );
+    await expect(page.getByText('100 aktivit')).toBeVisible();
+    await capture('reservations-100', 'filter', async () => {
+      await page
+        .getByRole('combobox', { name: 'Kapacitní stav' })
+        .selectOption('nearly_full');
+      await expect(
+        page.getByRole('button', { name: 'Zobrazit aktivitu' }).first(),
+      ).toBeVisible();
+    });
+    await capture('reservations-100', 'open-detail', async () => {
+      await page
+        .getByRole('button', { name: 'Zobrazit aktivitu' })
+        .first()
+        .click();
+      await expect(page.getByText('Detail aktivity')).toBeVisible();
+    });
+    await expectNoPageOverflow(page);
+
+    await waitForAdminRoute(page, '/admin/obsah', 'Program a obsah');
+    await capture('content-50', 'scenario-and-render', async () => {
+      await page
+        .getByRole('combobox', { name: 'Stav následujícího průchodu' })
+        .selectOption('max_page');
+      await expect(page.getByRole('button', { name: /^Upravit:/ })).toHaveCount(
+        50,
+      );
+    });
+    await capture('content-50', 'open-editor', async () => {
+      await page
+        .getByRole('button', { name: /^Upravit:/ })
+        .first()
+        .click();
+      await expect(page.getByText('Úprava obsahu')).toBeVisible();
+    });
+    await expectNoPageOverflow(page);
+
+    await waitForAdminRoute(
+      page,
+      '/admin/vstupenky?adminQa=max-page',
+      'Aktualizace vstupenek',
+    );
+    await capture('ticket-preview-500', 'load-and-render', async () => {
+      await page.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+      await expect(page.getByText('500 záznamů')).toBeVisible({
+        timeout: 30_000,
+      });
+    });
+    await capture('ticket-preview-500', 'filter', async () => {
+      await page
+        .getByRole('combobox', { name: 'Filtrovat záznamy' })
+        .selectOption('new');
+      await expect(page.getByText('Nové vstupenky').first()).toBeVisible();
+    });
+    const ticketPagination = page.getByRole('navigation', {
+      name: 'Stránkování kontroly vstupenek',
+    });
+    await expect(
+      ticketPagination.getByText('Zobrazeno 1–25 z 500'),
+    ).toBeVisible();
+    await capture('ticket-preview-500', 'keyboard-next-page', async () => {
+      const nextPage = ticketPagination.getByRole('button', {
+        name: 'Další záznamy',
+      });
+      await nextPage.focus();
+      await page.keyboard.press('Enter');
+      await expect(
+        ticketPagination.getByText('Zobrazeno 26–50 z 500'),
+      ).toBeVisible();
+    });
+    await expectPageToPassAxe(page);
+    await expectNoPageOverflow(page);
+
+    await waitForAdminRoute(
+      page,
+      '/admin/ucastnici?adminQa=max-page',
+      'Účastníci',
+    );
+    await page
+      .getByRole('searchbox', { name: 'Jméno, e-mail nebo reference' })
+      .fill('admin-qa-max-page');
+    await capture('support-search-5', 'search-and-render', async () => {
+      await page.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Zobrazit detail' }),
+      ).toHaveCount(5);
+    });
+    await capture('support-search-5', 'open-detail', async () => {
+      await page
+        .getByRole('button', { name: 'Zobrazit detail' })
+        .first()
+        .click();
+      await expect(page.getByText('Detail účastníka')).toBeVisible();
+    });
+    await expectNoPageOverflow(page);
+
+    await testInfo.attach('admin-max-page-performance.json', {
+      body: JSON.stringify(evidence, null, 2),
+      contentType: 'application/json',
+    });
+  });
 });

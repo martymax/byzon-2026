@@ -197,7 +197,7 @@ Cross-route automatizace pokrývá všech 11 admin rout na 320, 375, 414, 768,
 1024, 1280 a 1440 px. Ověřuje axe, landmarky, posloupnost nadpisů, skip link,
 desktopovou i drawer navigaci, filtry/detail, page overflow, 200% reflow a
 reduced motion. Ruční screenshot review opravil mobilní souhrn rezervací.
-Bundle budget drží shared admin gzip na +315 B/+0,24 % a přímé route importy snížily
+Bundle budget drží shared admin gzip na +360 B/+0,28 % a přímé route importy snížily
 rezervace, tým, reporty, audit a nastavení odstraněním nechtěného legacy
 barrel bundlingu. CLS je 0.03246 a měřené interakce nevytvořily long task;
 fyzický screen-reader UAT a max-page browser trace zůstávají poctivě otevřené.
@@ -331,6 +331,13 @@ focus trap/restore, 44px touch targety, safe areas, overflow, dlouhou češtinu,
 reduced motion a landscape check-in. Stav není sdělovaný jen barvou a
 kritické formuláře mají focusovatelný error summary, field association a
 live/progress region.
+
+`AUX-12C` přidal samostatný trace kontraktních maxim 100 auditních záznamů,
+100 rezervací/kapacit, 50 obsahových položek, 500 řádků ticket preview a 5
+support výsledků. První ticket render měl 128ms long task; klientské
+stránkování po 25 zachovalo celý kanonický preview, přidalo pojmenovanou
+keyboard/axe ověřenou navigaci a snížilo finální měřené interakce na 0 ms při
+CLS 0,03246.
 
 ## 8. Etapové review
 
