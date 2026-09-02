@@ -1377,6 +1377,25 @@ main > .ui-participant-nav-spacer {
   font-size: clamp(1.5rem, 4vw, 2rem);
   line-height: 1.1;
 }
+.session-calendar-export {
+  display: grid;
+  align-items: center;
+  gap: 1rem;
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface-soft);
+}
+.session-calendar-export > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.session-calendar-export h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
 .agenda-session-action {
   display: grid;
   align-items: center;
@@ -1895,6 +1914,7 @@ main > .ui-participant-nav-spacer {
     align-self: start;
   }
   .agenda-calendar-export,
+  .session-calendar-export,
   .agenda-session-action {
     grid-template-columns: minmax(0, 1fr) auto;
   }

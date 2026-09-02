@@ -109,6 +109,37 @@ describe('CS-CONTENT-01 participant UI', () => {
     expect(bounds.height).toBeGreaterThanOrEqual(44);
   });
 
+  it('offers a portable calendar export on the program detail', async () => {
+    const fixture = participantProgramFixtures.happy!;
+    const session = fixture.program.sessions[0]!;
+    const screen = await renderComponent(
+      <SessionView
+        eventId={fixture.eventId}
+        sessionId={session.id}
+        api={apiFor(fixture)}
+      />,
+    );
+
+    await expect
+      .element(screen.getByText(/Google Kalendáři, Apple Kalendáři/))
+      .toBeVisible();
+    const exportLink = screen
+      .getByRole('link', { name: 'Přidat tento bod' })
+      .element();
+    expect(exportLink.getAttribute('href')).toBe(
+      `/api/v1/events/${fixture.eventId}/program/${session.id}/calendar.ics`,
+    );
+    expect(exportLink.getAttribute('download')).toBe(
+      `byzon-2026-${session.slug}.ics`,
+    );
+    const bounds = exportLink.getBoundingClientRect();
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+  });
+
   it('maps an obfuscated server permission response to safe participant copy', async () => {
     const problem = participantProgramProblemFixtures.permission!;
     const api = createFetchApiClient({

@@ -223,7 +223,7 @@ test('participant reserves the available place and downloads the Prague-time age
   ).toBeVisible();
 
   const exportLink = page.getByRole('link', {
-    name: 'Stáhnout osobní agendu (.ics)',
+    name: 'Přidat celou agendu',
   });
   await expect(exportLink).toHaveAttribute('href', '/api/v1/me/agenda.ics');
   await expect(exportLink).toHaveAttribute(

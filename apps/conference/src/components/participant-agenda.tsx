@@ -171,6 +171,11 @@ const ParticipantAgendaReadyView = ({
         </Alert>
       ) : null}
       <ParticipantAgendaMutationFeedback resource={resource} />
+      {ready.items.length > 0 ? (
+        <ParticipantAgendaCalendarExport
+          calendarExport={ready.calendarExport}
+        />
+      ) : null}
       {ready.items.length === 0 ? (
         <StatePanel
           action={
@@ -215,7 +220,11 @@ const ParticipantAgendaReadyView = ({
           ))}
         </div>
       )}
-      <ParticipantAgendaCalendarExport calendarExport={ready.calendarExport} />
+      {ready.items.length === 0 ? (
+        <ParticipantAgendaCalendarExport
+          calendarExport={ready.calendarExport}
+        />
+      ) : null}
       <ParticipantAgendaConflictDialog
         onOpenSession={rememberScroll}
         resource={resource}

@@ -11,6 +11,7 @@ export * from './content.js';
 export * from './identity.js';
 export * from './offline.js';
 export * from './networking.js';
+export * from './program-calendar.js';
 export * from './questions.js';
 export * from './support.js';
 export * from './ticket.js';

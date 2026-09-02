@@ -19,6 +19,7 @@ import {
   ParticipantProgramSchedule,
   participantProgramDateLabel,
 } from './participant-program-schedule';
+import { ParticipantSessionCalendarExport } from './participant-session-calendar-export';
 import { ParticipantSessionAgendaAction } from './participant-session-agenda-action';
 
 const time = (value: string) =>
@@ -394,6 +395,7 @@ export const SessionView = ({
           {...(agendaApi ? { agendaApi } : {})}
         />
       ) : null}
+      <ParticipantSessionCalendarExport eventId={eventId} session={session} />
       {session.questionsEnabled && session.status !== 'cancelled' ? (
         <Link className="ui-button" href={`/app/interakce/${session.id}`}>
           Položit dotaz moderátorovi

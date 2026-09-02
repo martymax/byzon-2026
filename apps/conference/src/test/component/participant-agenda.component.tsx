@@ -351,7 +351,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     await expect.element(screen.getByText('Aktuální pořadí: 3.')).toBeVisible();
 
     const exportLink = screen
-      .getByRole('link', { name: 'Stáhnout osobní agendu (.ics)' })
+      .getByRole('link', { name: 'Přidat celou agendu' })
       .element();
     expect(exportLink.getAttribute('href')).toBe('/api/v1/me/agenda.ics');
     expect(exportLink.getAttribute('download')).toBe(
@@ -484,7 +484,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     expect(
       screen
         .getByRole('link', {
-          name: 'Stáhnout osobní agendu (.ics)',
+          name: 'Přidat celou agendu',
         })
         .elements(),
     ).toHaveLength(0);
@@ -513,7 +513,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     await expect
       .element(
         screen.getByRole('link', {
-          name: 'Stáhnout osobní agendu (.ics)',
+          name: 'Přidat celou agendu',
         }),
       )
       .toBeVisible();
