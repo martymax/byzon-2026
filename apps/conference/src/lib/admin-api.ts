@@ -13,6 +13,7 @@ import {
   adminEventSettingsUpdateRequestSchema,
   adminEventSettingsUpdateResponseSchema,
   adminExportProblemSchema,
+  adminExportJobListResponseSchema,
   adminExportRequestSchema,
   adminExportResponseSchema,
   adminMutationProblemSchema,
@@ -36,6 +37,7 @@ import {
   type AdminAuditQuery,
   type AdminEventSettingsUpdateRequest,
   type AdminExportRequest,
+  type AdminExportJobListQuery,
   type AdminReservationMutationRequest,
   type AdminReservationMutationResponse,
   type AdminReservationSessionQuery,
@@ -360,6 +362,17 @@ export const adminExportEndpoint = defineApiEndpoint({
   responseKind: 'json',
   retry: 'never',
   idempotency: 'required',
+});
+
+export const adminExportJobListEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminExportJobListResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
 });
 
 export const adminReservationsEndpoint = defineApiEndpoint({
@@ -850,6 +863,29 @@ export const requestAdminExport = async (
     }),
     (data) => data.eventId === eventId && data.report === body.report,
   );
+
+export const requestAdminExportJobs = async (
+  api: ApiPort,
+  eventId: string,
+  query: AdminExportJobListQuery,
+  signal?: AbortSignal,
+) => {
+  const parameters = new URLSearchParams();
+  Object.entries(query).forEach(([name, value]) => {
+    if (value !== undefined) parameters.set(name, String(value));
+  });
+  const suffix = parameters.size > 0 ? `?${parameters.toString()}` : '';
+  return correlated(
+    await api.request(adminExportJobListEndpoint, {
+      path: `${eventPath(eventId, '/exports')}${suffix}`,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.items.every((item) => item.eventId === eventId),
+  );
+};
 
 export const requestAdminReservations = async (
   api: ApiPort,

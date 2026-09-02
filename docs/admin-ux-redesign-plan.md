@@ -1177,8 +1177,10 @@ můžete pokračovat v práci.“
 - Export ID jen v technických údajích.
 
 Strict job kontrakt po `AUX-10B` rozlišuje všechny čtyři stavy a dovolí jen
-přesnou same-event download cestu pro `ready`. Produkční job-list endpoint a
-expiring download E2E dál vlastní `AUX-13I` za `BLOCKER-INFRA-01`.
+přesnou same-event download cestu pro `ready`. `AUX-13I` doplnil produkční
+bounded job-list, cursor, current-event download guard, expiraci, audit a
+CSV-injection regrese. Storage-backed staging E2E dál čeká na
+`BLOCKER-INFRA-01` a společný auth/context gate `AUX-13A`.
 
 ### 10.9 Historie změn — `/admin/audit`
 
@@ -1434,7 +1436,7 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-13F` | U1  | [~]  | integration   | `/admin/rezervace` session kapacity a storno                                       | `AUX-07C`, `AUX-13A`, `P5-05`, `P9-01`                                                                                                      | —                                               | `AUX-13G`, `AUX-13H`                                                        | `CS-ADMIN-01`                                            | integrated        | session-page keyset read + canonical capacity/cancel + PII/permission regrese; staging `AUX-13A` zbývá                     |
 | `AUX-13G` | U1  | [~]  | integration   | `/admin/oznameni` preview/send                                                     | `AUX-08C`, `AUX-08D`, `AUX-13A`, `P8-05`                                                                                                    | —                                               | `AUX-13F`, `AUX-13H`                                                        | `CS-ANN-01`                                              | integrated        | target endpoint + event/session preview/send + exact/already-sent regrese hotové; staging `AUX-13A` zbývá                  |
 | `AUX-13H` | U2  | [~]  | integration   | `/admin/role` assignments                                                          | `AUX-09C`, `AUX-13A`, `P9-02`                                                                                                               | —                                               | `AUX-13F`, `AUX-13G`                                                        | `CS-ADMIN-01`                                            | integrated        | list/search/options + current-event/phase/scope guards hotové; staging `AUX-13A` a personální UAT `BLOCKER-OPS-01` zbývají |
-| `AUX-13I` | U1  | [!]  | integration   | `/admin/reporty` request, jobs a expiring download                                 | `AUX-10G`, `AUX-13A`, `P9-05`, `P9-06`, `P9-07`                                                                                             | `BLOCKER-INFRA-01`                              | `AUX-13J`, `AUX-13K`                                                        | `CS-ADMIN-01`                                            | integrated        | — / download audit/expiry/CSV tests + docs sync                                                                            |
+| `AUX-13I` | U1  | [~]  | integration   | `/admin/reporty` request, jobs a expiring download                                 | `AUX-10G`, `AUX-13A`, `P9-05`, `P9-06`, `P9-07`                                                                                             | `BLOCKER-INFRA-01`                              | `AUX-13J`, `AUX-13K`                                                        | `CS-ADMIN-01`                                            | integrated        | bounded list/cursor, current-event ready-only download, expiry/audit/CSV hotové; storage staging `AUX-13A` zbývá           |
 | `AUX-13J` | U1  | [~]  | integration   | `/admin/audit` query a cursor                                                      | `AUX-10G`, `AUX-13A`, `P9-04`                                                                                                               | —                                               | `AUX-13I`, `AUX-13K`                                                        | `CS-ADMIN-01`                                            | integrated        | serverové event/category/action/time/request/cursor filtry, limit+1 a redigované DTO hotové; staging `AUX-13A` zbývá       |
 | `AUX-13K` | U1  | [~]  | integration   | `/admin/nastaveni` read/update                                                     | `AUX-10F`, `AUX-10G`, `AUX-13A`, `P9-09`                                                                                                    | `GAP-AUX-SETTINGS-01` jen pro support text      | `AUX-13I`, `AUX-13J`                                                        | `CS-ADMIN-01`                                            | integrated        | core read/update + current-event/stale/archive/audit hotové; support text fail-closed, staging `AUX-13A` zbývá             |
 | `AUX-13L` | U2  | [!]  | integration   | `/admin/obsah` asset read/upload/replace/remove                                    | `AUX-00B`, `AUX-04G`, `AUX-13C`                                                                                                             | `GAP-AUX-ASSET-01`, `BLOCKER-INFRA-01`          | `AUX-13I`                                                                   | `GAP-AUX-ASSET-01`, `ADR-007`, `P3-01`                   | integrated        | — / nový backend slice, storage, auth, alt-text a asset E2E                                                                |
@@ -1775,8 +1777,10 @@ frontend report, tracker a changelog.
   browserový grant/revoke flow mají negativní regrese. Finální `[x]` čeká na
   staging `AUX-13A`; konkrétní personální přiřazení dál vlastní
   `BLOCKER-OPS-01`.
-- [ ] **13I-1:** Reporty integrují request, job list, expirovaný download,
-      audit a CSV-injection ochranu.
+- [~] **13I-1:** Reporty integrují request, bounded job list s cursorem,
+  current-event ready-only download, expiraci, audit a CSV-injection ochranu.
+  Finální `[x]` čeká na storage-backed staging E2E po `BLOCKER-INFRA-01` a
+  společný auth/context gate `AUX-13A`.
 - [~] **13J-1:** Historie změn používá serverové filtry, cursor pagination a
   redakci bez klientského předstírání úplnosti.
 - [~] **13K-1:** Core nastavení integruje produkční read/update, stale,

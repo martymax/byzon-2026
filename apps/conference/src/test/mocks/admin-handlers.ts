@@ -24,6 +24,7 @@ import {
   adminEventSettingsUpdateRequestSchema,
   adminEventSettingsUpdateResponseSchema,
   adminExportProblemSchema,
+  adminExportJobListResponseSchema,
   adminExportRequestSchema,
   adminExportResponseSchema,
   adminMutationProblemSchema,
@@ -85,6 +86,7 @@ import {
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
   adminExportFixtures,
+  adminExportJobListFixtures,
   adminExportProblemFixtures,
   adminFixtureIds,
   adminMutationProblemFixtures,
@@ -1322,6 +1324,27 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       );
     },
   ),
+
+  http.get('*/api/v1/admin/events/:eventId/exports', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['personal-data:operational:export'],
+      'admin.mock.export-jobs',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
+        adminReadProblemSchema,
+        adminReadProblemFixtures.not_found,
+        { fixtureName: 'admin.mock.export-jobs-invalid' },
+      );
+    }
+    return mockJsonResponse(
+      adminExportJobListResponseSchema,
+      adminExportJobListFixtures.mixed!,
+      successOptions('admin.mock.export-jobs'),
+    );
+  }),
 
   http.get(
     '*/api/v1/admin/events/:eventId/announcements/targets',

@@ -1,24 +1,29 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import {
+  adminExportJobListResponseSchema,
+  adminExportResponseSchema,
   adminRoleAssignmentListResponseSchema,
   adminRolePersonSearchResponseSchema,
   adminRoleScopeOptionsResponseSchema,
 } from '@byzon/domain/contracts';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  handleAdminExport,
+  handleAdminExportJobList,
   handleAdminRoleAssignment,
   handleAdminRoleAssignmentList,
   handleAdminRolePersonSearch,
   handleAdminRoleScopeOptions,
 } from './admin-role-export';
+import { handleAdminExportDownload } from './admin-export-download';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe.sequential : describe.skip;
 const origin = 'http://localhost:3000';
 
-integration('admin role assignment integration', () => {
+integration('admin role and export integration', () => {
   const client = createDatabaseClient({
     connectionString: databaseUrl!,
     max: 3,
@@ -36,6 +41,8 @@ integration('admin role assignment integration', () => {
   const sessionId = crypto.randomUUID();
   const stationId = crypto.randomUUID();
   const assignmentId = crypto.randomUUID();
+  const readyExportId = crypto.randomUUID();
+  const expiredExportId = crypto.randomUUID();
   const url = `${origin}/api/v1/admin/events/${eventId}/role-assignments`;
 
   beforeAll(async () => {
@@ -126,6 +133,38 @@ integration('admin role assignment integration', () => {
       scope: { sessionIds: [sessionId] },
       grantedBy: adminId,
     });
+    await client.db.insert(schema.operationalExportRequests).values([
+      {
+        id: readyExportId,
+        eventId,
+        requestedBy: adminId,
+        report: 'participant_summary',
+        format: 'csv',
+        reason: 'Ready export integration fixture.',
+        state: 'ready',
+        content: '"status","count"\r\n"active","1"\r\n',
+        contentType: 'text/csv; charset=utf-8',
+        checksumSha256: 'a'.repeat(64),
+        expiresAt: new Date('2026-09-03T10:00:00Z'),
+        createdAt: new Date('2026-09-02T08:00:00Z'),
+        updatedAt: new Date('2026-09-02T08:00:00Z'),
+      },
+      {
+        id: expiredExportId,
+        eventId,
+        requestedBy: adminId,
+        report: 'audit_log',
+        format: 'json',
+        reason: 'Expired export integration fixture.',
+        state: 'ready',
+        content: '[]\n',
+        contentType: 'application/json',
+        checksumSha256: 'b'.repeat(64),
+        expiresAt: new Date('2026-09-01T10:00:00Z'),
+        createdAt: new Date('2026-08-31T10:00:00Z'),
+        updatedAt: new Date('2026-08-31T10:00:00Z'),
+      },
+    ]);
   });
 
   afterAll(async () => {
@@ -141,6 +180,7 @@ integration('admin role assignment integration', () => {
     allowedOrigin: origin,
     currentEventSlug: eventSlug,
     getSession: vi.fn(async () => ({ user: { id: actorId } })),
+    now: () => new Date('2026-09-02T10:00:00Z'),
   });
 
   it('lists named scopes and searches only through a masked POST response', async () => {
@@ -246,5 +286,126 @@ integration('admin role assignment integration', () => {
     expect(await mutation.json()).toMatchObject({
       code: 'ADMIN_INVALID_TRANSITION',
     });
+  });
+
+  it('queues and pages same-event export jobs with truthful expiry and paths', async () => {
+    const queued = await handleAdminExport(
+      new Request(`${origin}/api/v1/admin/events/${eventId}/exports`, {
+        method: 'POST',
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'idempotency-key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          report: 'reservation_summary',
+          format: 'csv',
+          range: null,
+          reason: 'Provozní export pro integrační ověření.',
+        }),
+      }),
+      eventId,
+      dependencies(),
+    );
+    expect(queued.status).toBe(202);
+    expect(adminExportResponseSchema.parse(await queued.json())).toMatchObject({
+      eventId,
+      state: 'queued',
+    });
+
+    const firstPageResponse = await handleAdminExportJobList(
+      new Request(`${url.replace('/role-assignments', '/exports')}?limit=1`),
+      eventId,
+      dependencies(),
+    );
+    expect(firstPageResponse.status).toBe(200);
+    const firstPage = adminExportJobListResponseSchema.parse(
+      await firstPageResponse.json(),
+    );
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.pageInfo).toMatchObject({ hasMore: true });
+
+    const readyResponse = await handleAdminExportJobList(
+      new Request(
+        `${url.replace('/role-assignments', '/exports')}?state=ready&limit=25`,
+      ),
+      eventId,
+      dependencies(),
+    );
+    const ready = adminExportJobListResponseSchema.parse(
+      await readyResponse.json(),
+    );
+    expect(ready.items).toEqual([
+      expect.objectContaining({
+        exportId: readyExportId,
+        state: 'ready',
+        downloadPath: `/api/v1/admin/events/${eventId}/exports/${readyExportId}`,
+      }),
+    ]);
+
+    const expiredResponse = await handleAdminExportJobList(
+      new Request(
+        `${url.replace('/role-assignments', '/exports')}?state=expired&limit=25`,
+      ),
+      eventId,
+      dependencies(),
+    );
+    const expired = adminExportJobListResponseSchema.parse(
+      await expiredResponse.json(),
+    );
+    expect(expired.items).toEqual([
+      expect.objectContaining({
+        exportId: expiredExportId,
+        state: 'expired',
+        downloadPath: null,
+      }),
+    ]);
+  });
+
+  it('audits a ready download and destroys expired inline content', async () => {
+    const ready = await handleAdminExportDownload(
+      new Request(
+        `${origin}/api/v1/admin/events/${eventId}/exports/${readyExportId}`,
+      ),
+      eventId,
+      readyExportId,
+      dependencies(),
+    );
+    expect(ready.status).toBe(200);
+    expect(ready.headers.get('cache-control')).toBe('private, no-store');
+    expect(await ready.text()).toContain('active');
+    const audit = await client.db.query.auditLogs.findFirst({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'export.download'),
+        eq(schema.auditLogs.targetId, readyExportId),
+      ),
+    });
+    expect(audit).toMatchObject({ actorId: adminId });
+
+    const expired = await handleAdminExportDownload(
+      new Request(
+        `${origin}/api/v1/admin/events/${eventId}/exports/${expiredExportId}`,
+      ),
+      eventId,
+      expiredExportId,
+      dependencies(),
+    );
+    expect(expired.status).toBe(404);
+    const expiredRow =
+      await client.db.query.operationalExportRequests.findFirst({
+        where: eq(schema.operationalExportRequests.id, expiredExportId),
+      });
+    expect(expiredRow).toMatchObject({ state: 'expired', content: null });
+
+    const wrongEvent = await handleAdminExportDownload(
+      new Request(
+        `${origin}/api/v1/admin/events/${eventId}/exports/${readyExportId}`,
+      ),
+      eventId,
+      readyExportId,
+      { ...dependencies(), currentEventSlug: 'not-the-current-event' },
+    );
+    expect(wrongEvent.status).toBe(403);
   });
 });

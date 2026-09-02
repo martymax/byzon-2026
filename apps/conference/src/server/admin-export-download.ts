@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
+import { CURRENT_EVENT_SLUG } from './current-event';
 
 const uuidSchema = z.string().uuid();
 
@@ -13,6 +14,7 @@ export const handleAdminExportDownload = async (
   exportId: string,
   dependencies: {
     db: Database;
+    currentEventSlug?: string;
     getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
     now?: () => Date;
   },
@@ -38,6 +40,24 @@ export const handleAdminExportDownload = async (
         code: 'AUTHENTICATION_REQUIRED',
         title: 'Authentication required',
         detail: 'A valid session is required.',
+      });
+    }
+    const event = await dependencies.db.query.events.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.events.id, eventId),
+        eq(
+          schema.events.slug,
+          dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
+        ),
+      ),
+    });
+    if (!event) {
+      throw new ApiProblemError({
+        status: 403,
+        code: 'EVENT_ACCESS_DENIED',
+        title: 'Event access denied',
+        detail: 'The export is unavailable.',
       });
     }
     try {
