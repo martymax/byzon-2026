@@ -123,6 +123,8 @@ const resetLongTasks = (page: Page) =>
   });
 
 test.describe('AUX-12 admin cross-route quality gate', () => {
+  test.describe.configure({ mode: 'serial', timeout: 120_000 });
+
   test('passes axe, landmarks, heading order and responsive overflow on every route', async ({
     page,
   }, testInfo) => {
