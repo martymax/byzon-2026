@@ -10,7 +10,16 @@ import {
 } from '@byzon/domain/contracts/support';
 import { AdminTechnicalDetails } from '@byzon/ui';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import {
   requestAdminParticipantDetail,
@@ -36,6 +45,8 @@ import styles from './admin-workspace.module.css';
 
 const participantPageSize = 100;
 const participantBulkInvitationLimit = 25;
+const participantRenderChunkSize = 5;
+const participantCompactDataViewQuery = '(max-width: 48rem)';
 type ParticipantBulkAction = 'invite' | 'block' | 'reactivate';
 const bulkActions = [
   'invite',
@@ -131,6 +142,162 @@ const SelectionCheckbox = ({
   );
 };
 
+const ParticipantTableRow = memo(
+  ({
+    participant,
+    selected,
+    onSelectionChange,
+  }: {
+    readonly participant: AdminParticipantListItem;
+    readonly selected: boolean;
+    readonly onSelectionChange: (
+      participantId: string,
+      checked: boolean,
+    ) => void;
+  }) => (
+    <tr>
+      <td>
+        <SelectionCheckbox
+          checked={selected}
+          label={`Vybrat ${participant.displayName}`}
+          onChange={(checked) =>
+            onSelectionChange(participant.participantId, checked)
+          }
+        />
+      </td>
+      <td className={styles.participantIdentityCell}>
+        <Link href={`/admin/ucastnici/${participant.participantId}`}>
+          {participant.displayName}
+        </Link>
+        <span>{participant.contactEmail}</span>
+      </td>
+      <td className={styles.participantCompanyCell}>
+        <strong>{participant.company || '—'}</strong>
+        <span>{participant.jobTitle || 'Neuvedeno'}</span>
+      </td>
+      <td>
+        <StateBadge tone={ticketTone(participant.ticketState)}>
+          {ticketStateLabels[participant.ticketState]}
+        </StateBadge>
+        <small className={styles.participantCellNote}>
+          ••{participant.referenceSuffix}
+        </small>
+        <small className={styles.participantCellNote}>
+          {invitationStatusLabels[participant.invitation.status]}
+        </small>
+      </td>
+      <td>
+        <StateBadge
+          tone={
+            participant.networkingState === 'enabled'
+              ? 'success'
+              : participant.networkingState === 'moderated'
+                ? 'warning'
+                : 'neutral'
+          }
+        >
+          {networkingStateLabels[participant.networkingState]}
+        </StateBadge>
+      </td>
+      <td>
+        <strong>{participant.reservationCount} rezervací</strong>
+        <span className={styles.participantCellNote}>
+          {participant.checkedIn ? 'Odbaven/a' : 'Neodbaven/a'}
+        </span>
+      </td>
+      <td>
+        <Link
+          aria-label={`Zobrazit detail: ${participant.displayName}`}
+          className={styles.participantDetailLink}
+          href={`/admin/ucastnici/${participant.participantId}`}
+        >
+          <ParticipantIcon>
+            <path d="m9 18 6-6-6-6" />
+          </ParticipantIcon>
+        </Link>
+      </td>
+    </tr>
+  ),
+);
+ParticipantTableRow.displayName = 'ParticipantTableRow';
+
+const ParticipantCard = memo(
+  ({
+    participant,
+    selected,
+    onSelectionChange,
+  }: {
+    readonly participant: AdminParticipantListItem;
+    readonly selected: boolean;
+    readonly onSelectionChange: (
+      participantId: string,
+      checked: boolean,
+    ) => void;
+  }) => (
+    <li>
+      <div className={styles.participantCardHeader}>
+        <SelectionCheckbox
+          checked={selected}
+          label={`Vybrat ${participant.displayName}`}
+          onChange={(checked) =>
+            onSelectionChange(participant.participantId, checked)
+          }
+        />
+        <div>
+          <Link href={`/admin/ucastnici/${participant.participantId}`}>
+            {participant.displayName}
+          </Link>
+          <span>{participant.contactEmail}</span>
+        </div>
+        <ParticipantIcon>
+          <path d="m9 18 6-6-6-6" />
+        </ParticipantIcon>
+      </div>
+      <div className={styles.participantCardBody}>
+        <p>
+          <span>Firma</span>
+          <strong>{participant.company || '—'}</strong>
+        </p>
+        <p>
+          <span>Vstupenka</span>
+          <StateBadge tone={ticketTone(participant.ticketState)}>
+            {ticketStateLabels[participant.ticketState]}
+          </StateBadge>
+        </p>
+        <p>
+          <span>Networking</span>
+          <strong>{networkingStateLabels[participant.networkingState]}</strong>
+        </p>
+        <p>
+          <span>Přístup</span>
+          <strong>
+            {invitationStatusLabels[participant.invitation.status]}
+          </strong>
+        </p>
+        <p>
+          <span>Rezervace</span>
+          <strong>{participant.reservationCount}</strong>
+        </p>
+      </div>
+    </li>
+  ),
+);
+ParticipantCard.displayName = 'ParticipantCard';
+
+const useCompactDataView = (): boolean => {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia(participantCompactDataViewQuery);
+    const update = () => setCompact(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
+};
+
 export const AdminSupportWorkspace = () => {
   const { api, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
@@ -160,6 +327,11 @@ export const AdminSupportWorkspace = () => {
     null,
   );
   const [bulkReason, setBulkReason] = useState('');
+  const compactDataView = useCompactDataView();
+  const renderedItemCountRef = useRef(participantRenderChunkSize);
+  const [renderedItemCount, setRenderedItemCount] = useState(
+    participantRenderChunkSize,
+  );
 
   const load = async (append = false) => {
     const offset = append ? items.length : 0;
@@ -196,19 +368,22 @@ export const AdminSupportWorkspace = () => {
       return;
     }
     if (result.kind !== 'success') return;
-    setItems((current) =>
-      append ? [...current, ...result.data.items] : result.data.items,
-    );
-    setSummary(result.data.summary);
-    setFilteredTotal(result.data.pageInfo.total);
-    setHasMore(result.data.pageInfo.hasMore);
-    if (!append)
-      setSelectedIds((current) => {
-        const visible = new Set(
-          result.data.items.map(({ participantId }) => participantId),
-        );
-        return new Set([...current].filter((id) => visible.has(id)));
-      });
+    startTransition(() => {
+      setItems((current) =>
+        append ? [...current, ...result.data.items] : result.data.items,
+      );
+      setSummary(result.data.summary);
+      setFilteredTotal(result.data.pageInfo.total);
+      setHasMore(result.data.pageInfo.hasMore);
+      if (!append) {
+        setSelectedIds((current) => {
+          const visible = new Set(
+            result.data.items.map(({ participantId }) => participantId),
+          );
+          return new Set([...current].filter((id) => visible.has(id)));
+        });
+      }
+    });
   };
 
   useEffect(() => {
@@ -217,11 +392,47 @@ export const AdminSupportWorkspace = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, ticketState, networkingState, eventId]);
 
+  useEffect(() => {
+    const target = items.length;
+    let revealed = Math.min(renderedItemCountRef.current, target);
+    renderedItemCountRef.current = revealed;
+    setRenderedItemCount(revealed);
+    let frame: number | null = null;
+    const revealNextChunk = () => {
+      revealed = Math.min(target, revealed + participantRenderChunkSize);
+      renderedItemCountRef.current = revealed;
+      setRenderedItemCount(revealed);
+      if (revealed < target) {
+        frame = window.requestAnimationFrame(revealNextChunk);
+      }
+    };
+    if (revealed < target) {
+      frame = window.requestAnimationFrame(revealNextChunk);
+    }
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [items]);
+
   const selected = useMemo(
     () => items.filter(({ participantId }) => selectedIds.has(participantId)),
     [items, selectedIds],
   );
   const allSelected = items.length > 0 && selected.length === items.length;
+  const renderedItems = useMemo(
+    () => items.slice(0, renderedItemCount),
+    [items, renderedItemCount],
+  );
+  const changeParticipantSelection = useCallback(
+    (participantId: string, checked: boolean) =>
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        if (checked) next.add(participantId);
+        else next.delete(participantId);
+        return next;
+      }),
+    [],
+  );
   const commonActions = bulkActions.filter((action) =>
     selected.every((participant) =>
       action === 'invite'
@@ -473,182 +684,68 @@ export const AdminSupportWorkspace = () => {
 
         {items.length > 0 ? (
           <>
-            <div className={styles.participantTableWrap}>
-              <table className={styles.participantTable}>
-                <caption className={styles.visuallyHidden}>
-                  Účastníci akce
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">
-                      <SelectionCheckbox
-                        checked={allSelected}
-                        indeterminate={selected.length > 0 && !allSelected}
-                        label="Vybrat všechny zobrazené účastníky"
-                        onChange={(checked) =>
-                          setSelectedIds(
-                            checked
-                              ? new Set(
-                                  items.map(
-                                    ({ participantId }) => participantId,
-                                  ),
-                                )
-                              : new Set(),
-                          )
-                        }
-                      />
-                    </th>
-                    <th scope="col">Účastník</th>
-                    <th scope="col">Firma a pozice</th>
-                    <th scope="col">Vstupenka</th>
-                    <th scope="col">Networking</th>
-                    <th scope="col">Aktivita</th>
-                    <th scope="col">
-                      <span className={styles.visuallyHidden}>Detail</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((participant) => (
-                    <tr key={participant.participantId}>
-                      <td>
+            {!compactDataView ? (
+              <div className={styles.participantTableWrap}>
+                <table className={styles.participantTable}>
+                  <caption className={styles.visuallyHidden}>
+                    Účastníci akce
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">
                         <SelectionCheckbox
-                          checked={selectedIds.has(participant.participantId)}
-                          label={`Vybrat ${participant.displayName}`}
+                          checked={allSelected}
+                          indeterminate={selected.length > 0 && !allSelected}
+                          label="Vybrat všechny zobrazené účastníky"
                           onChange={(checked) =>
-                            setSelectedIds((current) => {
-                              const next = new Set(current);
-                              if (checked) next.add(participant.participantId);
-                              else next.delete(participant.participantId);
-                              return next;
-                            })
+                            setSelectedIds(
+                              checked
+                                ? new Set(
+                                    items.map(
+                                      ({ participantId }) => participantId,
+                                    ),
+                                  )
+                                : new Set(),
+                            )
                           }
                         />
-                      </td>
-                      <td className={styles.participantIdentityCell}>
-                        <Link
-                          href={`/admin/ucastnici/${participant.participantId}`}
-                        >
-                          {participant.displayName}
-                        </Link>
-                        <span>{participant.contactEmail}</span>
-                      </td>
-                      <td className={styles.participantCompanyCell}>
-                        <strong>{participant.company || '—'}</strong>
-                        <span>{participant.jobTitle || 'Neuvedeno'}</span>
-                      </td>
-                      <td>
-                        <StateBadge tone={ticketTone(participant.ticketState)}>
-                          {ticketStateLabels[participant.ticketState]}
-                        </StateBadge>
-                        <small className={styles.participantCellNote}>
-                          ••{participant.referenceSuffix}
-                        </small>
-                        <small className={styles.participantCellNote}>
-                          {
-                            invitationStatusLabels[
-                              participant.invitation.status
-                            ]
-                          }
-                        </small>
-                      </td>
-                      <td>
-                        <StateBadge
-                          tone={
-                            participant.networkingState === 'enabled'
-                              ? 'success'
-                              : participant.networkingState === 'moderated'
-                                ? 'warning'
-                                : 'neutral'
-                          }
-                        >
-                          {networkingStateLabels[participant.networkingState]}
-                        </StateBadge>
-                      </td>
-                      <td>
-                        <strong>
-                          {participant.reservationCount} rezervací
-                        </strong>
-                        <span className={styles.participantCellNote}>
-                          {participant.checkedIn ? 'Odbaven/a' : 'Neodbaven/a'}
-                        </span>
-                      </td>
-                      <td>
-                        <Link
-                          aria-label={`Zobrazit detail: ${participant.displayName}`}
-                          className={styles.participantDetailLink}
-                          href={`/admin/ucastnici/${participant.participantId}`}
-                        >
-                          <ParticipantIcon>
-                            <path d="m9 18 6-6-6-6" />
-                          </ParticipantIcon>
-                        </Link>
-                      </td>
+                      </th>
+                      <th scope="col">Účastník</th>
+                      <th scope="col">Firma a pozice</th>
+                      <th scope="col">Vstupenka</th>
+                      <th scope="col">Networking</th>
+                      <th scope="col">Aktivita</th>
+                      <th scope="col">
+                        <span className={styles.visuallyHidden}>Detail</span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {renderedItems.map((participant) => (
+                      <ParticipantTableRow
+                        key={participant.participantId}
+                        onSelectionChange={changeParticipantSelection}
+                        participant={participant}
+                        selected={selectedIds.has(participant.participantId)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
 
-            <ul className={styles.participantCards}>
-              {items.map((participant) => (
-                <li key={participant.participantId}>
-                  <div className={styles.participantCardHeader}>
-                    <SelectionCheckbox
-                      checked={selectedIds.has(participant.participantId)}
-                      label={`Vybrat ${participant.displayName}`}
-                      onChange={(checked) =>
-                        setSelectedIds((current) => {
-                          const next = new Set(current);
-                          if (checked) next.add(participant.participantId);
-                          else next.delete(participant.participantId);
-                          return next;
-                        })
-                      }
-                    />
-                    <div>
-                      <Link
-                        href={`/admin/ucastnici/${participant.participantId}`}
-                      >
-                        {participant.displayName}
-                      </Link>
-                      <span>{participant.contactEmail}</span>
-                    </div>
-                    <ParticipantIcon>
-                      <path d="m9 18 6-6-6-6" />
-                    </ParticipantIcon>
-                  </div>
-                  <div className={styles.participantCardBody}>
-                    <p>
-                      <span>Firma</span>
-                      <strong>{participant.company || '—'}</strong>
-                    </p>
-                    <p>
-                      <span>Vstupenka</span>
-                      <StateBadge tone={ticketTone(participant.ticketState)}>
-                        {ticketStateLabels[participant.ticketState]}
-                      </StateBadge>
-                    </p>
-                    <p>
-                      <span>Networking</span>
-                      <strong>
-                        {networkingStateLabels[participant.networkingState]}
-                      </strong>
-                    </p>
-                    <p>
-                      <span>Přístup</span>
-                      <strong>
-                        {invitationStatusLabels[participant.invitation.status]}
-                      </strong>
-                    </p>
-                    <p>
-                      <span>Rezervace</span>
-                      <strong>{participant.reservationCount}</strong>
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {compactDataView ? (
+              <ul className={styles.participantCards}>
+                {renderedItems.map((participant) => (
+                  <ParticipantCard
+                    key={participant.participantId}
+                    onSelectionChange={changeParticipantSelection}
+                    participant={participant}
+                    selected={selectedIds.has(participant.participantId)}
+                  />
+                ))}
+              </ul>
+            ) : null}
           </>
         ) : null}
         {hasMore ? (

@@ -1989,14 +1989,22 @@
 
 .participantTableWrap {
   max-width: 100%;
-  overflow-x: auto;
+  max-height: 64vh;
+  min-height: 16rem;
+  overflow: auto;
   border-top: 1px solid var(--admin-border);
+  contain: layout paint;
 }
 
 .participantTable {
   width: 100%;
   min-width: 66rem;
   border-collapse: collapse;
+}
+
+.participantTable tbody tr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 4.5rem;
 }
 
 .participantTable th,
@@ -2008,6 +2016,9 @@
 }
 
 .participantTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   color: var(--admin-muted);
   background: var(--admin-canvas);
   font-size: 0.75rem;

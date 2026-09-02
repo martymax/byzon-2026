@@ -70,6 +70,7 @@ import {
   supportSearchQuerySchema,
   supportSearchResponseSchema,
   type AdminParticipantDetail,
+  type AdminParticipantListItem,
   type SupportRecord,
 } from '@byzon/domain/contracts/support';
 import {
@@ -526,6 +527,62 @@ const maxPageTicketPreview = (): TicketImportPreviewResponse => {
       conflict: 0,
       unknown: 0,
     },
+  });
+};
+
+const maxPageParticipantItems = (): readonly AdminParticipantListItem[] =>
+  Array.from({ length: 100 }, (_, index) => {
+    const serial = index + 1;
+    return {
+      eventId: adminFixtureIds.event,
+      participantId: maxPageUuid(5, serial),
+      ticketId: maxPageUuid(6, serial),
+      displayName: `Syntetický účastník ${String(serial).padStart(3, '0')}`,
+      contactEmail: `max-page-${String(serial).padStart(3, '0')}@example.test`,
+      company: 'Example test',
+      jobTitle: serial % 2 === 0 ? 'Founder' : 'Product lead',
+      referenceSuffix: `M${String(serial).padStart(3, '0')}`,
+      ticketState: 'active' as const,
+      accessState: 'not_claimed' as const,
+      networkingState:
+        serial % 2 === 0 ? ('enabled' as const) : ('disabled' as const),
+      invitation: { status: 'not_sent' as const, lastSentAt: null },
+      checkedIn: serial % 3 === 0,
+      reservationCount: serial % 4,
+      profileVersion: 1,
+      ticketVersion: 1,
+      updatedAt: '2026-09-02T10:00:00.000Z',
+      availableActions: ['block' as const],
+    };
+  });
+
+const maxPageParticipantDetail = (
+  participant: AdminParticipantListItem,
+): AdminParticipantDetail => {
+  const base = state.participantDetails[0]!;
+  const [firstName, ...lastName] = participant.displayName.split(' ');
+  return adminParticipantDetailSchema.parse({
+    ...base,
+    participantId: participant.participantId,
+    ticketId: participant.ticketId,
+    firstName,
+    lastName: lastName.join(' '),
+    contactEmail: participant.contactEmail,
+    company: participant.company,
+    jobTitle: participant.jobTitle,
+    networkingEnabled: participant.networkingState === 'enabled',
+    invitation: participant.invitation,
+    ticket: {
+      ...base.ticket,
+      referenceSuffix: participant.referenceSuffix,
+      state: participant.ticketState,
+      version: participant.ticketVersion,
+      availableActions: participant.availableActions,
+    },
+    checkIn: participant.checkedIn ? base.checkIn : null,
+    reservations: [],
+    profileVersion: participant.profileVersion,
+    updatedAt: participant.updatedAt,
   });
 };
 
@@ -1265,60 +1322,63 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         );
       }
       const normalizedQuery = body.data.query.toLocaleLowerCase('cs');
-      const candidates = state.participantDetails.flatMap((detail) => {
-        const ticket = state.supportRecords.find(
-          ({ participantId }) => participantId === detail.participantId,
-        );
-        if (!ticket) return [];
-        const networkingState =
-          detail.moderationStatus === 'hidden'
-            ? ('moderated' as const)
-            : detail.networkingEnabled
-              ? ('enabled' as const)
-              : ('disabled' as const);
+      const maxPageItems = maxPageRequested(request)
+        ? maxPageParticipantItems()
+        : null;
+      const sourceItems =
+        maxPageItems ??
+        state.participantDetails.flatMap((detail) => {
+          const ticket = state.supportRecords.find(
+            ({ participantId }) => participantId === detail.participantId,
+          );
+          if (!ticket) return [];
+          return [
+            {
+              eventId: adminFixtureIds.event,
+              participantId: detail.participantId,
+              ticketId: detail.ticketId,
+              displayName: `${detail.firstName} ${detail.lastName}`,
+              contactEmail: detail.contactEmail,
+              company: detail.company,
+              jobTitle: detail.jobTitle,
+              referenceSuffix: ticket.referenceSuffix,
+              ticketState: ticket.ticketState,
+              accessState: ticket.accessState,
+              networkingState:
+                detail.moderationStatus === 'hidden'
+                  ? ('moderated' as const)
+                  : detail.networkingEnabled
+                    ? ('enabled' as const)
+                    : ('disabled' as const),
+              invitation: detail.invitation,
+              checkedIn: detail.checkIn !== null,
+              reservationCount: detail.reservations.filter(
+                ({ status }) => status === 'confirmed',
+              ).length,
+              profileVersion: detail.profileVersion,
+              ticketVersion: ticket.version,
+              updatedAt: detail.updatedAt,
+              availableActions: ticket.availableActions,
+            },
+          ];
+        });
+      const candidates = sourceItems.filter((participant) => {
         const searchable = [
-          detail.firstName,
-          detail.lastName,
-          detail.contactEmail,
-          detail.company,
-          detail.jobTitle,
-          ticket.referenceSuffix,
+          participant.displayName,
+          participant.contactEmail,
+          participant.company,
+          participant.jobTitle,
+          participant.referenceSuffix,
         ]
           .join(' ')
           .toLocaleLowerCase('cs');
-        if (
-          (normalizedQuery && !searchable.includes(normalizedQuery)) ||
-          (body.data.ticketStates.length > 0 &&
-            !body.data.ticketStates.includes(ticket.ticketState)) ||
-          (body.data.networkingStates.length > 0 &&
-            !body.data.networkingStates.includes(networkingState))
-        ) {
-          return [];
-        }
-        return [
-          {
-            eventId: adminFixtureIds.event,
-            participantId: detail.participantId,
-            ticketId: detail.ticketId,
-            displayName: `${detail.firstName} ${detail.lastName}`,
-            contactEmail: detail.contactEmail,
-            company: detail.company,
-            jobTitle: detail.jobTitle,
-            referenceSuffix: ticket.referenceSuffix,
-            ticketState: ticket.ticketState,
-            accessState: ticket.accessState,
-            networkingState,
-            invitation: detail.invitation,
-            checkedIn: detail.checkIn !== null,
-            reservationCount: detail.reservations.filter(
-              ({ status }) => status === 'confirmed',
-            ).length,
-            profileVersion: detail.profileVersion,
-            ticketVersion: ticket.version,
-            updatedAt: detail.updatedAt,
-            availableActions: ticket.availableActions,
-          },
-        ];
+        return (
+          (!normalizedQuery || searchable.includes(normalizedQuery)) &&
+          (body.data.ticketStates.length === 0 ||
+            body.data.ticketStates.includes(participant.ticketState)) &&
+          (body.data.networkingStates.length === 0 ||
+            body.data.networkingStates.includes(participant.networkingState))
+        );
       });
       const page = candidates.slice(
         body.data.offset,
@@ -1336,17 +1396,14 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
             hasMore: body.data.offset + page.length < candidates.length,
           },
           summary: {
-            total: state.participantDetails.length,
-            active: state.supportRecords.filter(
+            total: sourceItems.length,
+            active: sourceItems.filter(
               ({ ticketState }) => ticketState === 'active',
             ).length,
-            networkingEnabled: state.participantDetails.filter(
-              ({ networkingEnabled, moderationStatus }) =>
-                networkingEnabled && moderationStatus === 'visible',
+            networkingEnabled: sourceItems.filter(
+              ({ networkingState }) => networkingState === 'enabled',
             ).length,
-            checkedIn: state.participantDetails.filter(
-              ({ checkIn }) => checkIn !== null,
-            ).length,
+            checkedIn: sourceItems.filter(({ checkedIn }) => checkedIn).length,
           },
         },
         successOptions('admin.mock.participant-list'),
@@ -1363,13 +1420,30 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         'admin.mock.participant-detail',
       );
       if (denied) return denied;
-      const detail = state.participantDetails.find(
+      const storedDetail = state.participantDetails.find(
         ({ participantId }) => participantId === params.participantId,
       );
       const ticket = state.supportRecords.find(
         ({ participantId }) => participantId === params.participantId,
       );
-      if (!routeMatchesEvent(params.eventId) || !detail || !ticket) {
+      const maxPageParticipant = maxPageParticipantItems().find(
+        ({ participantId }) => participantId === params.participantId,
+      );
+      const detail =
+        storedDetail && ticket
+          ? {
+              ...storedDetail,
+              ticket: {
+                ...storedDetail.ticket,
+                state: ticket.ticketState,
+                version: ticket.version,
+                availableActions: ticket.availableActions,
+              },
+            }
+          : maxPageParticipant
+            ? maxPageParticipantDetail(maxPageParticipant)
+            : null;
+      if (!routeMatchesEvent(params.eventId) || !detail) {
         return mockProblemResponse(
           adminParticipantReadProblemSchema,
           supportMutationProblemFixtures.not_found,
@@ -1378,15 +1452,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
       }
       return mockJsonResponse(
         adminParticipantDetailSchema,
-        {
-          ...detail,
-          ticket: {
-            ...detail.ticket,
-            state: ticket.ticketState,
-            version: ticket.version,
-            availableActions: ticket.availableActions,
-          },
-        },
+        detail,
         successOptions('admin.mock.participant-detail'),
       );
     },
