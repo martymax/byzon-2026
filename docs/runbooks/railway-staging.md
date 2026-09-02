@@ -172,9 +172,9 @@ opakované spuštění je no-op a role grant se auditovaně zapisuje bez e-mailu
 3. Otestujte zapnutí a vypnutí networkingu syntetickým účastníkem; bez opt-in
    nesmí být profil zjistitelný, po opt-in se zobrazí všechna vyplněná
    veřejná pole.
-4. Otestujte SimpleShop pouze jako sanitizované read-only preview. Participant
-   apply a skutečné pozvánky se nesmí před dokončením `P4-03`/`P4-06`
-   spustit.
+4. Otestujte SimpleShop preview a `P4-03` participant apply pouze se
+   syntetickými staging identitami. Skutečné pozvánky se nesmí před dokončením
+   `P4-06` spustit.
 
 ## První provozní ověření 31. 8. 2026
 

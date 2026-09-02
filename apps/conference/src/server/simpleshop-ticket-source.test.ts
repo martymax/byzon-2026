@@ -133,7 +133,7 @@ const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
     },
   });
 
-const successfulFetch = () =>
+const successfulFetch = (rows: readonly (readonly string[])[] = sourceRows) =>
   vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     expect(init?.method).toBe('GET');
@@ -144,7 +144,7 @@ const successfulFetch = () =>
     }
     if (url.pathname.endsWith('/export/who-bought/product/143958/')) {
       expect(url.search).toBe('?strict=1');
-      return jsonResponse({ csv: csv(sourceRows) });
+      return jsonResponse({ csv: csv(rows) });
     }
     throw new Error('Unexpected test URL');
   });
@@ -260,6 +260,30 @@ describe('SimpleShopTicketSourceAdapter', () => {
     }
     expect(serialized).toContain('alice@example.test');
     expect(serialized).toContain('Alice Participant');
+  });
+
+  it('changes the immutable snapshot digest when an apply identity changes', async () => {
+    const original = await createSimpleShopTicketSourceAdapter({
+      ...credentials,
+      fetch: successfulFetch(),
+      maxAttempts: 1,
+    }).fetchPreviewSource();
+    const changedRows = sourceRows.map((row, index) =>
+      index === 0
+        ? row.map((cell, column) =>
+            column === 13 ? 'changed@example.test' : cell,
+          )
+        : [...row],
+    );
+    const changed = await createSimpleShopTicketSourceAdapter({
+      ...credentials,
+      fetch: successfulFetch(changedRows),
+      maxAttempts: 1,
+    }).fetchPreviewSource();
+
+    expect(changed.records[0]?.contactEmail).toBe('changed@example.test');
+    expect(changed.snapshotDigest).not.toBe(original.snapshotDigest);
+    expect(changed.snapshotDigest).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it('uses a buyer only for a single paid ticket and flags group buyers for review', async () => {

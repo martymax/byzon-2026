@@ -228,7 +228,6 @@ integration('P4-02 SimpleShop preview persistence integration', () => {
       'paid',
       'unpaid',
     ]);
-
     const ticketCounts = await client.db
       .select({ value: count() })
       .from(schema.tickets)

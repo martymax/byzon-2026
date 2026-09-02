@@ -6,12 +6,14 @@ import {
   ticketEvents,
   ticketImportBatches,
   ticketImportRows,
+  ticketSourceParticipants,
   tickets,
 } from './tickets.js';
 
 const tables = [
   ticketImportBatches,
   ticketImportRows,
+  ticketSourceParticipants,
   tickets,
   ticketEvents,
   ticketClaimAttempts,
@@ -42,6 +44,18 @@ describe('stage 4 ticket infrastructure schema', () => {
     expect(
       getTableConfig(tickets).columns.map((column) => column.name),
     ).toEqual(expect.arrayContaining(['code_hmac', 'code_suffix']));
+    expect(
+      getTableConfig(ticketSourceParticipants).columns.map(
+        (column) => column.name,
+      ),
+    ).not.toEqual(
+      expect.arrayContaining([
+        'contact_name',
+        'contact_email',
+        'code_hmac',
+        'code_suffix',
+      ]),
+    );
   });
 
   it('deduplicates files, ticket codes and stable external ids per event', () => {
@@ -60,6 +74,14 @@ describe('stage 4 ticket infrastructure schema', () => {
       ),
     ).toBe(true);
     expect(
+      getTableConfig(ticketSourceParticipants).indexes.some(
+        (index) =>
+          index.config.name ===
+            'ticket_source_participants_event_external_unique' &&
+          index.config.unique,
+      ),
+    ).toBe(true);
+    expect(
       getTableConfig(tickets).indexes.some(
         (index) =>
           index.config.name === 'tickets_event_external_id_unique' &&
@@ -71,6 +93,7 @@ describe('stage 4 ticket infrastructure schema', () => {
   it('uses composite event foreign keys for owned relationships', () => {
     const references = [
       ...getTableConfig(ticketImportRows).foreignKeys,
+      ...getTableConfig(ticketSourceParticipants).foreignKeys,
       ...getTableConfig(ticketEvents).foreignKeys,
       ...getTableConfig(tickets).foreignKeys,
     ].map((key) =>

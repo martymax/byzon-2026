@@ -31,6 +31,8 @@ uzavřou před implementací, ne až během UAT.
 | -------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------- |
 | Únik SimpleShop API klíče              | server-only secret, redakce Authorization, allowlist hostu, oddělený účet     | okamžitá rotace klíče, sync fail-closed      |
 | Podvržená/změněná API odpověď          | HTTPS, striktní schema, bounded pagination, preview + explicit apply          | batch se neaplikuje                          |
+| Změna zdroje mezi preview a apply      | nový bounded fetch + porovnání celého normalizovaného apply snapshotu         | stale preview, žádný participant zápis       |
+| Duplicitní/souběžný participant apply  | event/source/identity advisory lock, unique reference a idempotency receipt   | jedna transakce vyhraje, retry čte receipt   |
 | Neznámý status nebo částečný refund    | výslovná status mapa, unknown = conflict                                      | žádná automatická aktivace/storno            |
 | Offline hádání source kódů po úniku DB | HMAC s rotovatelným pepperem, raw kód se neukládá                             | pepper rotation a revize auditů              |
 | Online enumerace claimu                | generické odpovědi, rate limit per actor/IP/fingerprint, transakční lock      | dočasný cooldown bez prozrazení existence    |
@@ -47,3 +49,6 @@ uzavřou před implementací, ne až během UAT.
   reálných test vectors;
 - nepovolit offline manifest před samostatnou bezpečnostní akceptací;
 - nepřevést neznámý vendor status na aktivní nebo zrušený ticket.
+- nepersistovat raw kód ani preview kontaktní PII; uložit jen source reference,
+  stav, immutable otisk a po apply vazbu na již vytvořenou identitu;
+- neposílat invitation e-mail jako skrytý side effect participant apply.

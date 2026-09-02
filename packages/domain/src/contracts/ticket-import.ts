@@ -491,11 +491,7 @@ export type TicketImportPreviewResponse = z.infer<
 
 export const canApplyTicketImportPreview = (
   preview: TicketImportPreviewResponse,
-): boolean =>
-  preview.source.kind !== 'simpleshop_api' &&
-  preview.summary.excluded === 0 &&
-  preview.summary.conflict === 0 &&
-  preview.summary.unknown === 0;
+): boolean => preview.summary.conflict === 0 && preview.summary.unknown === 0;
 
 export const ticketImportApplyRequestSchema = z
   .strictObject({
@@ -508,7 +504,6 @@ export const ticketImportApplyRequestSchema = z
   .superRefine((request, context) => {
     if (
       request.expectedImpact.conflict > 0 ||
-      request.expectedImpact.excluded > 0 ||
       request.expectedImpact.unknown > 0
     ) {
       context.addIssue({
@@ -597,6 +592,10 @@ export const ticketImportRateLimitedProblemSchema = defineApiProblemSchema(
   'RATE_LIMITED',
   429,
 );
+export const ticketImportIdempotencyKeyRequiredProblemSchema =
+  defineApiProblemSchema('IDEMPOTENCY_KEY_REQUIRED', 400);
+export const ticketImportIdempotencyKeyInvalidProblemSchema =
+  defineApiProblemSchema('IDEMPOTENCY_KEY_INVALID', 400);
 
 const ticketImportReadProblems = [
   ticketImportAuthenticationRequiredProblemSchema,
@@ -629,6 +628,12 @@ export const ticketImportApplyProblemSchema = z.discriminatedUnion('code', [
   ...ticketImportReadProblems,
   ticketImportPreviewBlockedProblemSchema,
   ticketImportStalePreviewProblemSchema,
+  ticketImportRateLimitedProblemSchema,
+  ticketImportSourceUnavailableProblemSchema,
+  ticketImportSourceTimeoutProblemSchema,
+  ticketImportSourceInvalidProblemSchema,
+  ticketImportIdempotencyKeyRequiredProblemSchema,
+  ticketImportIdempotencyKeyInvalidProblemSchema,
   idempotencyKeyReusedProblemSchema,
   idempotencyInProgressProblemSchema,
 ]);

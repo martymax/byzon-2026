@@ -43,7 +43,7 @@ export interface SimpleShopTicketSourceRecord {
 export interface SimpleShopTicketSourceSnapshot {
   readonly source: SimpleShopPreviewSource;
   readonly records: readonly SimpleShopTicketSourceRecord[];
-  /** Digest contains only non-PII source IDs/statuses and never a ticket code. */
+  /** Digest covers normalized apply inputs but never contains a ticket code. */
   readonly snapshotDigest: string;
 }
 
@@ -528,12 +528,18 @@ const parseExport = (
             orderExternalId,
             sourceStatus,
             quantity,
+            contactName,
+            contactEmail,
+            identitySource,
           }) => ({
             sourceRowNumber,
             externalId,
             orderExternalId,
             sourceStatus,
             quantity,
+            contactName,
+            contactEmail,
+            identitySource,
           }),
         ),
       }),

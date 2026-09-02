@@ -102,6 +102,7 @@ export const ticketImportRows = pgTable(
     codeSuffix: varchar('code_suffix', { length: 16 }),
     sourceStatus: text('source_status'),
     mappedStatus: ticketStatus('mapped_status'),
+    previewStatus: varchar('preview_status', { length: 32 }),
     validationErrors: jsonb('validation_errors_json')
       .$type<string[]>()
       .default([])
@@ -126,6 +127,60 @@ export const ticketImportRows = pgTable(
     check(
       'ticket_import_rows_code_hmac_check',
       sql`${table.codeHmac} is null or ${table.codeHmac} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'ticket_import_rows_preview_status_check',
+      sql`${table.previewStatus} is null or ${table.previewStatus} in ('new', 'unchanged', 'status_changed', 'excluded', 'conflict', 'unknown')`,
+    ),
+  ],
+);
+
+export const ticketSourceParticipants = pgTable(
+  'ticket_source_participants',
+  {
+    id: uuid('id').primaryKey(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    externalId: text('external_id').notNull(),
+    orderExternalId: text('order_external_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    sourceStatus: text('source_status').notNull(),
+    importBatchId: uuid('import_batch_id').notNull(),
+    version: integer('version').default(1).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('ticket_source_participants_event_external_unique').on(
+      table.eventId,
+      table.externalId,
+    ),
+    index('ticket_source_participants_event_user_idx').on(
+      table.eventId,
+      table.userId,
+    ),
+    foreignKey({
+      columns: [table.eventId, table.userId],
+      foreignColumns: [eventMemberships.eventId, eventMemberships.userId],
+      name: 'ticket_source_participants_membership_event_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.eventId, table.importBatchId],
+      foreignColumns: [ticketImportBatches.eventId, ticketImportBatches.id],
+      name: 'ticket_source_participants_batch_event_fk',
+    }).onDelete('restrict'),
+    check(
+      'ticket_source_participants_status_check',
+      sql`${table.sourceStatus} = 'paid'`,
+    ),
+    check(
+      'ticket_source_participants_version_check',
+      sql`${table.version} > 0`,
     ),
   ],
 );

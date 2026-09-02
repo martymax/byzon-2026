@@ -688,7 +688,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-CONTENT-01` | publikovaný program a praktické informace | `packages/domain/src/contracts/content.ts` | `F2-03` s vlastníkem existujícího `P3-03` API | `F2`, `F6` | `contract ready`; P3 API, typed klient a fixtures používají sdílené schéma |
 | `CS-TICKET-01` | stav a opaque presentation value vstupenky | `packages/domain/src/contracts/ticket.ts` | — | — | `not started`; vyřazeno pro 2026 podle `SCOPE-2026-14`, nesmí být aktivní route/CTA |
 | `CS-AGENDA-01` | agenda, rezervace, waitlist, kapacita a conflict | `packages/domain/src/contracts/agenda.ts` | `P5-02` až `P5-06`, `F3` | `F3`, `F6` | `partially integrated`: private live read, add/remove, conflict, atomická rezervace, participant cancel, osobní ICS, automatické FIFO, dvě source-verified coaching řady a administrátorsky konfigurovaný networking jsou produkčně napojené; zbývá sdílená mastermind skupina dle ADR-014 |
-| `CS-IMPORT-01` | participant batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `partially integrated`: server-only SimpleShop preview je live bez apply; `P4-03` doplní identity/membership apply po `TKT-02`, bez ticket credentialu |
+| `CS-IMPORT-01` | participant batch, row validation, diff, apply a report | `packages/domain/src/contracts/ticket-import.ts` | `P4-02`, `P4-03`, `F4-02` až `F4-04` | `F4` | `integrated`: server-only SimpleShop preview i reasoned/idempotentní identity/membership apply jsou live; bez ticket credentialu a automatického e-mailu |
 | `CS-SUPPORT-01` | participant/ticket lookup a auditované support akce | `packages/domain/src/contracts/support.ts` | `P4-09`, `P9-03`, `F4-05` | `F4` | `contract ready`; maskované hledání a verzované reasoned/idempotentní akce s auditem |
 | `CS-CHECKIN-01` | lookup, confirm, duplicate, undo a stats | `packages/domain/src/contracts/check-in.ts` | — | — | `not started`; vyřazeno pro 2026, dormant kompatibilní vrstva, ne aktivní UI/UAT |
 | `CS-ANN-01` | participant inbox/detail/read; admin draft, audience preview a send navazují | `packages/domain/src/contracts/announcements.ts` | `P8-05`, `P8-06`, `F2-05`, `F4-06` | `F2`, `F4` | v6 `contract ready` a `UI ready (mocked)`: pouze critical a event/dotčené sessions |
@@ -1355,7 +1355,7 @@ scope-alignment znamená `not started`, i když existuje znovupoužitelný v5 mo
 | Agenda a rezervace v6 | `partially integrated` | Live agenda podporuje add/remove, konflikty, atomickou rezervaci, participant cancel, automatické FIFO, privátní osobní `.ics`, 26 source-verified coaching sessions a administrátorem konfigurovanou rezervaci řízeného networkingu. | Dokončit jednu sdílenou rezervaci obou částí sobotního mastermindu podle ADR-014. |
 | Vstupenka účastníka | `not started` | Vyřazeno z produktu 2026 podle `SCOPE-2026-14`; historické preview nesmí být aktivní route/CTA. | Žádná launch závislost. |
 | Offline čtení | `UI ready (mocked)` | `F6-01` až `F6-05`: versionovaný service worker, atomický public cache/rollback, last-updated/stale UX a owner/event-scoped osobní IndexedDB/queue s wipe, lease, epoch a fail-closed replay. Veřejný slice je použitelný; osobní cache/replay jsou v produkčním režimu vypnuté bez autoritativního owner lease. | `P7` a skutečný owner-lease/replay server pro integraci; fyzické PWA/UAT zůstává v `F6-06` až `F6-08` |
-| Import a support | `partially integrated` | `P4-02`/`F4-02` napojily server-only SimpleShop preview bez raw kódu/PII a bez apply. | `TKT-02` a `P4-03` pro participant apply; `P4-06` pro invitation. |
+| Import a support | `partially integrated` | `P4-02`/`P4-03`/`AUX-13D` napojily server-only SimpleShop preview a transakční participant apply bez raw kódu, ticket credentialu nebo automatického e-mailu. | `P4-06` pro invitation a `P4-09`/`AUX-13E` pro support akce. |
 | Check-in | `not started` | Vyřazeno z produktu 2026 podle `SCOPE-2026-14`; interní historická vrstva je dormant. | Žádná launch závislost. |
 | Admin Priority A/B v6 | `integrated` | Produkční admin endpointy pokrývají rezervace, audit, settings, exporty, oznámení a nové `/admin/interakce` pro event flags, session questions a scoped moderátory; check-in ovládání je odstraněno. | Staging accessibility/UAT a e-mail/import capability. |
 | Networking Priority B | `integrated` | Event-wide admin gate, explicitní participant opt-in/opt-out, adresář a profil; opt-in zveřejní všechna vyplněná veřejná pole. | `BLOCKER-LEGAL-01` pro finální copy a staging UAT. |
@@ -1439,9 +1439,10 @@ Fáze 2026 musí minimálně dodat provozní fallback mimo běžný online flow:
 Podle [ADR-015](docs/adr/015-simpleshop-api-sync.md) je SimpleShop výhradně
 serverová implementace `TicketSourceAdapter` nad API. Produkční preview
 nepoužívá ruční CSV/XLSX upload, plánovaný polling ani webhook. Oprávněný
-organizátor jej spustí na vyžádání; `P4-02` připraví pouze staging a diff bez
-apply. [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md)
-omezuje budoucí `P4-03` na import způsobilých účastníků a event membershipů;
+organizátor jej spustí na vyžádání; `P4-02` připraví staging a diff a `P4-03`
+po novém ověření téhož snapshotu provede oddělený apply.
+[ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md)
+omezuje `P4-03` na import způsobilých účastníků a event membershipů;
 ticket credential, claim a check-in se nevytvářejí. Před apply musí zůstat
 fail-closed schválené mapování způsobilosti zdrojových stavů.
 
@@ -1458,7 +1459,8 @@ envelope `{csv}`, žádný dokumentovaný ani pozorovaný cursor/page parametr a
 stabilní per-ticket `ID vstupenky`; `ID dokladu` je opakované ID objednávky.
 Detaily sanitizovaného discovery a přesné počty jsou v ADR-015.
 
-API sync pipeline (body 1–6 je implementované preview, 7–10 budoucí participant apply):
+API sync pipeline (body 1–8 a importní audit v bodu 10 jsou implementované;
+bod 9 zůstává samostatný invitation scope):
 
 1. adminem spuštěný bounded read-only fetch ze SimpleShop API;
 2. striktní schema/pagination validace a staging bez změny ticketů;
@@ -1479,16 +1481,10 @@ ani serverový adapter jej nesmí trimovat, měnit velikost písmen nebo jinak
 normalizovat. Mock data používají pouze zjevně syntetické kódy a nesmějí se
 dostat do produkčního bundlu.
 
-API secrets, product/form binding a read-only preview jsou ověřené. Otevřené
-významy stavů blokují apply způsobilosti; source kód, claim a offline manifest
-se po `SCOPE-2026-13`/`14` neimplementují.
-
-Před produkčním apply doplnit:
-
-- schválený význam stornované/vrácené/nezaplacené vstupenky; refund v aktuálním
-  datasetu nebyl;
-- prioritu ověřených polí konkrétního účastníka („prodej na jméno“) vůči
-  e-mailu kupujícího a fallback pro skupinový nákup;
+API secrets, product/form binding, read-only preview a participant apply jsou
+ověřené. Neznámý stav, nejednoznačná identita nebo pozdější downgrade už
+importované identity blokuje batch bez automatického lockoutu; source kód,
+claim a offline manifest se po `SCOPE-2026-13`/`14` neimplementují.
 
 ### 15.2 Transakční e-mail
 
@@ -1509,8 +1505,9 @@ Každý e-mail má deduplication key, provider message ID, retry policy a plain-
 
 ### 15.3 Storage
 
-- Upload se používá jen pro ticket import, schválený obrázek a organizační
-  export; participant/speaker materiály se nenahrávají.
+- Upload se používá jen pro schválený obrázek a organizační export;
+  SimpleShop import žádný browserový soubor nepoužívá a participant/speaker
+  materiály se nenahrávají.
 - Upload inicializuje server a vrátí krátkodobý presigned request.
 - Klient nemůže zvolit libovolný bucket key.
 - Po uploadu server ověří checksum, velikost a skutečný MIME.
@@ -2528,16 +2525,17 @@ claim a check-in vyřazuje
 - [x] `P4-02` Serverový SimpleShop API adapter a autorizované
   staging/validation/preview bez změny ticketů. Síťové čtení spouští admin na
   vyžádání; adapter allowlistuje HTTPS host/cesty, používá jen GET, bounded
-  response/řádky, timeout, safe retry a sanitizované persistence/DTO. Preview
-  nikdy nenabízí apply; pending/storno/refund mapování zůstává pro `P4-03`
-  fail-closed.
-- [ ] `P4-03` Transakční idempotentní apply: upsert identity a event
+  response/řádky, timeout, safe retry a sanitizované persistence/DTO. Samotný
+  preview nic nezapisuje do identity ani membershipu; oddělený apply vlastní
+  `P4-03`.
+- [x] `P4-03` Transakční idempotentní apply: upsert identity a event
   membershipu pro způsobilé importované účastníky, bez automatického
   odeslání e-mailu a bez uložení ticket credentialu.
-  `AUX-05` dokončil čtyřkrokovou UI vrstvu, problem-first kontrolu a mockované
-  potvrzení/report s exact idempotency retry. Produkční route dál nabízí pouze
-  integrované `P4-02` SimpleShop preview; potvrzení se v ní nesmí zobrazit,
-  dokud tento úkol a `AUX-13D` nedodají serverový apply/report.
+  `AUX-13D` napojil čtyřkrokovou UI vrstvu na produkční apply/report. Server
+  znovu načte zdroj, porovná celý apply snapshot s uloženým otiskem, pod
+  deterministickými locky vytvoří identity, aktivní membershipy, participant
+  role a oddělené source reference. Konflikt/unknown, expirovaný nebo změněný
+  snapshot failuje bez částečných zápisů; exact retry vrací původní receipt.
 - [–] `P4-04` Manual code claim – mimo rozsah 2026 (`SCOPE-2026-13`).
 - [–] `P4-05` Scanner a ruční ticket kód – mimo rozsah 2026
   (`SCOPE-2026-13`/`14`).
@@ -3241,9 +3239,8 @@ jsou zelené.
 
 1. Dokončit implementaci jedné sdílené rezervace, kapacity a rosteru obou částí
    sobotního mastermindu podle ADR-014; produktové rozhodnutí už není blocker.
-2. `P4-02` read-only SimpleShop preview je dokončené. Před `P4-03` schválit
-   pending/storno/refund mapování (`TKT-02`) a bezpečnost kódu/HMAC (`TKT-04`);
-   do té doby žádný apply.
+2. `P4-02` preview a `P4-03` participant apply jsou dokončené; následuje
+   samostatná invitation batch `P4-06` bez ticket credentialu.
 3. `P5-04`, `P5-07` a `P5-09` jsou dokončené; před UAT nastavit skutečnou
    networkingovou kapacitu v administraci a ověřit roster.
 4. `P8-05`/`P8-06` integrují critical-only announcement kontrakt a produkčně
@@ -3369,3 +3366,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.44 | 2. 9. 2026 | `AUX-13J` opravil produkční auditní stránkování: event/category/action/time/request/cursor podmínky nyní běží před SQL limitem, stabilní keyset dotaz čte `limit + 1` a vrací přesné pageInfo. Minimální projekce nečte `before`, celé `after`, actor ID ani request ID; z JSON vybírá jen výslednou verzi a response používá redigovaný DTO s obecným actor labelem. Unit, tříviewportový browser gate a production build jsou zelené; PostgreSQL test je připravený pro CI, finální `[x]` čeká na staging auth/context E2E `AUX-13A`. |
 | 6.45 | 2. 9. 2026 | `AUX-12C` doplnil skutečný Chromium trace nad kontraktními maximy audit 100, rezervace/kapacity 100, obsah 50, ticket preview 500 a support 5. První ticket render odhalil 128ms long task kvůli současným 500 tabulkovým řádkům a 500 mobilním kartám; přístupné klientské stránkování po 25 zachovalo celý kanonický preview a snížilo finální měřené interakce na 0 ms při CLS 0,03246. Paginator prošel axe i keyboard Enter testem a shared bundle zůstává jen +360 B/+0,28 % nad baseline; finální task status čeká na fyzický screen-reader dependency `AUX-12A`. |
 | 6.46 | 2. 9. 2026 | `AUX-13F` dokončil lokální produkční řez rezervací: nový privátní event-scoped endpoint vrací session-first keyset stránky s maskovanými referencemi, agregovanou kapacitou/waitlistem a nejvýše 100 SQL-bounded rezervacemi na aktivitu. `/admin/rezervace` už neskládá dva omezené legacy ready, explicitně načítá další stránky bez duplicit a zachovává kanonický session-level capacity write i oddělené storno. Tracker odstranil zastaralou blokaci `RES-03`, kterou `P5-05` uzavřel; finální `[x]` čeká jen na společné staging auth/context E2E `AUX-13A`. |
+| 6.47 | 2. 9. 2026 | `P4-03`/`AUX-13D` dokončily produkční SimpleShop participant apply: server po exact preview potvrzení znovu načte a porovná normalizovaný source snapshot, pod deterministickými locky atomicky vytvoří jen způsobilé identity, aktivní membershipy, participant role a source reference. Raw kód, kontaktní PII v preview persistence, ticket credential ani automatický e-mail nevzniká; unknown/downgrade/stale/expiry failují zavřeně a exact retry vrací původní audit receipt. Lokální unit/browser/build gate je zelený, finální `[x]` čeká na společné staging auth/context E2E `AUX-13A`. |

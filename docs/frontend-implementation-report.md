@@ -146,9 +146,11 @@ ekvivalentní navigaci; breadcrumbs nevytvářejí paralelní systém.
 Aktualizace vstupenek načítá změny výhradně serverovým SimpleShop API
 preview, automaticky ukáže problematické záznamy a používá stejné lidské labely
 v desktopové tabulce i mobilních kartách. Browser nevytváří `File`, `FormData`
-ani multipart request. Potvrzení/report jsou připravené a testované nad
-oddělenou mock fixture hranicí; produkční route je do `P4-03`/`AUX-13D`
-nezobrazuje. Support pracuje s maskovanými PII, POST search body, odděleným
+ani multipart request. Produkční `P4-03`/`AUX-13D` po potvrzení přesného dopadu
+a důvodu znovu ověří immutable source snapshot, atomicky vytvoří jen způsobilé
+identity/membershipy a vrátí kanonický report s exact idempotency retry. Ticket
+credential ani automatický e-mail nevzniká. Support pracuje s maskovanými PII,
+POST search body, odděleným
 read/write oprávněním, lidskými stavy a akcemi, důvodem, potvrzením,
 idempotencí a výsledným auditem. `block`, `reactivate` a případný serverem
 povolený `resend` vysvětlují použití, dopad i recovery. Target-ticket picker
@@ -446,7 +448,7 @@ Tyto body nejsou chybějící mockované FE průchody:
   integrované v `P5-08`; zbývá finální přiřazení skutečných vedoucích;
 - skutečný auth/session/membership a autorizované backend endpointy pro celý
   F1–F6 rozsah;
-- produkční SimpleShop API mapping, staging/apply a synchronizace na vyžádání;
+- produkční invitation batch pro již importované SimpleShop identity;
 - úplný participant ticket credential za `BLOCKER-TKT-05`;
 - skutečné check-in credential adaptery, zařízení, load profil a provozní UAT;
 - produkční offline `lease-v1`, revocation a replay preflight;
