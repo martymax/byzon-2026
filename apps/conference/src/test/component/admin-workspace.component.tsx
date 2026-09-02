@@ -64,6 +64,7 @@ import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
 import {
   adminAnnouncementPreviewEndpoint,
   adminAnnouncementSendEndpoint,
+  adminAnnouncementTargetsEndpoint,
   adminAuditEndpoint,
   adminContextEndpoint,
   adminEngagementMutationEndpoint,
@@ -167,7 +168,12 @@ const organizerApi = (handler: RequestHandler): ApiPort =>
   createApi((endpoint, options) =>
     endpoint === adminContextEndpoint
       ? success(adminContextFixtures.organizer!)
-      : handler(endpoint, options),
+      : endpoint === adminAnnouncementTargetsEndpoint
+        ? success({
+            ...adminAnnouncementTargetFixtures.available!,
+            eventId: adminFixtureIds.event,
+          })
+        : handler(endpoint, options),
   );
 
 beforeEach(() => {
@@ -2407,7 +2413,7 @@ describe('F4 contract-first admin journeys', () => {
     const targets = adminAnnouncementTargetFixtures.available!.options;
     const screen = await renderComponent(
       <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminAnnouncementWorkspace targets={targets} />
+        <AdminAnnouncementWorkspace />
       </AdminWorkspaceShell>,
     );
 
@@ -2420,9 +2426,9 @@ describe('F4 contract-first admin journeys', () => {
     expect(
       window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
     ).toBe(false);
-    await screen
-      .getByRole('combobox', { name: 'Komu' })
-      .selectOptions('session');
+    const audience = screen.getByRole('combobox', { name: 'Komu' });
+    await expect.element(audience).toHaveValue('event');
+    await audience.selectOptions('session');
     await expect
       .element(screen.getByRole('combobox', { name: 'Aktivita' }))
       .toHaveValue(targets[0]!.sessionId);
@@ -2437,6 +2443,33 @@ describe('F4 contract-first admin journeys', () => {
     });
     await expect.element(screen.getByText(/Oznámení uvidí/)).toBeVisible();
     await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('wipes the announcement workspace when loading targets loses the session', async () => {
+    window.history.replaceState({}, '', '/admin/oznameni');
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return success(adminContextFixtures.organizer!);
+      }
+      if (endpoint === adminAnnouncementTargetsEndpoint) {
+        return failure('session_expired', 401);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAnnouncementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Text a publikum');
   });
 
   it('blocks a zero-recipient announcement before the send confirmation', async () => {

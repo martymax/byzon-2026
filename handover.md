@@ -36,8 +36,9 @@
   `/admin/oznameni` je critical-only čtyřkrokový tok s live kartou, dirty
   guardem, poctivým audience preview a odlišeným `sent`/`already_sent`
   potvrzením. Session picker přijímá jen pojmenované event-scoped options s
-  časem a místností; produkční options endpoint a E2E napojení vlastní
-  `AUX-13G`. `/admin/role` už nepřijímá ruční ID: používá strict stránkovaný
+  časem a místností. `AUX-13G` doplnil autorizovaný options endpoint, no-store
+  klienta a loading/retry/security wipe; finální stav čeká na staging
+  auth/context E2E `AUX-13A`. `/admin/role` už nepřijímá ruční ID: používá strict stránkovaný
   seznam, POST vyhledání existující osoby, popsané provozní role a pojmenované
   event/station/session rozsahy. Grant a danger revoke překládají serverové
   guardy, stale stav i exact retry; produkční read/search/options napojení
@@ -56,8 +57,8 @@
   produkční build; finální stav čeká na staging auth/context E2E `AUX-13A`.
   AUX-12 má reprodukovatelný sedmibodový Chromium gate všech 11 rout, bundle
   budget a mock security review. Fyzický screen-reader smoke a max-page trace
-  zůstávají otevřené; další neblokovaný integrační celek je `AUX-13G`
-  produkční napojení oznámení.
+  zůstávají otevřené; další neblokovaný integrační celek je `AUX-13J`
+  produkční audit s cursor stránkováním.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.

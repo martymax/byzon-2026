@@ -236,6 +236,9 @@ event-scoped a případný room/session scope se ověřuje serverem.
 `AUX-13C` sjednotil produkční `/admin/obsah` na admin shell context a výchozí
 produkční content fetch port. Route-level staging auth/context E2E zůstává
 součástí společného `AUX-13A`; asset operace zůstávají oddělené v `AUX-13L`.
+`AUX-13G` doplnil pro `/admin/oznameni` autorizovaný target options endpoint a
+produkční event/one-session preview/send cestu. Staging session evidence dál
+patří `AUX-13A`.
 
 ## 7. Permission matrix a zbývající gap
 
