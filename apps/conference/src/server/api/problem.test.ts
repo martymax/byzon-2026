@@ -45,6 +45,36 @@ describe('API problem responses', () => {
     expect(body).toContain('INTERNAL_ERROR');
   });
 
+  it('preserves only validated optimistic concurrency extensions', async () => {
+    const response = problemResponse(
+      new ApiProblemError({
+        status: 409,
+        code: 'STALE_VERSION',
+        title: 'Resource changed',
+        detail: 'Reload the resource.',
+        currentVersion: 3,
+        currentPreviewVersion: 4,
+      }),
+      'request-version-1',
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'STALE_VERSION',
+      currentVersion: 3,
+      currentPreviewVersion: 4,
+    });
+    expect(
+      () =>
+        new ApiProblemError({
+          status: 409,
+          code: 'STALE_VERSION',
+          title: 'Resource changed',
+          detail: 'Reload the resource.',
+          currentVersion: 0,
+        }),
+    ).toThrow('Invalid current version');
+  });
+
   it('accepts only bounded request IDs and replaces invalid input', () => {
     expect(
       getRequestId(new Headers({ 'x-request-id': 'client-request-123' })),

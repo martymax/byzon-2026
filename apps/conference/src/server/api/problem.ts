@@ -8,6 +8,8 @@ export interface ApiProblemErrorInput {
   detail: string;
   fieldErrors?: Record<string, string[]>;
   headers?: Record<string, string>;
+  currentVersion?: number;
+  currentPreviewVersion?: number;
 }
 
 export class ApiProblemError extends Error {
@@ -17,6 +19,8 @@ export class ApiProblemError extends Error {
   readonly detail: string;
   readonly fieldErrors?: Record<string, string[]>;
   readonly headers?: Record<string, string>;
+  readonly currentVersion?: number;
+  readonly currentPreviewVersion?: number;
 
   constructor(input: ApiProblemErrorInput) {
     super(input.title);
@@ -35,6 +39,21 @@ export class ApiProblemError extends Error {
     this.detail = input.detail;
     if (input.fieldErrors) this.fieldErrors = input.fieldErrors;
     if (input.headers) this.headers = input.headers;
+    if (input.currentVersion !== undefined) {
+      if (!Number.isInteger(input.currentVersion) || input.currentVersion < 1) {
+        throw new TypeError('Invalid current version');
+      }
+      this.currentVersion = input.currentVersion;
+    }
+    if (input.currentPreviewVersion !== undefined) {
+      if (
+        !Number.isInteger(input.currentPreviewVersion) ||
+        input.currentPreviewVersion < 1
+      ) {
+        throw new TypeError('Invalid current preview version');
+      }
+      this.currentPreviewVersion = input.currentPreviewVersion;
+    }
   }
 }
 
@@ -46,6 +65,8 @@ export interface ApiProblem {
   detail: string;
   requestId: string;
   fieldErrors?: Record<string, string[]>;
+  currentVersion?: number;
+  currentPreviewVersion?: number;
 }
 
 export const getRequestId = (
@@ -79,6 +100,12 @@ export const problemResponse = (
     detail: problem.detail,
     requestId,
     ...(problem.fieldErrors ? { fieldErrors: problem.fieldErrors } : {}),
+    ...(problem.currentVersion !== undefined
+      ? { currentVersion: problem.currentVersion }
+      : {}),
+    ...(problem.currentPreviewVersion !== undefined
+      ? { currentPreviewVersion: problem.currentPreviewVersion }
+      : {}),
   };
   return new Response(JSON.stringify(body), {
     status: problem.status,
