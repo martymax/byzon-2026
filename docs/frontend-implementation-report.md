@@ -338,12 +338,12 @@ Společné invarianty:
   dependency graphu.
 
 `AUX-13J` napojil `/admin/audit` na produkční serverové keyset stránkování.
-Event/category/action/time/request/cursor filtry se aplikují před SQL limitem,
-`limit + 1` určuje přesné `pageInfo` a response nečte ani nevrací auditní
-`before`, celé `after`, actor ID nebo request ID; z JSON vybírá jen výslednou
-verzi. UI zachovává stejné filtry pro další stránku, ukazuje lidské action
-labely a přiznává redakci; actor/outcome filtry zůstávají pravdivě skryté do
-`GAP-AUX-AUDIT-01`.
+Event/category/action, PII-safe actor/outcome, time/request/cursor filtry se
+aplikují před SQL limitem, `limit + 1` určuje přesné `pageInfo` a response
+nečte ani nevrací auditní `before`, celé `after`, actor ID nebo request ID; z
+JSON vybírá jen výslednou verzi. UI zachovává stejné filtry pro další stránku,
+ukazuje lidské labely z exhaustive typovaného registru a přiznává redakci.
+`GAP-AUX-AUDIT-01` je lokálně uzavřený.
 
 ## 7. Responsive, accessibility a UX
 

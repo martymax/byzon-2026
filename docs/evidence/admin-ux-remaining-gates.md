@@ -10,6 +10,9 @@ Datum ověření: 2026-09-02 (Europe/Prague).
   unit testy, produkční Next/worker build a production mock boundary PASS.
 - Admin browser matice má 1053/1053 PASS ve phone/tablet/desktop včetně axe,
   route isolation, permission/session wipe, cursorů a exact retry scénářů.
+- Následný úplný status audit uzavřel poslední lokální gap
+  `GAP-AUX-AUDIT-01`: actor/outcome filtry běží serverově před limitem a
+  action registry je exhaustive a typovaný.
 - PostgreSQL integrační testy pro nové serverové řezy jsou připravené pro CI;
   lokálně se bez `TEST_DATABASE_URL` očekávaně přeskakují.
 

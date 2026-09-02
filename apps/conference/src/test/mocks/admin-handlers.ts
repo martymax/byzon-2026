@@ -2067,8 +2067,17 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         ? maxPageAuditItems()
         : adminAuditFixtures.page!.items
     ).filter(
-      ({ category }) =>
-        query.data.category === undefined || category === query.data.category,
+      (item) =>
+        (query.data.category === undefined ||
+          item.category === query.data.category) &&
+        (query.data.action === undefined ||
+          item.action === query.data.action) &&
+        (query.data.actor === undefined ||
+          (query.data.actor === 'system'
+            ? item.actorLabel === 'Systém BYZON'
+            : item.actorLabel !== 'Systém BYZON')) &&
+        (query.data.outcome === undefined ||
+          item.outcome === query.data.outcome),
     );
     return mockJsonResponse(
       adminAuditResponseSchema,

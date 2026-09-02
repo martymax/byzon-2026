@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  adminAuditActionSchema,
+  adminAuditQuerySchema,
   adminAuditResponseSchema,
   adminCachePolicy,
   adminContextResponseSchema,
@@ -518,6 +520,20 @@ describe('CS-ADMIN-01 contracts', () => {
     };
 
     expect(adminAuditResponseSchema.parse(audits)).toEqual(audits);
+    expect(
+      adminAuditQuerySchema.parse({
+        actor: 'system',
+        outcome: 'queued',
+        action: 'export.queued',
+      }),
+    ).toEqual({
+      actor: 'system',
+      outcome: 'queued',
+      action: 'export.queued',
+    });
+    expect(adminAuditActionSchema.safeParse('private.raw_action').success).toBe(
+      false,
+    );
     expect(
       adminAuditResponseSchema.safeParse({
         ...audits,

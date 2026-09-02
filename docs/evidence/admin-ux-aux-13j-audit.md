@@ -8,9 +8,13 @@
 
 - `GET /api/v1/admin/events/:eventId/audit` ověřuje aktivní session,
   event-scoped `audit:read` a vrací privátní `no-store` odpověď.
-- Event, kategorie, přesná akce, request ID, časové rozmezí a keyset cursor se
-  aplikují přímo v databázovém dotazu. Kategorie už není filtrována až nad
-  prvních 500 načtenými záznamy.
+- Event, kategorie, přesná akce, PII-safe actor (`user`/`system`), výsledek,
+  request ID, časové rozmezí a keyset cursor se aplikují přímo v databázovém
+  dotazu před limitem. Kategorie ani nový actor/outcome filtr se neaplikují
+  jen na aktuální klientskou stránku.
+- Exhaustive typovaný registr pokrývá všechny zapisované admin akce i dvě
+  podporované historické hodnoty. UI z něj odvozuje kompletní české volby a
+  nemůže nepozorovaně zobrazit raw action kód.
 - Stabilní řazení `createdAt DESC, id DESC` a načtení `limit + 1` vytvářejí
   přesné `hasMore` a další opaque cursor bez předstírání úplné historie.
 - Select nečte auditní `before`, celé `after`, actor ID ani request ID; z JSON
@@ -23,18 +27,18 @@
 ## Ověření
 
 - Unit server test ověřuje `limit + 1`, minimální projekci, privátní hlavičky,
-  redigované DTO, obecné actor labely a odmítnutí neplatného cursoru.
+  redigované DTO, obecné actor labely, actor/outcome query a odmítnutí
+  neplatného cursoru.
 - PostgreSQL integrační test připravený pro CI ověřuje category filtr před
-  stránkováním, druhou cursor stránku, cross-event izolaci a absenci
-  `before`/secret dat v odpovědi.
+  stránkováním, actor/outcome filtry, druhou cursor stránku, cross-event
+  izolaci a absenci `before`/secret dat v odpovědi.
 - Browser component scénář ověřuje předání stejných filtrů do další stránky,
-  lidské action labely místo raw kódu, redaction text a axe kontrolu ve třech
-  viewportech.
+  včetně actor/outcome, lidské action labely místo raw kódu, redaction text a
+  axe kontrolu ve třech viewportech.
 - Produkční build prošel source i build mock-boundary kontrolou.
 
 ## Otevřený gate
 
 Lokální Docker daemon není dostupný, proto je PostgreSQL integrační test v
-lokálním běhu přeskočen. `AUX-13J` zůstává `[~]` do staging auth/context E2E
-společného `AUX-13A`; actor/outcome filtry a úplný action registry zůstávají
-samostatným rozšířením `GAP-AUX-AUDIT-01` a UI je nepředstírá.
+lokálním běhu přeskočen. `GAP-AUX-AUDIT-01` je lokálně uzavřený; `AUX-13J`
+zůstává `[~]` už jen do staging auth/context E2E společného `AUX-13A`.

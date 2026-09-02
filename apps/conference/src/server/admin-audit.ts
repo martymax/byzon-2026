@@ -1,10 +1,14 @@
 import { schema, type Database } from '@byzon/database';
 import {
+  adminAuditActionSchema,
   adminAuditQuerySchema,
   adminAuditResponseSchema,
+  type AdminAuditAction,
+  type AdminAuditActor,
   type AdminAuditCategory,
+  type AdminAuditOutcome,
 } from '@byzon/domain/contracts';
-import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -24,40 +28,57 @@ const privateHeaders = (requestId: string) => ({
   'x-request-id': requestId,
 });
 
-const categoryFor = (action: string): AdminAuditCategory | null => {
-  if (/^(support|ticket)\./.test(action)) return 'support';
-  if (/^(import|ticket_import)\./.test(action)) return 'import';
-  if (/^announcement\./.test(action)) return 'announcement';
-  if (/^role\./.test(action)) return 'role';
-  if (/^(reservation|session\.capacity|waitlist)\./.test(action))
-    return 'reservation';
-  if (/^settings\./.test(action)) return 'settings';
-  if (/^export\./.test(action)) return 'export';
-  return null;
-};
+const actionCategories = {
+  update_settings: 'settings',
+  cancel_reservation: 'reservation',
+  'support.block': 'support',
+  'support.reactivate': 'support',
+  'support.resend': 'support',
+  'ticket_import.preview_created': 'import',
+  'ticket_import.applied': 'import',
+  'announcement.send': 'announcement',
+  'role.grant': 'role',
+  'role.revoke': 'role',
+  'role.moderator.assign': 'role',
+  'role.moderator.remove': 'role',
+  'reservation.admin_cancelled': 'reservation',
+  'session.capacity_updated': 'reservation',
+  'waitlist.auto_cancelled': 'reservation',
+  'waitlist.auto_promoted': 'reservation',
+  'settings.update': 'settings',
+  'settings.engagement.update': 'settings',
+  'settings.session-questions.update': 'settings',
+  'export.queued': 'export',
+  'export.download': 'export',
+} satisfies Readonly<Record<AdminAuditAction, AdminAuditCategory>>;
 
-const categoryPrefixes: Readonly<
-  Record<AdminAuditCategory, readonly string[]>
-> = {
-  support: ['support.', 'ticket.'],
-  import: ['import.', 'ticket_import.'],
-  announcement: ['announcement.'],
-  role: ['role.'],
-  reservation: ['reservation.', 'session.capacity.', 'waitlist.'],
-  settings: ['settings.'],
-  export: ['export.'],
-};
+const categoryFor = (action: AdminAuditAction): AdminAuditCategory =>
+  actionCategories[action];
+
+const actionsForCategory = (category?: AdminAuditCategory) =>
+  adminAuditActionSchema.options.filter(
+    (action) => category === undefined || categoryFor(action) === category,
+  );
 
 const categoryCondition = (category?: AdminAuditCategory) =>
-  or(
-    ...(category ? [category] : Object.keys(categoryPrefixes)).flatMap(
-      (value) =>
-        categoryPrefixes[value as AdminAuditCategory].map(
-          (prefix) =>
-            sql`left(${schema.auditLogs.action}, ${prefix.length}) = ${prefix}`,
-        ),
-    ),
-  );
+  inArray(schema.auditLogs.action, actionsForCategory(category));
+
+const actorCondition = (actor?: AdminAuditActor) => {
+  if (actor === 'system') return eq(schema.auditLogs.actorType, 'system');
+  if (actor === 'user') return ne(schema.auditLogs.actorType, 'system');
+  return undefined;
+};
+
+const outcomeFor = (action: AdminAuditAction): AdminAuditOutcome =>
+  action === 'export.queued' ? 'queued' : 'succeeded';
+
+const outcomeCondition = (outcome?: AdminAuditOutcome) => {
+  if (outcome === 'queued') return eq(schema.auditLogs.action, 'export.queued');
+  if (outcome === 'succeeded')
+    return ne(schema.auditLogs.action, 'export.queued');
+  if (outcome === 'rejected') return sql<boolean>`false`;
+  return undefined;
+};
 
 const encodeCursor = (createdAt: Date, id: string): string =>
   Buffer.from(
@@ -142,6 +163,12 @@ export const handleAdminAudit = async (
       ...(url.searchParams.get('action')
         ? { action: url.searchParams.get('action') }
         : {}),
+      ...(url.searchParams.get('actor')
+        ? { actor: url.searchParams.get('actor') }
+        : {}),
+      ...(url.searchParams.get('outcome')
+        ? { outcome: url.searchParams.get('outcome') }
+        : {}),
       ...(url.searchParams.get('requestId')
         ? { requestId: url.searchParams.get('requestId') }
         : {}),
@@ -192,6 +219,8 @@ export const handleAdminAudit = async (
           query.data.action
             ? eq(schema.auditLogs.action, query.data.action)
             : undefined,
+          actorCondition(query.data.actor),
+          outcomeCondition(query.data.outcome),
           query.data.requestId
             ? eq(schema.auditLogs.requestId, query.data.requestId)
             : undefined,
@@ -212,6 +241,7 @@ export const handleAdminAudit = async (
     const body = adminAuditResponseSchema.parse({
       eventId,
       items: page.map((row) => {
+        const action = adminAuditActionSchema.parse(row.action);
         const version =
           typeof row.afterVersion === 'number' &&
           Number.isInteger(row.afterVersion) &&
@@ -223,11 +253,11 @@ export const handleAdminAudit = async (
           eventId,
           actorLabel:
             row.actorType === 'system' ? 'Systém BYZON' : 'Oprávněný uživatel',
-          category: categoryFor(row.action)!,
-          action: row.action,
+          category: categoryFor(action),
+          action,
           targetReference: row.targetId ?? row.targetType,
           reason: row.reason ?? 'Důvod je součástí řízené systémové operace.',
-          outcome: row.action.startsWith('export.') ? 'queued' : 'succeeded',
+          outcome: outcomeFor(action),
           createdAt: row.createdAt.toISOString(),
           resultingVersion: version,
           redacted: true,

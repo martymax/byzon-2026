@@ -94,7 +94,7 @@ describe('admin audit query', () => {
     const fixture = database();
     const response = await handleAdminAudit(
       new Request(
-        `https://app.byzon.test/api/v1/admin/events/${ids.event}/audit?category=settings&action=settings.update&requestId=admin-request-0001&from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-03T00%3A00%3A00.000Z&limit=2`,
+        `https://app.byzon.test/api/v1/admin/events/${ids.event}/audit?category=settings&action=settings.update&actor=user&outcome=succeeded&requestId=admin-request-0001&from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-03T00%3A00%3A00.000Z&limit=2`,
         { headers: { 'x-request-id': 'audit-query-test-0001' } },
       ),
       ids.event,

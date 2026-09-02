@@ -3066,6 +3066,16 @@ describe('F4 contract-first admin journeys', () => {
     await vi.waitFor(() => {
       expect(paths.at(-1)).toContain('category=settings');
     });
+    await screen
+      .getByRole('combobox', { name: 'Uživatel' })
+      .selectOptions('user');
+    await screen
+      .getByRole('combobox', { name: 'Výsledek' })
+      .selectOptions('succeeded');
+    await vi.waitFor(() => {
+      expect(paths.at(-1)).toContain('actor=user');
+      expect(paths.at(-1)).toContain('outcome=succeeded');
+    });
     await screen.getByText('Technické údaje').first().click();
     await screen
       .getByRole('textbox', { name: 'Request ID' })
@@ -3078,6 +3088,8 @@ describe('F4 contract-first admin journeys', () => {
       expect(document.body.textContent).toContain('Zrušil rezervaci');
     });
     expect(paths.at(-1)).toContain('category=settings');
+    expect(paths.at(-1)).toContain('actor=user');
+    expect(paths.at(-1)).toContain('outcome=succeeded');
     expect(paths.at(-1)).toContain('requestId=admin-request-0001');
     expect(paths.at(-1)).toContain('cursor=fixture-admin-audit-page-2');
     expect(document.body.textContent).not.toContain('update_settings');
