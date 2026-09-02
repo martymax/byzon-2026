@@ -233,6 +233,10 @@ event-scoped a případný room/session scope se ověřuje serverem.
 | `/admin/nastaveni` | `organizer_admin`; `event:settings:manage`                                                           | `D/A/L/E`; `R` read-only                                                                | Změnit minimální event nastavení → `Uložit změny`                                  | Deep link z admin nav; Back `/admin`. Neuložené změny potvrdit, stale version znovu načíst.                        | event config `P1`, role actor `P3`; online-only                              | `ADM-W` + invalid phase transition, stale version, destructive flag confirmation                         |
 | `/check-in`        | `checkin_operator` nebo `organizer_admin`; `checkin:perform`, undo navíc `checkin:undo`              | `L`; `A` pouze explicitní rehearsal; offline adapter jen `offlineCheckinEnabled` + gate | Odbavit právě jednu osobu → `Skenovat`/`Potvrdit odbavení` podle kroku             | Přímý deep link po loginu; Back vyžaduje opuštění operátorského režimu. Každý nový scan začíná čistým stavem.      | minimum identity/ticket outcome `P3`, credential `S`; autoritativně online   | `CHK` + camera/manual/name-email lookup, valid/duplicate/cancelled/unknown, undo a network-loss recovery |
 
+`AUX-13C` sjednotil produkční `/admin/obsah` na admin shell context a výchozí
+produkční content fetch port. Route-level staging auth/context E2E zůstává
+součástí společného `AUX-13A`; asset operace zůstávají oddělené v `AUX-13L`.
+
 ## 7. Permission matrix a zbývající gap
 
 Scope alignment doplnil `profile:own:write`, `privacy:own:write` a

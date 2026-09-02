@@ -212,6 +212,14 @@ změny mají dirty guard a změna scope, permission loss nebo session expiry
 formulář bezpečně vymaže. Zveřejnění vždy vzniká z přesně zkontrolované verze,
 vyžaduje potvrzení a koreluje verzi i request.
 
+Produkční route po `AUX-13C` nepoužívá paralelní participant event lookup.
+Event ID, timezone, phase a oprávnění čte pouze z ověřeného admin shell
+contextu; produkční wrapper neinjektuje port, takže používá výhradně fetch
+adapter. Security failure invaliduje celý shell scope. Preview workspace je
+stále dostupný pouze za development/test guardem a produkční build boundary
+odmítá jeho marker i mock závislosti. Finální staging auth/context důkaz patří
+společnému `AUX-13A`.
+
 Samostatné development/test preview `/host/aktivity` používá minimální
 `CS-ROSTER-01`: vedoucí aktivity vidí pouze přiřazené sessions, jméno, firmu a
 stav rezervace. Nemá attendance mutaci, telefon, e-mail ani globální export.

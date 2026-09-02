@@ -50,10 +50,14 @@
   `GAP-AUX-SETTINGS-01`. Rendered-copy scan chrání hlavní UI před technickým
   slovníkem, společné chyby odpovídají §6.4, request reference je jen v
   technických údajích a české počty používají sdílenou Intl pluralizaci.
+  Produkční `/admin/obsah` po `AUX-13C` čte event/timezone/phase/permissions
+  pouze z admin shell contextu, používá výchozí content fetch port a při
+  security failure invaliduje celý scope. Preview adapter zůstává mimo
+  produkční build; finální stav čeká na staging auth/context E2E `AUX-13A`.
   AUX-12 má reprodukovatelný sedmibodový Chromium gate všech 11 rout, bundle
   budget a mock security review. Fyzický screen-reader smoke a max-page trace
-  zůstávají otevřené; další implementační celek je `AUX-13` produkční
-  integrace po jednotlivých routách.
+  zůstávají otevřené; další neblokovaný integrační celek je `AUX-13G`
+  produkční napojení oznámení.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.
