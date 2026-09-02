@@ -45,6 +45,11 @@ import {
   adminRolePersonSearchResponseSchema,
   adminRoleScopeOptionsRequestSchema,
   adminRoleScopeOptionsResponseSchema,
+  adminTeamInvitationRequestSchema,
+  adminTeamInvitationResponseSchema,
+  adminTeamMemberListResponseSchema,
+  adminTeamMemberMutationRequestSchema,
+  adminTeamMemberMutationResponseSchema,
   type AdminContextResponse,
   type AdminEventSettings,
   type AdminOperationsOverviewResponse,
@@ -52,6 +57,7 @@ import {
   type AdminReservationRecord,
   type AdminReservationSessionItem,
   type AdminSessionCapacityRecord,
+  type AdminTeamMember,
 } from '@byzon/domain/contracts/admin';
 import {
   adminParticipantDetailSchema,
@@ -163,6 +169,8 @@ interface AdminMockState {
   reservations: AdminReservationRecord[];
   reservationSessions: AdminReservationSessionItem[];
   sessionCapacities: AdminSessionCapacityRecord[];
+  teamMembers: AdminTeamMember[];
+  teamVersion: number;
   settings: AdminEventSettings;
   announcementPreviewId: string | null;
   announcementPreviewVersion: number;
@@ -244,6 +252,21 @@ const initialState = (): AdminMockState => {
     reservations: clone(adminReservationFixtures.list!.items),
     reservationSessions: clone(adminReservationSessionFixtures.complete!.items),
     sessionCapacities: clone(adminSessionCapacityFixtures.list!.items),
+    teamMembers: [
+      {
+        memberId: adminFixtureIds.operator,
+        displayName: 'Demo administrátor',
+        email: 'admin@example.test',
+        emailVerified: true,
+        isCurrentActor: true,
+        roles: ['organizer_admin'],
+        invitation: {
+          status: 'accepted',
+          lastSentAt: '2026-08-20T09:55:00.000Z',
+        },
+      },
+    ],
+    teamVersion: 1,
     settings: clone(adminEventSettingsFixtures.open!),
     announcementPreviewId: null,
     announcementPreviewVersion: 1,
@@ -368,6 +391,8 @@ const replayResponse = (
         ? 'already_queued'
         : outcome === 'granted' ||
             outcome === 'revoked' ||
+            outcome === 'added' ||
+            outcome === 'removed' ||
             outcome === 'updated' ||
             outcome === 'applied'
           ? 'already_applied'
@@ -1962,6 +1987,237 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         adminAnnouncementSendResponseSchema,
         response,
         successOptions('admin.mock.announcement-send'),
+      );
+    },
+  ),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/team-members',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminMutationProblemSchema,
+        ['role:manage'],
+        'admin.mock.team-member',
+      );
+      if (denied) return denied;
+      const body = adminTeamMemberMutationRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'admin-team-member', body.data)
+        : null;
+      if (!routeMatchesEvent(params.eventId) || !body.success || !attempt) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.invalid_transition,
+          { fixtureName: 'admin.mock.team-member-invalid' },
+        );
+      }
+      if (attempt.kind === 'collision') {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.team-member-collision' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminTeamMemberMutationResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.team-member-replay'),
+        );
+      }
+      if (body.data.expectedVersion !== state.teamVersion) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          {
+            ...adminMutationProblemFixtures.stale,
+            currentVersion: state.teamVersion,
+          },
+          { fixtureName: 'admin.mock.team-member-stale' },
+        );
+      }
+      let member: AdminTeamMember | null;
+      if (body.data.action === 'add') {
+        member = {
+          memberId: crypto.randomUUID(),
+          displayName: body.data.displayName,
+          email: body.data.email,
+          emailVerified: false,
+          isCurrentActor: false,
+          roles: [body.data.access.role],
+          invitation: { status: 'not_sent', lastSentAt: null },
+        };
+        state.teamMembers.push(member);
+      } else {
+        const targetMemberId = body.data.memberId;
+        const index = state.teamMembers.findIndex(
+          ({ memberId }) => memberId === targetMemberId,
+        );
+        if (index < 0) {
+          return mockProblemResponse(
+            adminMutationProblemSchema,
+            adminReadProblemFixtures.not_found,
+            { fixtureName: 'admin.mock.team-member-not-found' },
+          );
+        }
+        const current = state.teamMembers[index]!;
+        if (body.data.action === 'remove') {
+          if (current.isCurrentActor) {
+            return mockProblemResponse(
+              adminMutationProblemSchema,
+              adminMutationProblemFixtures.self_lockout,
+              { fixtureName: 'admin.mock.team-member-self-lockout' },
+            );
+          }
+          state.teamMembers.splice(index, 1);
+          member = null;
+        } else {
+          member = {
+            ...current,
+            displayName: body.data.displayName,
+            email: body.data.email,
+            emailVerified:
+              current.email === body.data.email ? current.emailVerified : false,
+            roles: body.data.administrator
+              ? Array.from(
+                  new Set<AdminTeamMember['roles'][number]>([
+                    ...current.roles,
+                    'organizer_admin',
+                  ]),
+                )
+              : current.roles.filter((role) => role !== 'organizer_admin'),
+          };
+          state.teamMembers[index] = member;
+        }
+      }
+      state.teamVersion += 1;
+      const response = adminTeamMemberMutationResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        outcome:
+          body.data.action === 'add'
+            ? 'added'
+            : body.data.action === 'update'
+              ? 'updated'
+              : 'removed',
+        teamVersion: state.teamVersion,
+        member,
+        changedAt: new Date().toISOString(),
+        audit: { auditId: adminFixtureIds.auditMutation },
+      });
+      storeMutation(attempt, 'admin-team-member', response);
+      return mockJsonResponse(
+        adminTeamMemberMutationResponseSchema,
+        response,
+        successOptions('admin.mock.team-member'),
+      );
+    },
+  ),
+
+  http.get('*/api/v1/admin/events/:eventId/team-members', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['role:manage'],
+      'admin.mock.team-members',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId)) {
+      return mockProblemResponse(
+        adminReadProblemSchema,
+        adminReadProblemFixtures.permission,
+        { fixtureName: 'admin.mock.team-members-event' },
+      );
+    }
+    return mockJsonResponse(
+      adminTeamMemberListResponseSchema,
+      {
+        eventId: adminFixtureIds.event,
+        teamVersion: state.teamVersion,
+        generatedAt: new Date().toISOString(),
+        members: state.teamMembers,
+        summary: {
+          total: state.teamMembers.length,
+          administrators: state.teamMembers.filter(({ roles }) =>
+            roles.includes('organizer_admin'),
+          ).length,
+          awaitingInvitation: state.teamMembers.filter(
+            ({ invitation }) => invitation.status !== 'accepted',
+          ).length,
+        },
+      },
+      successOptions('admin.mock.team-members'),
+    );
+  }),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/team-members/:memberId/invite',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminMutationProblemSchema,
+        ['role:manage'],
+        'admin.mock.team-invitation',
+      );
+      if (denied) return denied;
+      const body = adminTeamInvitationRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'admin-team-invitation', body.data)
+        : null;
+      if (
+        !routeMatchesEvent(params.eventId) ||
+        !body.success ||
+        body.data.memberId !== String(params.memberId) ||
+        !attempt
+      ) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.invalid_transition,
+          { fixtureName: 'admin.mock.team-invitation-invalid' },
+        );
+      }
+      if (attempt.kind === 'collision') {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.team-invitation-collision' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminTeamInvitationResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.team-invitation-replay'),
+        );
+      }
+      const member = state.teamMembers.find(
+        ({ memberId }) => memberId === body.data.memberId,
+      );
+      if (!member) {
+        return mockProblemResponse(
+          adminMutationProblemSchema,
+          adminReadProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.team-invitation-not-found' },
+        );
+      }
+      const sentAt = new Date().toISOString();
+      member.invitation = {
+        status: member.emailVerified ? 'accepted' : 'sent',
+        lastSentAt: sentAt,
+      };
+      const response = adminTeamInvitationResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        memberId: member.memberId,
+        outcome: 'sent',
+        sentAt,
+        invitation: member.invitation,
+        audit: { auditId: adminFixtureIds.auditMutation },
+      });
+      storeMutation(attempt, 'admin-team-invitation', response);
+      return mockJsonResponse(
+        adminTeamInvitationResponseSchema,
+        response,
+        successOptions('admin.mock.team-invitation'),
       );
     },
   ),

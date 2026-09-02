@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -384,6 +384,70 @@ const listRows = async (
   }
 };
 
+const publishedItems = (
+  snapshot: Record<string, unknown> | null | undefined,
+  resource: AdminContentResource,
+): readonly Record<string, unknown>[] => {
+  if (!snapshot) return [];
+  const object = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  const collection = (parent: Record<string, unknown> | null, key: string) =>
+    Array.isArray(parent?.[key])
+      ? (parent[key] as Record<string, unknown>[])
+      : [];
+  const program = object(snapshot.program);
+  const practical = object(snapshot.practical);
+  switch (resource) {
+    case 'days':
+      return collection(program, 'days');
+    case 'rooms':
+      return collection(program, 'rooms');
+    case 'sessions':
+      return collection(program, 'sessions');
+    case 'speakers':
+      return collection(snapshot, 'speakers');
+    case 'partners':
+      return collection(snapshot, 'partners');
+    case 'venues':
+      return collection(snapshot, 'venues');
+    case 'pages':
+      return collection(practical, 'pages');
+    case 'faqs':
+      return collection(practical, 'faqs');
+  }
+};
+
+const listRowsWithPublicationState = async (
+  db: Database,
+  eventId: string,
+  resource: AdminContentResource,
+) => {
+  const [items, publication] = await Promise.all([
+    listRows(db, eventId, resource),
+    db.query.contentPublications.findFirst({
+      columns: { snapshot: true },
+      orderBy: [desc(schema.contentPublications.version)],
+      where: eq(schema.contentPublications.eventId, eventId),
+    }),
+  ]);
+  const publishedIds = new Set(
+    publishedItems(publication?.snapshot, resource).flatMap((item) =>
+      typeof item.id === 'string' ? [item.id] : [],
+    ),
+  );
+  return items.map((item) => ({
+    ...item,
+    publicationState:
+      'status' in item && item.status === 'archived'
+        ? ('archived' as const)
+        : publishedIds.has(item.id)
+          ? ('published' as const)
+          : ('unpublished' as const),
+  }));
+};
+
 const syncSpeakerSessions = async (
   db: Database,
   eventId: string,
@@ -759,7 +823,11 @@ export const handleAdminContent = async (
       return Response.json(
         {
           resource,
-          items: await listRows(dependencies.db, eventId, resource),
+          items: await listRowsWithPublicationState(
+            dependencies.db,
+            eventId,
+            resource,
+          ),
           requestId,
         },
         { headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },

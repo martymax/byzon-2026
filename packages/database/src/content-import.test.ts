@@ -24,6 +24,7 @@ describe('content import preparation', () => {
       assets: 35,
       speakers: 24,
       partners: 10,
+      rooms: 9,
       eventDays: 2,
       sessions: 82,
       coachingSessions: 26,
@@ -35,10 +36,6 @@ describe('content import preparation', () => {
         expect.objectContaining({
           code: 'invalid_time',
           value: '24:00 - ?',
-        }),
-        expect.objectContaining({
-          code: 'unmapped_field',
-          detail: expect.stringContaining('physical room'),
         }),
         expect.objectContaining({ code: 'unmapped_person' }),
         expect.objectContaining({ code: 'unknown_type', value: 'shared' }),

@@ -34,6 +34,11 @@ import {
   adminRolePersonSearchResponseSchema,
   adminRoleScopeOptionsRequestSchema,
   adminRoleScopeOptionsResponseSchema,
+  adminTeamInvitationRequestSchema,
+  adminTeamInvitationResponseSchema,
+  adminTeamMemberListResponseSchema,
+  adminTeamMemberMutationRequestSchema,
+  adminTeamMemberMutationResponseSchema,
   type AdminAuditQuery,
   type AdminEventSettingsUpdateRequest,
   type AdminExportRequest,
@@ -48,6 +53,8 @@ import {
   type AdminRoleAssignmentListQuery,
   type AdminRolePersonSearchRequest,
   type AdminRoleScopeOptionsRequest,
+  type AdminTeamInvitationRequest,
+  type AdminTeamMemberMutationRequest,
 } from '@byzon/domain/contracts/admin';
 import {
   adminAnnouncementPreviewProblemSchema,
@@ -117,6 +124,7 @@ const adminMutationProblemCodes = [
   'ADMIN_INVALID_TRANSITION',
   'LAST_ADMINISTRATOR_GUARD',
   'SELF_LOCKOUT_GUARD',
+  'INVITATION_DELIVERY_UNAVAILABLE',
   'IDEMPOTENCY_KEY_REUSED',
   'IDEMPOTENCY_IN_PROGRESS',
 ] as const;
@@ -441,6 +449,39 @@ export const adminRoleScopeOptionsEndpoint = defineApiEndpoint({
   responseKind: 'json',
   retry: 'never',
   idempotency: 'forbidden',
+});
+
+export const adminTeamMemberListEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminTeamMemberListResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+
+export const adminTeamMemberMutationEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminTeamMemberMutationRequestSchema,
+  successSchema: adminTeamMemberMutationResponseSchema,
+  problemSchema: adminMutationProblemSchema,
+  problemCodes: adminMutationProblemCodes,
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
+export const adminTeamInvitationEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminTeamInvitationRequestSchema,
+  successSchema: adminTeamInvitationResponseSchema,
+  problemSchema: adminMutationProblemSchema,
+  problemCodes: adminMutationProblemCodes,
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
 });
 
 export const adminExportEndpoint = defineApiEndpoint({
@@ -1022,6 +1063,59 @@ export const requestAdminRoleScopes = async (
       ...(signal ? { signal } : {}),
     }),
     (data) => data.eventId === eventId && data.role === body.role,
+  );
+
+export const requestAdminTeamMembers = async (
+  api: ApiPort,
+  eventId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminTeamMemberListEndpoint, {
+      path: eventPath(eventId, '/team-members'),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminTeamMemberMutation = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminTeamMemberMutationRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminTeamMemberMutationEndpoint, {
+      path: eventPath(eventId, '/team-members'),
+      body,
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminTeamInvitation = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminTeamInvitationRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminTeamInvitationEndpoint, {
+      path: eventPath(
+        eventId,
+        `/team-members/${encodeURIComponent(body.memberId)}/invite`,
+      ),
+      body,
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId && data.memberId === body.memberId,
   );
 
 export const requestAdminExport = async (

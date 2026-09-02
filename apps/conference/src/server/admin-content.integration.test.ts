@@ -100,7 +100,11 @@ integration('admin content CRUD integration', () => {
     );
     expect((await list.json()).items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id, slug: 'partner-test' }),
+        expect.objectContaining({
+          id,
+          publicationState: 'unpublished',
+          slug: 'partner-test',
+        }),
       ]),
     );
     const update = await handleAdminContent(

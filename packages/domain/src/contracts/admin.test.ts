@@ -22,6 +22,9 @@ import {
   adminRolePersonSearchRequestSchema,
   adminRolePersonSearchResponseSchema,
   adminRoleScopeOptionsResponseSchema,
+  adminTeamInvitationResponseSchema,
+  adminTeamMemberListResponseSchema,
+  adminTeamMemberMutationRequestSchema,
   problemTypeForCode,
 } from './index.js';
 
@@ -35,9 +38,54 @@ const ids = {
   networkingSession: '019fa200-0000-7000-8000-000000000007',
   assignment: '019fa200-0000-7000-8000-000000000008',
   station: '019fa200-0000-7000-8000-000000000009',
+  member: '019fa200-0000-7000-8000-000000000010',
 } as const;
 
 describe('CS-ADMIN-01 contracts', () => {
+  it('validates complete team administration without exposing invitation URLs', () => {
+    const member = {
+      memberId: ids.member,
+      displayName: 'Jana Týmová',
+      email: 'jana@example.test',
+      emailVerified: false,
+      isCurrentActor: false,
+      roles: ['organizer_admin'] as const,
+      invitation: {
+        status: 'sent' as const,
+        lastSentAt: '2026-09-02T10:00:00Z',
+      },
+    };
+    expect(
+      adminTeamMemberListResponseSchema.parse({
+        eventId: ids.event,
+        teamVersion: 2,
+        generatedAt: '2026-09-02T10:00:00Z',
+        members: [member],
+        summary: { total: 1, administrators: 1, awaitingInvitation: 1 },
+      }).members[0],
+    ).toEqual(member);
+    expect(
+      adminTeamMemberMutationRequestSchema.safeParse({
+        action: 'add',
+        displayName: 'Jana Týmová',
+        email: 'JANA@EXAMPLE.TEST',
+        access: { role: 'organizer_admin' },
+        expectedVersion: 1,
+        reason: 'Přidání produkční administrátorky.',
+        invitationUrl: 'https://example.test/secret',
+      }).success,
+    ).toBe(false);
+    const invitation = adminTeamInvitationResponseSchema.parse({
+      eventId: ids.event,
+      memberId: ids.member,
+      outcome: 'sent',
+      sentAt: '2026-09-02T10:00:00Z',
+      invitation: { status: 'sent', lastSentAt: '2026-09-02T10:00:00Z' },
+      audit: { auditId: ids.auditNewest },
+    });
+    expect(JSON.stringify(invitation)).not.toContain('url');
+  });
+
   it('validates event-scoped role lists, person search and compatible named scopes', () => {
     const assignment = {
       assignmentId: ids.assignment,

@@ -15,6 +15,7 @@ const healthySnapshot = (): AdminOperationsSnapshot => ({
   announcements: { enabled: true, total: 2 },
   latestImport: { rowCount: 24, status: 'applied' },
   publication: { syncStatus: 'synced', version: 3 },
+  publicContentSyncEnabled: true,
   queue: { failed: 0, pending: 0, processing: 0 },
   reservations: {
     capacity: 40,
@@ -81,6 +82,25 @@ describe('admin operations overview', () => {
       failed: 3,
     });
     expect(JSON.stringify(overview)).not.toContain('lastError');
+  });
+
+  it('reports an existing publication as healthy when public web sync is disabled', () => {
+    const snapshot = healthySnapshot();
+    snapshot.publicContentSyncEnabled = false;
+    snapshot.publication = { syncStatus: 'sync_pending', version: 2 };
+
+    const overview = buildAdminOperationsOverview(
+      eventId,
+      8,
+      generatedAt,
+      snapshot,
+    );
+
+    expect(overview.metrics.find(({ id }) => id === 'content')).toMatchObject({
+      value: 'Verze 2',
+      state: 'healthy',
+      detail: 'Publikovaná verze je dostupná v aplikaci.',
+    });
   });
 
   it('localizes intermediate import and empty activation states', () => {

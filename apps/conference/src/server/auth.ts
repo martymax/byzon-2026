@@ -57,9 +57,10 @@ export const createAuth = (
         rateLimit: { window: 60, max: options.magicLinkRateLimitMax ?? 5 },
         sendMagicLink: ({ email, url, metadata }) => {
           const invitation =
-            metadata?.purpose === 'participant-invitation'
+            metadata?.purpose === 'participant-invitation' ||
+            metadata?.purpose === 'team-invitation'
               ? {
-                  purpose: 'participant-invitation' as const,
+                  purpose: metadata.purpose,
                   ...(typeof metadata.recipientName === 'string'
                     ? { recipientName: metadata.recipientName.slice(0, 257) }
                     : {}),

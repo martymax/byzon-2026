@@ -128,6 +128,34 @@ describe('admin overview dashboard', () => {
       .toBeVisible();
   });
 
+  it('does not ask for a content review when a publication is available in the app', async () => {
+    const operations: AdminOperationsOverviewResponse = {
+      ...adminOperationsOverviewFixtures.healthy!,
+      metrics: adminOperationsOverviewFixtures.healthy!.metrics.map((metric) =>
+        metric.id === 'content'
+          ? {
+              ...metric,
+              value: 'Verze 2',
+              state: 'healthy',
+              detail: 'Publikovaná verze je dostupná v aplikaci.',
+            }
+          : metric,
+      ),
+    };
+    const screen = await renderOverview({ operations });
+
+    await expect.element(screen.getByText('Verze 2')).toBeVisible();
+    await expect
+      .element(screen.getByText('Publikovaná verze je dostupná v aplikaci.'))
+      .toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Zkontrolovat obsah' }),
+    ).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(
+      'Publikovaná verze čeká na dokončení synchronizace.',
+    );
+  });
+
   it('keeps permission and feature fallbacks non-actionable', async () => {
     const context: AdminContextResponse = {
       ...adminContextFixtures.organizer!,

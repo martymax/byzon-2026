@@ -5,7 +5,7 @@ import { readConferenceEnv } from '@byzon/config';
 export interface MagicLinkMessage {
   to: string;
   url: string;
-  purpose?: 'sign-in' | 'participant-invitation';
+  purpose?: 'sign-in' | 'participant-invitation' | 'team-invitation';
   recipientName?: string;
 }
 
@@ -64,6 +64,19 @@ const escapeHtml = (value: string): string =>
     .replaceAll("'", '&#39;');
 
 const createMagicLinkContent = (message: MagicLinkMessage) => {
+  if (message.purpose === 'team-invitation') {
+    const greeting = message.recipientName?.trim()
+      ? `Dobrý den, ${message.recipientName.trim()},\n\n`
+      : 'Dobrý den,\n\n';
+    const htmlGreeting = message.recipientName?.trim()
+      ? `<p>Dobrý den, ${escapeHtml(message.recipientName.trim())},</p>`
+      : '<p>Dobrý den,</p>';
+    return {
+      subject: 'Pozvánka do administrace BYZON 2026',
+      text: `${greeting}organizátor vás zve do týmu BYZON 2026. Administraci otevřete jednorázovým odkazem:\n\n${message.url}\n\nOdkaz platí 5 minut a lze jej použít pouze jednou. Po přihlášení uvidíte pouze funkce odpovídající vašim oprávněním.`,
+      html: `${htmlGreeting}<p>Organizátor vás zve do týmu BYZON 2026.</p><p><a href="${escapeHtml(message.url)}">Otevřít administraci</a></p><p>Odkaz platí 5 minut a lze jej použít pouze jednou. Po přihlášení uvidíte pouze funkce odpovídající vašim oprávněním.</p>`,
+    };
+  }
   if (message.purpose === 'participant-invitation') {
     const greeting = message.recipientName?.trim()
       ? `Dobrý den, ${message.recipientName.trim()},\n\n`

@@ -745,7 +745,7 @@ Každá routa používá v tomto pořadí:
 | `/admin/vstupenky` | Aktualizace vstupenek | Aktualizace vstupenek \| Administrace BYZON | Načíst, zkontrolovat a použít změny       |
 | `/admin/rezervace` | Rezervace a kapacity  | Rezervace a kapacity \| Administrace BYZON  | Vyřešit kapacitní výjimku                 |
 | `/admin/oznameni`  | Oznámení              | Oznámení \| Administrace BYZON              | Poslat kritickou informaci správným lidem |
-| `/admin/role`      | Tým a oprávnění       | Tým a oprávnění \| Administrace BYZON       | Přidělit nebo odebrat omezenou roli       |
+| `/admin/role`      | Tým a oprávnění       | Tým a oprávnění \| Administrace BYZON       | Spravovat členy, pozvánky a oprávnění     |
 | `/admin/reporty`   | Reporty               | Reporty \| Administrace BYZON               | Připravit a stáhnout report               |
 | `/admin/audit`     | Historie změn         | Historie změn \| Administrace BYZON         | Dohledat kdo, kdy a co změnil             |
 | `/admin/nastaveni` | Nastavení akce        | Nastavení akce \| Administrace BYZON        | Bezpečně změnit provozní pravidla         |
@@ -1116,15 +1116,30 @@ neúplnými či ručně zadanými daty.
 
 ### 10.7 Tým a oprávnění — `/admin/role`
 
-**Uživatelský výsledek:** vybrat člověka, srozumitelnou roli a konkrétní oblast,
-potom oprávnění později bezpečně odebrat.
+**Uživatelský výsledek:** spravovat členy organizačního týmu včetně jejich
+identity, pozvánek, administrátorského přístupu a omezených provozních rolí.
 
-**Seznam**
+**Členové týmu**
 
-- Sloupce: Člen týmu, Role, Oblast, Stav, Platnost/začátek pokud existuje, Akce.
+- Sloupce: člen, e-mail, role, stav přijetí pozvánky a akce.
+- Filtry: jméno/e-mail a stav pozvánky; PII zůstává pouze v paměti a neukládá se
+  do URL ani browser persistence.
+- Primární CTA: „Přidat člena“ otevře modal pro jméno, e-mail, počáteční roli,
+  důvod změny a volitelné okamžité odeslání pozvánky.
+- Řádkové akce: „Upravit“, „Poslat pozvánku“ / „Poslat znovu“ a „Odebrat“.
+- Úprava i odebrání probíhají v modalu. Odebrání ruší pouze eventové členství,
+  role a aktivní relace; globální identita se nemaže.
+- Změna e-mailu ruší jeho ověření a aktivní relace. Další přístup vyžaduje nový
+  jednorázový odkaz.
+- Pozvánkový endpoint odkaz pouze odešle e-mailem a nikdy jej nevrací klientovi.
+- Vlastní přístup ani posledního administrátora nelze odebrat. Ochranu rozhoduje
+  server a změny mají povinný důvod a auditní záznam.
+
+**Provozní oprávnění**
+
+- Sloupce: Člen týmu, Role, Oblast, Stav a Akce.
 - Filtry: role, stav, aktivita/stanice.
-- Primární CTA: „Přiřadit roli“; flow vybírá existující osobu, nevytváří ani
-  nezve nového člena.
+- CTA „Přiřadit roli“ vybírá existujícího aktivního člena a konkrétní oblast.
 - Empty: „Nikdo zatím nemá přidělenou provozní roli.“
 
 **Přiřazení role**
@@ -1139,10 +1154,10 @@ potom oprávnění později bezpečně odebrat.
    podle povoleného typu role.
 4. Zkontrolovat shrnutí a přidat důvod změny.
 
-`organizer_admin` není součástí současného grant kontraktu a nesmí se tiše
-přidat do formuláře. Odebírání používá row action „Odebrat oprávnění“ a danger
-potvrzení. Pokud server vrátí explicitní self-lockout nebo last-administrator
-problem branch, UI jej přeloží do lidské chyby; klient tuto podmínku neodhaduje.
+`organizer_admin` se přiděluje pouze přes přidání nebo detail člena. Odebírání
+provozní role používá row action „Odebrat oprávnění“ a danger potvrzení. Pokud
+server vrátí explicitní self-lockout nebo last-administrator problem branch, UI
+jej přeloží do lidské chyby; klient tuto podmínku neodhaduje.
 
 Strict list/search/scope-options kontrakt je uzavřený v `AUX-09A`; produkční
 endpointy a napojení dokončuje `AUX-13H`. Seznam je bounded keyset read,

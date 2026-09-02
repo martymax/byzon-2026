@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   adminContentBodyFromForm,
   localInputValue,
+  programTimeRangeLabel,
   zonedLocalToIso,
 } from './admin-content-console';
 
@@ -29,6 +30,19 @@ const formData = (
 };
 
 describe('admin event timezone conversion', () => {
+  it('formats a compact event-local program time range', () => {
+    expect(
+      programTimeRangeLabel(
+        '2026-09-18T07:00:00.000Z',
+        '2026-09-18T08:00:00.000Z',
+        'Europe/Prague',
+      ),
+    ).toBe('9:00–10:00');
+    expect(programTimeRangeLabel(null, null, 'Europe/Prague')).toBe(
+      'Čas neurčen',
+    );
+  });
+
   it('uses the named timezone daylight-saving offset', () => {
     expect(zonedLocalToIso('2026-01-15T10:00', 'Europe/Prague')).toBe(
       '2026-01-15T09:00:00.000Z',

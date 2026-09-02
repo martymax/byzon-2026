@@ -100,8 +100,18 @@ interface PreparedSession {
   type: 'break' | 'coaching' | 'mastermind' | 'meal' | 'other' | 'workshop';
   capacityMode: 'none' | 'reservation';
   capacity: number | null;
+  roomSlug: string;
   sortOrder: number;
   speakerSlugs: string[];
+}
+
+interface PreparedRoom {
+  sourceName: string;
+  sourceSha256: string;
+  sourcePath: string;
+  slug: string;
+  name: string;
+  sortOrder: number;
 }
 
 const SOURCE_NAME = 'static-site/data/content.json';
@@ -494,6 +504,7 @@ export async function importContentJson(options: {
     assetsByPath.set(path, await prepareAsset(options.repositoryRoot, path));
 
   const preparedSessions: PreparedSession[] = [];
+  const preparedRooms = new Map<string, PreparedRoom>();
   const replacedCoachingSourcePaths = new Set<string>();
   const matchedReservationPolicies = new Set<string>();
   const speakerSlugByName = new Map(
@@ -507,13 +518,18 @@ export async function importContentJson(options: {
         `unrecognized event date at program.days[${dayIndex}].date: ${day.date}`,
       );
     day.stages.forEach((stage, stageIndex) => {
-      addFinding(
-        findings,
-        'unmapped_field',
-        `program.days[${dayIndex}].stages[${stageIndex}].name`,
-        'Program section was preserved in provenance but not guessed to be a physical room.',
-        stage.name,
-      );
+      const stagePath = `program.days[${dayIndex}].stages[${stageIndex}]`;
+      const roomSlug = slugify(stage.name);
+      if (!preparedRooms.has(roomSlug)) {
+        preparedRooms.set(roomSlug, {
+          sourceName: SOURCE_NAME,
+          sourceSha256,
+          sourcePath: stagePath,
+          slug: roomSlug,
+          name: stage.name,
+          sortOrder: preparedRooms.size,
+        });
+      }
       stage.events.forEach((event, eventIndex) => {
         const path = `program.days[${dayIndex}].stages[${stageIndex}].events[${eventIndex}]`;
         if (
@@ -598,6 +614,7 @@ export async function importContentJson(options: {
           type,
           capacityMode: reservationPolicy ? 'reservation' : 'none',
           capacity: reservationPolicy?.capacity ?? null,
+          roomSlug,
           sortOrder: stageIndex * 100 + eventIndex,
           speakerSlugs: [...speakerSlugs],
         });
@@ -626,6 +643,17 @@ export async function importContentJson(options: {
     if (!range) {
       throw new Error(`invalid reconciled coaching slot: ${slot.time}`);
     }
+    const roomSlug = `koucovaci-zona-${slot.coachKey}`;
+    if (!preparedRooms.has(roomSlug)) {
+      preparedRooms.set(roomSlug, {
+        sourceName: coachingSchedule.sourceName,
+        sourceSha256: coachingSchedule.sourceSha256,
+        sourcePath: `${coachingSchedule.sourceName}#room-${slot.coachKey}`,
+        slug: roomSlug,
+        name: `Koučovací zóna · ${slot.coachName}`,
+        sortOrder: preparedRooms.size,
+      });
+    }
     preparedSessions.push({
       sourceName: coachingSchedule.sourceName,
       sourceSha256: coachingSchedule.sourceSha256,
@@ -639,6 +667,7 @@ export async function importContentJson(options: {
       type: 'coaching',
       capacityMode: 'reservation',
       capacity: coachingSchedule.capacity,
+      roomSlug,
       sortOrder: slot.sortOrder,
       speakerSlugs: [],
     });
@@ -700,6 +729,7 @@ export async function importContentJson(options: {
     speakers: source.speakers.list.length,
     partners: source.partners.logos.length,
     venues: 1,
+    rooms: preparedRooms.size,
     contentPages: 1,
     eventDays: source.program.days.length,
     sessions: preparedSessions.length,
@@ -749,7 +779,30 @@ export async function importContentJson(options: {
           ),
         ),
       });
-    if (unchangedImport && unchangedCoachingImport) return;
+    const roomProvenance =
+      await transaction.query.contentImportProvenance.findMany({
+        columns: {
+          sourceName: true,
+          sourcePath: true,
+          sourceSha256: true,
+        },
+        where: and(
+          eq(schema.contentImportProvenance.eventId, eventId),
+          eq(schema.contentImportProvenance.targetType, 'room'),
+        ),
+      });
+    const importedRooms = new Set(
+      roomProvenance.map(
+        ({ sourceName, sourcePath, sourceSha256 }) =>
+          `${sourceName}\u0000${sourcePath}\u0000${sourceSha256}`,
+      ),
+    );
+    const roomsUnchanged = [...preparedRooms.values()].every((room) =>
+      importedRooms.has(
+        `${room.sourceName}\u0000${room.sourcePath}\u0000${room.sourceSha256}`,
+      ),
+    );
+    if (unchangedImport && unchangedCoachingImport && roomsUnchanged) return;
     await acquireTransactionLock(transaction, `content-publish:${eventId}`);
 
     await archiveLegacyCoachingSessions(
@@ -916,6 +969,52 @@ export async function importContentJson(options: {
       venueId,
     );
 
+    const roomIds = new Map<string, string>();
+    for (const room of preparedRooms.values()) {
+      const existing = await transaction.query.rooms.findFirst({
+        where: and(
+          eq(schema.rooms.eventId, eventId),
+          eq(schema.rooms.slug, room.slug),
+        ),
+      });
+      if (existing && existing.status !== 'draft') {
+        throw new Error(`refusing to overwrite non-draft room: ${room.slug}`);
+      }
+      const id = existing?.id ?? generateUuidV7();
+      await transaction
+        .insert(schema.rooms)
+        .values({
+          id,
+          eventId,
+          venueId,
+          slug: room.slug,
+          name: room.name,
+          description: 'Programová stage nebo sekce veřejného programu.',
+          status: 'draft',
+          sortOrder: room.sortOrder,
+        })
+        .onConflictDoUpdate({
+          target: [schema.rooms.eventId, schema.rooms.slug],
+          set: {
+            venueId,
+            name: room.name,
+            description: 'Programová stage nebo sekce veřejného programu.',
+            sortOrder: room.sortOrder,
+            updatedAt: new Date(),
+          },
+        });
+      await upsertProvenance(
+        transaction,
+        eventId,
+        room.sourcePath,
+        room.sourceSha256,
+        'room',
+        id,
+        room.sourceName,
+      );
+      roomIds.set(room.slug, id);
+    }
+
     const pageSlug = 'misto-a-doprava';
     const existingPage = await transaction.query.contentPages.findFirst({
       where: and(
@@ -1030,7 +1129,7 @@ export async function importContentJson(options: {
           id,
           eventId,
           dayId: dayIds.get(session.dayPath)!,
-          roomId: null,
+          roomId: roomIds.get(session.roomSlug)!,
           slug: session.slug,
           title: session.title,
           summary: session.summary,
@@ -1053,7 +1152,7 @@ export async function importContentJson(options: {
           // and a moved session cutoff are synchronized by repeat imports.
           set: {
             dayId: dayIds.get(session.dayPath)!,
-            roomId: null,
+            roomId: roomIds.get(session.roomSlug)!,
             title: session.title,
             summary: session.summary,
             type: session.type,

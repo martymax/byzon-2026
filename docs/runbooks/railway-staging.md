@@ -44,7 +44,8 @@ nesmí spustit.
 1. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
    sledují větev `main`.
 2. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
-   migraci spustí idempotentní seed. Worker migrace nespouští.
+   migraci spustí idempotentní seed a import kanonického obsahu z
+   `static-site/data/content.json`. Worker migrace nespouští.
 3. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
    Redis. Produkční a staging data ani credentials se nesmí sdílet.
 4. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
@@ -159,8 +160,9 @@ opakované spuštění je no-op a role grant se auditovaně zapisuje bez e-mailu
   a worker. Veřejné databázové URL nepatří do aplikace ani logů.
 - Redis zůstává `noeviction`. Výpadek nesmí poškodit PostgreSQL; readiness
   jej smí hlásit jako degradaci, chráněné mutace failují podle své politiky.
-- Staging seed je idempotentní. Produkční osobní data se do stagingu
-  nekopírují.
+- Staging seed i import obsahu jsou idempotentní. Import zapisuje pouze draft a
+  zveřejnění nové verze zůstává samostatným auditovaným krokem organizátora.
+  Produkční osobní data se do stagingu nekopírují.
 
 ## Ověření releasu
 

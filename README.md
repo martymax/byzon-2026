@@ -18,16 +18,20 @@ pnpm preview:static      # poté otevři http://localhost:8000/
 
 Veškerý obsah je v jednom souboru:
 [`static-site/data/content.json`](./static-site/data/content.json).
+Program a profily řečníků z tohoto souboru používá také konferenční
+aplikace. Databázové tabulky na stagingu jsou pouze odvozená provozní projekce;
+nejsou druhým místem pro ruční úpravu těchto dat.
+
 Po úpravě znovu vygeneruj stránky:
 
 ```bash
 pnpm build:static
 ```
 
-Generátor aktuálně sestaví 24 stránek (homepage, program, minulé ročníky,
-vstupenky, partneři, 17 detailů řečníků a 2 právní stránky) ze sdílených
-komponent v [`static-site/build.py`](./static-site/build.py); navíc vytváří 404,
-sitemapu a robots.txt.
+Generátor aktuálně sestaví 44 obsahových stránek (homepage, program, minulé
+ročníky, vstupenky, partnery, 24 detailů řečníků a 2 právní stránky) ze
+sdílených komponent v [`static-site/build.py`](./static-site/build.py); navíc
+vytváří 404, sitemapu a robots.txt.
 
 ## Nasazení na FTP
 
@@ -105,6 +109,12 @@ Railway staging postup je v `docs/runbooks/railway-staging.md`.
 Aktuální staging běží na
 <https://byzonconference-staging.up.railway.app>; cílové `app.byzon.cz` bude
 připojené přes Cloudflare.
+
+Stagingový deploy po migracích a seedu idempotentně importuje program a
+řečníky z `static-site/data/content.json`. Změna zdrojového JSONu nebo jeho
+lokálních assetů proto spustí webový deploy. Import připraví draft; novou
+verzi pro účastnickou aplikaci pak organizátor zveřejní přes auditovaný publish
+flow v administraci.
 
 Admin preview účastníků používá výhradně serverové SimpleShop API credentials
 `SIMPLESHOP_API_EMAIL` a `SIMPLESHOP_API_KEY`. Organizátor spouští bounded

@@ -23,6 +23,8 @@ export type AdminContentResource = (typeof adminContentResources)[number];
 
 export interface AdminContentItem {
   readonly id: string;
+  readonly publicationState?:
+    'archived' | 'published' | 'unpublished' | undefined;
   readonly version?: number;
   readonly [key: string]: unknown;
 }
@@ -123,6 +125,7 @@ export interface AdminContentPort {
 const itemIdentity = {
   eventId: z.string().uuid(),
   id: z.string().uuid(),
+  publicationState: z.enum(['archived', 'published', 'unpublished']).optional(),
   sortOrder: z.number().int().nonnegative(),
 } as const;
 const versionedItemBase = {

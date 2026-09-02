@@ -31,6 +31,8 @@ import {
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
+import { AdminModal } from './admin-modal';
+import { AdminTeamMembers } from './admin-team-members';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -182,6 +184,9 @@ export const AdminTeamRedesign = ({
     AdminAssignmentScope['kind'] | 'all'
   >('all');
   const [formOpen, setFormOpen] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<AdminRoleAssignment | null>(
+    null,
+  );
   const [personQuery, setPersonQuery] = useState('');
   const [people, setPeople] = useState<readonly AdminRolePerson[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<AdminRolePerson | null>(
@@ -295,6 +300,15 @@ export const AdminTeamRedesign = ({
     reason,
   });
   const grantInvalid = attempted && !grantCandidate.success;
+  const revokeCandidate =
+    assignments && revokeTarget
+      ? adminRoleAssignmentMutationRequestSchema.safeParse({
+          action: 'revoke',
+          assignmentId: revokeTarget.assignmentId,
+          expectedVersion: assignments.assignmentsVersion,
+          reason,
+        })
+      : null;
 
   const search = async () => {
     setAttempted(false);
@@ -380,19 +394,47 @@ export const AdminTeamRedesign = ({
     setAmbiguous(false);
   };
 
-  const prepareRevoke = (assignment: AdminRoleAssignment) => {
-    if (!assignments) return;
-    const body = adminRoleAssignmentMutationRequestSchema.parse({
-      action: 'revoke',
-      assignmentId: assignment.assignmentId,
-      expectedVersion: assignments.assignmentsVersion,
-      reason,
-    });
+  const prepareRevoke = () => {
+    setAttempted(true);
+    if (!revokeCandidate?.success) return;
     setPending({
-      body,
+      body: revokeCandidate.data,
       idempotencyKey: createAdminIdempotencyKey('role-assignment'),
     });
     setConfirming(true);
+    setAmbiguous(false);
+  };
+
+  const openRevokeEditor = (assignment: AdminRoleAssignment) => {
+    setFormOpen(false);
+    setRevokeTarget(assignment);
+    setReason('');
+    setAttempted(false);
+    setPending(null);
+    setAmbiguous(false);
+    setError(null);
+  };
+
+  const closeRoleEditor = () => {
+    const hasDraft = Boolean(
+      reason.trim() || personQuery.trim() || selectedPerson,
+    );
+    if (
+      hasDraft &&
+      !window.confirm(
+        'Opravdu chcete editor zavřít? Neuložené změny se zahodí.',
+      )
+    ) {
+      return;
+    }
+    setFormOpen(false);
+    setRevokeTarget(null);
+    setPersonQuery('');
+    setPeople([]);
+    setSelectedPerson(null);
+    setReason('');
+    setAttempted(false);
+    setPending(null);
     setAmbiguous(false);
   };
 
@@ -418,6 +460,7 @@ export const AdminTeamRedesign = ({
         setPeople([]);
         setScopes([]);
         setSelectedPerson(null);
+        setRevokeTarget(null);
         setReason('');
         setPending(null);
         invalidateSensitive(
@@ -428,6 +471,9 @@ export const AdminTeamRedesign = ({
       if (isStaleAdminFailure(result.failure)) {
         setPending(null);
         setAmbiguous(false);
+        setFormOpen(false);
+        setRevokeTarget(null);
+        setReason('');
         setRecoveryMessage(
           'Oprávnění se mezitím změnila. Načetli jsme aktuální seznam; změnu připravte znovu.',
         );
@@ -458,6 +504,7 @@ export const AdminTeamRedesign = ({
       setReason('');
       setAttempted(false);
       setFormOpen(false);
+      setRevokeTarget(null);
       setSelectedPerson(null);
       setPeople([]);
       setBusy('list');
@@ -470,12 +517,12 @@ export const AdminTeamRedesign = ({
       <header className={styles.pageHeader}>
         <h1>Tým a oprávnění</h1>
         <p>
-          Spravujte omezené provozní role existujících členů týmu a vždy
-          zkontrolujte jejich konkrétní rozsah.
+          Přidávejte a upravujte členy týmu, posílejte jim pozvánky a nastavujte
+          administrátorské i omezené provozní role.
         </p>
       </header>
 
-      {error ? (
+      {error && !formOpen && !revokeTarget ? (
         <AdminFormErrorSummary
           descriptionId="admin-team-error"
           heading="Změnu oprávnění nelze dokončit"
@@ -501,22 +548,40 @@ export const AdminTeamRedesign = ({
 
       {canManage ? (
         <>
+          {dataPort === undefined ? (
+            <AdminTeamMembers
+              onChanged={() => {
+                setBusy('list');
+                setReload((value) => value + 1);
+              }}
+            />
+          ) : null}
           <section className={styles.panel} aria-labelledby="team-list-title">
             <div className={styles.panelHeader}>
               <div>
-                <h2 id="team-list-title">Provozní role</h2>
+                <h2 id="team-list-title">Provozní oprávnění</h2>
                 <p className={styles.muted}>
-                  Administrátorská role se na této stránce nepřiděluje.
+                  Přidělte členům omezené role jen pro konkrétní stanoviště nebo
+                  bod programu. Administrátorský přístup upravíte v detailu
+                  člena výše.
                 </p>
               </div>
               {canGrant ? (
                 <button
                   className={styles.button}
                   onClick={() => {
+                    setRevokeTarget(null);
                     setFormOpen(true);
                     setBusy('scopes');
                     setScopes([]);
                     setSelectedScopeId('');
+                    setPersonQuery('');
+                    setPeople([]);
+                    setSelectedPerson(null);
+                    setReason('');
+                    setAttempted(false);
+                    setPending(null);
+                    setAmbiguous(false);
                   }}
                   type="button"
                 >
@@ -613,8 +678,7 @@ export const AdminTeamRedesign = ({
                             {canRevoke ? (
                               <button
                                 className={styles.dangerButton}
-                                disabled={reason.trim().length < 8}
-                                onClick={() => prepareRevoke(assignment)}
+                                onClick={() => openRevokeEditor(assignment)}
                                 type="button"
                               >
                                 Odebrat oprávnění
@@ -646,8 +710,7 @@ export const AdminTeamRedesign = ({
                         {canRevoke ? (
                           <button
                             className={styles.dangerButton}
-                            disabled={reason.trim().length < 8}
-                            onClick={() => prepareRevoke(assignment)}
+                            onClick={() => openRevokeEditor(assignment)}
                             type="button"
                           >
                             Odebrat oprávnění
@@ -673,144 +736,255 @@ export const AdminTeamRedesign = ({
             ) : null}
           </section>
 
-          {canRevoke || canGrant ? (
-            <label className={styles.field}>
-              <span>Důvod změny oprávnění</span>
-              <textarea
-                disabled={pending !== null}
-                onChange={(event) => setReason(event.target.value)}
-                value={reason}
-              />
-              <span className={styles.helper}>
-                Důvod se uloží do historie změn. Je potřeba i pro odebrání.
-              </span>
-            </label>
-          ) : null}
-
-          {formOpen && canGrant ? (
-            <section
-              className={styles.panel}
-              aria-labelledby="team-grant-title"
+          {formOpen && canGrant && !confirming ? (
+            <AdminModal
+              dismissDisabled={busy === 'mutation'}
+              labelledBy="team-grant-title"
+              onDismiss={closeRoleEditor}
+              size="wide"
             >
-              <div className={styles.panelHeader}>
-                <h2 id="team-grant-title">Přiřadit provozní roli</h2>
+              <div className={styles.dialogHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Nové oprávnění</p>
+                  <h2 id="team-grant-title" tabIndex={-1}>
+                    Přiřadit provozní roli
+                  </h2>
+                </div>
                 <button
                   className={styles.secondaryButton}
-                  onClick={() => setFormOpen(false)}
+                  disabled={busy === 'mutation'}
+                  onClick={closeRoleEditor}
                   type="button"
                 >
                   Zavřít
                 </button>
               </div>
-              {grantInvalid ? (
-                <AdminFormErrorSummary
-                  descriptionId="admin-team-grant-error"
-                  heading="Přiřazení role zatím nelze potvrdit"
-                  message="Vyberte existující osobu, roli, povolený rozsah a doplňte důvod změny."
-                />
-              ) : null}
-              <div className={styles.actionRow}>
-                <label className={styles.field}>
-                  <span>Jméno nebo ověřený kontakt</span>
-                  <input
-                    autoComplete="off"
-                    onChange={(event) => setPersonQuery(event.target.value)}
-                    value={personQuery}
+              <div className={styles.dialogBody}>
+                {error ? (
+                  <AdminFormErrorSummary
+                    descriptionId="admin-team-grant-dialog-error"
+                    heading="Změnu oprávnění nelze dokončit"
+                    message={error}
                   />
-                </label>
-                <button
-                  className={styles.secondaryButton}
-                  disabled={busy !== null}
-                  onClick={() => void search()}
-                  type="button"
-                >
-                  Vyhledat osobu
-                </button>
-              </div>
-              {people.length === 0 &&
-              personQuery.trim().length >= 2 &&
-              busy !== 'search' ? (
-                <p className={styles.empty}>
-                  Žádná existující osoba neodpovídá hledání.
-                </p>
-              ) : (
-                <div className={styles.summaryGrid}>
-                  {people.map((person) => (
-                    <label className={styles.dataCard} key={person.operatorId}>
-                      <input
-                        checked={
-                          selectedPerson?.operatorId === person.operatorId
-                        }
-                        name="team-person"
-                        onChange={() => setSelectedPerson(person)}
-                        type="radio"
-                      />
-                      <strong>{person.displayName}</strong>
-                      <span>{person.maskedVerifiedContact}</span>
-                    </label>
-                  ))}
+                ) : null}
+                {grantInvalid ? (
+                  <AdminFormErrorSummary
+                    descriptionId="admin-team-grant-error"
+                    heading="Přiřazení role zatím nelze potvrdit"
+                    message="Vyberte existující osobu, roli, povolený rozsah a doplňte důvod změny."
+                  />
+                ) : null}
+                <div className={styles.actionRow}>
+                  <label className={styles.field}>
+                    <span>Jméno nebo ověřený kontakt</span>
+                    <input
+                      autoComplete="off"
+                      data-modal-initial-focus="true"
+                      onChange={(event) => setPersonQuery(event.target.value)}
+                      value={personQuery}
+                    />
+                  </label>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={busy !== null}
+                    onClick={() => void search()}
+                    type="button"
+                  >
+                    Vyhledat osobu
+                  </button>
                 </div>
-              )}
-              <fieldset className={styles.fieldset}>
-                <legend>Role a její dopad</legend>
-                <div className={styles.summaryGrid}>
-                  {(Object.keys(roleLabels) as AdminAssignmentRole[]).map(
-                    (option) => (
-                      <label className={styles.dataCard} key={option}>
+                {people.length === 0 &&
+                personQuery.trim().length >= 2 &&
+                busy !== 'search' ? (
+                  <p className={styles.empty}>
+                    Žádná existující osoba neodpovídá hledání.
+                  </p>
+                ) : (
+                  <div className={styles.summaryGrid}>
+                    {people.map((person) => (
+                      <label
+                        className={styles.dataCard}
+                        key={person.operatorId}
+                      >
                         <input
-                          checked={role === option}
-                          name="team-role"
-                          onChange={() => {
-                            setBusy('scopes');
-                            setScopes([]);
-                            setSelectedScopeId('');
-                            setRole(option);
-                          }}
+                          checked={
+                            selectedPerson?.operatorId === person.operatorId
+                          }
+                          name="team-person"
+                          onChange={() => setSelectedPerson(person)}
                           type="radio"
                         />
-                        <strong>{roleLabels[option]}</strong>
-                        <span>{roleDescriptions[option]}</span>
+                        <strong>{person.displayName}</strong>
+                        <span>{person.maskedVerifiedContact}</span>
                       </label>
-                    ),
-                  )}
+                    ))}
+                  </div>
+                )}
+                <fieldset className={styles.fieldset}>
+                  <legend>Role a její dopad</legend>
+                  <div className={styles.summaryGrid}>
+                    {(Object.keys(roleLabels) as AdminAssignmentRole[]).map(
+                      (option) => (
+                        <label className={styles.dataCard} key={option}>
+                          <input
+                            checked={role === option}
+                            name="team-role"
+                            onChange={() => {
+                              setBusy('scopes');
+                              setScopes([]);
+                              setSelectedScopeId('');
+                              setRole(option);
+                            }}
+                            type="radio"
+                          />
+                          <strong>{roleLabels[option]}</strong>
+                          <span>{roleDescriptions[option]}</span>
+                        </label>
+                      ),
+                    )}
+                  </div>
+                </fieldset>
+                <label className={styles.field}>
+                  <span>Povolený rozsah</span>
+                  <select
+                    disabled={busy === 'scopes' || scopes.length === 0}
+                    onChange={(event) => setSelectedScopeId(event.target.value)}
+                    value={selectedScopeId}
+                  >
+                    {scopes.map((scope) => (
+                      <option key={scopeId(scope)} value={scopeId(scope)}>
+                        {scope.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.field}>
+                  <span>Důvod změny oprávnění</span>
+                  <textarea
+                    disabled={pending !== null}
+                    onChange={(event) => setReason(event.target.value)}
+                    value={reason}
+                  />
+                  <span className={styles.helper}>
+                    Důvod se uloží do historie změn.
+                  </span>
+                </label>
+                {ambiguous && pending ? (
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={busy !== null}
+                    onClick={() => void execute(pending)}
+                    type="button"
+                  >
+                    Zopakovat přesně stejný pokus
+                  </button>
+                ) : null}
+                <div className={styles.dialogActions}>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={busy === 'mutation'}
+                    onClick={closeRoleEditor}
+                    type="button"
+                  >
+                    Zrušit a zavřít
+                  </button>
+                  <button
+                    className={styles.button}
+                    disabled={busy !== null || pending !== null}
+                    onClick={prepareGrant}
+                    type="button"
+                  >
+                    Zkontrolovat přiřazení
+                  </button>
                 </div>
-              </fieldset>
-              <label className={styles.field}>
-                <span>Povolený rozsah</span>
-                <select
-                  disabled={busy === 'scopes' || scopes.length === 0}
-                  onChange={(event) => setSelectedScopeId(event.target.value)}
-                  value={selectedScopeId}
-                >
-                  {scopes.map((scope) => (
-                    <option key={scopeId(scope)} value={scopeId(scope)}>
-                      {scope.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className={styles.button}
-                disabled={busy !== null || pending !== null}
-                onClick={prepareGrant}
-                type="button"
-              >
-                Zkontrolovat přiřazení
-              </button>
-            </section>
+              </div>
+            </AdminModal>
           ) : null}
         </>
       ) : null}
 
-      {ambiguous && pending ? (
-        <button
-          className={styles.secondaryButton}
-          disabled={busy !== null}
-          onClick={() => void execute(pending)}
-          type="button"
+      {revokeTarget && canRevoke && !confirming ? (
+        <AdminModal
+          dismissDisabled={busy === 'mutation'}
+          labelledBy="team-revoke-title"
+          onDismiss={closeRoleEditor}
         >
-          Zopakovat přesně stejný pokus
-        </button>
+          <div className={styles.dialogHeader}>
+            <div>
+              <p className={styles.eyebrow}>Úprava oprávnění</p>
+              <h2 id="team-revoke-title" tabIndex={-1}>
+                Odebrat provozní roli
+              </h2>
+            </div>
+            <button
+              className={styles.secondaryButton}
+              disabled={busy === 'mutation'}
+              onClick={closeRoleEditor}
+              type="button"
+            >
+              Zavřít
+            </button>
+          </div>
+          <div className={styles.dialogBody}>
+            {error ? (
+              <AdminFormErrorSummary
+                descriptionId="admin-team-revoke-dialog-error"
+                heading="Změnu oprávnění nelze dokončit"
+                message={error}
+              />
+            ) : null}
+            <p>
+              <strong>{revokeTarget.operatorLabel}</strong> ·{' '}
+              {roleLabels[revokeTarget.role]} · {revokeTarget.scope.label}
+            </p>
+            <label className={styles.field}>
+              <span>Důvod změny oprávnění</span>
+              <textarea
+                aria-invalid={attempted && !revokeCandidate?.success}
+                data-modal-initial-focus="true"
+                disabled={pending !== null}
+                onChange={(event) => setReason(event.target.value)}
+                value={reason}
+              />
+              <span className={styles.helper}>
+                Důvod se uloží do historie změn a musí mít alespoň 8 znaků.
+              </span>
+            </label>
+            {attempted && !revokeCandidate?.success ? (
+              <p className={styles.errorSummary} role="alert">
+                Doplňte důvod odebrání o alespoň 8 znaků.
+              </p>
+            ) : null}
+            {ambiguous && pending ? (
+              <button
+                className={styles.secondaryButton}
+                disabled={busy !== null}
+                onClick={() => void execute(pending)}
+                type="button"
+              >
+                Zopakovat přesně stejný pokus
+              </button>
+            ) : null}
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.secondaryButton}
+                disabled={busy === 'mutation'}
+                onClick={closeRoleEditor}
+                type="button"
+              >
+                Zrušit a zavřít
+              </button>
+              <button
+                className={styles.dangerButton}
+                disabled={busy !== null || pending !== null}
+                onClick={prepareRevoke}
+                type="button"
+              >
+                Zkontrolovat odebrání
+              </button>
+            </div>
+          </div>
+        </AdminModal>
       ) : null}
 
       {confirming && pending ? (

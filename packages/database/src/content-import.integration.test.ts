@@ -54,6 +54,9 @@ integration('content import integration', () => {
       .delete(schema.contentPages)
       .where(eq(schema.contentPages.eventId, eventId));
     await client.db
+      .delete(schema.rooms)
+      .where(eq(schema.rooms.eventId, eventId));
+    await client.db
       .delete(schema.speakerProfiles)
       .where(eq(schema.speakerProfiles.eventId, eventId));
     await client.db
@@ -309,6 +312,10 @@ integration('content import integration', () => {
           ne(schema.programSessions.status, 'archived'),
         ),
       );
+    const importedRooms = await client.db
+      .select({ id: schema.rooms.id, name: schema.rooms.name })
+      .from(schema.rooms)
+      .where(eq(schema.rooms.eventId, eventId));
     const archivedCoaching = await client.db
       .select({ id: schema.programSessions.id })
       .from(schema.programSessions)
@@ -336,12 +343,21 @@ integration('content import integration', () => {
       firstSessions.map(({ id }) => id).sort(),
     );
     expect(secondSessions).toHaveLength(82);
+    expect(importedRooms).toHaveLength(9);
+    expect(importedRooms.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        'BYZON Stage',
+        'Leadership Stage',
+        'Koučovací zóna · Radim Roček',
+        'Koučovací zóna · Stanislava Maunová',
+      ]),
+    );
     expect(archivedCoaching).toHaveLength(11);
     expect(secondSessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           status: 'draft',
-          roomId: null,
+          roomId: expect.any(String),
           capacityMode: 'none',
         }),
         expect.objectContaining({

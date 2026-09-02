@@ -81,8 +81,10 @@ only draft content, never creates reservations or publications, and refuses to
 overwrite non-draft speakers, partners, venues, pages or sessions. A
 transaction-scoped event lock serializes runs; repeating an unchanged source is
 a no-op. `content_import_provenance` records the source path and complete source
-SHA-256 for every imported target. Program section names remain reported rather
-than being guessed to be physical rooms, and invalid time ranges are skipped.
+SHA-256 for every imported target. Program stage/section labels are imported as
+rooms so sessions retain the source label; the two parallel coaching lanes use
+separate room records to prevent false scheduling conflicts. Invalid time ranges
+are skipped.
 
 The importer also validates
 `packages/database/data/coaching-schedule-2026.json`, a reviewed snapshot of

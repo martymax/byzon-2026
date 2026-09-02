@@ -448,6 +448,12 @@ export const createAdminContentPreviewPort = ({
   let publishedVersion = 0;
   let publishedChecksum: string | null = null;
   let lastPublishedAt: string | null = null;
+  const publishedItemIds = new Set(
+    Object.values(content)
+      .flat()
+      .filter((item) => item.status === 'published')
+      .map((item) => item.id),
+  );
   const significantSessionIds = new Set<string>();
   const pendingChanges = new Map<string, AdminPublicationChange>();
   let preview:
@@ -509,7 +515,15 @@ export const createAdminContentPreviewPort = ({
       if (!parsed.ok) return parsed;
       return success({
         resource,
-        items: parsed.data,
+        items: parsed.data.map((item) => ({
+          ...item,
+          publicationState:
+            item.status === 'archived'
+              ? 'archived'
+              : publishedItemIds.has(item.id)
+                ? 'published'
+                : 'unpublished',
+        })),
         requestId: `preview-content-list-${resource}`,
       });
     },
@@ -789,6 +803,10 @@ export const createAdminContentPreviewPort = ({
       publishedVersion = preview.version;
       publishedChecksum = preview.checksumSha256;
       lastPublishedAt = '2026-07-26T08:05:00.000+02:00';
+      Object.values(content)
+        .flat()
+        .filter((item) => item.status !== 'archived')
+        .forEach((item) => publishedItemIds.add(item.id));
       const result = {
         checksumSha256: preview.checksumSha256,
         publishedAt: lastPublishedAt,

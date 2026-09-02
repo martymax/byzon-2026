@@ -40,6 +40,9 @@ import {
   adminRoleAssignmentListEndpoint,
   adminRolePersonSearchEndpoint,
   adminRoleScopeOptionsEndpoint,
+  adminTeamInvitationEndpoint,
+  adminTeamMemberListEndpoint,
+  adminTeamMemberMutationEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
@@ -57,6 +60,9 @@ import {
   requestAdminRoleAssignments,
   requestAdminRolePeople,
   requestAdminRoleScopes,
+  requestAdminTeamInvitation,
+  requestAdminTeamMemberMutation,
+  requestAdminTeamMembers,
   requestAdminSupportMutation,
   requestAdminSupportSearch,
   requestAdminTicketImportApply,
@@ -77,6 +83,91 @@ const apiReturning = (data: unknown): ApiPort => ({
 });
 
 describe('admin API contract policies', () => {
+  it('keeps team PII in private bodies and sends invitations without returning a raw link', async () => {
+    const memberId = adminFixtureIds.operator;
+    const list = {
+      eventId: adminFixtureIds.event,
+      teamVersion: 1,
+      generatedAt: '2026-09-02T10:00:00Z',
+      members: [
+        {
+          memberId,
+          displayName: 'Patrik Provozní',
+          email: 'patrik@example.test',
+          emailVerified: false,
+          isCurrentActor: false,
+          roles: ['organizer_admin'] as const,
+          invitation: { status: 'not_sent' as const, lastSentAt: null },
+        },
+      ],
+      summary: { total: 1, administrators: 1, awaitingInvitation: 1 },
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(success(list))
+      .mockResolvedValueOnce(
+        success({
+          eventId: adminFixtureIds.event,
+          outcome: 'updated',
+          teamVersion: 2,
+          member: { ...list.members[0], emailVerified: true },
+          changedAt: '2026-09-02T10:01:00Z',
+          audit: { auditId: adminFixtureIds.auditMutation },
+        }),
+      )
+      .mockResolvedValueOnce(
+        success({
+          eventId: adminFixtureIds.event,
+          memberId,
+          outcome: 'sent',
+          sentAt: '2026-09-02T10:02:00Z',
+          invitation: {
+            status: 'accepted',
+            lastSentAt: '2026-09-02T10:02:00Z',
+          },
+          audit: { auditId: adminFixtureIds.auditMutation },
+        }),
+      );
+    const api = { request: request as unknown as ApiPort['request'] };
+
+    await requestAdminTeamMembers(api, adminFixtureIds.event);
+    await requestAdminTeamMemberMutation(
+      api,
+      adminFixtureIds.event,
+      {
+        action: 'update',
+        memberId,
+        displayName: 'Patrik Provozní',
+        email: 'patrik@example.test',
+        administrator: true,
+        expectedVersion: 1,
+        reason: 'Aktualizace člena organizačního týmu.',
+      },
+      'team-member-api-test',
+    );
+    await requestAdminTeamInvitation(
+      api,
+      adminFixtureIds.event,
+      { memberId },
+      'team-invitation-api-test',
+    );
+
+    expect(request.mock.calls.map(([endpoint]) => endpoint)).toEqual([
+      adminTeamMemberListEndpoint,
+      adminTeamMemberMutationEndpoint,
+      adminTeamInvitationEndpoint,
+    ]);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/team-members`,
+      cache: 'no-store',
+    });
+    expect(request.mock.calls[2]?.[1]).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/team-members/${memberId}/invite`,
+      body: { memberId },
+    });
+    expect(JSON.stringify(request.mock.calls)).not.toContain('invitationUrl');
+  });
+
   it('keeps private reads retry-safe and every side-effecting mutation never-retry', () => {
     expect(adminContextEndpoint).toMatchObject({
       method: 'GET',
