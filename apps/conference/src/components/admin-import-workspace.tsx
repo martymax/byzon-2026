@@ -206,6 +206,18 @@ export const AdminImportWorkspace = ({
       ),
     [filteredRows, pageIndex],
   );
+  const displayRows = useMemo(
+    () =>
+      visibleRows.map((row) => ({
+        companyPosition: companyAndPosition(row),
+        issueMessage:
+          row.issues.map(({ message }) => message).join('; ') || 'Bez problému',
+        orderSummary: orderTicketSummary(row),
+        purchaseDate: formatPurchaseDate(row.purchasedOn),
+        row,
+      })),
+    [visibleRows],
+  );
   const firstVisibleRow =
     filteredRows.length === 0 ? 0 : pageIndex * importPageSize + 1;
   const lastVisibleRow = Math.min(
@@ -592,124 +604,132 @@ export const AdminImportWorkspace = ({
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row) => (
-                  <tr key={row.rowId}>
-                    <td className={styles.referenceCell}>
-                      <span>
-                        #{row.sourceRowNumber} · •{row.referenceSuffix}
-                      </span>
-                      <small>Vstupenka {row.sourceTicketId}</small>
-                      <small>Doklad {row.sourceOrderId}</small>
-                      <small>{orderTicketSummary(row)}</small>
-                    </td>
-                    <td className={styles.identityCell}>
-                      <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
-                      <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
-                      <small>{identitySourceLabels[row.identitySource]}</small>
-                      {companyAndPosition(row) ? (
-                        <small>{companyAndPosition(row)}</small>
-                      ) : null}
-                      {row.contactPhone ? (
-                        <small>{row.contactPhone}</small>
-                      ) : null}
-                    </td>
-                    <td className={styles.purchaseCell}>
-                      <time dateTime={row.purchasedOn}>
-                        {formatPurchaseDate(row.purchasedOn)}
-                      </time>
-                      <small>
-                        {row.discountCoupon
-                          ? `Kupón ${row.discountCoupon}`
-                          : 'Bez slevového kupónu'}
-                      </small>
-                    </td>
-                    <td>
-                      {formatTicketState(row.currentState)} →{' '}
-                      {formatTicketState(row.incomingState)}
-                    </td>
-                    <td>
-                      <span
-                        className={`${styles.statusBadge} ${statusClass[row.status]}`}
-                      >
-                        {statusLabels[row.status]}
-                      </span>
-                      <small>{sourceStatusLabels[row.sourceStatus]}</small>
-                    </td>
-                    <td>
-                      {row.issues.map(({ message }) => message).join('; ') ||
-                        'Bez problému'}
-                    </td>
-                  </tr>
-                ))}
+                {displayRows.map(
+                  ({
+                    companyPosition,
+                    issueMessage,
+                    orderSummary,
+                    purchaseDate,
+                    row,
+                  }) => (
+                    <tr key={row.rowId}>
+                      <td className={styles.referenceCell}>
+                        <span>
+                          #{row.sourceRowNumber} · •{row.referenceSuffix}
+                        </span>
+                        <small>
+                          Vstupenka {row.sourceTicketId} · Doklad{' '}
+                          {row.sourceOrderId} · {orderSummary}
+                        </small>
+                      </td>
+                      <td className={styles.identityCell}>
+                        <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
+                        <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
+                        <small>
+                          {identitySourceLabels[row.identitySource]}
+                        </small>
+                        {companyPosition ? (
+                          <small>{companyPosition}</small>
+                        ) : null}
+                        {row.contactPhone ? (
+                          <small>{row.contactPhone}</small>
+                        ) : null}
+                      </td>
+                      <td className={styles.purchaseCell}>
+                        <time dateTime={row.purchasedOn}>{purchaseDate}</time>
+                        <small>
+                          {row.discountCoupon
+                            ? `Kupón ${row.discountCoupon}`
+                            : 'Bez slevového kupónu'}
+                        </small>
+                      </td>
+                      <td>
+                        {formatTicketState(row.currentState)} →{' '}
+                        {formatTicketState(row.incomingState)}
+                      </td>
+                      <td>
+                        <span
+                          className={`${styles.statusBadge} ${statusClass[row.status]}`}
+                        >
+                          {statusLabels[row.status]}
+                        </span>
+                        <small>{sourceStatusLabels[row.sourceStatus]}</small>
+                      </td>
+                      <td>{issueMessage}</td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </div>
           <div className={styles.cards}>
             <ul className={styles.cardList} aria-label="Záznamy změn vstupenek">
-              {visibleRows.map((row) => (
-                <li className={styles.dataCard} key={row.rowId}>
-                  <div className={styles.panelHeader}>
-                    <strong>
-                      Záznam #{row.sourceRowNumber} ·{' '}
-                      {row.contactName ?? 'Jméno neuvedeno'}
-                    </strong>
-                    <span
-                      className={`${styles.statusBadge} ${statusClass[row.status]}`}
-                    >
-                      {statusLabels[row.status]}
-                    </span>
-                  </div>
-                  <dl>
-                    <dt>E-mail</dt>
-                    <dd>{row.contactEmail ?? 'Neuveden'}</dd>
-                    <dt>Zdroj identity</dt>
-                    <dd>{identitySourceLabels[row.identitySource]}</dd>
-                    {companyAndPosition(row) ? (
-                      <>
-                        <dt>Firma / pozice</dt>
-                        <dd>{companyAndPosition(row)}</dd>
-                      </>
-                    ) : null}
-                    {row.contactPhone ? (
-                      <>
-                        <dt>Telefon</dt>
-                        <dd>{row.contactPhone}</dd>
-                      </>
-                    ) : null}
-                    <dt>Vstupenka</dt>
-                    <dd>{row.sourceTicketId}</dd>
-                    <dt>Doklad / objednávka</dt>
-                    <dd>
-                      {row.sourceOrderId} · {orderTicketSummary(row)}
-                    </dd>
-                    <dt>Reference kontroly</dt>
-                    <dd>•{row.referenceSuffix}</dd>
-                    <dt>Datum nákupu</dt>
-                    <dd>
-                      <time dateTime={row.purchasedOn}>
-                        {formatPurchaseDate(row.purchasedOn)}
-                      </time>
-                    </dd>
-                    <dt>Slevový kupón</dt>
-                    <dd>{row.discountCoupon ?? 'Bez slevového kupónu'}</dd>
-                    <dt>Co se změní</dt>
-                    <dd>
-                      {formatTicketState(row.currentState)} →{' '}
-                      {formatTicketState(row.incomingState)}
-                    </dd>
-                    <dt>Výsledek kontroly</dt>
-                    <dd>
-                      {statusLabels[row.status]} ·{' '}
-                      {sourceStatusLabels[row.sourceStatus]}
-                    </dd>
-                    <dt>Poznámka</dt>
-                    <dd>
-                      {row.issues.map(({ message }) => message).join('; ') ||
-                        'Bez problému'}
-                    </dd>
-                  </dl>
-                </li>
-              ))}
+              {displayRows.map(
+                ({
+                  companyPosition,
+                  issueMessage,
+                  orderSummary,
+                  purchaseDate,
+                  row,
+                }) => (
+                  <li className={styles.dataCard} key={row.rowId}>
+                    <div className={styles.panelHeader}>
+                      <strong>
+                        Záznam #{row.sourceRowNumber} ·{' '}
+                        {row.contactName ?? 'Jméno neuvedeno'}
+                      </strong>
+                      <span
+                        className={`${styles.statusBadge} ${statusClass[row.status]}`}
+                      >
+                        {statusLabels[row.status]}
+                      </span>
+                    </div>
+                    <dl>
+                      <dt>E-mail</dt>
+                      <dd>{row.contactEmail ?? 'Neuveden'}</dd>
+                      <dt>Zdroj identity</dt>
+                      <dd>{identitySourceLabels[row.identitySource]}</dd>
+                      {companyPosition ? (
+                        <>
+                          <dt>Firma / pozice</dt>
+                          <dd>{companyPosition}</dd>
+                        </>
+                      ) : null}
+                      {row.contactPhone ? (
+                        <>
+                          <dt>Telefon</dt>
+                          <dd>{row.contactPhone}</dd>
+                        </>
+                      ) : null}
+                      <dt>Vstupenka / doklad</dt>
+                      <dd>
+                        {row.sourceTicketId} · {row.sourceOrderId} ·{' '}
+                        {orderSummary} · kontrola •{row.referenceSuffix}
+                      </dd>
+                      <dt>Nákup</dt>
+                      <dd>
+                        <time dateTime={row.purchasedOn}>{purchaseDate}</time>
+                        {' · '}
+                        {row.discountCoupon
+                          ? `Kupón ${row.discountCoupon}`
+                          : 'Bez slevového kupónu'}
+                      </dd>
+                      <dt>Co se změní</dt>
+                      <dd>
+                        {formatTicketState(row.currentState)} →{' '}
+                        {formatTicketState(row.incomingState)}
+                      </dd>
+                      <dt>Výsledek kontroly</dt>
+                      <dd>
+                        {statusLabels[row.status]} ·{' '}
+                        {sourceStatusLabels[row.sourceStatus]}
+                      </dd>
+                      <dt>Poznámka</dt>
+                      <dd>{issueMessage}</dd>
+                    </dl>
+                  </li>
+                ),
+              )}
             </ul>
           </div>
 
