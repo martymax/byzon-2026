@@ -299,6 +299,7 @@ describe('CS-AGENDA-01 participant browser adapter', () => {
       'TICKET_INACTIVE',
       'CAPACITY_FULL',
       'RESERVATION_CLOSED',
+      'RESERVATION_CONFLICT',
       'STALE_VERSION',
       'VALIDATION_FAILED',
       'IDEMPOTENCY_KEY_REUSED',

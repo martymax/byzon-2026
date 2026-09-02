@@ -260,13 +260,14 @@ const conflictWarning = conflictMutation.timeConflict;
 if (!conflictWarning) {
   throw new TypeError('Conflict mutation fixture must carry a warning.');
 }
-const conflictInitialAgenda = participantAgendaResponseSchema.parse({
-  ...participantAgendaFixtures.saved!,
-  items: [
-    ...participantAgendaFixtures.saved!.items,
-    ...participantAgendaFixtures.conflict_target!.items,
-  ],
-});
+const reservationConflictProblem = (() => {
+  const problem = participantAgendaMutationProblemFixtures.reservation_conflict;
+  if (problem?.code !== 'RESERVATION_CONFLICT') {
+    throw new TypeError('Reservation conflict fixture must be available.');
+  }
+  return problem;
+})();
+const conflictInitialAgenda = reservationConflictProblem.agenda;
 
 const agendaForScope = (
   snapshot: ParticipantAgendaResponse,
@@ -615,6 +616,76 @@ describe('F3-01..F3-05 participant agenda', () => {
     ).toMatch(/^agenda-action:/);
   });
 
+  it('offers the required reservation immediately after adding a capacity session', async () => {
+    const { api } = agendaApiFor({
+      onRead: participantAgendaFixtures.empty!,
+      onMutation: (request, _init, index) => {
+        if (index === 0) {
+          expect(request).toMatchObject({
+            action: 'add',
+            sessionId: agendaFixtureIds.reservedSession,
+          });
+          return jsonResponse(
+            mutationResponse(
+              reservableAgenda,
+              {
+                action: 'add',
+                outcome: 'applied',
+                sessionId: request.sessionId,
+              },
+              request.expectedVersion,
+            ),
+          );
+        }
+        expect(request).toMatchObject({
+          action: 'reserve',
+          sessionId: agendaFixtureIds.reservedSession,
+        });
+        return jsonResponse(
+          mutationResponse(
+            participantAgendaFixtures.reserved!,
+            {
+              action: 'reserve',
+              outcome: 'applied',
+              sessionId: request.sessionId,
+            },
+            request.expectedVersion,
+          ),
+        );
+      },
+    });
+    const screen = await renderComponent(
+      <AgendaProbe agendaApi={api}>
+        <ParticipantSessionAgendaAction
+          agendaApi={api}
+          eventId={agendaFixtureIds.event}
+          sessionId={agendaFixtureIds.reservedSession}
+        />
+      </AgendaProbe>,
+    );
+
+    await screen.getByRole('button', { name: 'Přidat do agendy' }).click();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Rezervovat místo?' }))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByText(
+          'Tento bod vyžaduje registraci. V agendě už ho máte; místo je potřeba potvrdit zvlášť.',
+        ),
+      )
+      .toBeVisible();
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Rezervovat místo' })
+      .click();
+    await expect
+      .element(screen.getByText('Rezervováno', { exact: true }))
+      .toBeVisible();
+    expect(document.querySelector('dialog[open]')).toBeNull();
+    await expectComponentToPassAxe(screen.container);
+  });
+
   it('shows session-detail transport recovery and reuses the same idempotency key', async () => {
     const keys: string[] = [];
     const { api } = agendaApiFor({
@@ -728,6 +799,12 @@ describe('F3-01..F3-05 participant agenda', () => {
 
     await screen
       .getByRole('button', { name: 'Rozumím, ponechat v agendě' })
+      .click();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Rezervovat místo?' }))
+      .toBeVisible();
+    await screen
+      .getByRole('button', { name: 'Zatím ponechat jen v agendě' })
       .click();
     await new Promise<void>((resolve) =>
       window.requestAnimationFrame(() => resolve()),
@@ -1044,7 +1121,7 @@ describe('F3-01..F3-05 participant agenda', () => {
     }
   });
 
-  it('keeps a conflicting reservation and renders a warning with trapped, restorable focus', async () => {
+  it('keeps the original reservation when the conflict choice is dismissed', async () => {
     const { api, mutationCount } = agendaApiFor({
       onRead: conflictInitialAgenda,
       onMutation: (request) => {
@@ -1052,7 +1129,7 @@ describe('F3-01..F3-05 participant agenda', () => {
           action: 'reserve',
           sessionId: agendaFixtureIds.conflictTargetSession,
         });
-        return jsonResponse(conflictMutation);
+        return problemResponse(reservationConflictProblem);
       },
     });
     const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
@@ -1070,19 +1147,19 @@ describe('F3-01..F3-05 participant agenda', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Rezervace se překrývá s programem',
+          name: 'Rezervace se časově překrývají',
         }),
       )
       .toBeVisible();
     await expect
       .element(
         screen.getByText(
-          'Rezervaci jsme uložili. Její čas se ale překrývá s dalšími body ve vaší agendě; rozhodnutí můžete kdykoli změnit.',
+          'Na překrývající se aktivity nelze mít dvě rezervace. Novou rezervaci jsme zatím nevytvořili.',
         ),
       )
       .toBeVisible();
     await expect
-      .element(screen.getByText('Rezervováno', { exact: true }))
+      .element(screen.getByText('Uloženo', { exact: true }))
       .toBeVisible();
     const conflictLink = Array.from(
       dialog.element().querySelectorAll<HTMLAnchorElement>('a'),
@@ -1107,10 +1184,85 @@ describe('F3-01..F3-05 participant agenda', () => {
     expect(mutationCount()).toBe(1);
   });
 
+  it('atomically replaces the original reservation after explicit confirmation', async () => {
+    const switchedAgenda = participantAgendaResponseSchema.parse({
+      ...conflictInitialAgenda,
+      version: conflictInitialAgenda.version + 1,
+      items: conflictInitialAgenda.items.map((item) => {
+        if (item.session.id === agendaFixtureIds.savedSession) {
+          return {
+            day: item.day,
+            session: item.session,
+            capacity: item.capacity,
+            action: item.action,
+            state: 'saved' as const,
+            source: 'manual' as const,
+            savedAt: conflictInitialAgenda.serverNow,
+          };
+        }
+        if (item.capacity.mode !== 'reservation') return item;
+        return {
+          day: item.day,
+          session: item.session,
+          capacity: item.capacity,
+          action: item.action,
+          state: 'reserved' as const,
+          reservation: {
+            id: agendaFixtureIds.reservation,
+            version: 1,
+            confirmedAt: conflictInitialAgenda.serverNow,
+          },
+        };
+      }),
+    });
+    const { api, mutationCount } = agendaApiFor({
+      onRead: conflictInitialAgenda,
+      onMutation: (request, _init, index) => {
+        if (index === 0) return problemResponse(reservationConflictProblem);
+        expect(request).toMatchObject({
+          action: 'reserve',
+          sessionId: agendaFixtureIds.conflictTargetSession,
+          replaceReservationSessionIds: [agendaFixtureIds.savedSession],
+        });
+        return jsonResponse(
+          mutationResponse(
+            switchedAgenda,
+            {
+              action: 'reserve',
+              outcome: 'applied',
+              sessionId: request.sessionId,
+            },
+            request.expectedVersion,
+          ),
+        );
+      },
+    });
+    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+
+    await screen.getByRole('button', { name: 'Rezervovat místo' }).click();
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: 'Přihlásit na novou a odhlásit z původní',
+        }),
+      )
+      .toBeVisible();
+    await screen
+      .getByRole('button', {
+        name: 'Přihlásit na novou a odhlásit z původní',
+      })
+      .click();
+    await expect
+      .element(screen.getByText('Rezervováno', { exact: true }))
+      .toBeVisible();
+    expect(document.querySelector('dialog[open]')).toBeNull();
+    expect(mutationCount()).toBe(2);
+  });
+
   it('remembers agenda scroll before following a conflict-session deep link', async () => {
     const { api } = agendaApiFor({
       onRead: conflictInitialAgenda,
-      onMutation: () => jsonResponse(conflictMutation),
+      onMutation: () => problemResponse(reservationConflictProblem),
     });
     const scrollTo = vi
       .spyOn(window, 'scrollTo')

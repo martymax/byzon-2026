@@ -72,6 +72,16 @@ export type AgendaConflict = AgendaTimeConflictWarning & {
   readonly action: 'add' | 'join_waitlist' | 'reserve';
 };
 
+export type AgendaReservationConflict = Extract<
+  ParticipantAgendaMutationProblem,
+  { code: 'RESERVATION_CONFLICT' }
+>;
+
+export interface AgendaReservationOffer {
+  readonly action: 'join_waitlist' | 'reserve';
+  readonly sessionId: string;
+}
+
 interface PendingAgendaMutation {
   readonly expectedVersion: number;
   readonly idempotencyKey: string;
@@ -86,10 +96,14 @@ export interface ParticipantAgendaResource {
   readonly offline: ParticipantAgendaOfflineState;
   readonly pending: AgendaMutationIntent | null;
   readonly readOnly: boolean;
+  readonly reservationConflict: AgendaReservationConflict | null;
+  readonly reservationOffer: AgendaReservationOffer | null;
   readonly state: ParticipantAgendaResourceState;
   readonly discardFailedOfflineQueue: () => Promise<void>;
   readonly dismissConflict: () => void;
   readonly dismissFeedback: () => void;
+  readonly dismissReservationConflict: () => void;
+  readonly dismissReservationOffer: () => void;
   readonly mutate: (intent: AgendaMutationIntent) => Promise<void>;
   readonly retry: () => void;
   readonly retryOfflineQueue: () => Promise<void>;
@@ -180,6 +194,11 @@ const mutationInput = (
   action: intent.action,
   expectedVersion,
   sessionId: intent.sessionId,
+  ...(intent.replaceReservationSessionIds
+    ? {
+        replaceReservationSessionIds: [...intent.replaceReservationSessionIds],
+      }
+    : {}),
 });
 
 const mutationMatchesIntent = (
@@ -245,6 +264,10 @@ export const useParticipantAgendaResource = (
   const [pending, setPending] = useState<AgendaMutationIntent | null>(null);
   const [feedback, setFeedback] = useState<AgendaMutationFeedback | null>(null);
   const [conflict, setConflict] = useState<AgendaConflict | null>(null);
+  const [reservationConflict, setReservationConflict] =
+    useState<AgendaReservationConflict | null>(null);
+  const [reservationOffer, setReservationOffer] =
+    useState<AgendaReservationOffer | null>(null);
   const [offline, setOffline] = useState<ParticipantAgendaOfflineState>({
     cached: false,
     lastSyncedAt: null,
@@ -303,6 +326,8 @@ export const useParticipantAgendaResource = (
     setPending(null);
     setFeedback(null);
     setConflict(null);
+    setReservationConflict(null);
+    setReservationOffer(null);
   }, []);
 
   const applyInvalidation = useCallback(
@@ -772,6 +797,10 @@ export const useParticipantAgendaResource = (
       setPending(request.intent);
       setFeedback(null);
       setConflict(null);
+      if (!request.intent.replaceReservationSessionIds) {
+        setReservationConflict(null);
+      }
+      setReservationOffer(null);
 
       try {
         const queueOfflineMutation = async (): Promise<void> => {
@@ -797,6 +826,7 @@ export const useParticipantAgendaResource = (
           );
           pendingAttempt.current = null;
           reconciliationRequired.current = false;
+          setReservationConflict(null);
           setOffline((currentOffline) => ({
             ...currentOffline,
             cached: true,
@@ -848,6 +878,7 @@ export const useParticipantAgendaResource = (
           pendingAttempt.current = null;
           reconciliationRequired.current = false;
           const canonical = snapshotFromMutation(result.data);
+          setReservationConflict(null);
           storeState({
             status: 'ready',
             data: canonical,
@@ -873,6 +904,31 @@ export const useParticipantAgendaResource = (
               .catch(() => undefined);
           }
           setConflict(conflictFromMutation(result.data));
+          if (result.data.mutation.action === 'add') {
+            const added = canonical.items.find(
+              ({ session: agendaSession }) =>
+                agendaSession.id === result.data.mutation.sessionId,
+            );
+            if (
+              added?.state === 'saved' &&
+              added.capacity.mode === 'reservation'
+            ) {
+              if (added.action.state === 'available') {
+                setReservationOffer({
+                  action: 'reserve',
+                  sessionId: added.session.id,
+                });
+              } else if (
+                added.action.state === 'capacity_full' &&
+                added.capacity.waitlistAvailable
+              ) {
+                setReservationOffer({
+                  action: 'join_waitlist',
+                  sessionId: added.session.id,
+                });
+              }
+            }
+          }
           return;
         }
 
@@ -893,6 +949,9 @@ export const useParticipantAgendaResource = (
 
         if (result.failure.kind === 'problem') {
           const problem = result.failure.problem;
+          if (problem.code !== 'RESERVATION_CONFLICT') {
+            setReservationConflict(null);
+          }
           const canonical = canonicalProblemAgenda(problem);
           if (canonical) {
             const problemSessionId =
@@ -935,6 +994,12 @@ export const useParticipantAgendaResource = (
                 canonical,
                 mutationOfflineEpoch,
               ).catch(() => undefined);
+            }
+            if (problem.code === 'RESERVATION_CONFLICT') {
+              pendingAttempt.current = null;
+              reconciliationRequired.current = false;
+              setReservationConflict(problem);
+              return;
             }
           }
         }
@@ -1281,11 +1346,15 @@ export const useParticipantAgendaResource = (
       discardFailedOfflineQueue,
       dismissConflict: () => setConflict(null),
       dismissFeedback,
+      dismissReservationConflict: () => setReservationConflict(null),
+      dismissReservationOffer: () => setReservationOffer(null),
       feedback: privateStateIsVisible ? feedback : null,
       mutate,
       offline,
       pending: privateStateIsVisible ? pending : null,
       readOnly: !privateStateIsVisible || readOnly,
+      reservationConflict: privateStateIsVisible ? reservationConflict : null,
+      reservationOffer: privateStateIsVisible ? reservationOffer : null,
       retry,
       retryOfflineQueue,
       retryMutation,
@@ -1301,6 +1370,8 @@ export const useParticipantAgendaResource = (
       pending,
       privateStateIsVisible,
       readOnly,
+      reservationConflict,
+      reservationOffer,
       retry,
       retryOfflineQueue,
       retryMutation,

@@ -70,6 +70,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const waitlistFirstId = crypto.randomUUID();
   const waitlistSecondId = crypto.randomUUID();
   const mastermindGroupUserId = crypto.randomUUID();
+  const reservationSwitchUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -87,6 +88,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const waitlistSessionId = crypto.randomUUID();
   const mastermindGroupSessionId = crypto.randomUUID();
   const mastermindGroupPartTwoSessionId = crypto.randomUUID();
+  const reservationSwitchSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
 
@@ -202,6 +204,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       waitlistFirstId,
       waitlistSecondId,
       mastermindGroupUserId,
+      reservationSwitchUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -240,6 +243,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         waitlistFirstId,
         waitlistSecondId,
         mastermindGroupUserId,
+        reservationSwitchUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -276,6 +280,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         waitlistFirstId,
         waitlistSecondId,
         mastermindGroupUserId,
+        reservationSwitchUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -309,6 +314,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         waitlistFirstId,
         waitlistSecondId,
         mastermindGroupUserId,
+        reservationSwitchUserId,
       ].map((userId, index) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -380,6 +386,16 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'workshop' as const,
         capacityMode: 'reservation' as const,
         capacity: 2,
+      },
+      {
+        id: reservationSwitchSessionId,
+        slug: `reservation-switch-${reservationSwitchSessionId}`,
+        title: 'Překrývající se rezervovatelný workshop',
+        startsAt: new Date('2026-09-18T10:30:00Z'),
+        endsAt: new Date('2026-09-18T11:30:00Z'),
+        type: 'workshop' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 10,
       },
       {
         id: lastSeatSessionId,
@@ -1885,6 +1901,159 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(
       participantAgendaMutationProblemSchema.parse(await reused.json()).code,
     ).toBe('IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('offers an atomic reservation replacement and rejects changes from the activity start', async () => {
+    const addedOriginal = await mutate(
+      reservationSwitchUserId,
+      { action: 'add', sessionId: reservedSessionId, expectedVersion: 1 },
+      'agenda-switch-add-original-0001',
+    );
+    expect(addedOriginal.status).toBe(200);
+    const reservedOriginal = await mutate(
+      reservationSwitchUserId,
+      { action: 'reserve', sessionId: reservedSessionId, expectedVersion: 2 },
+      'agenda-switch-reserve-original-0001',
+    );
+    expect(reservedOriginal.status).toBe(200);
+    const addedTarget = await mutate(
+      reservationSwitchUserId,
+      {
+        action: 'add',
+        sessionId: reservationSwitchSessionId,
+        expectedVersion: 3,
+      },
+      'agenda-switch-add-target-0001',
+    );
+    expect(addedTarget.status).toBe(200);
+
+    const blocked = await mutate(
+      reservationSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: reservationSwitchSessionId,
+        expectedVersion: 4,
+      },
+      'agenda-switch-detect-conflict-0001',
+    );
+    expect(blocked.status).toBe(409);
+    const problem = participantAgendaMutationProblemSchema.parse(
+      await blocked.json(),
+    );
+    expect(problem).toMatchObject({
+      code: 'RESERVATION_CONFLICT',
+      sessionId: reservationSwitchSessionId,
+      agenda: { version: 4 },
+      conflict: {
+        targetSessions: [{ id: reservationSwitchSessionId }],
+        conflictingSessions: [{ id: reservedSessionId }],
+      },
+      replacement: {
+        allowed: true,
+        until: '2026-09-18T10:00:00.000Z',
+        reservationSessionIds: [reservedSessionId],
+      },
+    });
+    const beforeSwitch = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, reservationSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(beforeSwitch).toEqual([{ sessionId: reservedSessionId }]);
+
+    const lateReplacement = await mutateParticipantAgenda(
+      mutationRequest(
+        {
+          action: 'reserve',
+          sessionId: reservationSwitchSessionId,
+          expectedVersion: 4,
+          replaceReservationSessionIds: [reservedSessionId],
+        },
+        'agenda-switch-too-late-0001',
+      ),
+      {
+        ...dependencies(reservationSwitchUserId),
+        now: () => new Date('2026-09-18T10:15:00.000Z'),
+      },
+    );
+    expect(lateReplacement.status).toBe(409);
+    expect(
+      participantAgendaMutationProblemSchema.parse(
+        await lateReplacement.json(),
+      ),
+    ).toMatchObject({
+      code: 'RESERVATION_CONFLICT',
+      agenda: { version: 4 },
+      replacement: { allowed: false },
+    });
+
+    const switched = await mutate(
+      reservationSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: reservationSwitchSessionId,
+        expectedVersion: 4,
+        replaceReservationSessionIds: [reservedSessionId],
+      },
+      'agenda-switch-confirm-0001',
+    );
+    expect(switched.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema.parse(await switched.json()),
+    ).toMatchObject({
+      version: 5,
+      mutation: { action: 'reserve', outcome: 'applied' },
+      items: [
+        { state: 'saved', session: { id: reservedSessionId } },
+        {
+          state: 'reserved',
+          session: { id: reservationSwitchSessionId },
+        },
+      ],
+    });
+    const afterSwitch = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, reservationSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(afterSwitch).toEqual([{ sessionId: reservationSwitchSessionId }]);
+
+    const afterOriginalStart = await mutateParticipantAgenda(
+      mutationRequest(
+        {
+          action: 'reserve',
+          sessionId: reservedSessionId,
+          expectedVersion: 5,
+          replaceReservationSessionIds: [reservationSwitchSessionId],
+        },
+        'agenda-switch-after-start-0001',
+      ),
+      {
+        ...dependencies(reservationSwitchUserId),
+        now: () => new Date('2026-09-18T10:00:00.000Z'),
+      },
+    );
+    expect(afterOriginalStart.status).toBe(409);
+    expect(
+      participantAgendaMutationProblemSchema.parse(
+        await afterOriginalStart.json(),
+      ).code,
+    ).toBe('RESERVATION_CLOSED');
+    const afterDeadline = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, reservationSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(afterDeadline).toEqual([{ sessionId: reservationSwitchSessionId }]);
   });
 
   it('uses one reservation and one shared capacity projection for both mastermind parts', async () => {

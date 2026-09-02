@@ -217,6 +217,27 @@ const conflictReservedItem = {
   action: { state: 'available' as const },
 };
 
+const conflictExistingReservedItem = {
+  day: friday,
+  session: savedSession,
+  state: 'reserved' as const,
+  reservation: {
+    id: agendaFixtureIds.reservation,
+    version: 1,
+    confirmedAt: snapshotBase.serverNow,
+  },
+  capacity: {
+    mode: 'reservation' as const,
+    capacity: 20,
+    confirmed: 11,
+    held: 0,
+    remaining: 9,
+    waitlistAvailable: true,
+    actorAvailability: { state: 'available' as const },
+  },
+  action: { state: 'available' as const },
+};
+
 const waitingItem = {
   day: saturday,
   session: waitingSession,
@@ -519,6 +540,7 @@ interface AgendaProblemStatus {
   readonly TICKET_INACTIVE: 409;
   readonly CAPACITY_FULL: 409;
   readonly RESERVATION_CLOSED: 409;
+  readonly RESERVATION_CONFLICT: 409;
   readonly STALE_VERSION: 409;
   readonly VALIDATION_FAILED: 422;
   readonly RATE_LIMITED: 429;
@@ -586,6 +608,26 @@ export const participantAgendaMutationProblemFixtures = defineFixtureSet({
         ...snapshotBase,
         items: [closedItem],
         calendarExport: availableExport,
+      },
+    },
+    reservation_conflict: {
+      ...problem('RESERVATION_CONFLICT', 409),
+      sessionId: agendaFixtureIds.conflictTargetSession,
+      agenda: {
+        ...snapshotBase,
+        items: [conflictExistingReservedItem, conflictTargetItem],
+        calendarExport: availableExport,
+      },
+      conflict: {
+        eventId: agendaFixtureIds.event,
+        sessionId: agendaFixtureIds.conflictTargetSession,
+        targetSessions: [conflictTargetSession],
+        conflictingSessions: [savedSession],
+      },
+      replacement: {
+        allowed: true,
+        until: savedSession.startsAt,
+        reservationSessionIds: [agendaFixtureIds.savedSession],
       },
     },
     stale_version: {

@@ -12,7 +12,11 @@ import type { ApiPort } from '@/lib/api';
 import { subscribeToPrivateResourceInvalidation } from '@/lib/private-resource-events';
 
 import { ParticipantAgendaItemActions } from './participant-agenda-actions';
-import { ParticipantAgendaConflictDialog } from './participant-agenda-dialogs';
+import {
+  ParticipantAgendaConflictDialog,
+  ParticipantAgendaReservationConflictDialog,
+  ParticipantAgendaReservationOfferDialog,
+} from './participant-agenda-dialogs';
 import { ParticipantAgendaCalendarExport } from './participant-agenda-export';
 import {
   formatAgendaLocalDate,
@@ -226,6 +230,16 @@ const ParticipantAgendaReadyView = ({
         />
       ) : null}
       <ParticipantAgendaConflictDialog
+        onOpenSession={rememberScroll}
+        resource={resource}
+        returnOrigin="agenda"
+        timezone={ready.eventTimezone}
+      />
+      <ParticipantAgendaReservationOfferDialog
+        resource={resource}
+        timezone={ready.eventTimezone}
+      />
+      <ParticipantAgendaReservationConflictDialog
         onOpenSession={rememberScroll}
         resource={resource}
         returnOrigin="agenda"

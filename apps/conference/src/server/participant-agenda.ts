@@ -16,6 +16,7 @@ import {
   problemTypeForCode,
   publishedAgendaReservationWindowsSchema,
   publishedProgramAgendaSnapshotSchema,
+  type AgendaReservationConflict,
   type AgendaSessionSnapshot,
   type ParticipantAgendaItem,
   type ParticipantAgendaMutationResponse,
@@ -118,6 +119,20 @@ class AgendaTicketInactiveError extends Error {
   constructor(readonly sessionId: string) {
     super('An active ticket is required to reserve a place');
     this.name = 'AgendaTicketInactiveError';
+  }
+}
+
+class AgendaReservationConflictError extends Error {
+  constructor(
+    readonly sessionId: string,
+    readonly conflict: AgendaReservationConflict,
+    readonly reservationSessionIds: readonly string[],
+    readonly until: Date,
+    readonly allowed: boolean,
+    readonly agendaVersion: number,
+  ) {
+    super('Agenda reservation overlaps an existing reservation');
+    this.name = 'AgendaReservationConflictError';
   }
 }
 
@@ -1081,6 +1096,143 @@ const conflictFor = (
       };
 };
 
+interface ReservationConflictState {
+  readonly conflict: AgendaReservationConflict;
+  readonly reservationSessionIds: readonly string[];
+  readonly until: Date;
+}
+
+const loadReservationConflict = async (
+  transaction: DatabaseTransaction,
+  context: AgendaContext,
+  userId: string,
+  sessionId: string,
+  reservationTargetId: string,
+  targetClosesAt: number,
+): Promise<ReservationConflictState | null> => {
+  const operationalRows = await transaction
+    .select({
+      id: schema.programSessions.id,
+      reservationGroupId: schema.programSessions.reservationGroupId,
+      status: schema.programSessions.status,
+    })
+    .from(schema.programSessions)
+    .where(
+      and(
+        eq(schema.programSessions.eventId, context.event.id),
+        inArray(
+          schema.programSessions.id,
+          context.program.sessions.map(({ id }) => id),
+        ),
+        ne(schema.programSessions.status, 'archived'),
+      ),
+    );
+  const operationalById = new Map(operationalRows.map((row) => [row.id, row]));
+  const publishedById = new Map(
+    context.program.sessions.map((published) => [published.id, published]),
+  );
+  const targetSessions = operationalRows
+    .filter(
+      (row) =>
+        (row.reservationGroupId ?? row.id) === reservationTargetId &&
+        row.status !== 'cancelled',
+    )
+    .map(({ id }) => publishedById.get(id))
+    .filter(
+      (
+        published,
+      ): published is PublishedProgramAgendaSnapshot['sessions'][number] =>
+        published !== undefined && published.status !== 'cancelled',
+    );
+  if (targetSessions.length === 0) return null;
+
+  const confirmedReservations = await transaction
+    .select({ sessionId: schema.reservations.sessionId })
+    .from(schema.reservations)
+    .where(
+      and(
+        eq(schema.reservations.eventId, context.event.id),
+        eq(schema.reservations.userId, userId),
+        eq(schema.reservations.status, 'confirmed'),
+        ne(schema.reservations.sessionId, reservationTargetId),
+      ),
+    );
+  const conflictingRootIds: string[] = [];
+  const conflictingPublished = new Map<
+    string,
+    PublishedProgramAgendaSnapshot['sessions'][number]
+  >();
+  let until = targetClosesAt;
+  for (const reservation of confirmedReservations) {
+    const projections = operationalRows
+      .filter(
+        (row) =>
+          (row.reservationGroupId ?? row.id) === reservation.sessionId &&
+          row.status !== 'cancelled',
+      )
+      .map(({ id }) => publishedById.get(id))
+      .filter(
+        (
+          published,
+        ): published is PublishedProgramAgendaSnapshot['sessions'][number] =>
+          published !== undefined && published.status !== 'cancelled',
+      );
+    const overlapping = projections.filter((projection) =>
+      targetSessions.some(
+        (target) =>
+          Date.parse(projection.startsAt) < Date.parse(target.endsAt) &&
+          Date.parse(projection.endsAt) > Date.parse(target.startsAt),
+      ),
+    );
+    if (overlapping.length === 0) continue;
+    conflictingRootIds.push(reservation.sessionId);
+    projections.forEach((projection) => {
+      until = Math.min(until, Date.parse(projection.startsAt));
+    });
+    overlapping.forEach((projection) =>
+      conflictingPublished.set(projection.id, projection),
+    );
+  }
+  const reservationSessionIds = [...new Set(conflictingRootIds)].sort();
+  if (reservationSessionIds.length === 0) return null;
+  if (
+    reservationSessionIds.length > 10 ||
+    targetSessions.length > 10 ||
+    conflictingPublished.size > 10 ||
+    !Number.isFinite(until)
+  ) {
+    throw new Error('Reservation conflict projection limit exceeded');
+  }
+  const snapshotFor = (
+    published: PublishedProgramAgendaSnapshot['sessions'][number],
+  ): AgendaSessionSnapshot => {
+    const operational = operationalById.get(published.id);
+    return sessionSnapshot(
+      context,
+      published,
+      operational?.status === 'cancelled' ? 'cancelled' : 'published',
+    );
+  };
+  const byStart = (
+    left: PublishedProgramAgendaSnapshot['sessions'][number],
+    right: PublishedProgramAgendaSnapshot['sessions'][number],
+  ): number =>
+    Date.parse(left.startsAt) - Date.parse(right.startsAt) ||
+    left.id.localeCompare(right.id);
+  return {
+    reservationSessionIds,
+    until: new Date(until),
+    conflict: {
+      eventId: context.event.id,
+      sessionId,
+      targetSessions: [...targetSessions].sort(byStart).map(snapshotFor),
+      conflictingSessions: [...conflictingPublished.values()]
+        .sort(byStart)
+        .map(snapshotFor),
+    },
+  };
+};
+
 const receiptPostconditionHolds = (
   snapshot: ParticipantAgendaResponse,
   receipt: AgendaMutationReceipt,
@@ -1112,14 +1264,25 @@ const canonicalProblemResponse = (
     | StaleAgendaVersionError
     | AgendaCapacityFullError
     | AgendaReservationClosedError
-    | AgendaTicketInactiveError,
+    | AgendaTicketInactiveError
+    | AgendaReservationConflictError,
   snapshot: ParticipantAgendaResponse,
   requestId: string,
 ): Response => {
   let classified = error;
-  if (!(error instanceof StaleAgendaVersionError)) {
+  if (
+    error instanceof AgendaReservationConflictError &&
+    snapshot.version !== error.agendaVersion
+  ) {
+    classified = new StaleAgendaVersionError();
+  }
+  if (
+    !(classified instanceof StaleAgendaVersionError) &&
+    !(classified instanceof AgendaReservationConflictError)
+  ) {
+    const classifiedSessionId = classified.sessionId;
     const item = snapshot.items.find(
-      ({ session }) => session.id === error.sessionId,
+      ({ session }) => session.id === classifiedSessionId,
     );
     if (
       !item ||
@@ -1129,11 +1292,11 @@ const canonicalProblemResponse = (
       return privateProblemResponse(sessionNotFound(), requestId);
     }
     if (item.action.state === 'capacity_full') {
-      classified = new AgendaCapacityFullError(error.sessionId);
+      classified = new AgendaCapacityFullError(classifiedSessionId);
     } else if (item.action.state === 'closed') {
-      classified = new AgendaReservationClosedError(error.sessionId);
+      classified = new AgendaReservationClosedError(classifiedSessionId);
     } else if (
-      !(error instanceof AgendaTicketInactiveError) ||
+      !(classified instanceof AgendaTicketInactiveError) ||
       item.state !== 'saved'
     ) {
       classified = new StaleAgendaVersionError();
@@ -1151,39 +1314,57 @@ const canonicalProblemResponse = (
           currentVersion: snapshot.version,
           agenda: snapshot,
         }
-      : classified instanceof AgendaTicketInactiveError
+      : classified instanceof AgendaReservationConflictError
         ? {
-            type: problemTypeForCode('TICKET_INACTIVE'),
-            title: 'Active ticket required',
+            type: problemTypeForCode('RESERVATION_CONFLICT'),
+            title: 'Reservation overlaps another reservation',
             status: 409,
-            code: 'TICKET_INACTIVE',
-            detail: 'An active ticket is required to reserve this session.',
+            code: 'RESERVATION_CONFLICT',
+            detail:
+              'Choose whether to keep the existing reservation or replace it with the new one.',
             requestId,
             sessionId: classified.sessionId,
             agenda: snapshot,
+            conflict: classified.conflict,
+            replacement: {
+              allowed: classified.allowed,
+              until: classified.until.toISOString(),
+              reservationSessionIds: classified.reservationSessionIds,
+            },
           }
-        : classified instanceof AgendaCapacityFullError
+        : classified instanceof AgendaTicketInactiveError
           ? {
-              type: problemTypeForCode('CAPACITY_FULL'),
-              title: 'Session capacity is full',
+              type: problemTypeForCode('TICKET_INACTIVE'),
+              title: 'Active ticket required',
               status: 409,
-              code: 'CAPACITY_FULL',
-              detail:
-                'The final available place was reserved by another request.',
+              code: 'TICKET_INACTIVE',
+              detail: 'An active ticket is required to reserve this session.',
               requestId,
               sessionId: classified.sessionId,
               agenda: snapshot,
             }
-          : {
-              type: problemTypeForCode('RESERVATION_CLOSED'),
-              title: 'Reservations are closed',
-              status: 409,
-              code: 'RESERVATION_CLOSED',
-              detail: 'Reservations are not open for this session.',
-              requestId,
-              sessionId: classified.sessionId,
-              agenda: snapshot,
-            };
+          : classified instanceof AgendaCapacityFullError
+            ? {
+                type: problemTypeForCode('CAPACITY_FULL'),
+                title: 'Session capacity is full',
+                status: 409,
+                code: 'CAPACITY_FULL',
+                detail:
+                  'The final available place was reserved by another request.',
+                requestId,
+                sessionId: classified.sessionId,
+                agenda: snapshot,
+              }
+            : {
+                type: problemTypeForCode('RESERVATION_CLOSED'),
+                title: 'Reservations are closed',
+                status: 409,
+                code: 'RESERVATION_CLOSED',
+                detail: 'Reservations are not open for this session.',
+                requestId,
+                sessionId: classified.sessionId,
+                agenda: snapshot,
+              };
   const problem = participantAgendaMutationProblemSchema.parse(candidate);
   return new Response(JSON.stringify(problem), {
     status: problem.status,
@@ -1426,6 +1607,7 @@ export const mutateParticipantAgenda = async (
           ) ?? publishedTarget;
 
         let outcome: 'applied' | 'already_applied' = 'already_applied';
+        let replacedReservationSessionIds: readonly string[] = [];
         if (parsed.data.action === 'add') {
           const projectedSessionIds = await loadProjectedAgendaSessionIds(
             transaction,
@@ -1643,6 +1825,48 @@ export const mutateParticipantAgenda = async (
                 ],
               });
             }
+            if (parsed.data.action === 'reserve') {
+              const conflict = await loadReservationConflict(
+                transaction,
+                lockedContext,
+                session.user.id,
+                parsed.data.sessionId,
+                reservationTargetId,
+                closesAt,
+              );
+              const requestedReplacementIds = [
+                ...(parsed.data.replaceReservationSessionIds ?? []),
+              ].sort();
+              if (conflict) {
+                const replacementMatches =
+                  requestedReplacementIds.length ===
+                    conflict.reservationSessionIds.length &&
+                  requestedReplacementIds.every(
+                    (id, index) => id === conflict.reservationSessionIds[index],
+                  );
+                const replacementAllowed =
+                  mutationNow.getTime() < conflict.until.getTime();
+                if (!replacementMatches || !replacementAllowed) {
+                  throw new AgendaReservationConflictError(
+                    parsed.data.sessionId,
+                    conflict.conflict,
+                    conflict.reservationSessionIds,
+                    conflict.until,
+                    replacementAllowed,
+                    currentVersion,
+                  );
+                }
+                replacedReservationSessionIds = conflict.reservationSessionIds;
+                for (const conflictingSessionId of conflict.reservationSessionIds) {
+                  await acquireTransactionLock(
+                    transaction,
+                    `participant-reservation:${context.event.id}:${conflictingSessionId}`,
+                  );
+                }
+              } else if (requestedReplacementIds.length > 0) {
+                throw new StaleAgendaVersionError();
+              }
+            }
             const capacityRows = await transaction
               .select({ confirmed: count() })
               .from(schema.reservations)
@@ -1686,6 +1910,45 @@ export const mutateParticipantAgenda = async (
               });
               outcome = 'applied';
             } else if (!capacityIsFull && !waiting) {
+              if (replacedReservationSessionIds.length > 0) {
+                const cancelled = await transaction
+                  .update(schema.reservations)
+                  .set({
+                    status: 'cancelled',
+                    cancelledAt: mutationNow,
+                    version: sql`${schema.reservations.version} + 1`,
+                  })
+                  .where(
+                    and(
+                      eq(schema.reservations.eventId, context.event.id),
+                      eq(schema.reservations.userId, session.user.id),
+                      eq(schema.reservations.status, 'confirmed'),
+                      inArray(
+                        schema.reservations.sessionId,
+                        replacedReservationSessionIds,
+                      ),
+                    ),
+                  )
+                  .returning({ sessionId: schema.reservations.sessionId });
+                if (
+                  new Set(cancelled.map(({ sessionId }) => sessionId)).size !==
+                  replacedReservationSessionIds.length
+                ) {
+                  throw new StaleAgendaVersionError();
+                }
+                for (const replacedSessionId of replacedReservationSessionIds) {
+                  await promoteAutomaticWaitlist({
+                    transaction,
+                    eventId: context.event.id,
+                    sessionId: replacedSessionId,
+                    now: mutationNow,
+                    requestId: uuidSchema.safeParse(requestId).success
+                      ? requestId
+                      : generateUuidV7(),
+                    generateId,
+                  });
+                }
+              }
               await transaction.insert(schema.reservations).values({
                 id: generateId(),
                 eventId: context.event.id,
@@ -1729,6 +1992,13 @@ export const mutateParticipantAgenda = async (
             requestId: uuidSchema.safeParse(requestId).success
               ? requestId
               : generateUuidV7(),
+            ...(replacedReservationSessionIds.length > 0
+              ? {
+                  before: {
+                    replacedReservationSessionIds,
+                  },
+                }
+              : {}),
             after: { agendaVersion: currentVersion + 1 },
           });
         }
@@ -1765,9 +2035,7 @@ export const mutateParticipantAgenda = async (
       },
       timeConflict:
         !responseSuperseded &&
-        (receipt.action === 'add' ||
-          receipt.action === 'reserve' ||
-          receipt.action === 'join_waitlist')
+        (receipt.action === 'add' || receipt.action === 'join_waitlist')
           ? conflictFor(snapshot, receipt.sessionId)
           : null,
     });
@@ -1783,7 +2051,8 @@ export const mutateParticipantAgenda = async (
       (error instanceof StaleAgendaVersionError ||
         error instanceof AgendaCapacityFullError ||
         error instanceof AgendaReservationClosedError ||
-        error instanceof AgendaTicketInactiveError)
+        error instanceof AgendaTicketInactiveError ||
+        error instanceof AgendaReservationConflictError)
     ) {
       try {
         const snapshot = await loadParticipantAgendaSnapshot(

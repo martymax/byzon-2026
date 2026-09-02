@@ -519,10 +519,41 @@ const agendaMutationRequestBaseShape = {
   expectedVersion: agendaVersionSchema,
 } as const;
 
-export const participantAgendaMutationRequestSchema = z.strictObject({
-  ...agendaMutationRequestBaseShape,
-  action: agendaMutationActionSchema,
-});
+export const participantAgendaMutationRequestSchema = z
+  .strictObject({
+    ...agendaMutationRequestBaseShape,
+    action: agendaMutationActionSchema,
+    replaceReservationSessionIds: z
+      .array(uuidSchema)
+      .min(1)
+      .max(MAX_CONFLICTING_SESSIONS)
+      .optional(),
+  })
+  .superRefine((request, context) => {
+    const replacementIds = request.replaceReservationSessionIds;
+    if (replacementIds === undefined) return;
+    if (request.action !== 'reserve') {
+      context.addIssue({
+        code: 'custom',
+        path: ['replaceReservationSessionIds'],
+        message: 'Only a reservation may replace existing reservations',
+      });
+    }
+    if (replacementIds.includes(request.sessionId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['replaceReservationSessionIds'],
+        message: 'A reservation cannot replace itself',
+      });
+    }
+    if (new Set(replacementIds).size !== replacementIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['replaceReservationSessionIds'],
+        message: 'Replacement reservation session IDs must be unique',
+      });
+    }
+  });
 
 export type ParticipantAgendaMutationRequest = z.infer<
   typeof participantAgendaMutationRequestSchema
@@ -644,6 +675,74 @@ export const agendaTimeConflictWarningSchema = z
 
 export type AgendaTimeConflictWarning = z.infer<
   typeof agendaTimeConflictWarningSchema
+>;
+
+export const agendaReservationConflictSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    sessionId: uuidSchema,
+    targetSessions: z
+      .array(agendaConflictSessionSnapshotSchema)
+      .min(1)
+      .max(MAX_CONFLICTING_SESSIONS),
+    conflictingSessions: z
+      .array(agendaConflictSessionSnapshotSchema)
+      .min(1)
+      .max(MAX_CONFLICTING_SESSIONS),
+  })
+  .superRefine((conflict, context) => {
+    const targetIds = conflict.targetSessions.map(({ id }) => id);
+    const conflictingIds = conflict.conflictingSessions.map(({ id }) => id);
+    if (
+      !targetIds.includes(conflict.sessionId) ||
+      new Set(targetIds).size !== targetIds.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['targetSessions'],
+        message:
+          'Reservation conflict targets must be unique and contain the requested session',
+      });
+    }
+    if (new Set(conflictingIds).size !== conflictingIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['conflictingSessions'],
+        message: 'Conflicting reservation sessions must be unique',
+      });
+    }
+    conflict.targetSessions.forEach((session, index) => {
+      if (session.eventId !== conflict.eventId) {
+        context.addIssue({
+          code: 'custom',
+          path: ['targetSessions', index],
+          message: 'Reservation conflict target must belong to the event',
+        });
+      }
+    });
+    conflict.conflictingSessions.forEach((session, index) => {
+      const overlapsTarget = conflict.targetSessions.some(
+        (target) =>
+          Date.parse(session.startsAt) < Date.parse(target.endsAt) &&
+          Date.parse(session.endsAt) > Date.parse(target.startsAt),
+      );
+      if (
+        session.eventId !== conflict.eventId ||
+        targetIds.includes(session.id) ||
+        !overlapsTarget
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['conflictingSessions', index],
+          message:
+            'Conflicting reservation session must be a different overlapping same-event item',
+        });
+      }
+    });
+  });
+
+export type AgendaReservationConflict = z.infer<
+  typeof agendaReservationConflictSchema
 >;
 
 const validateAgendaMutationPostcondition = (
@@ -846,6 +945,45 @@ export const agendaReservationClosedProblemSchema = defineApiProblemSchema(
       });
     }
   });
+export const agendaReservationConflictProblemSchema = defineApiProblemSchema(
+  'RESERVATION_CONFLICT',
+  409,
+)
+  .extend({
+    sessionId: uuidSchema,
+    agenda: participantAgendaResponseSchema,
+    conflict: agendaReservationConflictSchema,
+    replacement: z.strictObject({
+      allowed: z.boolean(),
+      until: z.string().datetime({ offset: true }),
+      reservationSessionIds: z
+        .array(uuidSchema)
+        .min(1)
+        .max(MAX_CONFLICTING_SESSIONS),
+    }),
+  })
+  .superRefine((problem, context) => {
+    if (
+      problem.conflict.eventId !== problem.agenda.eventId ||
+      problem.conflict.sessionId !== problem.sessionId
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['conflict'],
+        message: 'Reservation conflict must match the canonical agenda target',
+      });
+    }
+    if (
+      new Set(problem.replacement.reservationSessionIds).size !==
+      problem.replacement.reservationSessionIds.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['replacement', 'reservationSessionIds'],
+        message: 'Replacement reservation session IDs must be unique',
+      });
+    }
+  });
 export const agendaStaleVersionProblemSchema = defineApiProblemSchema(
   'STALE_VERSION',
   409,
@@ -899,6 +1037,7 @@ export const participantAgendaMutationProblemSchema = z.discriminatedUnion(
     agendaTicketInactiveProblemSchema,
     agendaCapacityFullProblemSchema,
     agendaReservationClosedProblemSchema,
+    agendaReservationConflictProblemSchema,
     agendaStaleVersionProblemSchema,
     idempotencyKeyReusedProblemSchema,
     idempotencyInProgressProblemSchema,

@@ -7,7 +7,7 @@ import {
   publishedAgendaReservationWindowsSchema,
   publishedProgramAgendaSnapshotSchema,
 } from '@byzon/domain/contracts';
-import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 
 export interface AutomaticWaitlistPromotionInput {
   transaction: DatabaseTransaction;
@@ -113,6 +113,71 @@ const participantCanBePromoted = async (
   return ticket !== undefined;
 };
 
+const participantHasReservationConflict = async (
+  transaction: DatabaseTransaction,
+  eventId: string,
+  userId: string,
+  targetReservationSessionId: string,
+): Promise<boolean> => {
+  const publication = await transaction.query.contentPublications.findFirst({
+    columns: { snapshot: true },
+    where: eq(schema.contentPublications.eventId, eventId),
+    orderBy: [desc(schema.contentPublications.version)],
+  });
+  const snapshot = publishedProgramAgendaSnapshotSchema.safeParse(
+    publication?.snapshot,
+  );
+  if (!snapshot.success) return true;
+  const publishedById = new Map(
+    snapshot.data.program.sessions.map((session) => [session.id, session]),
+  );
+  const operational = await transaction
+    .select({
+      id: schema.programSessions.id,
+      reservationGroupId: schema.programSessions.reservationGroupId,
+      status: schema.programSessions.status,
+    })
+    .from(schema.programSessions)
+    .where(eq(schema.programSessions.eventId, eventId));
+  const projectionsFor = (reservationSessionId: string) =>
+    operational
+      .filter(
+        (session) =>
+          (session.reservationGroupId ?? session.id) === reservationSessionId &&
+          session.status !== 'archived' &&
+          session.status !== 'cancelled',
+      )
+      .map(({ id }) => publishedById.get(id))
+      .filter(
+        (
+          session,
+        ): session is NonNullable<ReturnType<typeof publishedById.get>> =>
+          session !== undefined && session.status !== 'cancelled',
+      );
+  const targetProjections = projectionsFor(targetReservationSessionId);
+  if (targetProjections.length === 0) return true;
+  const existingReservations = await transaction
+    .select({ sessionId: schema.reservations.sessionId })
+    .from(schema.reservations)
+    .where(
+      and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, userId),
+        eq(schema.reservations.status, 'confirmed'),
+        ne(schema.reservations.sessionId, targetReservationSessionId),
+      ),
+    );
+  return existingReservations.some((reservation) =>
+    projectionsFor(reservation.sessionId).some((existing) =>
+      targetProjections.some(
+        (target) =>
+          Date.parse(existing.startsAt) < Date.parse(target.endsAt) &&
+          Date.parse(existing.endsAt) > Date.parse(target.startsAt),
+      ),
+    ),
+  );
+};
+
 /**
  * Promotes as many FIFO entries as the current capacity permits. The caller
  * must already hold the canonical content and participant-reservation session
@@ -212,6 +277,20 @@ export const promoteAutomaticWaitlist = async ({
         { generateId },
       );
       continue;
+    }
+
+    // Preserve FIFO and leave the participant waiting for an explicit choice.
+    // A later capacity transition can retry after their conflicting booking is
+    // gone; automatic promotion must never create a double reservation.
+    if (
+      await participantHasReservationConflict(
+        transaction,
+        eventId,
+        waiting.userId,
+        sessionId,
+      )
+    ) {
+      break;
     }
 
     const existing = await transaction.query.reservations.findFirst({

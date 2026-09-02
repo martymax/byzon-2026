@@ -204,6 +204,39 @@ describe('CS-AGENDA-01 participant contracts', () => {
       }).success,
     ).toBe(false);
     expect(
+      participantAgendaMutationRequestSchema.parse({
+        sessionId: ids.otherSession,
+        action: 'reserve',
+        expectedVersion: 7,
+        replaceReservationSessionIds: [ids.session],
+      }).replaceReservationSessionIds,
+    ).toEqual([ids.session]);
+    for (const invalidReplacement of [
+      {
+        sessionId: ids.otherSession,
+        action: 'add',
+        expectedVersion: 7,
+        replaceReservationSessionIds: [ids.session],
+      },
+      {
+        sessionId: ids.session,
+        action: 'reserve',
+        expectedVersion: 7,
+        replaceReservationSessionIds: [ids.session],
+      },
+      {
+        sessionId: ids.otherSession,
+        action: 'reserve',
+        expectedVersion: 7,
+        replaceReservationSessionIds: [ids.session, ids.session],
+      },
+    ]) {
+      expect(
+        participantAgendaMutationRequestSchema.safeParse(invalidReplacement)
+          .success,
+      ).toBe(false);
+    }
+    expect(
       participantAgendaMutationRequestSchema.safeParse({
         sessionId: ids.session,
         action: 'registration_estimate',
@@ -959,6 +992,34 @@ describe('CS-AGENDA-01 participant contracts', () => {
         },
       }).code,
     ).toBe('RESERVATION_CLOSED');
+    expect(
+      participantAgendaMutationProblemSchema.parse({
+        ...problem('RESERVATION_CONFLICT', 409),
+        sessionId: ids.otherSession,
+        agenda: {
+          ...response,
+          items: [
+            reservedItem,
+            {
+              ...savedItem,
+              session: targetSession,
+              capacity: reservationCapacity,
+            },
+          ],
+        },
+        conflict: {
+          eventId: ids.event,
+          sessionId: ids.otherSession,
+          targetSessions: [targetSession],
+          conflictingSessions: [session],
+        },
+        replacement: {
+          allowed: true,
+          until: session.startsAt,
+          reservationSessionIds: [ids.session],
+        },
+      }).code,
+    ).toBe('RESERVATION_CONFLICT');
     expect(
       participantAgendaMutationProblemSchema.parse({
         ...problem('TICKET_INACTIVE', 409),
