@@ -391,7 +391,9 @@ const AdminNavigation = ({
           className={styles.navigationGroup}
           key={group.label ?? `primary-${index}`}
         >
-          {group.label ? <h2>{group.label}</h2> : null}
+          {group.label ? (
+            <p className={styles.navigationGroupLabel}>{group.label}</p>
+          ) : null}
           <ul>
             {group.items.map((item) => {
               const featureOff =

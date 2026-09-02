@@ -22,9 +22,11 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:a11y": "PLAYWRIGHT_ALLOW_LIVE_START=1 playwright test tests/e2e/accessibility.spec.ts",
+    "test:admin-ux": "playwright test --config=playwright.admin.config.ts",
     "test:components": "pnpm --filter @byzon/conference test:components",
     "test:static": "python3 tests/static_site_smoke.py",
     "test:e2e": "playwright test",
+    "report:admin-bundles": "node apps/conference/scripts/admin-ux-bundle-report.mjs --baseline docs/evidence/admin-ux-bundle-baseline.json",
     "ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:static"
   },
   "devDependencies": {

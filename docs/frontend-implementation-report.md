@@ -192,6 +192,15 @@ offline, relace, oprávnění, změněná data a nejistý výsledek používají
 texty. Reference požadavku se v chybovém souhrnu zobrazí až po otevření
 technických údajů. Počty používají česká `Intl` pravidla a lokalizované tisíce.
 
+Cross-route automatizace pokrývá všech 11 admin rout na 320, 375, 414, 768,
+1024, 1280 a 1440 px. Ověřuje axe, landmarky, posloupnost nadpisů, skip link,
+desktopovou i drawer navigaci, filtry/detail, page overflow, 200% reflow a
+reduced motion. Ruční screenshot review opravil mobilní souhrn rezervací.
+Bundle budget drží shared admin gzip na +315 B/+0,24 % a přímé route importy snížily
+rezervace, tým, reporty, audit a nastavení odstraněním nechtěného legacy
+barrel bundlingu. CLS je 0.03246 a měřené interakce nevytvořily long task;
+fyzický screen-reader UAT a max-page browser trace zůstávají poctivě otevřené.
+
 Správa obsahu na `/admin/obsah` používá jedno typed port rozhraní pro dny,
 místa, místnosti, body programu, řečníky, partnery, stránky a FAQ; development
 injektuje stateful preview port a produkce používá výchozí fetch port. Dny lze

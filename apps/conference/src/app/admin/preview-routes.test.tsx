@@ -34,17 +34,27 @@ vi.mock('@/components/admin-announcement-workspace', () => ({
 }));
 vi.mock('@/components/admin-operations-workspace', () => ({
   AdminOperationsWorkspace: () => null,
-  AdminReportsWorkspace: routeWorkspaceMocks.reports,
-  AdminTeamWorkspace: routeWorkspaceMocks.team,
+}));
+vi.mock('@/components/admin-reports-workspace', () => ({
+  AdminReportsRedesign: routeWorkspaceMocks.reports,
+}));
+vi.mock('@/components/admin-team-workspace', () => ({
+  AdminTeamRedesign: routeWorkspaceMocks.team,
 }));
 vi.mock('@/components/admin-engagement-workspace', () => ({
   AdminEngagementWorkspace: () => null,
 }));
 vi.mock('@/components/admin-reservation-workspace', () => ({
   AdminReservationWorkspace: () => null,
-  AdminAuditWorkspace: routeWorkspaceMocks.audit,
-  AdminReservationsWorkspace: routeWorkspaceMocks.reservations,
-  AdminSettingsWorkspace: routeWorkspaceMocks.settings,
+}));
+vi.mock('@/components/admin-audit-workspace', () => ({
+  AdminAuditRedesign: routeWorkspaceMocks.audit,
+}));
+vi.mock('@/components/admin-reservations-redesign', () => ({
+  AdminReservationsRedesign: routeWorkspaceMocks.reservations,
+}));
+vi.mock('@/components/admin-settings-workspace', () => ({
+  AdminSettingsRedesign: routeWorkspaceMocks.settings,
 }));
 
 import AdminAuditPage from './audit/page';

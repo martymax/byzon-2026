@@ -1,0 +1,23 @@
+{
+  "baseline": "main@5bb7afd",
+  "generatedBy": "apps/conference/scripts/admin-ux-bundle-report.mjs",
+  "node": "v24.18.0",
+  "shared": {
+    "chunks": 5,
+    "gzipBytes": 129094,
+    "rawBytes": 540733
+  },
+  "routes": {
+    "overview": { "chunks": 1, "gzipBytes": 4097, "rawBytes": 10999 },
+    "content": { "chunks": 2, "gzipBytes": 18131, "rawBytes": 58893 },
+    "tickets": { "chunks": 1, "gzipBytes": 6091, "rawBytes": 19604 },
+    "participants": { "chunks": 1, "gzipBytes": 4578, "rawBytes": 14168 },
+    "reservations": { "chunks": 3, "gzipBytes": 25825, "rawBytes": 96609 },
+    "announcements": { "chunks": 1, "gzipBytes": 4503, "rawBytes": 14020 },
+    "engagement": { "chunks": 1, "gzipBytes": 5461, "rawBytes": 17538 },
+    "team": { "chunks": 3, "gzipBytes": 22775, "rawBytes": 78891 },
+    "reports": { "chunks": 3, "gzipBytes": 22775, "rawBytes": 78891 },
+    "audit": { "chunks": 3, "gzipBytes": 25825, "rawBytes": 96609 },
+    "settings": { "chunks": 3, "gzipBytes": 25825, "rawBytes": 96609 }
+  }
+}

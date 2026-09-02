@@ -408,19 +408,19 @@ export const AdminReservationsRedesign = () => {
       ) : null}
 
       <section className={styles.summaryGrid} aria-label="Souhrn kapacit">
-        <article className={styles.metricCard}>
+        <article className={styles.metric}>
           <span>Plné</span>
           <strong>{summary.full}</strong>
         </article>
-        <article className={styles.metricCard}>
+        <article className={styles.metric}>
           <span>Téměř plné</span>
           <strong>{summary.nearly_full}</strong>
         </article>
-        <article className={styles.metricCard}>
+        <article className={styles.metric}>
           <span>Bez problému</span>
           <strong>{summary.healthy}</strong>
         </article>
-        <article className={styles.metricCard}>
+        <article className={styles.metric}>
           <span>Bez kapacity</span>
           <strong>{summary.not_configured}</strong>
         </article>
