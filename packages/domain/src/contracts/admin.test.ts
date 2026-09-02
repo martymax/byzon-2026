@@ -5,6 +5,7 @@ import {
   adminCachePolicy,
   adminContextResponseSchema,
   adminEventSettingsUpdateRequestSchema,
+  adminExportJobListResponseSchema,
   adminExportRequestSchema,
   adminMutationProblemSchema,
   adminOperationsOverviewResponseSchema,
@@ -204,6 +205,68 @@ describe('CS-ADMIN-01 contracts', () => {
       adminOperationsOverviewResponseSchema.safeParse({
         ...overview,
         metrics: [overview.metrics[0], overview.metrics[0]],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('keeps export jobs event-scoped and exposes downloads only while ready', () => {
+    const exportId = '019fa200-0000-7000-8000-000000000010';
+    const ready = {
+      eventId: ids.event,
+      exportId,
+      report: 'participant_summary' as const,
+      format: 'csv' as const,
+      range: null,
+      createdByLabel: 'Demo administrátor',
+      state: 'ready' as const,
+      createdAt: '2026-07-25T12:00:00.000+02:00',
+      expiresAt: '2026-07-26T12:00:00.000+02:00',
+      downloadPath: `/api/v1/admin/events/${ids.event}/exports/${exportId}`,
+    };
+    const response = {
+      eventId: ids.event,
+      items: [ready],
+      pageInfo: { nextCursor: null, hasMore: false },
+    };
+
+    expect(adminExportJobListResponseSchema.parse(response)).toEqual(response);
+    expect(
+      adminExportJobListResponseSchema.safeParse({
+        ...response,
+        items: [
+          { ...ready, state: 'queued', downloadPath: ready.downloadPath },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      adminExportJobListResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...ready,
+            downloadPath: `https://attacker.example/exports/${exportId}`,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      adminExportJobListResponseSchema.safeParse({
+        ...response,
+        items: [{ ...ready, eventId: ids.session }],
+      }).success,
+    ).toBe(false);
+    expect(
+      adminExportJobListResponseSchema.safeParse({
+        ...response,
+        items: [
+          {
+            ...ready,
+            range: {
+              from: '2026-07-25T13:00:00.000+02:00',
+              to: '2026-07-25T12:00:00.000+02:00',
+            },
+          },
+        ],
       }).success,
     ).toBe(false);
   });

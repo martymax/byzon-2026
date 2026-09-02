@@ -23,6 +23,10 @@ import {
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
+  AdminReportsRedesign,
+  type AdminExportJobsPort,
+} from './admin-reports-workspace';
+import {
   AdminTeamRedesign,
   type AdminTeamDataPort,
 } from './admin-team-workspace';
@@ -690,8 +694,10 @@ export const AdminTeamWorkspace = ({
   <AdminTeamRedesign {...(dataPort ? { dataPort } : {})} />
 );
 
-export const AdminReportsWorkspace = () => (
-  <AdminOperationsWorkspaceView mode="reports" />
+export const AdminReportsWorkspace = ({
+  jobsPort,
+}: Readonly<{ jobsPort?: AdminExportJobsPort }>) => (
+  <AdminReportsRedesign {...(jobsPort ? { jobsPort } : {})} />
 );
 
 /** Legacy preview only; canonical routes use dedicated workspaces above. */

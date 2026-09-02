@@ -30,7 +30,9 @@ import {
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
+import { AdminAuditRedesign } from './admin-audit-workspace';
 import { AdminReservationsRedesign } from './admin-reservations-redesign';
+import { AdminSettingsRedesign } from './admin-settings-workspace';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -1085,13 +1087,9 @@ const AdminReservationWorkspaceView = ({
 
 export const AdminReservationsWorkspace = () => <AdminReservationsRedesign />;
 
-export const AdminAuditWorkspace = () => (
-  <AdminReservationWorkspaceView mode="audit" />
-);
+export const AdminAuditWorkspace = () => <AdminAuditRedesign />;
 
-export const AdminSettingsWorkspace = () => (
-  <AdminReservationWorkspaceView mode="settings" />
-);
+export const AdminSettingsWorkspace = () => <AdminSettingsRedesign />;
 
 /** Legacy combined preview retained for regression coverage only. */
 export const AdminReservationWorkspace = ({

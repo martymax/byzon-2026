@@ -1,6 +1,6 @@
 # BYZON 2026 – detailní plán agentního vývoje
 
-> Stav: implementační plán v6.38 – UX týmu a oprávnění AUX-09
+> Stav: implementační plán v6.39 – UX reportů, auditu a nastavení AUX-10
 >
 > Datum sestavení: 20. července 2026
 >
@@ -3361,3 +3361,4 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.36 | 2. 9. 2026 | `AUX-07A`–`C` přidaly session-first stránkovaný kontrakt rezervací s povinně maskovanou referencí a aktivita-first `/admin/rezervace`. Kapacita a storno jsou oddělené, minimum kapacity odpovídá potvrzeným rezervacím a canonical UI testuje full/stale/exact retry/offline bez návratu attendance; dnešní produkční čtení přiznává omezenou první stránku do integrace `AUX-13F`. |
 | 6.37 | 2. 9. 2026 | `AUX-08A`–`D` převedly `/admin/oznameni` na čtyřkrokový critical-only tok s live participant kartou, dirty guardem a přesným audience preview bez tvrzení o doručení. Nový strict event-scoped target DTO poskytuje pojmenovanou session s časem a místností bez ručního UUID či zneužití assignmentů; `sent`/`already_sent`, zero audience, stale, exact retry a security wipe mají browserové regrese. Produkční options endpoint a end-to-end napojení dál vlastní `AUX-13G`. |
 | 6.38 | 2. 9. 2026 | `AUX-09A`–`C` odstranily z `/admin/role` ruční operator/session ID a oddělily seznam, vyhledání existující osoby, výběr role s dopadem, serverem povolený pojmenovaný rozsah a danger revoke. Strict cursor list, POST person search s maskovaným kontaktem a role-compatible options kontrakty kryjí event/station/session bez `organizer_admin` grantu; grant/revoke, server guard, stale reload, permission wipe a exact retry mají responzivní browserové regrese. Produkční read/search/options integraci dál vlastní `AUX-13H`. |
+| 6.39 | 2. 9. 2026 | `AUX-10A`–`E`,`G` převedly `/admin/reporty` na pravdivý async flow s CSV defaultem, obdobím v timezone akce a strict job kontraktem queued/ready/failed/expired, `/admin/audit` na lidské serverové filtry s request ID a cursor invariantem a `/admin/nastaveni` na read→edit core volby s dirty/exact retry a archivním read-only stavem. Download se ukazuje jen pro přesnou same-event ready cestu; neověřený `supportMessage` se zachová beze změny, ale netvrdí dopad ani se nezobrazuje. Produkční job-list integraci dál vlastní `AUX-13I`, audit `AUX-13J` a settings bez blokovaného support textu `AUX-13K`. |

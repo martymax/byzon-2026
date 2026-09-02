@@ -18,6 +18,7 @@ import {
   adminEngagementOverviewFixtures,
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
+  adminExportJobListFixtures,
   adminFixtureIds,
   adminMutationProblemFixtures,
   adminOperationsOverviewFixtures,
@@ -40,6 +41,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminAnnouncementWorkspace } from '../../components/admin-announcement-workspace';
+import type { AdminExportJobsPort } from '../../components/admin-reports-workspace';
 import {
   AdminImportWorkspace,
   type AdminTicketUpdatePort,
@@ -2658,20 +2660,11 @@ describe('F4 contract-first admin journeys', () => {
     },
   );
 
-  it('freezes every visible settings field while an ambiguous exact retry is pending', async () => {
+  it('freezes every visible core setting while an ambiguous exact retry is pending', async () => {
     window.history.replaceState({}, '', '/admin/nastaveni');
     const updateCalls: unknown[] = [];
     let updateCount = 0;
     const api = organizerApi((endpoint, options) => {
-      if (endpoint === adminReservationsEndpoint) {
-        return success(adminReservationFixtures.list!);
-      }
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        return success(adminSessionCapacityFixtures.list!);
-      }
-      if (endpoint === adminAuditEndpoint) {
-        return success(adminAuditFixtures.page!);
-      }
       if (endpoint === adminEventSettingsEndpoint) {
         return success(adminEventSettingsFixtures.open!);
       }
@@ -2688,23 +2681,20 @@ describe('F4 contract-first admin journeys', () => {
     });
     const screen = await renderComponent(
       <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminReservationWorkspace />
+        <AdminSettingsWorkspace />
       </AdminWorkspaceShell>,
     );
 
-    const mode = screen.getByRole('combobox', { name: 'Režim registrace' });
-    await mode.selectOptions('invite_only');
+    await screen.getByRole('button', { name: 'Upravit nastavení' }).click();
+    await expect
+      .element(screen.getByRole('radio', { name: /^Registrace je otevřená/ }))
+      .toHaveFocus();
+    const mode = screen.getByRole('radio', { name: /^Pouze pro pozvané/ });
+    await mode.click();
     await screen
-      .getByRole('textbox', { name: 'Auditní důvod změny' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Bezpečné ověření neměnného nastavení.');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat změnu nastavení' })
-      .click();
-    await screen
-      .getByRole('checkbox', {
-        name: /Ověřil\/a jsem aktuální snapshot/,
-      })
-      .click();
+    await screen.getByRole('button', { name: 'Uložit změny' }).click();
     await screen.getByRole('button', { name: 'Uložit nastavení' }).click();
     await expect
       .element(
@@ -2718,10 +2708,191 @@ describe('F4 contract-first admin journeys', () => {
       .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
       .click();
     await expect
-      .element(screen.getByText(/Nastavení bylo změněno/))
+      .element(screen.getByText(/Nastavení bylo uloženo/))
       .toBeVisible();
     expect(updateCalls).toHaveLength(2);
     expect(updateCalls[1]).toEqual(updateCalls[0]);
+  });
+
+  it('wipes the settings draft when a stale refresh loses the session', async () => {
+    window.history.replaceState({}, '', '/admin/nastaveni');
+    let updateRequested = false;
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminEventSettingsEndpoint) {
+        return !updateRequested
+          ? success(adminEventSettingsFixtures.open!)
+          : failure('session_expired', 401);
+      }
+      if (endpoint === adminEventSettingsUpdateEndpoint) {
+        updateRequested = true;
+        return problemFailure(adminMutationProblemFixtures.stale!);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSettingsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Upravit nastavení' }).click();
+    await screen.getByRole('radio', { name: /^Pouze pro pozvané/ }).click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny' })
+      .fill('Citlivý návrh musí po ztrátě relace zmizet.');
+    await screen.getByRole('button', { name: 'Uložit změny' }).click();
+    await screen.getByRole('button', { name: 'Uložit nastavení' }).click();
+
+    await expect
+      .element(screen.getByRole('textbox', { name: 'Důvod změny' }))
+      .not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(
+      'Citlivý návrh musí po ztrátě relace zmizet.',
+    );
+  });
+
+  it('shows truthful export-job states and queues CSV without inventing a download', async () => {
+    window.history.replaceState({}, '', '/admin/reporty');
+    const exportCalls: unknown[] = [];
+    const jobsPort: AdminExportJobsPort = {
+      loadJobs: vi.fn(async () => adminExportJobListFixtures.mixed!),
+    };
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminExportEndpoint) {
+        exportCalls.push(options);
+        return success({
+          eventId: adminFixtureIds.event,
+          exportId: adminFixtureIds.export,
+          report: 'participant_summary',
+          outcome: 'queued',
+          state: 'queued',
+          queuedAt: '2026-07-25T12:15:00.000+02:00',
+          audit: { auditId: adminFixtureIds.auditMutation },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminReportsWorkspace jobsPort={jobsPort} />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect.element(screen.getByText('Připravuje se')).toBeVisible();
+    await expect
+      .element(screen.getByText('Připraven ke stažení'))
+      .toBeVisible();
+    await expect.element(screen.getByText('Nepodařilo se')).toBeVisible();
+    await expect.element(screen.getByText('Odkaz vypršel')).toBeVisible();
+    const downloads = screen.getByRole('link', { name: 'Stáhnout' });
+    await expect
+      .element(downloads)
+      .toHaveAttribute(
+        'href',
+        `/api/v1/admin/events/${adminFixtureIds.event}/exports/${adminFixtureIds.readyExport}`,
+      );
+
+    await screen
+      .getByRole('textbox', { name: 'Důvod vytvoření reportu' })
+      .fill('Provozní kontrola syntetických účastníků.');
+    await screen.getByRole('button', { name: 'Vytvořit report' }).click();
+    await screen.getByRole('button', { name: 'Zařadit report' }).click();
+    await expect.element(screen.getByText(/Report připravujeme/)).toBeVisible();
+    expect(exportCalls).toHaveLength(1);
+    expect(exportCalls[0]).toMatchObject({
+      body: {
+        report: 'participant_summary',
+        format: 'csv',
+        range: null,
+        reason: 'Provozní kontrola syntetických účastníků.',
+      },
+    });
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('paginates audit history with the same server filters and human labels', async () => {
+    window.history.replaceState({}, '', '/admin/audit');
+    const paths: string[] = [];
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint !== adminAuditEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      const path = (options as { path: string }).path;
+      paths.push(path);
+      if (path.includes('cursor=')) {
+        return success({
+          eventId: adminFixtureIds.event,
+          items: [adminAuditFixtures.page!.items[1]!],
+          pageInfo: { nextCursor: null, hasMore: false },
+        });
+      }
+      return success(adminAuditFixtures.first_page!);
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminAuditWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('Upravil nastavení akce');
+    });
+    await screen
+      .getByRole('combobox', { name: 'Oblast' })
+      .selectOptions('settings');
+    await vi.waitFor(() => {
+      expect(paths.at(-1)).toContain('category=settings');
+    });
+    await screen.getByText('Technické údaje').first().click();
+    await screen
+      .getByRole('textbox', { name: 'Request ID' })
+      .fill('admin-request-0001');
+    await vi.waitFor(() => {
+      expect(paths.at(-1)).toContain('requestId=admin-request-0001');
+    });
+    await screen.getByRole('button', { name: 'Načíst další změny' }).click();
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('Zrušil rezervaci');
+    });
+    expect(paths.at(-1)).toContain('category=settings');
+    expect(paths.at(-1)).toContain('requestId=admin-request-0001');
+    expect(paths.at(-1)).toContain('cursor=fixture-admin-audit-page-2');
+    expect(document.body.textContent).not.toContain('update_settings');
+    expect(document.body.textContent).not.toContain('cancel_reservation');
+    expect(document.body.textContent).toContain('Citlivé údaje byly skryty.');
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('keeps archived event settings semantically read-only', async () => {
+    window.history.replaceState({}, '', '/admin/nastaveni');
+    const archived = {
+      ...adminContextFixtures.organizer!,
+      event: { ...adminContextFixtures.organizer!.event, phase: 'archived' },
+    } as const;
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) return success(archived);
+      if (endpoint === adminEventSettingsEndpoint) {
+        return success(adminEventSettingsFixtures.closed!);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSettingsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByText('Archivovaná akce je pouze ke čtení.'))
+      .toBeVisible();
+    expect(document.body.textContent).toContain('Registrace je uzavřená');
+    expect(
+      [...document.querySelectorAll('button')].some(
+        (button) => button.textContent?.trim() === 'Upravit nastavení',
+      ),
+    ).toBe(false);
+    expect(document.querySelector('input')).toBeNull();
+    await expectComponentToPassAxe(adminRoot());
   });
 
   it('renders the aggregate operations snapshot without exposing queue payloads', async () => {

@@ -5,6 +5,7 @@ import {
   adminAuditResponseSchema,
   adminContextResponseSchema,
   adminEventSettingsSchema,
+  adminExportJobListResponseSchema,
   adminOperationsOverviewResponseSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
@@ -33,6 +34,7 @@ import {
   adminContextFixtures,
   adminEventSettingsFixtures,
   adminExportFixtures,
+  adminExportJobListFixtures,
   adminFixtureIds,
   adminMutationProblemFixtures,
   adminOperationsOverviewFixtures,
@@ -169,6 +171,9 @@ describe('F4 canonical fixture sets', () => {
     for (const fixture of Object.values(adminEventSettingsFixtures)) {
       expect(adminEventSettingsSchema.parse(fixture)).toEqual(fixture);
     }
+    for (const fixture of Object.values(adminExportJobListFixtures)) {
+      expect(adminExportJobListResponseSchema.parse(fixture)).toEqual(fixture);
+    }
 
     expect(adminContextFixtures.room_operator?.actor.assignedSessions).toEqual([
       { sessionId: adminFixtureIds.session, title: 'Růst bez zkratek' },
@@ -177,6 +182,11 @@ describe('F4 canonical fixture sets', () => {
       1,
     );
     expect(adminExportFixtures.queued?.state).toBe('queued');
+    expect(
+      adminExportJobListFixtures.mixed?.items.filter(
+        ({ downloadPath }) => downloadPath !== null,
+      ),
+    ).toHaveLength(1);
     expect(adminMutationProblemFixtures.self_lockout?.code).toBe(
       'SELF_LOCKOUT_GUARD',
     );

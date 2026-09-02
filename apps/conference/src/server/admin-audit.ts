@@ -26,7 +26,7 @@ const privateHeaders = (requestId: string) => ({
 
 const categoryFor = (action: string): AdminAuditCategory | null => {
   if (/^(support|ticket)\./.test(action)) return 'support';
-  if (/^import\./.test(action)) return 'import';
+  if (/^(import|ticket_import)\./.test(action)) return 'import';
   if (/^announcement\./.test(action)) return 'announcement';
   if (/^role\./.test(action)) return 'role';
   if (/^(reservation|session\.capacity|waitlist)\./.test(action))

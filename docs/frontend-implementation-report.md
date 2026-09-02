@@ -165,8 +165,17 @@ i preview verzi do technických údajů; produkční options endpoint zůstává
 existující osobu, popsanou roli a serverem povolený pojmenovaný
 event/station/session rozsah. Ruční ID i grant `organizer_admin` jsou skryté;
 grant/revoke má lidské guard chyby, stale reload a exact retry. Produkční
-read/search/options endpointy zůstávají v `AUX-13H`. Exporty jsou
-asynchronní. Rezervace mají nový session-first cursor/pageInfo kontrakt s
+read/search/options endpointy zůstávají v `AUX-13H`. Reporty mají čtyři
+popsané typy, CSV jako výchozí formát, období v timezone akce a povinný důvod.
+Strict historie rozlišuje queued/ready/failed/expired a nabízí stažení pouze
+pro přesnou same-event ready cestu; produkční job list zůstává v `AUX-13I`.
+Audit zobrazuje lidské kategorie, akce a výsledky, serverové
+category/action/time/request filtry a cursor bez klientského předstírání
+úplnosti; actor/outcome filtry zůstávají fail-closed do rozšíření kontraktu.
+Core nastavení začíná read-only, vysvětluje dopad registrace a rezervací,
+zamyká exact-retry draft a archiv nevykreslí edit controls. Neověřený
+`supportMessage` se zachová beze změny, ale nezobrazuje se ani neupravuje do
+produktového rozhodnutí. Rezervace mají nový session-first cursor/pageInfo kontrakt s
 povinně maskovanou referencí. Kanonická stránka řadí plné a téměř plné
 aktivity, zobrazuje textovou obsazenost i progress a odděluje změnu kapacity od
 danger storna konkrétní rezervace; attendance mutace se nevrátila. Dokud
