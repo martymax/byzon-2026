@@ -160,8 +160,9 @@ počítadly, dirty guardem a event/právě-jedna-session audience preview. Sessi
 se vybírá pouze z pojmenovaného event-scoped DTO s časem a místností, nikdy
 ručním UUID nebo assignment seznamem. Kontrola uvádí recipient/excluded count
 bez tvrzení o doručení a canonical `sent`/`already_sent` receipt schovává audit
-i preview verzi do technických údajů; produkční options endpoint zůstává v
-`AUX-13G`. Týmová obrazovka zobrazuje stránkované provozní role a vybírá jen
+i preview verzi do technických údajů. `AUX-13G` doplnil autorizovaný
+event-scoped options endpoint a bezpečné no-store načtení se session
+wipe/retry. Týmová obrazovka zobrazuje stránkované provozní role a vybírá jen
 existující osobu, popsanou roli a serverem povolený pojmenovaný
 event/station/session rozsah. Ruční ID i grant `organizer_admin` jsou skryté;
 grant/revoke má lidské guard chyby, stale reload a exact retry. Produkční

@@ -11,6 +11,8 @@ import {
   adminAnnouncementSendProblemSchema,
   adminAnnouncementSendRequestSchema,
   adminAnnouncementSendResponseSchema,
+  adminAnnouncementTargetListResponseSchema,
+  adminAnnouncementTargetProblemSchema,
   idempotencyKeySchema,
   type ApiProblem,
 } from '@byzon/domain/contracts';
@@ -65,6 +67,7 @@ import {
   adminAnnouncementPreviewProblemFixtures,
   adminAnnouncementSendFixtures,
   adminAnnouncementSendProblemFixtures,
+  adminAnnouncementTargetFixtures,
   announcementFixtureIds,
 } from '@byzon/test-support/fixtures';
 import {
@@ -1128,6 +1131,33 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         supportMutationResponseSchema,
         response,
         successOptions('admin.mock.support-mutation'),
+      );
+    },
+  ),
+
+  http.get(
+    '*/api/v1/admin/events/:eventId/announcements/targets',
+    ({ params }) => {
+      const denied = authorize(
+        adminAnnouncementTargetProblemSchema,
+        ['announcement:send'],
+        'admin.mock.announcement-targets',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId)) {
+        return mockProblemResponse(
+          adminAnnouncementTargetProblemSchema,
+          adminAnnouncementPreviewProblemFixtures.permission,
+          { fixtureName: 'admin.mock.announcement-targets-event' },
+        );
+      }
+      return mockJsonResponse(
+        adminAnnouncementTargetListResponseSchema,
+        {
+          ...clone(adminAnnouncementTargetFixtures.available!),
+          eventId: adminFixtureIds.event,
+        },
+        successOptions('admin.mock.announcement-targets'),
       );
     },
   ),

@@ -12,11 +12,12 @@ import {
   type AnnouncementSeverity,
 } from '@byzon/domain/contracts';
 import { AdminTechnicalDetails } from '@byzon/ui';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   requestAdminAnnouncementPreview,
   requestAdminAnnouncementSend,
+  requestAdminAnnouncementTargets,
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
@@ -48,7 +49,7 @@ const severityLabels: Record<AnnouncementSeverity, string> = {
 };
 
 export const AdminAnnouncementWorkspace = ({
-  targets = [],
+  targets,
 }: AdminAnnouncementWorkspaceProps) => {
   const { api, eventId, eventTimezone, invalidateSensitive } =
     useAdminWorkspace();
@@ -74,6 +75,13 @@ export const AdminAnnouncementWorkspace = ({
   const [sendError, setSendError] = useState<string | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [sent, setSent] = useState<AdminAnnouncementSendResponse | null>(null);
+  const [loadedTargets, setLoadedTargets] = useState<
+    readonly AdminAnnouncementTarget[]
+  >([]);
+  const [targetsLoading, setTargetsLoading] = useState(targets === undefined);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
+  const [targetsReload, setTargetsReload] = useState(0);
+  const availableTargets = targets ?? loadedTargets;
 
   const targetDateFormatter = useMemo(
     () =>
@@ -88,7 +96,7 @@ export const AdminAnnouncementWorkspace = ({
     `${target.title} · ${targetDateFormatter.format(new Date(target.startsAt))}${
       target.roomLabel ? ` · ${target.roomLabel}` : ''
     }`;
-  const selectedTarget = targets.find(
+  const selectedTarget = availableTargets.find(
     (target) => target.sessionId === sessionId,
   );
   const dirty =
@@ -130,7 +138,7 @@ export const AdminAnnouncementWorkspace = ({
     setRecoveryMessage(null);
   };
 
-  const wipe = () => {
+  const wipe = useCallback(() => {
     setTitle('');
     setBodyText('');
     setAudienceKind('event');
@@ -143,7 +151,43 @@ export const AdminAnnouncementWorkspace = ({
     setAttempted(false);
     setSent(null);
     setRecoveryMessage(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (targets !== undefined) return;
+    const request = requestFence.begin('announcement-targets');
+    void requestAdminAnnouncementTargets(api, eventId, request.signal).then(
+      (result) => {
+        if (!request.isCurrent()) return;
+        request.finish();
+        setTargetsLoading(false);
+        if (!result.ok) {
+          setLoadedTargets([]);
+          if (isAdminSecurityFailure(result)) {
+            wipe();
+            invalidateSensitive(
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+            return;
+          }
+          setTargetsError(
+            adminFailureMessage(result.failure, result.metadata?.requestId),
+          );
+          return;
+        }
+        if (result.kind === 'success') setLoadedTargets(result.data.options);
+      },
+    );
+    return () => requestFence.cancel('announcement-targets');
+  }, [
+    api,
+    eventId,
+    invalidateSensitive,
+    requestFence,
+    targets,
+    targetsReload,
+    wipe,
+  ]);
 
   const createPreview = async (
     body: AdminAnnouncementPreviewRequest,
@@ -289,7 +333,7 @@ export const AdminAnnouncementWorkspace = ({
       ? preview.draft.audience.sessionId
       : null;
   const previewTarget = previewSessionId
-    ? targets.find((target) => target.sessionId === previewSessionId)
+    ? availableTargets.find((target) => target.sessionId === previewSessionId)
     : undefined;
   const previewAudienceLabel = preview
     ? preview.draft.audience.kind === 'event'
@@ -339,6 +383,27 @@ export const AdminAnnouncementWorkspace = ({
         <p className={styles.warning} role="status">
           {recoveryMessage}
         </p>
+      ) : null}
+      {targetsLoading ? (
+        <p className={styles.muted} role="status">
+          Načítám aktivity pro přesné publikum…
+        </p>
+      ) : null}
+      {targetsError ? (
+        <section className={styles.warning} role="alert">
+          <p>{targetsError}</p>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => {
+              setTargetsLoading(true);
+              setTargetsError(null);
+              setTargetsReload((value) => value + 1);
+            }}
+            type="button"
+          >
+            Načíst aktivity znovu
+          </button>
+        </section>
       ) : null}
 
       <section className={styles.panel} aria-labelledby="announcement-draft">
@@ -407,14 +472,16 @@ export const AdminAnnouncementWorkspace = ({
                 const nextKind = event.target.value as 'event' | 'session';
                 setAudienceKind(nextKind);
                 setSessionId(
-                  nextKind === 'session' ? (targets[0]?.sessionId ?? '') : '',
+                  nextKind === 'session'
+                    ? (availableTargets[0]?.sessionId ?? '')
+                    : '',
                 );
                 resetImmutablePreview();
               }}
               value={audienceKind}
             >
               <option value="event">Všem účastníkům akce</option>
-              {targets.length > 0 ? (
+              {availableTargets.length > 0 ? (
                 <option value="session">Účastníkům jedné aktivity</option>
               ) : null}
             </select>
@@ -431,7 +498,7 @@ export const AdminAnnouncementWorkspace = ({
                 }}
                 value={sessionId}
               >
-                {targets.map((target) => (
+                {availableTargets.map((target) => (
                   <option key={target.sessionId} value={target.sessionId}>
                     {targetLabel(target)}
                   </option>
@@ -440,8 +507,13 @@ export const AdminAnnouncementWorkspace = ({
             </label>
           ) : (
             <p className={styles.helper}>
-              Volba jedné aktivity se zobrazí, až server nabídne pojmenovaný
-              seznam aktivit pro tuto akci.
+              {targetsLoading
+                ? 'Načítáme pojmenovaný seznam aktivit pro tuto akci.'
+                : targetsError
+                  ? 'Seznam aktivit teď není dostupný; eventové publikum zůstává bezpečně dostupné.'
+                  : availableTargets.length === 0
+                    ? 'Pro tuto akci nejsou dostupné žádné aktivity.'
+                    : 'Můžete zvolit všechny účastníky, nebo právě jednu pojmenovanou aktivitu.'}
             </p>
           )}
         </div>

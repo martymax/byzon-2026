@@ -1,4 +1,6 @@
 import {
+  adminAnnouncementTargetFixtures,
+  announcementFixtureIds,
   adminEventSettingsFixtures,
   adminEventSettingsUpdateFixtures,
   adminEngagementMutationFixtures,
@@ -22,6 +24,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ApiPort } from './api/endpoint';
 import {
   adminAnnouncementSendEndpoint,
+  adminAnnouncementTargetsEndpoint,
   adminContextEndpoint,
   adminEngagementMutationEndpoint,
   adminEngagementOverviewEndpoint,
@@ -30,6 +33,7 @@ import {
   adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
   requestAdminEventSettingsUpdate,
+  requestAdminAnnouncementTargets,
   requestAdminEngagementMutation,
   requestAdminEngagementOverview,
   requestAdminOperationsOverview,
@@ -98,6 +102,31 @@ describe('admin API contract policies', () => {
       retry: 'never',
       idempotency: 'required',
     });
+    expect(adminAnnouncementTargetsEndpoint).toMatchObject({
+      method: 'GET',
+      retry: 'safe-read',
+      idempotency: 'forbidden',
+    });
+  });
+
+  it('loads named announcement targets through a correlated no-store read', async () => {
+    const request = vi.fn(async () =>
+      success(adminAnnouncementTargetFixtures.available!),
+    );
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
+
+    await expect(
+      requestAdminAnnouncementTargets(api, announcementFixtureIds.event),
+    ).resolves.toMatchObject({ ok: true });
+    expect(request).toHaveBeenCalledWith(
+      adminAnnouncementTargetsEndpoint,
+      expect.objectContaining({
+        path: `/api/v1/admin/events/${announcementFixtureIds.event}/announcements/targets`,
+        cache: 'no-store',
+      }),
+    );
   });
 
   it('loads one no-store engagement snapshot without raw participant contacts', async () => {

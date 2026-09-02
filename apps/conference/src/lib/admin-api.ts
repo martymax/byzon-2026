@@ -43,6 +43,8 @@ import {
   adminAnnouncementSendProblemSchema,
   adminAnnouncementSendRequestSchema,
   adminAnnouncementSendResponseSchema,
+  adminAnnouncementTargetListResponseSchema,
+  adminAnnouncementTargetProblemSchema,
   type AdminAnnouncementPreviewRequest,
   type AdminAnnouncementSendRequest,
   type ApiProblem,
@@ -239,6 +241,24 @@ export const adminAnnouncementPreviewEndpoint = defineApiEndpoint({
   ],
   responseKind: 'json',
   retry: 'never',
+  idempotency: 'forbidden',
+});
+
+export const adminAnnouncementTargetsEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminAnnouncementTargetListResponseSchema,
+  problemSchema: adminAnnouncementTargetProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'ANNOUNCEMENTS_DISABLED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+  ],
+  responseKind: 'json',
+  retry: 'safe-read',
   idempotency: 'forbidden',
 });
 
@@ -641,6 +661,20 @@ export const requestAdminAnnouncementPreview = async (
       ...(signal ? { signal } : {}),
     }),
     (data) => data.eventId === eventId && sameJson(data.draft, body.draft),
+  );
+
+export const requestAdminAnnouncementTargets = async (
+  api: ApiPort,
+  eventId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminAnnouncementTargetsEndpoint, {
+      path: eventPath(eventId, '/announcements/targets'),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
   );
 
 export const requestAdminAnnouncementSend = async (

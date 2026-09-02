@@ -11,9 +11,10 @@ import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendRequestSchema,
   adminAnnouncementSendResponseSchema,
+  adminAnnouncementTargetListResponseSchema,
   type AdminAnnouncementDraft,
 } from '@byzon/domain/contracts';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -209,6 +210,67 @@ const audienceSnapshot = async (
 
 const maskedReference = (userId: string) =>
   `Účastník •${userId.replaceAll('-', '').slice(-4)}`;
+
+export const handleAdminAnnouncementTargets = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminAnnouncementDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'GET') {
+      throw apiProblem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    await requireAdmin(request, eventId, dependencies);
+    const rows = await dependencies.db
+      .select({
+        roomLabel: schema.rooms.name,
+        sessionId: schema.programSessions.id,
+        startsAt: schema.programSessions.startsAt,
+        title: schema.programSessions.title,
+      })
+      .from(schema.programSessions)
+      .leftJoin(
+        schema.rooms,
+        and(
+          eq(schema.rooms.eventId, schema.programSessions.eventId),
+          eq(schema.rooms.id, schema.programSessions.roomId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          inArray(schema.programSessions.status, ['draft', 'published']),
+        ),
+      )
+      .orderBy(
+        asc(schema.programSessions.startsAt),
+        asc(schema.programSessions.id),
+      )
+      .limit(200);
+    const response = adminAnnouncementTargetListResponseSchema.parse({
+      eventId,
+      options: rows.map((row) => ({
+        ...row,
+        startsAt: row.startsAt.toISOString(),
+      })),
+    });
+    return Response.json(response, {
+      headers: privateHeaders(requestId),
+    });
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
 
 export const handleAdminAnnouncementPreview = async (
   request: Request,
