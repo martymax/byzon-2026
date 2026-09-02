@@ -212,7 +212,7 @@ const networkingStateFrom = (row: {
 
 const invitationFrom = (row: {
   emailVerified: boolean;
-  lastInvitationSentAt: Date | null;
+  lastInvitationSentAt: Date | string | null;
 }): {
   status: AdminParticipantInvitationStatus;
   lastSentAt: string | null;
@@ -222,7 +222,10 @@ const invitationFrom = (row: {
     : row.lastInvitationSentAt
       ? 'sent'
       : 'not_sent',
-  lastSentAt: row.lastInvitationSentAt?.toISOString() ?? null,
+  lastSentAt:
+    row.lastInvitationSentAt === null
+      ? null
+      : new Date(row.lastInvitationSentAt).toISOString(),
 });
 
 const participantAccessFor = (
@@ -233,7 +236,9 @@ const participantAccessFor = (
     .select({
       id: schema.tickets.id,
       eventId: schema.tickets.eventId,
-      userId: sql<string>`${schema.tickets.holderUserId}`.as('user_id'),
+      userId: sql<string>`${schema.tickets.holderUserId}`.as(
+        'participant_access_user_id',
+      ),
       source: sql<'ticket' | 'simpleshop'>`'ticket'`.as('source'),
       referenceValue: schema.tickets.codeSuffix,
       externalId: schema.tickets.externalId,
@@ -374,7 +379,7 @@ const loadParticipantDetail = async (
       ticketClaimedAt: participantAccess.claimedAt,
       ticketVersion: participantAccess.version,
       emailVerified: schema.users.emailVerified,
-      lastInvitationSentAt: sql<Date | null>`(
+      lastInvitationSentAt: sql<Date | string | null>`(
         select max(${schema.auditLogs.createdAt})
         from ${schema.auditLogs}
         where ${schema.auditLogs.eventId} = ${eventId}
@@ -601,7 +606,7 @@ export const handleAdminParticipantList = async (
           profileVersion: schema.participantProfiles.version,
           ticketVersion: participantAccess.version,
           emailVerified: schema.users.emailVerified,
-          lastInvitationSentAt: sql<Date | null>`(
+          lastInvitationSentAt: sql<Date | string | null>`(
             select max(${schema.auditLogs.createdAt})
             from ${schema.auditLogs}
             where ${schema.auditLogs.eventId} = ${eventId}
@@ -887,7 +892,7 @@ export const handleAdminParticipantInvite = async (
                 email: schema.users.email,
                 emailVerified: schema.users.emailVerified,
                 membershipStatus: schema.eventMemberships.status,
-                lastInvitationSentAt: sql<Date | null>`(
+                lastInvitationSentAt: sql<Date | string | null>`(
                   select max(${schema.auditLogs.createdAt})
                   from ${schema.auditLogs}
                   where ${schema.auditLogs.eventId} = ${eventId}
