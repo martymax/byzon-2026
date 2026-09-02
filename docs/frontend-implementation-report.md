@@ -161,7 +161,11 @@ se vybírá pouze z pojmenovaného event-scoped DTO s časem a místností, nikd
 ručním UUID nebo assignment seznamem. Kontrola uvádí recipient/excluded count
 bez tvrzení o doručení a canonical `sent`/`already_sent` receipt schovává audit
 i preview verzi do technických údajů; produkční options endpoint zůstává v
-`AUX-13G`. Role jsou event/session/room scoped; exporty jsou
+`AUX-13G`. Týmová obrazovka zobrazuje stránkované provozní role a vybírá jen
+existující osobu, popsanou roli a serverem povolený pojmenovaný
+event/station/session rozsah. Ruční ID i grant `organizer_admin` jsou skryté;
+grant/revoke má lidské guard chyby, stale reload a exact retry. Produkční
+read/search/options endpointy zůstávají v `AUX-13H`. Exporty jsou
 asynchronní. Rezervace mají nový session-first cursor/pageInfo kontrakt s
 povinně maskovanou referencí. Kanonická stránka řadí plné a téměř plné
 aktivity, zobrazuje textovou obsazenost i progress a odděluje změnu kapacity od

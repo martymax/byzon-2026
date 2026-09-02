@@ -23,6 +23,10 @@ import {
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
+  AdminTeamRedesign,
+  type AdminTeamDataPort,
+} from './admin-team-workspace';
+import {
   adminFailureMessage,
   createAdminIdempotencyKey,
   isAmbiguousAdminMutationFailure,
@@ -106,8 +110,7 @@ const AdminOperationsWorkspaceView = ({
 
   const canReadOperations =
     mode !== 'reports' && permissions.includes('operations:read');
-  const canManageRoles =
-    mode !== 'reports' && permissions.includes('role:manage');
+  const canManageRoles = false;
   const canExport =
     mode !== 'team' && permissions.includes('personal-data:operational:export');
 
@@ -681,8 +684,10 @@ const AdminOperationsWorkspaceView = ({
   );
 };
 
-export const AdminTeamWorkspace = () => (
-  <AdminOperationsWorkspaceView mode="team" />
+export const AdminTeamWorkspace = ({
+  dataPort,
+}: Readonly<{ dataPort?: AdminTeamDataPort }>) => (
+  <AdminTeamRedesign {...(dataPort ? { dataPort } : {})} />
 );
 
 export const AdminReportsWorkspace = () => (

@@ -16,6 +16,9 @@ import {
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationResponseSchema,
   adminRoleAssignmentMutationResponseSchema,
+  adminRoleAssignmentListResponseSchema,
+  adminRolePersonSearchResponseSchema,
+  adminRoleScopeOptionsResponseSchema,
   problemTypeForCode,
   type AdminReservationRecord,
   type AdminReservationSessionItem,
@@ -39,6 +42,7 @@ export const adminFixtureIds = Object.freeze({
   auditMutation: '019fb200-0000-7000-8000-000000000011',
   moderator: '019fb200-0000-7000-8000-000000000013',
   moderatorAssignment: '019fb200-0000-7000-8000-000000000014',
+  station: '019fb200-0000-7000-8000-000000000015',
 } as const);
 
 export const adminContextFixtures = defineFixtureSet({
@@ -348,6 +352,106 @@ const roleAssignment = {
   version: 1,
 };
 
+const moderatorAssignment = {
+  assignmentId: adminFixtureIds.moderatorAssignment,
+  eventId: adminFixtureIds.event,
+  operatorId: adminFixtureIds.moderator,
+  operatorLabel: 'Moderátorka #14',
+  role: 'moderator' as const,
+  scope: {
+    kind: 'session' as const,
+    sessionId: adminFixtureIds.secondSession,
+    label: 'Jak řídit růst firmy',
+  },
+  state: 'scheduled' as const,
+  version: 2,
+};
+
+export const adminRoleAssignmentListFixtures = defineFixtureSet({
+  name: 'admin.role-assignment-list',
+  schema: adminRoleAssignmentListResponseSchema,
+  fixtures: {
+    list: {
+      eventId: adminFixtureIds.event,
+      assignmentsVersion: 3,
+      items: [roleAssignment, moderatorAssignment],
+      pageInfo: { nextCursor: null, hasMore: false },
+    },
+    empty: {
+      eventId: adminFixtureIds.event,
+      assignmentsVersion: 1,
+      items: [],
+      pageInfo: { nextCursor: null, hasMore: false },
+    },
+  },
+});
+
+export const adminRolePersonSearchFixtures = defineFixtureSet({
+  name: 'admin.role-person-search',
+  schema: adminRolePersonSearchResponseSchema,
+  fixtures: {
+    found: {
+      eventId: adminFixtureIds.event,
+      items: [
+        {
+          operatorId: adminFixtureIds.operator,
+          displayName: 'Patrik Novák',
+          maskedVerifiedContact: 'p***@example.test',
+        },
+        {
+          operatorId: adminFixtureIds.moderator,
+          displayName: 'Jana Horáková',
+          maskedVerifiedContact: '+420 ••• ••• 214',
+        },
+      ],
+    },
+    empty: {
+      eventId: adminFixtureIds.event,
+      items: [],
+    },
+  },
+});
+
+export const adminRoleScopeOptionsFixtures = defineFixtureSet({
+  name: 'admin.role-scope-options',
+  schema: adminRoleScopeOptionsResponseSchema,
+  fixtures: {
+    checkin: {
+      eventId: adminFixtureIds.event,
+      role: 'checkin_operator',
+      options: [
+        {
+          kind: 'station',
+          stationId: adminFixtureIds.station,
+          label: 'Hlavní vstup',
+        },
+      ],
+    },
+    moderator: {
+      eventId: adminFixtureIds.event,
+      role: 'moderator',
+      options: [
+        {
+          kind: 'session',
+          sessionId: adminFixtureIds.secondSession,
+          label: 'Jak řídit růst firmy',
+        },
+      ],
+    },
+    activity_leader: {
+      eventId: adminFixtureIds.event,
+      role: 'room_operator',
+      options: [
+        {
+          kind: 'session',
+          sessionId: adminFixtureIds.session,
+          label: 'Růst bez zkratek',
+        },
+      ],
+    },
+  },
+});
+
 export const adminRoleAssignmentFixtures = defineFixtureSet({
   name: 'admin.role-assignment',
   schema: adminRoleAssignmentMutationResponseSchema,
@@ -366,6 +470,14 @@ export const adminRoleAssignmentFixtures = defineFixtureSet({
       assignmentsVersion: 3,
       assignment: roleAssignment,
       changedAt: '2026-07-25T12:10:00.000+02:00',
+      audit: { auditId: adminFixtureIds.auditMutation },
+    },
+    revoked: {
+      eventId: adminFixtureIds.event,
+      outcome: 'revoked',
+      assignmentsVersion: 4,
+      assignment: null,
+      changedAt: '2026-07-25T12:20:00.000+02:00',
       audit: { auditId: adminFixtureIds.auditMutation },
     },
   },
