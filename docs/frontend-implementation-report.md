@@ -160,12 +160,13 @@ ani multipart request. Produkční `P4-03`/`AUX-13D` po potvrzení přesného do
 a důvodu znovu ověří immutable source snapshot, atomicky vytvoří jen způsobilé
 identity/membershipy a vrátí kanonický report s exact idempotency retry. Ticket
 credential ani automatický e-mail nevzniká. Support pracuje s maskovanými PII,
-POST search body, odděleným
-read/write oprávněním, lidskými stavy a akcemi, důvodem, potvrzením,
-idempotencí a výsledným auditem. `block`, `reactivate` a případný serverem
-povolený `resend` vysvětlují použití, dopad i recovery. Target-ticket picker
-má strict reference kontrakt bez UUID vstupu; `reassign` a `transfer` jsou do
-produktového rozhodnutí o jejich rozdílu a rezervacích fail-closed skryté.
+POST/no-store search body, current-event guardem, HMACovaným rate limitem,
+odděleným read/write oprávněním, lidskými stavy a akcemi, důvodem, potvrzením,
+idempotencí a výsledným auditem. `AUX-13E` tento řez produkčně zpevnil pro
+legacy ticket `block`/`reactivate`; resend/recovery importované identity čeká
+na invitation handshake `P4-06`–`P4-09`. Target-ticket picker má strict
+reference kontrakt bez UUID vstupu; `reassign` a `transfer` se podle
+scope-alignmentu nevytvářejí a zůstávají fail-closed skryté.
 
 Oznámení používají čtyřkrokový critical-only tok s live participant kartou,
 počítadly, dirty guardem a event/právě-jedna-session audience preview. Session
