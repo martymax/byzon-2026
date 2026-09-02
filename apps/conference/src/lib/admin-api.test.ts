@@ -9,6 +9,7 @@ import {
   adminFixtureIds,
   adminReservationFixtures,
   adminReservationMutationFixtures,
+  adminReservationSessionFixtures,
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   adminRoleAssignmentFixtures,
@@ -29,6 +30,7 @@ import {
   adminEngagementMutationEndpoint,
   adminEngagementOverviewEndpoint,
   adminOperationsOverviewEndpoint,
+  adminReservationSessionsEndpoint,
   adminSupportSearchEndpoint,
   adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
@@ -38,6 +40,7 @@ import {
   requestAdminEngagementOverview,
   requestAdminOperationsOverview,
   requestAdminReservationMutation,
+  requestAdminReservationSessions,
   requestAdminSessionCapacities,
   requestAdminSessionCapacityMutation,
   requestAdminRoleAssignment,
@@ -197,6 +200,29 @@ describe('admin API contract policies', () => {
       expect.anything(),
       expect.objectContaining({
         path: `/api/v1/admin/events/${adminFixtureIds.event}/session-capacities`,
+        cache: 'no-store',
+      }),
+    );
+  });
+
+  it('loads session-first reservations through an encoded no-store cursor', async () => {
+    const request = vi.fn(async () =>
+      success(adminReservationSessionFixtures.last_page!),
+    );
+    const api = {
+      request: request as unknown as ApiPort['request'],
+    } satisfies ApiPort;
+
+    await expect(
+      requestAdminReservationSessions(api, adminFixtureIds.event, {
+        cursor: 'fixture-reservation-session-page-2',
+        limit: 25,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(request).toHaveBeenCalledWith(
+      adminReservationSessionsEndpoint,
+      expect.objectContaining({
+        path: `/api/v1/admin/events/${adminFixtureIds.event}/reservation-sessions?limit=25&cursor=fixture-reservation-session-page-2`,
         cache: 'no-store',
       }),
     );

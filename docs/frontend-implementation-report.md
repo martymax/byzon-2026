@@ -176,12 +176,13 @@ category/action/time/request filtry a cursor bez klientského předstírání
 Core nastavení začíná read-only, vysvětluje dopad registrace a rezervací,
 zamyká exact-retry draft a archiv nevykreslí edit controls. Neověřený
 `supportMessage` se zachová beze změny, ale nezobrazuje se ani neupravuje do
-produktového rozhodnutí. Rezervace mají nový session-first cursor/pageInfo kontrakt s
-povinně maskovanou referencí. Kanonická stránka řadí plné a téměř plné
-aktivity, zobrazuje textovou obsazenost i progress a odděluje změnu kapacity od
-danger storna konkrétní rezervace; attendance mutace se nevrátila. Dokud
-produkční read nepřejde na nový stránkovaný kontrakt v `AUX-13F`, UI výslovně
-přiznává omezenou první stránku. Rezervační override, audit a settings vyžadují
+produktového rozhodnutí. Rezervace používají produkční session-first
+cursor/pageInfo kontrakt s povinně maskovanou referencí. Kanonická stránka
+řadí plné a téměř plné aktivity, zobrazuje datum, čas, místnost,
+obsazenost, čekající i progress a odděluje změnu kapacity od danger storna
+konkrétní rezervace; attendance mutace se nevrátila. Keyset endpoint načítá
+další stránky explicitně a UI označuje souhrn jako souhrn dosud načtených
+aktivit. Rezervační override, audit a settings vyžadují
 přesné oprávnění, expected version a canonical odpověď. Každý request je fenced
 podle eventu a security epoch; permission loss nebo 401/403 skryje P3 data a
 přeruší stale práci.

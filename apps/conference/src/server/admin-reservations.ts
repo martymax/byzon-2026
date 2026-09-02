@@ -17,6 +17,8 @@ import {
   adminReservationListResponseSchema,
   adminReservationMutationRequestSchema,
   adminReservationMutationResponseSchema,
+  adminReservationSessionPageSchema,
+  adminReservationSessionQuerySchema,
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
@@ -28,6 +30,7 @@ import {
   type AdminReservationListResponse,
   type AdminReservationMutationResponse,
   type AdminReservationRecord,
+  type AdminReservationSessionPage,
   type AdminSessionCapacityListResponse,
   type AdminSessionCapacityMutationResponse,
   type AdminSessionCapacityRecord,
@@ -36,10 +39,13 @@ import {
   and,
   asc,
   count,
+  countDistinct,
   desc,
   eq,
+  gt,
   inArray,
   isNull,
+  lte,
   or,
   sql,
 } from 'drizzle-orm';
@@ -59,6 +65,7 @@ import { promoteAutomaticWaitlist } from './reservation-waitlist';
 const MAX_BODY_BYTES = 16_384;
 const MAX_RESERVATIONS = 100;
 const MAX_CAPACITY_SESSIONS = 100;
+const MAX_SESSION_RESERVATIONS = 100;
 const MAX_ASSIGNED_SESSIONS = 30;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 const uuidSchema = z.string().uuid();
@@ -189,6 +196,7 @@ const successResponse = (
     | AdminContextResponse
     | AdminReservationListResponse
     | AdminReservationMutationResponse
+    | AdminReservationSessionPage
     | AdminSessionCapacityListResponse
     | AdminSessionCapacityMutationResponse,
   requestId: string,
@@ -227,6 +235,57 @@ const requireReadTransport = (request: Request): void => {
   ) {
     throw validationFailed({ query: ['Query parameters are not supported.'] });
   }
+};
+
+const reservationSessionCursorSchema = z.strictObject({
+  startsAt: z.string().datetime({ offset: true }),
+  sessionId: z.string().uuid(),
+});
+
+const encodeReservationSessionCursor = (
+  startsAt: Date,
+  sessionId: string,
+): string =>
+  Buffer.from(
+    JSON.stringify({ startsAt: startsAt.toISOString(), sessionId }),
+    'utf8',
+  ).toString('base64url');
+
+const decodeReservationSessionCursor = (value: string) => {
+  try {
+    return reservationSessionCursorSchema.parse(
+      JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown,
+    );
+  } catch {
+    throw validationFailed({ cursor: ['The reservation cursor is invalid.'] });
+  }
+};
+
+const readReservationSessionQuery = (request: Request) => {
+  if (
+    request.headers.has('idempotency-key') ||
+    request.headers.has('if-match')
+  ) {
+    throw validationFailed({ query: ['Mutation headers are not supported.'] });
+  }
+  const url = new URL(request.url);
+  const allowed = new Set(['cursor', 'limit']);
+  if (
+    [...url.searchParams.keys()].some((key) => !allowed.has(key)) ||
+    [...allowed].some((key) => url.searchParams.getAll(key).length > 1)
+  ) {
+    throw validationFailed({
+      query: ['Only one cursor and limit are supported.'],
+    });
+  }
+  const cursor = url.searchParams.get('cursor');
+  const limit = url.searchParams.get('limit');
+  const parsed = adminReservationSessionQuerySchema.safeParse({
+    ...(cursor ? { cursor } : {}),
+    ...(limit ? { limit: Number(limit) } : {}),
+  });
+  if (!parsed.success) throw validationFailed(zodFieldErrors(parsed.error));
+  return parsed.data;
 };
 
 const requireMutationTransport = (
@@ -654,6 +713,188 @@ const loadSessionCapacityRecords = async (
   );
 };
 
+const loadReservationSessionPage = async (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+  limit: number,
+  cursor: ReturnType<typeof decodeReservationSessionCursor> | null,
+): Promise<{
+  items: AdminReservationSessionPage['items'];
+  nextCursor: string | null;
+}> => {
+  const cursorStartsAt = cursor ? new Date(cursor.startsAt) : null;
+  const sessionRows = await db
+    .select({
+      sessionId: schema.programSessions.id,
+      sessionTitle: schema.programSessions.title,
+      localDate: schema.eventDays.localDate,
+      startsAt: schema.programSessions.startsAt,
+      roomLabel: schema.rooms.name,
+      capacity: schema.programSessions.capacity,
+      confirmedCount: countDistinct(schema.reservations.id),
+      waitingCount: countDistinct(schema.waitlistEntries.id),
+      waitlistMode: schema.programSessions.waitlistMode,
+      capacityVersion: schema.programSessions.version,
+    })
+    .from(schema.programSessions)
+    .innerJoin(
+      schema.eventDays,
+      and(
+        eq(schema.eventDays.eventId, schema.programSessions.eventId),
+        eq(schema.eventDays.id, schema.programSessions.dayId),
+      ),
+    )
+    .leftJoin(
+      schema.rooms,
+      and(
+        eq(schema.rooms.eventId, schema.programSessions.eventId),
+        eq(schema.rooms.id, schema.programSessions.roomId),
+      ),
+    )
+    .leftJoin(
+      schema.reservations,
+      and(
+        eq(schema.reservations.eventId, schema.programSessions.eventId),
+        eq(schema.reservations.sessionId, schema.programSessions.id),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    )
+    .leftJoin(
+      schema.waitlistEntries,
+      and(
+        eq(schema.waitlistEntries.eventId, schema.programSessions.eventId),
+        eq(schema.waitlistEntries.sessionId, schema.programSessions.id),
+        eq(schema.waitlistEntries.status, 'waiting'),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.programSessions.eventId, eventId),
+        or(
+          eq(schema.programSessions.capacityMode, 'reservation'),
+          eq(schema.programSessions.type, 'networking'),
+        ),
+        cursor && cursorStartsAt
+          ? or(
+              gt(schema.programSessions.startsAt, cursorStartsAt),
+              and(
+                eq(schema.programSessions.startsAt, cursorStartsAt),
+                gt(schema.programSessions.id, cursor.sessionId),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .groupBy(
+      schema.programSessions.id,
+      schema.programSessions.title,
+      schema.eventDays.localDate,
+      schema.programSessions.startsAt,
+      schema.rooms.name,
+      schema.programSessions.capacity,
+      schema.programSessions.waitlistMode,
+      schema.programSessions.version,
+    )
+    .orderBy(
+      asc(schema.programSessions.startsAt),
+      asc(schema.programSessions.id),
+    )
+    .limit(limit + 1);
+  const pageRows = sessionRows.slice(0, limit);
+  const sessionIds = pageRows.map(({ sessionId }) => sessionId);
+  const rankedReservations = db
+    .select({
+      reservationId: schema.reservations.id,
+      sessionId: schema.reservations.sessionId,
+      userId: schema.reservations.userId,
+      state: schema.reservations.status,
+      version: schema.reservations.version,
+      cancelledAt: schema.reservations.cancelledAt,
+      createdAt: schema.reservations.createdAt,
+      rank: sql<number>`row_number() over (
+        partition by ${schema.reservations.sessionId}
+        order by ${schema.reservations.cancelledAt} desc nulls last,
+          ${schema.reservations.createdAt} desc,
+          ${schema.reservations.id} desc
+      )`.as('reservation_rank'),
+    })
+    .from(schema.reservations)
+    .where(
+      and(
+        eq(schema.reservations.eventId, eventId),
+        sessionIds.length > 0
+          ? inArray(schema.reservations.sessionId, sessionIds)
+          : sql`false`,
+      ),
+    )
+    .as('ranked_reservations');
+  const reservationRows =
+    sessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            reservationId: rankedReservations.reservationId,
+            sessionId: rankedReservations.sessionId,
+            userId: rankedReservations.userId,
+            state: rankedReservations.state,
+            version: rankedReservations.version,
+          })
+          .from(rankedReservations)
+          .where(lte(rankedReservations.rank, MAX_SESSION_RESERVATIONS))
+          .orderBy(
+            asc(rankedReservations.sessionId),
+            asc(rankedReservations.rank),
+          );
+  const reservationsBySession = new Map<
+    string,
+    AdminReservationSessionPage['items'][number]['reservations'][number][]
+  >();
+  for (const reservation of reservationRows) {
+    const items = reservationsBySession.get(reservation.sessionId) ?? [];
+    if (items.length >= MAX_SESSION_RESERVATIONS) continue;
+    items.push({
+      reservationId: reservation.reservationId,
+      maskedParticipantReference: participantReference(reservation.userId),
+      state: reservation.state === 'confirmed' ? 'reserved' : 'cancelled',
+      version: reservation.version,
+      availableActions:
+        reservation.state === 'confirmed'
+          ? (['cancel_reservation'] as const)
+          : ([] as const),
+    });
+    reservationsBySession.set(reservation.sessionId, items);
+  }
+  const hasMore = sessionRows.length > limit;
+  const last = pageRows.at(-1);
+  return {
+    items: pageRows.map((session) => ({
+      eventId,
+      sessionId: session.sessionId,
+      sessionTitle: safeLabel(
+        session.sessionTitle,
+        'Rezervovatelná aktivita',
+        160,
+      ),
+      localDate: session.localDate,
+      startsAt: session.startsAt.toISOString(),
+      roomLabel:
+        session.roomLabel === null
+          ? null
+          : safeLabel(session.roomLabel, 'Místnost', 120),
+      capacity: session.capacity,
+      confirmedCount: session.confirmedCount,
+      waitingCount:
+        session.waitlistMode === 'disabled' ? null : session.waitingCount,
+      capacityVersion: session.capacityVersion,
+      reservations: reservationsBySession.get(session.sessionId) ?? [],
+    })),
+    nextCursor:
+      hasMore && last
+        ? encodeReservationSessionCursor(last.startsAt, last.sessionId)
+        : null,
+  };
+};
+
 const requirePermission = async (
   db: Database | DatabaseTransaction,
   userId: string,
@@ -673,6 +914,62 @@ const requirePermission = async (
   } catch (error) {
     if (!(error instanceof EventAccessDeniedError)) throw error;
     throw eventAccessDenied();
+  }
+};
+
+export const readAdminReservationSessions = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminReservationDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (!uuidSchema.safeParse(eventId).success) throw resourceNotFound();
+    const session = await requireSession(request, dependencies);
+    const query = readReservationSessionQuery(request);
+    const cursor = query.cursor
+      ? decodeReservationSessionCursor(query.cursor)
+      : null;
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
+    const now = dependencies.now?.() ?? new Date();
+    const event = await loadCurrentAdminEvent(
+      dependencies.db,
+      dependencies,
+      eventId,
+    );
+    requireOperationalDataAvailable(event, now);
+    await requirePermission(
+      dependencies.db,
+      session.user.id,
+      event.id,
+      'reservation:any:read',
+    );
+    const page = await loadReservationSessionPage(
+      dependencies.db,
+      event.id,
+      query.limit,
+      cursor,
+    );
+    const body = adminReservationSessionPageSchema.parse({
+      eventId: event.id,
+      generatedAt: now.toISOString(),
+      items: page.items,
+      pageInfo: {
+        hasMore: page.nextCursor !== null,
+        nextCursor: page.nextCursor,
+      },
+    });
+    return withRateLimitHeaders(
+      successResponse(body, requestId),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
   }
 };
 

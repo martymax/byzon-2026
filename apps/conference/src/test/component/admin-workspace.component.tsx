@@ -28,6 +28,7 @@ import {
   adminRoleScopeOptionsFixtures,
   adminReservationFixtures,
   adminReservationMutationFixtures,
+  adminReservationSessionFixtures,
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
   supportMutationFixtures,
@@ -75,6 +76,7 @@ import {
   adminOperationsOverviewEndpoint,
   adminRoleAssignmentEndpoint,
   adminReservationsEndpoint,
+  adminReservationSessionsEndpoint,
   adminReservationMutationEndpoint,
   adminSessionCapacitiesEndpoint,
   adminSessionCapacityMutationEndpoint,
@@ -188,7 +190,7 @@ describe('F4 contract-first admin journeys', () => {
       '/admin/rezervace',
       'Rezervace a kapacity',
       AdminReservationsWorkspace,
-      [adminReservationsEndpoint, adminSessionCapacitiesEndpoint],
+      [adminReservationSessionsEndpoint],
     ],
     [
       '/admin/audit',
@@ -212,11 +214,8 @@ describe('F4 contract-first admin journeys', () => {
         if (endpoint === adminOperationsOverviewEndpoint) {
           return success(adminOperationsOverviewFixtures.healthy!);
         }
-        if (endpoint === adminReservationsEndpoint) {
-          return success(adminReservationFixtures.list!);
-        }
-        if (endpoint === adminSessionCapacitiesEndpoint) {
-          return success(adminSessionCapacityFixtures.list!);
+        if (endpoint === adminReservationSessionsEndpoint) {
+          return success(adminReservationSessionFixtures.complete!);
         }
         if (endpoint === adminAuditEndpoint) {
           return success(adminAuditFixtures.page!);
@@ -1780,11 +1779,8 @@ describe('F4 contract-first admin journeys', () => {
     };
     const api = createApi((endpoint) => {
       if (endpoint === adminContextEndpoint) return success(readOnlyContext);
-      if (endpoint === adminReservationsEndpoint) {
-        return success(adminReservationFixtures.list!);
-      }
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        return success(adminSessionCapacityFixtures.list!);
+      if (endpoint === adminReservationSessionsEndpoint) {
+        return success(adminReservationSessionFixtures.complete!);
       }
       throw new Error('A reservation reader attempted an unauthorized call.');
     });
@@ -1807,20 +1803,17 @@ describe('F4 contract-first admin journeys', () => {
 
   it('shows the canonical reservation route session-first with accessible capacity progress', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
-    const fullCapacities = {
-      ...adminSessionCapacityFixtures.list!,
-      items: adminSessionCapacityFixtures.list!.items.map((record) =>
+    const fullSessions = {
+      ...adminReservationSessionFixtures.complete!,
+      items: adminReservationSessionFixtures.complete!.items.map((record) =>
         record.sessionId === adminFixtureIds.session
           ? { ...record, confirmedCount: record.capacity ?? 0 }
           : record,
       ),
     };
     const api = organizerApi((endpoint) => {
-      if (endpoint === adminReservationsEndpoint) {
-        return success(adminReservationFixtures.list!);
-      }
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        return success(fullCapacities);
+      if (endpoint === adminReservationSessionsEndpoint) {
+        return success(fullSessions);
       }
       throw new Error('The reservation overview requested a mutation.');
     });
@@ -1844,7 +1837,7 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByText('Plná kapacita', { exact: true }).last())
       .toBeVisible();
     expect(document.body.textContent).toContain(
-      'Aktuální produkční API vrací omezenou první stránku.',
+      'Aktivity se načítají po stránkách v pořadí programu.',
     );
     expect(document.body.textContent).not.toContain('Docházka');
     expect(document.body.textContent).not.toContain('attendance');
@@ -1855,15 +1848,47 @@ describe('F4 contract-first admin journeys', () => {
     await expectComponentToPassAxe(adminRoot());
   });
 
+  it('loads the next reservation-session page without exposing participant PII', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const paths: string[] = [];
+    const api = organizerApi((endpoint, rawOptions) => {
+      if (endpoint !== adminReservationSessionsEndpoint) {
+        throw new Error('The paginated overview requested another endpoint.');
+      }
+      const options = rawOptions as { readonly path: string };
+      paths.push(options.path);
+      return success(
+        options.path.includes('cursor=')
+          ? adminReservationSessionFixtures.last_page!
+          : adminReservationSessionFixtures.first_page!,
+      );
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('button', { name: 'Načíst další aktivity' }))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst další aktivity' }).click();
+    await expect
+      .element(screen.getByText('Řízený networking', { exact: true }).last())
+      .toBeVisible();
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    expect(paths.at(-1)).toContain('cursor=fixture-reservation-session-page-2');
+    expect(JSON.stringify(paths)).not.toContain('@');
+    expect(document.body.textContent).not.toContain('@example');
+    await expectComponentToPassAxe(adminRoot());
+  });
+
   it('edits capacity from the activity detail with reserved count as the minimum', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     let mutationOptions: unknown;
     const api = organizerApi((endpoint, options) => {
-      if (endpoint === adminReservationsEndpoint) {
-        return success(adminReservationFixtures.list!);
-      }
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        return success(adminSessionCapacityFixtures.list!);
+      if (endpoint === adminReservationSessionsEndpoint) {
+        return success(adminReservationSessionFixtures.complete!);
       }
       if (endpoint === adminSessionCapacityMutationEndpoint) {
         mutationOptions = options;
@@ -1885,7 +1910,7 @@ describe('F4 contract-first admin journeys', () => {
       .first()
       .click();
     const capacity = screen.getByRole('spinbutton', { name: 'Nová kapacita' });
-    await expect.element(capacity).toHaveAttribute('min', '38');
+    await expect.element(capacity).toHaveAttribute('min', '40');
     await capacity.fill('42');
     await screen
       .getByRole('textbox', { name: 'Důvod změny kapacity' })
@@ -1918,11 +1943,8 @@ describe('F4 contract-first admin journeys', () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     const attempts: Array<Record<string, unknown>> = [];
     const api = organizerApi((endpoint, rawOptions) => {
-      if (endpoint === adminReservationsEndpoint) {
-        return success(adminReservationFixtures.list!);
-      }
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        return success(adminSessionCapacityFixtures.list!);
+      if (endpoint === adminReservationSessionsEndpoint) {
+        return success(adminReservationSessionFixtures.complete!);
       }
       if (endpoint === adminReservationMutationEndpoint) {
         const options = rawOptions as Record<string, unknown>;
@@ -1990,14 +2012,11 @@ describe('F4 contract-first admin journeys', () => {
 
   it('reloads the session overview and discards the draft after a stale capacity decision', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
-    let capacityReads = 0;
+    let sessionReads = 0;
     const api = organizerApi((endpoint) => {
-      if (endpoint === adminReservationsEndpoint) {
-        return success(adminReservationFixtures.list!);
-      }
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        capacityReads += 1;
-        return success(adminSessionCapacityFixtures.list!);
+      if (endpoint === adminReservationSessionsEndpoint) {
+        sessionReads += 1;
+        return success(adminReservationSessionFixtures.complete!);
       }
       if (endpoint === adminSessionCapacityMutationEndpoint) {
         return problemFailure(adminMutationProblemFixtures.invalid_transition!);
@@ -2014,7 +2033,7 @@ describe('F4 contract-first admin journeys', () => {
       .getByRole('combobox', { name: 'Aktivita' })
       .selectOptions(adminFixtureIds.session);
     await screen.getByRole('button', { name: 'Zobrazit aktivitu' }).click();
-    const initialCapacityReads = capacityReads;
+    const initialSessionReads = sessionReads;
     await screen.getByRole('spinbutton', { name: 'Nová kapacita' }).fill('42');
     await screen
       .getByRole('textbox', { name: 'Důvod změny kapacity' })
@@ -2030,7 +2049,7 @@ describe('F4 contract-first admin journeys', () => {
         ),
       )
       .toBeVisible();
-    expect(capacityReads).toBe(initialCapacityReads + 1);
+    expect(sessionReads).toBe(initialSessionReads + 1);
     expect(
       screen.getByRole('textbox', { name: 'Důvod změny kapacity' }),
     ).not.toBeInTheDocument();
@@ -2042,10 +2061,8 @@ describe('F4 contract-first admin journeys', () => {
   it('wipes reservation P3 state when either canonical read reports offline', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     const api = organizerApi((endpoint) => {
-      if (endpoint === adminSessionCapacitiesEndpoint) {
-        return success(adminSessionCapacityFixtures.list!);
-      }
-      if (endpoint === adminReservationsEndpoint) return failure('offline');
+      if (endpoint === adminReservationSessionsEndpoint)
+        return failure('offline');
       throw new Error('Unexpected reservation endpoint.');
     });
     const screen = await renderComponent(

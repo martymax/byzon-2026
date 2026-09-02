@@ -5,6 +5,7 @@ import {
   adminReadProblemSchema,
   adminReservationListResponseSchema,
   adminReservationMutationResponseSchema,
+  adminReservationSessionPageSchema,
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationResponseSchema,
 } from '@byzon/domain/contracts';
@@ -16,6 +17,7 @@ import {
   mutateAdminSessionCapacity,
   readAdminContext,
   readAdminReservations,
+  readAdminReservationSessions,
   readAdminSessionCapacities,
   type AdminReservationDependencies,
 } from './admin-reservations';
@@ -78,6 +80,11 @@ integration('P5-05 admin reservation HTTP integration', () => {
     new Request(
       `${appOrigin}/api/v1/admin/events/${requestedEventId}/session-capacities`,
       { headers: { 'x-request-id': 'admin-session-capacity-list-request' } },
+    );
+  const sessionPageRequest = (query = '', requestedEventId = eventId) =>
+    new Request(
+      `${appOrigin}/api/v1/admin/events/${requestedEventId}/reservation-sessions${query}`,
+      { headers: { 'x-request-id': 'admin-reservation-session-request' } },
     );
   const mutationRequest = (
     body: unknown,
@@ -473,6 +480,71 @@ integration('P5-05 admin reservation HTTP integration', () => {
       dependencies(adminId),
     );
     expect(crossEventCapacities.status).toBe(404);
+  });
+
+  it('pages session-first reservation snapshots with masked references and stable cursors', async () => {
+    const denied = await readAdminReservationSessions(
+      sessionPageRequest('?limit=1'),
+      eventId,
+      dependencies(participantId),
+    );
+    expect(denied.status).toBe(403);
+
+    const firstResponse = await readAdminReservationSessions(
+      sessionPageRequest('?limit=1'),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(firstResponse.status).toBe(200);
+    expect(firstResponse.headers.get('cache-control')).toBe(
+      'private, no-store',
+    );
+    const first = adminReservationSessionPageSchema.parse(
+      await firstResponse.json(),
+    );
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0]).toMatchObject({
+      eventId,
+      sessionId,
+      localDate: '2026-09-18',
+      capacity: 2,
+      confirmedCount: 2,
+      waitingCount: null,
+      capacityVersion: 1,
+    });
+    expect(first.items[0]?.reservations).toHaveLength(2);
+    expect(first.pageInfo).toMatchObject({ hasMore: true });
+    expect(first.pageInfo.nextCursor).not.toBeNull();
+    const serialized = JSON.stringify(first);
+    expect(serialized).not.toContain('@example.invalid');
+    expect(serialized).not.toContain(participantId);
+    expect(first.items[0]?.reservations[0]?.maskedParticipantReference).toMatch(
+      /[*•…]/,
+    );
+
+    const secondResponse = await readAdminReservationSessions(
+      sessionPageRequest(
+        `?limit=1&cursor=${encodeURIComponent(first.pageInfo.nextCursor!)}`,
+      ),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(secondResponse.status).toBe(200);
+    const second = adminReservationSessionPageSchema.parse(
+      await secondResponse.json(),
+    );
+    expect(second.items[0]?.sessionId).toBe(networkingSessionId);
+    expect(second.items[0]?.sessionId).not.toBe(first.items[0]?.sessionId);
+
+    const invalidCursor = await readAdminReservationSessions(
+      sessionPageRequest('?limit=1&cursor=not-a-cursor'),
+      eventId,
+      dependencies(adminId),
+    );
+    expect(invalidCursor.status).toBe(422);
+    expect(adminReadProblemSchema.parse(await invalidCursor.json()).code).toBe(
+      'VALIDATION_FAILED',
+    );
   });
 
   it('opens networking reservations only after an administrator sets capacity', async () => {
