@@ -74,6 +74,7 @@ import {
   adminEventSettingsEndpoint,
   adminEventSettingsUpdateEndpoint,
   adminExportEndpoint,
+  adminExportJobListEndpoint,
   adminOperationsOverviewEndpoint,
   adminRoleAssignmentEndpoint,
   adminRoleAssignmentListEndpoint,
@@ -195,7 +196,12 @@ describe('F4 contract-first admin journeys', () => {
       AdminTeamWorkspace,
       [adminRoleAssignmentListEndpoint],
     ],
-    ['/admin/reporty', 'Reporty', AdminReportsWorkspace, []],
+    [
+      '/admin/reporty',
+      'Reporty',
+      AdminReportsWorkspace,
+      [adminExportJobListEndpoint],
+    ],
     [
       '/admin/rezervace',
       'Rezervace a kapacity',
@@ -226,6 +232,9 @@ describe('F4 contract-first admin journeys', () => {
         }
         if (endpoint === adminRoleAssignmentListEndpoint) {
           return success(adminRoleAssignmentListFixtures.list!);
+        }
+        if (endpoint === adminExportJobListEndpoint) {
+          return success(adminExportJobListFixtures.mixed!);
         }
         if (endpoint === adminReservationSessionsEndpoint) {
           return success(adminReservationSessionFixtures.complete!);
@@ -2966,6 +2975,61 @@ describe('F4 contract-first admin journeys', () => {
         reason: 'Provozní kontrola syntetických účastníků.',
       },
     });
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('loads export jobs through the integrated production endpoint', async () => {
+    window.history.replaceState({}, '', '/admin/reporty');
+    const calls: unknown[] = [];
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminExportJobListEndpoint) {
+        calls.push(options);
+        const path = (options as { path: string }).path;
+        if (!path.includes('cursor=')) {
+          return success({
+            eventId: adminFixtureIds.event,
+            items: [adminExportJobListFixtures.mixed!.items[0]!],
+            pageInfo: {
+              nextCursor: 'fixture-export-page-2',
+              hasMore: true,
+            },
+          });
+        }
+        return success(adminExportJobListFixtures.mixed!);
+      }
+      if (endpoint === adminExportEndpoint) {
+        throw new Error('Export must not run without confirmation.');
+      }
+      throw new Error(
+        'The live reports page requested an unexpected endpoint.',
+      );
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminReportsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Načíst další reporty' }).click();
+    await expect
+      .element(screen.getByText('Připraven ke stažení'))
+      .toBeVisible();
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: `/api/v1/admin/events/${adminFixtureIds.event}/exports?limit=25`,
+          cache: 'no-store',
+        }),
+      ]),
+    );
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: `/api/v1/admin/events/${adminFixtureIds.event}/exports?limit=25&cursor=fixture-export-page-2`,
+        }),
+      ]),
+    );
     await expectComponentToPassAxe(adminRoot());
   });
 

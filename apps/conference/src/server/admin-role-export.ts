@@ -8,6 +8,8 @@ import {
 } from '@byzon/database';
 import {
   adminExportRequestSchema,
+  adminExportJobListQuerySchema,
+  adminExportJobListResponseSchema,
   adminExportResponseSchema,
   adminRoleAssignmentListQuerySchema,
   adminRoleAssignmentListResponseSchema,
@@ -20,7 +22,20 @@ import {
   type AdminAssignmentRole,
   type AdminAssignmentScope,
 } from '@byzon/domain/contracts';
-import { and, asc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -222,6 +237,33 @@ const decodeRoleCursor = (value: string): string => {
       'VALIDATION_FAILED',
       'Invalid cursor',
       'The role assignment cursor is invalid.',
+    );
+  }
+};
+
+const exportCursorSchema = z.strictObject({
+  createdAt: z.string().datetime({ offset: true }),
+  id: z.string().uuid(),
+});
+
+const encodeExportCursor = (createdAt: Date, id: string): string =>
+  Buffer.from(
+    JSON.stringify({ createdAt: createdAt.toISOString(), id }),
+    'utf8',
+  ).toString('base64url');
+
+const decodeExportCursor = (value: string): { createdAt: Date; id: string } => {
+  try {
+    const parsed = exportCursorSchema.parse(
+      JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown,
+    );
+    return { createdAt: new Date(parsed.createdAt), id: parsed.id };
+  } catch {
+    throw problem(
+      422,
+      'VALIDATION_FAILED',
+      'Invalid cursor',
+      'The export cursor is invalid.',
     );
   }
 };
@@ -962,6 +1004,166 @@ export const handleAdminExport = async (
         'idempotency-replayed': String(result.replayed),
       },
     });
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+export const handleAdminExportJobList = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminRoleExportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'GET') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    await authorize(
+      request,
+      eventId,
+      'personal-data:operational:export',
+      dependencies,
+    );
+    const url = new URL(request.url);
+    const limitValue = url.searchParams.get('limit');
+    const parsed = adminExportJobListQuerySchema.safeParse({
+      ...(url.searchParams.has('state')
+        ? { state: url.searchParams.get('state') }
+        : {}),
+      ...(url.searchParams.has('cursor')
+        ? { cursor: url.searchParams.get('cursor') }
+        : {}),
+      ...(limitValue === null ? {} : { limit: Number(limitValue) }),
+    });
+    if (!parsed.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid export filters',
+        'The export filters are invalid.',
+      );
+    }
+    const now = dependencies.now?.() ?? new Date();
+    const cursor = parsed.data.cursor
+      ? decodeExportCursor(parsed.data.cursor)
+      : null;
+    const unexpired = gt(schema.operationalExportRequests.expiresAt, now);
+    const stateCondition =
+      parsed.data.state === 'expired'
+        ? or(
+            eq(schema.operationalExportRequests.state, 'expired'),
+            lte(schema.operationalExportRequests.expiresAt, now),
+          )
+        : parsed.data.state === 'queued'
+          ? and(
+              inArray(schema.operationalExportRequests.state, [
+                'queued',
+                'processing',
+              ]),
+              unexpired,
+            )
+          : parsed.data.state
+            ? and(
+                eq(schema.operationalExportRequests.state, parsed.data.state),
+                unexpired,
+              )
+            : undefined;
+    const rows = await dependencies.db
+      .select({
+        id: schema.operationalExportRequests.id,
+        eventId: schema.operationalExportRequests.eventId,
+        report: schema.operationalExportRequests.report,
+        format: schema.operationalExportRequests.format,
+        rangeFrom: schema.operationalExportRequests.rangeFrom,
+        rangeTo: schema.operationalExportRequests.rangeTo,
+        state: schema.operationalExportRequests.state,
+        contentPresent: sql<boolean>`${schema.operationalExportRequests.content} is not null`,
+        createdAt: schema.operationalExportRequests.createdAt,
+        expiresAt: schema.operationalExportRequests.expiresAt,
+        requestedByName: schema.users.name,
+      })
+      .from(schema.operationalExportRequests)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.operationalExportRequests.requestedBy),
+      )
+      .where(
+        and(
+          eq(schema.operationalExportRequests.eventId, eventId),
+          stateCondition,
+          cursor
+            ? or(
+                lt(
+                  schema.operationalExportRequests.createdAt,
+                  cursor.createdAt,
+                ),
+                and(
+                  eq(
+                    schema.operationalExportRequests.createdAt,
+                    cursor.createdAt,
+                  ),
+                  lt(schema.operationalExportRequests.id, cursor.id),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(
+        desc(schema.operationalExportRequests.createdAt),
+        desc(schema.operationalExportRequests.id),
+      )
+      .limit(parsed.data.limit + 1);
+    const hasMore = rows.length > parsed.data.limit;
+    const pageRows = rows.slice(0, parsed.data.limit);
+    const last = pageRows.at(-1);
+    const response = adminExportJobListResponseSchema.parse({
+      eventId,
+      items: pageRows.map((row) => {
+        const expired = row.expiresAt <= now || row.state === 'expired';
+        const state = expired
+          ? 'expired'
+          : row.state === 'processing'
+            ? 'queued'
+            : row.state;
+        const ready = state === 'ready' && row.contentPresent;
+        return {
+          eventId: row.eventId,
+          exportId: row.id,
+          report: row.report,
+          format: row.format,
+          range:
+            row.rangeFrom && row.rangeTo
+              ? {
+                  from: row.rangeFrom.toISOString(),
+                  to: row.rangeTo.toISOString(),
+                }
+              : null,
+          createdByLabel: safeLabel(row.requestedByName, 'Uživatel'),
+          state: ready ? 'ready' : state === 'ready' ? 'failed' : state,
+          createdAt: row.createdAt.toISOString(),
+          expiresAt: row.expiresAt.toISOString(),
+          downloadPath: ready
+            ? `/api/v1/admin/events/${eventId}/exports/${row.id}`
+            : null,
+        };
+      }),
+      pageInfo: {
+        hasMore,
+        nextCursor:
+          hasMore && last ? encodeExportCursor(last.createdAt, last.id) : null,
+      },
+    });
+    return readResponse(requestId, response);
   } catch (error) {
     const response = problemResponse(error, requestId);
     Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>

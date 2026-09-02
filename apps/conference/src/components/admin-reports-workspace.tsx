@@ -10,9 +10,9 @@ import {
   type AdminExportRequest,
 } from '@byzon/domain/contracts/admin';
 import { AdminConfirmDialog, AdminTechnicalDetails } from '@byzon/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { requestAdminExport } from '@/lib/admin-api';
+import { requestAdminExport, requestAdminExportJobs } from '@/lib/admin-api';
 
 import { zonedLocalToIso } from './admin-content-console';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
@@ -39,6 +39,15 @@ type PendingExport = Readonly<{
   body: AdminExportRequest;
   idempotencyKey: string;
 }>;
+
+class AdminReportsReadError extends Error {
+  constructor(
+    readonly securityFailure: boolean,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 const reportLabels: Record<AdminExportReport, string> = {
   participant_summary: 'Souhrn účastníků',
@@ -84,6 +93,33 @@ export const AdminReportsRedesign = ({
     useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const canExport = permissions.includes('personal-data:operational:export');
+  const liveJobsPort = useMemo<AdminExportJobsPort>(
+    () =>
+      jobsPort ?? {
+        loadJobs: async (query, signal) => {
+          const result = await requestAdminExportJobs(
+            api,
+            eventId,
+            query,
+            signal,
+          );
+          if (result.kind === 'failure') {
+            throw new AdminReportsReadError(
+              isAdminSecurityFailure(result),
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+          }
+          if (!result.ok || result.kind !== 'success') {
+            throw new AdminReportsReadError(
+              false,
+              'Neaktuální odpověď serveru.',
+            );
+          }
+          return result.data;
+        },
+      },
+    [api, eventId, jobsPort],
+  );
   const [report, setReport] = useState<AdminExportReport>(
     'participant_summary',
   );
@@ -97,9 +133,7 @@ export const AdminReportsRedesign = ({
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [attempted, setAttempted] = useState(false);
-  const [busy, setBusy] = useState<'jobs' | 'export' | null>(
-    jobsPort ? 'jobs' : null,
-  );
+  const [busy, setBusy] = useState<'jobs' | 'export' | null>('jobs');
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{
     message: string;
@@ -109,9 +143,9 @@ export const AdminReportsRedesign = ({
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    if (!jobsPort || !canExport) return;
+    if (!canExport) return;
     const request = requestFence.begin('export-jobs');
-    void jobsPort
+    void liveJobsPort
       .loadJobs({ limit: 25 }, request.signal)
       .then((response) => {
         if (!request.isCurrent()) return;
@@ -121,15 +155,30 @@ export const AdminReportsRedesign = ({
         setJobs(parsed);
         setBusy(null);
       })
-      .catch(() => {
+      .catch((caught: unknown) => {
         if (!request.isCurrent()) return;
         request.finish();
         setJobs(null);
         setBusy(null);
-        setError('Historii reportů se nepodařilo bezpečně načíst.');
+        if (caught instanceof AdminReportsReadError && caught.securityFailure) {
+          invalidateSensitive(caught.message);
+          return;
+        }
+        setError(
+          caught instanceof AdminReportsReadError
+            ? caught.message
+            : 'Historii reportů se nepodařilo bezpečně načíst.',
+        );
       });
     return () => requestFence.cancel('export-jobs');
-  }, [canExport, eventId, jobsPort, reload, requestFence]);
+  }, [
+    canExport,
+    eventId,
+    invalidateSensitive,
+    liveJobsPort,
+    reload,
+    requestFence,
+  ]);
 
   let range: AdminExportRequest['range'] = null;
   try {
@@ -205,10 +254,49 @@ export const AdminReportsRedesign = ({
       setAmbiguous(false);
       setReason('');
       setAttempted(false);
-      if (jobsPort) {
-        setBusy('jobs');
-        setReload((value) => value + 1);
+      setBusy('jobs');
+      setReload((value) => value + 1);
+    }
+  };
+
+  const loadMoreJobs = async () => {
+    if (!jobs?.pageInfo.nextCursor) return;
+    const request = requestFence.begin('export-jobs-more');
+    setBusy('jobs');
+    setError(null);
+    try {
+      const response = await liveJobsPort.loadJobs(
+        { limit: 25, cursor: jobs.pageInfo.nextCursor },
+        request.signal,
+      );
+      if (!request.isCurrent()) return;
+      const parsed = adminExportJobListResponseSchema.parse(response);
+      if (parsed.eventId !== eventId) throw new Error('Event mismatch.');
+      const existing = new Set(jobs.items.map(({ exportId }) => exportId));
+      setJobs({
+        eventId,
+        items: [
+          ...jobs.items,
+          ...parsed.items.filter(({ exportId }) => !existing.has(exportId)),
+        ],
+        pageInfo: parsed.pageInfo,
+      });
+      request.finish();
+      setBusy(null);
+    } catch (caught) {
+      if (!request.isCurrent()) return;
+      request.finish();
+      setBusy(null);
+      if (caught instanceof AdminReportsReadError && caught.securityFailure) {
+        setJobs(null);
+        invalidateSensitive(caught.message);
+        return;
       }
+      setError(
+        caught instanceof AdminReportsReadError
+          ? caught.message
+          : 'Další historii reportů se nepodařilo bezpečně načíst.',
+      );
     }
   };
 
@@ -349,47 +437,54 @@ export const AdminReportsRedesign = ({
 
       <section className={styles.panel} aria-labelledby="report-history-title">
         <h2 id="report-history-title">Historie exportů</h2>
-        {!jobsPort ? (
-          <p className={styles.warning}>
-            Historie a stav souborů se zobrazí po připojení oprávněného zdroje
-            reportů. Stav „Připravuje se“ ještě neznamená, že je soubor hotový.
-          </p>
-        ) : busy === 'jobs' && !jobs ? (
+        {busy === 'jobs' && !jobs ? (
           <p role="status">Načítám historii reportů…</p>
         ) : jobs?.items.length === 0 ? (
           <p className={styles.empty}>Zatím nebyl vytvořen žádný report.</p>
         ) : jobs ? (
-          <ul className={styles.cardList}>
-            {jobs.items.map((job) => (
-              <li className={styles.dataCard} key={job.exportId}>
-                <div className={styles.panelHeader}>
-                  <strong>{reportLabels[job.report]}</strong>
-                  <span className={styles.statusBadge}>
-                    {jobStateLabels[job.state]}
-                  </span>
-                </div>
-                <p>
-                  {job.createdByLabel} · {job.format.toUpperCase()}
-                </p>
-                <p>Období: {formatRange(job.range, eventTimezone)}</p>
-                <p>
-                  Vytvořeno {formatMoment(job.createdAt, eventTimezone)} ·
-                  expiruje {formatMoment(job.expiresAt, eventTimezone)}
-                </p>
-                {job.state === 'ready' && job.downloadPath ? (
-                  <a className={styles.button} href={job.downloadPath}>
-                    Stáhnout
-                  </a>
-                ) : null}
-                <AdminTechnicalDetails>
-                  <dl className={styles.detailList}>
-                    <dt>ID exportu</dt>
-                    <dd>{job.exportId}</dd>
-                  </dl>
-                </AdminTechnicalDetails>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className={styles.cardList}>
+              {jobs.items.map((job) => (
+                <li className={styles.dataCard} key={job.exportId}>
+                  <div className={styles.panelHeader}>
+                    <strong>{reportLabels[job.report]}</strong>
+                    <span className={styles.statusBadge}>
+                      {jobStateLabels[job.state]}
+                    </span>
+                  </div>
+                  <p>
+                    {job.createdByLabel} · {job.format.toUpperCase()}
+                  </p>
+                  <p>Období: {formatRange(job.range, eventTimezone)}</p>
+                  <p>
+                    Vytvořeno {formatMoment(job.createdAt, eventTimezone)} ·
+                    expiruje {formatMoment(job.expiresAt, eventTimezone)}
+                  </p>
+                  {job.state === 'ready' && job.downloadPath ? (
+                    <a className={styles.button} href={job.downloadPath}>
+                      Stáhnout
+                    </a>
+                  ) : null}
+                  <AdminTechnicalDetails>
+                    <dl className={styles.detailList}>
+                      <dt>ID exportu</dt>
+                      <dd>{job.exportId}</dd>
+                    </dl>
+                  </AdminTechnicalDetails>
+                </li>
+              ))}
+            </ul>
+            {jobs.pageInfo.hasMore ? (
+              <button
+                className={styles.secondaryButton}
+                disabled={busy !== null}
+                onClick={() => void loadMoreJobs()}
+                type="button"
+              >
+                Načíst další reporty
+              </button>
+            ) : null}
+          </>
         ) : null}
       </section>
 

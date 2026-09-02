@@ -13,7 +13,10 @@ const PROCESSING_LEASE_MS = 60_000;
 
 export const protectSpreadsheetCell = (value: unknown): string => {
   const text = String(value ?? '');
-  const protectedText = /^[=+\-@]/.test(text.trimStart()) ? `'${text}` : text;
+  const protectedText =
+    /^[\t\r\n]/.test(text) || /^[=+\-@]/.test(text.trimStart())
+      ? `'${text}`
+      : text;
   return `"${protectedText.replaceAll('"', '""')}"`;
 };
 

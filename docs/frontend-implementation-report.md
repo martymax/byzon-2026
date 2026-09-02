@@ -185,7 +185,9 @@ konkrétní osoby pro ostrou akci zůstávají personálním UAT rozhodnutím
 `BLOCKER-OPS-01`. Reporty mají čtyři popsané typy, CSV jako výchozí formát,
 období v timezone akce a povinný důvod.
 Strict historie rozlišuje queued/ready/failed/expired a nabízí stažení pouze
-pro přesnou same-event ready cestu; produkční job list zůstává v `AUX-13I`.
+pro přesnou same-event ready cestu. `AUX-13I` ji připojil k produkčnímu bounded
+job listu s cursorem, current-event download guardem, expirací a auditem;
+storage-backed staging E2E zůstává za `BLOCKER-INFRA-01`.
 Audit zobrazuje lidské kategorie, akce a výsledky, serverové
 category/action/time/request filtry a cursor bez klientského předstírání
 úplnosti; actor/outcome filtry zůstávají fail-closed do rozšíření kontraktu.
