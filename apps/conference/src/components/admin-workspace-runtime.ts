@@ -48,37 +48,38 @@ export const isAdminSecurityFailure = (result: AdminFailureResult): boolean =>
 const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
   if (failure.kind === 'aborted') return 'Požadavek byl zrušen.';
   if (failure.kind === 'offline') {
-    return 'Připojení není dostupné. Administrace je online-only.';
+    return 'Tato část administrace vyžaduje připojení. Citlivá data jsme skryli. Zkontrolujte internet a zkuste to znovu.';
   }
   if (failure.kind === 'timeout') {
-    return 'Výsledek operace není jistý. Opakujte přesně stejný pokus.';
+    return 'Nepodařilo se ověřit, zda byla změna dokončena. Ověřte aktuální stav; další kontrola nevytvoří duplicitu.';
   }
   if (failure.kind === 'transport' || failure.kind === 'invalid_response') {
-    return 'Server nepotvrdil výsledek. Bezpečně lze zopakovat stejný pokus.';
+    return 'Nepodařilo se ověřit, zda byla změna dokončena. Ověřte aktuální stav; další kontrola nevytvoří duplicitu.';
   }
   if (failure.kind === 'session_expired') {
-    return 'Relace vypršela.';
+    return 'Přihlášení vypršelo. Citlivá rozpracovaná data jsme skryli. Přihlaste se znovu a změnu znovu připravte a zkontrolujte.';
   }
   switch (failure.problem.code) {
     case 'IDEMPOTENCY_IN_PROGRESS':
       return 'Stejná operace se ještě zpracovává. Po chvíli zopakujte stejný pokus.';
     case 'IDEMPOTENCY_KEY_REUSED':
-      return 'Klíč operace byl použit pro jiné tělo. Vytvořte nový záměr.';
+      return 'Tento pokus už patří jiné změně. Zkontrolujte aktuální stav a změnu připravte znovu.';
     case 'STALE_VERSION':
     case 'IMPORT_PREVIEW_STALE':
     case 'ANNOUNCEMENT_PREVIEW_STALE':
-      return 'Snapshot se mezitím změnil. Data byla obnovena; akci zkontrolujte znovu.';
+      return 'Data se mezitím změnila. Načtěte aktuální stav a změnu zkontrolujte znovu.';
     case 'ANNOUNCEMENT_PREVIEW_EXPIRED':
-      return 'Preview vypršelo. Vytvořte nové a akci znovu zkontrolujte.';
+      return 'Kontrola už není aktuální. Vytvořte novou a oznámení znovu zkontrolujte.';
     case 'IMPORT_PREVIEW_BLOCKED':
-      return 'Preview obsahuje konflikt nebo neznámý stav a nelze jej aplikovat.';
+      return 'Kontrola obsahuje konflikt nebo neznámý stav. Změny zatím nelze použít.';
     case 'ANNOUNCEMENT_EMPTY_AUDIENCE':
       return 'Vybrané publikum nemá žádné příjemce.';
     case 'EVENT_ACCESS_DENIED':
-      return 'Oprávnění k akci bylo odebráno.';
+      return 'K této části nemáte přístup. Pokud ji potřebujete pro svou práci, obraťte se na správce týmu.';
     case 'AUTHENTICATION_REQUIRED':
-    case 'AUTH_SESSION_EXPIRED':
       return 'Je nutné znovu ověřit přihlášení.';
+    case 'AUTH_SESSION_EXPIRED':
+      return 'Přihlášení vypršelo. Citlivá rozpracovaná data jsme skryli. Přihlaste se znovu a změnu znovu připravte a zkontrolujte.';
     case 'SUPPORT_RATE_LIMITED':
       return 'Vyhledávání je dočasně omezené. Zkuste to později.';
     case 'EXPORT_UNAVAILABLE':
@@ -91,7 +92,7 @@ const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
     case 'IMPORT_VALIDATION_FAILED':
       return 'Server odmítl neplatná vstupní data.';
     default:
-      return 'Operaci se nepodařilo dokončit.';
+      return 'Tuto část se nepodařilo načíst. Zkuste to znovu. Pokud problém trvá, otevřete Technické údaje a předejte referenci podpoře.';
   }
 };
 

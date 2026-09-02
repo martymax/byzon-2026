@@ -23,6 +23,7 @@ import {
   adminDashboardMetricRegistry,
   type AdminDashboardMetricIcon,
 } from './admin-dashboard-registry';
+import { adminCountForms, formatCzechCount } from './admin-copy';
 import {
   adminMetricStateLabels,
   adminPhaseLabels,
@@ -459,7 +460,7 @@ export const AdminOverviewWorkspace = () => {
             <section className={styles.panel} aria-labelledby="technical-title">
               <h2 id="technical-title">Technický provoz</h2>
               <p className={styles.muted}>
-                Zobrazuje jen souhrnné počty bez payloadů a osobních údajů.
+                Zobrazuje jen souhrnné počty bez obsahu úloh a osobních údajů.
               </p>
               <AdminTechnicalDetails>
                 <dl className={styles.dashboardQueueList}>
@@ -467,8 +468,20 @@ export const AdminOverviewWorkspace = () => {
                     <div key={queue.queue}>
                       <dt>{adminQueueLabels[queue.queue]}</dt>
                       <dd>
-                        {queue.ready} čeká · {queue.processing} právě se
-                        zpracovává · {queue.failed} se nepodařilo
+                        {formatCzechCount(
+                          queue.ready,
+                          adminCountForms.waitingTask,
+                        )}{' '}
+                        ·{' '}
+                        {formatCzechCount(
+                          queue.processing,
+                          adminCountForms.processingTask,
+                        )}{' '}
+                        ·{' '}
+                        {formatCzechCount(
+                          queue.failed,
+                          adminCountForms.failedTask,
+                        )}
                       </dd>
                     </div>
                   ))}

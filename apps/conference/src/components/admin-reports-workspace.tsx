@@ -52,7 +52,7 @@ const reportDescriptions: Record<AdminExportReport, string> = {
     'Agregovaný provozní přehled účastníků; může obsahovat osobní data.',
   checkin_summary: 'Souhrn průběhu odbavení bez vydávání nových oprávnění.',
   reservation_summary: 'Obsazenost a rezervace aktivit pro provozní kontrolu.',
-  audit_log: 'Auditní stopa změn provedených oprávněnými uživateli.',
+  audit_log: 'Historie změn provedených oprávněnými uživateli.',
 };
 
 const jobStateLabels: Record<AdminExportJob['state'], string> = {
@@ -220,7 +220,7 @@ export const AdminReportsRedesign = ({
         <h1>Reporty</h1>
         <p>
           Vyberte obsah a období reportu. Výstup může obsahovat provozní osobní
-          data, proto se vytvoření i stažení auditují.
+          data, proto se vytvoření i stažení zapisují do historie změn.
         </p>
       </header>
 
@@ -351,8 +351,8 @@ export const AdminReportsRedesign = ({
         <h2 id="report-history-title">Historie exportů</h2>
         {!jobsPort ? (
           <p className={styles.warning}>
-            Historie a stav souborů se zobrazí po připojení autorizovaného
-            export-job endpointu. Odpověď „ve frontě“ neznamená hotový soubor.
+            Historie a stav souborů se zobrazí po připojení oprávněného zdroje
+            reportů. Stav „Připravuje se“ ještě neznamená, že je soubor hotový.
           </p>
         ) : busy === 'jobs' && !jobs ? (
           <p role="status">Načítám historii reportů…</p>
@@ -408,7 +408,7 @@ export const AdminReportsRedesign = ({
           {pending?.body.format.toUpperCase()}
         </p>
         <p>
-          Report se vytvoří asynchronně a stažení bude samostatně auditované.
+          Report se připraví na pozadí a stažení se zapíše do historie změn.
         </p>
       </AdminConfirmDialog>
     </div>

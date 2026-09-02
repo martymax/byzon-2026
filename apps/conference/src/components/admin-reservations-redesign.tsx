@@ -19,6 +19,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { adminCountForms, formatCzechCount } from './admin-copy';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
   adminFailureMessage,
@@ -437,7 +438,9 @@ export const AdminReservationsRedesign = () => {
               přehledu bude potvrzena až serverovým stránkováním.
             </p>
           </div>
-          <span className={styles.badge}>{sessions.length} aktivit</span>
+          <span className={styles.badge}>
+            {formatCzechCount(sessions.length, adminCountForms.activity)}
+          </span>
         </div>
         <div className={styles.twoColumn}>
           <label className={styles.field}>

@@ -41,6 +41,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminAnnouncementWorkspace } from '../../components/admin-announcement-workspace';
+import { findForbiddenAdminMainCopy } from '../../components/admin-copy';
 import type { AdminExportJobsPort } from '../../components/admin-reports-workspace';
 import {
   AdminImportWorkspace,
@@ -144,6 +145,18 @@ const adminRoot = (): HTMLElement => {
   return element;
 };
 
+const renderedAdminMainCopy = (): string => {
+  const main = document.querySelector<HTMLElement>('#admin-main');
+  if (!main) throw new Error('Admin main landmark is missing.');
+  const copy = main.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('details').forEach((details) => details.remove());
+  return copy.textContent ?? '';
+};
+
+const expectPlainAdminMainCopy = () => {
+  expect(findForbiddenAdminMainCopy(renderedAdminMainCopy())).toBeNull();
+};
+
 const acknowledgeDialog = async (
   screen: Awaited<ReturnType<typeof renderComponent>>,
 ) => {
@@ -216,6 +229,7 @@ describe('F4 contract-first admin journeys', () => {
       await expect
         .element(screen.getByRole('heading', { level: 1, name: heading }))
         .toBeVisible();
+      expectPlainAdminMainCopy();
       await vi.waitFor(() => {
         expect(new Set(privateRequests)).toEqual(
           new Set<unknown>(expectedEndpoints),
@@ -346,6 +360,11 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(screen.getByText(/vlastní potřebné oprávnění/))
       .toBeVisible();
+    await expect
+      .element(screen.getByText(metadata.requestId))
+      .not.toBeVisible();
+    await screen.getByText('Technické údaje').last().click();
+    await expect.element(screen.getByText(metadata.requestId)).toBeVisible();
 
     await screen
       .getByRole('button', { name: 'Odebrat oprávnění' })
@@ -581,7 +600,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'K této části nemáte oprávnění',
+          name: 'K této části nemáte přístup',
         }),
       )
       .toBeVisible();
@@ -795,6 +814,7 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    expectPlainAdminMainCopy();
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -1206,7 +1226,10 @@ describe('F4 contract-first admin journeys', () => {
     await screen
       .getByRole('button', { name: 'Povolit otázky', exact: true })
       .click();
-    await expect.element(screen.getByText(/zapsána do auditu/i)).toBeVisible();
+    await expect
+      .element(screen.getByText(/uložena do historie změn/i))
+      .toBeVisible();
+    expectPlainAdminMainCopy();
 
     await screen
       .getByRole('combobox', { name: 'Přednáška' })
@@ -1456,6 +1479,7 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    expectPlainAdminMainCopy();
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -1821,6 +1845,7 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    expectPlainAdminMainCopy();
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -2353,7 +2378,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Oznámení bylo odesláno 37 příjemcům.',
+          name: 'Oznámení bylo odesláno. Počet příjemců: 37.',
         }),
       )
       .toBeVisible();
@@ -2501,7 +2526,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Toto oznámení už bylo odesláno 37 příjemcům. Další kopie nevznikla.',
+          name: 'Toto oznámení už bylo odesláno. Počet příjemců: 37. Další kopie nevznikla.',
         }),
       )
       .toBeVisible();
@@ -2564,7 +2589,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Oznámení bylo odesláno 37 příjemcům.',
+          name: 'Oznámení bylo odesláno. Počet příjemců: 37.',
         }),
       )
       .toBeVisible();

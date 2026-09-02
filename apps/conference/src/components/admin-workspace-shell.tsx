@@ -5,6 +5,7 @@ import type {
   AdminPermission,
 } from '@byzon/domain/contracts/admin';
 import type { ApiFailure, ApiProblem } from '@byzon/domain/contracts';
+import { AdminTechnicalDetails } from '@byzon/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -567,18 +568,18 @@ const requiresLogin = (failure: ApiFailure<ApiProblem>): boolean =>
 
 const failureMessage = (failure: ApiFailure<ApiProblem>): string => {
   if (failure.kind === 'offline') {
-    return 'Administrace je online-only. Soukromá data byla odstraněna; obnovte připojení a načtěte kontext znovu.';
+    return 'Tato část administrace vyžaduje připojení. Citlivá data jsme skryli. Zkontrolujte internet a zkuste to znovu.';
   }
   if (failure.kind === 'session_expired') {
-    return 'Relace vypršela. Soukromá data byla odstraněna a je nutné se znovu přihlásit.';
+    return 'Přihlášení vypršelo. Citlivá rozpracovaná data jsme skryli. Přihlaste se znovu a změnu znovu připravte a zkontrolujte.';
   }
   if (failure.kind === 'problem' && failure.problem.status === 403) {
-    return 'Aktuální účet nemá přístup k této akci. Žádná soukromá data nebyla ponechána.';
+    return 'K této části nemáte přístup. Pokud ji potřebujete pro svou práci, obraťte se na správce týmu.';
   }
   if (failure.kind === 'problem' && failure.problem.status === 401) {
     return 'Pro otevření administrace je nutné ověřit přihlášení.';
   }
-  return 'Administrační kontext se nepodařilo bezpečně ověřit. Zkuste načtení zopakovat.';
+  return 'Tuto část se nepodařilo načíst. Zkuste to znovu. Pokud problém trvá, otevřete Technické údaje a předejte referenci podpoře.';
 };
 
 const AdminWorkspaceView = ({
@@ -612,6 +613,16 @@ const AdminWorkspaceView = ({
   const section = sectionForPath(pathname);
   const activeNavigation = itemForPath(pathname) ?? navigation[0]!;
   const loginReturnTo = canonicalPathForNavigation(pathname);
+  const blockedReferenceMatch =
+    state.kind === 'blocked'
+      ? state.message.match(
+          /^(.*) Reference požadavku: ([A-Za-z0-9._:-]{8,128})\.$/,
+        )
+      : null;
+  const blockedMessage =
+    blockedReferenceMatch?.[1] ??
+    (state.kind === 'blocked' ? state.message : '');
+  const blockedRequestReference = blockedReferenceMatch?.[2];
 
   const closeDrawer = useCallback(() => {
     const dialog = drawerRef.current;
@@ -778,15 +789,23 @@ const AdminWorkspaceView = ({
               <section className={styles.panel} aria-busy="true">
                 <p className={styles.eyebrow}>Ověřuji přístup</p>
                 <h1>Načítám administrační kontext…</h1>
-                <p>
-                  Soukromé zdroje se načtou až po ověření eventu a oprávnění.
-                </p>
+                <p>Soukromé zdroje se načtou až po ověření akce a oprávnění.</p>
               </section>
             ) : state.kind === 'blocked' ? (
               <section className={styles.forbidden} role="alert">
                 <p className={styles.eyebrow}>Přístup uzavřen</p>
                 <h1>Administraci nelze bezpečně zobrazit</h1>
-                <p>{state.message}</p>
+                <p>{blockedMessage}</p>
+                {blockedRequestReference ? (
+                  <AdminTechnicalDetails>
+                    <dl>
+                      <dt>Reference požadavku</dt>
+                      <dd>
+                        <code>{blockedRequestReference}</code>
+                      </dd>
+                    </dl>
+                  </AdminTechnicalDetails>
+                ) : null}
                 {state.loginRequired ? (
                   <Link
                     className={styles.secondaryButton}
@@ -828,14 +847,13 @@ const AdminWorkspaceView = ({
                     </section>
                   ) : (
                     <section className={styles.forbidden} role="alert">
-                      <p className={styles.eyebrow}>403 · omezený rozsah</p>
-                      <h1>K této části nemáte oprávnění</h1>
+                      <p className={styles.eyebrow}>Přístup není dostupný</p>
+                      <h1>K této části nemáte přístup</h1>
                       <p>
-                        Oprávnění pro část {activeNavigation.label} není
-                        součástí autoritativního kontextu. Žádná data této části
-                        nebyla načtena.
+                        K této části nemáte přístup. Pokud ji potřebujete pro
+                        svou práci, obraťte se na správce týmu.
                       </p>
-                      <Link href="/admin">Zpět na administraci</Link>
+                      <Link href="/admin">Zpět na přehled</Link>
                     </section>
                   )}
                 </Fragment>
@@ -924,7 +942,7 @@ export const AdminWorkspaceShell = ({
         setState({
           kind: 'blocked',
           loginRequired: false,
-          message: 'Administrační kontext neposkytl úplný bezpečný snapshot.',
+          message: 'Administrace neposkytla úplný aktuální stav.',
         });
         return;
       }

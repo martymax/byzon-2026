@@ -227,7 +227,7 @@ export const AdminEngagementWorkspace = () => {
         description:
           'Změna se projeví pro celou akci a může okamžitě skrýt nebo zpřístupnit účastnické funkce.',
         acknowledgement:
-          'Ověřil/a jsem dopad na účastníky a chci změnu auditovaně uložit.',
+          'Ověřil/a jsem dopad na účastníky a chci změnu uložit do historie změn.',
         confirmLabel: 'Uložit dostupnost',
         danger:
           overview.features.networkingEnabled &&
@@ -248,7 +248,7 @@ export const AdminEngagementWorkspace = () => {
       },
       {
         title: `${enabled ? 'Povolit' : 'Zakázat'} otázky pro přednášku?`,
-        description: `${session.title} · změna se projeví po potvrzení a znovunačtení kanonického stavu.`,
+        description: `${session.title} · změna se projeví po potvrzení a novém načtení aktuálního stavu.`,
         acknowledgement:
           'Potvrzuji správnou přednášku a dopad změny na účastníky i moderátory.',
         confirmLabel: enabled ? 'Povolit otázky' : 'Zakázat otázky',
@@ -275,7 +275,7 @@ export const AdminEngagementWorkspace = () => {
         title: 'Přiřadit moderátora?',
         description: `${candidate.displayName} bude moderovat přednášku „${selectedSession.title}“.`,
         acknowledgement:
-          'Ověřil/a jsem osobu i přednášku a chci přiřazení auditovaně uložit.',
+          'Ověřil/a jsem osobu i přednášku a chci přiřazení uložit do historie změn.',
         confirmLabel: 'Přiřadit moderátora',
         danger: false,
       },
@@ -353,7 +353,7 @@ export const AdminEngagementWorkspace = () => {
       setSuccess(
         result.data.outcome === 'already_applied'
           ? 'Server potvrdil, že stejný stav už platí.'
-          : 'Změna byla bezpečně uložena a zapsána do auditu.',
+          : 'Změna byla bezpečně uložena do historie změn.',
       );
       setPending(null);
       setAmbiguous(false);
@@ -379,11 +379,12 @@ export const AdminEngagementWorkspace = () => {
   return (
     <div className={styles.stack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>F4 · interakce účastníků</p>
+        <p className={styles.eyebrow}>Interakce účastníků</p>
         <h1>Networking, otázky a hodnocení</h1>
         <p>
-          Všechny funkce jsou ve výchozím stavu vypnuté. Změny jsou online-only,
-          event-scoped, potvrzované a auditované.
+          Všechny funkce jsou ve výchozím stavu vypnuté. Tato část vyžaduje
+          připojení; změny platí jen pro tuto akci a po potvrzení se zapíší do
+          historie změn.
         </p>
       </header>
 
@@ -420,7 +421,7 @@ export const AdminEngagementWorkspace = () => {
         >
           <p>
             {busy === 'read'
-              ? 'Načítám kanonické nastavení interakcí…'
+              ? 'Načítám aktuální nastavení interakcí…'
               : 'Nastavení interakcí není k dispozici.'}
           </p>
           {busy !== 'read' ? (
@@ -440,7 +441,7 @@ export const AdminEngagementWorkspace = () => {
       ) : (
         <>
           <section className={styles.panel} aria-labelledby="reason-title">
-            <h2 id="reason-title">Auditní důvod změny</h2>
+            <h2 id="reason-title">Důvod změny</h2>
             <p className={styles.muted}>
               Důvod se použije pro jednu následující operaci a po uložení se
               vymaže.
@@ -448,7 +449,7 @@ export const AdminEngagementWorkspace = () => {
             {validationFailed ? (
               <AdminFormErrorSummary
                 descriptionId="admin-engagement-reason-error"
-                heading="Doplňte auditní důvod"
+                heading="Doplňte důvod změny"
                 message="Důvod musí mít alespoň 8 znaků a nesmí obsahovat HTML značky."
               />
             ) : null}

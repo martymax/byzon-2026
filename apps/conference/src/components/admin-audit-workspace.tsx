@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { requestAdminAudit } from '@/lib/admin-api';
 
 import { zonedLocalToIso } from './admin-content-console';
+import { adminCountForms, formatCzechCount } from './admin-copy';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { adminFailureMessage } from './admin-workspace-runtime';
 import {
@@ -66,6 +67,12 @@ const actionOptions = [
 
 const actionLabel = (action: string): string =>
   actionLabels[action] ?? 'Jiná provozní změna';
+
+const targetReferenceLabel = (reference: string): string =>
+  reference
+    .replace(/^event\b/i, 'akce')
+    .replace(/^session\b/i, 'aktivita')
+    .replace(/^reservation\b/i, 'rezervace');
 
 export const AdminAuditRedesign = () => {
   const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
@@ -295,7 +302,9 @@ export const AdminAuditRedesign = () => {
       <section className={styles.panel} aria-labelledby="audit-results-title">
         <div className={styles.panelHeader}>
           <h2 id="audit-results-title">Změny</h2>
-          <span className={styles.badge}>{items.length} položek</span>
+          <span className={styles.badge}>
+            {formatCzechCount(items.length, adminCountForms.item)}
+          </span>
         </div>
         {busy && query && items.length === 0 ? (
           <p role="status">Načítám historii změn…</p>
@@ -324,7 +333,7 @@ export const AdminAuditRedesign = () => {
                     timeStyle: 'short',
                     timeZone: eventTimezone,
                   }).format(new Date(entry.createdAt))}{' '}
-                  · {entry.targetReference}
+                  · {targetReferenceLabel(entry.targetReference)}
                 </p>
                 <details>
                   <summary>Zobrazit důvod a podrobnosti</summary>
