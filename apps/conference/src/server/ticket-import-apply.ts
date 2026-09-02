@@ -411,30 +411,28 @@ export const applySimpleShopTicketImport = async (
           throw previewBlocked('The immutable preview rows do not reconcile.');
         }
         if (
-          rows.some(
-            (row) => {
-              if (
-                !row.previewStatus ||
-                !['new', 'unchanged', 'excluded'].includes(row.previewStatus)
-              ) {
-                return true;
-              }
-              if (row.previewStatus === 'excluded') {
-                return (
-                  !['unpaid', 'cancelled', 'refunded'].includes(
-                    row.sourceStatus ?? '',
-                  ) ||
-                  row.mappedStatus !== null ||
-                  !row.validationErrors.includes('source_status_excluded')
-                );
-              }
+          rows.some((row) => {
+            if (
+              !row.previewStatus ||
+              !['new', 'unchanged', 'excluded'].includes(row.previewStatus)
+            ) {
+              return true;
+            }
+            if (row.previewStatus === 'excluded') {
               return (
-                row.sourceStatus !== 'paid' ||
-                row.mappedStatus !== 'valid' ||
-                row.validationErrors.length > 0
+                !['unpaid', 'cancelled', 'refunded'].includes(
+                  row.sourceStatus ?? '',
+                ) ||
+                row.mappedStatus !== null ||
+                !row.validationErrors.includes('source_status_excluded')
               );
-            },
-          )
+            }
+            return (
+              row.sourceStatus !== 'paid' ||
+              row.mappedStatus !== 'valid' ||
+              row.validationErrors.length > 0
+            );
+          })
         ) {
           throw previewBlocked(
             'The preview contains an unsafe or unresolved row.',

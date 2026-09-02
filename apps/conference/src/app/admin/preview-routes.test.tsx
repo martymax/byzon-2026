@@ -5,6 +5,7 @@ const redirectMock = vi.hoisted(() => vi.fn());
 const previewMock = vi.hoisted(() => vi.fn());
 const routeWorkspaceMocks = vi.hoisted(() => ({
   audit: vi.fn(() => null),
+  overview: vi.fn(() => null),
   reports: vi.fn(() => null),
   reservations: vi.fn(() => null),
   settings: vi.fn(() => null),
@@ -21,7 +22,7 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }));
 vi.mock('@/components/admin-overview-workspace', () => ({
-  AdminOverviewWorkspace: () => null,
+  AdminOverviewWorkspace: routeWorkspaceMocks.overview,
 }));
 vi.mock('@/components/admin-import-workspace', () => ({
   AdminImportWorkspace: () => null,
@@ -109,6 +110,7 @@ describe('F4 direct mock admin route boundary', () => {
   );
 
   it('gives each split management route its own workspace', () => {
+    expect(AdminOverviewPage().type).toBe(routeWorkspaceMocks.overview);
     expect(AdminReservationsPage().type).toBe(routeWorkspaceMocks.reservations);
     expect(AdminRolesPage().type).toBe(routeWorkspaceMocks.team);
     expect(AdminReportsPage().type).toBe(routeWorkspaceMocks.reports);
