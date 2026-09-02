@@ -64,6 +64,7 @@ const filterOptions = [
 
 type ImportFilter = (typeof filterOptions)[number][0];
 const importPageSize = 25;
+const compactDataViewQuery = '(max-width: 48rem)';
 type PendingApply = Readonly<{
   body: TicketImportApplyRequest;
   idempotencyKey: string;
@@ -131,6 +132,20 @@ const unchangedTicketLabel = (count: number): string =>
 const changedTicketLabel = (count: number): string =>
   count === 1 ? '1 vstupenky' : `${count} vstupenek`;
 
+const useCompactDataView = (): boolean => {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia(compactDataViewQuery);
+    const update = () => setCompact(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
+};
+
 export interface AdminTicketUpdatePort {
   readonly preview: typeof requestAdminTicketImportPreview;
   readonly apply: typeof requestAdminTicketImportApply;
@@ -167,6 +182,7 @@ export const AdminImportWorkspace = ({
   const [previewState, setPreviewState] = useState<
     'idle' | 'loading' | 'validated' | 'error'
   >('idle');
+  const compactDataView = useCompactDataView();
 
   const filteredRows = useMemo(
     () =>
@@ -559,120 +575,136 @@ export const AdminImportWorkspace = ({
             Neukládají se do cache prohlížeče a načtení se zapisuje do historie
             změn.
           </p>
-          <div
-            aria-label="Tabulka kontroly změn vstupenek"
-            className={styles.tableWrap}
-            tabIndex={0}
-          >
-            <table className={`${styles.table} ${styles.importTable}`}>
-              <caption>Záznamy načtené ze SimpleShopu ke kontrole.</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Záznam</th>
-                  <th scope="col">Účastník</th>
-                  <th scope="col">Co se změní</th>
-                  <th scope="col">Výsledek kontroly</th>
-                  <th scope="col">Poznámka</th>
-                </tr>
-              </thead>
-              <tbody>
+          {compactDataView ? (
+            <div className={styles.cards}>
+              <ul
+                className={styles.cardList}
+                aria-label="Záznamy změn vstupenek"
+              >
                 {visibleRows.map((row) => (
-                  <tr key={row.rowId}>
-                    <td>
-                      #{row.sourceRowNumber} · •{row.referenceSuffix}
-                    </td>
-                    <td className={styles.identityCell}>
-                      <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
-                      <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
-                      <small>{identitySourceLabels[row.identitySource]}</small>
-                      {companyAndPosition(row) ? (
-                        <small>{companyAndPosition(row)}</small>
-                      ) : null}
-                      {row.contactPhone ? (
-                        <small>{row.contactPhone}</small>
-                      ) : null}
-                    </td>
-                    <td>
-                      {formatTicketState(row.currentState)} →{' '}
-                      {formatTicketState(row.incomingState)}
-                    </td>
-                    <td>
+                  <li className={styles.dataCard} key={row.rowId}>
+                    <div className={styles.panelHeader}>
+                      <strong>
+                        Záznam #{row.sourceRowNumber} ·{' '}
+                        {row.contactName ?? 'Jméno neuvedeno'}
+                      </strong>
                       <span
                         className={`${styles.statusBadge} ${statusClass[row.status]}`}
                       >
                         {statusLabels[row.status]}
                       </span>
-                      <small>{sourceStatusLabels[row.sourceStatus]}</small>
-                    </td>
-                    <td>
-                      {row.issues.map(({ message }) => message).join('; ') ||
-                        'Bez problému'}
-                    </td>
-                  </tr>
+                    </div>
+                    <dl>
+                      <dt>E-mail</dt>
+                      <dd>{row.contactEmail ?? 'Neuveden'}</dd>
+                      <dt>Zdroj identity</dt>
+                      <dd>{identitySourceLabels[row.identitySource]}</dd>
+                      {companyAndPosition(row) ? (
+                        <>
+                          <dt>Firma / pozice</dt>
+                          <dd>{companyAndPosition(row)}</dd>
+                        </>
+                      ) : null}
+                      {row.contactPhone ? (
+                        <>
+                          <dt>Telefon</dt>
+                          <dd>{row.contactPhone}</dd>
+                        </>
+                      ) : null}
+                      <dt>Reference</dt>
+                      <dd>•{row.referenceSuffix}</dd>
+                      <dt>Datum nákupu</dt>
+                      <dd>
+                        <time dateTime={row.purchasedOn}>
+                          {formatPurchaseDate(row.purchasedOn)}
+                        </time>
+                      </dd>
+                      <dt>Co se změní</dt>
+                      <dd>
+                        {formatTicketState(row.currentState)} →{' '}
+                        {formatTicketState(row.incomingState)}
+                      </dd>
+                      <dt>Výsledek kontroly</dt>
+                      <dd>
+                        {statusLabels[row.status]} ·{' '}
+                        {sourceStatusLabels[row.sourceStatus]}
+                      </dd>
+                      <dt>Poznámka</dt>
+                      <dd>
+                        {row.issues.map(({ message }) => message).join('; ') ||
+                          'Bez problému'}
+                      </dd>
+                    </dl>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          <div className={styles.cards}>
-            <ul className={styles.cardList} aria-label="Záznamy změn vstupenek">
-              {visibleRows.map((row) => (
-                <li className={styles.dataCard} key={row.rowId}>
-                  <div className={styles.panelHeader}>
-                    <strong>
-                      Záznam #{row.sourceRowNumber} ·{' '}
-                      {row.contactName ?? 'Jméno neuvedeno'}
-                    </strong>
-                    <span
-                      className={`${styles.statusBadge} ${statusClass[row.status]}`}
-                    >
-                      {statusLabels[row.status]}
-                    </span>
-                  </div>
-                  <dl>
-                    <dt>E-mail</dt>
-                    <dd>{row.contactEmail ?? 'Neuveden'}</dd>
-                    <dt>Zdroj identity</dt>
-                    <dd>{identitySourceLabels[row.identitySource]}</dd>
-                    {companyAndPosition(row) ? (
-                      <>
-                        <dt>Firma / pozice</dt>
-                        <dd>{companyAndPosition(row)}</dd>
-                      </>
-                    ) : null}
-                    {row.contactPhone ? (
-                      <>
-                        <dt>Telefon</dt>
-                        <dd>{row.contactPhone}</dd>
-                      </>
-                    ) : null}
-                    <dt>Reference</dt>
-                    <dd>•{row.referenceSuffix}</dd>
-                    <dt>Datum nákupu</dt>
-                    <dd>
-                      <time dateTime={row.purchasedOn}>
-                        {formatPurchaseDate(row.purchasedOn)}
-                      </time>
-                    </dd>
-                    <dt>Co se změní</dt>
-                    <dd>
-                      {formatTicketState(row.currentState)} →{' '}
-                      {formatTicketState(row.incomingState)}
-                    </dd>
-                    <dt>Výsledek kontroly</dt>
-                    <dd>
-                      {statusLabels[row.status]} ·{' '}
-                      {sourceStatusLabels[row.sourceStatus]}
-                    </dd>
-                    <dt>Poznámka</dt>
-                    <dd>
-                      {row.issues.map(({ message }) => message).join('; ') ||
-                        'Bez problému'}
-                    </dd>
-                  </dl>
-                </li>
-              ))}
-            </ul>
-          </div>
+              </ul>
+            </div>
+          ) : (
+            <div
+              aria-label="Tabulka kontroly změn vstupenek"
+              className={styles.tableWrap}
+              tabIndex={0}
+            >
+              <table className={`${styles.table} ${styles.importTable}`}>
+                <caption>Záznamy načtené ze SimpleShopu ke kontrole.</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Záznam</th>
+                    <th scope="col">Účastník</th>
+                    <th scope="col">Co se změní</th>
+                    <th scope="col">Výsledek kontroly</th>
+                    <th scope="col">Poznámka</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRows.map((row) => (
+                    <tr key={row.rowId}>
+                      <td className={styles.referenceCell}>
+                        <span>
+                          #{row.sourceRowNumber} · •{row.referenceSuffix}
+                        </span>
+                        <small>
+                          Nákup{' '}
+                          <time dateTime={row.purchasedOn}>
+                            {formatPurchaseDate(row.purchasedOn)}
+                          </time>
+                        </small>
+                      </td>
+                      <td className={styles.identityCell}>
+                        <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
+                        <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
+                        <small>
+                          {identitySourceLabels[row.identitySource]}
+                        </small>
+                        {companyAndPosition(row) ? (
+                          <small>{companyAndPosition(row)}</small>
+                        ) : null}
+                        {row.contactPhone ? (
+                          <small>{row.contactPhone}</small>
+                        ) : null}
+                      </td>
+                      <td>
+                        {formatTicketState(row.currentState)} →{' '}
+                        {formatTicketState(row.incomingState)}
+                      </td>
+                      <td>
+                        <span
+                          className={`${styles.statusBadge} ${statusClass[row.status]}`}
+                        >
+                          {statusLabels[row.status]}
+                        </span>
+                        <small>{sourceStatusLabels[row.sourceStatus]}</small>
+                      </td>
+                      <td>
+                        {row.issues.map(({ message }) => message).join('; ') ||
+                          'Bez problému'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {filteredRows.length > importPageSize ? (
             <nav
