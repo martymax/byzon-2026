@@ -41,16 +41,21 @@ nesmí spustit.
 
 ## Služby a deployment
 
-1. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
+1. Každý dokončený funkční celek nejprve projde testy, dostane samostatný Git
+   commit a odešle se do vzdáleného repozitáře. Staging se standardně nasazuje
+   pouze přes Git integraci z větve `main`; `railway up` se pro běžné nasazení
+   nepoužívá. CLI slouží k read-only diagnostice. Ruční deploy je výjimečný
+   recovery krok, který musí být předem výslovně schválený a zdokumentovaný.
+2. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
    sledují větev `main`.
-2. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
+3. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
    migraci spustí idempotentní seed a import kanonického obsahu z
    `static-site/data/content.json`. Worker migrace nespouští.
-3. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
+4. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
    Redis. Produkční a staging data ani credentials se nesmí sdílet.
-4. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
+5. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
    2026 neprovisionují.
-5. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
+6. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
    restart loopu a aktuální release SHA.
 
 ## Proměnné webu
