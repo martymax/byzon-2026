@@ -78,7 +78,10 @@ DATABASE_URL=postgresql://... \
 
 The command emits a JSON report of skipped or unmapped source values. It writes
 only draft content, never creates reservations or publications, and refuses to
-overwrite non-draft speakers, partners, venues, pages or sessions. A
+overwrite non-draft speakers, partners, venues, pages or sessions. The staging
+pre-deploy import explicitly passes `--allow-published-update`, which permits
+Git-reviewed source changes to update published rows while preserving their
+published status; cancelled and archived records still fail closed. A
 transaction-scoped event lock serializes runs; repeating an unchanged source is
 a no-op. `content_import_provenance` records the source path and complete source
 SHA-256 for every imported target. Program stage/section labels are imported as

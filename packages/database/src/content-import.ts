@@ -510,6 +510,7 @@ export async function importContentJson(options: {
   sourceFile: string;
   repositoryRoot: string;
   dryRun?: boolean;
+  allowPublishedUpdate?: boolean;
 }): Promise<ContentImportReport> {
   const bytes = await readFile(options.sourceFile);
   const sourceSha256 = sha256(bytes);
@@ -860,7 +861,11 @@ export async function importContentJson(options: {
           eq(schema.speakerProfiles.slug, speaker.slug),
         ),
       });
-      if (existing && existing.status !== 'draft')
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      )
         throw new Error(
           `refusing to overwrite non-draft speaker: ${speaker.slug}`,
         );
@@ -918,7 +923,11 @@ export async function importContentJson(options: {
           eq(schema.partners.slug, slug),
         ),
       });
-      if (existing && existing.status !== 'draft')
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      )
         throw new Error(`refusing to overwrite non-draft partner: ${slug}`);
       const id = existing?.id ?? generateUuidV7();
       await transaction
@@ -958,7 +967,11 @@ export async function importContentJson(options: {
         eq(schema.venues.slug, venueSlug),
       ),
     });
-    if (existingVenue && existingVenue.status !== 'draft')
+    if (
+      existingVenue &&
+      existingVenue.status !== 'draft' &&
+      !(options.allowPublishedUpdate && existingVenue.status === 'published')
+    )
       throw new Error(`refusing to overwrite non-draft venue: ${venueSlug}`);
     const venueId = existingVenue?.id ?? generateUuidV7();
     await transaction
@@ -1001,7 +1014,11 @@ export async function importContentJson(options: {
           eq(schema.rooms.slug, room.slug),
         ),
       });
-      if (existing && existing.status !== 'draft') {
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      ) {
         throw new Error(`refusing to overwrite non-draft room: ${room.slug}`);
       }
       const id = existing?.id ?? generateUuidV7();
@@ -1046,7 +1063,11 @@ export async function importContentJson(options: {
         eq(schema.contentPages.slug, pageSlug),
       ),
     });
-    if (existingPage && existingPage.status !== 'draft')
+    if (
+      existingPage &&
+      existingPage.status !== 'draft' &&
+      !(options.allowPublishedUpdate && existingPage.status === 'published')
+    )
       throw new Error(
         `refusing to overwrite non-draft content page: ${pageSlug}`,
       );
@@ -1115,17 +1136,42 @@ export async function importContentJson(options: {
       Array<{ id: string; startsAt: Date }>
     >();
     for (const session of preparedSessions) {
-      const existing = await transaction.query.programSessions.findFirst({
-        where: and(
-          eq(schema.programSessions.eventId, eventId),
-          eq(schema.programSessions.slug, session.slug),
-        ),
-      });
-      if (existing && existing.status !== 'draft')
+      const provenance =
+        await transaction.query.contentImportProvenance.findFirst({
+          columns: { targetId: true },
+          where: and(
+            eq(schema.contentImportProvenance.eventId, eventId),
+            eq(schema.contentImportProvenance.sourceName, session.sourceName),
+            eq(schema.contentImportProvenance.sourcePath, session.sourcePath),
+            eq(schema.contentImportProvenance.targetType, 'session'),
+          ),
+        });
+      const existingByProvenance = provenance
+        ? await transaction.query.programSessions.findFirst({
+            where: and(
+              eq(schema.programSessions.eventId, eventId),
+              eq(schema.programSessions.id, provenance.targetId),
+            ),
+          })
+        : null;
+      const existing =
+        existingByProvenance ??
+        (await transaction.query.programSessions.findFirst({
+          where: and(
+            eq(schema.programSessions.eventId, eventId),
+            eq(schema.programSessions.slug, session.slug),
+          ),
+        }));
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      )
         throw new Error(
           `refusing to overwrite non-draft session: ${session.slug}`,
         );
       const id = existing?.id ?? generateUuidV7();
+      const stableSlug = existing?.slug ?? session.slug;
       if (session.reservationGroupKey) {
         const members =
           importedReservationGroups.get(session.reservationGroupKey) ?? [];
@@ -1164,7 +1210,7 @@ export async function importContentJson(options: {
           eventId,
           dayId: dayIds.get(session.dayPath)!,
           roomId: roomIds.get(session.roomSlug)!,
-          slug: session.slug,
+          slug: stableSlug,
           title: session.title,
           summary: session.summary,
           type: session.type,

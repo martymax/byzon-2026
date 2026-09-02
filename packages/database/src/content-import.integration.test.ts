@@ -75,7 +75,7 @@ integration('content import integration', () => {
     await client.close();
   });
 
-  it('imports only drafts and repeats without duplicate domain records', async () => {
+  it('reconciles explicitly allowed published source records without duplicates', async () => {
     const legacyDayId = generateUuidV7();
     const legacyTimes = [
       '9:15 - 9:45',
@@ -253,8 +253,12 @@ integration('content import integration', () => {
     const restoredWorkshopId = firstSessions.find(
       ({ title }) => title === 'Workshop: Blanka Mrázková',
     )?.id;
+    const openingSession = firstSessions.find(
+      ({ title }) => title === 'Zahájení konference',
+    );
     expect(preservedWorkshopId).toBeDefined();
     expect(restoredWorkshopId).toBeDefined();
+    expect(openingSession).toBeDefined();
     await client.db
       .update(schema.programSessions)
       .set({
@@ -286,20 +290,54 @@ integration('content import integration', () => {
       .update(schema.programSessions)
       .set({ capacityMode: 'none', capacity: null })
       .where(eq(schema.programSessions.id, restoredWorkshopId!));
+    await client.db
+      .update(schema.speakerProfiles)
+      .set({ status: 'published' })
+      .where(eq(schema.speakerProfiles.eventId, eventId));
+    await client.db
+      .update(schema.partners)
+      .set({ status: 'published' })
+      .where(eq(schema.partners.eventId, eventId));
+    await client.db
+      .update(schema.venues)
+      .set({ status: 'published' })
+      .where(eq(schema.venues.eventId, eventId));
+    await client.db
+      .update(schema.rooms)
+      .set({ status: 'published' })
+      .where(eq(schema.rooms.eventId, eventId));
+    await client.db
+      .update(schema.contentPages)
+      .set({ status: 'published' })
+      .where(eq(schema.contentPages.eventId, eventId));
+    await client.db
+      .update(schema.programSessions)
+      .set({ status: 'published' })
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.status, 'draft'),
+        ),
+      );
 
     const changedSourceDirectory = await mkdtemp(
       join(tmpdir(), 'byzon-content-import-'),
     );
     const changedSourceFile = join(changedSourceDirectory, 'content.json');
-    await writeFile(
-      changedSourceFile,
-      `${await readFile(options.sourceFile, 'utf8')}\n `,
+    const changedSource = (await readFile(options.sourceFile, 'utf8')).replace(
+      '"title": "Zahájení konference"',
+      '"title": "Zahájení konference – aktualizováno"',
     );
+    expect(changedSource).toContain(
+      '"title": "Zahájení konference – aktualizováno"',
+    );
+    await writeFile(changedSourceFile, changedSource);
     let second: Awaited<ReturnType<typeof importContentJson>>;
     try {
       second = await importContentJson({
         ...options,
         sourceFile: changedSourceFile,
+        allowPublishedUpdate: true,
       });
     } finally {
       await rm(changedSourceDirectory, { recursive: true, force: true });
@@ -372,9 +410,15 @@ integration('content import integration', () => {
     expect(secondSessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          status: 'draft',
+          status: 'published',
           roomId: expect.any(String),
           capacityMode: 'none',
+        }),
+        expect.objectContaining({
+          id: openingSession!.id,
+          slug: openingSession!.slug,
+          title: 'Zahájení konference – aktualizováno',
+          status: 'published',
         }),
         expect.objectContaining({
           title: 'Řízený networking',
