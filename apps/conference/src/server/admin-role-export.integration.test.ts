@@ -169,6 +169,9 @@ integration('admin role and export integration', () => {
 
   afterAll(async () => {
     await client.db
+      .delete(schema.operationalExportRequests)
+      .where(eq(schema.operationalExportRequests.eventId, eventId));
+    await client.db
       .delete(schema.auditLogs)
       .where(eq(schema.auditLogs.eventId, eventId));
     await client.db
