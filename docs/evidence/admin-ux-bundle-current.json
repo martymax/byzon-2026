@@ -1,0 +1,79 @@
+{
+  "baseline": "main@5bb7afd",
+  "generatedBy": "apps/conference/scripts/admin-ux-bundle-report.mjs",
+  "node": "v24.18.0",
+  "shared": {
+    "chunks": 5,
+    "gzipBytes": 129409,
+    "rawBytes": 540849,
+    "gzipDeltaBytes": 315
+  },
+  "routes": {
+    "overview": {
+      "chunks": 1,
+      "gzipBytes": 4097,
+      "rawBytes": 10999,
+      "gzipDeltaBytes": 0
+    },
+    "content": {
+      "chunks": 2,
+      "gzipBytes": 18131,
+      "rawBytes": 58893,
+      "gzipDeltaBytes": 0
+    },
+    "tickets": {
+      "chunks": 1,
+      "gzipBytes": 6091,
+      "rawBytes": 19604,
+      "gzipDeltaBytes": 0
+    },
+    "participants": {
+      "chunks": 1,
+      "gzipBytes": 4578,
+      "rawBytes": 14168,
+      "gzipDeltaBytes": 0
+    },
+    "reservations": {
+      "chunks": 1,
+      "gzipBytes": 5176,
+      "rawBytes": 16671,
+      "gzipDeltaBytes": -20649
+    },
+    "announcements": {
+      "chunks": 1,
+      "gzipBytes": 4503,
+      "rawBytes": 14020,
+      "gzipDeltaBytes": 0
+    },
+    "engagement": {
+      "chunks": 1,
+      "gzipBytes": 5461,
+      "rawBytes": 17538,
+      "gzipDeltaBytes": 0
+    },
+    "team": {
+      "chunks": 1,
+      "gzipBytes": 4927,
+      "rawBytes": 15485,
+      "gzipDeltaBytes": -17848
+    },
+    "reports": {
+      "chunks": 2,
+      "gzipBytes": 17483,
+      "rawBytes": 56601,
+      "gzipDeltaBytes": -5292
+    },
+    "audit": {
+      "chunks": 2,
+      "gzipBytes": 17443,
+      "rawBytes": 56745,
+      "gzipDeltaBytes": -8382
+    },
+    "settings": {
+      "chunks": 1,
+      "gzipBytes": 3271,
+      "rawBytes": 8930,
+      "gzipDeltaBytes": -22554
+    }
+  }
+}

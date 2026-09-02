@@ -3,13 +3,14 @@
 ## Aktivní navázání – redesign administrace (`AUX`, 2. 9. 2026)
 
 - Autoritativní specifikace i jediný tracker jsou v
-  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.40 obsahuje obousměrné
+  `docs/admin-ux-redesign-plan.md`; hlavní plán v6.41 obsahuje obousměrné
   AUX→F4/P/CS mapování a per-route integrační vlastníky.
 - `AUX-00B`, foundation `AUX-01A`–`C`, shell `AUX-02A`–`G`, dashboard
   `AUX-03A`–`C`, obsah `AUX-04A`–`G`, vstupenky `AUX-05A`–`C` a neblokovaná
   účastnická podpora `AUX-06A`, `B`, `D`, rezervace `AUX-07A`–`C` a oznámení
   `AUX-08A`–`D`, tým `AUX-09A`–`C` a neblokovaná část reportů, auditu a
-  nastavení `AUX-10A`–`E`,`G` a copy/feedback QA `AUX-11A`–`B` jsou
+  nastavení `AUX-10A`–`E`,`G`, copy/feedback QA `AUX-11A`–`B` a automatizovaná
+  část cross-route QA `AUX-12` jsou
   dokončené.
   Admin routy mají právě jeden landmark/skip link, permission/feature-aware
   cílovou IA, lidský topbar, bezpečný account menu a nativní modal drawer.
@@ -49,8 +50,10 @@
   `GAP-AUX-SETTINGS-01`. Rendered-copy scan chrání hlavní UI před technickým
   slovníkem, společné chyby odpovídají §6.4, request reference je jen v
   technických údajích a české počty používají sdílenou Intl pluralizaci.
-  Další celek je `AUX-12` cross-route accessibility, responsive, performance a
-  security QA.
+  AUX-12 má reprodukovatelný sedmibodový Chromium gate všech 11 rout, bundle
+  budget a mock security review. Fyzický screen-reader smoke a max-page trace
+  zůstávají otevřené; další implementační celek je `AUX-13` produkční
+  integrace po jednotlivých routách.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na
   320, 375, 414, 768, 1024 a 1440 px i při 200% zoomu. Drawer drží focus,
   zamyká a obnovuje scroll, reaguje na Escape a vrací focus na spouštěč.

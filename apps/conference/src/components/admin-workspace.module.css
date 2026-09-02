@@ -154,7 +154,7 @@
   gap: 1.5rem;
 }
 
-.navigationGroup h2 {
+.navigationGroupLabel {
   margin: 0 0 0.5rem;
   color: var(--admin-text-muted);
   font: 650 0.75rem/1rem var(--byzon-font-body);
