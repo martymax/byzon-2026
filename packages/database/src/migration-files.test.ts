@@ -58,6 +58,10 @@ const mastermindGroupMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0025_group_tomas_ryza_mastermind.sql'),
   'utf8',
 );
+const coachingReservationLimitMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0026_one_coaching_reservation.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -106,6 +110,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0025_group_tomas_ryza_mastermind',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0026_one_coaching_reservation',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -233,6 +240,15 @@ describe('versioned database artifacts', () => {
     expect(mastermindGroupMigration).toContain(
       'Mastermind reservation group contains participant state for event %',
     );
+    expect(coachingReservationLimitMigration).toContain(
+      'reservations_single_coaching_trigger',
+    );
+    expect(coachingReservationLimitMigration).toContain(
+      'reservations_active_user_coaching_unique',
+    );
+    expect(coachingReservationLimitMigration).toContain(
+      "'coaching-reservation:'",
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -249,6 +265,9 @@ describe('versioned database artifacts', () => {
       'gen_random_uuid()',
     );
     expect(mastermindGroupMigration).not.toContain('gen_random_uuid()');
+    expect(coachingReservationLimitMigration).not.toContain(
+      'gen_random_uuid()',
+    );
   });
 
   it('seeds both event scopes idempotently, enables current participant features and keeps isolation disabled', () => {

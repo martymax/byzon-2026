@@ -1010,6 +1010,7 @@ describe('CS-AGENDA-01 participant contracts', () => {
         conflict: {
           eventId: ids.event,
           sessionId: ids.otherSession,
+          reason: 'time_overlap',
           targetSessions: [targetSession],
           conflictingSessions: [session],
         },
@@ -1020,6 +1021,45 @@ describe('CS-AGENDA-01 participant contracts', () => {
         },
       }).code,
     ).toBe('RESERVATION_CONFLICT');
+    expect(
+      participantAgendaMutationProblemSchema.safeParse({
+        ...problem('RESERVATION_CONFLICT', 409),
+        sessionId: ids.otherSession,
+        agenda: {
+          ...response,
+          items: [
+            reservedItem,
+            {
+              ...savedItem,
+              session: {
+                ...targetSession,
+                startsAt: '2026-09-18T11:00:00.000+02:00',
+                endsAt: '2026-09-18T11:30:00.000+02:00',
+              },
+              capacity: reservationCapacity,
+            },
+          ],
+        },
+        conflict: {
+          eventId: ids.event,
+          sessionId: ids.otherSession,
+          reason: 'coaching_limit',
+          targetSessions: [
+            {
+              ...targetSession,
+              startsAt: '2026-09-18T11:00:00.000+02:00',
+              endsAt: '2026-09-18T11:30:00.000+02:00',
+            },
+          ],
+          conflictingSessions: [session],
+        },
+        replacement: {
+          allowed: true,
+          until: session.startsAt,
+          reservationSessionIds: [ids.session],
+        },
+      }).success,
+    ).toBe(true);
     expect(
       participantAgendaMutationProblemSchema.parse({
         ...problem('TICKET_INACTIVE', 409),

@@ -183,6 +183,13 @@
       "when": 1788390000000,
       "tag": "0025_group_tomas_ryza_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788393129000,
+      "tag": "0026_one_coaching_reservation",
+      "breakpoints": true
     }
   ]
 }

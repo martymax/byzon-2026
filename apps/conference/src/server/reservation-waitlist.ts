@@ -9,6 +9,8 @@ import {
 } from '@byzon/domain/contracts';
 import { and, asc, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 
+import { tryAcquireCoachingReservationLock } from './reservation-policy';
+
 export interface AutomaticWaitlistPromotionInput {
   transaction: DatabaseTransaction;
   eventId: string;
@@ -136,6 +138,7 @@ const participantHasReservationConflict = async (
       id: schema.programSessions.id,
       reservationGroupId: schema.programSessions.reservationGroupId,
       status: schema.programSessions.status,
+      type: schema.programSessions.type,
     })
     .from(schema.programSessions)
     .where(eq(schema.programSessions.eventId, eventId));
@@ -156,6 +159,14 @@ const participantHasReservationConflict = async (
       );
   const targetProjections = projectionsFor(targetReservationSessionId);
   if (targetProjections.length === 0) return true;
+  const targetIsCoaching = operational.some(
+    (session) =>
+      (session.reservationGroupId ?? session.id) ===
+        targetReservationSessionId &&
+      session.status !== 'archived' &&
+      session.status !== 'cancelled' &&
+      session.type === 'coaching',
+  );
   const existingReservations = await transaction
     .select({ sessionId: schema.reservations.sessionId })
     .from(schema.reservations)
@@ -167,15 +178,29 @@ const participantHasReservationConflict = async (
         ne(schema.reservations.sessionId, targetReservationSessionId),
       ),
     );
-  return existingReservations.some((reservation) =>
-    projectionsFor(reservation.sessionId).some((existing) =>
-      targetProjections.some(
-        (target) =>
-          Date.parse(existing.startsAt) < Date.parse(target.endsAt) &&
-          Date.parse(existing.endsAt) > Date.parse(target.startsAt),
-      ),
-    ),
-  );
+  return existingReservations.some((reservation) => {
+    const projections = projectionsFor(reservation.sessionId);
+    const coachingLimit =
+      targetIsCoaching &&
+      operational.some(
+        (session) =>
+          (session.reservationGroupId ?? session.id) ===
+            reservation.sessionId &&
+          session.status !== 'archived' &&
+          session.status !== 'cancelled' &&
+          session.type === 'coaching',
+      );
+    return (
+      coachingLimit ||
+      projections.some((existing) =>
+        targetProjections.some(
+          (target) =>
+            Date.parse(existing.startsAt) < Date.parse(target.endsAt) &&
+            Date.parse(existing.endsAt) > Date.parse(target.startsAt),
+        ),
+      )
+    );
+  });
 };
 
 /**
@@ -197,6 +222,7 @@ export const promoteAutomaticWaitlist = async ({
       capacity: true,
       capacityMode: true,
       status: true,
+      type: true,
       waitlistMode: true,
     },
     where: and(
@@ -246,6 +272,19 @@ export const promoteAutomaticWaitlist = async ({
       ],
     });
     if (!waiting) break;
+
+    if (
+      session.type === 'coaching' &&
+      !(await tryAcquireCoachingReservationLock(
+        transaction,
+        eventId,
+        waiting.userId,
+      ))
+    ) {
+      // Another transaction is deciding this participant's coaching slot.
+      // Preserve FIFO and let the next capacity transition retry safely.
+      break;
+    }
 
     if (
       !(await participantCanBePromoted(transaction, eventId, waiting.userId))

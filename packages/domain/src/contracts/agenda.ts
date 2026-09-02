@@ -681,6 +681,7 @@ export const agendaReservationConflictSchema = z
   .strictObject({
     eventId: uuidSchema,
     sessionId: uuidSchema,
+    reason: z.enum(['time_overlap', 'coaching_limit']).default('time_overlap'),
     targetSessions: z
       .array(agendaConflictSessionSnapshotSchema)
       .min(1)
@@ -729,13 +730,15 @@ export const agendaReservationConflictSchema = z
       if (
         session.eventId !== conflict.eventId ||
         targetIds.includes(session.id) ||
-        !overlapsTarget
+        (conflict.reason === 'time_overlap' && !overlapsTarget)
       ) {
         context.addIssue({
           code: 'custom',
           path: ['conflictingSessions', index],
           message:
-            'Conflicting reservation session must be a different overlapping same-event item',
+            conflict.reason === 'time_overlap'
+              ? 'Conflicting reservation session must be a different overlapping same-event item'
+              : 'Conflicting coaching reservation must be a different same-event item',
         });
       }
     });

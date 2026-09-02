@@ -1,5 +1,6 @@
 import {
   identityBootstrapResponseSchema,
+  participantAgendaMutationProblemSchema,
   participantAgendaMutationRequestSchema,
   participantAgendaMutationResponseSchema,
   participantAgendaResponseSchema,
@@ -1182,6 +1183,41 @@ describe('F3-01..F3-05 participant agenda', () => {
       .element(screen.getByRole('heading', { level: 1, name: 'Osobní agenda' }))
       .toHaveFocus();
     expect(mutationCount()).toBe(1);
+  });
+
+  it('explains the conference-wide coaching limit in the replacement dialog', async () => {
+    const coachingLimitProblem = participantAgendaMutationProblemSchema.parse({
+      ...reservationConflictProblem,
+      conflict: {
+        ...reservationConflictProblem.conflict,
+        reason: 'coaching_limit',
+      },
+    });
+    const { api } = agendaApiFor({
+      onRead: conflictInitialAgenda,
+      onMutation: () => problemResponse(coachingLimitProblem),
+    });
+    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+
+    await screen.getByRole('button', { name: 'Rezervovat místo' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Na konferenci lze rezervovat jen jeden koučink',
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByText(
+          'Už máte rezervovaný jiný koučovací slot. Novou rezervaci jsme zatím nevytvořili.',
+        ),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Rezervovaný koučink' }))
+      .toBeVisible();
+    await expectComponentToPassAxe(screen.container);
   });
 
   it('atomically replaces the original reservation after explicit confirmation', async () => {

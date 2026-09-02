@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import {
   createDatabaseClient,
@@ -103,7 +104,14 @@ integration('agenda roster-source schema integration', () => {
       capacity: 20,
       sortOrder: 0,
     });
-    return { eventId, isolationEventId, userId, secondUserId, sessionId };
+    return {
+      dayId,
+      eventId,
+      isolationEventId,
+      userId,
+      secondUserId,
+      sessionId,
+    };
   };
 
   afterAll(async () => {
@@ -219,6 +227,53 @@ integration('agenda roster-source schema integration', () => {
     ).rejects.toMatchObject({
       cause: expect.objectContaining({
         constraint: 'reservations_active_user_session_unique',
+      }),
+    });
+  });
+
+  it('allows at most one active coaching reservation per event and user', async () => {
+    await expect(
+      withTransaction(client.db, async (transaction) => {
+        const graph = await insertEventGraph(transaction);
+        const secondCoachingId = generateUuidV7();
+        await transaction
+          .update(schema.programSessions)
+          .set({ type: 'coaching' })
+          .where(eq(schema.programSessions.id, graph.sessionId));
+        await transaction.insert(schema.programSessions).values({
+          id: secondCoachingId,
+          eventId: graph.eventId,
+          dayId: graph.dayId,
+          slug: `agenda-schema-second-coaching-${secondCoachingId}`,
+          title: 'Second coaching slot',
+          type: 'coaching',
+          startsAt: new Date('2026-09-18T10:00:00Z'),
+          endsAt: new Date('2026-09-18T10:30:00Z'),
+          status: 'published',
+          capacityMode: 'reservation',
+          capacity: 1,
+          sortOrder: 1,
+        });
+        await transaction.insert(schema.reservations).values([
+          {
+            id: generateUuidV7(),
+            eventId: graph.eventId,
+            sessionId: graph.sessionId,
+            userId: graph.userId,
+            source: 'participant',
+          },
+          {
+            id: generateUuidV7(),
+            eventId: graph.eventId,
+            sessionId: secondCoachingId,
+            userId: graph.userId,
+            source: 'participant',
+          },
+        ]);
+      }),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({
+        constraint: 'reservations_active_user_coaching_unique',
       }),
     });
   });

@@ -35,6 +35,7 @@ import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import type { ParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
+import { acquireCoachingReservationLock } from './reservation-policy';
 import { promoteAutomaticWaitlist } from './reservation-waitlist';
 
 const MAX_AGENDA_ITEMS = 512;
@@ -131,7 +132,7 @@ class AgendaReservationConflictError extends Error {
     readonly allowed: boolean,
     readonly agendaVersion: number,
   ) {
-    super('Agenda reservation overlaps an existing reservation');
+    super('Agenda reservation conflicts with an existing reservation');
     this.name = 'AgendaReservationConflictError';
   }
 }
@@ -1115,6 +1116,7 @@ const loadReservationConflict = async (
       id: schema.programSessions.id,
       reservationGroupId: schema.programSessions.reservationGroupId,
       status: schema.programSessions.status,
+      type: schema.programSessions.type,
     })
     .from(schema.programSessions)
     .where(
@@ -1145,6 +1147,12 @@ const loadReservationConflict = async (
         published !== undefined && published.status !== 'cancelled',
     );
   if (targetSessions.length === 0) return null;
+  const targetIsCoaching = operationalRows.some(
+    (row) =>
+      (row.reservationGroupId ?? row.id) === reservationTargetId &&
+      row.status !== 'cancelled' &&
+      row.type === 'coaching',
+  );
 
   const confirmedReservations = await transaction
     .select({ sessionId: schema.reservations.sessionId })
@@ -1163,6 +1171,7 @@ const loadReservationConflict = async (
     PublishedProgramAgendaSnapshot['sessions'][number]
   >();
   let until = targetClosesAt;
+  let reason: AgendaReservationConflict['reason'] = 'time_overlap';
   for (const reservation of confirmedReservations) {
     const projections = operationalRows
       .filter(
@@ -1184,12 +1193,21 @@ const loadReservationConflict = async (
           Date.parse(projection.endsAt) > Date.parse(target.startsAt),
       ),
     );
-    if (overlapping.length === 0) continue;
+    const coachingLimit =
+      targetIsCoaching &&
+      operationalRows.some(
+        (row) =>
+          (row.reservationGroupId ?? row.id) === reservation.sessionId &&
+          row.status !== 'cancelled' &&
+          row.type === 'coaching',
+      );
+    if (overlapping.length === 0 && !coachingLimit) continue;
+    if (coachingLimit) reason = 'coaching_limit';
     conflictingRootIds.push(reservation.sessionId);
     projections.forEach((projection) => {
       until = Math.min(until, Date.parse(projection.startsAt));
     });
-    overlapping.forEach((projection) =>
+    (coachingLimit ? projections : overlapping).forEach((projection) =>
       conflictingPublished.set(projection.id, projection),
     );
   }
@@ -1225,6 +1243,7 @@ const loadReservationConflict = async (
     conflict: {
       eventId: context.event.id,
       sessionId,
+      reason,
       targetSessions: [...targetSessions].sort(byStart).map(snapshotFor),
       conflictingSessions: [...conflictingPublished.values()]
         .sort(byStart)
@@ -1317,11 +1336,16 @@ const canonicalProblemResponse = (
       : classified instanceof AgendaReservationConflictError
         ? {
             type: problemTypeForCode('RESERVATION_CONFLICT'),
-            title: 'Reservation overlaps another reservation',
+            title:
+              classified.conflict.reason === 'coaching_limit'
+                ? 'Only one coaching reservation is allowed'
+                : 'Reservation overlaps another reservation',
             status: 409,
             code: 'RESERVATION_CONFLICT',
             detail:
-              'Choose whether to keep the existing reservation or replace it with the new one.',
+              classified.conflict.reason === 'coaching_limit'
+                ? 'A participant may reserve only one coaching slot for the event. Choose whether to keep it or replace it with the new one.'
+                : 'Choose whether to keep the existing reservation or replace it with the new one.',
             requestId,
             sessionId: classified.sessionId,
             agenda: snapshot,
@@ -1605,6 +1629,18 @@ export const mutateParticipantAgenda = async (
           lockedContext.program.sessions.find(
             ({ id }) => id === reservationTargetId,
           ) ?? publishedTarget;
+
+        if (
+          (parsed.data.action === 'reserve' ||
+            parsed.data.action === 'join_waitlist') &&
+          reservationOperationalTarget?.type === 'coaching'
+        ) {
+          await acquireCoachingReservationLock(
+            transaction,
+            context.event.id,
+            session.user.id,
+          );
+        }
 
         let outcome: 'applied' | 'already_applied' = 'already_applied';
         let replacedReservationSessionIds: readonly string[] = [];

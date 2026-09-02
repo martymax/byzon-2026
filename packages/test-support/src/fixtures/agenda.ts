@@ -621,6 +621,7 @@ export const participantAgendaMutationProblemFixtures = defineFixtureSet({
       conflict: {
         eventId: agendaFixtureIds.event,
         sessionId: agendaFixtureIds.conflictTargetSession,
+        reason: 'time_overlap',
         targetSessions: [conflictTargetSession],
         conflictingSessions: [savedSession],
       },

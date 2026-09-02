@@ -64,6 +64,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const participantCancelCutoffUserId = crypto.randomUUID();
   const coachingContenderOneId = crypto.randomUUID();
   const coachingContenderTwoId = crypto.randomUUID();
+  const coachingSwitchUserId = crypto.randomUUID();
   const contentMutationRaceUserId = crypto.randomUUID();
   const calendarUserId = crypto.randomUUID();
   const waitlistOwnerId = crypto.randomUUID();
@@ -85,6 +86,8 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const archivedOperationalSessionId = crypto.randomUUID();
   const participantCancelSessionId = crypto.randomUUID();
   const coachingSessionId = crypto.randomUUID();
+  const coachingSecondSessionId = crypto.randomUUID();
+  const coachingReplacementSessionId = crypto.randomUUID();
   const waitlistSessionId = crypto.randomUUID();
   const mastermindGroupSessionId = crypto.randomUUID();
   const mastermindGroupPartTwoSessionId = crypto.randomUUID();
@@ -198,6 +201,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       participantCancelCutoffUserId,
       coachingContenderOneId,
       coachingContenderTwoId,
+      coachingSwitchUserId,
       contentMutationRaceUserId,
       calendarUserId,
       waitlistOwnerId,
@@ -237,6 +241,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelCutoffUserId,
         coachingContenderOneId,
         coachingContenderTwoId,
+        coachingSwitchUserId,
         contentMutationRaceUserId,
         calendarUserId,
         waitlistOwnerId,
@@ -274,6 +279,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelCutoffUserId,
         coachingContenderOneId,
         coachingContenderTwoId,
+        coachingSwitchUserId,
         contentMutationRaceUserId,
         calendarUserId,
         waitlistOwnerId,
@@ -309,6 +315,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelCutoffUserId,
         coachingContenderOneId,
         coachingContenderTwoId,
+        coachingSwitchUserId,
         contentMutationRaceUserId,
         waitlistOwnerId,
         waitlistFirstId,
@@ -506,6 +513,26 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         title: 'Koučink – Radim Roček',
         startsAt: new Date('2026-09-18T08:00:00Z'),
         endsAt: new Date('2026-09-18T08:30:00Z'),
+        type: 'coaching' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
+      },
+      {
+        id: coachingSecondSessionId,
+        slug: `coaching-second-${coachingSecondSessionId}`,
+        title: 'Koučink – druhý slot',
+        startsAt: new Date('2026-09-18T13:30:00Z'),
+        endsAt: new Date('2026-09-18T14:00:00Z'),
+        type: 'coaching' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
+      },
+      {
+        id: coachingReplacementSessionId,
+        slug: `coaching-replacement-${coachingReplacementSessionId}`,
+        title: 'Koučink – náhradní slot',
+        startsAt: new Date('2026-09-18T15:30:00Z'),
+        endsAt: new Date('2026-09-18T16:00:00Z'),
         type: 'coaching' as const,
         capacityMode: 'reservation' as const,
         capacity: 1,
@@ -2564,6 +2591,93 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       ),
     });
     expect(reservations).toEqual([{ userId: winnerId }]);
+  });
+
+  it('allows one coaching reservation per participant and switches slots atomically', async () => {
+    const addedFirst = await mutate(
+      coachingSwitchUserId,
+      { action: 'add', sessionId: coachingSecondSessionId, expectedVersion: 1 },
+      'agenda-coaching-limit-add-first-0001',
+    );
+    expect(addedFirst.status).toBe(200);
+    const reservedFirst = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: coachingSecondSessionId,
+        expectedVersion: 2,
+      },
+      'agenda-coaching-limit-reserve-first-0001',
+    );
+    expect(reservedFirst.status).toBe(200);
+    const addedSecond = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'add',
+        sessionId: coachingReplacementSessionId,
+        expectedVersion: 3,
+      },
+      'agenda-coaching-limit-add-second-0001',
+    );
+    expect(addedSecond.status).toBe(200);
+
+    const blocked = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: coachingReplacementSessionId,
+        expectedVersion: 4,
+      },
+      'agenda-coaching-limit-block-second-0001',
+    );
+    expect(blocked.status).toBe(409);
+    const problem = participantAgendaMutationProblemSchema.parse(
+      await blocked.json(),
+    );
+    expect(problem).toMatchObject({
+      code: 'RESERVATION_CONFLICT',
+      sessionId: coachingReplacementSessionId,
+      conflict: {
+        reason: 'coaching_limit',
+        targetSessions: [{ id: coachingReplacementSessionId }],
+        conflictingSessions: [{ id: coachingSecondSessionId }],
+      },
+      replacement: {
+        allowed: true,
+        until: '2026-09-18T13:30:00.000Z',
+        reservationSessionIds: [coachingSecondSessionId],
+      },
+    });
+
+    const switched = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: coachingReplacementSessionId,
+        expectedVersion: 4,
+        replaceReservationSessionIds: [coachingSecondSessionId],
+      },
+      'agenda-coaching-limit-switch-0001',
+    );
+    expect(switched.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema.parse(await switched.json()),
+    ).toMatchObject({
+      version: 5,
+      items: [
+        { state: 'saved', session: { id: coachingSecondSessionId } },
+        { state: 'reserved', session: { id: coachingReplacementSessionId } },
+      ],
+    });
+    const active = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, coachingSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(active).toEqual([{ sessionId: coachingReplacementSessionId }]);
   });
 
   it('serializes add with content replacement and revalidates the operational session', async () => {

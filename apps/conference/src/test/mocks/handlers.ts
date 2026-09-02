@@ -2190,6 +2190,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
               conflict: {
                 eventId: canonicalAgenda.eventId,
                 sessionId: parsed.data.sessionId,
+                reason: 'time_overlap',
                 targetSessions: [target.session],
                 conflictingSessions: conflicts.map(({ session }) => session),
               },

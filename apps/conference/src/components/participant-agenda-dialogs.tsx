@@ -207,6 +207,7 @@ export const ParticipantAgendaReservationConflictDialog = ({
   readonly timezone: string;
 }) => {
   const problem = resource.reservationConflict;
+  const coachingLimit = problem?.conflict.reason === 'coaching_limit';
   const pending =
     problem !== null &&
     resource.pending?.action === 'reserve' &&
@@ -235,13 +236,18 @@ export const ParticipantAgendaReservationConflictDialog = ({
       className="agenda-dialog"
       onClose={close}
       open={problem !== null}
-      title="Rezervace se časově překrývají"
+      title={
+        coachingLimit
+          ? 'Na konferenci lze rezervovat jen jeden koučink'
+          : 'Rezervace se časově překrývají'
+      }
     >
       {problem ? (
         <div className="agenda-dialog-content">
           <p>
-            Na překrývající se aktivity nelze mít dvě rezervace. Novou rezervaci
-            jsme zatím nevytvořili.
+            {coachingLimit
+              ? 'Už máte rezervovaný jiný koučovací slot. Novou rezervaci jsme zatím nevytvořili.'
+              : 'Na překrývající se aktivity nelze mít dvě rezervace. Novou rezervaci jsme zatím nevytvořili.'}
           </p>
           <div className="agenda-conflict-target">
             <span>Nová volba</span>
@@ -256,7 +262,9 @@ export const ParticipantAgendaReservationConflictDialog = ({
                 .join(', ')}
             </span>
           </div>
-          <h3>Stávající rezervace</h3>
+          <h3>
+            {coachingLimit ? 'Rezervovaný koučink' : 'Stávající rezervace'}
+          </h3>
           <ul className="agenda-conflict-list">
             {problem.conflict.conflictingSessions.map((session) => (
               <li key={session.id}>
