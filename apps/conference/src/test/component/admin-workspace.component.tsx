@@ -4,6 +4,7 @@ import {
 } from '@byzon/domain/contracts';
 import {
   adminOperationsOverviewResponseSchema,
+  type AdminRoleScopeOptionsRequest,
   adminSessionCapacityMutationResponseSchema,
 } from '@byzon/domain/contracts/admin';
 import {
@@ -20,6 +21,10 @@ import {
   adminFixtureIds,
   adminMutationProblemFixtures,
   adminOperationsOverviewFixtures,
+  adminRoleAssignmentFixtures,
+  adminRoleAssignmentListFixtures,
+  adminRolePersonSearchFixtures,
+  adminRoleScopeOptionsFixtures,
   adminReservationFixtures,
   adminReservationMutationFixtures,
   adminSessionCapacityFixtures,
@@ -64,6 +69,7 @@ import {
   adminEventSettingsUpdateEndpoint,
   adminExportEndpoint,
   adminOperationsOverviewEndpoint,
+  adminRoleAssignmentEndpoint,
   adminReservationsEndpoint,
   adminReservationMutationEndpoint,
   adminSessionCapacitiesEndpoint,
@@ -155,12 +161,7 @@ beforeEach(() => {
 
 describe('F4 contract-first admin journeys', () => {
   it.each([
-    [
-      '/admin/role',
-      'Tým a oprávnění',
-      AdminTeamWorkspace,
-      [adminOperationsOverviewEndpoint],
-    ],
+    ['/admin/role', 'Tým a oprávnění', AdminTeamWorkspace, []],
     ['/admin/reporty', 'Reporty', AdminReportsWorkspace, []],
     [
       '/admin/rezervace',
@@ -220,6 +221,288 @@ describe('F4 contract-first admin journeys', () => {
       });
     },
   );
+
+  it('assigns a role through named people and scope options without raw identifier fields', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const mutationBodies: unknown[] = [];
+    const scopeRequests: AdminRoleScopeOptionsRequest[] = [];
+    const dataPort = {
+      loadAssignments: vi.fn(async () => adminRoleAssignmentListFixtures.list!),
+      searchPeople: vi.fn(async () => adminRolePersonSearchFixtures.found!),
+      loadScopeOptions: vi.fn(async (request: AdminRoleScopeOptionsRequest) => {
+        scopeRequests.push(request);
+        return request.role === 'checkin_operator'
+          ? adminRoleScopeOptionsFixtures.checkin!
+          : request.role === 'moderator'
+            ? adminRoleScopeOptionsFixtures.moderator!
+            : adminRoleScopeOptionsFixtures.activity_leader!;
+      }),
+    };
+    const api = organizerApi((endpoint, rawOptions) => {
+      if (endpoint !== adminRoleAssignmentEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      const options = rawOptions as { readonly body: unknown };
+      mutationBodies.push(options.body);
+      return success({
+        ...adminRoleAssignmentFixtures.granted!,
+        assignmentsVersion: 4,
+      });
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminTeamWorkspace dataPort={dataPort} />
+      </AdminWorkspaceShell>,
+    );
+    expect(document.body.textContent).toContain('Operátor #27');
+    expect(document.body.textContent).not.toContain(adminFixtureIds.operator);
+    await expect
+      .element(screen.getByRole('textbox', { name: /ID operátora/i }))
+      .not.toBeInTheDocument();
+    await screen.getByRole('button', { name: 'Přiřadit roli' }).click();
+    await screen
+      .getByRole('textbox', { name: 'Jméno nebo ověřený kontakt' })
+      .fill('Patrik');
+    await screen.getByRole('button', { name: 'Vyhledat osobu' }).click();
+    await screen.getByRole('radio', { name: /Patrik Novák/ }).click();
+    await screen.getByRole('radio', { name: /Vedoucí aktivity/ }).click();
+    await expect
+      .element(screen.getByRole('combobox', { name: 'Povolený rozsah' }))
+      .toHaveValue(adminFixtureIds.session);
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
+      .fill('Přidělení vedoucího k potvrzené aktivitě.');
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat přiřazení' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Přiřadit roli' })
+      .click();
+
+    expect(scopeRequests.at(-1)).toEqual({ role: 'room_operator' });
+    expect(mutationBodies).toEqual([
+      {
+        action: 'grant',
+        operatorId: adminFixtureIds.operator,
+        role: 'room_operator',
+        scope: {
+          kind: 'session',
+          sessionId: adminFixtureIds.session,
+          label: 'Růst bez zkratek',
+        },
+        expectedVersion: 3,
+        reason: 'Přidělení vedoucího k potvrzené aktivitě.',
+      },
+    ]);
+    await expect
+      .element(screen.getByText('Role byla přiřazena.'))
+      .toBeVisible();
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('revokes a listed permission with a danger confirmation and translates server guards', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    let guarded = false;
+    const dataPort = {
+      loadAssignments: vi.fn(async () => adminRoleAssignmentListFixtures.list!),
+      searchPeople: vi.fn(async () => adminRolePersonSearchFixtures.empty!),
+      loadScopeOptions: vi.fn(
+        async () => adminRoleScopeOptionsFixtures.checkin!,
+      ),
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint !== adminRoleAssignmentEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      if (!guarded) {
+        guarded = true;
+        return problemFailure(adminMutationProblemFixtures.self_lockout!);
+      }
+      return success(adminRoleAssignmentFixtures.revoked!);
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminTeamWorkspace dataPort={dataPort} />
+      </AdminWorkspaceShell>,
+    );
+
+    const reason = screen.getByRole('textbox', {
+      name: 'Důvod změny oprávnění',
+    });
+    await reason.fill('Odebrání již nepotřebného provozního přístupu.');
+    await screen
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .first()
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .click();
+    await expect
+      .element(screen.getByText(/vlastní potřebné oprávnění/))
+      .toBeVisible();
+
+    await screen
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .first()
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .click();
+    await expect
+      .element(screen.getByText('Oprávnění bylo odebráno.'))
+      .toBeVisible();
+  });
+
+  it('reloads the canonical team list after a stale revoke', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    let listCalls = 0;
+    const dataPort = {
+      loadAssignments: vi.fn(async () => {
+        listCalls += 1;
+        return {
+          ...adminRoleAssignmentListFixtures.list!,
+          assignmentsVersion: listCalls === 1 ? 3 : 6,
+        };
+      }),
+      searchPeople: vi.fn(async () => adminRolePersonSearchFixtures.empty!),
+      loadScopeOptions: vi.fn(
+        async () => adminRoleScopeOptionsFixtures.checkin!,
+      ),
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminRoleAssignmentEndpoint) {
+        return problemFailure(adminMutationProblemFixtures.stale!);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminTeamWorkspace dataPort={dataPort} />
+      </AdminWorkspaceShell>,
+    );
+    const initialListCalls = listCalls;
+
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
+      .fill('Odebrání zastaralého provozního oprávnění.');
+    await screen
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .first()
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .click();
+
+    await vi.waitFor(() => expect(listCalls).toBeGreaterThan(initialListCalls));
+    await expect
+      .element(screen.getByText(/Načetli jsme aktuální seznam/))
+      .toBeVisible();
+  });
+
+  it('wipes the team workspace when role permission is revoked', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const dataPort = {
+      loadAssignments: vi.fn(async () => adminRoleAssignmentListFixtures.list!),
+      searchPeople: vi.fn(async () => adminRolePersonSearchFixtures.empty!),
+      loadScopeOptions: vi.fn(
+        async () => adminRoleScopeOptionsFixtures.checkin!,
+      ),
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminRoleAssignmentEndpoint) {
+        return problemFailure(adminMutationProblemFixtures.permission!);
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminTeamWorkspace dataPort={dataPort} />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
+      .fill('Bezpečnostní ověření odebraného oprávnění.');
+    await screen
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .first()
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .click();
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Administraci nelze bezpečně zobrazit',
+        }),
+      )
+      .toBeVisible();
+    expect(document.body.textContent).not.toContain('Operátor #27');
+  });
+
+  it('retries an ambiguous role revoke with the exact same request', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const mutationCalls: unknown[] = [];
+    const dataPort = {
+      loadAssignments: vi.fn(async () => adminRoleAssignmentListFixtures.list!),
+      searchPeople: vi.fn(async () => adminRolePersonSearchFixtures.empty!),
+      loadScopeOptions: vi.fn(
+        async () => adminRoleScopeOptionsFixtures.checkin!,
+      ),
+    };
+    const api = organizerApi((endpoint, rawOptions) => {
+      if (endpoint !== adminRoleAssignmentEndpoint) {
+        throw new Error('Unexpected admin endpoint.');
+      }
+      const { signal, ...stableRequest } = rawOptions as Record<
+        string,
+        unknown
+      >;
+      expect(signal).toBeInstanceOf(AbortSignal);
+      mutationCalls.push(structuredClone(stableRequest));
+      return mutationCalls.length === 1
+        ? failure('timeout')
+        : success(adminRoleAssignmentFixtures.revoked!);
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminTeamWorkspace dataPort={dataPort} />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
+      .fill('Odebrání již nepotřebného provozního oprávnění.');
+    await screen
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .first()
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odebrat oprávnění' })
+      .click();
+    await screen
+      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .click();
+
+    expect(mutationCalls).toHaveLength(2);
+    expect(mutationCalls[1]).toEqual(mutationCalls[0]);
+    await expect
+      .element(screen.getByText('Oprávnění bylo odebráno.'))
+      .toBeVisible();
+  });
 
   it('offers the production login route and preserves the exact admin return', async () => {
     window.history.replaceState({}, '', '/admin/interakce');

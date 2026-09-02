@@ -15,6 +15,10 @@ import {
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminRoleAssignmentMutationRequestSchema,
+  adminRoleAssignmentListResponseSchema,
+  adminRolePersonSearchRequestSchema,
+  adminRolePersonSearchResponseSchema,
+  adminRoleScopeOptionsResponseSchema,
   problemTypeForCode,
 } from './index.js';
 
@@ -26,9 +30,82 @@ const ids = {
   auditOlder: '019fa200-0000-7000-8000-000000000005',
   operator: '019fa200-0000-7000-8000-000000000006',
   networkingSession: '019fa200-0000-7000-8000-000000000007',
+  assignment: '019fa200-0000-7000-8000-000000000008',
+  station: '019fa200-0000-7000-8000-000000000009',
 } as const;
 
 describe('CS-ADMIN-01 contracts', () => {
+  it('validates event-scoped role lists, person search and compatible named scopes', () => {
+    const assignment = {
+      assignmentId: ids.assignment,
+      eventId: ids.event,
+      operatorId: ids.operator,
+      operatorLabel: 'Patrik Novák',
+      role: 'room_operator' as const,
+      scope: {
+        kind: 'session' as const,
+        sessionId: ids.session,
+        label: 'Růst bez zkratek',
+      },
+      state: 'active' as const,
+      version: 2,
+    };
+    const list = {
+      eventId: ids.event,
+      assignmentsVersion: 3,
+      items: [assignment],
+      pageInfo: { nextCursor: null, hasMore: false },
+    };
+    expect(adminRoleAssignmentListResponseSchema.parse(list)).toEqual(list);
+    expect(
+      adminRoleAssignmentListResponseSchema.safeParse({
+        ...list,
+        items: [assignment, assignment],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      adminRolePersonSearchRequestSchema.parse({ query: 'Patrik' }),
+    ).toEqual({ query: 'Patrik' });
+    expect(
+      adminRolePersonSearchRequestSchema.safeParse({
+        query: 'Patrik',
+        operatorId: ids.operator,
+      }).success,
+    ).toBe(false);
+    expect(
+      adminRolePersonSearchResponseSchema.safeParse({
+        eventId: ids.event,
+        items: [
+          {
+            operatorId: ids.operator,
+            displayName: 'Patrik Novák',
+            maskedVerifiedContact: 'patrik@example.test',
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      adminRoleScopeOptionsResponseSchema.parse({
+        eventId: ids.event,
+        role: 'checkin_operator',
+        options: [
+          { kind: 'station', stationId: ids.station, label: 'Hlavní vstup' },
+        ],
+      }),
+    ).toBeTruthy();
+    expect(
+      adminRoleScopeOptionsResponseSchema.safeParse({
+        eventId: ids.event,
+        role: 'room_operator',
+        options: [
+          { kind: 'station', stationId: ids.station, label: 'Hlavní vstup' },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it('returns server-derived actor permissions and scope as private data', () => {
     const context = {
       event: {

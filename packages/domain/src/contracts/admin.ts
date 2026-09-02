@@ -252,6 +252,133 @@ export const adminRoleAssignmentSchema = z.strictObject({
 
 export type AdminRoleAssignment = z.infer<typeof adminRoleAssignmentSchema>;
 
+export const adminRoleAssignmentListQuerySchema = z.strictObject({
+  role: adminAssignmentRoleSchema.optional(),
+  state: z.enum(['active', 'scheduled']).optional(),
+  scopeKind: z.enum(['event', 'station', 'session']).optional(),
+  cursor: opaqueCursorSchema.optional(),
+});
+
+export type AdminRoleAssignmentListQuery = z.infer<
+  typeof adminRoleAssignmentListQuerySchema
+>;
+
+export const adminRoleAssignmentListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    assignmentsVersion: versionSchema,
+    items: z.array(adminRoleAssignmentSchema).max(100),
+    pageInfo: z.strictObject({
+      nextCursor: opaqueCursorSchema.nullable(),
+      hasMore: z.boolean(),
+    }),
+  })
+  .superRefine((response, context) => {
+    const ids = response.items.map(({ assignmentId }) => assignmentId);
+    if (
+      response.items.some(({ eventId }) => eventId !== response.eventId) ||
+      new Set(ids).size !== ids.length ||
+      response.pageInfo.hasMore !== (response.pageInfo.nextCursor !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message:
+          'Role assignments must be event-scoped, unique and carry consistent page info',
+      });
+    }
+  });
+
+export type AdminRoleAssignmentListResponse = z.infer<
+  typeof adminRoleAssignmentListResponseSchema
+>;
+
+export const adminRolePersonSearchRequestSchema = z.strictObject({
+  query: safeInlineTextSchema(120).refine(
+    (value) => value.trim().length >= 2,
+    'Person search needs at least two visible characters',
+  ),
+});
+
+export type AdminRolePersonSearchRequest = z.infer<
+  typeof adminRolePersonSearchRequestSchema
+>;
+
+export const adminRolePersonSchema = z.strictObject({
+  operatorId: uuidSchema,
+  displayName: safeInlineTextSchema(120),
+  maskedVerifiedContact: safeInlineTextSchema(160).refine(
+    (value) => /[*•…]/.test(value),
+    'Verified contact must remain masked',
+  ),
+});
+
+export type AdminRolePerson = z.infer<typeof adminRolePersonSchema>;
+
+export const adminRolePersonSearchResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    items: z.array(adminRolePersonSchema).max(20),
+  })
+  .superRefine((response, context) => {
+    const ids = response.items.map(({ operatorId }) => operatorId);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message: 'Role person search results must be unique',
+      });
+    }
+  });
+
+export type AdminRolePersonSearchResponse = z.infer<
+  typeof adminRolePersonSearchResponseSchema
+>;
+
+export const adminRoleScopeOptionsRequestSchema = z.strictObject({
+  role: adminAssignmentRoleSchema,
+});
+
+export type AdminRoleScopeOptionsRequest = z.infer<
+  typeof adminRoleScopeOptionsRequestSchema
+>;
+
+export const adminRoleScopeOptionsResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    role: adminAssignmentRoleSchema,
+    options: z.array(adminAssignmentScopeSchema).max(200),
+  })
+  .superRefine((response, context) => {
+    const compatible = (kind: AdminAssignmentScope['kind']) =>
+      response.role === 'checkin_operator'
+        ? kind === 'station'
+        : response.role === 'moderator'
+          ? kind === 'event' || kind === 'session'
+          : kind === 'session';
+    const ids = response.options.map((option) =>
+      option.kind === 'event'
+        ? 'event'
+        : option.kind === 'station'
+          ? option.stationId
+          : option.sessionId,
+    );
+    if (
+      response.options.some(({ kind }) => !compatible(kind)) ||
+      new Set(ids).size !== ids.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: 'Role scope options must be compatible and unique',
+      });
+    }
+  });
+
+export type AdminRoleScopeOptionsResponse = z.infer<
+  typeof adminRoleScopeOptionsResponseSchema
+>;
+
 const roleAssignmentMutationBase = {
   expectedVersion: versionSchema,
   reason: mutationReasonSchema,

@@ -83,6 +83,10 @@ const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
       return 'Vyhledávání je dočasně omezené. Zkuste to později.';
     case 'EXPORT_UNAVAILABLE':
       return 'Export nyní není dostupný.';
+    case 'SELF_LOCKOUT_GUARD':
+      return 'Tuto změnu nelze provést, protože by odebrala vaše vlastní potřebné oprávnění.';
+    case 'LAST_ADMINISTRATOR_GUARD':
+      return 'Poslední administrátorské oprávnění akce nelze odebrat.';
     case 'VALIDATION_FAILED':
     case 'IMPORT_VALIDATION_FAILED':
       return 'Server odmítl neplatná vstupní data.';

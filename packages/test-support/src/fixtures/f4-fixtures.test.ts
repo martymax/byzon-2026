@@ -11,6 +11,9 @@ import {
   adminReservationSessionPageSchema,
   adminSessionCapacityListResponseSchema,
   adminRoleAssignmentMutationResponseSchema,
+  adminRoleAssignmentListResponseSchema,
+  adminRolePersonSearchResponseSchema,
+  adminRoleScopeOptionsResponseSchema,
   supportMutationResponseSchema,
   supportSearchResponseSchema,
   supportTargetTicketSearchResponseSchema,
@@ -38,6 +41,9 @@ import {
   adminReservationSessionFixtures,
   adminSessionCapacityFixtures,
   adminRoleAssignmentFixtures,
+  adminRoleAssignmentListFixtures,
+  adminRolePersonSearchFixtures,
+  adminRoleScopeOptionsFixtures,
   supportMutationFixtures,
   supportMutationProblemFixtures,
   supportSearchFixtures,
@@ -121,6 +127,21 @@ describe('F4 canonical fixture sets', () => {
     }
     for (const fixture of Object.values(adminRoleAssignmentFixtures)) {
       expect(adminRoleAssignmentMutationResponseSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+    }
+    for (const fixture of Object.values(adminRoleAssignmentListFixtures)) {
+      expect(adminRoleAssignmentListResponseSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+    }
+    for (const fixture of Object.values(adminRolePersonSearchFixtures)) {
+      expect(adminRolePersonSearchResponseSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+    }
+    for (const fixture of Object.values(adminRoleScopeOptionsFixtures)) {
+      expect(adminRoleScopeOptionsResponseSchema.parse(fixture)).toEqual(
         fixture,
       );
     }
