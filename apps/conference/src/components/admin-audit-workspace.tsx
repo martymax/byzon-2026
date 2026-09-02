@@ -10,7 +10,7 @@ import {
   type AdminAuditQuery,
 } from '@byzon/domain/contracts/admin';
 import { AdminTechnicalDetails } from '@byzon/ui';
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { memo, startTransition, useEffect, useMemo, useState } from 'react';
 
 import { requestAdminAudit } from '@/lib/admin-api';
 
@@ -37,6 +37,50 @@ const targetReferenceLabel = (reference: string): string =>
     .replace(/^session\b/i, 'aktivita')
     .replace(/^reservation\b/i, 'rezervace');
 
+const AUDIT_PAGE_SIZE = 25;
+
+const AdminAuditEntryCard = memo(function AdminAuditEntryCard({
+  entry,
+  momentFormatter,
+}: Readonly<{
+  entry: AdminAuditEntry;
+  momentFormatter: Intl.DateTimeFormat;
+}>) {
+  return (
+    <li className={styles.dataCard}>
+      <div className={styles.panelHeader}>
+        <div>
+          <strong>{adminAuditActionLabels[entry.action]}</strong>
+          <p className={styles.muted}>
+            {adminAuditCategoryLabels[entry.category]} · {entry.actorLabel}
+          </p>
+        </div>
+        <span className={styles.statusBadge}>
+          {adminAuditOutcomeLabels[entry.outcome]}
+        </span>
+      </div>
+      <p>
+        {momentFormatter.format(new Date(entry.createdAt))} ·{' '}
+        {targetReferenceLabel(entry.targetReference)}
+      </p>
+      <details>
+        <summary>Zobrazit důvod a podrobnosti</summary>
+        <p>{entry.reason}</p>
+        {entry.resultingVersion ? (
+          <p>Výsledná verze: {entry.resultingVersion}</p>
+        ) : null}
+        {entry.redacted ? <p>Citlivé údaje byly skryty.</p> : null}
+        <AdminTechnicalDetails>
+          <dl className={styles.detailList}>
+            <dt>ID auditu</dt>
+            <dd>{entry.auditId}</dd>
+          </dl>
+        </AdminTechnicalDetails>
+      </details>
+    </li>
+  );
+});
+
 export const AdminAuditRedesign = () => {
   const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
     useAdminWorkspace();
@@ -50,6 +94,7 @@ export const AdminAuditRedesign = () => {
   const [to, setTo] = useState('');
   const [requestId, setRequestId] = useState('');
   const [items, setItems] = useState<readonly AdminAuditEntry[]>([]);
+  const [visibleItemCount, setVisibleItemCount] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(canRead);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +137,7 @@ export const AdminAuditRedesign = () => {
         if (!result.ok) {
           setBusy(false);
           setItems([]);
+          setVisibleItemCount(0);
           setNextCursor(null);
           if (isAdminSecurityFailure(result)) {
             invalidateSensitive(
@@ -108,6 +154,9 @@ export const AdminAuditRedesign = () => {
           startTransition(() => {
             setBusy(false);
             setItems(result.data.items);
+            setVisibleItemCount(
+              Math.min(AUDIT_PAGE_SIZE, result.data.items.length),
+            );
             setNextCursor(result.data.pageInfo.nextCursor);
             setError(null);
           });
@@ -120,6 +169,7 @@ export const AdminAuditRedesign = () => {
   const changeFilters = (change: () => void) => {
     setBusy(true);
     setItems([]);
+    setVisibleItemCount(0);
     setNextCursor(null);
     setError(null);
     change();
@@ -141,6 +191,7 @@ export const AdminAuditRedesign = () => {
       setBusy(false);
       if (isAdminSecurityFailure(result)) {
         setItems([]);
+        setVisibleItemCount(0);
         setNextCursor(null);
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
@@ -154,6 +205,7 @@ export const AdminAuditRedesign = () => {
       startTransition(() => {
         setBusy(false);
         setItems((current) => [...current, ...result.data.items]);
+        setVisibleItemCount((current) => current + result.data.items.length);
         setNextCursor(result.data.pageInfo.nextCursor);
       });
     }
@@ -345,43 +397,37 @@ export const AdminAuditRedesign = () => {
           </p>
         ) : (
           <ul className={styles.cardList}>
-            {items.map((entry) => (
-              <li className={styles.dataCard} key={entry.auditId}>
-                <div className={styles.panelHeader}>
-                  <div>
-                    <strong>{adminAuditActionLabels[entry.action]}</strong>
-                    <p className={styles.muted}>
-                      {adminAuditCategoryLabels[entry.category]} ·{' '}
-                      {entry.actorLabel}
-                    </p>
-                  </div>
-                  <span className={styles.statusBadge}>
-                    {adminAuditOutcomeLabels[entry.outcome]}
-                  </span>
-                </div>
-                <p>
-                  {momentFormatter.format(new Date(entry.createdAt))} ·{' '}
-                  {targetReferenceLabel(entry.targetReference)}
-                </p>
-                <details>
-                  <summary>Zobrazit důvod a podrobnosti</summary>
-                  <p>{entry.reason}</p>
-                  {entry.resultingVersion ? (
-                    <p>Výsledná verze: {entry.resultingVersion}</p>
-                  ) : null}
-                  {entry.redacted ? <p>Citlivé údaje byly skryty.</p> : null}
-                  <AdminTechnicalDetails>
-                    <dl className={styles.detailList}>
-                      <dt>ID auditu</dt>
-                      <dd>{entry.auditId}</dd>
-                    </dl>
-                  </AdminTechnicalDetails>
-                </details>
-              </li>
+            {items.slice(0, visibleItemCount).map((entry) => (
+              <AdminAuditEntryCard
+                entry={entry}
+                key={entry.auditId}
+                momentFormatter={momentFormatter}
+              />
             ))}
           </ul>
         )}
-        {nextCursor ? (
+        {visibleItemCount < items.length ? (
+          <div className={styles.stack}>
+            <p aria-live="polite" className={styles.muted}>
+              Zobrazeno {visibleItemCount} ze {items.length} načtených změn.
+            </p>
+            <button
+              className={styles.secondaryButton}
+              onClick={() =>
+                startTransition(() =>
+                  setVisibleItemCount((current) =>
+                    Math.min(current + AUDIT_PAGE_SIZE, items.length),
+                  ),
+                )
+              }
+              type="button"
+            >
+              Zobrazit dalších{' '}
+              {Math.min(AUDIT_PAGE_SIZE, items.length - visibleItemCount)} změn
+            </button>
+          </div>
+        ) : null}
+        {nextCursor && visibleItemCount >= items.length ? (
           <button
             className={styles.secondaryButton}
             disabled={busy}
