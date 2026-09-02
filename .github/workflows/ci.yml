@@ -64,4 +64,6 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:components
       - run: pnpm test:e2e
+      - name: Run admin max-page performance gate
+        run: pnpm exec playwright test --config=playwright.admin.config.ts --project=admin-1280 --grep "contract-maximum"
       - run: pnpm audit --audit-level high
