@@ -58,8 +58,10 @@
   security failure invaliduje celý scope. Preview adapter zůstává mimo
   produkční build; finální stav čeká na staging auth/context E2E `AUX-13A`.
   AUX-12 má reprodukovatelný sedmibodový Chromium gate všech 11 rout, bundle
-  budget a mock security review. Fyzický screen-reader smoke a max-page trace
-  zůstávají otevřené. Ostatní integrační celky `AUX-13B`, `D`–`F`, `H`, `I`,
+  budget a mock security review. `AUX-12C` navíc měří maxima 100/100/50/500/5;
+  ticket preview po nalezeném 128ms long tasku stránkuje po 25 a finální
+  interakce mají 0 ms při CLS 0,03246. Otevřený zůstává jen fyzický
+  VoiceOver/NVDA smoke `AUX-12A`. Ostatní integrační celky `AUX-13B`, `D`–`F`, `H`, `I`,
   `K`, `L` mají explicitní produktové, auth, rezervační, provozní nebo
   infrastrukturní blockery; společné route/staging ověření vlastní `AUX-13A`.
 - `AUX-02` prošel unit/browser/typecheck/lint gate a skutečným Chromium smoke na

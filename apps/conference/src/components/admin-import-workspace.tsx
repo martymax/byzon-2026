@@ -63,6 +63,7 @@ const filterOptions = [
 ] as const;
 
 type ImportFilter = (typeof filterOptions)[number][0];
+const importPageSize = 25;
 type PendingApply = Readonly<{
   body: TicketImportApplyRequest;
   idempotencyKey: string;
@@ -154,6 +155,7 @@ export const AdminImportWorkspace = ({
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
   const [filter, setFilter] = useState<ImportFilter>('all');
+  const [pageIndex, setPageIndex] = useState(0);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'preview' | 'apply' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +168,7 @@ export const AdminImportWorkspace = ({
     'idle' | 'loading' | 'validated' | 'error'
   >('idle');
 
-  const visibleRows = useMemo(
+  const filteredRows = useMemo(
     () =>
       preview?.rows.filter(
         ({ status }) =>
@@ -176,6 +178,24 @@ export const AdminImportWorkspace = ({
             : status === filter),
       ) ?? [],
     [filter, preview],
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredRows.length / importPageSize),
+  );
+  const visibleRows = useMemo(
+    () =>
+      filteredRows.slice(
+        pageIndex * importPageSize,
+        (pageIndex + 1) * importPageSize,
+      ),
+    [filteredRows, pageIndex],
+  );
+  const firstVisibleRow =
+    filteredRows.length === 0 ? 0 : pageIndex * importPageSize + 1;
+  const lastVisibleRow = Math.min(
+    filteredRows.length,
+    (pageIndex + 1) * importPageSize,
   );
 
   const requestCandidate = preview
@@ -208,6 +228,7 @@ export const AdminImportWorkspace = ({
     setReport(null);
     setPending(null);
     setAmbiguous(false);
+    setPageIndex(0);
     try {
       const result = await port.preview(api, eventId, request.signal);
       if (!request.isCurrent()) return;
@@ -237,6 +258,7 @@ export const AdminImportWorkspace = ({
             ? 'needs_attention'
             : 'all',
         );
+        setPageIndex(0);
         setReason('');
         setAttempted(false);
         if (staleMessage) {
@@ -332,6 +354,7 @@ export const AdminImportWorkspace = ({
     setError(null);
     setErrorScope(null);
     setFilter('all');
+    setPageIndex(0);
     setPreviewState('idle');
   };
 
@@ -520,9 +543,10 @@ export const AdminImportWorkspace = ({
           <label className={styles.field}>
             <span>Filtrovat záznamy</span>
             <select
-              onChange={(event) =>
-                setFilter(event.target.value as ImportFilter)
-              }
+              onChange={(event) => {
+                setFilter(event.target.value as ImportFilter);
+                setPageIndex(0);
+              }}
               value={filter}
             >
               {filterOptions.map(([value, label]) => (
@@ -651,6 +675,34 @@ export const AdminImportWorkspace = ({
               ))}
             </ul>
           </div>
+
+          {filteredRows.length > importPageSize ? (
+            <nav
+              aria-label="Stránkování kontroly vstupenek"
+              className={styles.actionRow}
+            >
+              <button
+                className={styles.secondaryButton}
+                disabled={pageIndex === 0}
+                onClick={() => setPageIndex((current) => current - 1)}
+                type="button"
+              >
+                Předchozí záznamy
+              </button>
+              <span aria-live="polite">
+                Zobrazeno {firstVisibleRow}–{lastVisibleRow} z{' '}
+                {filteredRows.length}
+              </span>
+              <button
+                className={styles.secondaryButton}
+                disabled={pageIndex >= pageCount - 1}
+                onClick={() => setPageIndex((current) => current + 1)}
+                type="button"
+              >
+                Další záznamy
+              </button>
+            </nav>
+          ) : null}
 
           <div className={styles.actionRow}>
             <button

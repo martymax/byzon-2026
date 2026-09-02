@@ -20,6 +20,7 @@ const previewModes: readonly {
   readonly value: AdminContentPreviewMode;
 }[] = [
   { value: 'ready', label: 'Běžný stateful průchod' },
+  { value: 'max_page', label: 'Maximální stránka · 50 položek' },
   { value: 'empty', label: 'Prázdné seznamy' },
   { value: 'archived', label: 'Archivovaná akce · pouze čtení' },
   { value: 'stale', label: 'Stale verze při zápisu' },

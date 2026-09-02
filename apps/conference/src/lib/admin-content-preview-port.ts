@@ -21,6 +21,7 @@ export const ADMIN_CONTENT_PREVIEW_BOUNDARY_MARKER =
 
 export type AdminContentPreviewMode =
   | 'ready'
+  | 'max_page'
   | 'empty'
   | 'archived'
   | 'offline'
@@ -445,6 +446,25 @@ export const createAdminContentPreviewPort = ({
 
   return {
     setMode: (nextMode) => {
+      if (nextMode === 'max_page' && mode !== 'max_page') {
+        const base =
+          content.sessions[0] ?? initialContent(eventId).sessions[0]!;
+        content.sessions.splice(
+          0,
+          content.sessions.length,
+          ...Array.from({ length: 50 }, (_, index) => {
+            const serial = index + 1;
+            return {
+              ...base,
+              id: `019fc400-0001-7000-8000-${String(serial).padStart(12, '0')}`,
+              slug: `maximalni-testovaci-aktivita-${serial}`,
+              sortOrder: index,
+              title: `Maximální testovací aktivita ${String(serial).padStart(2, '0')}`,
+            };
+          }),
+        );
+        changed();
+      }
       if (nextMode === 'empty' && mode !== 'empty') {
         adminContentResources.forEach((resource) => {
           content[resource].splice(0);

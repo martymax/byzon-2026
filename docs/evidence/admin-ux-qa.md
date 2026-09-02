@@ -8,6 +8,8 @@
 
 - 11 admin rout × 7 viewportů: 320×720, 375×667, 414×896, 768×1024,
   1024×768, 1280×800 a 1440×900.
+- Celá matice po doplnění max-page trace: 17 průchodů a 18 záměrných skipů
+  perf/reflow scénářů mimo jejich jediný stabilní 1280×800 projekt.
 - Každá kombinace ověřuje nulový horizontální page overflow, právě jeden
   `main`, právě jednu `h1`, jeden skip link, logickou posloupnost nadpisů a
   nulový serious/critical axe nález.
@@ -34,18 +36,33 @@ long-task observeru vytvořil filtr + detail auditu i filtr + detail rezervace
 maximální user-triggered long task `0 ms` (limit `≤50 ms`). Nejdelší load task
 auditu byl `87 ms`; load task není vydáván za interakční výsledek.
 
-Kontrakty už omezují ticket preview na 500, support search na 5, audit a
-rezervace na 100 položek. Samostatný browser trace s uměle naplněnými maximy
-500/5/100/100 a 50 obsahovými položkami zatím nebyl proveden; tato část
-`AUX-12C` proto není uzavřena.
+Reprodukovatelný příkaz
+`ADMIN_QA_MAX_TRACE=1 pnpm exec playwright test --config=playwright.admin.config.ts --project=admin-1280 --grep "contract-maximum"`
+vytváří Chromium trace nad kontraktními maximy: 100 auditních položek, 100
+rezervací/kapacit, 50 obsahových položek, 500 řádků ticket preview a 5 support
+výsledků. Všechny scénáře měly CLS `0.032461608505249026`; filtr, otevření
+detailu/editoru, načtení a render i klávesnicová další stránka měly finální
+maximální long task `0 ms`.
+
+První měření ticket preview odhalilo `128 ms`: komponenta současně renderovala
+500 tabulkových řádků i 500 mobilních karet. Preview dál drží celý kanonický
+500řádkový payload a souhrn, ale zobrazuje přístupné klientské stránky po 25.
+Navigace má pojmenovaný landmark, živý rozsah „Zobrazeno X–Y z 500“, nativní
+tlačítka Předchozí/Další a prošla axe i klávesnicovým Enter průchodem. Po
+opravě stejný trace naměřil `0 ms` pro load/render, filtr i další stránku.
+
+Technická akceptace `12C-1` je hotová. Tracker `AUX-12C` zůstává `[~]` pouze
+proto, že jeho dependency `AUX-12A` čeká na fyzický VoiceOver/NVDA smoke.
 
 ## Bundle budget
 
 Baseline je [admin-ux-bundle-baseline.json](./admin-ux-bundle-baseline.json),
 aktuální čísla a delty jsou v
 [admin-ux-bundle-current.json](./admin-ux-bundle-current.json). Shared admin JS
-je 129 409 B gzip, tedy +315 B (+0,24 %; budget +10 %). Žádná route neroste;
-přímé route importy odstranily nechtěné přibalování legacy barrelů:
+je 129 454 B gzip, tedy +360 B (+0,28 %; budget +10 %). Od baseline narostly
+obsah/tickets/announcements jen o 231/217/324 B; žádná route se nepřiblížila
+20KiB limitu. Přímé route importy odstranily nechtěné přibalování legacy
+barrelů:
 
 | Route     | Baseline gzip | Aktuálně gzip |     Delta |
 | --------- | ------------: | ------------: | --------: |

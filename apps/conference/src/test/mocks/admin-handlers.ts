@@ -308,6 +308,143 @@ const storeMutation = (
 
 const scenario = (value: string): string => value.toLocaleLowerCase('en-US');
 
+const maxPageRequested = (request: Request): boolean => {
+  if (request.headers.get('x-byzon-admin-qa') === 'max-page') return true;
+  if (!request.referrer) return false;
+  try {
+    return new URL(request.referrer).searchParams.get('adminQa') === 'max-page';
+  } catch {
+    return false;
+  }
+};
+
+const maxPageUuid = (group: number, index: number): string =>
+  `019fd000-${group.toString(16).padStart(4, '0')}-7000-8000-${String(index).padStart(12, '0')}`;
+
+const maxPageReservations = () => {
+  const reservation = adminReservationFixtures.list!.items[0]!;
+  const capacity = adminSessionCapacityFixtures.list!.items[0]!;
+  return Array.from({ length: 100 }, (_, index) => {
+    const serial = index + 1;
+    const sessionId = maxPageUuid(1, serial);
+    const sessionTitle = `Maximální testovací aktivita ${String(serial).padStart(3, '0')}`;
+    return {
+      reservation: {
+        ...reservation,
+        reservationId: maxPageUuid(2, serial),
+        sessionId,
+        sessionTitle,
+        participantReference: `Účastník •${String(serial).padStart(3, '0')}`,
+        capacity: 100,
+        reservedCount: 50 + (serial % 50),
+      },
+      capacity: {
+        ...capacity,
+        sessionId,
+        sessionTitle,
+        capacity: 100,
+        confirmedCount: 50 + (serial % 50),
+      },
+    };
+  });
+};
+
+const maxPageAuditItems = () =>
+  Array.from({ length: 100 }, (_, index) => {
+    const serial = index + 1;
+    return {
+      auditId: maxPageUuid(3, serial),
+      eventId: adminFixtureIds.event,
+      actorLabel: serial % 7 === 0 ? 'Systém BYZON' : 'Oprávněný uživatel',
+      category: 'settings' as const,
+      action: 'settings.update',
+      targetReference: `akce •${String(serial).padStart(3, '0')}`,
+      reason: 'Syntetický redigovaný důvod pro max-page QA.',
+      outcome: 'succeeded' as const,
+      createdAt: new Date(
+        Date.UTC(2026, 8, 2, 12, 0) - index * 60_000,
+      ).toISOString(),
+      resultingVersion: 101 - serial,
+      redacted: true,
+    };
+  });
+
+const maxPageTicketPreview = (): TicketImportPreviewResponse => {
+  const fixture = clone(ticketImportPreviewFixtures.simpleshop_readonly!);
+  if (fixture.source.kind !== 'simpleshop_api') {
+    throw new TypeError('Max-page ticket fixture must use SimpleShop.');
+  }
+  const base = fixture.rows[0]!;
+  const rows = Array.from({ length: 500 }, (_, index) => {
+    const serial = index + 1;
+    return {
+      ...base,
+      rowId: maxPageUuid(4, serial),
+      sourceRowNumber: serial,
+      referenceSuffix: String(serial).padStart(6, '0'),
+      sourceTicketId: String(7_100_000 + serial),
+      sourceOrderId: String(8_100_000 + serial),
+      orderTicketCount: 1,
+      orderTicketPosition: 1,
+      contactName: `Syntetický účastník ${serial}`,
+      contactEmail: `max-page-${serial}@example.test`,
+      contactCompany: 'Example test',
+      contactPosition: null,
+      contactPhone: null,
+      discountCoupon: null,
+      identitySource: 'named_participant' as const,
+      sourceStatus: 'paid' as const,
+      status: 'new' as const,
+      incomingState: 'active' as const,
+      currentState: null,
+      issues: [],
+    };
+  });
+  return ticketImportPreviewResponseSchema.parse({
+    ...fixture,
+    source: {
+      ...fixture.source,
+      sourceRows: 500,
+      ticketRows: 500,
+      ignoredSummaryRows: 0,
+      multipleQuantitySummaryRows: 0,
+      observedStatuses: {
+        paid: 500,
+        unpaid: 0,
+        cancelled: 0,
+        refunded: 0,
+        unknown: 0,
+      },
+      codeShape: { ...fixture.source.codeShape, count: 500 },
+    },
+    rows,
+    summary: {
+      total: 500,
+      new: 500,
+      unchanged: 0,
+      statusChanged: 0,
+      excluded: 0,
+      conflict: 0,
+      unknown: 0,
+    },
+  });
+};
+
+const maxPageSupportRecords = (): readonly SupportRecord[] => {
+  const base = state.supportRecords[0]!;
+  return Array.from({ length: 5 }, (_, index) => {
+    const serial = index + 1;
+    return {
+      ...base,
+      participantId: maxPageUuid(5, serial),
+      ticketId: maxPageUuid(6, serial),
+      displayName: `Syntetický účastník ${serial}`,
+      maskedContact: `s${serial}•••@example.test`,
+      referenceSuffix: `M${String(serial).padStart(3, '0')}`,
+    };
+  });
+};
+
 const transientFailure = (
   reason: string,
   attempt: Extract<StoredMutationResult, { kind: 'new' }>,
@@ -857,7 +994,9 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         );
       }
       const preview = ticketImportPreviewResponseSchema.parse({
-        ...clone(ticketImportPreviewFixtures.simpleshop_readonly!),
+        ...(maxPageRequested(request)
+          ? maxPageTicketPreview()
+          : clone(ticketImportPreviewFixtures.simpleshop_readonly!)),
         eventId: adminFixtureIds.event,
       });
       state.importPreviews.set(preview.previewId, {
@@ -1016,9 +1155,17 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.support-search-error' },
         );
       }
+      const response = maxPageRequested(request)
+        ? {
+            eventId: adminFixtureIds.event,
+            limitedTo: 5 as const,
+            outcome: 'ambiguous' as const,
+            matches: maxPageSupportRecords(),
+          }
+        : currentSupportResponse(query.data.query);
       return mockJsonResponse(
         supportSearchResponseSchema,
-        currentSupportResponse(query.data.query),
+        response,
         successOptions('admin.mock.support-search'),
       );
     },
@@ -1469,35 +1616,40 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     },
   ),
 
-  http.get('*/api/v1/admin/events/:eventId/reservations', ({ params }) => {
-    const denied = authorize(
-      adminReadProblemSchema,
-      ['reservation:any:read'],
-      'admin.mock.reservations',
-    );
-    if (denied) return denied;
-    if (!routeMatchesEvent(params.eventId)) {
-      return mockProblemResponse(
+  http.get(
+    '*/api/v1/admin/events/:eventId/reservations',
+    ({ params, request }) => {
+      const denied = authorize(
         adminReadProblemSchema,
-        adminReadProblemFixtures.not_found,
-        { fixtureName: 'admin.mock.reservations-not-found' },
+        ['reservation:any:read'],
+        'admin.mock.reservations',
       );
-    }
-    const items = state.reservations;
-    return mockJsonResponse(
-      adminReservationListResponseSchema,
-      {
-        ...clone(adminReservationFixtures.list!),
-        eventId: adminFixtureIds.event,
-        items,
-      },
-      successOptions('admin.mock.reservations'),
-    );
-  }),
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId)) {
+        return mockProblemResponse(
+          adminReadProblemSchema,
+          adminReadProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.reservations-not-found' },
+        );
+      }
+      const items = maxPageRequested(request)
+        ? maxPageReservations().map(({ reservation }) => reservation)
+        : state.reservations;
+      return mockJsonResponse(
+        adminReservationListResponseSchema,
+        {
+          ...clone(adminReservationFixtures.list!),
+          eventId: adminFixtureIds.event,
+          items,
+        },
+        successOptions('admin.mock.reservations'),
+      );
+    },
+  ),
 
   http.get(
     '*/api/v1/admin/events/:eventId/session-capacities',
-    ({ params }) => {
+    ({ params, request }) => {
       const denied = authorize(
         adminReadProblemSchema,
         ['reservation:any:read'],
@@ -1511,12 +1663,15 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.session-capacities-not-found' },
         );
       }
+      const items = maxPageRequested(request)
+        ? maxPageReservations().map(({ capacity }) => capacity)
+        : state.sessionCapacities;
       return mockJsonResponse(
         adminSessionCapacityListResponseSchema,
         {
           ...clone(adminSessionCapacityFixtures.list!),
           eventId: adminFixtureIds.event,
-          items: state.sessionCapacities,
+          items,
         },
         successOptions('admin.mock.session-capacities'),
       );
@@ -1690,7 +1845,11 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         { fixtureName: 'admin.mock.audit-validation' },
       );
     }
-    const items = adminAuditFixtures.page!.items.filter(
+    const items = (
+      query.data.requestId === 'admin-qa-max-page'
+        ? maxPageAuditItems()
+        : adminAuditFixtures.page!.items
+    ).filter(
       ({ category }) =>
         query.data.category === undefined || category === query.data.category,
     );
