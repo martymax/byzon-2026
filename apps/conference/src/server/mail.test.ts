@@ -171,9 +171,7 @@ describe('production auth mail provider', () => {
     });
 
     const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
-    expect(body.subject).toBe(
-      'Pozvánka do účastnické aplikace BYZON 2026',
-    );
+    expect(body.subject).toBe('Pozvánka do účastnické aplikace BYZON 2026');
     expect(body.text).toContain('účastnické aplikace BYZON 2026');
     expect(body.html).toContain('Otevřít účastnickou aplikaci');
     expect(body.html).toContain('Kateřina &lt;Novotná&gt;');

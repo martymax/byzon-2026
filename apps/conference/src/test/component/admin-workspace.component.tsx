@@ -1805,9 +1805,7 @@ describe('F4 contract-first admin journeys', () => {
 
     await expect
       .element(
-        screen.getByText(
-          'Pozvánka byla odeslána na ucastnik@example.test.',
-        ),
+        screen.getByText('Pozvánka byla odeslána na ucastnik@example.test.'),
       )
       .toBeVisible();
     expect(inviteOptions).toMatchObject({

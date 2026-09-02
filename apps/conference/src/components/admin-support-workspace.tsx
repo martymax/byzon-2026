@@ -21,10 +21,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
-import {
-  supportActionLabels,
-  ticketStateLabels,
-} from './admin-ui-registry';
+import { supportActionLabels, ticketStateLabels } from './admin-ui-registry';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -159,9 +156,9 @@ export const AdminSupportWorkspace = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [bulkAction, setBulkAction] = useState<
-    ParticipantBulkAction | null
-  >(null);
+  const [bulkAction, setBulkAction] = useState<ParticipantBulkAction | null>(
+    null,
+  );
   const [bulkReason, setBulkReason] = useState('');
 
   const load = async (append = false) => {
@@ -548,7 +545,11 @@ export const AdminSupportWorkspace = () => {
                           ••{participant.referenceSuffix}
                         </small>
                         <small className={styles.participantCellNote}>
-                          {invitationStatusLabels[participant.invitation.status]}
+                          {
+                            invitationStatusLabels[
+                              participant.invitation.status
+                            ]
+                          }
                         </small>
                       </td>
                       <td>

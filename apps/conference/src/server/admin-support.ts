@@ -234,8 +234,7 @@ const participantAccessFor = (
       id: schema.tickets.id,
       eventId: schema.tickets.eventId,
       userId: sql<string>`${schema.tickets.holderUserId}`.as('user_id'),
-      source:
-        sql<'ticket' | 'simpleshop'>`'ticket'`.as('source'),
+      source: sql<'ticket' | 'simpleshop'>`'ticket'`.as('source'),
       referenceValue: schema.tickets.codeSuffix,
       externalId: schema.tickets.externalId,
       orderExternalId: schema.tickets.orderExternalId,
@@ -257,21 +256,19 @@ const participantAccessFor = (
           id: schema.ticketSourceParticipants.id,
           eventId: schema.ticketSourceParticipants.eventId,
           userId: schema.ticketSourceParticipants.userId,
-          source:
-            sql<'ticket' | 'simpleshop'>`'simpleshop'`.as('source'),
+          source: sql<'ticket' | 'simpleshop'>`'simpleshop'`.as('source'),
           referenceValue: schema.ticketSourceParticipants.externalId,
-          externalId:
-            sql<string | null>`${schema.ticketSourceParticipants.externalId}`.as(
-              'external_id',
-            ),
-          orderExternalId:
-            sql<string | null>`${schema.ticketSourceParticipants.orderExternalId}`.as(
-              'order_external_id',
-            ),
-          status:
-            sql<
-              (typeof schema.tickets.$inferSelect)['status']
-            >`'activated'::ticket_status`.as('status'),
+          externalId: sql<
+            string | null
+          >`${schema.ticketSourceParticipants.externalId}`.as('external_id'),
+          orderExternalId: sql<
+            string | null
+          >`${schema.ticketSourceParticipants.orderExternalId}`.as(
+            'order_external_id',
+          ),
+          status: sql<
+            (typeof schema.tickets.$inferSelect)['status']
+          >`'activated'::ticket_status`.as('status'),
           claimedAt: sql<Date | null>`null::timestamptz`.as('claimed_at'),
           version: schema.ticketSourceParticipants.version,
           updatedAt: schema.ticketSourceParticipants.updatedAt,
@@ -995,9 +992,7 @@ export const handleAdminParticipantInvite = async (
                 : 'not_sent',
           },
           after: {
-            invitationStatus: participant.emailVerified
-              ? 'accepted'
-              : 'sent',
+            invitationStatus: participant.emailVerified ? 'accepted' : 'sent',
             sentAt: sentAt.toISOString(),
           },
         });

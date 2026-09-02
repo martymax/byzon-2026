@@ -132,12 +132,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -255,12 +251,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -485,14 +477,8 @@
           "name": "agenda_items_participant_agenda_fk",
           "tableFrom": "agenda_items",
           "tableTo": "participant_agendas",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -500,14 +486,8 @@
           "name": "agenda_items_session_event_fk",
           "tableFrom": "agenda_items",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -515,11 +495,7 @@
       "compositePrimaryKeys": {
         "agenda_items_pk": {
           "name": "agenda_items_pk",
-          "columns": [
-            "event_id",
-            "user_id",
-            "session_id"
-          ]
+          "columns": ["event_id", "user_id", "session_id"]
         }
       },
       "uniqueConstraints": {},
@@ -587,14 +563,8 @@
           "name": "participant_agendas_membership_event_fk",
           "tableFrom": "participant_agendas",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -602,10 +572,7 @@
       "compositePrimaryKeys": {
         "participant_agendas_pk": {
           "name": "participant_agendas_pk",
-          "columns": [
-            "event_id",
-            "user_id"
-          ]
+          "columns": ["event_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -770,14 +737,8 @@
           "name": "reservations_session_event_fk",
           "tableFrom": "reservations",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -785,14 +746,8 @@
           "name": "reservations_membership_event_fk",
           "tableFrom": "reservations",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -802,10 +757,7 @@
         "reservations_event_id_id_unique": {
           "name": "reservations_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -1009,14 +961,8 @@
           "name": "waitlist_entries_session_event_fk",
           "tableFrom": "waitlist_entries",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1024,14 +970,8 @@
           "name": "waitlist_entries_membership_event_fk",
           "tableFrom": "waitlist_entries",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1041,10 +981,7 @@
         "waitlist_entries_event_id_id_unique": {
           "name": "waitlist_entries_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -1091,12 +1028,8 @@
           "name": "event_admin_versions_event_id_events_id_fk",
           "tableFrom": "event_admin_versions",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1166,12 +1099,8 @@
           "name": "event_operational_settings_event_id_events_id_fk",
           "tableFrom": "event_operational_settings",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1179,14 +1108,8 @@
           "name": "event_operational_settings_updater_event_fk",
           "tableFrom": "event_operational_settings",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "updated_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "updated_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1356,14 +1279,8 @@
           "name": "operational_export_requests_requester_event_fk",
           "tableFrom": "operational_export_requests",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "requested_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "requested_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1486,12 +1403,8 @@
           "name": "announcement_previews_event_id_events_id_fk",
           "tableFrom": "announcement_previews",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1499,14 +1412,8 @@
           "name": "announcement_previews_creator_event_fk",
           "tableFrom": "announcement_previews",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "created_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "created_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1516,10 +1423,7 @@
         "announcement_previews_event_id_id_unique": {
           "name": "announcement_previews_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -1613,14 +1517,8 @@
           "name": "announcement_recipients_announcement_event_fk",
           "tableFrom": "announcement_recipients",
           "tableTo": "announcements",
-          "columnsFrom": [
-            "event_id",
-            "announcement_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "announcement_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1628,14 +1526,8 @@
           "name": "announcement_recipients_membership_event_fk",
           "tableFrom": "announcement_recipients",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1643,11 +1535,7 @@
       "compositePrimaryKeys": {
         "announcement_recipients_pk": {
           "name": "announcement_recipients_pk",
-          "columns": [
-            "event_id",
-            "announcement_id",
-            "user_id"
-          ]
+          "columns": ["event_id", "announcement_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1784,12 +1672,8 @@
           "name": "announcements_event_id_events_id_fk",
           "tableFrom": "announcements",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1797,14 +1681,8 @@
           "name": "announcements_preview_event_fk",
           "tableFrom": "announcements",
           "tableTo": "announcement_previews",
-          "columnsFrom": [
-            "event_id",
-            "preview_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "preview_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1812,14 +1690,8 @@
           "name": "announcements_session_event_fk",
           "tableFrom": "announcements",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1827,14 +1699,8 @@
           "name": "announcements_creator_event_fk",
           "tableFrom": "announcements",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "created_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "created_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1844,10 +1710,7 @@
         "announcements_event_id_id_unique": {
           "name": "announcements_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -1945,14 +1808,8 @@
           "name": "questions_session_event_fk",
           "tableFrom": "questions",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1960,14 +1817,8 @@
           "name": "questions_author_membership_fk",
           "tableFrom": "questions",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "author_user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2128,12 +1979,8 @@
           "name": "ratings_event_id_events_id_fk",
           "tableFrom": "ratings",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2141,14 +1988,8 @@
           "name": "ratings_membership_fk",
           "tableFrom": "ratings",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2156,14 +1997,8 @@
           "name": "ratings_session_event_fk",
           "tableFrom": "ratings",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2360,12 +2195,8 @@
           "name": "assets_event_id_events_id_fk",
           "tableFrom": "assets",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2373,14 +2204,8 @@
           "name": "assets_owner_membership_event_fk",
           "tableFrom": "assets",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "owner_user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2390,10 +2215,7 @@
         "assets_event_id_id_unique": {
           "name": "assets_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -2538,12 +2360,8 @@
           "name": "content_import_provenance_event_id_events_id_fk",
           "tableFrom": "content_import_provenance",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2696,12 +2514,8 @@
           "name": "content_pages_event_id_events_id_fk",
           "tableFrom": "content_pages",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2709,14 +2523,8 @@
           "name": "content_pages_hero_asset_event_fk",
           "tableFrom": "content_pages",
           "tableTo": "assets",
-          "columnsFrom": [
-            "event_id",
-            "hero_asset_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "hero_asset_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2726,10 +2534,7 @@
         "content_pages_event_id_id_unique": {
           "name": "content_pages_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -2906,12 +2711,8 @@
           "name": "content_publications_event_id_events_id_fk",
           "tableFrom": "content_publications",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2919,14 +2720,8 @@
           "name": "content_publications_publisher_membership_event_fk",
           "tableFrom": "content_publications",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "published_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "published_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2936,10 +2731,7 @@
         "content_publications_event_id_id_unique": {
           "name": "content_publications_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -3086,12 +2878,8 @@
           "name": "event_days_event_id_events_id_fk",
           "tableFrom": "event_days",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3101,10 +2889,7 @@
         "event_days_event_id_id_unique": {
           "name": "event_days_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -3229,12 +3014,8 @@
           "name": "faq_items_event_id_events_id_fk",
           "tableFrom": "faq_items",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3244,10 +3025,7 @@
         "faq_items_event_id_id_unique": {
           "name": "faq_items_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -3400,12 +3178,8 @@
           "name": "partners_event_id_events_id_fk",
           "tableFrom": "partners",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3413,14 +3187,8 @@
           "name": "partners_logo_asset_event_fk",
           "tableFrom": "partners",
           "tableTo": "assets",
-          "columnsFrom": [
-            "event_id",
-            "logo_asset_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "logo_asset_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3430,10 +3198,7 @@
         "partners_event_id_id_unique": {
           "name": "partners_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -3708,12 +3473,8 @@
           "name": "sessions_event_id_events_id_fk",
           "tableFrom": "sessions",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3721,14 +3482,8 @@
           "name": "sessions_day_event_fk",
           "tableFrom": "sessions",
           "tableTo": "event_days",
-          "columnsFrom": [
-            "event_id",
-            "day_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "day_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3736,14 +3491,8 @@
           "name": "sessions_room_event_fk",
           "tableFrom": "sessions",
           "tableTo": "rooms",
-          "columnsFrom": [
-            "event_id",
-            "room_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "room_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3753,10 +3502,7 @@
         "sessions_event_id_id_unique": {
           "name": "sessions_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -3945,12 +3691,8 @@
           "name": "rooms_event_id_events_id_fk",
           "tableFrom": "rooms",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3958,14 +3700,8 @@
           "name": "rooms_venue_event_fk",
           "tableFrom": "rooms",
           "tableTo": "venues",
-          "columnsFrom": [
-            "event_id",
-            "venue_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "venue_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3975,10 +3711,7 @@
         "rooms_event_id_id_unique": {
           "name": "rooms_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -4103,12 +3836,8 @@
           "name": "session_speakers_event_id_events_id_fk",
           "tableFrom": "session_speakers",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4116,14 +3845,8 @@
           "name": "session_speakers_session_event_fk",
           "tableFrom": "session_speakers",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "event_id",
-            "session_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "session_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4131,14 +3854,8 @@
           "name": "session_speakers_speaker_event_fk",
           "tableFrom": "session_speakers",
           "tableTo": "speaker_profiles",
-          "columnsFrom": [
-            "event_id",
-            "speaker_profile_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "speaker_profile_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4146,11 +3863,7 @@
       "compositePrimaryKeys": {
         "session_speakers_pk": {
           "name": "session_speakers_pk",
-          "columns": [
-            "event_id",
-            "session_id",
-            "speaker_profile_id"
-          ]
+          "columns": ["event_id", "session_id", "speaker_profile_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4366,12 +4079,8 @@
           "name": "speaker_profiles_event_id_events_id_fk",
           "tableFrom": "speaker_profiles",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4379,14 +4088,8 @@
           "name": "speaker_profiles_photo_asset_event_fk",
           "tableFrom": "speaker_profiles",
           "tableTo": "assets",
-          "columnsFrom": [
-            "event_id",
-            "photo_asset_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "photo_asset_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -4394,14 +4097,8 @@
           "name": "speaker_profiles_membership_event_fk",
           "tableFrom": "speaker_profiles",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4411,10 +4108,7 @@
         "speaker_profiles_event_id_id_unique": {
           "name": "speaker_profiles_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -4610,12 +4304,8 @@
           "name": "venues_event_id_events_id_fk",
           "tableFrom": "venues",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4623,14 +4313,8 @@
           "name": "venues_hero_asset_event_fk",
           "tableFrom": "venues",
           "tableTo": "assets",
-          "columnsFrom": [
-            "event_id",
-            "hero_asset_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "hero_asset_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4640,10 +4324,7 @@
         "venues_event_id_id_unique": {
           "name": "venues_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -4760,12 +4441,8 @@
           "name": "event_features_event_id_events_id_fk",
           "tableFrom": "event_features",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4773,12 +4450,8 @@
           "name": "event_features_updated_by_user_id_fk",
           "tableFrom": "event_features",
           "tableTo": "user",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -4876,12 +4549,8 @@
           "name": "event_memberships_event_id_events_id_fk",
           "tableFrom": "event_memberships",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4889,12 +4558,8 @@
           "name": "event_memberships_user_id_user_id_fk",
           "tableFrom": "event_memberships",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4902,10 +4567,7 @@
       "compositePrimaryKeys": {
         "event_memberships_pk": {
           "name": "event_memberships_pk",
-          "columns": [
-            "event_id",
-            "user_id"
-          ]
+          "columns": ["event_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -5034,12 +4696,8 @@
           "name": "event_roles_event_id_events_id_fk",
           "tableFrom": "event_roles",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5047,12 +4705,8 @@
           "name": "event_roles_user_id_user_id_fk",
           "tableFrom": "event_roles",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5060,12 +4714,8 @@
           "name": "event_roles_granted_by_user_id_fk",
           "tableFrom": "event_roles",
           "tableTo": "user",
-          "columnsFrom": [
-            "granted_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["granted_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -5311,12 +4961,8 @@
           "name": "consent_records_event_id_events_id_fk",
           "tableFrom": "consent_records",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5324,12 +4970,8 @@
           "name": "consent_records_user_id_user_id_fk",
           "tableFrom": "consent_records",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5337,14 +4979,8 @@
           "name": "consent_records_legal_document_event_fk",
           "tableFrom": "consent_records",
           "tableTo": "legal_documents",
-          "columnsFrom": [
-            "event_id",
-            "legal_document_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "legal_document_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -5487,12 +5123,8 @@
           "name": "legal_documents_event_id_events_id_fk",
           "tableFrom": "legal_documents",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5502,10 +5134,7 @@
         "legal_documents_event_id_id_unique": {
           "name": "legal_documents_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -5633,12 +5262,8 @@
           "name": "audit_logs_event_id_events_id_fk",
           "tableFrom": "audit_logs",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5646,12 +5271,8 @@
           "name": "audit_logs_actor_id_user_id_fk",
           "tableFrom": "audit_logs",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -5805,14 +5426,8 @@
           "name": "check_ins_ticket_event_fk",
           "tableFrom": "check_ins",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "event_id",
-            "ticket_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "ticket_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5820,14 +5435,8 @@
           "name": "check_ins_holder_event_fk",
           "tableFrom": "check_ins",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "holder_user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "holder_user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5835,14 +5444,8 @@
           "name": "check_ins_station_event_fk",
           "tableFrom": "check_ins",
           "tableTo": "checkin_stations",
-          "columnsFrom": [
-            "event_id",
-            "station_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "station_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5850,14 +5453,8 @@
           "name": "check_ins_device_event_fk",
           "tableFrom": "check_ins",
           "tableTo": "operator_devices",
-          "columnsFrom": [
-            "event_id",
-            "device_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "device_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5865,14 +5462,8 @@
           "name": "check_ins_operator_event_fk",
           "tableFrom": "check_ins",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "checked_in_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "checked_in_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5880,14 +5471,8 @@
           "name": "check_ins_undo_operator_event_fk",
           "tableFrom": "check_ins",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "undone_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "undone_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -5897,10 +5482,7 @@
         "check_ins_event_id_id_unique": {
           "name": "check_ins_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -6003,14 +5585,8 @@
           "name": "checkin_lookups_ticket_event_fk",
           "tableFrom": "checkin_lookups",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "event_id",
-            "ticket_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "ticket_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6018,14 +5594,8 @@
           "name": "checkin_lookups_operator_event_fk",
           "tableFrom": "checkin_lookups",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "operator_user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "operator_user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6033,14 +5603,8 @@
           "name": "checkin_lookups_device_event_fk",
           "tableFrom": "checkin_lookups",
           "tableTo": "operator_devices",
-          "columnsFrom": [
-            "event_id",
-            "device_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "device_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6129,12 +5693,8 @@
           "name": "checkin_stations_event_id_events_id_fk",
           "tableFrom": "checkin_stations",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6144,10 +5704,7 @@
         "checkin_stations_event_id_id_unique": {
           "name": "checkin_stations_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -6296,12 +5853,8 @@
           "name": "idempotency_keys_event_id_events_id_fk",
           "tableFrom": "idempotency_keys",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6309,12 +5862,8 @@
           "name": "idempotency_keys_actor_id_user_id_fk",
           "tableFrom": "idempotency_keys",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6412,14 +5961,8 @@
           "name": "operator_devices_station_event_fk",
           "tableFrom": "operator_devices",
           "tableTo": "checkin_stations",
-          "columnsFrom": [
-            "event_id",
-            "station_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "station_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6429,10 +5972,7 @@
         "operator_devices_event_id_id_unique": {
           "name": "operator_devices_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -6591,12 +6131,8 @@
           "name": "outbox_events_event_id_events_id_fk",
           "tableFrom": "outbox_events",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6788,12 +6324,8 @@
           "name": "participant_profiles_event_id_events_id_fk",
           "tableFrom": "participant_profiles",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6801,12 +6333,8 @@
           "name": "participant_profiles_user_id_user_id_fk",
           "tableFrom": "participant_profiles",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6814,10 +6342,7 @@
       "compositePrimaryKeys": {
         "participant_profiles_pk": {
           "name": "participant_profiles_pk",
-          "columns": [
-            "event_id",
-            "user_id"
-          ]
+          "columns": ["event_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -6951,12 +6476,8 @@
           "name": "privacy_requests_event_id_events_id_fk",
           "tableFrom": "privacy_requests",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -6964,12 +6485,8 @@
           "name": "privacy_requests_user_id_user_id_fk",
           "tableFrom": "privacy_requests",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -7115,12 +6632,8 @@
           "name": "ticket_claim_attempts_event_id_events_id_fk",
           "tableFrom": "ticket_claim_attempts",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7257,12 +6770,8 @@
           "name": "ticket_events_actor_id_user_id_fk",
           "tableFrom": "ticket_events",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -7270,14 +6779,8 @@
           "name": "ticket_events_ticket_event_fk",
           "tableFrom": "ticket_events",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "event_id",
-            "ticket_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "ticket_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -7285,14 +6788,8 @@
           "name": "ticket_events_import_batch_event_fk",
           "tableFrom": "ticket_events",
           "tableTo": "ticket_import_batches",
-          "columnsFrom": [
-            "event_id",
-            "import_batch_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "import_batch_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -7300,14 +6797,8 @@
           "name": "ticket_events_actor_membership_event_fk",
           "tableFrom": "ticket_events",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "actor_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "actor_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -7457,12 +6948,8 @@
           "name": "ticket_import_batches_event_id_events_id_fk",
           "tableFrom": "ticket_import_batches",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -7470,14 +6957,8 @@
           "name": "ticket_import_batches_creator_membership_event_fk",
           "tableFrom": "ticket_import_batches",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "created_by"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "created_by"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -7487,10 +6968,7 @@
         "ticket_import_batches_event_id_id_unique": {
           "name": "ticket_import_batches_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -7650,14 +7128,8 @@
           "name": "ticket_import_rows_batch_event_fk",
           "tableFrom": "ticket_import_rows",
           "tableTo": "ticket_import_batches",
-          "columnsFrom": [
-            "event_id",
-            "batch_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "batch_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7798,12 +7270,8 @@
           "name": "ticket_source_participants_event_id_events_id_fk",
           "tableFrom": "ticket_source_participants",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -7811,14 +7279,8 @@
           "name": "ticket_source_participants_membership_event_fk",
           "tableFrom": "ticket_source_participants",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -7826,14 +7288,8 @@
           "name": "ticket_source_participants_batch_event_fk",
           "tableFrom": "ticket_source_participants",
           "tableTo": "ticket_import_batches",
-          "columnsFrom": [
-            "event_id",
-            "import_batch_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "import_batch_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -8075,12 +7531,8 @@
           "name": "tickets_event_id_events_id_fk",
           "tableFrom": "tickets",
           "tableTo": "events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -8088,12 +7540,8 @@
           "name": "tickets_holder_user_id_user_id_fk",
           "tableFrom": "tickets",
           "tableTo": "user",
-          "columnsFrom": [
-            "holder_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["holder_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -8101,14 +7549,8 @@
           "name": "tickets_holder_membership_event_fk",
           "tableFrom": "tickets",
           "tableTo": "event_memberships",
-          "columnsFrom": [
-            "event_id",
-            "holder_user_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "user_id"
-          ],
+          "columnsFrom": ["event_id", "holder_user_id"],
+          "columnsTo": ["event_id", "user_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -8116,14 +7558,8 @@
           "name": "tickets_transfer_source_event_fk",
           "tableFrom": "tickets",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "event_id",
-            "transferred_from_ticket_id"
-          ],
-          "columnsTo": [
-            "event_id",
-            "id"
-          ],
+          "columnsFrom": ["event_id", "transferred_from_ticket_id"],
+          "columnsTo": ["event_id", "id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -8133,10 +7569,7 @@
         "tickets_event_id_id_unique": {
           "name": "tickets_event_id_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "event_id",
-            "id"
-          ]
+          "columns": ["event_id", "id"]
         }
       },
       "policies": {},
@@ -8161,121 +7594,67 @@
     "public.agenda_item_source": {
       "name": "agenda_item_source",
       "schema": "public",
-      "values": [
-        "manual",
-        "organizer"
-      ]
+      "values": ["manual", "organizer"]
     },
     "public.reservation_status": {
       "name": "reservation_status",
       "schema": "public",
-      "values": [
-        "confirmed",
-        "cancelled"
-      ]
+      "values": ["confirmed", "cancelled"]
     },
     "public.waitlist_entry_status": {
       "name": "waitlist_entry_status",
       "schema": "public",
-      "values": [
-        "waiting",
-        "promoted",
-        "cancelled"
-      ]
+      "values": ["waiting", "promoted", "cancelled"]
     },
     "public.operational_export_state": {
       "name": "operational_export_state",
       "schema": "public",
-      "values": [
-        "queued",
-        "processing",
-        "ready",
-        "failed",
-        "expired"
-      ]
+      "values": ["queued", "processing", "ready", "failed", "expired"]
     },
     "public.registration_mode": {
       "name": "registration_mode",
       "schema": "public",
-      "values": [
-        "open",
-        "invite_only",
-        "closed"
-      ]
+      "values": ["open", "invite_only", "closed"]
     },
     "public.announcement_audience_kind": {
       "name": "announcement_audience_kind",
       "schema": "public",
-      "values": [
-        "event",
-        "session"
-      ]
+      "values": ["event", "session"]
     },
     "public.rating_target_type": {
       "name": "rating_target_type",
       "schema": "public",
-      "values": [
-        "session",
-        "event"
-      ]
+      "values": ["session", "event"]
     },
     "public.asset_status": {
       "name": "asset_status",
       "schema": "public",
-      "values": [
-        "uploading",
-        "quarantined",
-        "ready",
-        "rejected",
-        "deleted"
-      ]
+      "values": ["uploading", "quarantined", "ready", "rejected", "deleted"]
     },
     "public.capacity_mode": {
       "name": "capacity_mode",
       "schema": "public",
-      "values": [
-        "none",
-        "reservation",
-        "registration_estimate"
-      ]
+      "values": ["none", "reservation", "registration_estimate"]
     },
     "public.content_page_kind": {
       "name": "content_page_kind",
       "schema": "public",
-      "values": [
-        "practical",
-        "marketing",
-        "other"
-      ]
+      "values": ["practical", "marketing", "other"]
     },
     "public.content_status": {
       "name": "content_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "published",
-        "archived"
-      ]
+      "values": ["draft", "published", "archived"]
     },
     "public.publication_sync_status": {
       "name": "publication_sync_status",
       "schema": "public",
-      "values": [
-        "sync_pending",
-        "syncing",
-        "synced",
-        "sync_failed"
-      ]
+      "values": ["sync_pending", "syncing", "synced", "sync_failed"]
     },
     "public.session_status": {
       "name": "session_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "published",
-        "cancelled",
-        "archived"
-      ]
+      "values": ["draft", "published", "cancelled", "archived"]
     },
     "public.session_type": {
       "name": "session_type",
@@ -8296,11 +7675,7 @@
     "public.waitlist_mode": {
       "name": "waitlist_mode",
       "schema": "public",
-      "values": [
-        "disabled",
-        "auto_confirm",
-        "offer_with_deadline"
-      ]
+      "values": ["disabled", "auto_confirm", "offer_with_deadline"]
     },
     "public.event_role": {
       "name": "event_role",
@@ -8318,75 +7693,42 @@
     "public.event_status": {
       "name": "event_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "activation_open",
-        "live",
-        "ended",
-        "archived"
-      ]
+      "values": ["draft", "activation_open", "live", "ended", "archived"]
     },
     "public.membership_status": {
       "name": "membership_status",
       "schema": "public",
-      "values": [
-        "active",
-        "suspended",
-        "revoked"
-      ]
+      "values": ["active", "suspended", "revoked"]
     },
     "public.consent_decision": {
       "name": "consent_decision",
       "schema": "public",
-      "values": [
-        "accepted",
-        "withdrawn",
-        "acknowledged"
-      ]
+      "values": ["accepted", "withdrawn", "acknowledged"]
     },
     "public.legal_document_type": {
       "name": "legal_document_type",
       "schema": "public",
-      "values": [
-        "terms",
-        "privacy_notice",
-        "networking_consent",
-        "other"
-      ]
+      "values": ["terms", "privacy_notice", "networking_consent", "other"]
     },
     "public.checkin_device_state": {
       "name": "checkin_device_state",
       "schema": "public",
-      "values": [
-        "trusted",
-        "revoked"
-      ]
+      "values": ["trusted", "revoked"]
     },
     "public.outbox_status": {
       "name": "outbox_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "processing",
-        "delivered",
-        "failed"
-      ]
+      "values": ["pending", "processing", "delivered", "failed"]
     },
     "public.networking_field_visibility": {
       "name": "networking_field_visibility",
       "schema": "public",
-      "values": [
-        "hidden",
-        "directory"
-      ]
+      "values": ["hidden", "directory"]
     },
     "public.networking_moderation_status": {
       "name": "networking_moderation_status",
       "schema": "public",
-      "values": [
-        "visible",
-        "hidden"
-      ]
+      "values": ["visible", "hidden"]
     },
     "public.today_hunting_value": {
       "name": "today_hunting_value",
@@ -8403,18 +7745,12 @@
     "public.privacy_request_kind": {
       "name": "privacy_request_kind",
       "schema": "public",
-      "values": [
-        "data_deletion"
-      ]
+      "values": ["data_deletion"]
     },
     "public.privacy_request_status": {
       "name": "privacy_request_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "completed",
-        "rejected"
-      ]
+      "values": ["pending", "completed", "rejected"]
     },
     "public.ticket_import_batch_status": {
       "name": "ticket_import_batch_status",
