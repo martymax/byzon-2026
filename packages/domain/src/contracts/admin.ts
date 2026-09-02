@@ -354,7 +354,7 @@ export const adminRoleScopeOptionsResponseSchema = z
       response.role === 'checkin_operator'
         ? kind === 'station'
         : response.role === 'moderator'
-          ? kind === 'event' || kind === 'session'
+          ? kind === 'session'
           : kind === 'session';
     const ids = response.options.map((option) =>
       option.kind === 'event'

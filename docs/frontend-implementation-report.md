@@ -178,8 +178,12 @@ wipe/retry. Týmová obrazovka zobrazuje stránkované provozní role a vybírá
 existující osobu, popsanou roli a serverem povolený pojmenovaný
 event/station/session rozsah. Ruční ID i grant `organizer_admin` jsou skryté;
 grant/revoke má lidské guard chyby, stale reload a exact retry. Produkční
-read/search/options endpointy zůstávají v `AUX-13H`. Reporty mají čtyři
-popsané typy, CSV jako výchozí formát, období v timezone akce a povinný důvod.
+`AUX-13H` nyní připojuje bounded list, POST/no-store hledání ověřených členů s
+maskovaným kontaktem a serverem pojmenované role-compatible station/session
+options. Current event, fáze, permission a scope se ověřují i při zápisu;
+konkrétní osoby pro ostrou akci zůstávají personálním UAT rozhodnutím
+`BLOCKER-OPS-01`. Reporty mají čtyři popsané typy, CSV jako výchozí formát,
+období v timezone akce a povinný důvod.
 Strict historie rozlišuje queued/ready/failed/expired a nabízí stažení pouze
 pro přesnou same-event ready cestu; produkční job list zůstává v `AUX-13I`.
 Audit zobrazuje lidské kategorie, akce a výsledky, serverové

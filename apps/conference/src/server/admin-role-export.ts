@@ -9,11 +9,18 @@ import {
 import {
   adminExportRequestSchema,
   adminExportResponseSchema,
+  adminRoleAssignmentListQuerySchema,
+  adminRoleAssignmentListResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
   adminRoleAssignmentMutationResponseSchema,
+  adminRolePersonSearchRequestSchema,
+  adminRolePersonSearchResponseSchema,
+  adminRoleScopeOptionsRequestSchema,
+  adminRoleScopeOptionsResponseSchema,
+  type AdminAssignmentRole,
   type AdminAssignmentScope,
 } from '@byzon/domain/contracts';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -22,6 +29,7 @@ import {
   readIdempotencyKey,
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 
 const uuidSchema = z.string().uuid();
@@ -30,6 +38,7 @@ const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 export interface AdminRoleExportDependencies {
   db: Database;
   allowedOrigin: string;
+  currentEventSlug?: string;
   getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
   now?: () => Date;
 }
@@ -72,6 +81,24 @@ const authorize = async (
       'A valid session is required.',
     );
   }
+  const event = await dependencies.db.query.events.findFirst({
+    columns: { status: true },
+    where: and(
+      eq(schema.events.id, eventId),
+      eq(
+        schema.events.slug,
+        dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
+      ),
+    ),
+  });
+  if (!event) {
+    throw problem(
+      403,
+      'EVENT_ACCESS_DENIED',
+      'Event access denied',
+      'The administration action is unavailable.',
+    );
+  }
   try {
     await requireEventPermission(
       dependencies.db,
@@ -91,7 +118,7 @@ const authorize = async (
       'The administration action is unavailable.',
     );
   }
-  return identity.user.id;
+  return { actorId: identity.user.id, eventStatus: event.status };
 };
 
 const validateScope = async (
@@ -142,6 +169,444 @@ const validateScope = async (
   );
 };
 
+const parseBody = async (request: Request): Promise<unknown> => {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+};
+
+const requireSameOrigin = (
+  request: Request,
+  dependencies: AdminRoleExportDependencies,
+): void => {
+  if (request.headers.get('origin') !== dependencies.allowedOrigin) {
+    throw problem(
+      403,
+      'EVENT_ACCESS_DENIED',
+      'Event access denied',
+      'The request origin is not allowed.',
+    );
+  }
+};
+
+const safeLabel = (value: string, fallback: string): string => {
+  const normalized = value
+    .replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/g, '')
+    .trim()
+    .slice(0, 120);
+  return normalized || fallback;
+};
+
+const maskEmail = (email: string): string => {
+  const at = email.lastIndexOf('@');
+  return at > 0
+    ? `${email.slice(0, 1)}***@${email.slice(at + 1)}`
+    : 'x***@invalid.example';
+};
+
+const encodeRoleCursor = (id: string): string =>
+  Buffer.from(JSON.stringify({ id }), 'utf8').toString('base64url');
+
+const decodeRoleCursor = (value: string): string => {
+  try {
+    return z
+      .strictObject({ id: z.string().uuid() })
+      .parse(
+        JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown,
+      ).id;
+  } catch {
+    throw problem(
+      422,
+      'VALIDATION_FAILED',
+      'Invalid cursor',
+      'The role assignment cursor is invalid.',
+    );
+  }
+};
+
+const readResponse = (
+  requestId: string,
+  body: unknown,
+  status = 200,
+): Response =>
+  Response.json(body, { status, headers: privateHeaders(requestId) });
+
+export const handleAdminRoleAssignmentList = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminRoleExportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'GET') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    await authorize(request, eventId, 'role:manage', dependencies);
+    const url = new URL(request.url);
+    const query = adminRoleAssignmentListQuerySchema.safeParse(
+      Object.fromEntries(url.searchParams.entries()),
+    );
+    if (!query.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid role filters',
+        'The role assignment filters are invalid.',
+      );
+    }
+    await dependencies.db
+      .insert(schema.eventAdminVersions)
+      .values({ eventId })
+      .onConflictDoNothing();
+    const version = await dependencies.db.query.eventAdminVersions.findFirst({
+      columns: { assignmentsVersion: true },
+      where: eq(schema.eventAdminVersions.eventId, eventId),
+    });
+    const assignmentsVersion = version?.assignmentsVersion ?? 1;
+    if (query.data.state === 'scheduled' || query.data.scopeKind === 'event') {
+      return readResponse(
+        requestId,
+        adminRoleAssignmentListResponseSchema.parse({
+          eventId,
+          assignmentsVersion,
+          items: [],
+          pageInfo: { nextCursor: null, hasMore: false },
+        }),
+      );
+    }
+    const cursor = query.data.cursor
+      ? decodeRoleCursor(query.data.cursor)
+      : null;
+    const scopeCondition = query.data.scopeKind
+      ? sql`${schema.eventRoles.scope} ? ${
+          query.data.scopeKind === 'station' ? 'stationIds' : 'sessionIds'
+        }`
+      : undefined;
+    const rows = await dependencies.db
+      .select({
+        assignmentId: schema.eventRoles.id,
+        eventId: schema.eventRoles.eventId,
+        operatorId: schema.eventRoles.userId,
+        operatorName: schema.users.name,
+        role: schema.eventRoles.role,
+        scope: schema.eventRoles.scope,
+      })
+      .from(schema.eventRoles)
+      .innerJoin(schema.users, eq(schema.users.id, schema.eventRoles.userId))
+      .where(
+        and(
+          eq(schema.eventRoles.eventId, eventId),
+          inArray(schema.eventRoles.role, [
+            'checkin_operator',
+            'moderator',
+            'room_operator',
+          ]),
+          isNull(schema.eventRoles.revokedAt),
+          query.data.role
+            ? eq(schema.eventRoles.role, query.data.role)
+            : undefined,
+          cursor ? gt(schema.eventRoles.id, cursor) : undefined,
+          scopeCondition,
+        ),
+      )
+      .orderBy(asc(schema.eventRoles.id))
+      .limit(101);
+    const pageRows = rows.slice(0, 100);
+    const stationIds = pageRows.flatMap(({ role, scope }) =>
+      role === 'checkin_operator' && scope.stationIds?.length === 1
+        ? scope.stationIds
+        : [],
+    );
+    const sessionIds = pageRows.flatMap(({ role, scope }) =>
+      (role === 'moderator' || role === 'room_operator') &&
+      scope.sessionIds?.length === 1
+        ? scope.sessionIds
+        : [],
+    );
+    const [stations, sessions] = await Promise.all([
+      stationIds.length
+        ? dependencies.db
+            .select({
+              id: schema.checkinStations.id,
+              name: schema.checkinStations.name,
+            })
+            .from(schema.checkinStations)
+            .where(
+              and(
+                eq(schema.checkinStations.eventId, eventId),
+                inArray(schema.checkinStations.id, stationIds),
+              ),
+            )
+        : [],
+      sessionIds.length
+        ? dependencies.db
+            .select({
+              id: schema.programSessions.id,
+              title: schema.programSessions.title,
+            })
+            .from(schema.programSessions)
+            .where(
+              and(
+                eq(schema.programSessions.eventId, eventId),
+                inArray(schema.programSessions.id, sessionIds),
+              ),
+            )
+        : [],
+    ]);
+    const stationLabels = new Map(stations.map(({ id, name }) => [id, name]));
+    const sessionLabels = new Map(sessions.map(({ id, title }) => [id, title]));
+    const items = pageRows.map((row) => {
+      if (
+        row.role === 'checkin_operator' &&
+        row.scope.stationIds?.length === 1
+      ) {
+        const stationId = row.scope.stationIds[0]!;
+        const label = stationLabels.get(stationId);
+        if (!label) throw new Error('Invalid station-scoped assignment.');
+        return {
+          assignmentId: row.assignmentId,
+          eventId: row.eventId,
+          operatorId: row.operatorId,
+          operatorLabel: safeLabel(row.operatorName, 'Člen týmu'),
+          role: row.role,
+          scope: {
+            kind: 'station' as const,
+            stationId,
+            label: safeLabel(label, 'Stanoviště'),
+          },
+          state: 'active' as const,
+          version: assignmentsVersion,
+        };
+      }
+      if (
+        (row.role === 'moderator' || row.role === 'room_operator') &&
+        row.scope.sessionIds?.length === 1
+      ) {
+        const sessionId = row.scope.sessionIds[0]!;
+        const label = sessionLabels.get(sessionId);
+        if (!label) throw new Error('Invalid session-scoped assignment.');
+        return {
+          assignmentId: row.assignmentId,
+          eventId: row.eventId,
+          operatorId: row.operatorId,
+          operatorLabel: safeLabel(row.operatorName, 'Člen týmu'),
+          role: row.role,
+          scope: {
+            kind: 'session' as const,
+            sessionId,
+            label: safeLabel(label, 'Aktivita'),
+          },
+          state: 'active' as const,
+          version: assignmentsVersion,
+        };
+      }
+      throw new Error('Invalid role assignment scope.');
+    });
+    const hasMore = rows.length > 100;
+    const last = items.at(-1);
+    return readResponse(
+      requestId,
+      adminRoleAssignmentListResponseSchema.parse({
+        eventId,
+        assignmentsVersion,
+        items,
+        pageInfo: {
+          nextCursor:
+            hasMore && last ? encodeRoleCursor(last.assignmentId) : null,
+          hasMore,
+        },
+      }),
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+export const handleAdminRolePersonSearch = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminRoleExportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'POST') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    await authorize(request, eventId, 'role:manage', dependencies);
+    const parsed = adminRolePersonSearchRequestSchema.safeParse(
+      await parseBody(request),
+    );
+    if (!parsed.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid search',
+        'The person search is invalid.',
+      );
+    }
+    const pattern = `%${parsed.data.query.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+    const rows = await dependencies.db
+      .select({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+      })
+      .from(schema.eventMemberships)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.eventMemberships.userId),
+      )
+      .where(
+        and(
+          eq(schema.eventMemberships.eventId, eventId),
+          eq(schema.eventMemberships.status, 'active'),
+          eq(schema.users.emailVerified, true),
+          or(
+            ilike(schema.users.name, pattern),
+            ilike(schema.users.email, pattern),
+          ),
+        ),
+      )
+      .orderBy(asc(schema.users.name), asc(schema.users.id))
+      .limit(20);
+    return readResponse(
+      requestId,
+      adminRolePersonSearchResponseSchema.parse({
+        eventId,
+        items: rows.map((row) => ({
+          operatorId: row.id,
+          displayName: safeLabel(row.name, 'Člen týmu'),
+          maskedVerifiedContact: maskEmail(row.email),
+        })),
+      }),
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+export const handleAdminRoleScopeOptions = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminRoleExportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'POST') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    await authorize(request, eventId, 'role:manage', dependencies);
+    const parsed = adminRoleScopeOptionsRequestSchema.safeParse(
+      await parseBody(request),
+    );
+    if (!parsed.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid role',
+        'The role scope request is invalid.',
+      );
+    }
+    const role: AdminAssignmentRole = parsed.data.role;
+    let options: AdminAssignmentScope[];
+    if (role === 'checkin_operator') {
+      const rows = await dependencies.db
+        .select({
+          id: schema.checkinStations.id,
+          name: schema.checkinStations.name,
+        })
+        .from(schema.checkinStations)
+        .where(eq(schema.checkinStations.eventId, eventId))
+        .orderBy(
+          asc(schema.checkinStations.name),
+          asc(schema.checkinStations.id),
+        )
+        .limit(200);
+      options = rows.map((row) => ({
+        kind: 'station',
+        stationId: row.id,
+        label: safeLabel(row.name, 'Stanoviště'),
+      }));
+    } else {
+      const features =
+        role === 'moderator'
+          ? await dependencies.db.query.eventFeatures.findFirst({
+              columns: { questionsEnabled: true },
+              where: eq(schema.eventFeatures.eventId, eventId),
+            })
+          : null;
+      const rows =
+        role === 'moderator' && !features?.questionsEnabled
+          ? []
+          : await dependencies.db
+              .select({
+                id: schema.programSessions.id,
+                title: schema.programSessions.title,
+              })
+              .from(schema.programSessions)
+              .where(
+                and(
+                  eq(schema.programSessions.eventId, eventId),
+                  inArray(schema.programSessions.status, [
+                    'draft',
+                    'published',
+                  ]),
+                  role === 'moderator'
+                    ? eq(schema.programSessions.questionsEnabled, true)
+                    : eq(schema.programSessions.capacityMode, 'reservation'),
+                ),
+              )
+              .orderBy(
+                asc(schema.programSessions.startsAt),
+                asc(schema.programSessions.id),
+              )
+              .limit(200);
+      options = rows.map((row) => ({
+        kind: 'session',
+        sessionId: row.id,
+        label: safeLabel(row.title, 'Aktivita'),
+      }));
+    }
+    return readResponse(
+      requestId,
+      adminRoleScopeOptionsResponseSchema.parse({ eventId, role, options }),
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
 export const handleAdminRoleAssignment = async (
   request: Request,
   eventId: string,
@@ -165,7 +630,7 @@ export const handleAdminRoleAssignment = async (
         'The request origin is not allowed.',
       );
     }
-    const actorId = await authorize(
+    const { actorId, eventStatus } = await authorize(
       request,
       eventId,
       'role:manage',
@@ -185,6 +650,17 @@ export const handleAdminRoleAssignment = async (
         'VALIDATION_FAILED',
         'Invalid role action',
         'The role assignment is invalid.',
+      );
+    }
+    if (
+      eventStatus === 'archived' ||
+      (eventStatus === 'ended' && parsed.data.action === 'grant')
+    ) {
+      throw problem(
+        409,
+        'ADMIN_INVALID_TRANSITION',
+        'Role change unavailable',
+        'The event phase does not allow this role change.',
       );
     }
     await dependencies.db
@@ -384,7 +860,7 @@ export const handleAdminExport = async (
         'The request origin is not allowed.',
       );
     }
-    const actorId = await authorize(
+    const { actorId } = await authorize(
       request,
       eventId,
       'personal-data:operational:export',

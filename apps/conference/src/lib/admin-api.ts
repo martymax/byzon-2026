@@ -26,8 +26,13 @@ import {
   adminSessionCapacityListResponseSchema,
   adminSessionCapacityMutationRequestSchema,
   adminSessionCapacityMutationResponseSchema,
+  adminRoleAssignmentListResponseSchema,
   adminRoleAssignmentMutationRequestSchema,
   adminRoleAssignmentMutationResponseSchema,
+  adminRolePersonSearchRequestSchema,
+  adminRolePersonSearchResponseSchema,
+  adminRoleScopeOptionsRequestSchema,
+  adminRoleScopeOptionsResponseSchema,
   type AdminAuditQuery,
   type AdminEventSettingsUpdateRequest,
   type AdminExportRequest,
@@ -38,6 +43,9 @@ import {
   type AdminSessionCapacityMutationResponse,
   type AdminRoleAssignmentMutationRequest,
   type AdminRoleAssignmentMutationResponse,
+  type AdminRoleAssignmentListQuery,
+  type AdminRolePersonSearchRequest,
+  type AdminRoleScopeOptionsRequest,
 } from '@byzon/domain/contracts/admin';
 import {
   adminAnnouncementPreviewProblemSchema,
@@ -303,6 +311,39 @@ export const adminRoleAssignmentEndpoint = defineApiEndpoint({
   responseKind: 'json',
   retry: 'never',
   idempotency: 'required',
+});
+
+export const adminRoleAssignmentListEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: adminRoleAssignmentListResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+
+export const adminRolePersonSearchEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminRolePersonSearchRequestSchema,
+  successSchema: adminRolePersonSearchResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'forbidden',
+});
+
+export const adminRoleScopeOptionsEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminRoleScopeOptionsRequestSchema,
+  successSchema: adminRoleScopeOptionsResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: adminReadProblemCodes,
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'forbidden',
 });
 
 export const adminExportEndpoint = defineApiEndpoint({
@@ -737,6 +778,59 @@ export const requestAdminRoleAssignment = async (
       data.eventId === eventId &&
       (data.assignment === null || data.assignment.eventId === eventId) &&
       matchesRoleAssignmentMutation(data, body),
+  );
+
+export const requestAdminRoleAssignments = async (
+  api: ApiPort,
+  eventId: string,
+  query: AdminRoleAssignmentListQuery,
+  signal?: AbortSignal,
+) => {
+  const parameters = new URLSearchParams();
+  Object.entries(query).forEach(([name, value]) => {
+    if (value !== undefined) parameters.set(name, value);
+  });
+  const suffix = parameters.size > 0 ? `?${parameters.toString()}` : '';
+  return correlated(
+    await api.request(adminRoleAssignmentListEndpoint, {
+      path: `${eventPath(eventId, '/role-assignments')}${suffix}`,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+};
+
+export const requestAdminRolePeople = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminRolePersonSearchRequest,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminRolePersonSearchEndpoint, {
+      path: eventPath(eventId, '/role-assignments/search'),
+      body,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminRoleScopes = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminRoleScopeOptionsRequest,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminRoleScopeOptionsEndpoint, {
+      path: eventPath(eventId, '/role-assignments/scope-options'),
+      body,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId && data.role === body.role,
   );
 
 export const requestAdminExport = async (

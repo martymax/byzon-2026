@@ -22,7 +22,12 @@ import {
 import { AdminTechnicalDetails } from '@byzon/ui';
 import { useEffect, useMemo, useState } from 'react';
 
-import { requestAdminRoleAssignment } from '@/lib/admin-api';
+import {
+  requestAdminRoleAssignment,
+  requestAdminRoleAssignments,
+  requestAdminRolePeople,
+  requestAdminRoleScopes,
+} from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
@@ -59,6 +64,15 @@ type PendingChange = Readonly<{
   idempotencyKey: string;
 }>;
 
+class AdminTeamReadError extends Error {
+  constructor(
+    readonly securityFailure: boolean,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 const roleLabels: Record<AdminAssignmentRole, string> = {
   checkin_operator: 'Obsluha odbavení',
   moderator: 'Moderátor',
@@ -88,10 +102,74 @@ const scopeId = (scope: AdminAssignmentScope): string =>
 export const AdminTeamRedesign = ({
   dataPort,
 }: Readonly<{ dataPort?: AdminTeamDataPort }>) => {
-  const { api, eventId, invalidateSensitive, permissions } =
+  const { api, context, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const canManage = permissions.includes('role:manage');
+  const canGrant =
+    canManage &&
+    ['draft', 'activation_open', 'live'].includes(context.event.phase);
+  const canRevoke = canManage && context.event.phase !== 'archived';
+  const teamPort = useMemo<AdminTeamDataPort>(
+    () =>
+      dataPort ?? {
+        loadAssignments: async (query, signal) => {
+          const result = await requestAdminRoleAssignments(
+            api,
+            eventId,
+            query,
+            signal,
+          );
+          if (result.kind === 'failure') {
+            throw new AdminTeamReadError(
+              isAdminSecurityFailure(result),
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+          }
+          if (!result.ok || result.kind !== 'success') {
+            throw new AdminTeamReadError(false, 'Neaktuální odpověď serveru.');
+          }
+          return result.data;
+        },
+        searchPeople: async (body, signal) => {
+          const result = await requestAdminRolePeople(
+            api,
+            eventId,
+            body,
+            signal,
+          );
+          if (result.kind === 'failure') {
+            throw new AdminTeamReadError(
+              isAdminSecurityFailure(result),
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+          }
+          if (!result.ok || result.kind !== 'success') {
+            throw new AdminTeamReadError(false, 'Neaktuální odpověď serveru.');
+          }
+          return result.data;
+        },
+        loadScopeOptions: async (body, signal) => {
+          const result = await requestAdminRoleScopes(
+            api,
+            eventId,
+            body,
+            signal,
+          );
+          if (result.kind === 'failure') {
+            throw new AdminTeamReadError(
+              isAdminSecurityFailure(result),
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+          }
+          if (!result.ok || result.kind !== 'success') {
+            throw new AdminTeamReadError(false, 'Neaktuální odpověď serveru.');
+          }
+          return result.data;
+        },
+      },
+    [api, dataPort, eventId],
+  );
   const [assignments, setAssignments] =
     useState<AdminRoleAssignmentListResponse | null>(null);
   const [roleFilter, setRoleFilter] = useState<AdminAssignmentRole | 'all'>(
@@ -119,7 +197,7 @@ export const AdminTeamRedesign = ({
   const [ambiguous, setAmbiguous] = useState(false);
   const [busy, setBusy] = useState<
     'list' | 'search' | 'scopes' | 'mutation' | null
-  >(dataPort && canManage ? 'list' : null);
+  >(canManage ? 'list' : null);
   const [error, setError] = useState<string | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
@@ -127,6 +205,7 @@ export const AdminTeamRedesign = ({
     auditId: string;
   } | null>(null);
   const [reload, setReload] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const listQuery = useMemo(
     () => ({
@@ -138,9 +217,9 @@ export const AdminTeamRedesign = ({
   );
 
   useEffect(() => {
-    if (!dataPort || !canManage) return;
+    if (!canManage) return;
     const request = requestFence.begin('team-list');
-    void dataPort
+    void teamPort
       .loadAssignments(listQuery, request.signal)
       .then((response) => {
         if (!request.isCurrent()) return;
@@ -152,21 +231,33 @@ export const AdminTeamRedesign = ({
         setAssignments(parsed);
         setBusy(null);
       })
-      .catch(() => {
+      .catch((caught: unknown) => {
         if (!request.isCurrent()) return;
         request.finish();
         setAssignments(null);
         setBusy(null);
+        if (caught instanceof AdminTeamReadError && caught.securityFailure) {
+          invalidateSensitive(caught.message);
+          return;
+        }
         setError('Seznam týmových oprávnění se nepodařilo bezpečně načíst.');
       });
     return () => requestFence.cancel('team-list');
-  }, [canManage, dataPort, eventId, listQuery, reload, requestFence]);
+  }, [
+    canManage,
+    eventId,
+    invalidateSensitive,
+    listQuery,
+    reload,
+    requestFence,
+    teamPort,
+  ]);
 
   useEffect(() => {
-    if (!dataPort || !formOpen) return;
+    if (!formOpen) return;
     const request = requestFence.begin('team-scopes');
     const body = adminRoleScopeOptionsRequestSchema.parse({ role });
-    void dataPort
+    void teamPort
       .loadScopeOptions(body, request.signal)
       .then((response) => {
         if (!request.isCurrent()) return;
@@ -179,14 +270,18 @@ export const AdminTeamRedesign = ({
         setSelectedScopeId(parsed.options[0] ? scopeId(parsed.options[0]) : '');
         setBusy(null);
       })
-      .catch(() => {
+      .catch((caught: unknown) => {
         if (!request.isCurrent()) return;
         request.finish();
         setBusy(null);
+        if (caught instanceof AdminTeamReadError && caught.securityFailure) {
+          invalidateSensitive(caught.message);
+          return;
+        }
         setError('Povolené rozsahy role se nepodařilo načíst.');
       });
     return () => requestFence.cancel('team-scopes');
-  }, [dataPort, eventId, formOpen, requestFence, role]);
+  }, [eventId, formOpen, invalidateSensitive, requestFence, role, teamPort]);
 
   const selectedScope = scopes.find(
     (option) => scopeId(option) === selectedScopeId,
@@ -207,7 +302,7 @@ export const AdminTeamRedesign = ({
     const candidate = adminRolePersonSearchRequestSchema.safeParse({
       query: personQuery,
     });
-    if (!candidate.success || !dataPort) {
+    if (!candidate.success) {
       setError('Zadejte alespoň dva znaky jména nebo ověřeného kontaktu.');
       return;
     }
@@ -215,7 +310,7 @@ export const AdminTeamRedesign = ({
     setBusy('search');
     setError(null);
     try {
-      const response = await dataPort.searchPeople(
+      const response = await teamPort.searchPeople(
         candidate.data,
         request.signal,
       );
@@ -225,12 +320,50 @@ export const AdminTeamRedesign = ({
       request.finish();
       setPeople(parsed.items);
       setBusy(null);
-    } catch {
+    } catch (caught) {
       if (!request.isCurrent()) return;
       request.finish();
       setPeople([]);
       setBusy(null);
+      if (caught instanceof AdminTeamReadError && caught.securityFailure) {
+        invalidateSensitive(caught.message);
+        return;
+      }
       setError('Existující osobu se nepodařilo bezpečně vyhledat.');
+    }
+  };
+
+  const loadMore = async () => {
+    const cursor = assignments?.pageInfo.nextCursor;
+    if (!assignments || !cursor) return;
+    const request = requestFence.begin('team-list-more');
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const response = await teamPort.loadAssignments(
+        { ...listQuery, cursor },
+        request.signal,
+      );
+      if (!request.isCurrent()) return;
+      const parsed = adminRoleAssignmentListResponseSchema.parse(response);
+      if (
+        parsed.eventId !== eventId ||
+        parsed.assignmentsVersion !== assignments.assignmentsVersion
+      ) {
+        throw new Error('Role assignment page mismatch.');
+      }
+      request.finish();
+      setAssignments(parsed);
+      setLoadingMore(false);
+    } catch (caught) {
+      if (!request.isCurrent()) return;
+      request.finish();
+      setLoadingMore(false);
+      if (caught instanceof AdminTeamReadError && caught.securityFailure) {
+        invalidateSensitive(caught.message);
+        return;
+      }
+      setError('Další týmová oprávnění se nepodařilo bezpečně načíst.');
     }
   };
 
@@ -342,16 +475,6 @@ export const AdminTeamRedesign = ({
         </p>
       </header>
 
-      {!dataPort ? (
-        <section className={styles.warning} role="status">
-          <strong>Správa týmových rolí zatím není připojená.</strong>
-          <p>
-            Ruční identifikátory nejsou bezpečná náhrada. Formulář se zobrazí,
-            až server poskytne seznam, vyhledání osob a pojmenované rozsahy.
-          </p>
-        </section>
-      ) : null}
-
       {error ? (
         <AdminFormErrorSummary
           descriptionId="admin-team-error"
@@ -376,7 +499,7 @@ export const AdminTeamRedesign = ({
         </section>
       ) : null}
 
-      {dataPort && canManage ? (
+      {canManage ? (
         <>
           <section className={styles.panel} aria-labelledby="team-list-title">
             <div className={styles.panelHeader}>
@@ -386,18 +509,20 @@ export const AdminTeamRedesign = ({
                   Administrátorská role se na této stránce nepřiděluje.
                 </p>
               </div>
-              <button
-                className={styles.button}
-                onClick={() => {
-                  setFormOpen(true);
-                  setBusy('scopes');
-                  setScopes([]);
-                  setSelectedScopeId('');
-                }}
-                type="button"
-              >
-                Přiřadit roli
-              </button>
+              {canGrant ? (
+                <button
+                  className={styles.button}
+                  onClick={() => {
+                    setFormOpen(true);
+                    setBusy('scopes');
+                    setScopes([]);
+                    setSelectedScopeId('');
+                  }}
+                  type="button"
+                >
+                  Přiřadit roli
+                </button>
+              ) : null}
             </div>
             <div className={styles.filters}>
               <label className={styles.field}>
@@ -485,14 +610,18 @@ export const AdminTeamRedesign = ({
                           <td>{assignment.scope.label}</td>
                           <td>{stateLabels[assignment.state]}</td>
                           <td>
-                            <button
-                              className={styles.dangerButton}
-                              disabled={reason.trim().length < 8}
-                              onClick={() => prepareRevoke(assignment)}
-                              type="button"
-                            >
-                              Odebrat oprávnění
-                            </button>
+                            {canRevoke ? (
+                              <button
+                                className={styles.dangerButton}
+                                disabled={reason.trim().length < 8}
+                                onClick={() => prepareRevoke(assignment)}
+                                type="button"
+                              >
+                                Odebrat oprávnění
+                              </button>
+                            ) : (
+                              'Pouze čtení'
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -514,41 +643,51 @@ export const AdminTeamRedesign = ({
                         <span className={styles.statusBadge}>
                           {stateLabels[assignment.state]}
                         </span>
-                        <button
-                          className={styles.dangerButton}
-                          disabled={reason.trim().length < 8}
-                          onClick={() => prepareRevoke(assignment)}
-                          type="button"
-                        >
-                          Odebrat oprávnění
-                        </button>
+                        {canRevoke ? (
+                          <button
+                            className={styles.dangerButton}
+                            disabled={reason.trim().length < 8}
+                            onClick={() => prepareRevoke(assignment)}
+                            type="button"
+                          >
+                            Odebrat oprávnění
+                          </button>
+                        ) : (
+                          <span>Pouze čtení</span>
+                        )}
                       </li>
                     ))}
                   </ul>
                 </div>
                 {assignments.pageInfo.hasMore ? (
-                  <p className={styles.warning}>
-                    Seznam má další stránku. Produkční stránkování doplní
-                    integrační řez.
-                  </p>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={loadingMore}
+                    onClick={() => void loadMore()}
+                    type="button"
+                  >
+                    {loadingMore ? 'Načítám další…' : 'Načíst další role'}
+                  </button>
                 ) : null}
               </>
             ) : null}
           </section>
 
-          <label className={styles.field}>
-            <span>Důvod změny oprávnění</span>
-            <textarea
-              disabled={pending !== null}
-              onChange={(event) => setReason(event.target.value)}
-              value={reason}
-            />
-            <span className={styles.helper}>
-              Důvod se uloží do historie změn. Je potřeba i pro odebrání.
-            </span>
-          </label>
+          {canRevoke || canGrant ? (
+            <label className={styles.field}>
+              <span>Důvod změny oprávnění</span>
+              <textarea
+                disabled={pending !== null}
+                onChange={(event) => setReason(event.target.value)}
+                value={reason}
+              />
+              <span className={styles.helper}>
+                Důvod se uloží do historie změn. Je potřeba i pro odebrání.
+              </span>
+            </label>
+          ) : null}
 
-          {formOpen ? (
+          {formOpen && canGrant ? (
             <section
               className={styles.panel}
               aria-labelledby="team-grant-title"
