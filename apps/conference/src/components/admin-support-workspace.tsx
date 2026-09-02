@@ -284,6 +284,83 @@ const ParticipantCard = memo(
 );
 ParticipantCard.displayName = 'ParticipantCard';
 
+const ParticipantDataView = memo(
+  ({
+    allSelected,
+    compact,
+    items,
+    onAllSelectionChange,
+    onSelectionChange,
+    selectedCount,
+    selectedIds,
+  }: {
+    readonly allSelected: boolean;
+    readonly compact: boolean;
+    readonly items: readonly AdminParticipantListItem[];
+    readonly onAllSelectionChange: (checked: boolean) => void;
+    readonly onSelectionChange: (
+      participantId: string,
+      checked: boolean,
+    ) => void;
+    readonly selectedCount: number;
+    readonly selectedIds: ReadonlySet<string>;
+  }) => {
+    if (compact) {
+      return (
+        <ul className={styles.participantCards}>
+          {items.map((participant) => (
+            <ParticipantCard
+              key={participant.participantId}
+              onSelectionChange={onSelectionChange}
+              participant={participant}
+              selected={selectedIds.has(participant.participantId)}
+            />
+          ))}
+        </ul>
+      );
+    }
+
+    return (
+      <div className={styles.participantTableWrap}>
+        <table className={styles.participantTable}>
+          <caption className={styles.visuallyHidden}>Účastníci akce</caption>
+          <thead>
+            <tr>
+              <th scope="col">
+                <SelectionCheckbox
+                  checked={allSelected}
+                  indeterminate={selectedCount > 0 && !allSelected}
+                  label="Vybrat všechny zobrazené účastníky"
+                  onChange={onAllSelectionChange}
+                />
+              </th>
+              <th scope="col">Účastník</th>
+              <th scope="col">Firma a pozice</th>
+              <th scope="col">Vstupenka</th>
+              <th scope="col">Networking</th>
+              <th scope="col">Aktivita</th>
+              <th scope="col">
+                <span className={styles.visuallyHidden}>Detail</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((participant) => (
+              <ParticipantTableRow
+                key={participant.participantId}
+                onSelectionChange={onSelectionChange}
+                participant={participant}
+                selected={selectedIds.has(participant.participantId)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  },
+);
+ParticipantDataView.displayName = 'ParticipantDataView';
+
 const useCompactDataView = (): boolean => {
   const [compact, setCompact] = useState(false);
 
@@ -432,6 +509,15 @@ export const AdminSupportWorkspace = () => {
         return next;
       }),
     [],
+  );
+  const changeAllParticipantSelection = useCallback(
+    (checked: boolean) =>
+      setSelectedIds(
+        checked
+          ? new Set(items.map(({ participantId }) => participantId))
+          : new Set(),
+      ),
+    [items],
   );
   const commonActions = bulkActions.filter((action) =>
     selected.every((participant) =>
@@ -683,70 +769,15 @@ export const AdminSupportWorkspace = () => {
         ) : null}
 
         {items.length > 0 ? (
-          <>
-            {!compactDataView ? (
-              <div className={styles.participantTableWrap}>
-                <table className={styles.participantTable}>
-                  <caption className={styles.visuallyHidden}>
-                    Účastníci akce
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">
-                        <SelectionCheckbox
-                          checked={allSelected}
-                          indeterminate={selected.length > 0 && !allSelected}
-                          label="Vybrat všechny zobrazené účastníky"
-                          onChange={(checked) =>
-                            setSelectedIds(
-                              checked
-                                ? new Set(
-                                    items.map(
-                                      ({ participantId }) => participantId,
-                                    ),
-                                  )
-                                : new Set(),
-                            )
-                          }
-                        />
-                      </th>
-                      <th scope="col">Účastník</th>
-                      <th scope="col">Firma a pozice</th>
-                      <th scope="col">Vstupenka</th>
-                      <th scope="col">Networking</th>
-                      <th scope="col">Aktivita</th>
-                      <th scope="col">
-                        <span className={styles.visuallyHidden}>Detail</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {renderedItems.map((participant) => (
-                      <ParticipantTableRow
-                        key={participant.participantId}
-                        onSelectionChange={changeParticipantSelection}
-                        participant={participant}
-                        selected={selectedIds.has(participant.participantId)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-
-            {compactDataView ? (
-              <ul className={styles.participantCards}>
-                {renderedItems.map((participant) => (
-                  <ParticipantCard
-                    key={participant.participantId}
-                    onSelectionChange={changeParticipantSelection}
-                    participant={participant}
-                    selected={selectedIds.has(participant.participantId)}
-                  />
-                ))}
-              </ul>
-            ) : null}
-          </>
+          <ParticipantDataView
+            allSelected={allSelected}
+            compact={compactDataView}
+            items={renderedItems}
+            onAllSelectionChange={changeAllParticipantSelection}
+            onSelectionChange={changeParticipantSelection}
+            selectedCount={selected.length}
+            selectedIds={selectedIds}
+          />
         ) : null}
         {hasMore ? (
           <div className={styles.participantLoadMore}>

@@ -155,6 +155,13 @@
       "when": 1788346282162,
       "tag": "0021_nostalgic_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788352028069,
+      "tag": "0022_backfill_simpleshop_participant_profiles",
+      "breakpoints": true
     }
   ]
 }

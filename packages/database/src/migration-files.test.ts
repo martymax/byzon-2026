@@ -39,6 +39,13 @@ const ticketParticipantApplyMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0020_goofy_green_goblin.sql'),
   'utf8',
 );
+const ticketParticipantProfileBackfillMigration = readFileSync(
+  resolve(
+    packageRoot,
+    'drizzle/0022_backfill_simpleshop_participant_profiles.sql',
+  ),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -75,6 +82,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0020_goofy_green_goblin',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0022_backfill_simpleshop_participant_profiles',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -179,6 +189,15 @@ describe('versioned database artifacts', () => {
     );
     expect(ticketParticipantApplyMigration).not.toContain('contact_email');
     expect(ticketParticipantApplyMigration).not.toContain('code_hmac');
+    expect(ticketParticipantProfileBackfillMigration).toContain(
+      'INSERT INTO "participant_profiles"',
+    );
+    expect(ticketParticipantProfileBackfillMigration).toContain(
+      'FROM "ticket_source_participants"',
+    );
+    expect(ticketParticipantProfileBackfillMigration).toContain(
+      'ON CONFLICT ("event_id", "user_id") DO NOTHING',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -191,6 +210,9 @@ describe('versioned database artifacts', () => {
     expect(reservationWindowMigration).not.toContain('gen_random_uuid()');
     expect(coachingMigration).not.toContain('gen_random_uuid()');
     expect(ticketParticipantApplyMigration).not.toContain('gen_random_uuid()');
+    expect(ticketParticipantProfileBackfillMigration).not.toContain(
+      'gen_random_uuid()',
+    );
   });
 
   it('seeds both event scopes idempotently and keeps the test event archived', () => {
