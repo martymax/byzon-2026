@@ -740,7 +740,7 @@
             "name": "BYZON Stage",
             "events": [
               { "time": "8:00 - 9:00", "title": "Registrace", "type": "shared", "span": "all" },
-              { "time": "9:00 - 9:15", "title": "Úvod", "type": "shared" },
+              { "time": "9:00 - 9:15", "title": "Zahájení konference", "type": "shared" },
               { "time": "9:15 - 10:00", "title": "Lidskost jako konkurenční výhoda", "meta": "Margareta Křížová", "detail": "lidskost-jako-konkurencni-vyhoda" },
               { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček" },
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
