@@ -113,6 +113,21 @@ const purchaseDateFormatter = new Intl.DateTimeFormat('cs-CZ', {
 const formatPurchaseDate = (value: string): string =>
   purchaseDateFormatter.format(new Date(`${value}T12:00:00Z`));
 
+const orderTicketCountLabel = (count: number): string =>
+  count === 1
+    ? '1 vstupenka v objednávce'
+    : count >= 2 && count <= 4
+      ? `${count} vstupenky v objednávce`
+      : `${count} vstupenek v objednávce`;
+
+const orderTicketSummary = (row: {
+  readonly orderTicketCount: number;
+  readonly orderTicketPosition: number;
+}): string =>
+  row.orderTicketCount > 1
+    ? `${orderTicketCountLabel(row.orderTicketCount)} · tato ${row.orderTicketPosition} z ${row.orderTicketCount}`
+    : orderTicketCountLabel(row.orderTicketCount);
+
 const checkedAtFormatter = new Intl.DateTimeFormat('cs-CZ', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -611,7 +626,13 @@ export const AdminImportWorkspace = ({
                           <dd>{row.contactPhone}</dd>
                         </>
                       ) : null}
-                      <dt>Reference</dt>
+                      <dt>Vstupenka</dt>
+                      <dd>{row.sourceTicketId}</dd>
+                      <dt>Doklad / objednávka</dt>
+                      <dd>
+                        {row.sourceOrderId} · {orderTicketSummary(row)}
+                      </dd>
+                      <dt>Reference kontroly</dt>
                       <dd>•{row.referenceSuffix}</dd>
                       <dt>Datum nákupu</dt>
                       <dd>
@@ -619,6 +640,8 @@ export const AdminImportWorkspace = ({
                           {formatPurchaseDate(row.purchasedOn)}
                         </time>
                       </dd>
+                      <dt>Slevový kupón</dt>
+                      <dd>{row.discountCoupon ?? 'Bez slevového kupónu'}</dd>
                       <dt>Co se změní</dt>
                       <dd>
                         {formatTicketState(row.currentState)} →{' '}
@@ -651,6 +674,7 @@ export const AdminImportWorkspace = ({
                   <tr>
                     <th scope="col">Záznam</th>
                     <th scope="col">Účastník</th>
+                    <th scope="col">Nákup</th>
                     <th scope="col">Co se změní</th>
                     <th scope="col">Výsledek kontroly</th>
                     <th scope="col">Poznámka</th>
@@ -663,12 +687,9 @@ export const AdminImportWorkspace = ({
                         <span>
                           #{row.sourceRowNumber} · •{row.referenceSuffix}
                         </span>
-                        <small>
-                          Nákup{' '}
-                          <time dateTime={row.purchasedOn}>
-                            {formatPurchaseDate(row.purchasedOn)}
-                          </time>
-                        </small>
+                        <small>Vstupenka {row.sourceTicketId}</small>
+                        <small>Doklad {row.sourceOrderId}</small>
+                        <small>{orderTicketSummary(row)}</small>
                       </td>
                       <td className={styles.identityCell}>
                         <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
@@ -682,6 +703,16 @@ export const AdminImportWorkspace = ({
                         {row.contactPhone ? (
                           <small>{row.contactPhone}</small>
                         ) : null}
+                      </td>
+                      <td className={styles.purchaseCell}>
+                        <time dateTime={row.purchasedOn}>
+                          {formatPurchaseDate(row.purchasedOn)}
+                        </time>
+                        <small>
+                          {row.discountCoupon
+                            ? `Kupón ${row.discountCoupon}`
+                            : 'Bez slevového kupónu'}
+                        </small>
                       </td>
                       <td>
                         {formatTicketState(row.currentState)} →{' '}

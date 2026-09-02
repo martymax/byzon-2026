@@ -814,6 +814,17 @@ describe('F4 contract-first admin journeys', () => {
     const preview = {
       ...ticketImportPreviewFixtures.simpleshop_readonly!,
       eventId: adminFixtureIds.event,
+      rows: ticketImportPreviewFixtures.simpleshop_readonly!.rows.map(
+        (row, index) =>
+          index < 2
+            ? {
+                ...row,
+                sourceOrderId: '8100001',
+                orderTicketCount: 2,
+                orderTicketPosition: index + 1,
+              }
+            : row,
+      ),
     };
     const report = {
       ...ticketImportApplyFixtures.applied!,
@@ -858,10 +869,12 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.body.textContent).toContain('Alice Participant');
     expect(document.body.textContent).toContain('alice@example.test');
     expect(document.body.textContent).toContain('•A1B2C3');
-    expect(document.body.textContent).not.toContain('7100001');
-    expect(document.body.textContent).not.toContain('8100001');
+    expect(document.body.textContent).toContain('7100001');
+    expect(document.body.textContent).toContain('8100001');
+    expect(document.body.textContent).toContain('2 vstupenky v objednávce');
+    expect(document.body.textContent).toContain('tato 1 z 2');
     expect(document.body.textContent).toContain('18. 8. 2026');
-    expect(document.body.textContent).not.toContain('EARLYBIRD');
+    expect(document.body.textContent).toContain('EARLYBIRD');
     expect(document.body.textContent).toContain(
       'Účastník z „prodeje na jméno“',
     );
