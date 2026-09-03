@@ -163,17 +163,27 @@ export const programTimeRangeLabel = (
   startsAt: unknown,
   endsAt: unknown,
   timezone: string,
+): string =>
+  formatProgramTimeRange(
+    startsAt,
+    endsAt,
+    new Intl.DateTimeFormat('cs-CZ', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: timezone,
+    }),
+  );
+
+const formatProgramTimeRange = (
+  startsAt: unknown,
+  endsAt: unknown,
+  formatter: Intl.DateTimeFormat,
 ): string => {
   const start = new Date(String(startsAt));
   const end = new Date(String(endsAt));
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
     return 'Čas neurčen';
   }
-  const formatter = new Intl.DateTimeFormat('cs-CZ', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: timezone,
-  });
   return `${formatter.format(start)}–${formatter.format(end)}`;
 };
 
@@ -394,6 +404,8 @@ const itemLabel = (item: AdminContentItem): string =>
           'Položka bez názvu',
       );
 
+const contentListRenderBatchSize = 20;
+
 const AdminContentItemList = memo(function AdminContentItemList({
   archiveBlocked,
   items,
@@ -415,19 +427,52 @@ const AdminContentItemList = memo(function AdminContentItemList({
   readonly timezone: string;
   readonly writesBlocked: boolean;
 }) {
-  const roomsById = new Map(
-    references.rooms.map((room) => [room.id, itemLabel(room)]),
+  const [visibleCount, setVisibleCount] = useState(() =>
+    Math.min(contentListRenderBatchSize, items.length),
   );
-  const daysById = new Map(
-    references.days.map((day) => [day.id, itemLabel(day)]),
+  const roomsById = useMemo(
+    () => new Map(references.rooms.map((room) => [room.id, itemLabel(room)])),
+    [references.rooms],
   );
-  const speakersById = new Map(
-    references.speakers.map((speaker) => [speaker.id, itemLabel(speaker)]),
+  const daysById = useMemo(
+    () => new Map(references.days.map((day) => [day.id, itemLabel(day)])),
+    [references.days],
+  );
+  const speakersById = useMemo(
+    () =>
+      new Map(
+        references.speakers.map((speaker) => [speaker.id, itemLabel(speaker)]),
+      ),
+    [references.speakers],
+  );
+  const timeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('cs-CZ', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: timezone,
+      }),
+    [timezone],
   );
 
+  useEffect(() => {
+    if (visibleCount >= items.length) return;
+    const frame = window.requestAnimationFrame(() => {
+      setVisibleCount((current) =>
+        Math.min(current + contentListRenderBatchSize, items.length),
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [items.length, visibleCount]);
+
+  const renderedItems = items.slice(0, visibleCount);
+
   return (
-    <ul className={styles.contentList}>
-      {items.map((item) => (
+    <ul
+      aria-busy={renderedItems.length < items.length}
+      className={styles.contentList}
+    >
+      {renderedItems.map((item) => (
         <li data-archived={item.status === 'archived'} key={item.id}>
           <span>
             <strong>{itemLabel(item)}</strong>
@@ -439,10 +484,10 @@ const AdminContentItemList = memo(function AdminContentItemList({
                     {daysById.get(String(item.dayId))
                       ? `${daysById.get(String(item.dayId))} · `
                       : ''}
-                    {programTimeRangeLabel(
+                    {formatProgramTimeRange(
                       item.startsAt,
                       item.endsAt,
-                      timezone,
+                      timeFormatter,
                     )}
                   </dd>
                 </div>
