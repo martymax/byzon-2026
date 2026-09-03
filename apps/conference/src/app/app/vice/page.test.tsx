@@ -26,7 +26,7 @@ vi.mock('@/components/participant-account-more', () => ({
 
 import ParticipantMorePage, { canOpenParticipantMore } from './page';
 
-describe('participant More server phase boundary', () => {
+describe('participant account hub server phase boundary', () => {
   beforeEach(() => {
     pageMocks.loadParticipantCurrentEvent.mockReset();
     pageMocks.notFound.mockClear();

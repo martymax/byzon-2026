@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 
+import type { PublishedContent } from '@byzon/domain/contracts';
+import { useState } from 'react';
+
 import type { ApiPort } from '@/lib/api';
 
 import {
@@ -14,6 +17,8 @@ interface ContentProps {
   readonly eventId: string;
   readonly api?: ApiPort;
 }
+
+type PublishedPartner = PublishedContent['partners'][number];
 
 export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
   const state = useParticipantContent(eventId, api);
@@ -142,25 +147,77 @@ export const PartnerDirectory = ({ eventId, api }: ContentProps) => {
       />
     );
   }
+  return <PartnerLogoGrid partners={state.data.content.partners} />;
+};
+
+const PartnerLogo = ({ partner }: { readonly partner: PublishedPartner }) => {
+  const [logoUnavailable, setLogoUnavailable] = useState(false);
+  const logoVisible = Boolean(partner.logoAssetId) && !logoUnavailable;
+  const content = (
+    <>
+      {logoVisible ? (
+        // Public content assets are resolved through an allowlisted server route.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt={partner.name}
+          loading="lazy"
+          onError={() => setLogoUnavailable(true)}
+          src={`/api/v1/public/assets/${partner.logoAssetId}`}
+        />
+      ) : (
+        <span className="participant-partner-fallback">{partner.name}</span>
+      )}
+    </>
+  );
+
+  return partner.websiteUrl ? (
+    <a
+      aria-label={`${partner.name} – web partnera`}
+      className="participant-partner-logo"
+      href={partner.websiteUrl}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {content}
+    </a>
+  ) : (
+    <div className="participant-partner-logo">{content}</div>
+  );
+};
+
+export const PartnerLogoGrid = ({
+  partners,
+}: {
+  readonly partners: readonly PublishedPartner[];
+}) => (
+  <ul className="participant-partners-grid">
+    {partners.map((partner) => (
+      <li key={partner.id}>
+        <PartnerLogo partner={partner} />
+      </li>
+    ))}
+  </ul>
+);
+
+export const ParticipantPartnersFooter = ({
+  partners,
+}: {
+  readonly partners: readonly PublishedPartner[];
+}) => {
+  if (partners.length === 0) return null;
   return (
-    <ul className="card-grid">
-      {state.data.content.partners.map((partner) => (
-        <li key={partner.id}>
-          <article>
-            <strong>{partner.name}</strong>
-            {partner.category ? <span>{partner.category}</span> : null}
-            {partner.descriptionMarkdown ? (
-              <span>{partner.descriptionMarkdown}</span>
-            ) : null}
-            {partner.websiteUrl ? (
-              <a href={partner.websiteUrl} rel="noreferrer">
-                Navštívit web
-              </a>
-            ) : null}
-          </article>
-        </li>
-      ))}
-    </ul>
+    <footer
+      aria-labelledby="participant-partners-heading"
+      className="home-partners-footer"
+      data-testid="participant-partners-footer"
+      id="partneri"
+    >
+      <div className="home-partners-heading">
+        <p className="home-section-kicker">Spolupracujeme</p>
+        <h2 id="participant-partners-heading">Naši partneři</h2>
+      </div>
+      <PartnerLogoGrid partners={partners} />
+    </footer>
   );
 };
 

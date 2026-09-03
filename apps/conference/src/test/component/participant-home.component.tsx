@@ -158,14 +158,33 @@ describe('F2-02 participant home overview', () => {
       .toBeVisible();
     await expect.element(screen.getByText('Růst bez zkratek')).toBeVisible();
     await expect.element(screen.getByText('Výstaviště')).toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Naši partneři' }))
+      .toBeVisible();
+    await expect.element(screen.getByText('Syntetický partner')).toBeVisible();
+    const partnersFooter = screen.getByTestId('participant-partners-footer');
+    await expect.element(partnersFooter).toBeVisible();
+    await expect.element(partnersFooter).toMatchScreenshot('home-partners', {
+      comparatorOptions: { allowedMismatchedPixelRatio: 0.02 },
+      screenshotOptions: {
+        animations: 'disabled',
+        caret: 'hide',
+        scale: 'css',
+      },
+    });
 
     const navigation = screen.getByRole('navigation', {
       name: 'Hlavní navigace',
     });
-    expect(navigation.element().querySelectorAll('a')).toHaveLength(4);
-    await expect
-      .element(navigation.getByRole('link', { name: 'Přehled', exact: true }))
-      .toHaveAttribute('aria-current', 'page');
+    expect(navigation.element().querySelectorAll('a')).toHaveLength(5);
+    expect(
+      Array.from(navigation.element().querySelectorAll('a')).map((link) =>
+        link.textContent?.trim(),
+      ),
+    ).toEqual(['Program', 'Agenda', 'Networking', 'Řečníci', 'Můj účet']);
+    expect(
+      navigation.element().querySelector('[aria-current="page"]'),
+    ).toBeNull();
 
     const visibleHomeLinks = Array.from(
       screen

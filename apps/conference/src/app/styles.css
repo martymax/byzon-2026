@@ -69,6 +69,11 @@ h5,
   width: clamp(9rem, 24vw, 11.875rem);
   height: auto;
 }
+.brand:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 0.25rem;
+  border-radius: var(--byzon-radius-sm);
+}
 .eyebrow {
   color: var(--pink-dark);
   font-size: 1rem;
@@ -401,9 +406,82 @@ main > .ui-participant-nav-spacer {
 .home-primary-action:focus-visible,
 .home-section-link:focus-visible,
 .home-card-link:focus-visible,
-.home-session-list a:focus-visible {
+.home-session-list a:focus-visible,
+.participant-partner-logo:focus-visible {
   outline: 3px solid var(--byzon-focus);
   outline-offset: 2px;
+}
+.home-partners-footer {
+  min-width: 0;
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  padding-block: clamp(2rem, 6vw, 4rem) 0;
+  border-top: 1px solid var(--byzon-border);
+}
+.home-partners-heading {
+  text-align: center;
+}
+.home-partners-heading h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+}
+.participant-partners-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(10.625rem, 100%), 1fr));
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+.participant-partners-grid li {
+  min-width: 0;
+}
+.participant-partner-logo {
+  min-width: 0;
+  min-height: 7.5rem;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1.625rem 1.5rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  color: var(--byzon-text-muted);
+  background: var(--byzon-surface);
+  box-shadow: var(--byzon-shadow-sm);
+  text-decoration: none;
+  transition:
+    transform var(--byzon-motion-fast) var(--byzon-ease),
+    border-color var(--byzon-motion-fast) var(--byzon-ease),
+    box-shadow var(--byzon-motion-fast) var(--byzon-ease);
+}
+.participant-partner-logo:is(a):hover {
+  transform: translateY(-0.25rem);
+  border-color: var(--byzon-brand);
+  box-shadow: var(--byzon-shadow-md);
+}
+.participant-partner-logo img {
+  width: min(14.375rem, 86%);
+  height: 4.625rem;
+  object-fit: contain;
+  filter: grayscale(1);
+  opacity: 0.8;
+  transition:
+    filter var(--byzon-motion-fast) var(--byzon-ease),
+    opacity var(--byzon-motion-fast) var(--byzon-ease);
+}
+.participant-partner-logo:is(a):hover img {
+  filter: grayscale(0);
+  opacity: 1;
+}
+.participant-partner-fallback {
+  overflow-wrap: anywhere;
+  color: var(--byzon-text-muted);
+  font-family: var(--byzon-font-display);
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.15;
+  text-align: center;
 }
 .ticket-page {
   display: grid;
@@ -2820,7 +2898,9 @@ main > .ui-participant-nav-spacer {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .networking-directory-list a {
+  .networking-directory-list a,
+  .participant-partner-logo,
+  .participant-partner-logo img {
     transition: none;
   }
 }

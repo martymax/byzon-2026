@@ -495,7 +495,7 @@ describe('F2-07 participant account, profile and privacy', () => {
     ).toHaveLength(2);
   });
 
-  it('renders the responsive More hub with focus, 44px targets and an axe-clean hierarchy', async () => {
+  it('renders the responsive account hub with focus, 44px targets and an axe-clean hierarchy', async () => {
     const screen = await renderComponent(
       <AccountProbe api={accountApi()}>
         <ParticipantMoreHub />
@@ -506,7 +506,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Účet a informace',
+          name: 'Můj účet',
         }),
       )
       .toHaveFocus();
@@ -515,8 +515,8 @@ describe('F2-07 participant account, profile and privacy', () => {
       .element(screen.getByRole('link', { name: 'Moje osobní údaje' }))
       .toHaveAttribute('href', '/app/profil');
     await expect
-      .element(screen.getByRole('link', { name: 'Networking a kontakty' }))
-      .toHaveAttribute('href', '/app/networking');
+      .element(screen.getByRole('link', { name: 'Moje vstupenka' }))
+      .toHaveAttribute('href', '/app/vstupenka');
 
     for (const target of screen.container.querySelectorAll('a, button')) {
       const bounds = target.getBoundingClientRect();
@@ -1203,7 +1203,7 @@ describe('F2-07 participant account, profile and privacy', () => {
         .element(
           screen.getByRole('heading', {
             level: 1,
-            name: 'Účet a informace',
+            name: 'Můj účet',
           }),
         )
         .toBeVisible();
@@ -1232,7 +1232,7 @@ describe('F2-07 participant account, profile and privacy', () => {
         .element(
           screen.getByRole('heading', {
             level: 1,
-            name: 'Účet a informace',
+            name: 'Můj účet',
           }),
         )
         .toBeVisible();
@@ -1264,7 +1264,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Účet a informace',
+          name: 'Můj účet',
         }),
       )
       .toBeVisible();
@@ -1278,7 +1278,7 @@ describe('F2-07 participant account, profile and privacy', () => {
     }
   });
 
-  it('consumes the dirty sentinel before More navigation and preserves the account provider', async () => {
+  it('consumes the dirty sentinel before account navigation and preserves the account provider', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const providerMounted = vi.fn();
     const screen = await renderComponent(
@@ -1294,13 +1294,13 @@ describe('F2-07 participant account, profile and privacy', () => {
     const providerMountEffectsBeforeNavigation =
       providerMounted.mock.calls.length;
 
-    await screen.getByRole('link', { name: 'Více', exact: true }).click();
+    await screen.getByRole('link', { name: 'Můj účet', exact: true }).click();
     await vi.waitFor(() => expect(window.location.pathname).toBe('/app/vice'));
     await expect
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Účet a informace',
+          name: 'Můj účet',
         }),
       )
       .toBeVisible();

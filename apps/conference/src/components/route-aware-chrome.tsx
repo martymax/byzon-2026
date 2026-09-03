@@ -16,6 +16,7 @@ export const RouteAwareChrome = ({
   readonly children: ReactNode;
 }) => {
   const pathname = usePathname();
+  const participantRoute = pathname === '/app' || pathname.startsWith('/app/');
 
   if (isAdminPath(pathname)) return children;
 
@@ -25,7 +26,16 @@ export const RouteAwareChrome = ({
         Přejít na obsah
       </a>
       <header className="app-header">
-        <Link className="brand" href="/" aria-label="BYZON – přihlášení">
+        <Link
+          aria-current={pathname === '/app' ? 'page' : undefined}
+          aria-label={
+            participantRoute
+              ? 'BYZON – přehled účastnické aplikace'
+              : 'BYZON – přihlášení'
+          }
+          className="brand"
+          href={participantRoute ? '/app' : '/'}
+        >
           <Image
             alt=""
             className="brand-logo"

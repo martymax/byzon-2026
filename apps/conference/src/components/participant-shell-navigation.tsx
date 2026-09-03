@@ -22,18 +22,6 @@ const NavigationIcon = ({ children }: { readonly children: ReactNode }) => (
   </svg>
 );
 
-const overviewNavigationItem: NavigationItem = {
-  id: 'overview',
-  href: '/app',
-  label: 'Přehled',
-  icon: (
-    <NavigationIcon>
-      <path d="m3 11 9-8 9 8" />
-      <path d="M5 10v10h14V10M9 20v-6h6v6" />
-    </NavigationIcon>
-  ),
-};
-
 const programNavigationItem: NavigationItem = {
   id: 'program',
   href: '/app/program',
@@ -46,21 +34,19 @@ const programNavigationItem: NavigationItem = {
   ),
 };
 
-const moreNavigationItem: NavigationItem = {
-  id: 'more',
+const accountNavigationItem: NavigationItem = {
+  id: 'account',
   href: '/app/vice',
-  label: 'Více',
+  label: 'Můj účet',
   icon: (
     <NavigationIcon>
-      <circle cx="5" cy="12" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="19" cy="12" r="1.5" />
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
     </NavigationIcon>
   ),
 };
 
 const participantNavigationItems: NavigationItem[] = [
-  overviewNavigationItem,
   programNavigationItem,
   {
     id: 'agenda',
@@ -74,17 +60,44 @@ const participantNavigationItems: NavigationItem[] = [
       </NavigationIcon>
     ),
   },
-  moreNavigationItem,
-];
-
-const productionNavigationItems: NavigationItem[] = [
-  overviewNavigationItem,
-  programNavigationItem,
-  moreNavigationItem,
+  {
+    id: 'networking',
+    href: '/app/networking',
+    label: 'Networking',
+    icon: (
+      <NavigationIcon>
+        <circle cx="9" cy="8" r="3" />
+        <circle cx="17" cy="10" r="2.5" />
+        <path d="M3 20a6 6 0 0 1 12 0M14 15.5a5 5 0 0 1 7 4.5" />
+      </NavigationIcon>
+    ),
+  },
+  {
+    id: 'speakers',
+    href: '/app/recnici',
+    label: 'Řečníci',
+    icon: (
+      <NavigationIcon>
+        <rect height="11" rx="4" width="8" x="8" y="3" />
+        <path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" />
+      </NavigationIcon>
+    ),
+  },
+  accountNavigationItem,
 ];
 
 const archivedPreviewNavigationItems: NavigationItem[] = [
-  overviewNavigationItem,
+  {
+    id: 'overview',
+    href: '/app',
+    label: 'Přehled',
+    icon: (
+      <NavigationIcon>
+        <path d="m3 11 9-8 9 8" />
+        <path d="M5 10v10h14V10M9 20v-6h6v6" />
+      </NavigationIcon>
+    ),
+  },
   {
     id: 'privacy',
     href: '/app/soukromi',
@@ -109,27 +122,25 @@ const archivedPreviewNavigationItems: NavigationItem[] = [
   },
 ];
 
-const moreDestinations = [
+const accountDestinations = [
   '/app/vice',
   '/app/profil',
   '/app/soukromi',
   '/app/nastaveni',
   '/app/vstupenka',
-  '/app/recnici',
-  '/app/partneri',
   '/app/informace',
-  '/app/networking',
 ] as const;
 
 const isDestination = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
 
 export const participantNavigationActiveId = (pathname: string): string => {
-  if (pathname === '/app') return 'overview';
   if (isDestination(pathname, '/app/program')) return 'program';
   if (isDestination(pathname, '/app/agenda')) return 'agenda';
-  return moreDestinations.some((href) => isDestination(pathname, href))
-    ? 'more'
+  if (isDestination(pathname, '/app/networking')) return 'networking';
+  if (isDestination(pathname, '/app/recnici')) return 'speakers';
+  return accountDestinations.some((href) => isDestination(pathname, href))
+    ? 'account'
     : '';
 };
 
@@ -140,9 +151,7 @@ export const participantNavigationItemsForMode = (
     return archivedPreviewNavigationItems;
   }
   if (mode === 'unavailable') return [];
-  return mode === 'active-preview'
-    ? participantNavigationItems
-    : productionNavigationItems;
+  return participantNavigationItems;
 };
 
 export const archivedNavigationActiveId = (pathname: string): string => {

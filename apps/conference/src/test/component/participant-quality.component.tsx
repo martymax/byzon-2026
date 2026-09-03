@@ -168,7 +168,7 @@ describe('F2-06 participant shell and program quality gate', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
-    expect(navigationElement.querySelectorAll('a')).toHaveLength(4);
+    expect(navigationElement.querySelectorAll('a')).toHaveLength(5);
     for (const link of navigationElement.querySelectorAll('a')) {
       const bounds = link.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);
@@ -244,7 +244,7 @@ describe('F2-06 participant shell and program quality gate', () => {
       .element(screen.getByRole('heading', { level: 1, name: 'Jana Nováková' }))
       .toHaveFocus();
     await expect
-      .element(screen.getByRole('link', { name: 'Více', exact: true }))
+      .element(screen.getByRole('link', { name: 'Řečníci', exact: true }))
       .toHaveAttribute('aria-current', 'page');
     await expect
       .element(screen.getByRole('link', { name: 'Zpět na řečníky' }))

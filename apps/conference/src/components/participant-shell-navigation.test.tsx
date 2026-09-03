@@ -8,22 +8,22 @@ import {
 
 describe('participant shell navigation', () => {
   it.each([
-    ['/app', 'overview'],
+    ['/app', ''],
     ['/app/program', 'program'],
     ['/app/program/session-1', 'program'],
     ['/app/agenda', 'agenda'],
     ['/app/oznameni', ''],
     ['/app/oznameni/announcement-1', ''],
-    ['/app/vice', 'more'],
-    ['/app/profil', 'more'],
-    ['/app/soukromi', 'more'],
-    ['/app/nastaveni', 'more'],
-    ['/app/vstupenka', 'more'],
-    ['/app/recnici/jana-novakova', 'more'],
-    ['/app/partneri', 'more'],
-    ['/app/informace', 'more'],
-    ['/app/networking', 'more'],
-    ['/app/networking/01910000-0000-7000-8000-000000000301', 'more'],
+    ['/app/vice', 'account'],
+    ['/app/profil', 'account'],
+    ['/app/soukromi', 'account'],
+    ['/app/nastaveni', 'account'],
+    ['/app/vstupenka', 'account'],
+    ['/app/recnici/jana-novakova', 'speakers'],
+    ['/app/partneri', ''],
+    ['/app/informace', 'account'],
+    ['/app/networking', 'networking'],
+    ['/app/networking/01910000-0000-7000-8000-000000000301', 'networking'],
   ])('maps %s to its parent destination', (pathname, expected) => {
     expect(participantNavigationActiveId(pathname)).toBe(expected);
   });
@@ -56,7 +56,13 @@ describe('participant shell navigation', () => {
   it('exposes the production account hub alongside the core destinations', () => {
     expect(
       participantNavigationItemsForMode('active').map(({ href }) => href),
-    ).toEqual(['/app', '/app/program', '/app/vice']);
+    ).toEqual([
+      '/app/program',
+      '/app/agenda',
+      '/app/networking',
+      '/app/recnici',
+      '/app/vice',
+    ]);
   });
 
   it('exposes all mocked participant journeys only in frontend preview', () => {
@@ -64,7 +70,13 @@ describe('participant shell navigation', () => {
       participantNavigationItemsForMode('active-preview').map(
         ({ href }) => href,
       ),
-    ).toEqual(['/app', '/app/program', '/app/agenda', '/app/vice']);
+    ).toEqual([
+      '/app/program',
+      '/app/agenda',
+      '/app/networking',
+      '/app/recnici',
+      '/app/vice',
+    ]);
   });
 
   it('does not expose participant destinations while the event is unavailable', () => {

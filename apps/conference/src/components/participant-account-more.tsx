@@ -13,12 +13,13 @@ const SupportLink = ({ email }: { readonly email: string }) => (
 export const ParticipantMoreHub = () => (
   <section className="app-page participant-account-page participant-more-page">
     <header className="participant-account-heading">
-      <p className="eyebrow">Více</p>
+      <p className="eyebrow">Účet</p>
       <h1 data-route-heading tabIndex={-1}>
-        Účet a informace
+        Můj účet
       </h1>
       <p className="lead">
-        Spravujte své údaje, networking, soukromí a přihlášení na jednom místě.
+        Spravujte své osobní údaje, vstupenku, soukromí a přihlášení na jednom
+        místě.
       </p>
     </header>
 
@@ -45,23 +46,14 @@ export const ParticipantMoreHub = () => (
             <ActionLink block href="/app/profil">
               Moje osobní údaje
             </ActionLink>
-            <ActionLink block href="/app/networking" variant="secondary">
-              Networking a kontakty
+            <ActionLink block href="/app/vstupenka" variant="secondary">
+              Moje vstupenka
             </ActionLink>
             <ActionLink block href="/app/soukromi" variant="secondary">
               Soukromí a právní dokumenty
             </ActionLink>
             <ActionLink block href="/app/nastaveni" variant="secondary">
               Nastavení a přihlášení
-            </ActionLink>
-            <ActionLink block href="/app/informace" variant="secondary">
-              Praktické informace
-            </ActionLink>
-            <ActionLink block href="/app/recnici" variant="secondary">
-              Řečníci
-            </ActionLink>
-            <ActionLink block href="/app/partneri" variant="secondary">
-              Partneři
             </ActionLink>
           </nav>
 
