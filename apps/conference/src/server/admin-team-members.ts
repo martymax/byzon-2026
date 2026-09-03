@@ -172,7 +172,12 @@ const loadTeamRows = async (db: TeamDb, eventId: string) =>
       emailVerified: schema.users.emailVerified,
       role: schema.eventRoles.role,
       lastInvitationSentAt: sql<Date | string | null>`(
-        select max(${schema.auditLogs.createdAt})
+        select max(
+          coalesce(
+            nullif(${schema.auditLogs.after} ->> 'sentAt', '')::timestamptz,
+            ${schema.auditLogs.createdAt}
+          )
+        )
         from ${schema.auditLogs}
         where ${schema.auditLogs.eventId} = ${eventId}
           and ${schema.auditLogs.action} = 'team.invitation_sent'
