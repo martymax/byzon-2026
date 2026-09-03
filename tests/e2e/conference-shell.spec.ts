@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import {
+  identityBootstrapFixtures,
+  participantAnnouncementInboxFixtures,
+  participantProgramFixtures,
+} from '@byzon/test-support';
 import { targetViewports } from '@byzon/test-support/viewports';
 
 const mockParticipantSessionKey = 'byzon.mock.participant.active';
@@ -131,9 +136,43 @@ test('participant reserves the available place and downloads the Prague-time age
   await page.setExtraHTTPHeaders({
     'x-byzon-mock-participant': 'active',
   });
-  // Warm the browser mock runtime, then leave the protected layout. Returning
-  // through browser history is a client navigation, so protected reads cannot
-  // escape to the real dev endpoint during a document-level MSW bootstrap.
+  // The first document can render before its development-only service worker
+  // controls the page. Keep those initial private reads deterministic; after
+  // the indicator appears, every following request uses the browser mock.
+  await page.route('**/api/v1/me/bootstrap', async (route) => {
+    await route.fulfill({
+      headers: {
+        'cache-control': 'private, no-store',
+        'x-request-id': 'mock-request-0001',
+      },
+      json: {
+        ...identityBootstrapFixtures.complete!,
+        membership: {
+          access: { state: 'active' as const },
+          roles: ['participant' as const],
+        },
+      },
+    });
+  });
+  await page.route('**/api/v1/me/announcements?**', async (route) => {
+    await route.fulfill({
+      headers: {
+        'cache-control': 'private, no-store',
+        'x-request-id': 'mock-request-0001',
+      },
+      json: participantAnnouncementInboxFixtures.empty_unread,
+    });
+  });
+  await page.route('**/api/v1/events/*/program', async (route) => {
+    await route.fulfill({
+      headers: {
+        'cache-control': 'private, no-store',
+        etag: '"content-program-v3"',
+        'x-request-id': 'mock-request-0001',
+      },
+      json: participantProgramFixtures.happy,
+    });
+  });
   await page.goto('/app/program');
   await expect(
     page.getByRole('heading', { name: 'Program', level: 1 }),
@@ -143,11 +182,7 @@ test('participant reserves the available place and downloads the Prague-time age
     'active',
     { timeout: 20_000 },
   );
-  await page.getByRole('link', { name: 'BYZON – přihlášení' }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole('heading', { name: 'Přihlaste se do BYZON' }),
-  ).toBeVisible();
+  await page.unrouteAll({ behavior: 'wait' });
   const syntheticSession = await page.evaluate(async (sessionKey) => {
     window.sessionStorage.setItem(sessionKey, 'true');
     const reset = await fetch('/__byzon/mock/participant-session', {
@@ -186,12 +221,6 @@ test('participant reserves the available place and downloads the Prague-time age
     reset: { ok: true, status: 204 },
   });
 
-  await page.goBack();
-  await expect(page).toHaveURL(/\/app\/program$/);
-  await expect(
-    page.getByRole('heading', { name: 'Program', level: 1 }),
-  ).toBeVisible();
-
   await page
     .getByRole('navigation', { name: 'Hlavní navigace' })
     .getByRole('link', { name: 'Agenda', exact: true })
@@ -200,10 +229,13 @@ test('participant reserves the available place and downloads the Prague-time age
   await expect(
     page.getByRole('heading', { name: 'Osobní agenda', level: 1 }),
   ).toBeVisible({ timeout: 20_000 });
+  const openingAgendaItem = page
+    .locator('article')
+    .filter({ hasText: 'Otevření konference' });
 
   const agendaPage = page.locator('.agenda-page');
   await expect(
-    page.locator('article').filter({ hasText: 'Otevření konference' }),
+    openingAgendaItem,
     `Agenda UI after a canonical 200 response:\n${await agendaPage.innerText()}\nAPI traffic:\n${apiTraffic.join('\n')}`,
   ).toBeAttached({ timeout: 20_000 });
 
