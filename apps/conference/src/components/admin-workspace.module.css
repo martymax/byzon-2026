@@ -1946,6 +1946,13 @@
   color: var(--admin-muted);
 }
 
+.participantHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 .participantMetrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2699,8 +2706,12 @@
     flex-wrap: wrap;
   }
 
-  .participantPageHeader > a {
+  .participantHeaderActions {
     width: 100%;
+  }
+
+  .participantHeaderActions > * {
+    flex: 1 1 12rem;
   }
 
   .participantMetrics {

@@ -71,6 +71,8 @@ import {
 } from '@byzon/domain/contracts';
 import {
   SUPPORT_SEARCH_RESULT_LIMIT,
+  adminParticipantCreateRequestSchema,
+  adminParticipantCreateResponseSchema,
   adminParticipantDetailSchema,
   adminParticipantInviteProblemSchema,
   adminParticipantInviteRequestSchema,
@@ -87,6 +89,7 @@ import {
   supportSearchQuerySchema,
   supportSearchResponseSchema,
   type AdminParticipantListRequest,
+  type AdminParticipantCreateRequest,
   type AdminParticipantInviteRequest,
   type AdminParticipantUpdateRequest,
   type SupportMutationRequest,
@@ -255,6 +258,27 @@ export const adminSupportMutationEndpoint = defineApiEndpoint({
     'SUPPORT_RECORD_NOT_FOUND',
     'SUPPORT_TARGET_NOT_FOUND',
     'STALE_VERSION',
+    'SUPPORT_INVALID_TRANSITION',
+    'IDEMPOTENCY_KEY_REUSED',
+    'IDEMPOTENCY_IN_PROGRESS',
+  ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
+export const adminParticipantCreateEndpoint = defineApiEndpoint({
+  method: 'POST',
+  requestSchema: adminParticipantCreateRequestSchema,
+  successSchema: adminParticipantCreateResponseSchema,
+  problemSchema: supportMutationProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'SUPPORT_RATE_LIMITED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
     'SUPPORT_INVALID_TRANSITION',
     'IDEMPOTENCY_KEY_REUSED',
     'IDEMPOTENCY_IN_PROGRESS',
@@ -870,6 +894,27 @@ export const requestAdminParticipantList = async (
       ...(signal ? { signal } : {}),
     }),
     (data) => data.eventId === eventId,
+  );
+
+export const requestAdminParticipantCreate = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminParticipantCreateRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantCreateEndpoint, {
+      path: eventPath(eventId, '/participants'),
+      body: adminParticipantCreateRequestSchema.parse(body),
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.detail.eventId === eventId &&
+      data.detail.contactEmail === body.profile.contactEmail,
   );
 
 export const requestAdminParticipantDetail = async (

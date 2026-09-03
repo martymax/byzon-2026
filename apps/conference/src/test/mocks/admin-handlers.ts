@@ -60,6 +60,8 @@ import {
   type AdminTeamMember,
 } from '@byzon/domain/contracts/admin';
 import {
+  adminParticipantCreateRequestSchema,
+  adminParticipantCreateResponseSchema,
   adminParticipantDetailSchema,
   adminParticipantInviteProblemSchema,
   adminParticipantInviteRequestSchema,
@@ -1433,6 +1435,122 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         },
         successOptions('admin.mock.participant-list'),
       );
+    },
+  ),
+
+  http.post(
+    '*/api/v1/admin/events/:eventId/participants',
+    async ({ params, request }) => {
+      const denied = authorize(
+        supportMutationProblemSchema,
+        ['ticket:any:manage'],
+        'admin.mock.participant-create',
+      );
+      if (denied) return denied;
+      const body = adminParticipantCreateRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'participant-create', body.data)
+        : null;
+      if (!routeMatchesEvent(params.eventId) || !body.success || !attempt) {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportSearchProblemFixtures.validation,
+          { fixtureName: 'admin.mock.participant-create-validation' },
+        );
+      }
+      if (attempt.kind === 'replay') {
+        return mockJsonResponse(
+          adminParticipantCreateResponseSchema,
+          replayResponse(attempt.response),
+          successOptions('admin.mock.participant-create-replay'),
+        );
+      }
+      if (attempt.kind === 'collision') {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.participant-create-collision' },
+        );
+      }
+      if (
+        state.participantDetails.some(
+          ({ contactEmail }) =>
+            contactEmail.toLowerCase() === body.data.profile.contactEmail,
+        )
+      ) {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          {
+            ...supportSearchProblemFixtures.validation,
+            fieldErrors: {
+              'profile.contactEmail': [
+                'A participant with this email address already exists.',
+              ],
+            },
+          },
+          { fixtureName: 'admin.mock.participant-create-duplicate' },
+        );
+      }
+      const participantId = crypto.randomUUID();
+      const ticketId = crypto.randomUUID();
+      const timestamp = new Date().toISOString();
+      const referenceSuffix = `M${ticketId.replaceAll('-', '').slice(-7)}`;
+      const detail = adminParticipantDetailSchema.parse({
+        eventId: adminFixtureIds.event,
+        participantId,
+        ticketId,
+        ...body.data.profile,
+        introduction: '',
+        linkedinUrl: null,
+        todayHunting: [],
+        networkingEnabled: false,
+        moderationStatus: 'visible',
+        onboardingCompleted: false,
+        membershipStatus: 'active',
+        invitation: { status: 'not_sent', lastSentAt: null },
+        ticket: {
+          source: 'ticket',
+          referenceSuffix,
+          externalId: null,
+          orderExternalId: null,
+          state: 'active',
+          claimedAt: timestamp,
+          version: 1,
+          availableActions: ['block'],
+        },
+        checkIn: null,
+        reservations: [],
+        profileVersion: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      state.participantDetails.push(detail);
+      state.supportRecords.push({
+        eventId: adminFixtureIds.event,
+        participantId,
+        ticketId,
+        displayName: `${detail.firstName} ${detail.lastName}`,
+        maskedContact: `${detail.contactEmail.slice(0, 1)}***@${detail.contactEmail.split('@')[1]}`,
+        referenceSuffix,
+        ticketState: 'active',
+        accessState: 'not_claimed',
+        version: 1,
+        availableActions: ['block'],
+      });
+      const response = adminParticipantCreateResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        outcome: 'created',
+        detail,
+        createdAt: timestamp,
+        audit: supportMutationFixtures.blocked!.audit,
+      });
+      storeMutation(attempt, 'participant-create', response);
+      return mockJsonResponse(adminParticipantCreateResponseSchema, response, {
+        ...successOptions('admin.mock.participant-create'),
+        status: 201,
+      });
     },
   ),
 

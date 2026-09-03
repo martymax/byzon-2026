@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -8,6 +10,8 @@ import {
 } from '@byzon/database';
 import {
   adminParticipantDetailSchema,
+  adminParticipantCreateRequestSchema,
+  adminParticipantCreateResponseSchema,
   adminParticipantInviteRequestSchema,
   adminParticipantInviteResponseSchema,
   adminParticipantListRequestSchema,
@@ -500,6 +504,311 @@ const loadParticipantDetail = async (
     createdAt: row.profileCreatedAt.toISOString(),
     updatedAt: row.profileUpdatedAt.toISOString(),
   });
+};
+
+export const handleAdminParticipantCreate = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (request.method !== 'POST') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'ticket:any:manage',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', actorId)) ?? null;
+    const rawBody = await request.text();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(rawBody);
+    } catch {
+      raw = null;
+    }
+    const parsed = adminParticipantCreateRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid participant',
+        'The new participant data is invalid.',
+        {
+          fieldErrors: Object.fromEntries(
+            parsed.error.issues.map((issue) => [
+              issue.path.join('.') || 'body',
+              [issue.message],
+            ]),
+          ),
+        },
+      );
+    }
+
+    const key = readIdempotencyKey(request.headers);
+    const createdAt = dependencies.now?.() ?? new Date();
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'participant.create',
+        key,
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: rawBody,
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now: createdAt,
+      },
+      async (transaction) => {
+        const emailDigest = createHash('sha256')
+          .update(parsed.data.profile.contactEmail)
+          .digest('hex');
+        await acquireTransactionLock(
+          transaction,
+          `participant-create:${emailDigest}`,
+        );
+        const event = await transaction.query.events.findFirst({
+          columns: { status: true },
+          where: eq(schema.events.id, eventId),
+        });
+        if (!event) {
+          throw problem(
+            403,
+            'EVENT_ACCESS_DENIED',
+            'Event access denied',
+            'The event is unavailable.',
+          );
+        }
+        if (event.status === 'archived') {
+          throw problem(
+            409,
+            'SUPPORT_INVALID_TRANSITION',
+            'Archived event',
+            'Participants cannot be added to an archived event.',
+          );
+        }
+
+        const existingUser = await transaction.query.users.findFirst({
+          columns: { id: true },
+          where: eq(schema.users.email, parsed.data.profile.contactEmail),
+        });
+        const participantId = existingUser?.id ?? generateUuidV7();
+        const [existingProfile, membership, existingTicket, sourceParticipant] =
+          await Promise.all([
+            transaction.query.participantProfiles.findFirst({
+              columns: { userId: true },
+              where: and(
+                eq(schema.participantProfiles.eventId, eventId),
+                eq(schema.participantProfiles.userId, participantId),
+              ),
+            }),
+            transaction.query.eventMemberships.findFirst({
+              columns: { status: true },
+              where: and(
+                eq(schema.eventMemberships.eventId, eventId),
+                eq(schema.eventMemberships.userId, participantId),
+              ),
+            }),
+            transaction.query.tickets.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.tickets.eventId, eventId),
+                eq(schema.tickets.holderUserId, participantId),
+              ),
+            }),
+            transaction.query.ticketSourceParticipants.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.ticketSourceParticipants.eventId, eventId),
+                eq(schema.ticketSourceParticipants.userId, participantId),
+              ),
+            }),
+          ]);
+        if (existingProfile || existingTicket || sourceParticipant) {
+          throw problem(
+            422,
+            'VALIDATION_FAILED',
+            'Participant already exists',
+            'A participant with this email address already exists in the event.',
+            {
+              fieldErrors: {
+                'profile.contactEmail': [
+                  'A participant with this email address already exists.',
+                ],
+              },
+            },
+          );
+        }
+        if (membership && membership.status !== 'active') {
+          throw problem(
+            409,
+            'SUPPORT_INVALID_TRANSITION',
+            'Membership is inactive',
+            'The existing event membership must be reviewed before adding this participant.',
+          );
+        }
+
+        if (!existingUser) {
+          await transaction.insert(schema.users).values({
+            id: participantId,
+            name: `${parsed.data.profile.firstName} ${parsed.data.profile.lastName}`,
+            email: parsed.data.profile.contactEmail,
+            emailVerified: false,
+            createdAt,
+            updatedAt: createdAt,
+          });
+        }
+        if (!membership) {
+          await transaction.insert(schema.eventMemberships).values({
+            eventId,
+            userId: participantId,
+            status: 'active',
+          });
+        }
+        await transaction.insert(schema.participantProfiles).values({
+          eventId,
+          userId: participantId,
+          firstName: parsed.data.profile.firstName,
+          lastName: parsed.data.profile.lastName,
+          contactEmail: parsed.data.profile.contactEmail,
+          phone: parsed.data.profile.phone,
+          company: parsed.data.profile.company || null,
+          jobTitle: parsed.data.profile.jobTitle || null,
+          networkingEnabled: false,
+          moderationStatus: 'visible',
+          emailVisibility: 'hidden',
+          phoneVisibility: 'hidden',
+          linkedinVisibility: 'hidden',
+          createdAt,
+          updatedAt: createdAt,
+        });
+        const participantRole = await transaction.query.eventRoles.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(schema.eventRoles.eventId, eventId),
+            eq(schema.eventRoles.userId, participantId),
+            eq(schema.eventRoles.role, 'participant'),
+            isNull(schema.eventRoles.revokedAt),
+          ),
+        });
+        if (!participantRole) {
+          await transaction.insert(schema.eventRoles).values({
+            id: generateUuidV7(),
+            eventId,
+            userId: participantId,
+            role: 'participant',
+            scope: {},
+            grantedBy: actorId,
+            grantedAt: createdAt,
+          });
+        }
+        const ticketId = generateUuidV7();
+        const ticketSuffix = `M${ticketId.replaceAll('-', '').slice(-7)}`;
+        await transaction.insert(schema.tickets).values({
+          id: ticketId,
+          eventId,
+          codeHmac: createHash('sha256')
+            .update(`manual-ticket:${eventId}:${ticketId}`)
+            .digest('hex'),
+          codeSuffix: ticketSuffix,
+          status: 'activated',
+          holderUserId: participantId,
+          claimedAt: createdAt,
+          createdAt,
+          updatedAt: createdAt,
+        });
+        await transaction.insert(schema.ticketEvents).values({
+          id: generateUuidV7(),
+          eventId,
+          ticketId,
+          actorType: 'user',
+          actorId,
+          fromStatus: null,
+          toStatus: 'activated',
+          reason: 'Ruční vytvoření účastníka v administraci.',
+          requestId,
+          occurredAt: createdAt,
+        });
+        const auditId = await writeAuditLog(transaction, {
+          eventId,
+          actorId,
+          actorType: 'user',
+          action: 'participant.created_manually',
+          targetType: 'participant_profile',
+          targetId: participantId,
+          requestId,
+          reason: parsed.data.reason,
+          after: {
+            participantId,
+            ticketId,
+            source: 'manual',
+            membershipStatus: 'active',
+            ticketState: 'activated',
+          },
+        });
+        const detail = await loadParticipantDetail(
+          transaction,
+          eventId,
+          participantId,
+        );
+        if (!detail) {
+          throw problem(
+            500,
+            'INTERNAL_ERROR',
+            'Participant unavailable',
+            'The new participant could not be loaded.',
+          );
+        }
+        return {
+          status: 201,
+          body: adminParticipantCreateResponseSchema.parse({
+            eventId,
+            outcome: 'created',
+            detail,
+            createdAt: createdAt.toISOString(),
+            audit: { auditId },
+          }),
+          resultReference: participantId,
+        };
+      },
+    );
+    return withRateLimitHeaders(
+      Response.json(
+        adminParticipantCreateResponseSchema.parse({
+          ...result.body,
+          outcome: result.replayed ? 'already_applied' : result.body.outcome,
+        }),
+        {
+          status: result.replayed ? 200 : result.status,
+          headers: {
+            ...privateHeaders(requestId),
+            'idempotency-replayed': String(result.replayed),
+          },
+        },
+      ),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return withRateLimitHeaders(response, rateLimitDecision);
+  }
 };
 
 export const handleAdminParticipantList = async (

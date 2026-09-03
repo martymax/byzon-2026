@@ -80,6 +80,7 @@ import {
   adminExportEndpoint,
   adminExportJobListEndpoint,
   adminOperationsOverviewEndpoint,
+  adminParticipantCreateEndpoint,
   adminParticipantListEndpoint,
   adminParticipantDetailEndpoint,
   adminParticipantInviteEndpoint,
@@ -1767,6 +1768,143 @@ describe('F4 contract-first admin journeys', () => {
       body: { query: 'citlivy@example.test' },
     });
     expect(window.location.href).not.toContain('citlivy');
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('creates a participant in a modal and refreshes the list after saving', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const createdDetail = {
+      ...participantDetailResponse(),
+      participantId: '019fa100-0000-7000-8000-000000000091',
+      ticketId: '019fa100-0000-7000-8000-000000000092',
+      firstName: 'Ruční',
+      lastName: 'Host',
+      contactEmail: 'rucni.host@example.test',
+      phone: null,
+      company: 'Manual Labs',
+      jobTitle: '',
+      introduction: '',
+      linkedinUrl: null,
+      todayHunting: [] as const,
+      networkingEnabled: false,
+      onboardingCompleted: false,
+      invitation: { status: 'not_sent' as const, lastSentAt: null },
+      ticket: {
+        source: 'ticket' as const,
+        referenceSuffix: 'M0000092',
+        externalId: null,
+        orderExternalId: null,
+        state: 'active' as const,
+        claimedAt: '2026-09-03T10:00:00.000Z',
+        version: 1,
+        availableActions: ['block'] as const,
+      },
+      checkIn: null,
+      profileVersion: 1,
+      createdAt: '2026-09-03T10:00:00.000Z',
+      updatedAt: '2026-09-03T10:00:00.000Z',
+    };
+    let createOptions: unknown;
+    let listRequests = 0;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminParticipantListEndpoint) {
+        listRequests += 1;
+        const list = participantListResponse();
+        if (listRequests === 1) return success(list);
+        const createdItem = {
+          eventId: adminFixtureIds.event,
+          participantId: createdDetail.participantId,
+          ticketId: createdDetail.ticketId,
+          displayName: 'Ruční Host',
+          contactEmail: createdDetail.contactEmail,
+          company: createdDetail.company,
+          jobTitle: createdDetail.jobTitle,
+          referenceSuffix: createdDetail.ticket.referenceSuffix,
+          ticketState: 'active' as const,
+          accessState: 'not_claimed' as const,
+          networkingState: 'disabled' as const,
+          invitation: createdDetail.invitation,
+          checkedIn: false,
+          reservationCount: 0,
+          profileVersion: 1,
+          ticketVersion: 1,
+          updatedAt: createdDetail.updatedAt,
+          availableActions: ['block'] as const,
+        };
+        return success({
+          ...list,
+          items: [...list.items, createdItem],
+          pageInfo: { total: 3, offset: 0, hasMore: false },
+          summary: { ...list.summary, total: 3, active: 3 },
+        });
+      }
+      if (endpoint === adminParticipantCreateEndpoint) {
+        createOptions = options;
+        return success({
+          eventId: adminFixtureIds.event,
+          outcome: 'created' as const,
+          detail: createdDetail,
+          createdAt: createdDetail.createdAt,
+          audit: { auditId: supportFixtureIds.audit },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('button', { name: 'Přidat účastníka' }))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Přidat účastníka' }).click();
+    const dialog = screen.getByRole('dialog');
+    await expect
+      .element(dialog.getByRole('heading', { name: 'Přidat účastníka ručně' }))
+      .toBeVisible();
+    await dialog.getByRole('textbox', { name: 'Jméno' }).fill('Ruční');
+    await dialog.getByRole('textbox', { name: 'Příjmení' }).fill('Host');
+    await dialog
+      .getByRole('textbox', { name: 'E-mail' })
+      .fill('RUCNI.HOST@example.test');
+    await dialog
+      .getByRole('textbox', { name: 'Firma (nepovinná)' })
+      .fill('Manual Labs');
+    await dialog
+      .getByRole('textbox', { name: 'Důvod vytvoření' })
+      .fill('Registrace hosta mimo SimpleShop.');
+    await dialog.getByRole('button', { name: 'Vytvořit účastníka' }).click();
+
+    await vi.waitFor(() => expect(listRequests).toBeGreaterThanOrEqual(2));
+    await expect.element(screen.getByText('Ruční Host').first()).toBeVisible();
+    await expect
+      .element(
+        screen.getByText(
+          'Účastník Ruční Host byl vytvořen. Může se přihlásit svým e-mailem nebo mu můžete poslat pozvánku.',
+        ),
+      )
+      .toBeVisible();
+    expect(createOptions).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/participants`,
+      cache: 'no-store',
+      body: {
+        reason: 'Registrace hosta mimo SimpleShop.',
+        profile: {
+          firstName: 'Ruční',
+          lastName: 'Host',
+          contactEmail: 'rucni.host@example.test',
+          phone: null,
+          company: 'Manual Labs',
+          jobTitle: '',
+        },
+      },
+    });
+    expect(
+      (createOptions as { idempotencyKey?: string }).idempotencyKey,
+    ).toBeTruthy();
+    expect(screen.getByRole('dialog')).not.toBeInTheDocument();
     await expectComponentToPassAxe(adminRoot());
   });
 

@@ -399,6 +399,22 @@ const adminParticipantProfileFields = {
   moderationStatus: z.enum(['visible', 'hidden']),
 } as const;
 
+export const adminParticipantCreateRequestSchema = z.strictObject({
+  reason: mutationReasonSchema,
+  profile: z.strictObject({
+    firstName: adminParticipantProfileFields.firstName,
+    lastName: adminParticipantProfileFields.lastName,
+    contactEmail: adminParticipantProfileFields.contactEmail,
+    phone: adminParticipantProfileFields.phone,
+    company: adminParticipantProfileFields.company,
+    jobTitle: adminParticipantProfileFields.jobTitle,
+  }),
+});
+
+export type AdminParticipantCreateRequest = z.infer<
+  typeof adminParticipantCreateRequestSchema
+>;
+
 export const adminParticipantUpdateRequestSchema = z.strictObject({
   participantId: uuidSchema,
   expectedProfileVersion: versionSchema,
@@ -420,6 +436,18 @@ export const adminParticipantUpdateResponseSchema = z.strictObject({
 
 export type AdminParticipantUpdateResponse = z.infer<
   typeof adminParticipantUpdateResponseSchema
+>;
+
+export const adminParticipantCreateResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  outcome: z.enum(['created', 'already_applied']),
+  detail: adminParticipantDetailSchema,
+  createdAt: dateTimeSchema,
+  audit: z.strictObject({ auditId: uuidSchema }),
+});
+
+export type AdminParticipantCreateResponse = z.infer<
+  typeof adminParticipantCreateResponseSchema
 >;
 
 const supportSearchBaseShape = {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  adminParticipantCreateRequestSchema,
+  adminParticipantCreateResponseSchema,
   adminParticipantDetailSchema,
   adminParticipantInviteRequestSchema,
   adminParticipantInviteResponseSchema,
@@ -144,6 +146,71 @@ describe('CS-SUPPORT-01 contracts', () => {
         },
       }).profile.networkingEnabled,
     ).toBe(true);
+  });
+
+  it('validates manual participant creation and its audited result', () => {
+    const request = adminParticipantCreateRequestSchema.parse({
+      reason: 'Registrace hosta mimo SimpleShop.',
+      profile: {
+        firstName: 'Ruční',
+        lastName: 'Účastník',
+        contactEmail: ' RUCNI@example.test ',
+        phone: null,
+        company: '',
+        jobTitle: '',
+      },
+    });
+    expect(request.profile.contactEmail).toBe('rucni@example.test');
+
+    const detail = adminParticipantDetailSchema.parse({
+      eventId: ids.event,
+      participantId: ids.participant,
+      ticketId: ids.ticket,
+      firstName: request.profile.firstName,
+      lastName: request.profile.lastName,
+      contactEmail: request.profile.contactEmail,
+      phone: null,
+      company: '',
+      jobTitle: '',
+      introduction: '',
+      linkedinUrl: null,
+      todayHunting: [],
+      networkingEnabled: false,
+      moderationStatus: 'visible',
+      onboardingCompleted: false,
+      membershipStatus: 'active',
+      invitation: { status: 'not_sent', lastSentAt: null },
+      ticket: {
+        source: 'ticket',
+        referenceSuffix: 'M1234567',
+        externalId: null,
+        orderExternalId: null,
+        state: 'active',
+        claimedAt: '2026-09-02T10:00:00.000Z',
+        version: 1,
+        availableActions: ['block'],
+      },
+      checkIn: null,
+      reservations: [],
+      profileVersion: 1,
+      createdAt: '2026-09-02T10:00:00.000Z',
+      updatedAt: '2026-09-02T10:00:00.000Z',
+    });
+    expect(
+      adminParticipantCreateResponseSchema.parse({
+        eventId: ids.event,
+        outcome: 'created',
+        detail,
+        createdAt: '2026-09-02T10:00:00.000Z',
+        audit: { auditId: ids.ticketTwo },
+      }).detail.invitation.status,
+    ).toBe('not_sent');
+    expect(
+      adminParticipantCreateRequestSchema.safeParse({
+        ...request,
+        reason: 'krátké',
+      }).success,
+    ).toBe(false);
   });
 
   it('binds a sent invitation receipt to one participant and delivery time', () => {

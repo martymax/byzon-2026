@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  adminParticipantCreateRequestSchema,
   adminParticipantListRequestSchema,
   adminParticipantUpdateRequestSchema,
+  type AdminParticipantCreateRequest,
   type AdminParticipantDetail,
   type AdminParticipantListItem,
   type AdminParticipantNetworkingState,
@@ -18,10 +20,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type ReactNode,
 } from 'react';
 
 import {
+  requestAdminParticipantCreate,
   requestAdminParticipantDetail,
   requestAdminParticipantInvite,
   requestAdminParticipantList,
@@ -30,10 +34,13 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { AdminFormErrorSummary } from './admin-form-error-summary';
+import { AdminModal } from './admin-modal';
 import { supportActionLabels, ticketStateLabels } from './admin-ui-registry';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
+  isAmbiguousAdminMutationFailure,
   isStaleAdminFailure,
 } from './admin-workspace-runtime';
 import {
@@ -53,6 +60,21 @@ const bulkActions = [
   'block',
   'reactivate',
 ] as const satisfies readonly ParticipantBulkAction[];
+
+const emptyParticipantCreateForm = {
+  firstName: '',
+  lastName: '',
+  contactEmail: '',
+  phone: '',
+  company: '',
+  jobTitle: '',
+  reason: '',
+};
+
+type PendingParticipantCreate = Readonly<{
+  body: AdminParticipantCreateRequest;
+  idempotencyKey: string;
+}>;
 
 const networkingStateLabels: Record<AdminParticipantNetworkingState, string> = {
   enabled: 'Zapnutý',
@@ -413,6 +435,14 @@ export const AdminSupportWorkspace = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(emptyParticipantCreateForm);
+  const [createAttempted, setCreateAttempted] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingCreate, setPendingCreate] =
+    useState<PendingParticipantCreate | null>(null);
+  const [reload, setReload] = useState(0);
   const [bulkAction, setBulkAction] = useState<ParticipantBulkAction | null>(
     null,
   );
@@ -482,7 +512,100 @@ export const AdminSupportWorkspace = () => {
     const timeout = window.setTimeout(() => void load(), query ? 250 : 0);
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, ticketState, networkingState, eventId]);
+  }, [query, ticketState, networkingState, eventId, reload]);
+
+  const createCandidate = adminParticipantCreateRequestSchema.safeParse({
+    reason: createForm.reason,
+    profile: {
+      firstName: createForm.firstName.trim(),
+      lastName: createForm.lastName.trim(),
+      contactEmail: createForm.contactEmail,
+      phone: createForm.phone.trim() || null,
+      company: createForm.company,
+      jobTitle: createForm.jobTitle,
+    },
+  });
+  const invalidCreateFields = new Set(
+    createCandidate.success
+      ? []
+      : createCandidate.error.issues.map((issue) => issue.path.join('.')),
+  );
+
+  const closeCreate = () => {
+    if (createBusy) return;
+    setCreateOpen(false);
+    setCreateForm(emptyParticipantCreateForm);
+    setCreateAttempted(false);
+    setCreateError(null);
+    setPendingCreate(null);
+  };
+
+  const executeCreate = async (change: PendingParticipantCreate) => {
+    setCreateBusy(true);
+    setCreateError(null);
+    const result = await requestAdminParticipantCreate(
+      api,
+      eventId,
+      change.body,
+      change.idempotencyKey,
+    );
+    setCreateBusy(false);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        setCreateOpen(false);
+        setPendingCreate(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (!isAmbiguousAdminMutationFailure(result)) setPendingCreate(null);
+      const duplicateEmail =
+        result.failure.kind === 'problem' &&
+        result.failure.problem.code === 'VALIDATION_FAILED' &&
+        result.failure.problem.fieldErrors?.['profile.contactEmail']?.some(
+          (message) => message.toLowerCase().includes('already exists'),
+        );
+      setCreateError(
+        duplicateEmail
+          ? 'Účastník s tímto e-mailem už v akci existuje.'
+          : adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      return;
+    }
+    if (result.kind !== 'success') {
+      setCreateError('Server nepotvrdil vytvoření účastníka.');
+      return;
+    }
+    const displayName = `${result.data.detail.firstName} ${result.data.detail.lastName}`;
+    setNotice(
+      result.data.outcome === 'already_applied'
+        ? `Účastník ${displayName} už byl vytvořen při předchozím pokusu.`
+        : `Účastník ${displayName} byl vytvořen. Může se přihlásit svým e-mailem nebo mu můžete poslat pozvánku.`,
+    );
+    setCreateOpen(false);
+    setCreateForm(emptyParticipantCreateForm);
+    setCreateAttempted(false);
+    setCreateError(null);
+    setPendingCreate(null);
+    setQuery('');
+    setTicketState('');
+    setNetworkingState('');
+    setReload((value) => value + 1);
+  };
+
+  const submitCreate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateAttempted(true);
+    setCreateError(null);
+    if (!createCandidate.success) return;
+    const change = {
+      body: createCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('participant-create'),
+    };
+    setPendingCreate(change);
+    void executeCreate(change);
+  };
 
   const selected = useMemo(
     () => items.filter(({ participantId }) => selectedIds.has(participantId)),
@@ -587,9 +710,24 @@ export const AdminSupportWorkspace = () => {
           <h1>Účastníci</h1>
           <p>Kompletní přehled účastníků, jejich přístupu a networkingu.</p>
         </div>
-        <Link className={styles.secondaryButton} href="/admin/reporty">
-          Exportovat seznam
-        </Link>
+        <div className={styles.participantHeaderActions}>
+          {canMutate ? (
+            <button
+              className={styles.button}
+              onClick={() => {
+                setCreateOpen(true);
+                setCreateError(null);
+                setNotice(null);
+              }}
+              type="button"
+            >
+              Přidat účastníka
+            </button>
+          ) : null}
+          <Link className={styles.secondaryButton} href="/admin/reporty">
+            Exportovat seznam
+          </Link>
+        </div>
       </header>
 
       <section
@@ -862,6 +1000,227 @@ export const AdminSupportWorkspace = () => {
                 : 'Obnovit vybrané přístupy?'
           }
         />
+      ) : null}
+
+      {createOpen ? (
+        <AdminModal
+          dismissDisabled={createBusy}
+          labelledBy="participant-create-title"
+          onDismiss={closeCreate}
+        >
+          <div className={styles.dialogHeader}>
+            <div>
+              <p className={styles.eyebrow}>Nový účastník</p>
+              <h2 id="participant-create-title" tabIndex={-1}>
+                Přidat účastníka ručně
+              </h2>
+            </div>
+            <button
+              className={styles.secondaryButton}
+              disabled={createBusy}
+              onClick={closeCreate}
+              type="button"
+            >
+              Zavřít
+            </button>
+          </div>
+          <form onSubmit={submitCreate}>
+            <div className={styles.dialogBody}>
+              <p className={styles.muted}>
+                Účastník dostane aktivní přístup do této akce stejně jako po
+                importu ze SimpleShopu. Pozvánku mu můžete poslat následně z
+                jeho detailu.
+              </p>
+              {createError ? (
+                <AdminFormErrorSummary
+                  descriptionId="participant-create-server-error"
+                  heading="Účastníka nelze vytvořit"
+                  message={createError}
+                />
+              ) : null}
+              {createAttempted && !createCandidate.success ? (
+                <AdminFormErrorSummary
+                  descriptionId="participant-create-validation-error"
+                  heading="Zkontrolujte zadané údaje"
+                  message="Vyplňte jméno, příjmení, platný e-mail a důvod vytvoření o alespoň 8 znacích. Telefon zadejte v mezinárodním formátu, například +420777123456."
+                />
+              ) : null}
+              <div className={styles.participantFormGrid}>
+                <label className={styles.field}>
+                  <span>Jméno</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.firstName')
+                    }
+                    autoComplete="given-name"
+                    data-modal-initial-focus="true"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={128}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        firstName: event.target.value,
+                      }))
+                    }
+                    required
+                    value={createForm.firstName}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Příjmení</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.lastName')
+                    }
+                    autoComplete="family-name"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={128}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        lastName: event.target.value,
+                      }))
+                    }
+                    required
+                    value={createForm.lastName}
+                  />
+                </label>
+                <label
+                  className={`${styles.field} ${styles.participantWideField}`}
+                >
+                  <span>E-mail</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.contactEmail')
+                    }
+                    autoComplete="email"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={320}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        contactEmail: event.target.value,
+                      }))
+                    }
+                    required
+                    type="email"
+                    value={createForm.contactEmail}
+                  />
+                  <span className={styles.helper}>
+                    E-mail je přihlašovací identita účastníka a musí být v akci
+                    jedinečný.
+                  </span>
+                </label>
+                <label className={styles.field}>
+                  <span>Telefon (nepovinný)</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.phone')
+                    }
+                    autoComplete="tel"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={16}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                    placeholder="+420777123456"
+                    type="tel"
+                    value={createForm.phone}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Firma (nepovinná)</span>
+                  <input
+                    autoComplete="organization"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={160}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        company: event.target.value,
+                      }))
+                    }
+                    value={createForm.company}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Pozice (nepovinná)</span>
+                  <input
+                    autoComplete="organization-title"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={160}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        jobTitle: event.target.value,
+                      }))
+                    }
+                    value={createForm.jobTitle}
+                  />
+                </label>
+                <label
+                  className={`${styles.field} ${styles.participantWideField}`}
+                >
+                  <span>Důvod vytvoření</span>
+                  <textarea
+                    aria-invalid={
+                      createAttempted && invalidCreateFields.has('reason')
+                    }
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={500}
+                    minLength={8}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        reason: event.target.value,
+                      }))
+                    }
+                    placeholder="Např. registrace hosta mimo SimpleShop"
+                    required
+                    value={createForm.reason}
+                  />
+                  <span className={styles.helper}>
+                    Důvod se uloží do historie změn.
+                  </span>
+                </label>
+              </div>
+              {pendingCreate && createError ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={createBusy}
+                  onClick={() => void executeCreate(pendingCreate)}
+                  type="button"
+                >
+                  Zopakovat přesně stejný pokus
+                </button>
+              ) : null}
+            </div>
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.secondaryButton}
+                disabled={createBusy}
+                onClick={closeCreate}
+                type="button"
+              >
+                Zrušit a zavřít
+              </button>
+              <button
+                className={styles.button}
+                disabled={createBusy || pendingCreate !== null}
+                type="submit"
+              >
+                {createBusy ? 'Vytvářím…' : 'Vytvořit účastníka'}
+              </button>
+            </div>
+          </form>
+        </AdminModal>
       ) : null}
     </div>
   );
