@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  participantProgramFiltersSchema,
-  type ParticipantProgramResponse,
-} from '@byzon/domain/contracts';
+import type { ParticipantProgramResponse } from '@byzon/domain/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -34,7 +31,6 @@ const programScrollKey = (eventId: string) => `byzon.program.scroll.${eventId}`;
 
 interface ProgramPreferences {
   readonly day: string;
-  readonly type: string;
 }
 
 const readSessionValue = (key: string): string | null => {
@@ -54,7 +50,7 @@ const writeSessionValue = (key: string, value: string): void => {
 };
 
 const readProgramPreferences = (): ProgramPreferences => {
-  if (typeof window === 'undefined') return { day: '', type: '' };
+  if (typeof window === 'undefined') return { day: '' };
   const query = new URL(window.location.href).searchParams;
   const stored = readSessionValue(PROGRAM_FILTER_KEY);
   let storedQuery = new URLSearchParams();
@@ -66,14 +62,7 @@ const readProgramPreferences = (): ProgramPreferences => {
     }
   }
   const day = query.get('day') ?? storedQuery.get('day') ?? undefined;
-  const type = query.get('type') ?? storedQuery.get('type') ?? undefined;
-  const parsed = participantProgramFiltersSchema.safeParse({
-    ...(day ? { day } : {}),
-    ...(type ? { type } : {}),
-  });
-  return parsed.success
-    ? { day: parsed.data.day ?? '', type: parsed.data.type ?? '' }
-    : { day: '', type: '' };
+  return day && day.length <= 128 ? { day } : { day: '' };
 };
 
 const useProgramContinuity = (
@@ -88,33 +77,23 @@ const useProgramContinuity = (
     !data.program.days.some(({ id }) => id === preferences.day)
       ? ''
       : preferences.day;
-  const type =
-    data &&
-    preferences.type &&
-    !data.program.sessions.some(
-      ({ type: sessionType }) => sessionType === preferences.type,
-    )
-      ? ''
-      : preferences.type;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const query = new URLSearchParams();
     if (day) query.set('day', day);
-    if (type) query.set('type', type);
     writeSessionValue(PROGRAM_FILTER_KEY, query.toString());
 
     const url = new URL(window.location.href);
     if (day) url.searchParams.set('day', day);
     else url.searchParams.delete('day');
-    if (type) url.searchParams.set('type', type);
-    else url.searchParams.delete('type');
+    url.searchParams.delete('type');
     try {
       window.history.replaceState(window.history.state, '', url);
     } catch {
       // A locked-down embed may forbid history writes; filtering still works.
     }
-  }, [day, type]);
+  }, [day]);
 
   const rememberScroll = useCallback(() => {
     writeSessionValue(
@@ -145,24 +124,144 @@ const useProgramContinuity = (
 
   return {
     day,
-    type,
     setDay: (day: string) => setPreferences((current) => ({ ...current, day })),
-    setType: (type: string) =>
-      setPreferences((current) => ({ ...current, type })),
-    reset: () => setPreferences({ day: '', type: '' }),
     rememberScroll,
   };
 };
 
 const sessionHref = (
-  sessionId: string,
-  preferences: Pick<ProgramPreferences, 'day' | 'type'>,
+  session: ParticipantProgramResponse['program']['sessions'][number],
+  preferences: ProgramPreferences,
 ): string => {
   const query = new URLSearchParams();
   if (preferences.day) query.set('day', preferences.day);
-  if (preferences.type) query.set('type', preferences.type);
+  if (session.type === 'coaching') query.set('coaching', 'choose');
   const suffix = query.toString();
-  return `/app/program/${sessionId}${suffix ? `?${suffix}` : ''}`;
+  return `/app/program/${session.id}${suffix ? `?${suffix}` : ''}`;
+};
+
+const weekday = (localDate: string): string => {
+  const label = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'UTC',
+    weekday: 'long',
+  }).format(new Date(`${localDate}T00:00:00Z`));
+  return `${label.charAt(0).toLocaleUpperCase('cs-CZ')}${label.slice(1)}`;
+};
+
+type ProgramSession = ParticipantProgramResponse['program']['sessions'][number];
+type ProgramRoom = ParticipantProgramResponse['program']['rooms'][number];
+
+const coachingCoachName = (
+  session: ProgramSession,
+  rooms: readonly ProgramRoom[],
+): string => {
+  const titleMatch = /^Koučink\s*[–—-]\s*(.+)$/iu.exec(session.title.trim());
+  if (titleMatch?.[1]) return titleMatch[1].trim();
+  const room = rooms.find(({ id }) => id === session.roomId);
+  const roomMatch = /Koučovací zóna\s*[·–—-]\s*(.+)$/iu.exec(room?.name ?? '');
+  return roomMatch?.[1]?.trim() || 'Kouč bude upřesněn';
+};
+
+const CoachingSlotChoice = ({
+  agendaApi,
+  eventId,
+  initialSessionId,
+  rooms,
+  sessions,
+  showAgendaAction,
+}: {
+  readonly agendaApi?: ApiPort;
+  readonly eventId: string;
+  readonly initialSessionId: string | null;
+  readonly rooms: readonly ProgramRoom[];
+  readonly sessions: readonly ProgramSession[];
+  readonly showAgendaAction: boolean;
+}) => {
+  const availableSessions = useMemo(
+    () =>
+      [...sessions].sort((first, second) =>
+        coachingCoachName(first, rooms).localeCompare(
+          coachingCoachName(second, rooms),
+          'cs-CZ',
+        ),
+      ),
+    [rooms, sessions],
+  );
+  const [selectedId, setSelectedId] = useState(() =>
+    initialSessionId &&
+    availableSessions.some(({ id }) => id === initialSessionId)
+      ? initialSessionId
+      : null,
+  );
+  const selected =
+    availableSessions.find(({ id }) => id === selectedId) ?? null;
+
+  return (
+    <section
+      className="coaching-slot-choice"
+      aria-labelledby="coach-choice-title"
+    >
+      <div className="coaching-slot-choice__intro">
+        <p className="eyebrow">Koučovací zóna</p>
+        <h2 id="coach-choice-title">Vyberte si kouče</h2>
+        <p>
+          {availableSessions.length > 1
+            ? 'Každý kouč má vlastní kapacitu. '
+            : 'V tomto čase je dostupný jeden kouč. '}
+          Rezervaci dokončíte až po výběru konkrétního kouče.
+        </p>
+      </div>
+      <div
+        aria-label="Kouč pro tento čas"
+        className="coaching-slot-choice__options"
+        role="group"
+      >
+        {availableSessions.map((option) => {
+          const selectedOption = option.id === selected?.id;
+          const coachName = coachingCoachName(option, rooms);
+          return (
+            <button
+              aria-pressed={selectedOption}
+              className="coaching-slot-choice__option"
+              disabled={option.status === 'cancelled'}
+              key={option.id}
+              onClick={() => setSelectedId(option.id)}
+              type="button"
+            >
+              <span>{coachName}</span>
+              <small>
+                {option.status === 'cancelled'
+                  ? 'Tento kouč není v daném čase dostupný'
+                  : selectedOption
+                    ? 'Vybráno'
+                    : 'Vybrat kouče'}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      {selected ? (
+        <div className="coaching-slot-choice__selected" aria-live="polite">
+          <h2>{coachingCoachName(selected, rooms)}</h2>
+          {showAgendaAction && selected.status !== 'cancelled' ? (
+            <ParticipantSessionAgendaAction
+              eventId={eventId}
+              sessionId={selected.id}
+              {...(agendaApi ? { agendaApi } : {})}
+            />
+          ) : null}
+          <ParticipantSessionCalendarExport
+            eventId={eventId}
+            session={selected}
+          />
+        </div>
+      ) : (
+        <p className="coaching-slot-choice__prompt">
+          Pro zobrazení rezervace nejdřív vyberte jednoho z dostupných koučů.
+        </p>
+      )}
+    </section>
+  );
 };
 
 export const ProgramView = ({
@@ -187,11 +286,9 @@ export const ProgramView = ({
   const sessions = useMemo(
     () =>
       data?.program.sessions.filter(
-        (session) =>
-          (!activeDay || session.dayId === activeDay.id) &&
-          (!continuity.type || session.type === continuity.type),
+        (session) => !activeDay || session.dayId === activeDay.id,
       ) ?? [],
-    [activeDay, continuity.type, data],
+    [activeDay, data],
   );
 
   if (state.status !== 'ready') {
@@ -256,49 +353,19 @@ export const ProgramView = ({
               tabIndex={selected ? 0 : -1}
               type="button"
             >
-              {day.title}
+              {weekday(day.localDate)}
             </button>
           );
         })}
       </div>
-      <div className="program-day-toolbar">
+      <div className="program-day-toolbar program-day-toolbar--static">
         {activeDay ? (
           <p className="program-day-meta">
             {participantProgramDateLabel(activeDay.localDate)}
           </p>
         ) : null}
-        <fieldset className="filter-bar program-type-filter">
-          <legend className="ui-visually-hidden">Filtry programu</legend>
-          <label>
-            Typ
-            <select
-              value={continuity.type}
-              onChange={(event) => continuity.setType(event.target.value)}
-            >
-              <option value="">Všechny typy</option>
-              {[
-                ...new Set(
-                  state.data.program.sessions.map((session) => session.type),
-                ),
-              ].map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-        </fieldset>
-        <p className="result-count" aria-live="polite">
-          {sessions.length} bodů programu
-        </p>
       </div>
-      {sessions.length === 0 ? (
-        <EmptyContent
-          title="Tomuto filtru nic neodpovídá"
-          detail="Zrušte filtry a zobrazte celý publikovaný program."
-          action={{ label: 'Zrušit filtry', onClick: continuity.reset }}
-        />
-      ) : activeDay ? (
+      {activeDay ? (
         <div
           aria-labelledby={`program-day-tab-${activeDay.id}`}
           id="program-day-panel"
@@ -309,7 +376,7 @@ export const ProgramView = ({
             onOpenSession={continuity.rememberScroll}
             rooms={state.data.program.rooms}
             sessions={sessions}
-            sessionHref={(sessionId) => sessionHref(sessionId, continuity)}
+            sessionHref={(session) => sessionHref(session, continuity)}
           />
         </div>
       ) : null}
@@ -321,6 +388,7 @@ export const SessionView = ({
   agendaApi,
   eventId,
   sessionId,
+  chooseCoach = false,
   showAgendaAction = false,
   returnQuery = '',
   returnOrigin = 'program',
@@ -329,6 +397,7 @@ export const SessionView = ({
   agendaApi?: ApiPort;
   eventId: string;
   sessionId: string;
+  chooseCoach?: boolean;
   showAgendaAction?: boolean;
   returnQuery?: string;
   returnOrigin?: 'agenda' | 'program';
@@ -336,8 +405,11 @@ export const SessionView = ({
 }) => {
   const state = useParticipantProgram(eventId, api);
   if (state.status !== 'ready') {
+    const loginQuery = new URLSearchParams();
+    if (returnOrigin === 'agenda') loginQuery.set('from', 'agenda');
+    if (chooseCoach) loginQuery.set('coaching', 'choose');
     const loginReturnTo = `/app/program/${encodeURIComponent(sessionId)}${
-      returnOrigin === 'agenda' ? '?from=agenda' : ''
+      loginQuery.size > 0 ? `?${loginQuery.toString()}` : ''
     }`;
     return (
       <ResourceStatus
@@ -359,49 +431,79 @@ export const SessionView = ({
     );
   }
   const room = state.data.program.rooms.find(({ id }) => id === session.roomId);
+  const coachingSessions =
+    session.type === 'coaching'
+      ? state.data.program.sessions.filter(
+          (candidate) =>
+            candidate.type === 'coaching' &&
+            candidate.dayId === session.dayId &&
+            candidate.startsAt === session.startsAt &&
+            candidate.endsAt === session.endsAt,
+        )
+      : [];
+  const coachingSlot = coachingSessions.length > 0;
   const backHref =
     returnOrigin === 'agenda'
       ? '/app/agenda'
       : `/app/program${returnQuery ? `?${returnQuery}` : ''}`;
   return (
     <article className="detail-card">
-      <p className="eyebrow">{session.type}</p>
+      <p className="eyebrow">{coachingSlot ? 'Koučink' : session.type}</p>
       <h1 data-route-heading tabIndex={-1}>
-        {session.title}
+        {coachingSlot ? 'Koučovací slot' : session.title}
       </h1>
       <p className="detail-meta">
         <time dateTime={session.startsAt}>
           {time(session.startsAt)}–{time(session.endsAt)}
         </time>
-        {room ? ` · ${room.name}` : ''}
+        {coachingSlot ? ' · Koučovací zóna' : room ? ` · ${room.name}` : ''}
       </p>
       {session.status === 'cancelled' ? (
         <p className="status-notice" role="status">
           Tento bod programu byl zrušen.
         </p>
       ) : null}
-      {session.summary ? <p className="lead">{session.summary}</p> : null}
-      {session.description ? (
+      {coachingSlot ? (
+        <p className="lead">
+          Vyberte si konkrétního kouče a následně dokončete rezervaci místa.
+        </p>
+      ) : session.summary ? (
+        <p className="lead">{session.summary}</p>
+      ) : null}
+      {!coachingSlot && session.description ? (
         <div className="prose">
           {session.description.split('\n\n').map((paragraph, index) => (
             <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
           ))}
         </div>
       ) : null}
-      {showAgendaAction && session.status !== 'cancelled' ? (
+      {coachingSlot ? (
+        <CoachingSlotChoice
+          eventId={eventId}
+          initialSessionId={chooseCoach ? null : session.id}
+          rooms={state.data.program.rooms}
+          sessions={coachingSessions}
+          showAgendaAction={showAgendaAction}
+          {...(agendaApi ? { agendaApi } : {})}
+        />
+      ) : showAgendaAction && session.status !== 'cancelled' ? (
         <ParticipantSessionAgendaAction
           eventId={eventId}
           sessionId={session.id}
           {...(agendaApi ? { agendaApi } : {})}
         />
       ) : null}
-      <ParticipantSessionCalendarExport eventId={eventId} session={session} />
-      {session.questionsEnabled && session.status !== 'cancelled' ? (
+      {!coachingSlot ? (
+        <ParticipantSessionCalendarExport eventId={eventId} session={session} />
+      ) : null}
+      {!coachingSlot &&
+      session.questionsEnabled &&
+      session.status !== 'cancelled' ? (
         <Link className="ui-button" href={`/app/interakce/${session.id}`}>
           Položit dotaz moderátorovi
         </Link>
       ) : null}
-      {session.status !== 'cancelled' ? (
+      {!coachingSlot && session.status !== 'cancelled' ? (
         <SessionRating sessionId={session.id} endsAt={session.endsAt} />
       ) : null}
       <Link className="text-link" href={backHref}>

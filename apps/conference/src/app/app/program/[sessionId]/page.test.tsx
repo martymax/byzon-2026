@@ -47,10 +47,31 @@ describe('participant session agenda boundary', () => {
 
       expect(pageMocks.sessionView).toHaveBeenCalledWith(
         expect.objectContaining({
+          chooseCoach: false,
           returnOrigin,
           showAgendaAction: true,
         }),
       );
     },
   );
+
+  it('opens a coaching slot without preselecting the representative coach', async () => {
+    pageMocks.loadCurrentEventId.mockResolvedValueOnce(
+      '019f7e6f-62ed-7c87-bce7-b742be58ce0b',
+    );
+
+    renderToStaticMarkup(
+      await SessionPage({
+        params: Promise.resolve({ sessionId: 'coaching-session-1' }),
+        searchParams: Promise.resolve({ coaching: 'choose' }),
+      }),
+    );
+
+    expect(pageMocks.sessionView).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chooseCoach: true,
+        sessionId: 'coaching-session-1',
+      }),
+    );
+  });
 });

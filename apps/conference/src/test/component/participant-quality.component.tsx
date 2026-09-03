@@ -155,7 +155,6 @@ describe('F2-06 participant shell and program quality gate', () => {
     });
     const navigationElement = navigation.element();
     const pageElement = screen.getByTestId('participant-program').element();
-    const filters = pageElement.querySelectorAll('select');
     const tabs =
       pageElement.querySelectorAll<HTMLButtonElement>('[role="tab"]');
     const calendar = pageElement.querySelector<HTMLElement>(
@@ -181,10 +180,7 @@ describe('F2-06 participant shell and program quality gate', () => {
     expect(
       navigationElement.querySelector('a[href="/app/oznameni"]'),
     ).toBeNull();
-    expect(filters).toHaveLength(1);
-    for (const filter of filters) {
-      expect(filter.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    }
+    expect(pageElement.querySelectorAll('select')).toHaveLength(0);
     expect(tabs).toHaveLength(2);
     for (const tab of tabs) {
       expect(tab.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);

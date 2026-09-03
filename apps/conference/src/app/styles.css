@@ -921,6 +921,10 @@ main > .ui-participant-nav-spacer {
   justify-content: space-between;
   margin-bottom: 1.125rem;
 }
+.program-day-toolbar--static {
+  align-items: center;
+  justify-content: flex-start;
+}
 .program-day-meta {
   min-height: 2.25rem;
   display: inline-flex;
@@ -1067,6 +1071,9 @@ main > .ui-participant-nav-spacer {
   border-radius: 0.375rem;
   background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
+}
+.program-cal-event--span-all {
+  margin-inline: 0.375rem;
 }
 .program-cal-event__inner {
   width: 100%;
@@ -1320,6 +1327,91 @@ main > .ui-participant-nav-spacer {
   margin-bottom: 0.7rem;
   color: var(--ink);
   font-size: 2rem;
+}
+.coaching-slot-choice {
+  display: grid;
+  gap: var(--byzon-space-5);
+  margin-block: var(--byzon-space-6);
+  padding-block-start: var(--byzon-space-5);
+  border-block-start: 1px solid var(--byzon-border);
+}
+.coaching-slot-choice__intro {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.coaching-slot-choice__intro .eyebrow {
+  margin: 0;
+}
+.coaching-slot-choice__intro h2,
+.coaching-slot-choice__selected h2 {
+  margin: 0;
+}
+.coaching-slot-choice__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--byzon-space-3);
+}
+.coaching-slot-choice__option {
+  min-height: 5.5rem;
+  display: grid;
+  align-content: center;
+  gap: var(--byzon-space-1);
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-border-strong);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface);
+  color: var(--byzon-ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color var(--byzon-motion-normal) var(--byzon-ease),
+    border-color var(--byzon-motion-normal) var(--byzon-ease),
+    box-shadow var(--byzon-motion-normal) var(--byzon-ease);
+}
+.coaching-slot-choice__option span {
+  font: 650 1.15rem/1.2 var(--byzon-font-display);
+}
+.coaching-slot-choice__option small {
+  color: var(--byzon-text-muted);
+  font-size: 0.9rem;
+}
+.coaching-slot-choice__option:hover:not(:disabled),
+.coaching-slot-choice__option:focus-visible {
+  border-color: var(--byzon-brand);
+  box-shadow: 0 0 0 3px var(--byzon-brand-glow);
+}
+.coaching-slot-choice__option:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.coaching-slot-choice__option[aria-pressed='true'] {
+  border-color: var(--byzon-brand-active);
+  background: var(--byzon-brand-subtle);
+  box-shadow: inset 5px 0 0 var(--byzon-brand);
+}
+.coaching-slot-choice__option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.coaching-slot-choice__selected {
+  display: grid;
+  gap: var(--byzon-space-3);
+  padding: var(--byzon-space-4);
+  border: 1px solid var(--byzon-brand-glow);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-brand-subtle);
+}
+.coaching-slot-choice__selected .agenda-session-action,
+.coaching-slot-choice__selected .session-calendar-export {
+  margin-block: 0;
+  background: var(--byzon-surface);
+}
+.coaching-slot-choice__prompt {
+  padding: var(--byzon-space-4);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface-soft);
+  color: var(--byzon-text-muted);
 }
 .detail-meta {
   margin: -0.7rem 0 1.2rem;
@@ -2167,6 +2259,9 @@ main > .ui-participant-nav-spacer {
 @media (prefers-reduced-motion: reduce) {
   .agenda-loading .ui-skeleton__line {
     animation: none;
+  }
+  .coaching-slot-choice__option {
+    transition: none;
   }
 }
 

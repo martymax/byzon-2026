@@ -26,6 +26,11 @@ interface CalendarRows {
 const SLOT_MINUTES = 15;
 const EVENING_START_MINUTES = 18 * 60 + 15;
 const UNASSIGNED_ROOM_ID = 'unassigned';
+const COACHING_STAGE_ID = 'coaching-zone';
+const COACHING_STAGE_NAME = 'Koučovací zóna';
+const COACHING_STAGE_DESCRIPTION =
+  'Koučování probíhá v paralelních 30minutových slotech.';
+const COACHING_SLOT_TITLE = 'Koučovací sloty';
 
 const pragueParts = (value: string) => {
   const values = new Map(
@@ -96,7 +101,7 @@ const sessionClass = (session: ProgramSession): string => {
   if (session.type === 'networking' || session.type === 'gala') return 'social';
   if (/networking|afterparty|galakoktejl/i.test(session.title)) return 'social';
   if (
-    /^(registrace|úvod|společně|volný program|tombola|společné foto|poděkování)/i.test(
+    /^(registrace|úvod|zahájení|společně|volný program|tombola|společné foto|poděkování)/i.test(
       session.title,
     )
   )
@@ -107,7 +112,18 @@ const sessionClass = (session: ProgramSession): string => {
 const isCondensed = (session: ProgramSession): boolean =>
   session.type === 'break' ||
   session.type === 'meal' ||
-  session.title.trim().toLocaleLowerCase('cs-CZ') === 'registrace';
+  session.title.trim().toLocaleLowerCase('cs-CZ') === 'registrace' ||
+  (session.title.trim().toLocaleLowerCase('cs-CZ') === 'volný program' &&
+    Date.parse(session.endsAt) - Date.parse(session.startsAt) >= 60 * 60_000);
+
+const spansAllStages = (session: ProgramSession): boolean => {
+  const title = session.title.trim().toLocaleLowerCase('cs-CZ');
+  const duration = Date.parse(session.endsAt) - Date.parse(session.startsAt);
+  return (
+    (title === 'registrace' && duration > SLOT_MINUTES * 60_000) ||
+    (title === 'volný program' && duration >= 60 * 60_000)
+  );
+};
 
 const stageIconKind = (name: string) => {
   const normalized = name.toLocaleLowerCase('cs-CZ');
@@ -183,24 +199,112 @@ const StageIcon = ({ name }: { readonly name: string }) => {
   }
 };
 
-const stagesFor = (
+const isCoachingRoom = (room: ProgramRoom): boolean =>
+  room.name
+    .trim()
+    .toLocaleLowerCase('cs-CZ')
+    .startsWith(COACHING_STAGE_NAME.toLocaleLowerCase('cs-CZ'));
+
+const collapsedCoachingSessions = (
+  sessions: readonly ProgramSession[],
+  coachingRoomId: string,
+): readonly ProgramSession[] => {
+  const groups = new Map<string, ProgramSession[]>();
+  for (const session of sessions.filter(({ type }) => type === 'coaching')) {
+    const key = [session.dayId, session.startsAt, session.endsAt].join('|');
+    const group = groups.get(key) ?? [];
+    group.push(session);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => {
+    const candidates = [...group].sort(compareSessions);
+    const representative =
+      candidates.find(({ status }) => status !== 'cancelled') ?? candidates[0]!;
+    return {
+      ...representative,
+      roomId: coachingRoomId,
+      title: COACHING_SLOT_TITLE,
+      summary: null,
+      status: candidates.every(({ status }) => status === 'cancelled')
+        ? ('cancelled' as const)
+        : ('published' as const),
+    };
+  });
+};
+
+const rangesOverlap = (
+  first: Pick<ProgramSession, 'endsAt' | 'startsAt'>,
+  second: Pick<ProgramSession, 'endsAt' | 'startsAt'>,
+): boolean =>
+  Date.parse(first.startsAt) < Date.parse(second.endsAt) &&
+  Date.parse(first.endsAt) > Date.parse(second.startsAt);
+
+const participantProgramStagesFor = (
   sessions: readonly ProgramSession[],
   rooms: readonly ProgramRoom[],
 ): readonly ProgramStage[] => {
+  const genericCoachingRoom = rooms.find(
+    (room) =>
+      room.name.trim().toLocaleLowerCase('cs-CZ') ===
+      COACHING_STAGE_NAME.toLocaleLowerCase('cs-CZ'),
+  );
+  const firstCoachingRoom = rooms.find(isCoachingRoom);
+  const coachingRoomId =
+    genericCoachingRoom?.id ?? firstCoachingRoom?.id ?? COACHING_STAGE_ID;
+  const coachingSessions = collapsedCoachingSessions(sessions, coachingRoomId);
+  const displaySessions = [
+    ...sessions.filter(
+      (session) =>
+        session.type !== 'coaching' &&
+        !(
+          session.roomId === coachingRoomId &&
+          (session.type === 'break' || session.type === 'meal') &&
+          coachingSessions.some((coaching) => rangesOverlap(session, coaching))
+        ),
+    ),
+    ...coachingSessions,
+  ];
   const byRoom = new Map<string, ProgramSession[]>();
-  for (const session of sessions) {
+  for (const session of displaySessions) {
     const roomId = session.roomId ?? UNASSIGNED_ROOM_ID;
     const roomSessions = byRoom.get(roomId) ?? [];
     roomSessions.push(session);
     byRoom.set(roomId, roomSessions);
   }
-  const stages: ProgramStage[] = rooms
+  const displayRooms = genericCoachingRoom
+    ? rooms
+    : firstCoachingRoom
+      ? rooms.map((room) =>
+          room.id === firstCoachingRoom.id
+            ? {
+                ...room,
+                name: COACHING_STAGE_NAME,
+                description: COACHING_STAGE_DESCRIPTION,
+              }
+            : room,
+        )
+      : coachingSessions.length > 0
+        ? [
+            ...rooms,
+            {
+              id: COACHING_STAGE_ID,
+              slug: COACHING_STAGE_ID,
+              name: COACHING_STAGE_NAME,
+              description: COACHING_STAGE_DESCRIPTION,
+              sortOrder: rooms.length,
+            },
+          ]
+        : rooms;
+  const stages: ProgramStage[] = displayRooms
     .filter(({ id }) => byRoom.has(id))
     .sort((first, second) => first.sortOrder - second.sortOrder)
     .map((room) => ({
       id: room.id,
       name: room.name,
-      description: room.description ?? null,
+      description:
+        room.id === coachingRoomId
+          ? COACHING_STAGE_DESCRIPTION
+          : (room.description ?? null),
       sessions: (byRoom.get(room.id) ?? []).sort(compareSessions),
     }));
   const unassigned = byRoom.get(UNASSIGNED_ROOM_ID);
@@ -330,7 +434,7 @@ const Calendar = ({
   readonly modifier?: 'compact' | 'dense';
   readonly onOpenSession: () => void;
   readonly stages: readonly ProgramStage[];
-  readonly sessionHref: (sessionId: string) => string;
+  readonly sessionHref: (session: ProgramSession) => string;
 }) => {
   const rows = useMemo(() => calendarRows(stages, day), [day, stages]);
   const startMinute = Math.min(
@@ -418,19 +522,20 @@ const Calendar = ({
             stage.sessions.map((session) => {
               const position = sessionPosition(session, day, rows);
               const short = position.span === 1 || isCondensed(session);
+              const spanAll = spansAllStages(session);
               return (
                 <article
-                  className={`program-cal-event program-cal-event--${sessionClass(session)} program-cal-event--has-link${short ? ' program-cal-event--short' : ''}`}
+                  className={`program-cal-event program-cal-event--${sessionClass(session)} program-cal-event--has-link${spanAll ? ' program-cal-event--span-all' : ''}${short ? ' program-cal-event--short' : ''}`}
                   key={session.id}
                   style={{
-                    gridColumn: stageIndex + 2,
+                    gridColumn: spanAll ? '2 / -1' : stageIndex + 2,
                     gridRow: `${String(position.row)} / span ${String(position.span)}`,
                   }}
                 >
                   <Link
                     aria-label={`Detail programu: ${session.title}`}
                     className="program-cal-event__inner program-cal-event__inner--link"
-                    href={sessionHref(session.id)}
+                    href={sessionHref(session)}
                     onClick={onOpenSession}
                   >
                     <time
@@ -481,7 +586,7 @@ const MobileAgenda = ({
   readonly label?: string;
   readonly onOpenSession: () => void;
   readonly stages: readonly ProgramStage[];
-  readonly sessionHref: (sessionId: string) => string;
+  readonly sessionHref: (session: ProgramSession) => string;
 }) => {
   const [activeStage, setActiveStage] = useState('all');
   const stageIds = stages.map(({ id }) => id);
@@ -499,24 +604,36 @@ const MobileAgenda = ({
   for (const stage of stages) {
     for (const session of stage.sessions) {
       const range = sessionRange(session, day);
-      const key = isCondensed(session)
+      const spanAll = spansAllStages(session);
+      const key = spanAll
         ? [
+            'all',
             range.start,
             range.end,
             session.title,
             session.summary,
             session.type,
           ].join('|')
-        : session.id;
+        : isCondensed(session)
+          ? [
+              range.start,
+              range.end,
+              session.title,
+              session.summary,
+              session.type,
+            ].join('|')
+          : session.id;
       const current = itemsByKey.get(key);
       if (current) {
-        current.stageIds.push(stage.id);
-        current.stageNames.push(stage.name);
+        current.stageIds.push(...(spanAll ? stageIds : [stage.id]));
+        current.stageNames.push(
+          ...(spanAll ? stages.map(({ name }) => name) : [stage.name]),
+        );
       } else {
         itemsByKey.set(key, {
           session,
-          stageIds: [stage.id],
-          stageNames: [stage.name],
+          stageIds: spanAll ? [...stageIds] : [stage.id],
+          stageNames: spanAll ? stages.map(({ name }) => name) : [stage.name],
           start: range.start,
         });
       }
@@ -581,7 +698,7 @@ const MobileAgenda = ({
                       <Link
                         aria-label={`Detail programu: ${session.title}`}
                         className="program-mobile-event__inner program-mobile-event__inner--link"
-                        href={sessionHref(session.id)}
+                        href={sessionHref(session)}
                         onClick={onOpenSession}
                       >
                         <div className="program-mobile-event__top">
@@ -636,9 +753,12 @@ const ProgramScheduleSection = ({
   readonly onOpenSession: () => void;
   readonly rooms: readonly ProgramRoom[];
   readonly sessions: readonly ProgramSession[];
-  readonly sessionHref: (sessionId: string) => string;
+  readonly sessionHref: (session: ProgramSession) => string;
 }) => {
-  const stages = useMemo(() => stagesFor(sessions, rooms), [rooms, sessions]);
+  const stages = useMemo(
+    () => participantProgramStagesFor(sessions, rooms),
+    [rooms, sessions],
+  );
   if (stages.length === 0) return null;
   return (
     <>
@@ -672,7 +792,7 @@ export const ParticipantProgramSchedule = ({
   readonly onOpenSession: () => void;
   readonly rooms: readonly ProgramRoom[];
   readonly sessions: readonly ProgramSession[];
-  readonly sessionHref: (sessionId: string) => string;
+  readonly sessionHref: (session: ProgramSession) => string;
 }) => {
   const eveningRoomIds = new Set(
     rooms
