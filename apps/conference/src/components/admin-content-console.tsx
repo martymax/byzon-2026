@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -782,6 +783,7 @@ export const AdminContentConsole = ({
   const [reconciliationRequired, setReconciliationRequired] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [localFormAvailable, setLocalFormAvailable] = useState(false);
+  const working = busy !== null;
   const operationLocked = useRef(false);
   const activeMutation = useRef<AbortController | null>(null);
   const activeResource = useRef<AdminContentResource>(initialResource);
@@ -1016,7 +1018,7 @@ export const AdminContentConsole = ({
     [items],
   );
 
-  const closeEditor = (focusList = false) => {
+  const closeEditor = useCallback((focusList = false) => {
     editorHistoryActive.current = false;
     setEditorOpen(false);
     setEditorFieldsReady(false);
@@ -1036,15 +1038,15 @@ export const AdminContentConsole = ({
       if (target?.isConnected) target.focus({ preventScroll: true });
       else listTitleRef.current?.focus({ preventScroll: true });
     });
-  };
+  }, []);
 
-  const requestEditorClose = () => {
+  const requestEditorClose = useCallback(() => {
     if (working) return;
     if (dirty && !window.confirm('Zahodit neuložené změny formuláře?')) {
       return;
     }
     closeEditor();
-  };
+  }, [closeEditor, dirty, working]);
 
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
@@ -1214,8 +1216,19 @@ export const AdminContentConsole = ({
   };
 
   const fieldErrors = error?.fieldErrors ?? {};
-  const working = busy !== null;
   const writesBlocked = working || reconciliationRequired || !snapshotReady;
+
+  useLayoutEffect(() => {
+    if (!editorOpen) return;
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      requestEditorClose();
+    };
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [editorOpen, requestEditorClose]);
+
   const bodyFieldName = bodyFieldNames[resource];
   const area = resourceArea[selectedResource];
   const areaResources = contentAreaResources[area];

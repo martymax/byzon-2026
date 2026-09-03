@@ -205,6 +205,11 @@ describe('admin content user journeys', () => {
       .element(screen.getByRole('dialog', { name: 'Přidat stránku' }))
       .toBeVisible();
     await userEvent.keyboard('{Escape}');
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole('dialog', { name: 'Přidat stránku' }).elements(),
+      ).toHaveLength(0),
+    );
     await screen.getByRole('button', { name: 'Časté dotazy' }).click();
     await expect
       .element(screen.getByRole('button', { name: 'Přidat otázku' }))
@@ -214,6 +219,11 @@ describe('admin content user journeys', () => {
       .element(screen.getByRole('dialog', { name: 'Přidat otázku' }))
       .toBeVisible();
     await userEvent.keyboard('{Escape}');
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole('dialog', { name: 'Přidat otázku' }).elements(),
+      ).toHaveLength(0),
+    );
     expect(window.location.search).toBe('?oblast=practical&typ=faqs');
     expect(window.location.search).not.toContain('query');
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
