@@ -172,12 +172,7 @@ const loadTeamRows = async (db: TeamDb, eventId: string) =>
       emailVerified: schema.users.emailVerified,
       role: schema.eventRoles.role,
       lastInvitationSentAt: sql<Date | string | null>`(
-        select max(
-          coalesce(
-            nullif(${schema.auditLogs.after} ->> 'sentAt', '')::timestamptz,
-            ${schema.auditLogs.createdAt}
-          )
-        )
+        select max(${schema.auditLogs.createdAt})
         from ${schema.auditLogs}
         where ${schema.auditLogs.eventId} = ${eventId}
           and ${schema.auditLogs.action} = 'team.invitation_sent'
@@ -919,21 +914,25 @@ export const handleAdminTeamInvitation = async (
             'The invitation could not be delivered. Try again later.',
           );
         }
-        const auditId = await writeAuditLog(transaction, {
-          eventId,
-          actorId,
-          actorType: 'user',
-          action: 'team.invitation_sent',
-          targetType: 'event_membership',
-          targetId: memberId,
-          requestId,
-          reason: 'Pozvánka členovi týmu odeslána z administrace.',
-          before: { invitationStatus: member.invitation.status },
-          after: {
-            invitationStatus: member.emailVerified ? 'accepted' : 'sent',
-            sentAt: sentAt.toISOString(),
+        const auditId = await writeAuditLog(
+          transaction,
+          {
+            eventId,
+            actorId,
+            actorType: 'user',
+            action: 'team.invitation_sent',
+            targetType: 'event_membership',
+            targetId: memberId,
+            requestId,
+            reason: 'Pozvánka členovi týmu odeslána z administrace.',
+            before: { invitationStatus: member.invitation.status },
+            after: {
+              invitationStatus: member.emailVerified ? 'accepted' : 'sent',
+              sentAt: sentAt.toISOString(),
+            },
           },
-        });
+          { occurredAt: sentAt },
+        );
         return {
           status: 200,
           body: adminTeamInvitationResponseSchema.parse({
