@@ -46,7 +46,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const contenderOneId = crypto.randomUUID();
   const contenderTwoId = crypto.randomUUID();
   const isolationUserId = crypto.randomUUID();
-  const inactiveTicketUserId = crypto.randomUUID();
+  const participantWithoutLegacyTicketUserId = crypto.randomUUID();
   const driftUserId = crypto.randomUUID();
   const cancellationRaceUserId = crypto.randomUUID();
   const cutoffRaceUserId = crypto.randomUUID();
@@ -183,7 +183,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       contenderOneId,
       contenderTwoId,
       isolationUserId,
-      inactiveTicketUserId,
+      participantWithoutLegacyTicketUserId,
       driftUserId,
       cancellationRaceUserId,
       cutoffRaceUserId,
@@ -223,7 +223,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         primaryUserId,
         contenderOneId,
         contenderTwoId,
-        inactiveTicketUserId,
+        participantWithoutLegacyTicketUserId,
         driftUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
@@ -261,7 +261,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         primaryUserId,
         contenderOneId,
         contenderTwoId,
-        inactiveTicketUserId,
+        participantWithoutLegacyTicketUserId,
         driftUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
@@ -305,7 +305,6 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         primaryUserId,
         contenderOneId,
         contenderTwoId,
-        inactiveTicketUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
         publicationPolicyUserId,
@@ -318,7 +317,6 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         coachingSwitchUserId,
         contentMutationRaceUserId,
         waitlistOwnerId,
-        waitlistFirstId,
         waitlistSecondId,
         mastermindGroupUserId,
         reservationSwitchUserId,
@@ -327,12 +325,9 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         eventId,
         codeHmac: (index + 1).toString(16).padStart(64, '0'),
         codeSuffix: `agenda-${index + 1}`,
-        status:
-          userId === inactiveTicketUserId
-            ? ('blocked' as const)
-            : ('activated' as const),
+        status: 'activated' as const,
         holderUserId: userId,
-        ...(userId === inactiveTicketUserId ? {} : { claimedAt: fixedNow }),
+        claimedAt: fixedNow,
       })),
     );
     await client.db.insert(schema.eventDays).values({
@@ -698,7 +693,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     await client.close();
   });
 
-  it('joins and leaves a stable FIFO waitlist and auto-promotes the first eligible participant', async () => {
+  it('auto-promotes an eligible participant without a legacy ticket credential', async () => {
     const addAndReturnVersion = async (userId: string, key: string) => {
       const added = await mutate(
         userId,
@@ -3135,29 +3130,34 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     });
   });
 
-  it('requires an active ticket for the reservation itself', async () => {
+  it('allows an active participant to reserve without a legacy ticket credential', async () => {
     const added = await mutate(
-      inactiveTicketUserId,
+      participantWithoutLegacyTicketUserId,
       { action: 'add', sessionId: reservedSessionId, expectedVersion: 1 },
-      'agenda-inactive-ticket-add-0001',
+      'agenda-ticketless-participant-add-0001',
     );
     expect(added.status).toBe(200);
 
     const response = await mutate(
-      inactiveTicketUserId,
+      participantWithoutLegacyTicketUserId,
       { action: 'reserve', sessionId: reservedSessionId, expectedVersion: 2 },
-      'agenda-inactive-ticket-reserve-0001',
+      'agenda-ticketless-participant-reserve-0001',
     );
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
     expect(
-      participantAgendaMutationProblemSchema.parse(await response.json()),
+      participantAgendaMutationResponseSchema.parse(await response.json()),
     ).toMatchObject({
-      code: 'TICKET_INACTIVE',
-      sessionId: reservedSessionId,
-      agenda: {
-        version: 2,
-        items: [{ state: 'saved', session: { id: reservedSessionId } }],
+      mutation: {
+        action: 'reserve',
+        outcome: 'applied',
+        sessionId: reservedSessionId,
       },
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          state: 'reserved',
+          session: expect.objectContaining({ id: reservedSessionId }),
+        }),
+      ]),
     });
   });
 

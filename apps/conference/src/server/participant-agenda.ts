@@ -116,13 +116,6 @@ class AgendaReservationClosedError extends Error {
   }
 }
 
-class AgendaTicketInactiveError extends Error {
-  constructor(readonly sessionId: string) {
-    super('An active ticket is required to reserve a place');
-    this.name = 'AgendaTicketInactiveError';
-  }
-}
-
 class AgendaReservationConflictError extends Error {
   constructor(
     readonly sessionId: string,
@@ -1283,7 +1276,6 @@ const canonicalProblemResponse = (
     | StaleAgendaVersionError
     | AgendaCapacityFullError
     | AgendaReservationClosedError
-    | AgendaTicketInactiveError
     | AgendaReservationConflictError,
   snapshot: ParticipantAgendaResponse,
   requestId: string,
@@ -1314,10 +1306,7 @@ const canonicalProblemResponse = (
       classified = new AgendaCapacityFullError(classifiedSessionId);
     } else if (item.action.state === 'closed') {
       classified = new AgendaReservationClosedError(classifiedSessionId);
-    } else if (
-      !(classified instanceof AgendaTicketInactiveError) ||
-      item.state !== 'saved'
-    ) {
+    } else {
       classified = new StaleAgendaVersionError();
     }
   }
@@ -1356,39 +1345,28 @@ const canonicalProblemResponse = (
               reservationSessionIds: classified.reservationSessionIds,
             },
           }
-        : classified instanceof AgendaTicketInactiveError
+        : classified instanceof AgendaCapacityFullError
           ? {
-              type: problemTypeForCode('TICKET_INACTIVE'),
-              title: 'Active ticket required',
+              type: problemTypeForCode('CAPACITY_FULL'),
+              title: 'Session capacity is full',
               status: 409,
-              code: 'TICKET_INACTIVE',
-              detail: 'An active ticket is required to reserve this session.',
+              code: 'CAPACITY_FULL',
+              detail:
+                'The final available place was reserved by another request.',
               requestId,
               sessionId: classified.sessionId,
               agenda: snapshot,
             }
-          : classified instanceof AgendaCapacityFullError
-            ? {
-                type: problemTypeForCode('CAPACITY_FULL'),
-                title: 'Session capacity is full',
-                status: 409,
-                code: 'CAPACITY_FULL',
-                detail:
-                  'The final available place was reserved by another request.',
-                requestId,
-                sessionId: classified.sessionId,
-                agenda: snapshot,
-              }
-            : {
-                type: problemTypeForCode('RESERVATION_CLOSED'),
-                title: 'Reservations are closed',
-                status: 409,
-                code: 'RESERVATION_CLOSED',
-                detail: 'Reservations are not open for this session.',
-                requestId,
-                sessionId: classified.sessionId,
-                agenda: snapshot,
-              };
+          : {
+              type: problemTypeForCode('RESERVATION_CLOSED'),
+              title: 'Reservations are closed',
+              status: 409,
+              code: 'RESERVATION_CLOSED',
+              detail: 'Reservations are not open for this session.',
+              requestId,
+              sessionId: classified.sessionId,
+              agenda: snapshot,
+            };
   const problem = participantAgendaMutationProblemSchema.parse(candidate);
   return new Response(JSON.stringify(problem), {
     status: problem.status,
@@ -1796,17 +1774,9 @@ export const mutateParticipantAgenda = async (
               sessionId: ['Add the session to the agenda before reserving.'],
             });
           }
-          const activeTicket = await transaction.query.tickets.findFirst({
-            columns: { id: true },
-            where: and(
-              eq(schema.tickets.eventId, context.event.id),
-              eq(schema.tickets.holderUserId, session.user.id),
-              eq(schema.tickets.status, 'activated'),
-            ),
-          });
-          if (!activeTicket) {
-            throw new AgendaTicketInactiveError(parsed.data.sessionId);
-          }
+          // ADR-016 makes active event access authoritative for 2026. The
+          // post-lock permission check above already revalidates membership
+          // and an eligible event role; no ticket credential is issued.
           if (
             reservationOperationalTarget.capacityMode !== 'reservation' ||
             reservationOperationalTarget.capacity === null ||
@@ -2087,7 +2057,6 @@ export const mutateParticipantAgenda = async (
       (error instanceof StaleAgendaVersionError ||
         error instanceof AgendaCapacityFullError ||
         error instanceof AgendaReservationClosedError ||
-        error instanceof AgendaTicketInactiveError ||
         error instanceof AgendaReservationConflictError)
     ) {
       try {

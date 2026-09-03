@@ -85,6 +85,8 @@ const participantCanBePromoted = async (
   eventId: string,
   userId: string,
 ): Promise<boolean> => {
+  // ADR-016 uses active event membership and role eligibility for 2026;
+  // participant ticket credentials are intentionally not issued.
   const membership = await transaction.query.eventMemberships.findFirst({
     columns: { userId: true },
     where: and(
@@ -103,16 +105,7 @@ const participantCanBePromoted = async (
       isNull(schema.eventRoles.revokedAt),
     ),
   });
-  if (!role) return false;
-  const ticket = await transaction.query.tickets.findFirst({
-    columns: { id: true },
-    where: and(
-      eq(schema.tickets.eventId, eventId),
-      eq(schema.tickets.holderUserId, userId),
-      eq(schema.tickets.status, 'activated'),
-    ),
-  });
-  return ticket !== undefined;
+  return role !== undefined;
 };
 
 const participantHasReservationConflict = async (
