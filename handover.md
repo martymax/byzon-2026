@@ -1648,6 +1648,16 @@ read-only discovery pak doplní field/status mapping a source-code test vectors.
 
 ## Poslední ověření
 
+- Dne 3. 9. 2026 byla custom doména `app.byzon.cz` záměrně ponechána na Railway
+  prostředí `staging` pro testování. Stagingový web i worker mají
+  `APP_BASE_URL=https://app.byzon.cz`; `production-2026` používá
+  `https://byzonconference-production-2026.up.railway.app`. DNS je propagované,
+  Railway certifikát je platný a `/health/live`, `/health/ready` i `/` na custom
+  doméně vracejí `200`; readiness hlásí `environment=staging`.
+- Better Auth v hostovaných prostředích explicitně používá Railway-overwritten
+  `X-Real-IP`, aby auth rate limiting za Railway edge nesdílel jeden fallback
+  bucket pro všechny uživatele. Development a test proxy headeru nedůvěřují.
+
 - PostgreSQL integrace: migrace, dvakrát spuštěný Node seed a 19 databázových
   testů prošly; commit/rollback/advisory lock i uzavření poolu byly ověřeny.
 - Produkční conference build a worker build prošly.

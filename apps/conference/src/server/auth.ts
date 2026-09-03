@@ -1,5 +1,5 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
-import { readConferenceEnv } from '@byzon/config';
+import { readConferenceEnv, type BaseEnv } from '@byzon/config';
 import { schema, type Database } from '@byzon/database';
 import { betterAuth } from 'better-auth';
 import { magicLink } from 'better-auth/plugins';
@@ -19,6 +19,13 @@ export const magicLinkPurposeForAccount = (
 ): 'account-activation' | 'sign-in' =>
   emailVerified === false ? 'account-activation' : 'sign-in';
 
+export const authIpAddressHeadersFor = (
+  appEnvironment: BaseEnv['APP_ENV'],
+): string[] | undefined =>
+  appEnvironment === 'staging' || appEnvironment === 'production'
+    ? ['x-real-ip']
+    : undefined;
+
 export const getAuthAppOrigin = (
   environment: NodeJS.ProcessEnv | Record<string, unknown> = process.env,
 ): string => new URL(readConferenceEnv(environment).APP_BASE_URL).origin;
@@ -34,6 +41,7 @@ export const createAuth = (
 ) => {
   const env = readConferenceEnv(environment);
   const appOrigin = getAuthAppOrigin(environment);
+  const ipAddressHeaders = authIpAddressHeadersFor(env.APP_ENV);
 
   return betterAuth({
     appName: 'BYZON 2026',
@@ -53,6 +61,7 @@ export const createAuth = (
     advanced: {
       database: { generateId: () => crypto.randomUUID() },
       useSecureCookies: env.NODE_ENV === 'production',
+      ...(ipAddressHeaders ? { ipAddress: { ipAddressHeaders } } : undefined),
     },
     session: {
       expiresIn: SESSION_EXPIRES_IN_SECONDS,

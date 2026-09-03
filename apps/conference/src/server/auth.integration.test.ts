@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
+  authIpAddressHeadersFor,
   createAuth,
   LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
   magicLinkPurposeForAccount,
@@ -33,6 +34,13 @@ describe('authentication session policy', () => {
   it('keeps an inactive login valid for 48 hours and refreshes active sessions sooner', () => {
     expect(SESSION_EXPIRES_IN_SECONDS).toBe(48 * 60 * 60);
     expect(SESSION_UPDATE_AGE_SECONDS).toBeLessThan(SESSION_EXPIRES_IN_SECONDS);
+  });
+
+  it('trusts the Railway-overwritten client IP header only in hosted environments', () => {
+    expect(authIpAddressHeadersFor('staging')).toEqual(['x-real-ip']);
+    expect(authIpAddressHeadersFor('production')).toEqual(['x-real-ip']);
+    expect(authIpAddressHeadersFor('development')).toBeUndefined();
+    expect(authIpAddressHeadersFor('test')).toBeUndefined();
   });
 });
 

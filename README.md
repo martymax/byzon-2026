@@ -106,9 +106,11 @@ lze zastavit přes `pnpm dev:infra:down` bez smazání jejich volumes.
 
 Kontroly aplikace spustíte přes `pnpm run ci`, browser smoke přes `pnpm test:e2e`.
 Railway staging postup je v `docs/runbooks/railway-staging.md`.
-Aktuální staging běží na
-<https://byzonconference-staging.up.railway.app>; cílové `app.byzon.cz` bude
-připojené přes Cloudflare.
+Aktuální staging je pro testování dostupný na <https://app.byzon.cz>;
+generická Railway adresa
+<https://byzonconference-staging.up.railway.app> zůstává pouze jako technický
+alias. Do produkčního cutoveru obsluhuje `app.byzon.cz` prostředí `staging`, ne
+`production-2026`.
 
 Stagingový deploy po migracích a seedu idempotentně importuje program a
 řečníky z `static-site/data/content.json`. Změna zdrojového JSONu nebo jeho

@@ -1,13 +1,17 @@
 # Railway prostředí
 
-Autoritativní staging aplikace je
-`https://byzonconference-staging.up.railway.app`. Projekt `Byzon 2026` používá
-prostředí `staging` a existující služby `@byzon/conference`,
-`@byzon/worker`, `Postgres` a `Redis`. Nevytvářejte jejich duplicitní kopie.
+Autoritativní staging aplikace je během testování dostupná na
+`https://app.byzon.cz`. Generická adresa
+`https://byzonconference-staging.up.railway.app` zůstává technickým aliasem.
+Projekt `Byzon 2026` používá prostředí `staging` a existující služby
+`@byzon/conference`, `@byzon/worker`, `Postgres` a `Redis`. Nevytvářejte jejich
+duplicitní kopie.
 
-Cílová produkční doména je `https://app.byzon.cz`; DNS/proxy připojení se
-provede přes Cloudflare až po staging UAT. Railway je produkční platforma,
-nikoli dočasný hosting.
+Cílová produkční doména zůstává `https://app.byzon.cz`, ale do explicitně
+schváleného produkčního cutoveru je custom doména v Railway připojená ke
+stagingovému webu a stagingové `APP_BASE_URL` je nastavené na tuto adresu.
+Prostředí `production-2026` mezitím používá svou generickou Railway doménu.
+Railway je produkční platforma, nikoli dočasný hosting.
 
 ## Produkční klon 2026
 
@@ -70,7 +74,7 @@ administračního announcement flow a serverových endpointů.
 | --------------------------- | -------------------------------------------------- |
 | `NODE_ENV`                  | `production`                                       |
 | `APP_ENV`                   | `staging`                                          |
-| `APP_BASE_URL`              | `https://byzonconference-staging.up.railway.app`   |
+| `APP_BASE_URL`              | `https://app.byzon.cz`                             |
 | `PUBLIC_SITE_URL`           | `https://byzon.cz`                                 |
 | `DATABASE_URL`              | private reference na `Postgres.DATABASE_URL`       |
 | `REDIS_URL`                 | private reference na `Redis.REDIS_URL`             |
@@ -90,6 +94,15 @@ Worker potřebuje stejné `NODE_ENV`, `APP_ENV`, `APP_BASE_URL`,
 `REDIS_CONNECT_TIMEOUT_MS` a `RELEASE_SHA`. Dále používá
 `WORKER_CONCURRENCY_EMAIL` a `WORKER_CONCURRENCY_DEFAULT`, jakmile budou
 explicitně nastavené; do té doby platí validované serverové defaulty.
+
+Aktuálně tedy i stagingový worker používá
+`APP_BASE_URL=https://app.byzon.cz`. Při budoucím cutoveru se custom doména a
+`APP_BASE_URL` webu i workeru musí změnit společně; generická stagingová URL se
+nesmí ponechat jako povolený auth origin.
+
+Better Auth ve stagingu a produkci čte klientskou IP pouze z `X-Real-IP`, který
+Railway edge nastavuje a přepisuje. Bez tohoto explicitního headeru by se za
+proxy všechny auth požadavky propadly do jednoho sdíleného rate-limit bucketu.
 
 ## E-mailové placeholders a magic link
 
