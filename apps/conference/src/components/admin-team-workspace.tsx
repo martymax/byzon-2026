@@ -779,7 +779,7 @@ export const AdminTeamRedesign = ({
                 ) : null}
                 <div className={styles.actionRow}>
                   <label className={styles.field}>
-                    <span>Jméno nebo ověřený kontakt</span>
+                    <span>Jméno nebo ověřený e-mail</span>
                     <input
                       autoComplete="off"
                       data-modal-initial-focus="true"
@@ -818,7 +818,7 @@ export const AdminTeamRedesign = ({
                           type="radio"
                         />
                         <strong>{person.displayName}</strong>
-                        <span>{person.maskedVerifiedContact}</span>
+                        <span>{person.verifiedEmail}</span>
                       </label>
                     ))}
                   </div>

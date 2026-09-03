@@ -224,6 +224,29 @@ integration('P5-05 admin reservation HTTP integration', () => {
         role: 'organizer_admin',
       },
     ]);
+    await client.db.insert(schema.participantProfiles).values([
+      {
+        eventId,
+        userId: participantId,
+        firstName: 'Alex',
+        lastName: 'Novák',
+        contactEmail: 'alex.novak@example.invalid',
+      },
+      {
+        eventId,
+        userId: secondParticipantId,
+        firstName: 'Mila',
+        lastName: 'Testová',
+        contactEmail: 'mila.testova@example.invalid',
+      },
+      {
+        eventId: isolationEventId,
+        userId: participantId,
+        firstName: 'Cizí',
+        lastName: 'Profil',
+        contactEmail: 'cizi.profil@example.invalid',
+      },
+    ]);
     await client.db.insert(schema.eventDays).values([
       {
         id: dayId,
@@ -500,11 +523,11 @@ integration('P5-05 admin reservation HTTP integration', () => {
       availableActions: ['capacity_override', 'cancel_reservation'],
     });
     expect(
-      body.items.find(({ reservationId: id }) => id === reservationId)
-        ?.participantReference,
-    ).toBe(
-      `Účastník •${participantId.replaceAll('-', '').slice(-4).toUpperCase()}`,
-    );
+      body.items.find(({ reservationId: id }) => id === reservationId),
+    ).toMatchObject({
+      participantName: 'Alex Novák',
+      contactEmail: 'alex.novak@example.invalid',
+    });
 
     const crossEvent = await readAdminReservations(
       listRequest(isolationEventId),
@@ -520,7 +543,7 @@ integration('P5-05 admin reservation HTTP integration', () => {
     expect(crossEventCapacities.status).toBe(404);
   });
 
-  it('pages session-first reservation snapshots with masked references and stable cursors', async () => {
+  it('pages session-first reservation snapshots with transparent admin identities and stable cursors', async () => {
     const denied = await readAdminReservationSessions(
       sessionPageRequest('?limit=1'),
       eventId,
@@ -554,11 +577,18 @@ integration('P5-05 admin reservation HTTP integration', () => {
     expect(first.pageInfo).toMatchObject({ hasMore: true });
     expect(first.pageInfo.nextCursor).not.toBeNull();
     const serialized = JSON.stringify(first);
-    expect(serialized).not.toContain('@example.invalid');
     expect(serialized).not.toContain(participantId);
-    expect(first.items[0]?.reservations[0]?.maskedParticipantReference).toMatch(
-      /[*•…]/,
-    );
+    expect(serialized).not.toContain('Cizí Profil');
+    expect(
+      first.items[0]?.reservations
+        .map(({ participantName }) => participantName)
+        .sort(),
+    ).toEqual(['Alex Novák', 'Mila Testová']);
+    expect(
+      first.items[0]?.reservations
+        .map(({ contactEmail }) => contactEmail)
+        .sort(),
+    ).toEqual(['alex.novak@example.invalid', 'mila.testova@example.invalid']);
 
     const secondResponse = await readAdminReservationSessions(
       sessionPageRequest(

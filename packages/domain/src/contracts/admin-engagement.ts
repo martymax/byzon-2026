@@ -33,13 +33,6 @@ const mutationReasonSchema = z
     message: 'Mutation reason contains unsafe characters or markup',
   });
 
-const maskedContactSchema = safeInlineTextSchema(120).refine(
-  (value) =>
-    /[*•…]/.test(value) &&
-    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
-  'Moderator contact must remain masked',
-);
-
 export const adminEngagementFeaturesSchema = z.strictObject({
   networkingEnabled: z.boolean(),
   questionsEnabled: z.boolean(),
@@ -53,7 +46,7 @@ export type AdminEngagementFeatures = z.infer<
 export const adminModeratorCandidateSchema = z.strictObject({
   userId: uuidSchema,
   displayName: safeInlineTextSchema(160),
-  maskedContact: maskedContactSchema,
+  contactEmail: z.string().email().max(320),
 });
 
 export type AdminModeratorCandidate = z.infer<
@@ -64,7 +57,7 @@ export const adminModeratorAssignmentSchema = z.strictObject({
   assignmentId: uuidSchema,
   userId: uuidSchema,
   displayName: safeInlineTextSchema(160),
-  maskedContact: maskedContactSchema,
+  contactEmail: z.string().email().max(320),
 });
 
 export type AdminModeratorAssignment = z.infer<
@@ -100,7 +93,8 @@ export type AdminEngagementSession = z.infer<
 
 /**
  * CS-ADMIN-ENGAGEMENT-01 is an online-only operational snapshot. Candidate
- * contacts are masked and no response may be persisted in browser storage.
+ * contacts are visible only to authorized administrators and no response may
+ * be persisted in browser storage.
  */
 export const adminEngagementCachePolicy = Object.freeze({
   cacheControl: 'private, no-store',
@@ -221,7 +215,7 @@ export const adminEngagementMutationResponseSchema = z.discriminatedUnion(
           sessionId: uuidSchema,
           userId: uuidSchema,
           displayName: safeInlineTextSchema(160),
-          maskedContact: maskedContactSchema,
+          contactEmail: z.string().email().max(320),
         })
         .nullable(),
       changedAt: dateTimeSchema,

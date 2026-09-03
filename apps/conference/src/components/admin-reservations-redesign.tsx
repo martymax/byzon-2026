@@ -74,11 +74,6 @@ const reservationStateLabels: Record<ReservationItem['state'], string> = {
   cancelled: 'Zrušeno',
 };
 
-const safeParticipantReference = (value: string): string =>
-  /[*•…]/.test(value) && !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)
-    ? value
-    : 'Účastník · reference skrytá';
-
 export const AdminReservationsRedesign = () => {
   const { api, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
@@ -97,7 +92,7 @@ export const AdminReservationsRedesign = () => {
   );
   const [dayFilter, setDayFilter] = useState('all');
   const [activityFilter, setActivityFilter] = useState('all');
-  const [referenceFilter, setReferenceFilter] = useState('');
+  const [participantFilter, setParticipantFilter] = useState('');
   const [capacityDraft, setCapacityDraft] = useState(1);
   const [capacityReason, setCapacityReason] = useState('');
   const [selectedReservation, setSelectedReservation] =
@@ -123,7 +118,7 @@ export const AdminReservationsRedesign = () => {
     setSessions([]);
     setNextCursor(null);
     setSelectedSessionId(null);
-    setReferenceFilter('');
+    setParticipantFilter('');
     setCapacityReason('');
     setCancelReason('');
     setSelectedReservation(null);
@@ -237,11 +232,14 @@ export const AdminReservationsRedesign = () => {
   const selectedSession =
     sessions.find(({ sessionId }) => sessionId === selectedSessionId) ?? null;
   const selectedReservations = (selectedSession?.reservations ?? []).filter(
-    (record) =>
-      referenceFilter.trim() === '' ||
-      record.maskedParticipantReference
-        .toLocaleLowerCase('cs')
-        .includes(referenceFilter.trim().toLocaleLowerCase('cs')),
+    (record) => {
+      const filter = participantFilter.trim().toLocaleLowerCase('cs');
+      return (
+        filter === '' ||
+        record.participantName.toLocaleLowerCase('cs').includes(filter) ||
+        record.contactEmail.toLocaleLowerCase('cs').includes(filter)
+      );
+    },
   );
   const summary = sessions.reduce(
     (current, session) => {
@@ -698,12 +696,14 @@ export const AdminReservationsRedesign = () => {
               <section className={styles.dataCard}>
                 <h3>Rezervace účastníků</h3>
                 <label className={styles.field}>
-                  <span>Maskovaná reference účastníka</span>
+                  <span>Jméno nebo e-mail účastníka</span>
                   <input
                     autoComplete="off"
-                    onChange={(event) => setReferenceFilter(event.target.value)}
+                    onChange={(event) =>
+                      setParticipantFilter(event.target.value)
+                    }
                     type="search"
-                    value={referenceFilter}
+                    value={participantFilter}
                   />
                   <span className={styles.helper}>
                     Hledání zůstává jen v této stránce a neukládá se do URL.
@@ -713,11 +713,10 @@ export const AdminReservationsRedesign = () => {
                   {selectedReservations.map((record) => (
                     <li className={styles.dataCard} key={record.reservationId}>
                       <div className={styles.panelHeader}>
-                        <strong>
-                          {safeParticipantReference(
-                            record.maskedParticipantReference,
-                          )}
-                        </strong>
+                        <div className={styles.identityCell}>
+                          <strong>{record.participantName}</strong>
+                          <small>{record.contactEmail}</small>
+                        </div>
                         <span className={styles.statusBadge}>
                           {reservationStateLabels[record.state]}
                         </span>
@@ -752,13 +751,9 @@ export const AdminReservationsRedesign = () => {
               <section className={styles.warning}>
                 <h3>Zrušit rezervaci účastníka</h3>
                 <p>
-                  <strong>
-                    {safeParticipantReference(
-                      selectedReservation.maskedParticipantReference,
-                    )}
-                  </strong>{' '}
-                  ztratí rezervaci na aktivitu {selectedSession.sessionTitle}.
-                  Uvolněné místo může získat další čekající.
+                  <strong>{selectedReservation.participantName}</strong> ztratí
+                  rezervaci na aktivitu {selectedSession.sessionTitle}. Uvolněné
+                  místo může získat další čekající.
                 </p>
                 <label className={styles.field}>
                   <span>Důvod zrušení</span>
@@ -819,7 +814,7 @@ export const AdminReservationsRedesign = () => {
                 {selectedSession?.sessionTitle ?? 'Vybraná aktivita'}
               </strong>
               {pending.kind === 'reservation'
-                ? ` · ${selectedReservation ? safeParticipantReference(selectedReservation.maskedParticipantReference) : ''}`
+                ? ` · ${selectedReservation?.participantName ?? ''}`
                 : ''}
             </p>
           }

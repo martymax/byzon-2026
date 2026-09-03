@@ -22,7 +22,7 @@ describe('simple question and rating contracts', () => {
     ).toBe(false);
   });
 
-  it('models a chronological moderator feed without author identity or moderation state', () => {
+  it('models a chronological moderator feed with author names but no contact details', () => {
     const feed = moderatorQuestionFeedSchema.parse({
       eventId: '019fa200-0000-7000-8000-000000000001',
       sessionId: '019fa200-0000-7000-8000-000000000002',
@@ -30,6 +30,7 @@ describe('simple question and rating contracts', () => {
       items: [
         {
           questionId: '019fa200-0000-7000-8000-000000000003',
+          authorName: 'Alex Novák',
           text: 'První dotaz',
           submittedAt: '2026-09-18T08:59:00.000Z',
         },
@@ -37,7 +38,8 @@ describe('simple question and rating contracts', () => {
       nextCursor: '019fa200-0000-7000-8000-000000000003',
       pollAfterMs: 5_000,
     });
-    expect(feed.items[0]).not.toHaveProperty('authorUserId');
+    expect(feed.items[0]?.authorName).toBe('Alex Novák');
+    expect(feed.items[0]).not.toHaveProperty('contactEmail');
     expect(feed.items[0]).not.toHaveProperty('status');
   });
 

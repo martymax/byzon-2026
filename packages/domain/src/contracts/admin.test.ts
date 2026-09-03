@@ -126,17 +126,17 @@ describe('CS-ADMIN-01 contracts', () => {
       }).success,
     ).toBe(false);
     expect(
-      adminRolePersonSearchResponseSchema.safeParse({
+      adminRolePersonSearchResponseSchema.parse({
         eventId: ids.event,
         items: [
           {
             operatorId: ids.operator,
             displayName: 'Patrik Novák',
-            maskedVerifiedContact: 'patrik@example.test',
+            verifiedEmail: 'patrik@example.test',
           },
         ],
-      }).success,
-    ).toBe(false);
+      }).items[0]?.verifiedEmail,
+    ).toBe('patrik@example.test');
 
     expect(
       adminRoleScopeOptionsResponseSchema.parse({
@@ -413,7 +413,8 @@ describe('CS-ADMIN-01 contracts', () => {
       eventId: ids.event,
       sessionId: ids.session,
       sessionTitle: 'Růst bez zkratek',
-      participantReference: 'Účastník •001',
+      participantName: 'Alex Novák',
+      contactEmail: 'alex.novak@example.test',
       state: 'reserved' as const,
       capacity: 40,
       reservedCount: 38,
@@ -498,7 +499,7 @@ describe('CS-ADMIN-01 contracts', () => {
     ).toBe(false);
   });
 
-  it('validates session-first paginated reservation pages with masked references', () => {
+  it('validates session-first paginated reservation pages with transparent participant identities', () => {
     expect(adminReservationSessionQuerySchema.parse({})).toEqual({ limit: 25 });
     const page = {
       eventId: ids.event,
@@ -518,7 +519,8 @@ describe('CS-ADMIN-01 contracts', () => {
           reservations: [
             {
               reservationId: ids.reservation,
-              maskedParticipantReference: 'Účastník •001',
+              participantName: 'Alex Novák',
+              contactEmail: 'alex.novak@example.test',
               state: 'reserved' as const,
               version: 4,
               availableActions: ['cancel_reservation'] as const,
@@ -538,7 +540,7 @@ describe('CS-ADMIN-01 contracts', () => {
             reservations: [
               {
                 ...page.items[0]!.reservations[0],
-                maskedParticipantReference: 'person@example.test',
+                contactEmail: 'not-an-email',
               },
             ],
           },

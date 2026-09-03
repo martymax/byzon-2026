@@ -170,13 +170,6 @@ const withRateLimitHeaders = (
   return response;
 };
 
-const maskEmail = (email: string) => {
-  const at = email.lastIndexOf('@');
-  return at > 0
-    ? `${email.slice(0, 1)}***@${email.slice(at + 1)}`
-    : 'x***@invalid.example';
-};
-
 const ticketState = (
   state: (typeof schema.tickets.$inferSelect)['status'],
 ): SupportRecord['ticketState'] => {
@@ -307,7 +300,7 @@ const recordFrom = (row: {
       `${row.firstName} ${row.lastName}`,
       'Účastník bez uvedeného jména',
     ),
-    maskedContact: maskEmail(row.email),
+    contactEmail: row.email,
     referenceSuffix: suffix(row.suffix),
     ticketState: state,
     accessState: 'claimed',

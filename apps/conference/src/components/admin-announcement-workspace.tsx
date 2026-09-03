@@ -583,6 +583,22 @@ export const AdminAnnouncementWorkspace = ({
             )}
             . Současný přehled neuvádí jednotlivé důvody.
           </p>
+          {preview.audience.sample.length > 0 ? (
+            <section aria-labelledby="announcement-recipient-sample">
+              <h3 id="announcement-recipient-sample">Ukázka příjemců</h3>
+              <ul className={styles.cardList}>
+                {preview.audience.sample.map((participant) => (
+                  <li
+                    className={`${styles.dataCard} ${styles.identityCell}`}
+                    key={participant.contactEmail}
+                  >
+                    <strong>{participant.participantName}</strong>
+                    <small>{participant.contactEmail}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <AdminTechnicalDetails>
             <dl className={styles.detailList}>
               <dt>ID kontroly</dt>

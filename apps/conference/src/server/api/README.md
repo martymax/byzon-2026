@@ -177,9 +177,9 @@ content imports synchronize source-managed reservation mode, cutoff and waitlist
 policy while preserving a later audited numeric capacity as long as the session
 remains reservable.
 Operational records stop at the event anonymization deadline and archived events
-are read-only. The DTO exposes only a masked participant reference, never contact
-or ticket data. Released capacity does not promote a waitlist row before
-`P5-04`.
+are read-only. The authorized admin DTO exposes the participant's available name
+and contact email, but never ticket credentials. Released capacity does not
+promote a waitlist row before `P5-04`.
 
 Admin reservation routes use shared one-minute Redis buckets keyed by an
 environment-keyed HMAC of canonical event slug and authenticated user ID.

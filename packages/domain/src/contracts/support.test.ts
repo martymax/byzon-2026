@@ -34,7 +34,7 @@ const activeRecord = {
   participantId: ids.participant,
   ticketId: ids.ticket,
   displayName: 'Syntetický účastník',
-  maskedContact: 's•••@example.test',
+  contactEmail: 'synteticky.ucastnik@example.test',
   referenceSuffix: 'T001',
   ticketState: 'active' as const,
   accessState: 'claimed' as const,
@@ -290,7 +290,7 @@ describe('CS-SUPPORT-01 contracts', () => {
     ).toBe(false);
   });
 
-  it('keeps operational PII masked and private/no-store', () => {
+  it('keeps transparent admin identity data private and out of browser storage', () => {
     expect(supportCachePolicy).toEqual({
       cacheControl: 'private, no-store',
       browserPersistence: 'forbidden',
@@ -300,18 +300,13 @@ describe('CS-SUPPORT-01 contracts', () => {
       mutationIdempotency: 'required',
     });
     expect(
-      supportSearchResponseSchema.safeParse({
+      supportSearchResponseSchema.parse({
         eventId: ids.event,
         limitedTo: 5,
         outcome: 'single_match',
-        matches: [
-          {
-            ...activeRecord,
-            maskedContact: 'person@example.test',
-          },
-        ],
-      }).success,
-    ).toBe(false);
+        matches: [activeRecord],
+      }).matches[0]?.contactEmail,
+    ).toBe('synteticky.ucastnik@example.test');
   });
 
   it('defines a reference-based target picker with no, ambiguous and stale branches', () => {
@@ -335,7 +330,8 @@ describe('CS-SUPPORT-01 contracts', () => {
     const candidate = {
       eventId: ids.event,
       ticketId: ids.ticketTwo,
-      maskedContact: 't•••@example.test',
+      displayName: 'Testovací návštěvník',
+      contactEmail: 'testovaci.navstevnik@example.test',
       referenceSuffix: 'T002',
       ticketState: 'active' as const,
       accessState: 'claimed' as const,
@@ -365,7 +361,7 @@ describe('CS-SUPPORT-01 contracts', () => {
         sourceVersion: 3,
         limitedTo: 5,
         outcome: 'single_match',
-        candidates: [{ ...candidate, maskedContact: 'target@example.test' }],
+        candidates: [{ ...candidate, contactEmail: 'not-an-email' }],
       }).success,
     ).toBe(false);
     expect(

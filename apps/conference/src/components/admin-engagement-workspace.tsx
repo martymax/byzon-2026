@@ -682,8 +682,8 @@ export const AdminEngagementWorkspace = () => {
               <div>
                 <h2 id="moderators-title">Moderátoři přednášek</h2>
                 <p className={styles.muted}>
-                  Jednoho člověka lze přiřadit k více přednáškám. Kontaktní údaj
-                  zůstává maskovaný.
+                  Jednoho člověka lze přiřadit k více přednáškám. Administrátor
+                  vidí celé jméno i kontaktní e-mail.
                 </p>
               </div>
               <span className={styles.badge}>
@@ -724,7 +724,7 @@ export const AdminEngagementWorkspace = () => {
                   ) : (
                     availableCandidates.map((candidate) => (
                       <option key={candidate.userId} value={candidate.userId}>
-                        {candidate.displayName} · {candidate.maskedContact}
+                        {candidate.displayName} · {candidate.contactEmail}
                       </option>
                     ))
                   )}
@@ -760,7 +760,7 @@ export const AdminEngagementWorkspace = () => {
                   <li key={moderator.userId}>
                     <span>
                       <strong>{moderator.displayName}</strong>
-                      <small>{moderator.maskedContact}</small>
+                      <small>{moderator.contactEmail}</small>
                     </span>
                     <button
                       className={styles.dangerButton}

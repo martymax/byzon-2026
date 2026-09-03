@@ -116,7 +116,7 @@ describe('CS-IMPORT-01 contracts', () => {
     expect(
       ticketImportPreviewResponseSchema.safeParse({
         ...preview,
-        rows: [{ ...newRow, maskedContact: 's•••@example.test' }, unchangedRow],
+        rows: [{ ...newRow, unexpectedIdentityField: true }, unchangedRow],
       }).success,
     ).toBe(false);
     expect(

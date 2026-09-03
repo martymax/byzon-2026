@@ -798,7 +798,9 @@ const AdminReservationWorkspaceView = ({
                 </div>
                 <dl>
                   <dt>Účastník</dt>
-                  <dd>{record.participantReference}</dd>
+                  <dd>
+                    {record.participantName} · {record.contactEmail}
+                  </dd>
                   <dt>Kapacita</dt>
                   <dd>
                     {record.reservedCount} / {record.capacity}

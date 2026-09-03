@@ -30,6 +30,7 @@ export const questionSubmitResponseSchema = z.strictObject({
 });
 export const moderatorQuestionSchema = z.strictObject({
   questionId: uuidSchema,
+  authorName: cleanText(1, 257),
   text: cleanText(1, 1_000),
   submittedAt: dateTimeSchema,
 });

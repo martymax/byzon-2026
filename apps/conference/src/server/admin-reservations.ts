@@ -416,8 +416,17 @@ const safeLabel = (
   return normalized.length > 0 ? normalized : fallback;
 };
 
-const participantReference = (userId: string): string =>
-  `Účastník •${userId.replaceAll('-', '').slice(-4).toUpperCase()}`;
+const participantDisplayName = (
+  firstName: string | null,
+  lastName: string | null,
+  accountName: string,
+): string =>
+  safeLabel(
+    [firstName, lastName].filter((value) => value !== null).join(' ') ||
+      accountName,
+    'Účastník',
+    257,
+  );
 
 const permissionContext = (
   permission: AdminPermission,
@@ -576,6 +585,11 @@ const loadReservationRecords = async (
     .select({
       reservationId: schema.reservations.id,
       userId: schema.reservations.userId,
+      participantFirstName: schema.participantProfiles.firstName,
+      participantLastName: schema.participantProfiles.lastName,
+      participantContactEmail: schema.participantProfiles.contactEmail,
+      participantAccountName: schema.users.name,
+      participantAccountEmail: schema.users.email,
       sessionId: schema.reservations.sessionId,
       sessionTitle: schema.programSessions.title,
       state: schema.reservations.status,
@@ -588,6 +602,14 @@ const loadReservationRecords = async (
       and(
         eq(schema.programSessions.eventId, schema.reservations.eventId),
         eq(schema.programSessions.id, schema.reservations.sessionId),
+      ),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.reservations.userId))
+    .leftJoin(
+      schema.participantProfiles,
+      and(
+        eq(schema.participantProfiles.eventId, eventId),
+        eq(schema.participantProfiles.userId, schema.reservations.userId),
       ),
     )
     .where(
@@ -631,7 +653,13 @@ const loadReservationRecords = async (
         eventId,
         sessionId: row.sessionId,
         sessionTitle: safeLabel(row.sessionTitle, 'Rezervovaná aktivita', 160),
-        participantReference: participantReference(row.userId),
+        participantName: participantDisplayName(
+          row.participantFirstName,
+          row.participantLastName,
+          row.participantAccountName,
+        ),
+        contactEmail:
+          row.participantContactEmail ?? row.participantAccountEmail,
         state: row.state === 'confirmed' ? 'reserved' : 'cancelled',
         capacity: row.capacity,
         reservedCount: confirmedBySession.get(row.sessionId) ?? 0,
@@ -935,10 +963,26 @@ const loadReservationSessionPage = async (
             reservationId: rankedReservations.reservationId,
             sessionId: rankedReservations.sessionId,
             userId: rankedReservations.userId,
+            participantFirstName: schema.participantProfiles.firstName,
+            participantLastName: schema.participantProfiles.lastName,
+            participantContactEmail: schema.participantProfiles.contactEmail,
+            participantAccountName: schema.users.name,
+            participantAccountEmail: schema.users.email,
             state: rankedReservations.state,
             version: rankedReservations.version,
           })
           .from(rankedReservations)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, rankedReservations.userId),
+          )
+          .leftJoin(
+            schema.participantProfiles,
+            and(
+              eq(schema.participantProfiles.eventId, eventId),
+              eq(schema.participantProfiles.userId, rankedReservations.userId),
+            ),
+          )
           .where(lte(rankedReservations.rank, MAX_SESSION_RESERVATIONS))
           .orderBy(
             asc(rankedReservations.sessionId),
@@ -953,7 +997,14 @@ const loadReservationSessionPage = async (
     if (items.length >= MAX_SESSION_RESERVATIONS) continue;
     items.push({
       reservationId: reservation.reservationId,
-      maskedParticipantReference: participantReference(reservation.userId),
+      participantName: participantDisplayName(
+        reservation.participantFirstName,
+        reservation.participantLastName,
+        reservation.participantAccountName,
+      ),
+      contactEmail:
+        reservation.participantContactEmail ??
+        reservation.participantAccountEmail,
       state: reservation.state === 'confirmed' ? 'reserved' : 'cancelled',
       version: reservation.version,
       availableActions:
@@ -1171,6 +1222,11 @@ const loadMutationReservation = async (
     .select({
       id: schema.reservations.id,
       userId: schema.reservations.userId,
+      participantFirstName: schema.participantProfiles.firstName,
+      participantLastName: schema.participantProfiles.lastName,
+      participantContactEmail: schema.participantProfiles.contactEmail,
+      participantAccountName: schema.users.name,
+      participantAccountEmail: schema.users.email,
       sessionId: schema.reservations.sessionId,
       status: schema.reservations.status,
       version: schema.reservations.version,
@@ -1187,6 +1243,14 @@ const loadMutationReservation = async (
       and(
         eq(schema.programSessions.eventId, schema.reservations.eventId),
         eq(schema.programSessions.id, schema.reservations.sessionId),
+      ),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.reservations.userId))
+    .leftJoin(
+      schema.participantProfiles,
+      and(
+        eq(schema.participantProfiles.eventId, eventId),
+        eq(schema.participantProfiles.userId, schema.reservations.userId),
       ),
     )
     .where(
@@ -1764,7 +1828,13 @@ export const mutateAdminReservation = async (
             'Rezervovaná aktivita',
             160,
           ),
-          participantReference: participantReference(current.userId),
+          participantName: participantDisplayName(
+            current.participantFirstName,
+            current.participantLastName,
+            current.participantAccountName,
+          ),
+          contactEmail:
+            current.participantContactEmail ?? current.participantAccountEmail,
           state: nextState,
           capacity: nextCapacity,
           reservedCount: confirmedAfter,

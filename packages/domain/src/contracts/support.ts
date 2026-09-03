@@ -43,13 +43,6 @@ const mutationReasonSchema = z
     message: 'Support mutation reason contains unsafe characters or markup',
   });
 
-const maskedContactSchema = safeInlineTextSchema(120).refine(
-  (value) =>
-    /[*•…]/.test(value) &&
-    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
-  'Support contact must remain masked',
-);
-
 /**
  * CS-SUPPORT-01 carries operational PII. It is online-only and must be
  * synchronously discarded after permission loss, logout or event switch.
@@ -110,7 +103,7 @@ export const supportRecordSchema = z
     participantId: uuidSchema,
     ticketId: uuidSchema,
     displayName: safeInlineTextSchema(160),
-    maskedContact: maskedContactSchema,
+    contactEmail: z.string().email().max(320),
     referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
     ticketState: supportTicketStateSchema,
     accessState: supportAccessStateSchema,
@@ -518,7 +511,8 @@ export type SupportTargetTicketSearchRequest = z.infer<
 export const supportTargetTicketCandidateSchema = z.strictObject({
   eventId: uuidSchema,
   ticketId: uuidSchema,
-  maskedContact: maskedContactSchema,
+  displayName: safeInlineTextSchema(160),
+  contactEmail: z.string().email().max(320),
   referenceSuffix: z.string().regex(/^[A-Za-z0-9]{2,8}$/),
   ticketState: supportTicketStateSchema,
   accessState: supportAccessStateSchema,

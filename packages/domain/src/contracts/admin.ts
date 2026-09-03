@@ -312,10 +312,7 @@ export type AdminRolePersonSearchRequest = z.infer<
 export const adminRolePersonSchema = z.strictObject({
   operatorId: uuidSchema,
   displayName: safeInlineTextSchema(120),
-  maskedVerifiedContact: safeInlineTextSchema(160).refine(
-    (value) => /[*•…]/.test(value),
-    'Verified contact must remain masked',
-  ),
+  verifiedEmail: z.string().email().max(320),
 });
 
 export type AdminRolePerson = z.infer<typeof adminRolePersonSchema>;
@@ -845,7 +842,8 @@ export const adminReservationRecordSchema = z
     eventId: uuidSchema,
     sessionId: uuidSchema,
     sessionTitle: safeInlineTextSchema(160),
-    participantReference: safeInlineTextSchema(80),
+    participantName: safeInlineTextSchema(257),
+    contactEmail: z.string().email().max(320),
     state: z.enum(['reserved', 'cancelled']),
     capacity: adminReservationCapacitySchema,
     reservedCount: z.number().int().nonnegative().max(100_000),
@@ -900,13 +898,6 @@ export type AdminReservationListResponse = z.infer<
   typeof adminReservationListResponseSchema
 >;
 
-const maskedParticipantReferenceSchema = safeInlineTextSchema(80).refine(
-  (value) =>
-    /[*•…]/.test(value) &&
-    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
-  'Participant reference must be masked',
-);
-
 export const adminReservationSessionQuerySchema = z.strictObject({
   cursor: z.string().min(1).max(200).optional(),
   limit: z.number().int().min(1).max(50).default(25),
@@ -932,7 +923,8 @@ export const adminReservationSessionItemSchema = z
       .array(
         z.strictObject({
           reservationId: uuidSchema,
-          maskedParticipantReference: maskedParticipantReferenceSchema,
+          participantName: safeInlineTextSchema(257),
+          contactEmail: z.string().email().max(320),
           state: z.enum(['reserved', 'cancelled']),
           version: versionSchema,
           availableActions: z.array(adminReservationActionSchema).max(2),

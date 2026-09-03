@@ -186,8 +186,8 @@ opakované spuštění je no-op a role grant se auditovaně zapisuje bez e-mailu
 1. Otevřete `/health/live` a `/health/ready`; readiness musí vrátit `200` a
    databázi/Redis bez secret URL.
 2. Přihlaste se administrátorskou staging identitou a ověřte
-   `/admin/interakce`: default-off flags, výběr přednášky a maskovaný výběr
-   moderátora.
+   `/admin/interakce`: default-off flags, výběr přednášky a výběr moderátora
+   s celým jménem a kontaktním e-mailem.
 3. Otestujte zapnutí a vypnutí networkingu syntetickým účastníkem; bez opt-in
    nesmí být profil zjistitelný, po opt-in se zobrazí všechna vyplněná
    veřejná pole.

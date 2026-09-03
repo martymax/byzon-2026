@@ -226,13 +226,6 @@ const safeLabel = (value: string, fallback: string): string => {
   return normalized || fallback;
 };
 
-const maskEmail = (email: string): string => {
-  const at = email.lastIndexOf('@');
-  return at > 0
-    ? `${email.slice(0, 1)}***@${email.slice(at + 1)}`
-    : 'x***@invalid.example';
-};
-
 const encodeRoleCursor = (id: string): string =>
   Buffer.from(JSON.stringify({ id }), 'utf8').toString('base64url');
 
@@ -587,7 +580,7 @@ export const handleAdminRolePersonSearch = async (
         items: rows.map((row) => ({
           operatorId: row.id,
           displayName: safeLabel(row.name, 'Člen týmu'),
-          maskedVerifiedContact: maskEmail(row.email),
+          verifiedEmail: row.email,
         })),
       }),
     );

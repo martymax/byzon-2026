@@ -212,7 +212,7 @@ integration('admin role and export integration', () => {
     now: () => new Date('2026-09-02T10:00:00Z'),
   });
 
-  it('lists named scopes and searches only through a masked POST response', async () => {
+  it('lists named scopes and returns complete identities through an authorized POST search', async () => {
     const list = await handleAdminRoleAssignmentList(
       new Request(url),
       eventId,
@@ -249,9 +249,8 @@ integration('admin role and export integration', () => {
     expect(found.items[0]).toMatchObject({
       operatorId: staffId,
       displayName: 'Patrik Provozní',
+      verifiedEmail: `patrik-${staffId}@example.invalid`,
     });
-    expect(found.items[0]?.maskedVerifiedContact).toContain('***@');
-    expect(JSON.stringify(found)).not.toContain(`patrik-${staffId}@`);
   });
 
   it('returns only role-compatible server-named scope options', async () => {

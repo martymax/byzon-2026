@@ -168,7 +168,7 @@ integration('admin participant support integration', () => {
     rateLimit,
   });
 
-  it('searches through a POST body, deduplicates people and masks contact PII', async () => {
+  it('searches through a POST body, deduplicates people and returns complete admin identities', async () => {
     rateLimit.mockClear();
     const request = new Request(searchUrl, {
       method: 'POST',
@@ -192,13 +192,12 @@ integration('admin participant support integration', () => {
         {
           participantId,
           ticketId,
-          maskedContact: `p***@example.invalid`,
+          contactEmail: `private-${participantId}@example.invalid`,
           referenceSuffix: 'LIVE9876',
           availableActions: ['block'],
         },
       ],
     });
-    expect(JSON.stringify(body)).not.toContain(`private-${participantId}@`);
     expect(rateLimit).toHaveBeenCalledWith('search', adminId);
   });
 

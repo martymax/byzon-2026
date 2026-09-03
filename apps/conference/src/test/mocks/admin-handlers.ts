@@ -443,7 +443,8 @@ const maxPageReservations = () => {
         reservationId: maxPageUuid(2, serial),
         sessionId,
         sessionTitle,
-        participantReference: `Účastník •${String(serial).padStart(3, '0')}`,
+        participantName: `Testovací účastník ${String(serial).padStart(3, '0')}`,
+        contactEmail: `ucastnik${serial}@example.test`,
         capacity: 100,
         reservedCount: 50 + (serial % 50),
       },
@@ -468,7 +469,8 @@ const maxPageReservations = () => {
           {
             ...session.reservations[0]!,
             reservationId: maxPageUuid(2, serial),
-            maskedParticipantReference: `Účastník •${String(serial).padStart(3, '0')}`,
+            participantName: `Testovací účastník ${String(serial).padStart(3, '0')}`,
+            contactEmail: `ucastnik${serial}@example.test`,
           },
         ],
       },
@@ -622,7 +624,7 @@ const maxPageSupportRecords = (): readonly SupportRecord[] => {
       participantId: maxPageUuid(5, serial),
       ticketId: maxPageUuid(6, serial),
       displayName: `Syntetický účastník ${serial}`,
-      maskedContact: `s${serial}•••@example.test`,
+      contactEmail: `synteticky.ucastnik${serial}@example.test`,
       referenceSuffix: `M${String(serial).padStart(3, '0')}`,
     };
   });
@@ -1004,7 +1006,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
                   sessionId: session.sessionId,
                   userId: candidate.userId,
                   displayName: candidate.displayName,
-                  maskedContact: candidate.maskedContact,
+                  contactEmail: candidate.contactEmail,
                 }
               : null,
           changedAt: '2026-07-25T12:32:00.000+02:00',
@@ -1532,7 +1534,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         participantId,
         ticketId,
         displayName: `${detail.firstName} ${detail.lastName}`,
-        maskedContact: `${detail.contactEmail.slice(0, 1)}***@${detail.contactEmail.split('@')[1]}`,
+        contactEmail: detail.contactEmail,
         referenceSuffix,
         ticketState: 'active',
         accessState: 'not_claimed',

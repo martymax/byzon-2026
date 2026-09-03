@@ -59,6 +59,20 @@ const apiProblem = (
   detail: string,
 ): ApiProblemError => new ApiProblemError({ status, code, title, detail });
 
+const participantName = (
+  firstName: string | null,
+  lastName: string | null,
+  accountName: string,
+): string => {
+  const normalized = (
+    [firstName, lastName].filter(Boolean).join(' ') || accountName
+  )
+    .replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '')
+    .trim()
+    .slice(0, 257);
+  return normalized || 'Účastník';
+};
+
 const respondProblem = (error: unknown, requestId: string): Response => {
   const response = problemResponse(error, requestId);
   response.headers.set('cache-control', 'private, no-store');
@@ -377,8 +391,26 @@ export const readModeratorQuestions = async (
     const limit = query.data.limit ?? 100;
     const after = query.data.after ? new Date(query.data.after) : null;
     const rows = await dependencies.db
-      .select()
+      .select({
+        questionId: schema.questions.id,
+        text: schema.questions.text,
+        createdAt: schema.questions.createdAt,
+        authorFirstName: schema.participantProfiles.firstName,
+        authorLastName: schema.participantProfiles.lastName,
+        authorAccountName: schema.users.name,
+      })
       .from(schema.questions)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.questions.authorUserId),
+      )
+      .leftJoin(
+        schema.participantProfiles,
+        and(
+          eq(schema.participantProfiles.eventId, actor.eventId),
+          eq(schema.participantProfiles.userId, schema.questions.authorUserId),
+        ),
+      )
       .where(
         and(
           eq(schema.questions.eventId, actor.eventId),
@@ -404,11 +436,16 @@ export const readModeratorQuestions = async (
       sessionId,
       serverTime: now.toISOString(),
       items: rows.map((row) => ({
-        questionId: row.id,
+        questionId: row.questionId,
+        authorName: participantName(
+          row.authorFirstName,
+          row.authorLastName,
+          row.authorAccountName,
+        ),
         text: row.text,
         submittedAt: row.createdAt.toISOString(),
       })),
-      nextCursor: rows.at(-1)?.id ?? null,
+      nextCursor: rows.at(-1)?.questionId ?? null,
       pollAfterMs: 5_000,
     });
     return Response.json(body, { headers: privateHeaders(requestId) });

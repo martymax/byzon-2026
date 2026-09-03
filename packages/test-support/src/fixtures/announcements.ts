@@ -248,8 +248,14 @@ export const adminAnnouncementPreviewFixtures = defineFixtureSet({
         recipientCount: 37,
         excludedCount: 2,
         sample: [
-          { participantReference: 'Účastník •001' },
-          { participantReference: 'Účastník •002' },
+          {
+            participantName: 'Alex Novák',
+            contactEmail: 'alex.novak@example.test',
+          },
+          {
+            participantName: 'Mila Testová',
+            contactEmail: 'mila.testova@example.test',
+          },
         ],
       },
       createdAt: '2026-09-18T06:00:00.000Z',

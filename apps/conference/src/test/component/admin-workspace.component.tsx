@@ -562,9 +562,10 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByRole('dialog', { name: 'Přiřadit provozní roli' }))
       .toBeVisible();
     await screen
-      .getByRole('textbox', { name: 'Jméno nebo ověřený kontakt' })
+      .getByRole('textbox', { name: 'Jméno nebo ověřený e-mail' })
       .fill('Patrik');
     await screen.getByRole('button', { name: 'Vyhledat osobu' }).click();
+    expect(document.body.textContent).toContain('patrik@example.test');
     await screen.getByRole('radio', { name: /Patrik Novák/ }).click();
     await screen.getByRole('radio', { name: /Vedoucí aktivity/ }).click();
     await expect
@@ -1631,7 +1632,7 @@ describe('F4 contract-first admin journeys', () => {
                         assignmentId: adminFixtureIds.assignment,
                         userId: adminFixtureIds.operator,
                         displayName: 'Operátor #27',
-                        maskedContact: 'o***@example.test',
+                        contactEmail: 'operator27@example.test',
                       },
                     ],
                   }
@@ -1697,7 +1698,7 @@ describe('F4 contract-first admin journeys', () => {
         userId: adminFixtureIds.operator,
       }),
     ]);
-    expect(document.body.textContent).not.toContain('operator@example.test');
+    expect(document.body.textContent).toContain('operator27@example.test');
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -2299,6 +2300,16 @@ describe('F4 contract-first admin journeys', () => {
       .getByRole('button', { name: 'Zobrazit aktivitu' })
       .first()
       .click();
+    const participantSearch = screen.getByRole('searchbox', {
+      name: 'Jméno nebo e-mail účastníka',
+    });
+    await participantSearch.fill('Alex');
+    await expect
+      .element(screen.getByText('Alex Novák', { exact: true }))
+      .toBeVisible();
+    expect(
+      screen.getByText('alex.novak@example.test', { exact: true }),
+    ).toBeVisible();
     await screen
       .getByRole('button', { name: 'Zrušit rezervaci účastníka' })
       .click();
@@ -2404,7 +2415,7 @@ describe('F4 contract-first admin journeys', () => {
         }),
       )
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('Účastník •001');
+    expect(document.body.textContent).not.toContain('alex.novak@example.test');
     expect(
       screen.getByRole('heading', { name: 'Rezervace a kapacity' }),
     ).not.toBeInTheDocument();
@@ -2785,6 +2796,11 @@ describe('F4 contract-first admin journeys', () => {
       sessionId: targets[0]!.sessionId,
     });
     await expect.element(screen.getByText(/Oznámení uvidí/)).toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Ukázka příjemců' }))
+      .toBeVisible();
+    expect(document.body.textContent).toContain('Alex Novák');
+    expect(document.body.textContent).toContain('alex.novak@example.test');
     await expectComponentToPassAxe(adminRoot());
   });
 

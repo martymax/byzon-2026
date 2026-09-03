@@ -134,7 +134,7 @@ integration('admin engagement integration', () => {
     await client.close();
   });
 
-  it('loads masked candidates and atomically configures flags, a session and its moderator', async () => {
+  it('loads complete admin candidate identities and atomically configures flags, a session and its moderator', async () => {
     const initial = await handleAdminEngagement(
       new Request(`${origin}/api/v1/admin/events/${eventId}/engagement`),
       eventId,
@@ -153,8 +153,7 @@ integration('admin engagement integration', () => {
     const candidate = initialBody.moderatorCandidates.find(
       ({ userId }) => userId === participantId,
     );
-    expect(candidate?.maskedContact).toMatch(/^m\*\*\*@example\.invalid$/);
-    expect(JSON.stringify(initialBody)).not.toContain(
+    expect(candidate?.contactEmail).toBe(
       `moderator-${participantId}@example.invalid`,
     );
 

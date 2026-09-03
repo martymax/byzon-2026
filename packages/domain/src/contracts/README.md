@@ -250,7 +250,7 @@ SimpleShop source is a server-only, admin-triggered API adapter according to
 ADR-015; it reuses the canonical row/diff model without uploading or exporting
 a SimpleShop file. Raw API responses, previews and operational PII
 are forbidden from browser persistence and shared/service-worker caches. Rows
-expose masked contacts and one of `new`, `unchanged`, `status_changed`,
+expose available participant contact data and one of `new`, `unchanged`, `status_changed`,
 `conflict` or `unknown`, with totals validated against the complete preview.
 
 Apply binds the exact event, preview ID/version and immutable snapshot digest,
@@ -263,7 +263,8 @@ outcomes may retry only the exact frozen request.
 
 ## Operational support (`CS-SUPPORT-01`)
 
-`support.ts` defines bounded POST-based search with at most five masked results
+`support.ts` defines bounded POST-based search with at most five results carrying
+the participant name and complete contact email for an authorized administrator
 and explicit `no_match`, `single_match` and `ambiguous` outcomes. Queries,
 names, contacts and reasons never belong in URLs, persistence or caches.
 Reading operational participant data and mutating tickets are separate
@@ -306,7 +307,8 @@ never a substitute for server authorization.
 `admin-engagement.ts` adds `CS-ADMIN-ENGAGEMENT-01` for the default-off
 networking, questions and ratings event flags, per-session questions and
 session-scoped moderator assignments. Reads are private/no-store and expose
-only masked moderator contacts. Every mutation requires the narrow server
+complete moderator contact emails to authorized administrators. Every mutation
+requires the narrow server
 permission, an optimistic version, an idempotency key, a visible reason and an
 audit record; the client selects canonical sessions and active event members
 instead of entering IDs manually.
