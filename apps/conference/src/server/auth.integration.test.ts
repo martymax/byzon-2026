@@ -69,6 +69,18 @@ integration('magic-link authentication integration', () => {
     },
     { magicLinkExpiresInSeconds: ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS },
   );
+  const stagingAuth = createAuth(mail, client.db, {
+    NODE_ENV: 'test',
+    APP_ENV: 'staging',
+    APP_BASE_URL: 'http://localhost:3000',
+    PUBLIC_SITE_URL: 'http://localhost:8000',
+    DATABASE_URL:
+      databaseUrl ?? 'postgresql://postgres:postgres@localhost:5432/byzon',
+    REDIS_URL: 'redis://127.0.0.1:6379',
+    BETTER_AUTH_SECRET: 'integration-test-secret-at-least-32-characters',
+    RATE_LIMIT_SUBJECT_SECRET:
+      'integration-rate-limit-secret-at-least-32-characters',
+  });
 
   beforeEach(async () => {
     mail.clear();
@@ -117,6 +129,77 @@ integration('magic-link authentication integration', () => {
     expect(setCookie).toBeTruthy();
     return setCookie!.split(';', 1)[0]!;
   };
+
+  it('signs a provisioned account in directly on staging without sending mail', async () => {
+    const response = await stagingAuth.handler(
+      new Request('http://localhost:3000/api/auth/sign-in/staging-email', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://localhost:3000',
+        },
+        body: JSON.stringify({ email: email.toUpperCase() }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: true });
+    expect(mail.messages).toEqual([]);
+    const setCookie = response.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith('better-auth.session_token='));
+    expect(setCookie).toBeTruthy();
+
+    const session = await stagingAuth.api.getSession({
+      headers: new Headers({ cookie: setCookie!.split(';', 1)[0]! }),
+    });
+    expect(session?.user.email).toBe(email);
+
+    const user = await client.db.query.users.findFirst({
+      columns: { emailVerified: true },
+      where: eq(schema.users.email, email),
+    });
+    expect(user?.emailVerified).toBe(true);
+  });
+
+  it('does not create a staging session for an unknown e-mail', async () => {
+    const unknownEmail = `unknown-${crypto.randomUUID()}@example.com`;
+    const response = await stagingAuth.handler(
+      new Request('http://localhost:3000/api/auth/sign-in/staging-email', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://localhost:3000',
+        },
+        body: JSON.stringify({ email: unknownEmail }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(mail.messages).toEqual([]);
+    const users = await client.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.email, unknownEmail));
+    expect(users).toEqual([]);
+  });
+
+  it('keeps direct e-mail login disabled outside staging', async () => {
+    const response = await auth.handler(
+      new Request('http://localhost:3000/api/auth/sign-in/staging-email', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://localhost:3000',
+        },
+        body: JSON.stringify({ email }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
 
   it('persists the configured 30-minute login and 24-hour activation expirations', async () => {
     const requestLink = async (

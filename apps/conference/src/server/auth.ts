@@ -6,6 +6,7 @@ import { magicLink } from 'better-auth/plugins';
 
 import { database } from './database';
 import { authMailProvider, type AuthMailProvider } from './mail';
+import { stagingEmailLogin } from './staging-email-login';
 
 export const ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 export const LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS = 30 * 60;
@@ -81,6 +82,7 @@ export const createAuth = (
           return mailProvider.sendMagicLink({ to: email, url, ...invitation });
         },
       }),
+      stagingEmailLogin({ enabled: env.APP_ENV === 'staging' }),
     ],
   });
 };
