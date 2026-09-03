@@ -44,10 +44,12 @@ const NavigationItems = ({
 
 export const ParticipantNavigation = ({
   activeItemId,
+  contextAction,
   items,
   label = 'Hlavní navigace',
 }: {
   activeItemId: string;
+  contextAction?: NavigationItem;
   items: NavigationItem[];
   label?: string;
 }) => {
@@ -61,7 +63,20 @@ export const ParticipantNavigation = ({
         aria-label={label}
         style={{ '--ui-nav-count': items.length } as CSSProperties}
       >
-        <NavigationItems activeItemId={activeItemId} items={items} />
+        <div className="ui-participant-nav__inner">
+          <NavigationItems activeItemId={activeItemId} items={items} />
+          {contextAction ? (
+            <a
+              className="ui-participant-nav__context"
+              href={contextAction.href}
+            >
+              <span className="ui-navigation__icon" aria-hidden="true">
+                {contextAction.icon}
+              </span>
+              <span>{contextAction.label}</span>
+            </a>
+          ) : null}
+        </div>
       </nav>
       <div className="ui-participant-nav-spacer" aria-hidden="true" />
     </>

@@ -231,6 +231,11 @@ export const adminAssignmentScopeSchema = z.discriminatedUnion('kind', [
     label: safeInlineTextSchema(120),
   }),
   z.strictObject({
+    kind: z.literal('room'),
+    roomId: uuidSchema,
+    label: safeInlineTextSchema(160),
+  }),
+  z.strictObject({
     kind: z.literal('session'),
     sessionId: uuidSchema,
     label: safeInlineTextSchema(160),
@@ -255,7 +260,7 @@ export type AdminRoleAssignment = z.infer<typeof adminRoleAssignmentSchema>;
 export const adminRoleAssignmentListQuerySchema = z.strictObject({
   role: adminAssignmentRoleSchema.optional(),
   state: z.enum(['active', 'scheduled']).optional(),
-  scopeKind: z.enum(['event', 'station', 'session']).optional(),
+  scopeKind: z.enum(['event', 'station', 'room', 'session']).optional(),
   cursor: opaqueCursorSchema.optional(),
 });
 
@@ -355,13 +360,15 @@ export const adminRoleScopeOptionsResponseSchema = z
         ? kind === 'station'
         : response.role === 'moderator'
           ? kind === 'session'
-          : kind === 'session';
+          : kind === 'room' || kind === 'session';
     const ids = response.options.map((option) =>
       option.kind === 'event'
         ? 'event'
         : option.kind === 'station'
           ? option.stationId
-          : option.sessionId,
+          : option.kind === 'room'
+            ? option.roomId
+            : option.sessionId,
     );
     if (
       response.options.some(({ kind }) => !compatible(kind)) ||

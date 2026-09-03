@@ -100,7 +100,7 @@ const loadAssignedSessionIds = async (
   eventId: string,
   userId: string,
 ): Promise<readonly string[]> => {
-  const [membership, assignment] = await Promise.all([
+  const [membership, assignments, speakerProfile] = await Promise.all([
     dependencies.db.query.eventMemberships.findFirst({
       columns: { userId: true },
       where: and(
@@ -109,7 +109,7 @@ const loadAssignedSessionIds = async (
         eq(schema.eventMemberships.status, 'active'),
       ),
     }),
-    dependencies.db.query.eventRoles.findFirst({
+    dependencies.db.query.eventRoles.findMany({
       columns: { scope: true },
       where: and(
         eq(schema.eventRoles.eventId, eventId),
@@ -118,16 +118,61 @@ const loadAssignedSessionIds = async (
         isNull(schema.eventRoles.revokedAt),
       ),
     }),
+    dependencies.db.query.speakerProfiles.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.speakerProfiles.eventId, eventId),
+        eq(schema.speakerProfiles.userId, userId),
+      ),
+    }),
   ]);
-  if (!membership || !assignment) throw eventAccessDenied();
+  if (!membership || (assignments.length === 0 && !speakerProfile)) {
+    throw eventAccessDenied();
+  }
 
-  const scope = assignmentScopeSchema.safeParse(assignment.scope);
-  if (!scope.success) throw eventAccessDenied();
-  return scope.data.sessionIds ?? [];
+  const sessionIds = new Set<string>();
+  const roomIds = new Set<string>();
+  for (const assignment of assignments) {
+    const scope = assignmentScopeSchema.safeParse(assignment.scope);
+    if (!scope.success) throw eventAccessDenied();
+    scope.data.sessionIds?.forEach((id) => sessionIds.add(id));
+    scope.data.roomIds?.forEach((id) => roomIds.add(id));
+  }
+  const [roomSessions, speakerSessions] = await Promise.all([
+    roomIds.size === 0
+      ? []
+      : dependencies.db.query.programSessions.findMany({
+          columns: { id: true },
+          where: and(
+            eq(schema.programSessions.eventId, eventId),
+            inArray(schema.programSessions.roomId, [...roomIds]),
+          ),
+        }),
+    !speakerProfile
+      ? []
+      : dependencies.db.query.sessionSpeakers.findMany({
+          columns: { sessionId: true },
+          where: and(
+            eq(schema.sessionSpeakers.eventId, eventId),
+            eq(schema.sessionSpeakers.speakerProfileId, speakerProfile.id),
+          ),
+        }),
+  ]);
+  roomSessions.forEach(({ id }) => sessionIds.add(id));
+  speakerSessions.forEach(({ sessionId }) => sessionIds.add(sessionId));
+  if (sessionIds.size > MAX_ASSIGNED_SESSIONS) throw eventAccessDenied();
+  return [...sessionIds];
 };
 
 type RosterParticipant =
   ActivityRosterResponse['sessions'][number]['participants'][number];
+
+interface AssignedActivitySession {
+  sessionId: string;
+  title: string;
+  startsAt: Date;
+  capacity: number | null;
+}
 
 export const loadActivityRoster = async (
   headers: Headers,
@@ -209,6 +254,7 @@ export const loadActivityRoster = async (
           .select({
             sessionId: schema.programSessions.id,
             capacity: schema.programSessions.capacity,
+            capacityMode: schema.programSessions.capacityMode,
             reservationGroupId: schema.programSessions.reservationGroupId,
           })
           .from(schema.programSessions)
@@ -217,7 +263,6 @@ export const loadActivityRoster = async (
               eq(schema.programSessions.eventId, event.id),
               inArray(schema.programSessions.id, publishedSessionIds),
               inArray(schema.programSessions.status, ['draft', 'published']),
-              eq(schema.programSessions.capacityMode, 'reservation'),
             ),
           )
           .orderBy(asc(schema.programSessions.id));
@@ -230,15 +275,26 @@ export const loadActivityRoster = async (
   );
   const assignedSessionTargets = new Set<string>();
   const assignedSessions = publishedSessionIds
-    .flatMap((sessionId) => {
+    .flatMap<AssignedActivitySession>((sessionId) => {
       const publishedSession = publishedById.get(sessionId);
       const operationalSession = operationalById.get(sessionId);
+      if (!publishedSession || !operationalSession) {
+        return [];
+      }
       if (
-        !publishedSession ||
-        !operationalSession ||
+        operationalSession.capacityMode !== 'reservation' ||
         operationalSession.capacity === null
       ) {
-        return [];
+        if (assignedSessionTargets.has(sessionId)) return [];
+        assignedSessionTargets.add(sessionId);
+        return [
+          {
+            sessionId,
+            title: publishedSession.title,
+            startsAt: new Date(publishedSession.startsAt),
+            capacity: null,
+          },
+        ];
       }
       const reservationTargetId =
         operationalSession.reservationGroupId ?? sessionId;
@@ -265,7 +321,9 @@ export const loadActivityRoster = async (
     throw rosterNotFound();
   }
 
-  const sessionIds = assignedSessions.map(({ sessionId }) => sessionId);
+  const sessionIds = assignedSessions
+    .filter(({ capacity }) => capacity !== null)
+    .map(({ sessionId }) => sessionId);
   const participantsBySession = new Map<string, RosterParticipant[]>();
   if (sessionIds.length > 0) {
     const maximumParticipantRows =

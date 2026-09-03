@@ -39,6 +39,7 @@ const ids = {
   assignment: '019fa200-0000-7000-8000-000000000008',
   station: '019fa200-0000-7000-8000-000000000009',
   member: '019fa200-0000-7000-8000-000000000010',
+  room: '019fa200-0000-7000-8000-000000000011',
 } as const;
 
 describe('CS-ADMIN-01 contracts', () => {
@@ -155,6 +156,20 @@ describe('CS-ADMIN-01 contracts', () => {
         ],
       }).success,
     ).toBe(false);
+    expect(
+      adminRoleScopeOptionsResponseSchema.parse({
+        eventId: ids.event,
+        role: 'room_operator',
+        options: [
+          { kind: 'room', roomId: ids.room, label: 'Koučovací zóna' },
+          {
+            kind: 'session',
+            sessionId: ids.session,
+            label: 'Koučink – dopolední slot',
+          },
+        ],
+      }),
+    ).toBeTruthy();
   });
 
   it('returns server-derived actor permissions and scope as private data', () => {

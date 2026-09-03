@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('./participant-account-resource', () => ({
+  useParticipantAccountResourceOptional: () => null,
+}));
 
 import {
   archivedNavigationActiveId,
+  participantActivityContextAction,
   participantNavigationActiveId,
   participantNavigationItemsForMode,
 } from './participant-shell-navigation';
@@ -81,6 +86,24 @@ describe('participant shell navigation', () => {
 
   it('does not expose participant destinations while the event is unavailable', () => {
     expect(participantNavigationItemsForMode('unavailable')).toEqual([]);
+  });
+
+  it('offers activity management only to linked speakers and activity leaders in an active event', () => {
+    expect(
+      participantActivityContextAction(['participant', 'speaker'], 'active'),
+    ).toMatchObject({ href: '/host/aktivity', label: 'Správa aktivit' });
+    expect(
+      participantActivityContextAction(
+        ['participant', 'room_operator'],
+        'active-preview',
+      ),
+    ).toMatchObject({ href: '/host/aktivity' });
+    expect(
+      participantActivityContextAction(['participant'], 'active'),
+    ).toBeUndefined();
+    expect(
+      participantActivityContextAction(['participant', 'speaker'], 'archived'),
+    ).toBeUndefined();
   });
 
   it.each([

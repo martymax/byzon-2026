@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -202,6 +202,14 @@ const schemas = {
     instagramUrl: publishedSpeakerSchema.shape.instagramUrl,
     facebookUrl: publishedSpeakerSchema.shape.facebookUrl,
     websiteUrl: publishedSpeakerSchema.shape.websiteUrl.optional(),
+    accountEmail: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email()
+      .max(320)
+      .nullable()
+      .optional(),
     sessionIds: z.array(uuid).max(50).optional(),
     sortOrder,
     status,
@@ -346,7 +354,7 @@ const listRows = async (
     case 'speakers': {
       const [speakers, links] = await Promise.all([
         db.query.speakerProfiles.findMany({
-          columns: adminContentListColumns.speakers,
+          columns: { ...adminContentListColumns.speakers, userId: true },
           where: eq(schema.speakerProfiles.eventId, eventId),
           orderBy: [asc(schema.speakerProfiles.sortOrder)],
         }),
@@ -356,8 +364,23 @@ const listRows = async (
           orderBy: [asc(schema.sessionSpeakers.sortOrder)],
         }),
       ]);
-      return speakers.map((speaker) => ({
+      const userIds = speakers.flatMap(({ userId }) =>
+        userId === null ? [] : [userId],
+      );
+      const users =
+        userIds.length === 0
+          ? []
+          : await db.query.users.findMany({
+              columns: { email: true, id: true },
+              where: inArray(schema.users.id, userIds),
+            });
+      const emailsByUserId = new Map(
+        users.map(({ email, id: userId }) => [userId, email.toLowerCase()]),
+      );
+      return speakers.map(({ userId, ...speaker }) => ({
         ...speaker,
+        accountEmail:
+          userId === null ? null : (emailsByUserId.get(userId) ?? null),
         sessionIds: links
           .filter((link) => link.speakerProfileId === speaker.id)
           .map((link) => link.sessionId),
@@ -381,6 +404,152 @@ const listRows = async (
         where: eq(schema.faqItems.eventId, eventId),
         orderBy: [asc(schema.faqItems.sortOrder)],
       });
+  }
+};
+
+const syncSpeakerAccount = async (
+  db: Database,
+  eventId: string,
+  speakerProfileId: string,
+  accountEmail: string | null,
+) => {
+  const speaker = await db.query.speakerProfiles.findFirst({
+    columns: { userId: true },
+    where: and(
+      eq(schema.speakerProfiles.eventId, eventId),
+      eq(schema.speakerProfiles.id, speakerProfileId),
+    ),
+  });
+  if (!speaker) return;
+
+  const normalizedEmail = accountEmail?.trim().toLowerCase() || null;
+  let nextUserId: string | null = null;
+  if (normalizedEmail !== null) {
+    const user = await db.query.users.findFirst({
+      columns: { id: true },
+      where: sql<boolean>`lower(${schema.users.email}) = ${normalizedEmail}`,
+    });
+    if (!user) {
+      throw new ApiProblemError({
+        status: 409,
+        code: 'SPEAKER_ACCOUNT_NOT_FOUND',
+        title: 'Participant account not found',
+        detail:
+          'Create the participant account first, then link it to the speaker.',
+        fieldErrors: {
+          accountEmail: [
+            'Nejdřív vytvořte účastníka s tímto e-mailem v části Účastníci.',
+          ],
+        },
+      });
+    }
+    const [membership, participantProfile, participantRole, otherSpeaker] =
+      await Promise.all([
+        db.query.eventMemberships.findFirst({
+          columns: { userId: true },
+          where: and(
+            eq(schema.eventMemberships.eventId, eventId),
+            eq(schema.eventMemberships.userId, user.id),
+            eq(schema.eventMemberships.status, 'active'),
+          ),
+        }),
+        db.query.participantProfiles.findFirst({
+          columns: { userId: true },
+          where: and(
+            eq(schema.participantProfiles.eventId, eventId),
+            eq(schema.participantProfiles.userId, user.id),
+          ),
+        }),
+        db.query.eventRoles.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(schema.eventRoles.eventId, eventId),
+            eq(schema.eventRoles.userId, user.id),
+            eq(schema.eventRoles.role, 'participant'),
+            isNull(schema.eventRoles.revokedAt),
+          ),
+        }),
+        db.query.speakerProfiles.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(schema.speakerProfiles.eventId, eventId),
+            eq(schema.speakerProfiles.userId, user.id),
+          ),
+        }),
+      ]);
+    if (!membership || !participantProfile || !participantRole) {
+      throw new ApiProblemError({
+        status: 409,
+        code: 'SPEAKER_PARTICIPANT_ACCESS_REQUIRED',
+        title: 'Participant access required',
+        detail:
+          'The linked identity must have an active participant account for this event.',
+        fieldErrors: {
+          accountEmail: [
+            'Tento e-mail nemá aktivní účastnický účet pro tuto akci.',
+          ],
+        },
+      });
+    }
+    if (otherSpeaker && otherSpeaker.id !== speakerProfileId) {
+      throw new ApiProblemError({
+        status: 409,
+        code: 'SPEAKER_ACCOUNT_ALREADY_LINKED',
+        title: 'Participant account already linked',
+        detail: 'The participant account is linked to another speaker.',
+        fieldErrors: {
+          accountEmail: [
+            'Tento účastnický účet už je propojený s jiným řečníkem.',
+          ],
+        },
+      });
+    }
+    nextUserId = user.id;
+  }
+
+  if (speaker.userId !== nextUserId) {
+    if (speaker.userId !== null) {
+      await db
+        .update(schema.eventRoles)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(schema.eventRoles.eventId, eventId),
+            eq(schema.eventRoles.userId, speaker.userId),
+            eq(schema.eventRoles.role, 'speaker'),
+            isNull(schema.eventRoles.revokedAt),
+          ),
+        );
+    }
+    await db
+      .update(schema.speakerProfiles)
+      .set({ userId: nextUserId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.speakerProfiles.eventId, eventId),
+          eq(schema.speakerProfiles.id, speakerProfileId),
+        ),
+      );
+  }
+  if (nextUserId !== null) {
+    const role = await db.query.eventRoles.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.eventRoles.eventId, eventId),
+        eq(schema.eventRoles.userId, nextUserId),
+        eq(schema.eventRoles.role, 'speaker'),
+        isNull(schema.eventRoles.revokedAt),
+      ),
+    });
+    if (!role) {
+      await db.insert(schema.eventRoles).values({
+        id: generateUuidV7(),
+        eventId,
+        userId: nextUserId,
+        role: 'speaker',
+        scope: {},
+      });
+    }
   }
 };
 
@@ -528,7 +697,7 @@ const createRow = async (
   data: Record<string, unknown>,
 ) => {
   const id = generateUuidV7();
-  const { sessionIds, speakerIds, ...persistedData } = data;
+  const { accountEmail, sessionIds, speakerIds, ...persistedData } = data;
   switch (resource) {
     case 'days':
       await db
@@ -572,6 +741,14 @@ const createRow = async (
       if (Array.isArray(sessionIds)) {
         await syncSpeakerSessions(db, eventId, id, sessionIds.map(String));
       }
+      if (Object.hasOwn(data, 'accountEmail')) {
+        await syncSpeakerAccount(
+          db,
+          eventId,
+          id,
+          typeof accountEmail === 'string' ? accountEmail : null,
+        );
+      }
       break;
     case 'partners':
       await db
@@ -601,7 +778,7 @@ const updateRow = async (
   expectedVersion?: number,
 ) => {
   const updatedAt = new Date();
-  const { sessionIds, speakerIds, ...persistedData } = data;
+  const { accountEmail, sessionIds, speakerIds, ...persistedData } = data;
   let rows: Array<{ id: string }>;
   switch (resource) {
     case 'days':
@@ -736,6 +913,14 @@ const updateRow = async (
   }
   if (resource === 'speakers' && Array.isArray(sessionIds)) {
     await syncSpeakerSessions(db, eventId, id, sessionIds.map(String));
+  }
+  if (resource === 'speakers' && Object.hasOwn(data, 'accountEmail')) {
+    await syncSpeakerAccount(
+      db,
+      eventId,
+      id,
+      typeof accountEmail === 'string' ? accountEmail : null,
+    );
   }
 };
 

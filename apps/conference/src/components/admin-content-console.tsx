@@ -336,6 +336,7 @@ export const adminContentBodyFromForm = (
       jobTitle: value('jobTitle') || null,
       company: value('company') || null,
       bioMarkdown: value('bioMarkdown') || null,
+      accountEmail: value('accountEmail').toLowerCase() || null,
       linkedinUrl: value('linkedinUrl') || null,
       instagramUrl: value('instagramUrl') || null,
       facebookUrl: value('facebookUrl') || null,
@@ -1890,6 +1891,24 @@ export const AdminContentConsole = ({
             ) : null}
             {resource === 'speakers' ? (
               <>
+                <label className={`${styles.field} ${styles.contentWide}`}>
+                  <span>E-mail účastnického účtu (nepovinný)</span>
+                  <input
+                    autoComplete="email"
+                    defaultValue={String(editing?.accountEmail ?? '')}
+                    name="accountEmail"
+                    placeholder="jmeno@example.cz"
+                    type="email"
+                    {...fieldA11y(fieldErrors, 'accountEmail')}
+                  />
+                  <span className={styles.helper}>
+                    Propojí profil s existujícím účastníkem. Pokud účet ještě
+                    neexistuje, vytvořte ho nejdřív v části Účastníci. Řečník
+                    pak může přepínat mezi účastnickou aplikací a správou svých
+                    aktivit.
+                  </span>
+                  <FieldError errors={fieldErrors} name="accountEmail" />
+                </label>
                 {editing ? (
                   <AdminContentAssetField
                     eventId={eventId}

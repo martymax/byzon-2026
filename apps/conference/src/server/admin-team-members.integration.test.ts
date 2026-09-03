@@ -4,7 +4,7 @@ import {
   adminTeamMemberListResponseSchema,
   adminTeamMemberMutationResponseSchema,
 } from '@byzon/domain/contracts';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -29,7 +29,11 @@ integration('admin team member integration', () => {
   const eventId = crypto.randomUUID();
   const eventSlug = `admin-team-${eventId}`;
   const adminId = crypto.randomUUID();
+  const leaderId = crypto.randomUUID();
+  const venueId = crypto.randomUUID();
+  const roomId = crypto.randomUUID();
   const invitedEmail = `team-${eventId}@example.invalid`;
+  const leaderEmail = `leader-${eventId}@example.invalid`;
   const url = `${origin}/api/v1/admin/events/${eventId}/team-members`;
   let invitedId: string | null = null;
 
@@ -43,22 +47,64 @@ integration('admin team member integration', () => {
       timezone: 'Europe/Prague',
       status: 'activation_open',
     });
-    await client.db.insert(schema.users).values({
-      id: adminId,
-      name: 'Původní administrátor',
-      email: `team-admin-${adminId}@example.invalid`,
-      emailVerified: true,
-    });
-    await client.db.insert(schema.eventMemberships).values({
+    await client.db.insert(schema.users).values([
+      {
+        id: adminId,
+        name: 'Původní administrátor',
+        email: `team-admin-${adminId}@example.invalid`,
+        emailVerified: true,
+      },
+      {
+        id: leaderId,
+        name: 'Tomáš Vedoucí',
+        email: leaderEmail,
+        emailVerified: true,
+      },
+    ]);
+    await client.db.insert(schema.eventMemberships).values(
+      [adminId, leaderId].map((userId) => ({
+        eventId,
+        userId,
+        status: 'active' as const,
+      })),
+    );
+    await client.db.insert(schema.eventRoles).values([
+      {
+        id: crypto.randomUUID(),
+        eventId,
+        userId: adminId,
+        role: 'organizer_admin',
+      },
+      {
+        id: crypto.randomUUID(),
+        eventId,
+        userId: leaderId,
+        role: 'participant',
+      },
+    ]);
+    await client.db.insert(schema.participantProfiles).values({
       eventId,
-      userId: adminId,
-      status: 'active',
+      userId: leaderId,
+      firstName: 'Tomáš',
+      lastName: 'Vedoucí',
+      contactEmail: leaderEmail,
     });
-    await client.db.insert(schema.eventRoles).values({
-      id: crypto.randomUUID(),
+    await client.db.insert(schema.venues).values({
+      id: venueId,
       eventId,
-      userId: adminId,
-      role: 'organizer_admin',
+      slug: `team-venue-${venueId}`,
+      name: 'Hotel Passage',
+      status: 'published',
+      sortOrder: 0,
+    });
+    await client.db.insert(schema.rooms).values({
+      id: roomId,
+      eventId,
+      venueId,
+      slug: `team-room-${roomId}`,
+      name: 'Mastermind salonek',
+      status: 'published',
+      sortOrder: 0,
     });
   });
 
@@ -70,7 +116,9 @@ integration('admin team member integration', () => {
     await client.db.delete(schema.users).where(
       inArray(
         schema.users.id,
-        [adminId, invitedId].filter((id): id is string => id !== null),
+        [adminId, leaderId, invitedId].filter(
+          (id): id is string => id !== null,
+        ),
       ),
     );
     await client.close();
@@ -239,5 +287,91 @@ integration('admin team member integration', () => {
     );
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: 'SELF_LOCKOUT_GUARD' });
+  });
+
+  it('adds room leadership to an existing participant identity', async () => {
+    const response = await handleAdminTeamMemberMutation(
+      mutationRequest({
+        action: 'add',
+        displayName: 'Tomáš Vedoucí',
+        email: leaderEmail,
+        access: {
+          role: 'room_operator',
+          scope: {
+            kind: 'room',
+            roomId,
+            label: 'Mastermind salonek',
+          },
+        },
+        expectedVersion: 4,
+        reason: 'Přiřazení vedoucího všech aktivit v mastermind salonku.',
+      }),
+      eventId,
+      dependencies(),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      adminTeamMemberMutationResponseSchema.parse(await response.json()),
+    ).toMatchObject({
+      outcome: 'added',
+      teamVersion: 5,
+      member: {
+        memberId: leaderId,
+        email: leaderEmail,
+        roles: ['room_operator'],
+      },
+    });
+
+    const roles = await client.db.query.eventRoles.findMany({
+      columns: { role: true, scope: true },
+      where: and(
+        eq(schema.eventRoles.eventId, eventId),
+        eq(schema.eventRoles.userId, leaderId),
+        isNull(schema.eventRoles.revokedAt),
+      ),
+    });
+    expect(roles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'participant' }),
+        expect.objectContaining({
+          role: 'room_operator',
+          scope: { roomIds: [roomId] },
+        }),
+      ]),
+    );
+
+    const removedResponse = await handleAdminTeamMemberMutation(
+      mutationRequest({
+        action: 'remove',
+        memberId: leaderId,
+        expectedVersion: 5,
+        reason: 'Odebrání pouze správy aktivit.',
+      }),
+      eventId,
+      dependencies(),
+    );
+    expect(removedResponse.status).toBe(200);
+    expect(
+      adminTeamMemberMutationResponseSchema.parse(await removedResponse.json()),
+    ).toMatchObject({ outcome: 'removed', teamVersion: 6, member: null });
+
+    const remainingRoles = await client.db.query.eventRoles.findMany({
+      columns: { role: true },
+      where: and(
+        eq(schema.eventRoles.eventId, eventId),
+        eq(schema.eventRoles.userId, leaderId),
+        isNull(schema.eventRoles.revokedAt),
+      ),
+    });
+    expect(remainingRoles).toEqual([{ role: 'participant' }]);
+    await expect(
+      client.db.query.eventMemberships.findFirst({
+        columns: { status: true },
+        where: and(
+          eq(schema.eventMemberships.eventId, eventId),
+          eq(schema.eventMemberships.userId, leaderId),
+        ),
+      }),
+    ).resolves.toEqual({ status: 'active' });
   });
 });

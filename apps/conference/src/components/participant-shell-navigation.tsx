@@ -4,6 +4,8 @@ import { ParticipantNavigation, type NavigationItem } from '@byzon/ui';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { useParticipantAccountResourceOptional } from './participant-account-resource';
+
 export type ParticipantShellNavigationMode =
   'active' | 'active-preview' | 'archived' | 'archived-preview' | 'unavailable';
 
@@ -42,6 +44,18 @@ const accountNavigationItem: NavigationItem = {
     <NavigationIcon>
       <circle cx="12" cy="8" r="4" />
       <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+    </NavigationIcon>
+  ),
+};
+
+const activityManagementNavigationItem: NavigationItem = {
+  id: 'activity-management',
+  href: '/host/aktivity',
+  label: 'Správa aktivit',
+  icon: (
+    <NavigationIcon>
+      <rect height="15" rx="2" width="18" x="3" y="5" />
+      <path d="M8 3v4M16 3v4M3 10h18M8 15h8M8 18h5" />
     </NavigationIcon>
   ),
 };
@@ -161,14 +175,30 @@ export const archivedNavigationActiveId = (pathname: string): string => {
   return '';
 };
 
+export const participantActivityContextAction = (
+  roles: readonly string[],
+  mode: ParticipantShellNavigationMode,
+): NavigationItem | undefined =>
+  (mode === 'active' || mode === 'active-preview') &&
+  (roles.includes('speaker') || roles.includes('room_operator'))
+    ? activityManagementNavigationItem
+    : undefined;
+
 export const ParticipantShellNavigation = ({
   mode = 'active',
 }: {
   readonly mode?: ParticipantShellNavigationMode;
 }) => {
   const pathname = usePathname();
+  const account = useParticipantAccountResourceOptional();
   const items = participantNavigationItemsForMode(mode);
   const archived = mode === 'archived' || mode === 'archived-preview';
+  const contextAction = participantActivityContextAction(
+    account?.state.status === 'ready'
+      ? account.state.data.membership.roles
+      : [],
+    mode,
+  );
 
   if (items.length === 0) return null;
 
@@ -179,6 +209,7 @@ export const ParticipantShellNavigation = ({
           ? archivedNavigationActiveId(pathname)
           : participantNavigationActiveId(pathname)
       }
+      {...(contextAction ? { contextAction } : {})}
       items={items}
       label={archived ? 'Navigace archivovaného účtu' : 'Hlavní navigace'}
     />

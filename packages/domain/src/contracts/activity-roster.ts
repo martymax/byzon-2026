@@ -40,7 +40,7 @@ export const activityRosterSessionSchema = z
     sessionId: uuidSchema,
     title: safeTextSchema(160),
     startsAt: dateTimeSchema,
-    capacity: z.number().int().positive(),
+    capacity: z.number().int().positive().nullable(),
     participants: z.array(activityRosterParticipantSchema).max(250),
   })
   .superRefine((session, context) => {
@@ -55,7 +55,14 @@ export const activityRosterSessionSchema = z
     const reserved = session.participants.filter(
       ({ state }) => state === 'reserved',
     ).length;
-    if (reserved > session.capacity) {
+    if (session.capacity === null && session.participants.length > 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['participants'],
+        message: 'Sessions without reservations cannot expose a roster',
+      });
+    }
+    if (session.capacity !== null && reserved > session.capacity) {
       context.addIssue({
         code: 'custom',
         path: ['participants'],

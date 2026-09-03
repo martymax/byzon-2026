@@ -295,6 +295,17 @@ const validateScope = async (
       if (features?.questionsEnabled) return { sessionIds: [scope.sessionId] };
     }
   }
+  if (role === 'room_operator' && scope.kind === 'room') {
+    const room = await db.query.rooms.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.rooms.eventId, eventId),
+        eq(schema.rooms.id, scope.roomId),
+        ne(schema.rooms.status, 'archived'),
+      ),
+    });
+    if (room) return { roomIds: [scope.roomId] };
+  }
   throw problem(
     409,
     'ADMIN_INVALID_TRANSITION',
@@ -623,28 +634,44 @@ export const handleAdminTeamMemberMutation = async (
                 and(
                   eq(schema.eventRoles.eventId, eventId),
                   eq(schema.eventRoles.userId, memberId),
+                  inArray(schema.eventRoles.role, TEAM_ROLES),
                   isNull(schema.eventRoles.revokedAt),
                 ),
               );
-            await transaction
-              .update(schema.eventMemberships)
-              .set({
-                status: 'revoked',
-                revokedAt: changedAt,
-                revocationReason: parsed.data.reason,
-                offlineRevocationEpoch: crypto.randomUUID(),
-              })
-              .where(
-                and(
-                  eq(schema.eventMemberships.eventId, eventId),
-                  eq(schema.eventMemberships.userId, memberId),
-                ),
-              );
-            await transaction
-              .delete(schema.sessions)
-              .where(eq(schema.sessions.userId, memberId));
+            const remainingRoles = await transaction.query.eventRoles.findMany({
+              columns: { role: true },
+              where: and(
+                eq(schema.eventRoles.eventId, eventId),
+                eq(schema.eventRoles.userId, memberId),
+                isNull(schema.eventRoles.revokedAt),
+              ),
+            });
+            const membershipStatus =
+              remainingRoles.length > 0 ? 'active' : 'revoked';
+            if (membershipStatus === 'revoked') {
+              await transaction
+                .update(schema.eventMemberships)
+                .set({
+                  status: 'revoked',
+                  revokedAt: changedAt,
+                  revocationReason: parsed.data.reason,
+                  offlineRevocationEpoch: crypto.randomUUID(),
+                })
+                .where(
+                  and(
+                    eq(schema.eventMemberships.eventId, eventId),
+                    eq(schema.eventMemberships.userId, memberId),
+                  ),
+                );
+              await transaction
+                .delete(schema.sessions)
+                .where(eq(schema.sessions.userId, memberId));
+            }
             outcome = 'removed';
-            after = { membershipStatus: 'revoked', roleCount: 0 };
+            after = {
+              membershipStatus,
+              roleCount: remainingRoles.length,
+            };
           } else {
             const wasAdministrator = target.roles.includes('organizer_admin');
             if (wasAdministrator && !parsed.data.administrator) {

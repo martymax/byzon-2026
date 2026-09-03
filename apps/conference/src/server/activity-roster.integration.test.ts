@@ -35,6 +35,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
   const groupedMastermindPartTwoSessionId = crypto.randomUUID();
   const isolationSessionId = crypto.randomUUID();
   const operatorId = crypto.randomUUID();
+  const speakerId = crypto.randomUUID();
   const emptyOperatorId = crypto.randomUUID();
   const noRoleUserId = crypto.randomUUID();
   const suspendedOperatorId = crypto.randomUUID();
@@ -50,6 +51,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
   const fixedNow = new Date('2026-09-18T08:00:00.000Z');
   const allUserIds = [
     operatorId,
+    speakerId,
     emptyOperatorId,
     noRoleUserId,
     suspendedOperatorId,
@@ -147,6 +149,13 @@ integration('CS-ROSTER-01 HTTP integration', () => {
       {
         id: crypto.randomUUID(),
         eventId,
+        userId: speakerId,
+        role: 'speaker',
+        scope: {},
+      },
+      {
+        id: crypto.randomUUID(),
+        eventId,
         userId: suspendedOperatorId,
         role: 'room_operator',
         scope: { sessionIds: [assignedSessionId] },
@@ -199,6 +208,13 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         lastName: 'Účastník',
         company: 'Nezobrazovat',
         contactEmail: `private-${inactiveUserId}@example.invalid`,
+      },
+      {
+        eventId,
+        userId: speakerId,
+        firstName: 'Dana',
+        lastName: 'Řečnice',
+        contactEmail: `private-${speakerId}@example.invalid`,
       },
     ]);
     await client.db.insert(schema.eventDays).values([
@@ -333,6 +349,22 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         sortOrder: 0,
       },
     ]);
+    const speakerProfileId = crypto.randomUUID();
+    await client.db.insert(schema.speakerProfiles).values({
+      id: speakerProfileId,
+      eventId,
+      userId: speakerId,
+      slug: `speaker-${speakerId}`,
+      firstName: 'Dana',
+      lastName: 'Řečnice',
+      sortOrder: 0,
+    });
+    await client.db.insert(schema.sessionSpeakers).values({
+      eventId,
+      sessionId: nonCapacitySessionId,
+      speakerProfileId,
+      sortOrder: 0,
+    });
     await client.db.insert(schema.contentPublications).values({
       id: crypto.randomUUID(),
       eventId,
@@ -542,6 +574,13 @@ integration('CS-ROSTER-01 HTTP integration', () => {
           participants: [],
         },
         {
+          sessionId: nonCapacitySessionId,
+          title: 'Nekapacitní přednáška',
+          startsAt: '2026-09-18T11:00:00.000Z',
+          capacity: null,
+          participants: [],
+        },
+        {
           sessionId: groupedMastermindSessionId,
           title: 'Mastermind část 1',
           startsAt: '2026-09-18T13:00:00.000Z',
@@ -591,6 +630,26 @@ integration('CS-ROSTER-01 HTTP integration', () => {
       expect(response.status).toBe(404);
       expect(await response.json()).toMatchObject({ code: 'ROSTER_NOT_FOUND' });
     }
+  });
+
+  it("derives a speaker's own program sessions from the linked profile", async () => {
+    const response = await readActivityRoster(
+      request(),
+      dependencies(speakerId),
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      activityRosterResponseSchema.parse(await response.json()).sessions,
+    ).toEqual([
+      {
+        sessionId: nonCapacitySessionId,
+        title: 'Nekapacitní přednáška',
+        startsAt: '2026-09-18T11:00:00.000Z',
+        capacity: null,
+        participants: [],
+      },
+    ]);
   });
 
   it('resolves an assignment to the second mastermind part to the shared roster', async () => {

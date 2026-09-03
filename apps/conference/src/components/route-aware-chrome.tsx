@@ -17,6 +17,8 @@ export const RouteAwareChrome = ({
 }) => {
   const pathname = usePathname();
   const participantRoute = pathname === '/app' || pathname.startsWith('/app/');
+  const hostRoute = pathname === '/host' || pathname.startsWith('/host/');
+  const signedInApplicationRoute = participantRoute || hostRoute;
 
   if (isAdminPath(pathname)) return children;
 
@@ -29,12 +31,12 @@ export const RouteAwareChrome = ({
         <Link
           aria-current={pathname === '/app' ? 'page' : undefined}
           aria-label={
-            participantRoute
-              ? 'BYZON – přehled účastnické aplikace'
+            signedInApplicationRoute
+              ? 'BYZON – účastnická aplikace'
               : 'BYZON – přihlášení'
           }
           className="brand"
-          href={participantRoute ? '/app' : '/'}
+          href={signedInApplicationRoute ? '/app' : '/'}
         >
           <Image
             alt=""

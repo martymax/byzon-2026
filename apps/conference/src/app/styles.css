@@ -128,6 +128,41 @@ h1 span {
   min-width: 0;
   padding-bottom: calc(4.5rem + var(--byzon-safe-bottom));
 }
+.activity-context-switch {
+  width: fit-content;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  margin-bottom: var(--byzon-space-5);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-pill);
+  background: var(--byzon-surface);
+}
+.activity-context-switch a,
+.activity-context-switch span {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  border-radius: var(--byzon-radius-pill);
+  font-weight: 650;
+  text-decoration: none;
+}
+.activity-context-switch a:hover {
+  background: var(--byzon-brand-soft);
+}
+.activity-context-switch a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 2px;
+}
+.activity-context-switch [aria-current='page'] {
+  color: white;
+  background: var(--byzon-brand-active);
+}
+.activity-roster-note {
+  margin-top: var(--byzon-space-4);
+  color: var(--byzon-text-muted);
+}
 .participant-notification-link {
   position: fixed;
   z-index: 40;

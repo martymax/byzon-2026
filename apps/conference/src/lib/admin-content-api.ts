@@ -205,6 +205,7 @@ const resourceItemSchemas = {
   speakers: z
     .object({
       ...versionedItemBase,
+      accountEmail: z.string().email().nullable().optional(),
       bioMarkdown: itemNullableText,
       company: itemNullableText,
       firstName: itemText,

@@ -38,6 +38,8 @@ integration('admin role and export integration', () => {
   const staffId = crypto.randomUUID();
   const participantId = crypto.randomUUID();
   const dayId = crypto.randomUUID();
+  const venueId = crypto.randomUUID();
+  const roomId = crypto.randomUUID();
   const sessionId = crypto.randomUUID();
   const stationId = crypto.randomUUID();
   const assignmentId = crypto.randomUUID();
@@ -105,10 +107,28 @@ integration('admin role and export integration', () => {
       title: 'Hlavní den',
       sortOrder: 0,
     });
+    await client.db.insert(schema.venues).values({
+      id: venueId,
+      eventId,
+      slug: `role-venue-${venueId}`,
+      name: 'Hotel Passage',
+      status: 'published',
+      sortOrder: 0,
+    });
+    await client.db.insert(schema.rooms).values({
+      id: roomId,
+      eventId,
+      venueId,
+      slug: `role-room-${roomId}`,
+      name: 'Koučovací zóna',
+      status: 'published',
+      sortOrder: 0,
+    });
     await client.db.insert(schema.programSessions).values({
       id: sessionId,
       eventId,
       dayId,
+      roomId,
       slug: `role-session-${sessionId}`,
       title: 'Růst bez zkratek',
       type: 'workshop',
@@ -130,7 +150,7 @@ integration('admin role and export integration', () => {
       eventId,
       userId: staffId,
       role: 'room_operator',
-      scope: { sessionIds: [sessionId] },
+      scope: { roomIds: [roomId] },
       grantedBy: adminId,
     });
     await client.db.insert(schema.operationalExportRequests).values([
@@ -207,8 +227,8 @@ integration('admin role and export integration', () => {
         assignmentId,
         operatorLabel: 'Patrik Provozní',
         scope: expect.objectContaining({
-          kind: 'session',
-          label: 'Růst bez zkratek',
+          kind: 'room',
+          label: 'Koučovací zóna',
         }),
       }),
     ]);
@@ -235,10 +255,10 @@ integration('admin role and export integration', () => {
   });
 
   it('returns only role-compatible server-named scope options', async () => {
-    for (const [role, expectedKind] of [
-      ['checkin_operator', 'station'],
-      ['moderator', 'session'],
-      ['room_operator', 'session'],
+    for (const [role, expectedKinds] of [
+      ['checkin_operator', ['station']],
+      ['moderator', ['session']],
+      ['room_operator', ['room', 'session']],
     ] as const) {
       const response = await handleAdminRoleScopeOptions(
         new Request(`${url}/scope-options`, {
@@ -253,9 +273,7 @@ integration('admin role and export integration', () => {
       const body = adminRoleScopeOptionsResponseSchema.parse(
         await response.json(),
       );
-      expect(body.options).toEqual([
-        expect.objectContaining({ kind: expectedKind }),
-      ]);
+      expect(body.options.map(({ kind }) => kind)).toEqual(expectedKinds);
     }
   });
 

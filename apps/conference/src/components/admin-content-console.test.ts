@@ -176,6 +176,7 @@ describe('admin content form contract mapping', () => {
     [
       'speakers',
       {
+        accountEmail: 'DANA.NOVA@EXAMPLE.TEST',
         bioMarkdown: 'Bio řečnice.',
         firstName: 'Dana',
         jobTitle: 'Facilitátorka',
@@ -191,6 +192,7 @@ describe('admin content form contract mapping', () => {
         websiteUrl: 'https://example.test/dana',
       },
       {
+        accountEmail: 'dana.nova@example.test',
         bioMarkdown: 'Bio řečnice.',
         company: 'Example.test',
         facebookUrl: 'https://www.facebook.com/dana',

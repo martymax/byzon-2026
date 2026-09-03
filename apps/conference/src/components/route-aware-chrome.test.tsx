@@ -68,7 +68,7 @@ describe('route-aware root chrome', () => {
     );
 
     expect(markup).toContain('href="/app"');
-    expect(markup).toContain('BYZON – přehled účastnické aplikace');
+    expect(markup).toContain('BYZON – účastnická aplikace');
     expect(markup).not.toContain('aria-current="page"');
   });
 
@@ -83,5 +83,18 @@ describe('route-aware root chrome', () => {
 
     expect(markup).toContain('href="/app"');
     expect(markup).toContain('aria-current="page"');
+  });
+
+  it('returns from activity management to the participant application', () => {
+    navigationMocks.pathname.mockReturnValue('/host/aktivity');
+
+    const markup = renderToStaticMarkup(
+      <RouteAwareChrome>
+        <section>Moje aktivity</section>
+      </RouteAwareChrome>,
+    );
+
+    expect(markup).toContain('href="/app"');
+    expect(markup).toContain('BYZON – účastnická aplikace');
   });
 });

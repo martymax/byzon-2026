@@ -52,4 +52,32 @@ describe('CS-ROSTER-01', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('represents a linked speaker session without exposing participant data', () => {
+    expect(
+      activityRosterResponseSchema.safeParse({
+        ...roster,
+        sessions: [
+          {
+            sessionId: '019fb900-0000-7000-8000-000000000005',
+            title: 'Vystoupení řečníka',
+            startsAt: '2026-09-18T12:00:00.000+02:00',
+            capacity: null,
+            participants: [],
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      activityRosterResponseSchema.safeParse({
+        ...roster,
+        sessions: [
+          {
+            ...roster.sessions[0],
+            capacity: null,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
 });

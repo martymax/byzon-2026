@@ -86,7 +86,7 @@ const roleDescriptions: Record<AdminAssignmentRole, string> = {
   moderator:
     'Má pouze serverem schválená oprávnění k přiděleným bodům programu.',
   room_operator:
-    'Vidí read-only seznam rezervovaných účastníků u svých aktivit.',
+    'Spravuje přiřazenou aktivitu nebo všechny aktivity v přidělené místnosti.',
 };
 
 const stateLabels: Record<AdminRoleAssignment['state'], string> = {
@@ -99,7 +99,9 @@ const scopeId = (scope: AdminAssignmentScope): string =>
     ? 'event'
     : scope.kind === 'station'
       ? scope.stationId
-      : scope.sessionId;
+      : scope.kind === 'room'
+        ? scope.roomId
+        : scope.sessionId;
 
 export const AdminTeamRedesign = ({
   dataPort,
@@ -644,6 +646,7 @@ export const AdminTeamRedesign = ({
                   <option value="all">Všechny oblasti</option>
                   <option value="event">Celá akce</option>
                   <option value="station">Stanoviště</option>
+                  <option value="room">Místnosti</option>
                   <option value="session">Aktivity</option>
                 </select>
               </label>

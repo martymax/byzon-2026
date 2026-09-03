@@ -1,5 +1,6 @@
 import {
   contentFixtureIds,
+  identityBootstrapFixtures,
   participantContentFixtures,
   participantProgramFixtures,
 } from '@byzon/test-support/fixtures';
@@ -79,6 +80,37 @@ const ParticipantProgramProbe = () => (
       />
     </section>
   </ParticipantProbe>
+);
+
+const SpeakerParticipantProbe = () => (
+  <main
+    id="main"
+    data-testid="speaker-participant-shell"
+    style={visualTestStyle}
+    tabIndex={-1}
+  >
+    <ParticipantLayout
+      accountApi={apiFor(
+        {
+          ...identityBootstrapFixtures.complete!,
+          membership: {
+            ...identityBootstrapFixtures.complete!.membership,
+            access: { state: 'active' },
+            roles: ['participant', 'speaker'],
+          },
+        },
+        'component-speaker-account-0001',
+      )}
+      accountScope={{ kind: 'active', eventId: program.eventId }}
+      navigationMode="active-preview"
+    >
+      <section className="app-page">
+        <h1 data-route-heading tabIndex={-1}>
+          Program
+        </h1>
+      </section>
+    </ParticipantLayout>
+  </main>
 );
 
 const ParticipantSpeakerProbe = () => (
@@ -245,6 +277,25 @@ describe('F2-06 participant shell and program quality gate', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Zpět na řečníky' }))
       .toHaveAttribute('href', '/app/recnici');
+  });
+
+  it('shows an accessible non-overlapping context switch to linked speakers', async () => {
+    const screen = await renderComponent(<SpeakerParticipantProbe />);
+    const switchLink = screen.getByRole('link', { name: 'Správa aktivit' });
+
+    await expect.element(switchLink).toBeVisible();
+    await expect.element(switchLink).toHaveAttribute('href', '/host/aktivity');
+    const switchBounds = switchLink.element().getBoundingClientRect();
+    const navigationBounds = screen
+      .getByRole('navigation', { name: 'Hlavní navigace' })
+      .element()
+      .getBoundingClientRect();
+    expect(switchBounds.width).toBeGreaterThanOrEqual(44);
+    expect(switchBounds.height).toBeGreaterThanOrEqual(44);
+    if (window.innerWidth < 768) {
+      expect(switchBounds.bottom).toBeLessThanOrEqual(navigationBounds.top);
+    }
+    await expectComponentToPassAxe(screen.container);
   });
 
   it('offers only account-safe destinations in the archived shell', async () => {

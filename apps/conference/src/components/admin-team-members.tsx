@@ -74,7 +74,9 @@ const scopeId = (scope: AdminAssignmentScope): string =>
     ? 'event'
     : scope.kind === 'station'
       ? scope.stationId
-      : scope.sessionId;
+      : scope.kind === 'room'
+        ? scope.roomId
+        : scope.sessionId;
 
 const initialForm = {
   displayName: '',
@@ -413,7 +415,9 @@ export const AdminTeamMembers = ({
           <h2 id="team-members-title">Členové týmu</h2>
           <p className={styles.muted}>
             Přidávejte uživatele, spravujte jejich administrátorský přístup a
-            posílejte nebo obnovujte zvací odkazy.
+            posílejte nebo obnovujte zvací odkazy. Pokud stejný e-mail patří
+            účastníkovi, vedoucí aktivity používá jeden společný účet a může
+            mezi oběma částmi aplikace přepínat.
           </p>
         </div>
         {canAdd ? (
