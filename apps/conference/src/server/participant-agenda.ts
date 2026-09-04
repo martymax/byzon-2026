@@ -32,6 +32,10 @@ import {
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
+import {
+  issueAgendaCalendarTicket,
+  readAgendaCalendarTicket,
+} from './agenda-calendar-ticket';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import type { ParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
@@ -81,6 +85,10 @@ export interface ParticipantAgendaDependencies {
   generateId?: () => string;
   onOperationalDrift?: (drift: ParticipantAgendaOperationalDrift) => void;
   rateLimit?: ParticipantAgendaRateLimiter;
+}
+
+export interface ParticipantAgendaCalendarDependencies extends ParticipantAgendaDependencies {
+  calendarTicketSecret: string;
 }
 
 type AgendaDatabase = Database | DatabaseTransaction;
@@ -235,6 +243,22 @@ const calendarSuccessResponse = (
         'attachment; filename="byzon-2026-moje-agenda.ics"',
     }),
   });
+
+const calendarRedirectResponse = (
+  requestId: string,
+  allowedOrigin: string,
+  ticket: string,
+): Response => {
+  const location = new URL('/api/v1/me/agenda.ics', allowedOrigin);
+  location.searchParams.set('ticket', ticket);
+  return new Response(null, {
+    status: 303,
+    headers: privateHeaders(requestId, 'text/plain; charset=utf-8', {
+      location: location.toString(),
+      'referrer-policy': 'no-referrer',
+    }),
+  });
+};
 
 const withRateLimitHeaders = (
   response: Response,
@@ -1422,13 +1446,118 @@ export const readParticipantAgenda = (
 
 export const readParticipantAgendaCalendar = (
   request: Request,
-  dependencies: ParticipantAgendaDependencies,
+  dependencies: ParticipantAgendaCalendarDependencies,
 ): Promise<Response> =>
-  readParticipantAgendaRepresentation(
-    request,
-    dependencies,
-    calendarSuccessResponse,
-  );
+  readParticipantAgendaCalendarWithTicket(request, dependencies);
+
+const calendarTicketFromRequest = (request: Request): string | null => {
+  if (
+    request.headers.has('idempotency-key') ||
+    request.headers.has('if-match')
+  ) {
+    throw validationFailed({
+      query: ['Calendar download parameters are invalid.'],
+    });
+  }
+  const parameters = [...new URL(request.url).searchParams.entries()];
+  if (parameters.length === 0) return null;
+  if (
+    parameters.length !== 1 ||
+    parameters[0]?.[0] !== 'ticket' ||
+    parameters[0][1].length === 0
+  ) {
+    throw validationFailed({
+      query: ['Calendar download parameters are invalid.'],
+    });
+  }
+  return parameters[0][1];
+};
+
+async function readParticipantAgendaCalendarWithTicket(
+  request: Request,
+  dependencies: ParticipantAgendaCalendarDependencies,
+): Promise<Response> {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    const getNow = dependencies.now ?? (() => new Date());
+    const ticket = calendarTicketFromRequest(request);
+    if (ticket === null) {
+      const session = await requireSession(request, dependencies);
+      rateLimitDecision =
+        (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
+      const now = getNow();
+      const context = await loadAgendaContext(
+        dependencies,
+        session.user.id,
+        now,
+        false,
+      );
+      const body = await loadParticipantAgendaSnapshot(
+        dependencies.db,
+        context,
+        session.user.id,
+        getNow,
+        dependencies.onOperationalDrift,
+      );
+      const sealedTicket = issueAgendaCalendarTicket({
+        secret: dependencies.calendarTicketSecret,
+        now: getNow(),
+        userId: body.userId,
+        eventId: body.eventId,
+        agendaVersion: body.version,
+        publicationVersion: body.publicationVersion,
+      });
+      return withRateLimitHeaders(
+        calendarRedirectResponse(
+          requestId,
+          dependencies.allowedOrigin,
+          sealedTicket,
+        ),
+        rateLimitDecision,
+      );
+    }
+
+    const claims = readAgendaCalendarTicket({
+      secret: dependencies.calendarTicketSecret,
+      token: ticket,
+      now: getNow(),
+    });
+    if (!claims) throw authenticationRequired();
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('read', claims.userId)) ?? null;
+    const context = await loadAgendaContext(
+      dependencies,
+      claims.userId,
+      getNow(),
+      false,
+    );
+    const body = await loadParticipantAgendaSnapshot(
+      dependencies.db,
+      context,
+      claims.userId,
+      getNow,
+      dependencies.onOperationalDrift,
+    );
+    if (
+      body.userId !== claims.userId ||
+      body.eventId !== claims.eventId ||
+      body.version !== claims.agendaVersion ||
+      body.publicationVersion !== claims.publicationVersion
+    ) {
+      throw authenticationRequired();
+    }
+    return withRateLimitHeaders(
+      calendarSuccessResponse(body, requestId),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
+  }
+}
 
 export const mutateParticipantAgenda = async (
   request: Request,

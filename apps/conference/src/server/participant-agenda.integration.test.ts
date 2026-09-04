@@ -18,8 +18,9 @@ import {
   mutateParticipantAgenda,
   readParticipantAgenda,
   readParticipantAgendaCalendar,
-  type ParticipantAgendaDependencies,
+  type ParticipantAgendaCalendarDependencies,
 } from './participant-agenda';
+import { issueAgendaCalendarTicket } from './agenda-calendar-ticket';
 import { createParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -94,12 +95,15 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const reservationSwitchSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
+  const calendarTicketSecret =
+    'participant-agenda-calendar-test-secret-at-least-32-characters';
 
   const dependencies = (
     userId: string | null,
-  ): ParticipantAgendaDependencies => ({
+  ): ParticipantAgendaCalendarDependencies => ({
     db: client.db,
     allowedOrigin: appOrigin,
+    calendarTicketSecret,
     currentEventSlug: eventSlug,
     getSession: vi.fn(async () => (userId ? { user: { id: userId } } : null)),
     now: () => fixedNow,
@@ -918,9 +922,14 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     );
     expect(query.status).toBe(422);
 
-    const otherOwner = await readParticipantAgendaCalendar(
+    const otherOwnerRedirect = await readParticipantAgendaCalendar(
       calendarRequest(),
       dependencies(primaryUserId),
+    );
+    expect(otherOwnerRedirect.status).toBe(303);
+    const otherOwner = await readParticipantAgendaCalendar(
+      new Request(otherOwnerRedirect.headers.get('location')!),
+      dependencies(null),
     );
     expect(otherOwner.status).toBe(200);
     expect(await otherOwner.text()).not.toContain(
@@ -936,9 +945,24 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         .calendarExport,
     ).toEqual({ state: 'available', href: '/api/v1/me/agenda.ics' });
 
-    const response = await readParticipantAgendaCalendar(
+    const redirect = await readParticipantAgendaCalendar(
       calendarRequest(),
       dependencies(calendarUserId),
+    );
+    expect(redirect.status).toBe(303);
+    expect(redirect.headers.get('cache-control')).toBe('private, no-store');
+    expect(redirect.headers.get('vary')).toBe('Authorization, Cookie');
+    expect(redirect.headers.get('referrer-policy')).toBe('no-referrer');
+    const location = redirect.headers.get('location');
+    expect(location).not.toBeNull();
+    const ticketUrl = new URL(location!);
+    expect(ticketUrl.origin).toBe(appOrigin);
+    expect(ticketUrl.pathname).toBe('/api/v1/me/agenda.ics');
+    expect(ticketUrl.searchParams.get('ticket')).toBeTruthy();
+
+    const response = await readParticipantAgendaCalendar(
+      new Request(ticketUrl),
+      dependencies(null),
     );
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -959,6 +983,36 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(calendar).not.toContain(calendarUserId);
     expect(calendar).not.toContain('@example.invalid');
     expect(calendar.endsWith('\r\n')).toBe(true);
+
+    const repeatedDownload = await readParticipantAgendaCalendar(
+      new Request(ticketUrl),
+      dependencies(null),
+    );
+    expect(repeatedDownload.status).toBe(200);
+    expect(await repeatedDownload.text()).toBe(calendar);
+
+    const expiredDownload = await readParticipantAgendaCalendar(
+      new Request(ticketUrl),
+      {
+        ...dependencies(null),
+        now: () => new Date(fixedNow.getTime() + 60_000),
+      },
+    );
+    expect(expiredDownload.status).toBe(401);
+
+    const staleTicket = issueAgendaCalendarTicket({
+      secret: calendarTicketSecret,
+      now: fixedNow,
+      userId: calendarUserId,
+      eventId,
+      agendaVersion: 999,
+      publicationVersion: 3,
+    });
+    const staleDownload = await readParticipantAgendaCalendar(
+      calendarRequest(`?ticket=${encodeURIComponent(staleTicket)}`),
+      dependencies(null),
+    );
+    expect(staleDownload.status).toBe(401);
   });
 
   it('reads the version and projected items under the participant mutation lock', async () => {
@@ -1620,7 +1674,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       ...dependencies(primaryUserId),
       rateLimit: calendarRateLimit,
     });
-    expect(calendar.status).toBe(200);
+    expect(calendar.status).toBe(303);
     expect(calendar.headers.get('ratelimit-limit')).toBe('120');
     expect(calendar.headers.get('ratelimit-remaining')).toBe('118');
     expect(calendarRateLimit).toHaveBeenCalledWith('read', primaryUserId);

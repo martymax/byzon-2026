@@ -131,6 +131,13 @@ reconciliation belongs to `P5-06`. The
 calendar representation is generated from the same locked canonical snapshot
 as JSON, contains only the authenticated owner's current items and uses stable
 non-PII UID, publication sequence, UTC, CRLF and Unicode-safe 75-octet folding.
+The initial authenticated calendar request returns a private, no-store redirect
+to an encrypted one-minute download ticket. The ticket is bound to the owner,
+event, agenda version and publication version, and may be fetched repeatedly
+during that short window so iOS calendar hand-off can repeat the GET without
+sharing the originating browser's session cookie. Every ticket redemption
+rechecks current event access and the bound versions before returning the ICS;
+tampered, expired or stale tickets fail closed.
 The immutable publication is the visibility allowlist while non-archived
 operational rows provide capacity and immediate cancellation state. Capacity
 drift degrades only the affected confirmed reservation to a conservative closed
