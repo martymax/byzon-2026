@@ -10,7 +10,11 @@ const SupportLink = ({ email }: { readonly email: string }) => (
   </a>
 );
 
-export const ParticipantMoreHub = () => (
+export const ParticipantMoreHub = ({
+  ticketAvailable = false,
+}: {
+  readonly ticketAvailable?: boolean;
+}) => (
   <section className="app-page participant-account-page participant-more-page">
     <header className="participant-account-heading">
       <p className="eyebrow">Účet</p>
@@ -18,8 +22,7 @@ export const ParticipantMoreHub = () => (
         Můj účet
       </h1>
       <p className="lead">
-        Spravujte své osobní údaje, vstupenku, soukromí a přihlášení na jednom
-        místě.
+        Spravujte své osobní údaje, soukromí a přihlášení na jednom místě.
       </p>
     </header>
 
@@ -46,9 +49,11 @@ export const ParticipantMoreHub = () => (
             <ActionLink block href="/app/profil">
               Moje osobní údaje
             </ActionLink>
-            <ActionLink block href="/app/vstupenka" variant="secondary">
-              Moje vstupenka
-            </ActionLink>
+            {ticketAvailable ? (
+              <ActionLink block href="/app/vstupenka" variant="secondary">
+                Moje vstupenka
+              </ActionLink>
+            ) : null}
             <ActionLink block href="/app/soukromi" variant="secondary">
               Soukromí a právní dokumenty
             </ActionLink>

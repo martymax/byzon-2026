@@ -109,6 +109,109 @@ h1 span {
   font-size: 1.3rem;
   max-width: 34rem;
 }
+.not-found-page {
+  position: relative;
+  width: min(100%, 76rem);
+  min-height: calc(100dvh - 5rem);
+  display: grid;
+  align-items: center;
+  gap: var(--byzon-space-10);
+  margin-inline: auto;
+  padding: clamp(3rem, 9vh, 7rem) clamp(1.25rem, 5vw, 3rem);
+  overflow: hidden;
+}
+.not-found-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 40rem;
+}
+.not-found-copy h1 {
+  max-width: 11ch;
+  margin-block: var(--byzon-space-3) var(--byzon-space-5);
+  font-size: clamp(3.25rem, 10vw, 6.75rem);
+  line-height: 0.86;
+}
+.not-found-copy .lead {
+  color: var(--byzon-text);
+  font-size: clamp(1.125rem, 2.4vw, 1.4rem);
+}
+.not-found-copy .ui-action {
+  margin-block-start: var(--byzon-space-8);
+}
+.not-found-illustration {
+  position: relative;
+  min-height: clamp(15rem, 52vw, 26rem);
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+.not-found-illustration::before,
+.not-found-illustration::after {
+  position: absolute;
+  z-index: -1;
+  content: '';
+  border-radius: 50%;
+}
+.not-found-illustration::before {
+  width: clamp(15rem, 46vw, 26rem);
+  aspect-ratio: 1;
+  background: var(--byzon-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--byzon-brand-glow);
+}
+.not-found-illustration::after {
+  width: clamp(4.5rem, 15vw, 8rem);
+  aspect-ratio: 1;
+  translate: 110% -95%;
+  background: var(--byzon-surface);
+  border: 1px solid var(--byzon-border);
+  box-shadow: var(--byzon-shadow-md);
+}
+.not-found-code {
+  color: var(--byzon-brand-active);
+  font-family: var(--byzon-font-display);
+  font-size: clamp(7.5rem, 28vw, 15rem);
+  font-weight: 700;
+  line-height: 0.75;
+  letter-spacing: -0.08em;
+}
+.not-found-route {
+  position: absolute;
+  inset: auto 4% 5%;
+  width: 92%;
+  overflow: visible;
+  fill: var(--byzon-brand);
+  stroke: var(--byzon-brand);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+}
+.not-found-route path:first-child {
+  fill: none;
+  stroke-dasharray: 0.025 0.025;
+}
+.not-found-marker {
+  position: absolute;
+  top: 5%;
+  right: 8%;
+  width: clamp(2.75rem, 8vw, 4.5rem);
+  aspect-ratio: 1;
+  border: clamp(0.65rem, 2vw, 1rem) solid var(--byzon-ink);
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  filter: drop-shadow(0 0.75rem 0 var(--byzon-surface));
+}
+.not-found-marker::after {
+  position: absolute;
+  inset: 28%;
+  content: '';
+  border-radius: 50%;
+  background: var(--byzon-brand);
+}
+@media (min-width: 48rem) {
+  .not-found-page {
+    grid-template-columns: minmax(0, 1.05fr) minmax(20rem, 0.95fr);
+  }
+}
 .button {
   min-height: var(--byzon-touch-target);
   display: inline-flex;

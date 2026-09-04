@@ -340,7 +340,7 @@ const AccountJourney = ({
                     Otevřít profil obyčejným interním odkazem
                   </a>
                 ) : null}
-                <ParticipantMoreHub />
+                <ParticipantMoreHub ticketAvailable />
               </>
             )}
           </div>
@@ -498,7 +498,7 @@ describe('F2-07 participant account, profile and privacy', () => {
   it('renders the responsive account hub with focus, 44px targets and an axe-clean hierarchy', async () => {
     const screen = await renderComponent(
       <AccountProbe api={accountApi()}>
-        <ParticipantMoreHub />
+        <ParticipantMoreHub ticketAvailable />
       </AccountProbe>,
     );
 
@@ -526,6 +526,21 @@ describe('F2-07 participant account, profile and privacy', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    await expectComponentToPassAxe(screen.container);
+  });
+
+  it('does not offer the preview-only ticket route in the production account hub', async () => {
+    const screen = await renderComponent(
+      <AccountProbe api={accountApi()}>
+        <ParticipantMoreHub />
+      </AccountProbe>,
+    );
+
+    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Moje vstupenka' }).elements(),
+    ).toHaveLength(0);
+    expect(screen.container.textContent).not.toContain('vstupenku');
     await expectComponentToPassAxe(screen.container);
   });
 

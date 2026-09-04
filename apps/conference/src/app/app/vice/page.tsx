@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { ParticipantMoreHub } from '@/components/participant-account-more';
+import { isFrontendPreviewAvailable } from '@/lib/frontend-preview';
 import {
   loadParticipantCurrentEvent,
   type ParticipantCurrentEventState,
@@ -13,5 +14,7 @@ export const canOpenParticipantMore = (
 export default async function ParticipantMorePage() {
   const currentEvent = await loadParticipantCurrentEvent();
   if (!canOpenParticipantMore(currentEvent)) notFound();
-  return <ParticipantMoreHub />;
+  return (
+    <ParticipantMoreHub ticketAvailable={isFrontendPreviewAvailable()} />
+  );
 }
