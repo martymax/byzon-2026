@@ -2,7 +2,11 @@
 
 import Link from 'next/link';
 
-import type { PublishedContent } from '@byzon/domain/contracts';
+import type {
+  ParticipantProgramResponse,
+  ParticipantSessionType,
+  PublishedContent,
+} from '@byzon/domain/contracts';
 import { useState } from 'react';
 
 import type { ApiPort } from '@/lib/api';
@@ -11,6 +15,7 @@ import {
   EmptyContent,
   ResourceStatus,
   useParticipantContent,
+  useParticipantProgram,
 } from './content-state';
 
 interface ContentProps {
@@ -20,6 +25,128 @@ interface ContentProps {
 
 type PublishedPartner = PublishedContent['partners'][number];
 type PublishedSpeaker = PublishedContent['speakers'][number];
+
+const sessionTypeLabels = {
+  talk: 'Přednáška',
+  panel: 'Panelová diskuse',
+  workshop: 'Workshop',
+  mastermind: 'Mastermind',
+  coaching: 'Koučink',
+  networking: 'Networking',
+  break: 'Přestávka',
+  meal: 'Občerstvení',
+  gala: 'Galavečer',
+  other: 'Program',
+} satisfies Record<ParticipantSessionType, string>;
+
+const speakerSessionTime = (value: string, timezone: string): string => {
+  try {
+    return new Intl.DateTimeFormat('cs-CZ', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    }).format(new Date(value));
+  } catch {
+    return 'čas bude upřesněn';
+  }
+};
+
+const speakerSessionDay = (value: string, timezone: string): string => {
+  try {
+    const label = new Intl.DateTimeFormat('cs-CZ', {
+      weekday: 'long',
+      timeZone: timezone,
+    }).format(new Date(value));
+    return `${label.charAt(0).toLocaleUpperCase('cs-CZ')}${label.slice(1)}`;
+  } catch {
+    return 'Termín bude upřesněn';
+  }
+};
+
+const SpeakerProgram = ({
+  program,
+  speaker,
+  timezone,
+}: {
+  readonly program: ParticipantProgramResponse['program'];
+  readonly speaker: PublishedSpeaker;
+  readonly timezone: string;
+}) => {
+  const sessions = program.sessions
+    .filter((session) => session.speakerIds?.includes(speaker.id))
+    .sort(
+      (first, second) =>
+        Date.parse(first.startsAt) - Date.parse(second.startsAt) ||
+        first.sortOrder - second.sortOrder,
+    );
+  if (sessions.length === 0) return null;
+
+  const roomById = new Map(program.rooms.map((room) => [room.id, room]));
+  const headingId = `speaker-program-${speaker.id}`;
+
+  return (
+    <section className="speaker-program" aria-labelledby={headingId}>
+      <div className="speaker-program__head">
+        <p className="eyebrow">Kde se potkáme</p>
+        <h2 id={headingId}>V programu</h2>
+      </div>
+      <ul className="speaker-program__list">
+        {sessions.map((session) => {
+          const room = session.roomId ? roomById.get(session.roomId) : null;
+          const detailLabel =
+            session.type === 'talk'
+              ? 'Detail přednášky'
+              : 'Detail bodu programu';
+          return (
+            <li key={session.id}>
+              <Link
+                aria-label={`${detailLabel}: ${session.title}`}
+                className="speaker-session-card"
+                href={`/app/program/${session.id}`}
+              >
+                <p className="speaker-session-card__meta">
+                  <span className="speaker-session-card__kind">
+                    {sessionTypeLabels[session.type]}
+                  </span>
+                  <span>
+                    {speakerSessionDay(session.startsAt, timezone)} ·{' '}
+                    {speakerSessionTime(session.startsAt, timezone)}–
+                    {speakerSessionTime(session.endsAt, timezone)}
+                    {room ? ` · ${room.name}` : ''}
+                    {session.status === 'cancelled' ? ' · Zrušeno' : ''}
+                  </span>
+                </p>
+                <h3>{session.title}</h3>
+                {session.summary ? (
+                  <p className="speaker-session-card__annotation">
+                    {session.summary}
+                  </p>
+                ) : null}
+                <span className="speaker-session-card__action">
+                  {detailLabel}
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    height="20"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.4"
+                    viewBox="0 0 24 24"
+                    width="20"
+                  >
+                    <line x1="5" x2="19" y1="12" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+};
 
 const SpeakerPortrait = ({
   speaker,
@@ -109,6 +236,7 @@ export const SpeakerDetail = ({
   api,
 }: ContentProps & { slug: string }) => {
   const state = useParticipantContent(eventId, api);
+  const programState = useParticipantProgram(eventId, api);
   if (state.status !== 'ready') {
     return (
       <ResourceStatus
@@ -170,6 +298,13 @@ export const SpeakerDetail = ({
             </a>
           ) : null}
         </div>
+        {programState.status === 'ready' ? (
+          <SpeakerProgram
+            program={programState.data.program}
+            speaker={speaker}
+            timezone={state.data.content.event.timezone}
+          />
+        ) : null}
         <Link className="text-link" href="/app/recnici">
           ← Zpět na řečníky
         </Link>

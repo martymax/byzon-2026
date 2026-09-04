@@ -5,6 +5,7 @@ import { defineApiProblemSchema } from './base.js';
 const MAX_DAYS = 64;
 const MAX_ROOMS = 256;
 const MAX_SESSIONS = 4_096;
+const MAX_SPEAKERS_PER_SESSION = 50;
 const MAX_DIRECTORY_ITEMS = 2_048;
 const MAX_PRACTICAL_ITEMS = 512;
 
@@ -117,6 +118,7 @@ const programSessionShape = {
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   questionsEnabled: z.boolean().optional(),
+  speakerIds: z.array(uuidSchema).max(MAX_SPEAKERS_PER_SESSION).optional(),
   sortOrder: sortOrderSchema,
 } as const;
 

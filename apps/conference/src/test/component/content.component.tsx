@@ -31,6 +31,23 @@ const apiFor = (fixture: unknown) =>
       }),
   });
 
+const contentAndProgramApi = createFetchApiClient({
+  maxRetries: 0,
+  fetch: async (input) => {
+    const url = input instanceof Request ? input.url : String(input);
+    const fixture = url.endsWith('/program')
+      ? participantProgramFixtures.happy
+      : participantContentFixtures.happy;
+    return new Response(JSON.stringify(fixture), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'x-request-id': 'component-content-program-0001',
+      },
+    });
+  },
+});
+
 const coachingIds = {
   zone: '01910000-0000-7000-8000-00000000000d',
   radimRoom: '01910000-0000-7000-8000-00000000000e',
@@ -434,6 +451,37 @@ describe('CS-CONTENT-01 participant UI', () => {
     await expect
       .element(screen.getByRole('link', { name: 'Facebook' }))
       .toHaveAttribute('href', speaker.facebookUrl!);
+  });
+
+  it('links the speaker to their published program item', async () => {
+    const speaker = participantContentFixtures.happy!.content.speakers[0]!;
+    const session = participantProgramFixtures.happy!.program.sessions.find(
+      (item) => item.speakerIds?.includes(speaker.id),
+    )!;
+    const screen = await renderComponent(
+      <SpeakerDetail
+        eventId={participantContentFixtures.happy!.eventId}
+        slug={speaker.slug}
+        api={contentAndProgramApi}
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { level: 2, name: 'V programu' }))
+      .toBeVisible();
+    const link = screen.getByRole('link', {
+      name: `Detail bodu programu: ${session.title}`,
+    });
+    await expect
+      .element(link)
+      .toHaveAttribute('href', `/app/program/${session.id}`);
+    await expect.element(screen.getByText(session.summary!)).toBeVisible();
+    const bounds = await link.element().getBoundingClientRect();
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
+    await expectComponentToPassAxe(screen.container);
   });
 
   it('wraps long Czech practical content without horizontal overflow', async () => {

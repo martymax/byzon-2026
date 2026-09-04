@@ -140,6 +140,7 @@ const program = {
       status: 'published' as const,
       startsAt: '2026-09-19T08:00:00.000Z',
       endsAt: '2026-09-19T09:30:00.000Z',
+      speakerIds: [contentFixtureIds.speaker],
       sortOrder: 0,
     },
     agendaProgramSession({
