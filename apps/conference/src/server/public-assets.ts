@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const assetIdSchema = z.string().uuid();
 const STATIC_SITE_ORIGIN = 'https://byzon.cz';
+const LOCAL_CONTENT_ASSET_PREFIX = '/content-assets';
 
 export interface PublicAssetRecord {
   readonly bucketKey: string;
@@ -24,6 +25,9 @@ export const publicAssetLocation = (
     segments.some((segment) => segment === '.' || segment === '..')
   ) {
     return null;
+  }
+  if (sourcePath.toLowerCase().endsWith('.webp')) {
+    return `${LOCAL_CONTENT_ASSET_PREFIX}${sourcePath}`;
   }
   const location = new URL(sourcePath, STATIC_SITE_ORIGIN);
   return location.origin === STATIC_SITE_ORIGIN &&

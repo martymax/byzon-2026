@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "build": "node scripts/mock-worker.mjs clean && node scripts/check-production-mock-boundary.mjs source && next build && node scripts/offline-shell-manifest.mjs && node scripts/check-production-mock-boundary.mjs build",
+    "build": "node scripts/mock-worker.mjs clean && node scripts/sync-public-content-assets.mjs && node scripts/check-production-mock-boundary.mjs source && next build && node scripts/offline-shell-manifest.mjs && node scripts/check-production-mock-boundary.mjs build",
     "check:production-mocks": "node scripts/check-production-mock-boundary.mjs source && node scripts/check-production-mock-boundary.mjs build",
-    "dev": "pnpm --filter @byzon/domain build && pnpm --filter @byzon/redis build && pnpm --filter @byzon/test-support build && node scripts/mock-worker.mjs prepare && next dev",
+    "dev": "pnpm --filter @byzon/domain build && pnpm --filter @byzon/redis build && pnpm --filter @byzon/test-support build && node scripts/mock-worker.mjs prepare && node scripts/sync-public-content-assets.mjs && next dev",
     "lint": "eslint .",
     "mocks:clean": "node scripts/mock-worker.mjs clean",
     "mocks:prepare": "node scripts/mock-worker.mjs prepare",

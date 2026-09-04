@@ -20,4 +20,16 @@ describe('private root login document policy', () => {
       ]),
     );
   });
+
+  it('serves packaged content assets with a bounded public cache', async () => {
+    const rules = await nextConfig.headers?.();
+    const contentAssetRule = rules?.find(
+      (rule) => rule.source === '/content-assets/:path*',
+    );
+
+    expect(contentAssetRule?.headers).toContainEqual({
+      key: 'Cache-Control',
+      value: 'public, max-age=300, stale-while-revalidate=3600',
+    });
+  });
 });

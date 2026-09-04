@@ -6,7 +6,16 @@ const eventId = '01910000-0000-7000-8000-000000000001';
 const assetId = '01910000-0000-7000-8000-000000000002';
 
 describe('public content assets', () => {
-  it('maps imported public images to the canonical static website', () => {
+  it('maps packaged WebP images to the conference application', () => {
+    expect(
+      publicAssetLocation({
+        eventId,
+        bucketKey: `public-static/${eventId}/assets/img/2026/08/speaker.webp`,
+      }),
+    ).toBe('/content-assets/assets/img/2026/08/speaker.webp');
+  });
+
+  it('keeps other imported public images on the canonical static website', () => {
     expect(
       publicAssetLocation({
         eventId,

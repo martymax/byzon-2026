@@ -83,6 +83,15 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'Cache-Control', value: publicShellCacheControl }],
       },
       {
+        source: '/content-assets/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=300, stale-while-revalidate=3600',
+          },
+        ],
+      },
+      {
         source: '/sw-shell-manifest.js',
         headers: [
           {
