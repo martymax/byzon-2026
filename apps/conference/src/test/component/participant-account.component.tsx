@@ -30,6 +30,7 @@ import {
   useParticipantAccountResource,
 } from '../../components/participant-account-resource';
 import { ParticipantAccountSettings } from '../../components/participant-account-settings';
+import { ParticipantAccountBoundary } from '../../components/participant-account-state';
 import { ParticipantShellNavigation } from '../../components/participant-shell-navigation';
 import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
@@ -495,6 +496,140 @@ describe('F2-07 participant account, profile and privacy', () => {
     ).toHaveLength(2);
   });
 
+  it.each([
+    [
+      'missing authentication',
+      identityBootstrapProblemFixtures.authentication!,
+      'recovery',
+    ],
+    [
+      'an expired session',
+      identityBootstrapProblemFixtures.session_expired!,
+      'recovery',
+    ],
+    [
+      'another account without participant access',
+      identityBootstrapProblemFixtures.permission!,
+      'switch',
+    ],
+  ] as const)(
+    'redirects a failed account retry to login after confirming %s',
+    async (_label, authenticationProblem, loginMode) => {
+      const api = accountApi({
+        bootstrapProblems: [
+          identityBootstrapProblemFixtures.internal_error!,
+          authenticationProblem,
+        ],
+      });
+      const screen = await renderComponent(
+        <AppMain>
+          <ParticipantAccountResourceProvider
+            api={api}
+            scope={activeAccountScope}
+          >
+            <div style={visualTestStyle}>
+              <ParticipantAccountBoundary loginReturnTo="/app/vice">
+                {() => <p>Načtený účet</p>}
+              </ParticipantAccountBoundary>
+            </div>
+          </ParticipantAccountResourceProvider>
+        </AppMain>,
+      );
+
+      await expect
+        .element(screen.getByText('Účet se nepodařilo načíst'))
+        .toBeVisible();
+      await screen.getByRole('button', { name: 'Načíst znovu' }).click();
+
+      await vi.waitFor(() => {
+        expect(window.location.pathname).toBe('/prihlaseni');
+        expect(window.location.search).toBe(
+          `?mode=${loginMode}&returnTo=%2Fapp%2Fvice`,
+        );
+      });
+      expect(screen.container.textContent).not.toContain('Načtený účet');
+    },
+  );
+
+  it('redirects a failed account retry after an unparseable HTTP 401', async () => {
+    const navigate = vi.fn();
+    let attempt = 0;
+    const api = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async () => {
+        attempt += 1;
+        return new Response(
+          attempt === 1 ? 'temporary upstream failure' : 'session is gone',
+          {
+            status: attempt === 1 ? 500 : 401,
+            headers: { 'content-type': 'text/plain' },
+          },
+        );
+      },
+    });
+    const screen = await renderComponent(
+      <main id="main" style={visualTestStyle} tabIndex={-1}>
+        <ParticipantAccountResourceProvider
+          api={api}
+          scope={activeAccountScope}
+        >
+          <ParticipantAccountBoundary
+            loginReturnTo="/app/profil"
+            navigate={navigate}
+          >
+            {() => <p>Načtený účet</p>}
+          </ParticipantAccountBoundary>
+        </ParticipantAccountResourceProvider>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByText('Účet se nepodařilo načíst'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst znovu' }).click();
+
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        '/prihlaseni?mode=recovery&returnTo=%2Fapp%2Fprofil',
+      ),
+    );
+    expect(attempt).toBe(2);
+  });
+
+  it('stays on the account page when retry revalidation succeeds', async () => {
+    const navigate = vi.fn();
+    const api = accountApi({
+      bootstrapProblems: [identityBootstrapProblemFixtures.internal_error!],
+    });
+    const screen = await renderComponent(
+      <main id="main" style={visualTestStyle} tabIndex={-1}>
+        <ParticipantAccountResourceProvider
+          api={api}
+          scope={activeAccountScope}
+        >
+          <ParticipantAccountBoundary
+            loginReturnTo="/app/vice"
+            navigate={navigate}
+          >
+            {() => <p>Načtený účet</p>}
+          </ParticipantAccountBoundary>
+        </ParticipantAccountResourceProvider>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByText('Účet se nepodařilo načíst'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst znovu' }).click();
+
+    await expect.element(screen.getByText('Načtený účet')).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+
+    await invalidateParticipantPrivateResources('session_expired');
+    await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('renders the responsive account hub with focus, 44px targets and an axe-clean hierarchy', async () => {
     const screen = await renderComponent(
       <AccountProbe api={accountApi()}>
@@ -554,6 +689,12 @@ describe('F2-07 participant account, profile and privacy', () => {
     await expect
       .element(screen.getByText('K účtu nemáte přístup'))
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Použít jiný účet' }))
+      .toHaveAttribute(
+        'href',
+        '/prihlaseni?mode=switch&returnTo=%2Fapp%2Fvice',
+      );
     expect(screen.container.textContent).not.toContain('BYZON 2026');
     expect(screen.container.textContent).not.toContain('alex@example.test');
     expect(screen.container.textContent).not.toContain('Alex Novák');
