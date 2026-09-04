@@ -1207,6 +1207,18 @@ describe('F3-01..F3-05 participant agenda', () => {
         }),
       )
       .toBeVisible();
+    const dialogBounds = screen
+      .getByRole('dialog')
+      .element()
+      .getBoundingClientRect();
+    expect(dialogBounds.left + dialogBounds.width / 2).toBeCloseTo(
+      window.innerWidth / 2,
+      0,
+    );
+    expect(dialogBounds.top + dialogBounds.height / 2).toBeCloseTo(
+      window.innerHeight / 2,
+      0,
+    );
     await expect
       .element(
         screen.getByText(

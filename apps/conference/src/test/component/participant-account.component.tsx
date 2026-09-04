@@ -1100,6 +1100,18 @@ describe('F2-07 participant account, profile and privacy', () => {
     );
 
     await screen.getByRole('button', { name: 'Požádat o smazání' }).click();
+    const dialogBounds = screen
+      .getByRole('dialog')
+      .element()
+      .getBoundingClientRect();
+    expect(dialogBounds.left + dialogBounds.width / 2).toBeCloseTo(
+      window.innerWidth / 2,
+      0,
+    );
+    expect(dialogBounds.top + dialogBounds.height / 2).toBeCloseTo(
+      window.innerHeight / 2,
+      0,
+    );
     const confirm = screen.getByRole('button', {
       name: 'Potvrdit žádost o smazání',
     });
