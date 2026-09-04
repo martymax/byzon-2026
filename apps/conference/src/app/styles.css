@@ -1450,6 +1450,81 @@ main > .ui-participant-nav-spacer {
   color: var(--pink-dark);
   font-weight: 600;
 }
+.speaker-grid li {
+  min-width: 0;
+}
+.speaker-grid .speaker-card {
+  height: 100%;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  transition:
+    transform var(--byzon-motion-fast) var(--byzon-ease),
+    border-color var(--byzon-motion-fast) var(--byzon-ease),
+    box-shadow var(--byzon-motion-fast) var(--byzon-ease);
+}
+.speaker-grid .speaker-card:hover,
+.speaker-grid .speaker-card:focus-visible {
+  transform: translateY(-0.25rem);
+  box-shadow: var(--byzon-shadow-md);
+}
+.speaker-portrait {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  background:
+    radial-gradient(circle at 75% 20%, rgb(255 255 255 / 42%), transparent 32%),
+    linear-gradient(145deg, var(--byzon-brand-soft), #f3e8ee);
+}
+.speaker-portrait img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform var(--byzon-motion-slow) var(--byzon-ease);
+}
+.speaker-card:hover .speaker-portrait img,
+.speaker-card:focus-visible .speaker-portrait img {
+  transform: scale(1.025);
+}
+.speaker-portrait__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--byzon-brand-active);
+  font-family: var(--byzon-font-display);
+  font-size: clamp(3.5rem, 10vw, 6rem);
+  font-weight: 750;
+  letter-spacing: -0.08em;
+}
+.speaker-card__body {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+  padding: 1rem 1.1rem 1.2rem;
+}
+.speaker-card__body > span {
+  overflow-wrap: anywhere;
+  color: var(--byzon-text-muted);
+}
+.speaker-detail-card {
+  max-width: 66rem;
+  display: grid;
+  gap: clamp(1.5rem, 5vw, 3rem);
+}
+.speaker-portrait--detail {
+  width: min(100%, 18rem);
+  border-radius: var(--byzon-radius-md);
+  box-shadow: var(--byzon-shadow-sm);
+}
+.speaker-detail-card__content {
+  min-width: 0;
+}
+.speaker-detail-card__content .prose {
+  overflow-wrap: anywhere;
+}
 .detail-card {
   max-width: 52rem;
   padding: clamp(1.25rem, 4vw, 2.5rem);
@@ -3130,10 +3205,19 @@ main > .ui-participant-nav-spacer {
   }
 }
 
+@media (min-width: 48rem) {
+  .speaker-detail-card {
+    grid-template-columns: 18rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .networking-directory-list a,
   .participant-partner-logo,
-  .participant-partner-logo img {
+  .participant-partner-logo img,
+  .speaker-card,
+  .speaker-portrait img {
     transition: none;
   }
 }

@@ -19,6 +19,50 @@ interface ContentProps {
 }
 
 type PublishedPartner = PublishedContent['partners'][number];
+type PublishedSpeaker = PublishedContent['speakers'][number];
+
+const SpeakerPortrait = ({
+  speaker,
+  detail = false,
+}: {
+  readonly speaker: PublishedSpeaker;
+  readonly detail?: boolean;
+}) => {
+  const [imageUnavailable, setImageUnavailable] = useState(false);
+  const name = `${speaker.firstName} ${speaker.lastName}`;
+  const imageVisible = Boolean(speaker.photoAssetId) && !imageUnavailable;
+
+  return (
+    <div
+      className={
+        detail
+          ? 'speaker-portrait speaker-portrait--detail'
+          : 'speaker-portrait'
+      }
+    >
+      {imageVisible ? (
+        // Public content assets are pre-sized WebP files resolved through an
+        // allowlisted route; intrinsic dimensions reserve space before load.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt={detail ? `Portrét – ${name}` : ''}
+          decoding="async"
+          fetchPriority={detail ? 'high' : 'auto'}
+          height="900"
+          loading={detail ? 'eager' : 'lazy'}
+          onError={() => setImageUnavailable(true)}
+          src={`/api/v1/public/assets/${speaker.photoAssetId}`}
+          width="720"
+        />
+      ) : (
+        <span aria-hidden="true" className="speaker-portrait__fallback">
+          {speaker.firstName.charAt(0)}
+          {speaker.lastName.charAt(0)}
+        </span>
+      )}
+    </div>
+  );
+};
 
 export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
   const state = useParticipantContent(eventId, api);
@@ -40,15 +84,18 @@ export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
     );
   }
   return (
-    <ul className="card-grid">
+    <ul className="card-grid speaker-grid">
       {state.data.content.speakers.map((speaker) => (
         <li key={speaker.id}>
-          <Link href={`/app/recnici/${speaker.slug}`}>
-            <strong>
-              {speaker.firstName} {speaker.lastName}
-            </strong>
-            <span>{speaker.jobTitle || 'Profil řečníka'}</span>
-            {speaker.company ? <span>{speaker.company}</span> : null}
+          <Link className="speaker-card" href={`/app/recnici/${speaker.slug}`}>
+            <SpeakerPortrait speaker={speaker} />
+            <span className="speaker-card__body">
+              <strong>
+                {speaker.firstName} {speaker.lastName}
+              </strong>
+              <span>{speaker.jobTitle || 'Profil řečníka'}</span>
+              {speaker.company ? <span>{speaker.company}</span> : null}
+            </span>
           </Link>
         </li>
       ))}
@@ -83,47 +130,50 @@ export const SpeakerDetail = ({
     );
   }
   return (
-    <article className="detail-card">
-      <p className="eyebrow">Řečník</p>
-      <h1 data-route-heading tabIndex={-1}>
-        {speaker.firstName} {speaker.lastName}
-      </h1>
-      {speaker.jobTitle ? <p className="lead">{speaker.jobTitle}</p> : null}
-      {speaker.company ? <p>{speaker.company}</p> : null}
-      {speaker.bioMarkdown ? (
-        <div className="prose">
-          {speaker.bioMarkdown.split('\n\n').map((paragraph, index) => (
-            <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
-          ))}
+    <article className="detail-card speaker-detail-card">
+      <SpeakerPortrait detail speaker={speaker} />
+      <div className="speaker-detail-card__content">
+        <p className="eyebrow">Řečník</p>
+        <h1 data-route-heading tabIndex={-1}>
+          {speaker.firstName} {speaker.lastName}
+        </h1>
+        {speaker.jobTitle ? <p className="lead">{speaker.jobTitle}</p> : null}
+        {speaker.company ? <p>{speaker.company}</p> : null}
+        {speaker.bioMarkdown ? (
+          <div className="prose">
+            {speaker.bioMarkdown.split('\n\n').map((paragraph, index) => (
+              <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
+            ))}
+          </div>
+        ) : (
+          <p>Podrobnosti o řečníkovi zatím nejsou zveřejněné.</p>
+        )}
+        <div className="link-row">
+          {speaker.linkedinUrl ? (
+            <a href={speaker.linkedinUrl} rel="noreferrer">
+              LinkedIn
+            </a>
+          ) : null}
+          {speaker.instagramUrl ? (
+            <a href={speaker.instagramUrl} rel="noreferrer">
+              Instagram
+            </a>
+          ) : null}
+          {speaker.facebookUrl ? (
+            <a href={speaker.facebookUrl} rel="noreferrer">
+              Facebook
+            </a>
+          ) : null}
+          {speaker.websiteUrl ? (
+            <a href={speaker.websiteUrl} rel="noreferrer">
+              Web
+            </a>
+          ) : null}
         </div>
-      ) : (
-        <p>Podrobnosti o řečníkovi zatím nejsou zveřejněné.</p>
-      )}
-      <div className="link-row">
-        {speaker.linkedinUrl ? (
-          <a href={speaker.linkedinUrl} rel="noreferrer">
-            LinkedIn
-          </a>
-        ) : null}
-        {speaker.instagramUrl ? (
-          <a href={speaker.instagramUrl} rel="noreferrer">
-            Instagram
-          </a>
-        ) : null}
-        {speaker.facebookUrl ? (
-          <a href={speaker.facebookUrl} rel="noreferrer">
-            Facebook
-          </a>
-        ) : null}
-        {speaker.websiteUrl ? (
-          <a href={speaker.websiteUrl} rel="noreferrer">
-            Web
-          </a>
-        ) : null}
+        <Link className="text-link" href="/app/recnici">
+          ← Zpět na řečníky
+        </Link>
       </div>
-      <Link className="text-link" href="/app/recnici">
-        ← Zpět na řečníky
-      </Link>
     </article>
   );
 };
