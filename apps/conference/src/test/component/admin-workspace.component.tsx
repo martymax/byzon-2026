@@ -819,6 +819,30 @@ describe('F4 contract-first admin journeys', () => {
     );
   });
 
+  it('offers login instead of retrying when the current account is forbidden', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return problemFailure(adminMutationProblemFixtures.permission!);
+      }
+      throw new Error('A forbidden shell requested a private resource.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminTeamWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    const login = screen.getByRole('link', { name: 'Přihlásit se' });
+    await expect.element(login).toBeVisible();
+    expect(login.element().getAttribute('href')).toBe(
+      '/prihlaseni?returnTo=%2Fadmin%2Frole',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Ověřit přístup znovu' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('rejects a non-organizer context before a private resource is mounted', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
     const api = createApi((endpoint) => {

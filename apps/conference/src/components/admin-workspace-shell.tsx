@@ -580,7 +580,8 @@ type ShellState =
 
 const requiresLogin = (failure: ApiFailure<ApiProblem>): boolean =>
   failure.kind === 'session_expired' ||
-  (failure.kind === 'problem' && failure.problem.status === 401);
+  (failure.kind === 'problem' &&
+    (failure.problem.status === 401 || failure.problem.status === 403));
 
 const failureMessage = (failure: ApiFailure<ApiProblem>): string => {
   if (failure.kind === 'offline') {
