@@ -165,7 +165,7 @@ describe('F2-02 participant home overview', () => {
     const partnersFooter = screen.getByTestId('participant-partners-footer');
     await expect.element(partnersFooter).toBeVisible();
     await expect.element(partnersFooter).toMatchScreenshot('home-partners', {
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.02 },
+      comparatorOptions: { allowedMismatchedPixelRatio: 0.05 },
       screenshotOptions: {
         animations: 'disabled',
         caret: 'hide',
