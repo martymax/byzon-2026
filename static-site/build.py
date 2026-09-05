@@ -954,7 +954,13 @@ def sec_partners():
     for lg in d["logos"]:
         dark = " on-dark" if lg.get("on_dark") else ""
         image_class = ' class="partner-logo__image--tall"' if lg.get("tall") else ""
-        logos += f'<div class="partner-logo{dark}"><img{image_class} src="{att(versioned_asset(lg["src"]))}" alt="{att(lg["name"])}" loading="lazy" data-fallback="{att(lg["name"])}"></div>'
+        image = f'<img{image_class} src="{att(versioned_asset(lg["src"]))}" alt="{att(lg["name"])}" loading="lazy" data-fallback="{att(lg["name"])}">'
+        website_url = lg.get("websiteUrl")
+        if website_url:
+            accessible_name = f'{lg["name"]} – web partnera (otevře se v novém panelu)'
+            logos += f'<a class="partner-logo{dark}" href="{att(website_url)}" target="_blank" rel="noopener noreferrer" aria-label="{att(accessible_name)}">{image}</a>'
+        else:
+            logos += f'<div class="partner-logo{dark}">{image}</div>'
     return f"""<section class="section" id="partneri">
   <div class="container">
     <div class="section-head section-head--center reveal">

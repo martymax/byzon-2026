@@ -357,10 +357,10 @@ const PartnerLogo = ({ partner }: { readonly partner: PublishedPartner }) => {
 
   return partner.websiteUrl ? (
     <a
-      aria-label={`${partner.name} – web partnera`}
+      aria-label={`${partner.name} – web partnera (otevře se v novém panelu)`}
       className="participant-partner-logo"
       href={partner.websiteUrl}
-      rel="noreferrer"
+      rel="noopener noreferrer"
       target="_blank"
     >
       {content}

@@ -69,7 +69,15 @@ interface ContentSource {
     map_query: string;
   };
   speakers: { list: SourceSpeaker[] };
-  partners: { logos: Array<{ name: string; src: string; on_dark?: boolean }> };
+  partners: {
+    logos: Array<{
+      name: string;
+      slug?: string;
+      src: string;
+      websiteUrl?: string;
+      on_dark?: boolean;
+    }>;
+  };
   program: {
     days: Array<{
       date: string;
@@ -736,12 +744,19 @@ export async function importContentJson(options: {
       );
   });
   source.partners.logos.forEach((partner, index) => {
-    for (const field of ['description', 'websiteUrl', 'category', 'tier'])
+    for (const field of ['description', 'category', 'tier'])
       addFinding(
         findings,
         'missing_field',
         `partners.logos[${index}].${field}`,
         `Partner ${field} is missing and remains null.`,
+      );
+    if (!partner.websiteUrl?.trim())
+      addFinding(
+        findings,
+        'missing_field',
+        `partners.logos[${index}].websiteUrl`,
+        'Partner websiteUrl is missing and remains null.',
       );
     if (partner.on_dark !== undefined)
       addFinding(
@@ -920,7 +935,7 @@ export async function importContentJson(options: {
     }
 
     for (const [index, partner] of source.partners.logos.entries()) {
-      const slug = slugify(partner.name);
+      const slug = slugify(partner.slug ?? partner.name);
       const existing = await transaction.query.partners.findFirst({
         where: and(
           eq(schema.partners.eventId, eventId),
@@ -941,6 +956,7 @@ export async function importContentJson(options: {
           eventId,
           slug,
           name: partner.name,
+          websiteUrl: partner.websiteUrl?.trim() || null,
           logoAssetId: assetIds.get(partner.src),
           status: 'draft',
           sortOrder: index,
@@ -949,6 +965,7 @@ export async function importContentJson(options: {
           target: [schema.partners.eventId, schema.partners.slug],
           set: {
             name: partner.name,
+            websiteUrl: partner.websiteUrl?.trim() || null,
             logoAssetId: assetIds.get(partner.src),
             sortOrder: index,
             updatedAt: new Date(),

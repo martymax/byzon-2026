@@ -384,6 +384,8 @@ integration('content import integration', () => {
       .select({
         logoAssetId: schema.partners.logoAssetId,
         name: schema.partners.name,
+        slug: schema.partners.slug,
+        websiteUrl: schema.partners.websiteUrl,
       })
       .from(schema.partners)
       .where(eq(schema.partners.eventId, eventId));
@@ -434,6 +436,9 @@ integration('content import integration', () => {
       ]),
     );
     expect(importedPartners).toHaveLength(15);
+    expect(
+      importedPartners.every(({ websiteUrl }) => websiteUrl !== null),
+    ).toBe(true);
     expect(importedPartners).toEqual(
       expect.arrayContaining(
         [
@@ -450,6 +455,23 @@ integration('content import integration', () => {
           }),
         ),
       ),
+    );
+    expect(importedPartners).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Společnost pro ranou péči',
+          slug: 'horizont',
+          websiteUrl: 'https://www.ranapece.cz/ceske-budejovice/',
+        }),
+        expect.objectContaining({
+          name: 'LEGAL PLUS',
+          websiteUrl: 'https://www.halaburt.cz/',
+        }),
+        expect.objectContaining({
+          name: 'dm',
+          websiteUrl: 'https://www.dm.cz/',
+        }),
+      ]),
     );
     expect(archivedCoaching).toHaveLength(11);
     expect(secondSessions).toEqual(

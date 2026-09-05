@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from html import escape
+from html import unescape
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -136,6 +137,26 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
     if absent:
         fail("Missing critical output markers: " + ", ".join(absent))
+
+    partner_link_pattern = re.compile(
+        r'<a class="partner-logo(?: on-dark)?" href="([^"]+)" '
+        r'target="_blank" rel="noopener noreferrer" aria-label="[^"]+">'
+        r'<img[^>]* alt="([^"]+)"',
+    )
+    actual_partner_links = {
+        unescape(name): unescape(url)
+        for url, name in partner_link_pattern.findall(home)
+    }
+    expected_partner_links = {
+        partner["name"]: partner["websiteUrl"]
+        for partner in content["partners"]["logos"]  # type: ignore[index]
+    }
+    if actual_partner_links != expected_partner_links:
+        fail(
+            "Partner links differ from content data:\n"
+            f"  expected: {expected_partner_links}\n"
+            f"  actual: {actual_partner_links}"
+        )
 
     hidden_markers = {
         "conference app desktop link": '<a href="https://app.byzon.cz/">Konferenční aplikace</a>',

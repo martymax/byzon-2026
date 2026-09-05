@@ -61,5 +61,13 @@ describe('content import preparation', () => {
         }),
       ]),
     );
+    expect(report.findings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'missing_field',
+          path: expect.stringMatching(/^partners\.logos\[\d+\]\.websiteUrl$/),
+        }),
+      ]),
+    );
   });
 });

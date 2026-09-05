@@ -712,78 +712,94 @@
       {
         "name": "JCI Czech Republic",
         "src": "/assets/img/2026/07/jci-czech-republic.png",
+        "websiteUrl": "https://jcicr.cz/",
         "on_dark": false
       },
       {
         "name": "Finovo",
         "src": "/assets/img/2026/06/finovo.svg",
+        "websiteUrl": "https://www.finovo.cz/",
         "on_dark": false
       },
       {
         "name": "Borovka Event",
         "src": "/assets/img/2025/10/borovka_event-e1780847651744-300x99.png",
+        "websiteUrl": "https://www.borovka.cz/",
         "on_dark": false
       },
       {
         "name": "BM Viva Marketing",
         "src": "/assets/img/2026/07/viva-marketing.png",
+        "websiteUrl": "https://vivamarketing.cz/",
         "on_dark": false
       },
       {
         "name": "Moderní Leader",
         "src": "/assets/img/2026/07/moderni-leader.png",
+        "websiteUrl": "https://modernileader.cz/",
         "on_dark": false
       },
       {
         "name": "Jihočeská hospodářská komora",
         "src": "/assets/img/2023/04/JHK_logo_podelne-300x138.png",
+        "websiteUrl": "https://www.jhk.cz/",
         "on_dark": false
       },
       {
-        "name": "Horizont",
+        "name": "Společnost pro ranou péči",
+        "slug": "horizont",
         "src": "/assets/img/2023/08/horizont_full-removebg-preview-300x81.png",
+        "websiteUrl": "https://www.ranapece.cz/ceske-budejovice/",
         "on_dark": false
       },
       {
         "name": "Expertní Board 21",
         "src": "/assets/img/2026/08/eb21-logo.png",
+        "websiteUrl": "https://expertniboard21.cz/",
         "on_dark": false
       },
       {
         "name": "Wexia Digital",
         "src": "/assets/img/2026/08/wexia.svg",
+        "websiteUrl": "https://www.wexia.digital/",
         "on_dark": false
       },
       {
         "name": "Frame Land",
         "src": "/assets/img/2026/09/frame-land.png",
+        "websiteUrl": "https://frameland.cz/",
         "tall": true,
         "on_dark": false
       },
       {
         "name": "Growy",
         "src": "/assets/img/2026/09/growy.svg",
+        "websiteUrl": "https://growy.cz/",
         "on_dark": false
       },
       {
         "name": "Vojáček",
         "src": "/assets/img/2026/09/vojacek.jpg",
+        "websiteUrl": "https://ondrejvojacek.cz/",
         "tall": true,
         "on_dark": false
       },
       {
         "name": "Panství Bzí",
         "src": "/assets/img/2026/09/panstvi-bzi.svg",
+        "websiteUrl": "https://www.panstvi-bzi.cz/",
         "on_dark": false
       },
       {
         "name": "LEGAL PLUS",
         "src": "/assets/img/2026/09/legal-plus.svg",
+        "websiteUrl": "https://www.halaburt.cz/",
         "on_dark": false
       },
       {
         "name": "dm",
         "src": "/assets/img/2026/09/dm.svg",
+        "websiteUrl": "https://www.dm.cz/",
         "tall": true,
         "on_dark": false
       }
