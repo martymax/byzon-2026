@@ -44,4 +44,6 @@ for (const sourcePath of webpPaths) {
   await copyFile(source, destination);
 }
 
-process.stdout.write(`Packaged ${webpPaths.length} public speaker portraits.\n`);
+process.stdout.write(
+  `Packaged ${webpPaths.length} public speaker portraits.\n`,
+);

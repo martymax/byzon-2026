@@ -14,7 +14,5 @@ export const canOpenParticipantMore = (
 export default async function ParticipantMorePage() {
   const currentEvent = await loadParticipantCurrentEvent();
   if (!canOpenParticipantMore(currentEvent)) notFound();
-  return (
-    <ParticipantMoreHub ticketAvailable={isFrontendPreviewAvailable()} />
-  );
+  return <ParticipantMoreHub ticketAvailable={isFrontendPreviewAvailable()} />;
 }
