@@ -156,7 +156,7 @@ describe('participant networking settings', () => {
       />,
     );
 
-    await screen.getByLabelText('Hledat podle čísla').fill('042');
+    await screen.getByLabelText('Hledat podle networking čísla').fill('042');
     await vi.waitFor(() =>
       expect(requests).toContain(
         '/api/v1/networking/directory?participantNumber=042',

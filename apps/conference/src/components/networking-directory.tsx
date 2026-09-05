@@ -533,12 +533,12 @@ export const NetworkingDirectory = ({
         <Card className="participant-account-card networking-directory-card">
           <header>
             <p className="activation-kicker">Adresář účastníků</p>
-            <h2>Najděte lidi pro dnešní setkání</h2>
+            <h2>Najděte lidi z konference</h2>
           </header>
           <div className="networking-directory-filters">
             <FormField
-              helperText="Zadejte celé číslo účastníka."
-              label="Hledat podle čísla"
+              helperText="Zadejte celé číslo účastníka přidělené na večerním networkingu."
+              label="Hledat podle networking čísla"
             >
               <Input
                 autoComplete="off"
