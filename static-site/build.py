@@ -467,7 +467,7 @@ def program_mobile_agenda(stages, label=None):
         return ""
 
     all_stage_ids = [stage["mobile_id"] for stage in stage_items]
-    all_stage_names = [stage["name"] for stage in stage_items]
+    all_stage_names = [stage.get("mobile_label", stage["name"]) for stage in stage_items]
     merged = {}
     order = 0
     for stage_index, stage in enumerate(stage_items):
@@ -483,11 +483,11 @@ def program_mobile_agenda(stages, label=None):
                 key = ("all", start, end, ev.get("time", ""), ev.get("title", ""), ev.get("meta", ""), ev.get("description", ""), ev.get("type", ""))
             elif is_condensed_calendar_event(ev):
                 stage_ids = [stage["mobile_id"]]
-                stage_names = [stage["name"]]
+                stage_names = [stage.get("mobile_label", stage["name"])]
                 key = ("condensed", start, end, ev.get("time", ""), ev.get("title", ""), ev.get("meta", ""), ev.get("description", ""), ev.get("type", ""))
             else:
                 stage_ids = [stage["mobile_id"]]
-                stage_names = [stage["name"]]
+                stage_names = [stage.get("mobile_label", stage["name"])]
                 key = ("event", start, end, stage_index, order)
             if key not in merged:
                 merged[key] = {

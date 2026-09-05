@@ -775,6 +775,17 @@
         "name": "Panství Bzí",
         "src": "/assets/img/2026/09/panstvi-bzi.svg",
         "on_dark": false
+      },
+      {
+        "name": "LEGAL PLUS",
+        "src": "/assets/img/2026/09/legal-plus.svg",
+        "on_dark": false
+      },
+      {
+        "name": "dm",
+        "src": "/assets/img/2026/09/dm.svg",
+        "tall": true,
+        "on_dark": false
       }
     ],
     "organizer": {
@@ -796,7 +807,7 @@
             "name": "BYZON Stage",
             "events": [
               { "time": "8:00 - 9:00", "title": "Registrace", "type": "shared", "span": "all" },
-              { "time": "9:00 - 9:15", "title": "Zahájení konference", "type": "shared" },
+              { "time": "9:00 - 9:15", "title": "Zahájení a slovo primátorky", "type": "shared" },
               { "time": "9:15 - 10:00", "title": "Lidskost jako konkurenční výhoda", "meta": "Margareta Křížová", "detail": "lidskost-jako-konkurencni-vyhoda" },
               { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček" },
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
@@ -827,7 +838,7 @@
               { "time": "11:45 - 12:15", "title": "Přestaňte lidi motivovat", "meta": "Blanka Mrázková", "detail": "prestante-lidi-motivovat" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
               { "time": "13:15 - 13:45", "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?", "meta": "Patrik Čada", "detail": "tyrkysova-firma" },
-              { "time": "13:45 - 14:15", "title": "Andrea Bílá" },
+              { "time": "13:45 - 14:15", "title": "Jak lidsky získat GenZ a vést s energií", "meta": "Andrea Bílá" },
               { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
               { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
               { "time": "15:15 - 16:45", "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?", "meta": "Lucie Libovická, Pavel Janoušek", "badge": "Mastermind", "detail": "co-o-svych-lidech-skutecne-vite", "link_speakers": true },
@@ -896,7 +907,9 @@
             ]
           },
           {
-            "name": "Solnice",
+            "name": "Bude Hub",
+            "note": "Rudolfovská tř. 34, České Budějovice",
+            "mobile_label": "Bude Hub · Rudolfovská tř. 34, České Budějovice",
             "events": [
               { "time": "15:15 - 17:15", "title": "Finále JCI Debating 2026" },
               { "time": "17:15 - 18:30", "title": "Galakoktejl - předání JCI awards (nejlepší projekty, leader roku)", "type": "social" }

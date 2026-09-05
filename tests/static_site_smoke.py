@@ -127,6 +127,11 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         "Growy partner": (home, '/assets/img/2026/09/growy.svg'),
         "Vojáček partner": (home, '/assets/img/2026/09/vojacek.jpg'),
         "Panství Bzí partner": (home, '/assets/img/2026/09/panstvi-bzi.svg'),
+        "LEGAL PLUS partner": (home, '/assets/img/2026/09/legal-plus.svg'),
+        "dm partner": (home, '/assets/img/2026/09/dm.svg'),
+        "opening with mayor": (program, "Zahájení a slovo primátorky"),
+        "Andrea Bílá talk": (program, "Jak lidsky získat GenZ a vést s energií"),
+        "Bude Hub address": (program, "Rudolfovská tř. 34, České Budějovice"),
     }
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
     if absent:
