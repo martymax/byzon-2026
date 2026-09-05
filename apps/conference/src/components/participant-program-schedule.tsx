@@ -31,6 +31,15 @@ const COACHING_STAGE_NAME = 'Koučovací zóna';
 const COACHING_STAGE_DESCRIPTION =
   'Koučování probíhá v paralelních 30minutových slotech.';
 const COACHING_SLOT_TITLE = 'Koučovací sloty';
+const LEGACY_STAGE_DESCRIPTION =
+  'Programová stage nebo sekce veřejného programu.';
+
+const mobileStageLabel = (stage: ProgramStage): string =>
+  stage.description &&
+  stage.description !== COACHING_STAGE_DESCRIPTION &&
+  stage.description !== LEGACY_STAGE_DESCRIPTION
+    ? `${stage.name} · ${stage.description}`
+    : stage.name;
 
 const pragueParts = (value: string) => {
   const values = new Map(
@@ -627,13 +636,17 @@ const MobileAgenda = ({
       if (current) {
         current.stageIds.push(...(spanAll ? stageIds : [stage.id]));
         current.stageNames.push(
-          ...(spanAll ? stages.map(({ name }) => name) : [stage.name]),
+          ...(spanAll
+            ? stages.map(mobileStageLabel)
+            : [mobileStageLabel(stage)]),
         );
       } else {
         itemsByKey.set(key, {
           session,
           stageIds: spanAll ? [...stageIds] : [stage.id],
-          stageNames: spanAll ? stages.map(({ name }) => name) : [stage.name],
+          stageNames: spanAll
+            ? stages.map(mobileStageLabel)
+            : [mobileStageLabel(stage)],
           start: range.start,
         });
       }

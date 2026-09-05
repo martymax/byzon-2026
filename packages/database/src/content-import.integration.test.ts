@@ -327,10 +327,12 @@ integration('content import integration', () => {
       join(tmpdir(), 'byzon-content-import-'),
     );
     const changedSourceFile = join(changedSourceDirectory, 'content.json');
-    const changedSource = (await readFile(options.sourceFile, 'utf8')).replace(
-      '"title": "Zahájení a slovo primátorky"',
-      '"title": "Zahájení a slovo primátorky – aktualizováno"',
-    );
+    const changedSource = (await readFile(options.sourceFile, 'utf8'))
+      .replace(
+        '"title": "Zahájení a slovo primátorky"',
+        '"title": "Zahájení a slovo primátorky – aktualizováno"',
+      )
+      .replace('"name": "Bude Hub"', '"name": "Bude Hub – aktualizováno"');
     expect(changedSource).toContain(
       '"title": "Zahájení a slovo primátorky – aktualizováno"',
     );
@@ -370,9 +372,21 @@ integration('content import integration', () => {
         ),
       );
     const importedRooms = await client.db
-      .select({ id: schema.rooms.id, name: schema.rooms.name })
+      .select({
+        description: schema.rooms.description,
+        id: schema.rooms.id,
+        name: schema.rooms.name,
+        slug: schema.rooms.slug,
+      })
       .from(schema.rooms)
       .where(eq(schema.rooms.eventId, eventId));
+    const importedPartners = await client.db
+      .select({
+        logoAssetId: schema.partners.logoAssetId,
+        name: schema.partners.name,
+      })
+      .from(schema.partners)
+      .where(eq(schema.partners.eventId, eventId));
     const archivedCoaching = await client.db
       .select({ id: schema.programSessions.id })
       .from(schema.programSessions)
@@ -405,9 +419,37 @@ integration('content import integration', () => {
       expect.arrayContaining([
         'BYZON Stage',
         'Leadership Stage',
+        'Bude Hub – aktualizováno',
         'Koučovací zóna · Radim Roček',
         'Koučovací zóna · Stanislava Maunová',
       ]),
+    );
+    expect(importedRooms).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          description: 'Rudolfovská tř. 34, České Budějovice',
+          name: 'Bude Hub – aktualizováno',
+          slug: 'bude-hub',
+        }),
+      ]),
+    );
+    expect(importedPartners).toHaveLength(15);
+    expect(importedPartners).toEqual(
+      expect.arrayContaining(
+        [
+          'Frame Land',
+          'Growy',
+          'Vojáček',
+          'Panství Bzí',
+          'LEGAL PLUS',
+          'dm',
+        ].map((name) =>
+          expect.objectContaining({
+            logoAssetId: expect.any(String),
+            name,
+          }),
+        ),
+      ),
     );
     expect(archivedCoaching).toHaveLength(11);
     expect(secondSessions).toEqual(
@@ -465,6 +507,10 @@ integration('content import integration', () => {
           capacityMode: 'reservation',
           capacity: 6,
           reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+        }),
+        expect.objectContaining({
+          summary: 'Andrea Bílá',
+          title: 'Jak lidsky získat GenZ a vést s energií',
         }),
         expect.objectContaining({
           title: 'Volný program',

@@ -73,7 +73,7 @@ interface ContentSource {
   program: {
     days: Array<{
       date: string;
-      stages: Array<{ name: string; events: SourceEvent[] }>;
+      stages: Array<{ name: string; note?: string; events: SourceEvent[] }>;
     }>;
   };
 }
@@ -112,6 +112,7 @@ interface PreparedRoom {
   sourcePath: string;
   slug: string;
   name: string;
+  description: string | null;
   sortOrder: number;
 }
 
@@ -551,6 +552,7 @@ export async function importContentJson(options: {
           sourcePath: stagePath,
           slug: roomSlug,
           name: stage.name,
+          description: stage.note?.trim() || null,
           sortOrder: preparedRooms.size,
         });
       }
@@ -676,6 +678,7 @@ export async function importContentJson(options: {
         sourcePath: `${coachingSchedule.sourceName}#room-${slot.coachKey}`,
         slug: roomSlug,
         name: `Koučovací zóna · ${slot.coachName}`,
+        description: null,
         sortOrder: preparedRooms.size,
       });
     }
@@ -1009,12 +1012,32 @@ export async function importContentJson(options: {
 
     const roomIds = new Map<string, string>();
     for (const room of preparedRooms.values()) {
-      const existing = await transaction.query.rooms.findFirst({
-        where: and(
-          eq(schema.rooms.eventId, eventId),
-          eq(schema.rooms.slug, room.slug),
-        ),
-      });
+      const provenance =
+        await transaction.query.contentImportProvenance.findFirst({
+          columns: { targetId: true },
+          where: and(
+            eq(schema.contentImportProvenance.eventId, eventId),
+            eq(schema.contentImportProvenance.sourceName, room.sourceName),
+            eq(schema.contentImportProvenance.sourcePath, room.sourcePath),
+            eq(schema.contentImportProvenance.targetType, 'room'),
+          ),
+        });
+      const existingByProvenance = provenance
+        ? await transaction.query.rooms.findFirst({
+            where: and(
+              eq(schema.rooms.eventId, eventId),
+              eq(schema.rooms.id, provenance.targetId),
+            ),
+          })
+        : null;
+      const existing =
+        existingByProvenance ??
+        (await transaction.query.rooms.findFirst({
+          where: and(
+            eq(schema.rooms.eventId, eventId),
+            eq(schema.rooms.slug, room.slug),
+          ),
+        }));
       if (
         existing &&
         existing.status !== 'draft' &&
@@ -1023,15 +1046,16 @@ export async function importContentJson(options: {
         throw new Error(`refusing to overwrite non-draft room: ${room.slug}`);
       }
       const id = existing?.id ?? generateUuidV7();
+      const stableSlug = existing?.slug ?? room.slug;
       await transaction
         .insert(schema.rooms)
         .values({
           id,
           eventId,
           venueId,
-          slug: room.slug,
+          slug: stableSlug,
           name: room.name,
-          description: 'Programová stage nebo sekce veřejného programu.',
+          description: room.description,
           status: 'draft',
           sortOrder: room.sortOrder,
         })
@@ -1040,7 +1064,7 @@ export async function importContentJson(options: {
           set: {
             venueId,
             name: room.name,
-            description: 'Programová stage nebo sekce veřejného programu.',
+            description: room.description,
             sortOrder: room.sortOrder,
             updatedAt: new Date(),
           },

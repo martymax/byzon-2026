@@ -126,6 +126,25 @@ const coachingProgram = (() => {
   };
 })();
 
+const budeHubProgram = (() => {
+  const fixture = participantProgramFixtures.happy!;
+  return {
+    ...fixture,
+    program: {
+      ...fixture.program,
+      rooms: fixture.program.rooms.map((room) =>
+        room.id === contentFixtureIds.workshopRoom
+          ? {
+              ...room,
+              name: 'Bude Hub',
+              description: 'Rudolfovská tř. 34, České Budějovice',
+            }
+          : room,
+      ),
+    },
+  };
+})();
+
 beforeEach(() => {
   window.sessionStorage.clear();
   window.history.replaceState({}, '', window.location.pathname);
@@ -166,6 +185,37 @@ describe('CS-CONTENT-01 participant UI', () => {
       contentFixtureIds.saturday,
     );
     expect(new URL(window.location.href).searchParams.get('type')).toBeNull();
+  });
+
+  it('shows the Bude Hub address in desktop and mobile program layouts', async () => {
+    const screen = await renderComponent(
+      <ProgramView
+        eventId={budeHubProgram.eventId}
+        api={apiFor(budeHubProgram)}
+      />,
+    );
+
+    await screen.getByRole('tab', { name: 'Sobota' }).click();
+    const stageHeaders = Array.from(
+      screen.container.querySelectorAll('.program-calendar__stage-head'),
+    );
+    const budeHubHeader = stageHeaders.find(
+      (header) => header.querySelector('h3')?.textContent === 'Bude Hub',
+    );
+    expect(budeHubHeader?.querySelector('p')?.textContent).toBe(
+      'Rudolfovská tř. 34, České Budějovice',
+    );
+    expect(
+      Array.from(
+        screen.container.querySelectorAll('.program-mobile-event__stage'),
+      ).some(
+        ({ textContent }) =>
+          textContent === 'Bude Hub · Rudolfovská tř. 34, České Budějovice',
+      ),
+    ).toBe(true);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
   });
 
   it('shows one static-site coaching slot and defers the coach choice to its detail', async () => {
