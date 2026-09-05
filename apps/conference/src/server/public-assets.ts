@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 const assetIdSchema = z.string().uuid();
-const STATIC_SITE_ORIGIN = 'https://byzon.cz';
 const LOCAL_CONTENT_ASSET_PREFIX = '/content-assets';
 
 export interface PublicAssetRecord {
@@ -19,6 +18,7 @@ export const publicAssetLocation = (
   if (
     !sourcePath.startsWith('/assets/img/') ||
     sourcePath.includes('\\') ||
+    sourcePath.includes('%') ||
     sourcePath.includes('?') ||
     sourcePath.includes('#') ||
     /[\u0000-\u001f\u007f]/.test(sourcePath) ||
@@ -26,14 +26,7 @@ export const publicAssetLocation = (
   ) {
     return null;
   }
-  if (sourcePath.toLowerCase().endsWith('.webp')) {
-    return `${LOCAL_CONTENT_ASSET_PREFIX}${sourcePath}`;
-  }
-  const location = new URL(sourcePath, STATIC_SITE_ORIGIN);
-  return location.origin === STATIC_SITE_ORIGIN &&
-    location.pathname.startsWith('/assets/img/')
-    ? location.toString()
-    : null;
+  return `${LOCAL_CONTENT_ASSET_PREFIX}${sourcePath}`;
 };
 
 const notFound = () =>

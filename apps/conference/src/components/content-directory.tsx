@@ -374,15 +374,23 @@ export const PartnerLogoGrid = ({
   partners,
 }: {
   readonly partners: readonly PublishedPartner[];
-}) => (
-  <ul className="participant-partners-grid">
-    {partners.map((partner) => (
-      <li key={partner.id}>
-        <PartnerLogo partner={partner} />
-      </li>
-    ))}
-  </ul>
-);
+}) => {
+  const partnerSlugs = new Set(partners.map(({ slug }) => slug));
+  // Keep older published snapshots clean until the source import archives
+  // the partner that Frame Land replaced.
+  const visiblePartners = partners.filter(
+    ({ slug }) => !(slug === 'livest' && partnerSlugs.has('frame-land')),
+  );
+  return (
+    <ul className="participant-partners-grid">
+      {visiblePartners.map((partner) => (
+        <li key={partner.id}>
+          <PartnerLogo partner={partner} />
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 export const ParticipantPartnersFooter = ({
   partners,

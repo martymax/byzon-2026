@@ -297,6 +297,14 @@ integration('content import integration', () => {
       .update(schema.speakerProfiles)
       .set({ status: 'published' })
       .where(eq(schema.speakerProfiles.eventId, eventId));
+    await client.db.insert(schema.partners).values({
+      id: generateUuidV7(),
+      eventId,
+      slug: 'livest',
+      name: 'LIVEST',
+      status: 'draft',
+      sortOrder: 9,
+    });
     await client.db
       .update(schema.partners)
       .set({ status: 'published' })
@@ -388,7 +396,19 @@ integration('content import integration', () => {
         websiteUrl: schema.partners.websiteUrl,
       })
       .from(schema.partners)
-      .where(eq(schema.partners.eventId, eventId));
+      .where(
+        and(
+          eq(schema.partners.eventId, eventId),
+          ne(schema.partners.status, 'archived'),
+        ),
+      );
+    const archivedLegacyPartner = await client.db.query.partners.findFirst({
+      columns: { name: true, status: true },
+      where: and(
+        eq(schema.partners.eventId, eventId),
+        eq(schema.partners.slug, 'livest'),
+      ),
+    });
     const archivedCoaching = await client.db
       .select({ id: schema.programSessions.id })
       .from(schema.programSessions)
@@ -436,6 +456,10 @@ integration('content import integration', () => {
       ]),
     );
     expect(importedPartners).toHaveLength(15);
+    expect(archivedLegacyPartner).toEqual({
+      name: 'LIVEST',
+      status: 'archived',
+    });
     expect(
       importedPartners.every(({ websiteUrl }) => websiteUrl !== null),
     ).toBe(true);

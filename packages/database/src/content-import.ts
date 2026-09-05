@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 
-import { and, count, eq, inArray, like, or } from 'drizzle-orm';
+import { and, count, eq, inArray, like, ne, or } from 'drizzle-orm';
 
 import {
   acquireTransactionLock,
@@ -128,6 +128,7 @@ const SOURCE_NAME = 'static-site/data/content.json';
 const LEGACY_COACHING_STAGE = 'Koučovací zóna';
 const LEGACY_COACHING_TITLE = 'Koučovací sloty';
 const EXPECTED_LEGACY_COACHING_SESSIONS = 11;
+const LEGACY_PARTNER_REPLACEMENTS = new Map([['livest', 'frame-land']]);
 const PRAGUE_OFFSET = '+02:00';
 const knownDates: Record<string, string> = {
   '18. září 2026': '2026-09-18',
@@ -514,6 +515,45 @@ async function archiveLegacyCoachingSessions(
   }
 }
 
+async function archiveReplacedPartners(
+  transaction: DatabaseTransaction,
+  eventId: string,
+  sourcePartnerSlugs: ReadonlySet<string>,
+  allowPublishedUpdate: boolean,
+): Promise<void> {
+  for (const [legacySlug, replacementSlug] of LEGACY_PARTNER_REPLACEMENTS) {
+    if (
+      sourcePartnerSlugs.has(legacySlug) ||
+      !sourcePartnerSlugs.has(replacementSlug)
+    ) {
+      continue;
+    }
+    const legacyPartner = await transaction.query.partners.findFirst({
+      where: and(
+        eq(schema.partners.eventId, eventId),
+        eq(schema.partners.slug, legacySlug),
+        ne(schema.partners.status, 'archived'),
+      ),
+    });
+    if (!legacyPartner) continue;
+    if (legacyPartner.status === 'published' && !allowPublishedUpdate) {
+      throw new Error(
+        `refusing to archive published legacy partner: ${legacySlug}`,
+      );
+    }
+    await transaction
+      .update(schema.partners)
+      .set({ status: 'archived', updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.partners.eventId, eventId),
+          eq(schema.partners.id, legacyPartner.id),
+          ne(schema.partners.status, 'archived'),
+        ),
+      );
+  }
+}
+
 export async function importContentJson(options: {
   db: Database;
   eventSlug: string;
@@ -791,6 +831,19 @@ export async function importContentJson(options: {
       findings,
     };
 
+  const sourcePartnerSlugs = new Set(
+    source.partners.logos.map((partner) =>
+      slugify(partner.slug ?? partner.name),
+    ),
+  );
+  const legacyPartnerSlugsToArchive = [...LEGACY_PARTNER_REPLACEMENTS]
+    .filter(
+      ([legacySlug, replacementSlug]) =>
+        !sourcePartnerSlugs.has(legacySlug) &&
+        sourcePartnerSlugs.has(replacementSlug),
+    )
+    .map(([legacySlug]) => legacySlug);
+
   await withTransaction(options.db, async (transaction) => {
     await acquireTransactionLock(
       transaction,
@@ -846,9 +899,31 @@ export async function importContentJson(options: {
         `${room.sourceName}\u0000${room.sourcePath}\u0000${room.sourceSha256}`,
       ),
     );
-    if (unchangedImport && unchangedCoachingImport && roomsUnchanged) return;
+    const replacedLegacyPartner = legacyPartnerSlugsToArchive.length
+      ? await transaction.query.partners.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(schema.partners.eventId, eventId),
+            ne(schema.partners.status, 'archived'),
+            inArray(schema.partners.slug, legacyPartnerSlugsToArchive),
+          ),
+        })
+      : null;
+    if (
+      unchangedImport &&
+      unchangedCoachingImport &&
+      roomsUnchanged &&
+      !replacedLegacyPartner
+    )
+      return;
     await acquireTransactionLock(transaction, `content-publish:${eventId}`);
 
+    await archiveReplacedPartners(
+      transaction,
+      eventId,
+      sourcePartnerSlugs,
+      options.allowPublishedUpdate ?? false,
+    );
     await archiveLegacyCoachingSessions(
       transaction,
       eventId,

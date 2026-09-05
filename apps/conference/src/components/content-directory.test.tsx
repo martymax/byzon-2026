@@ -39,4 +39,28 @@ describe('partner logo grid', () => {
       'aria-label="Partner Test – web partnera (otevře se v novém panelu)"',
     );
   });
+
+  it('hides the replaced Livest entry when Frame Land is available', () => {
+    const markup = renderToStaticMarkup(
+      <PartnerLogoGrid
+        partners={[
+          {
+            ...linkedPartner,
+            id: `${linkedPartner.id.slice(0, -1)}7`,
+            slug: 'livest',
+            name: 'LIVEST',
+          },
+          {
+            ...linkedPartner,
+            id: `${linkedPartner.id.slice(0, -1)}8`,
+            slug: 'frame-land',
+            name: 'Frame Land',
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('Frame Land');
+    expect(markup).not.toContain('LIVEST');
+  });
 });

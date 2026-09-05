@@ -20,15 +20,17 @@ const content = JSON.parse(
   ),
 );
 const referencedPaths = new Set([
+  content.location.image,
   ...content.speakers.list.map((speaker) => speaker.photo),
+  ...content.partners.logos.map((partner) => partner.src),
 ]);
-const webpPaths = [...referencedPaths]
-  .filter((sourcePath) => sourcePath.toLowerCase().endsWith('.webp'))
-  .sort();
+const imagePaths = [...referencedPaths].sort();
 
-for (const sourcePath of webpPaths) {
+for (const sourcePath of imagePaths) {
   if (
-    !/^\/assets\/img\/[A-Za-z0-9._/-]+\.webp$/i.test(sourcePath) ||
+    !/^\/assets\/img\/[A-Za-z0-9._/-]+\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(
+      sourcePath,
+    ) ||
     sourcePath.includes('..') ||
     sourcePath.includes('\\')
   ) {
@@ -44,6 +46,4 @@ for (const sourcePath of webpPaths) {
   await copyFile(source, destination);
 }
 
-process.stdout.write(
-  `Packaged ${webpPaths.length} public speaker portraits.\n`,
-);
+process.stdout.write(`Packaged ${imagePaths.length} public content images.\n`);

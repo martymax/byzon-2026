@@ -6,7 +6,7 @@ const eventId = '01910000-0000-7000-8000-000000000001';
 const assetId = '01910000-0000-7000-8000-000000000002';
 
 describe('public content assets', () => {
-  it('maps packaged WebP images to the conference application', () => {
+  it('maps packaged content images to the conference application', () => {
     expect(
       publicAssetLocation({
         eventId,
@@ -15,13 +15,13 @@ describe('public content assets', () => {
     ).toBe('/content-assets/assets/img/2026/08/speaker.webp');
   });
 
-  it('keeps other imported public images on the canonical static website', () => {
+  it('serves imported partner logos from the conference application', () => {
     expect(
       publicAssetLocation({
         eventId,
         bucketKey: `public-static/${eventId}/assets/img/2026/08/wexia.svg`,
       }),
-    ).toBe('https://byzon.cz/assets/img/2026/08/wexia.svg');
+    ).toBe('/content-assets/assets/img/2026/08/wexia.svg');
   });
 
   it.each([
@@ -45,7 +45,7 @@ describe('public content assets', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe(
-      'https://byzon.cz/assets/img/logo.png',
+      '/content-assets/assets/img/logo.png',
     );
     expect(response.headers.get('cache-control')).toContain('max-age=300');
     expect(findAsset).toHaveBeenCalledWith(assetId);
