@@ -1,7 +1,10 @@
 import { createDatabaseClient, generateUuidV7, schema } from '@byzon/database';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { readParticipantProgram } from './participant-program';
+import {
+  readParticipantProgram,
+  readParticipantProgramSessionCalendar,
+} from './participant-program';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -227,5 +230,49 @@ integration('participant program integration', () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it('exports one published session as a private calendar file', async () => {
+    const response = await readParticipantProgramSessionCalendar(
+      new Request(
+        `https://app.byzon.test/api/v1/events/${eventId}/program/${sessionOneId}/calendar.ics`,
+        { headers },
+      ),
+      eventId,
+      sessionOneId,
+      dependencies,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('content-type')).toBe(
+      'text/calendar; charset=utf-8',
+    );
+    expect(response.headers.get('content-disposition')).toBe(
+      'attachment; filename="byzon-2026-opening.ics"',
+    );
+    const calendar = await response.text();
+    expect(calendar).toContain(`UID:${sessionOneId}@program.byzon.cz`);
+    expect(calendar).toContain('DTSTART:20260918T070000Z');
+    expect(calendar).toContain('LOCATION:Main Stage');
+    expect(calendar.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+  });
+
+  it('does not export a session outside the published program', async () => {
+    const unknownSessionId = generateUuidV7();
+    const response = await readParticipantProgramSessionCalendar(
+      new Request(
+        `https://app.byzon.test/api/v1/events/${eventId}/program/${unknownSessionId}/calendar.ics`,
+        { headers },
+      ),
+      eventId,
+      unknownSessionId,
+      dependencies,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'SESSION_NOT_FOUND',
+    });
   });
 });

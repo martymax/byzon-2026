@@ -107,13 +107,6 @@ const authorize = async (
   return identity.user.id;
 };
 
-export const maskModeratorContact = (email: string): string => {
-  const at = email.lastIndexOf('@');
-  return at > 0
-    ? `${email.slice(0, 1)}***@${email.slice(at + 1)}`
-    : 'x***@invalid.example';
-};
-
 const currentFeatures = (
   row:
     | Pick<
@@ -221,13 +214,13 @@ const loadOverview = async (
           assignmentId: role.assignmentId,
           userId: role.userId,
           displayName: role.displayName,
-          maskedContact: maskModeratorContact(role.email),
+          contactEmail: role.email,
         })),
     })),
     moderatorCandidates: candidates.map((candidate) => ({
       userId: candidate.userId,
       displayName: candidate.displayName,
-      maskedContact: maskModeratorContact(candidate.email),
+      contactEmail: candidate.email,
     })),
   });
 };
@@ -643,7 +636,7 @@ const updateModerator = async (
             sessionId: input.sessionId,
             userId: input.userId,
             displayName: candidate.name,
-            maskedContact: maskModeratorContact(candidate.email),
+            contactEmail: candidate.email,
           }
         : null,
     changedAt: context.changedAt.toISOString(),

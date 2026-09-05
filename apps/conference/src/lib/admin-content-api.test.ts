@@ -38,6 +38,7 @@ const sessionItem = (eventId: string = ids.event) => ({
   endsAt: '2026-09-18T11:00:00.000Z',
   eventId,
   id: ids.item,
+  publicationState: 'published',
   roomId: null,
   slug: 'synteticky-program',
   sortOrder: 0,
@@ -76,7 +77,14 @@ describe('admin content fetch port', () => {
       ok: true,
       data: {
         resource: 'sessions',
-        items: [{ eventId: ids.event, id: ids.item, version: 3 }],
+        items: [
+          {
+            eventId: ids.event,
+            id: ids.item,
+            publicationState: 'published',
+            version: 3,
+          },
+        ],
       },
     });
     expect(fetcher).toHaveBeenCalledWith(

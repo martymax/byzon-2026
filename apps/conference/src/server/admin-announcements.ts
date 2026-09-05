@@ -208,8 +208,49 @@ const audienceSnapshot = async (
   };
 };
 
-const maskedReference = (userId: string) =>
-  `Účastník •${userId.replaceAll('-', '').slice(-4)}`;
+const audienceSample = async (
+  db: Database,
+  eventId: string,
+  userIds: readonly string[],
+) => {
+  if (userIds.length === 0) return [];
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      accountName: schema.users.name,
+      accountEmail: schema.users.email,
+      firstName: schema.participantProfiles.firstName,
+      lastName: schema.participantProfiles.lastName,
+      contactEmail: schema.participantProfiles.contactEmail,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.participantProfiles,
+      and(
+        eq(schema.participantProfiles.eventId, eventId),
+        eq(schema.participantProfiles.userId, schema.users.id),
+      ),
+    )
+    .where(inArray(schema.users.id, [...userIds]));
+  const identities = new Map(rows.map((row) => [row.userId, row]));
+  return userIds.flatMap((userId) => {
+    const identity = identities.get(userId);
+    if (!identity) return [];
+    const profileName = [identity.firstName, identity.lastName]
+      .filter((value) => value !== null)
+      .join(' ');
+    const participantName = (profileName || identity.accountName)
+      .replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/g, '')
+      .trim()
+      .slice(0, 257);
+    return [
+      {
+        participantName: participantName || 'Účastník',
+        contactEmail: identity.contactEmail ?? identity.accountEmail,
+      },
+    ];
+  });
+};
 
 export const handleAdminAnnouncementTargets = async (
   request: Request,
@@ -320,6 +361,11 @@ export const handleAdminAnnouncementPreview = async (
         'The immutable audience would contain no recipients.',
       );
     }
+    const sample = await audienceSample(
+      dependencies.db,
+      eventId,
+      audience.recipientIds.slice(0, 5),
+    );
     const now = dependencies.now?.() ?? new Date();
     const previewId = generateUuidV7();
     const expiresAt = new Date(now.getTime() + PREVIEW_TTL_MS);
@@ -342,9 +388,7 @@ export const handleAdminAnnouncementPreview = async (
       audience: {
         recipientCount: audience.recipientIds.length,
         excludedCount: 0,
-        sample: audience.recipientIds.slice(0, 5).map((userId) => ({
-          participantReference: maskedReference(userId),
-        })),
+        sample,
       },
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),

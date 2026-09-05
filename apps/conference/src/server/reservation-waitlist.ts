@@ -7,7 +7,9 @@ import {
   publishedAgendaReservationWindowsSchema,
   publishedProgramAgendaSnapshotSchema,
 } from '@byzon/domain/contracts';
-import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
+
+import { tryAcquireCoachingReservationLock } from './reservation-policy';
 
 export interface AutomaticWaitlistPromotionInput {
   transaction: DatabaseTransaction;
@@ -83,6 +85,8 @@ const participantCanBePromoted = async (
   eventId: string,
   userId: string,
 ): Promise<boolean> => {
+  // ADR-016 uses active event membership and role eligibility for 2026;
+  // participant ticket credentials are intentionally not issued.
   const membership = await transaction.query.eventMemberships.findFirst({
     columns: { userId: true },
     where: and(
@@ -101,16 +105,95 @@ const participantCanBePromoted = async (
       isNull(schema.eventRoles.revokedAt),
     ),
   });
-  if (!role) return false;
-  const ticket = await transaction.query.tickets.findFirst({
-    columns: { id: true },
-    where: and(
-      eq(schema.tickets.eventId, eventId),
-      eq(schema.tickets.holderUserId, userId),
-      eq(schema.tickets.status, 'activated'),
-    ),
+  return role !== undefined;
+};
+
+const participantHasReservationConflict = async (
+  transaction: DatabaseTransaction,
+  eventId: string,
+  userId: string,
+  targetReservationSessionId: string,
+): Promise<boolean> => {
+  const publication = await transaction.query.contentPublications.findFirst({
+    columns: { snapshot: true },
+    where: eq(schema.contentPublications.eventId, eventId),
+    orderBy: [desc(schema.contentPublications.version)],
   });
-  return ticket !== undefined;
+  const snapshot = publishedProgramAgendaSnapshotSchema.safeParse(
+    publication?.snapshot,
+  );
+  if (!snapshot.success) return true;
+  const publishedById = new Map(
+    snapshot.data.program.sessions.map((session) => [session.id, session]),
+  );
+  const operational = await transaction
+    .select({
+      id: schema.programSessions.id,
+      reservationGroupId: schema.programSessions.reservationGroupId,
+      status: schema.programSessions.status,
+      type: schema.programSessions.type,
+    })
+    .from(schema.programSessions)
+    .where(eq(schema.programSessions.eventId, eventId));
+  const projectionsFor = (reservationSessionId: string) =>
+    operational
+      .filter(
+        (session) =>
+          (session.reservationGroupId ?? session.id) === reservationSessionId &&
+          session.status !== 'archived' &&
+          session.status !== 'cancelled',
+      )
+      .map(({ id }) => publishedById.get(id))
+      .filter(
+        (
+          session,
+        ): session is NonNullable<ReturnType<typeof publishedById.get>> =>
+          session !== undefined && session.status !== 'cancelled',
+      );
+  const targetProjections = projectionsFor(targetReservationSessionId);
+  if (targetProjections.length === 0) return true;
+  const targetIsCoaching = operational.some(
+    (session) =>
+      (session.reservationGroupId ?? session.id) ===
+        targetReservationSessionId &&
+      session.status !== 'archived' &&
+      session.status !== 'cancelled' &&
+      session.type === 'coaching',
+  );
+  const existingReservations = await transaction
+    .select({ sessionId: schema.reservations.sessionId })
+    .from(schema.reservations)
+    .where(
+      and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, userId),
+        eq(schema.reservations.status, 'confirmed'),
+        ne(schema.reservations.sessionId, targetReservationSessionId),
+      ),
+    );
+  return existingReservations.some((reservation) => {
+    const projections = projectionsFor(reservation.sessionId);
+    const coachingLimit =
+      targetIsCoaching &&
+      operational.some(
+        (session) =>
+          (session.reservationGroupId ?? session.id) ===
+            reservation.sessionId &&
+          session.status !== 'archived' &&
+          session.status !== 'cancelled' &&
+          session.type === 'coaching',
+      );
+    return (
+      coachingLimit ||
+      projections.some((existing) =>
+        targetProjections.some(
+          (target) =>
+            Date.parse(existing.startsAt) < Date.parse(target.endsAt) &&
+            Date.parse(existing.endsAt) > Date.parse(target.startsAt),
+        ),
+      )
+    );
+  });
 };
 
 /**
@@ -132,6 +215,7 @@ export const promoteAutomaticWaitlist = async ({
       capacity: true,
       capacityMode: true,
       status: true,
+      type: true,
       waitlistMode: true,
     },
     where: and(
@@ -183,6 +267,19 @@ export const promoteAutomaticWaitlist = async ({
     if (!waiting) break;
 
     if (
+      session.type === 'coaching' &&
+      !(await tryAcquireCoachingReservationLock(
+        transaction,
+        eventId,
+        waiting.userId,
+      ))
+    ) {
+      // Another transaction is deciding this participant's coaching slot.
+      // Preserve FIFO and let the next capacity transition retry safely.
+      break;
+    }
+
+    if (
       !(await participantCanBePromoted(transaction, eventId, waiting.userId))
     ) {
       await transaction
@@ -212,6 +309,20 @@ export const promoteAutomaticWaitlist = async ({
         { generateId },
       );
       continue;
+    }
+
+    // Preserve FIFO and leave the participant waiting for an explicit choice.
+    // A later capacity transition can retry after their conflicting booking is
+    // gone; automatic promotion must never create a double reservation.
+    if (
+      await participantHasReservationConflict(
+        transaction,
+        eventId,
+        waiting.userId,
+        sessionId,
+      )
+    ) {
+      break;
     }
 
     const existing = await transaction.query.reservations.findFirst({

@@ -23,6 +23,8 @@ export type AdminContentResource = (typeof adminContentResources)[number];
 
 export interface AdminContentItem {
   readonly id: string;
+  readonly publicationState?:
+    'archived' | 'published' | 'unpublished' | undefined;
   readonly version?: number;
   readonly [key: string]: unknown;
 }
@@ -123,6 +125,7 @@ export interface AdminContentPort {
 const itemIdentity = {
   eventId: z.string().uuid(),
   id: z.string().uuid(),
+  publicationState: z.enum(['archived', 'published', 'unpublished']).optional(),
   sortOrder: z.number().int().nonnegative(),
 } as const;
 const versionedItemBase = {
@@ -202,12 +205,16 @@ const resourceItemSchemas = {
   speakers: z
     .object({
       ...versionedItemBase,
+      accountEmail: z.string().email().nullable().optional(),
       bioMarkdown: itemNullableText,
       company: itemNullableText,
       firstName: itemText,
       jobTitle: itemNullableText,
       lastName: itemText,
       linkedinUrl: itemUrl,
+      instagramUrl: itemUrl,
+      facebookUrl: itemUrl,
+      sessionIds: z.array(z.string().uuid()).max(50).optional(),
       slug: itemSlug,
       status: itemStatus,
       websiteUrl: itemUrl,

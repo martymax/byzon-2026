@@ -33,6 +33,7 @@ import {
   isNull,
   lt,
   lte,
+  ne,
   or,
   sql,
 } from 'drizzle-orm';
@@ -176,11 +177,22 @@ const validateScope = async (
       }
     }
   }
+  if (role === 'room_operator' && scope.kind === 'room') {
+    const room = await db.query.rooms.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.rooms.eventId, eventId),
+        eq(schema.rooms.id, scope.roomId),
+        ne(schema.rooms.status, 'archived'),
+      ),
+    });
+    if (room) return { roomIds: [scope.roomId] };
+  }
   throw problem(
     409,
     'ADMIN_INVALID_TRANSITION',
     'Invalid assignment scope',
-    'Check-in operators require a station and moderators or activity leaders require a session.',
+    'Check-in operators require a station, moderators require a session and activity leaders require a room or session.',
   );
 };
 
@@ -212,13 +224,6 @@ const safeLabel = (value: string, fallback: string): string => {
     .trim()
     .slice(0, 120);
   return normalized || fallback;
-};
-
-const maskEmail = (email: string): string => {
-  const at = email.lastIndexOf('@');
-  return at > 0
-    ? `${email.slice(0, 1)}***@${email.slice(at + 1)}`
-    : 'x***@invalid.example';
 };
 
 const encodeRoleCursor = (id: string): string =>
@@ -328,7 +333,11 @@ export const handleAdminRoleAssignmentList = async (
       : null;
     const scopeCondition = query.data.scopeKind
       ? sql`${schema.eventRoles.scope} ? ${
-          query.data.scopeKind === 'station' ? 'stationIds' : 'sessionIds'
+          query.data.scopeKind === 'station'
+            ? 'stationIds'
+            : query.data.scopeKind === 'room'
+              ? 'roomIds'
+              : 'sessionIds'
         }`
       : undefined;
     const rows = await dependencies.db
@@ -372,7 +381,12 @@ export const handleAdminRoleAssignmentList = async (
         ? scope.sessionIds
         : [],
     );
-    const [stations, sessions] = await Promise.all([
+    const roomIds = pageRows.flatMap(({ role, scope }) =>
+      role === 'room_operator' && scope.roomIds?.length === 1
+        ? scope.roomIds
+        : [],
+    );
+    const [stations, rooms, sessions] = await Promise.all([
       stationIds.length
         ? dependencies.db
             .select({
@@ -384,6 +398,17 @@ export const handleAdminRoleAssignmentList = async (
               and(
                 eq(schema.checkinStations.eventId, eventId),
                 inArray(schema.checkinStations.id, stationIds),
+              ),
+            )
+        : [],
+      roomIds.length
+        ? dependencies.db
+            .select({ id: schema.rooms.id, name: schema.rooms.name })
+            .from(schema.rooms)
+            .where(
+              and(
+                eq(schema.rooms.eventId, eventId),
+                inArray(schema.rooms.id, roomIds),
               ),
             )
         : [],
@@ -403,6 +428,7 @@ export const handleAdminRoleAssignmentList = async (
         : [],
     ]);
     const stationLabels = new Map(stations.map(({ id, name }) => [id, name]));
+    const roomLabels = new Map(rooms.map(({ id, name }) => [id, name]));
     const sessionLabels = new Map(sessions.map(({ id, title }) => [id, title]));
     const items = pageRows.map((row) => {
       if (
@@ -422,6 +448,25 @@ export const handleAdminRoleAssignmentList = async (
             kind: 'station' as const,
             stationId,
             label: safeLabel(label, 'Stanoviště'),
+          },
+          state: 'active' as const,
+          version: assignmentsVersion,
+        };
+      }
+      if (row.role === 'room_operator' && row.scope.roomIds?.length === 1) {
+        const roomId = row.scope.roomIds[0]!;
+        const label = roomLabels.get(roomId);
+        if (!label) throw new Error('Invalid room-scoped assignment.');
+        return {
+          assignmentId: row.assignmentId,
+          eventId: row.eventId,
+          operatorId: row.operatorId,
+          operatorLabel: safeLabel(row.operatorName, 'Člen týmu'),
+          role: row.role,
+          scope: {
+            kind: 'room' as const,
+            roomId,
+            label: safeLabel(label, 'Místnost'),
           },
           state: 'active' as const,
           version: assignmentsVersion,
@@ -535,7 +580,7 @@ export const handleAdminRolePersonSearch = async (
         items: rows.map((row) => ({
           operatorId: row.id,
           displayName: safeLabel(row.name, 'Člen týmu'),
-          maskedVerifiedContact: maskEmail(row.email),
+          verifiedEmail: row.email,
         })),
       }),
     );
@@ -596,16 +641,50 @@ export const handleAdminRoleScopeOptions = async (
         stationId: row.id,
         label: safeLabel(row.name, 'Stanoviště'),
       }));
-    } else {
-      const features =
-        role === 'moderator'
-          ? await dependencies.db.query.eventFeatures.findFirst({
-              columns: { questionsEnabled: true },
-              where: eq(schema.eventFeatures.eventId, eventId),
+    } else if (role === 'moderator') {
+      const features = await dependencies.db.query.eventFeatures.findFirst({
+        columns: { questionsEnabled: true },
+        where: eq(schema.eventFeatures.eventId, eventId),
+      });
+      const rows = !features?.questionsEnabled
+        ? []
+        : await dependencies.db
+            .select({
+              id: schema.programSessions.id,
+              title: schema.programSessions.title,
             })
-          : null;
-      const rows =
-        role === 'moderator' && !features?.questionsEnabled
+            .from(schema.programSessions)
+            .where(
+              and(
+                eq(schema.programSessions.eventId, eventId),
+                inArray(schema.programSessions.status, ['draft', 'published']),
+                eq(schema.programSessions.questionsEnabled, true),
+              ),
+            )
+            .orderBy(
+              asc(schema.programSessions.startsAt),
+              asc(schema.programSessions.id),
+            )
+            .limit(200);
+      options = rows.map((row) => ({
+        kind: 'session',
+        sessionId: row.id,
+        label: safeLabel(row.title, 'Aktivita'),
+      }));
+    } else {
+      const rooms = await dependencies.db
+        .select({ id: schema.rooms.id, name: schema.rooms.name })
+        .from(schema.rooms)
+        .where(
+          and(
+            eq(schema.rooms.eventId, eventId),
+            ne(schema.rooms.status, 'archived'),
+          ),
+        )
+        .orderBy(asc(schema.rooms.sortOrder), asc(schema.rooms.id))
+        .limit(200);
+      const sessions =
+        rooms.length >= 200
           ? []
           : await dependencies.db
               .select({
@@ -620,21 +699,26 @@ export const handleAdminRoleScopeOptions = async (
                     'draft',
                     'published',
                   ]),
-                  role === 'moderator'
-                    ? eq(schema.programSessions.questionsEnabled, true)
-                    : eq(schema.programSessions.capacityMode, 'reservation'),
+                  eq(schema.programSessions.capacityMode, 'reservation'),
                 ),
               )
               .orderBy(
                 asc(schema.programSessions.startsAt),
                 asc(schema.programSessions.id),
               )
-              .limit(200);
-      options = rows.map((row) => ({
-        kind: 'session',
-        sessionId: row.id,
-        label: safeLabel(row.title, 'Aktivita'),
-      }));
+              .limit(200 - rooms.length);
+      options = [
+        ...rooms.map((room) => ({
+          kind: 'room' as const,
+          roomId: room.id,
+          label: safeLabel(`Místnost: ${room.name}`, 'Místnost'),
+        })),
+        ...sessions.map((session) => ({
+          kind: 'session' as const,
+          sessionId: session.id,
+          label: safeLabel(`Aktivita: ${session.title}`, 'Aktivita'),
+        })),
+      ];
     }
     return readResponse(
       requestId,

@@ -649,8 +649,7 @@ export const createDatabaseTicketImportPreviewStore = (
               ticketRows: input.snapshot.source.ticketRows,
               observedStatuses: input.snapshot.source.observedStatuses,
               summary: input.summary,
-              applyAvailable:
-                input.summary.conflict === 0 && input.summary.unknown === 0,
+              applyAvailable: input.summary.new > 0,
             },
           },
           { generateId },

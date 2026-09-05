@@ -835,7 +835,7 @@ def sec_vstupenky():
 
 def speaker_card(sp):
     return f"""<a class="speaker-card reveal" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
-      <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" loading="lazy" data-fallback="{att(sp['name'])}">
+      <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="720" height="900" loading="lazy" decoding="async" data-fallback="{att(sp['name'])}">
     </a>"""
 
 
@@ -1138,7 +1138,7 @@ def page_speaker(sp):
   <div class="container">
     <nav class="breadcrumb speaker-back" aria-label="Návrat na předchozí přehled" style="justify-content:flex-start"><a href="{att(back_href)}">‹ {esc(back_label)}</a></nav>
     <div class="speaker-detail">
-      <div class="portrait"><img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="1080" height="1350" decoding="async" data-fallback="{att(sp['name'])}"></div>
+      <div class="portrait"><img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="720" height="900" decoding="async" fetchpriority="high" data-fallback="{att(sp['name'])}"></div>
       <div>
         <span class="eyebrow">{esc(profile_label)}</span>
         <h1>{esc(sp['name'])}</h1>
@@ -1229,7 +1229,7 @@ def session_presenter(value):
     bio = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in sp.get("bio", [])[:1])
     return f"""<article class="session-presenter">
       <a class="session-presenter__portrait" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
-        <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="1080" height="1350" loading="lazy" decoding="async" data-fallback="{att(sp['name'])}">
+        <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="720" height="900" loading="lazy" decoding="async" data-fallback="{att(sp['name'])}">
       </a>
       <div class="session-presenter__summary">
         <span class="eyebrow">{esc(sp.get('label', 'Řečník BYZON 2026'))}</span>

@@ -13,13 +13,20 @@ import { useRef, useState } from 'react';
 
 import { POST_LOGIN_DESTINATION, type AuthReturnTo } from '../lib/auth-return';
 
-type LoginFailure = 'offline' | 'rate_limited' | 'unavailable';
+type LoginFailure =
+  'offline' | 'rate_limited' | 'unknown_account' | 'unavailable';
 
 export const MagicLinkLogin = ({
+  directEmailLogin = false,
   fetch = globalThis.fetch,
+  invalidLink = false,
+  navigate = (destination) => window.location.assign(destination),
   returnTo = POST_LOGIN_DESTINATION,
 }: {
+  readonly directEmailLogin?: boolean;
   readonly fetch?: typeof globalThis.fetch;
+  readonly invalidLink?: boolean;
+  readonly navigate?: (destination: AuthReturnTo) => void;
   readonly returnTo?: AuthReturnTo;
 }) => {
   const [email, setEmail] = useState('');
@@ -54,20 +61,33 @@ export const MagicLinkLogin = ({
     setFailure(undefined);
     setSubmitting(true);
     try {
-      const response = await fetch('/api/auth/sign-in/magic-link', {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/json',
+      const response = await fetch(
+        directEmailLogin
+          ? '/api/auth/sign-in/staging-email'
+          : '/api/auth/sign-in/magic-link',
+        {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(
+            directEmailLogin
+              ? { email: normalizedEmail }
+              : {
+                  email: normalizedEmail,
+                  callbackURL: returnTo,
+                  errorCallbackURL: `/prihlaseni?returnTo=${encodeURIComponent(returnTo)}`,
+                },
+          ),
+          cache: 'no-store',
         },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          callbackURL: returnTo,
-          errorCallbackURL: `/prihlaseni?returnTo=${encodeURIComponent(returnTo)}`,
-        }),
-        cache: 'no-store',
-      });
+      );
       if (response.ok) {
+        if (directEmailLogin) {
+          navigate(returnTo);
+          return;
+        }
         setEmail('');
         setSent(true);
         requestAnimationFrame(() =>
@@ -76,7 +96,13 @@ export const MagicLinkLogin = ({
             ?.focus(),
         );
       } else {
-        setFailure(response.status === 429 ? 'rate_limited' : 'unavailable');
+        setFailure(
+          response.status === 429
+            ? 'rate_limited'
+            : directEmailLogin && response.status === 401
+              ? 'unknown_account'
+              : 'unavailable',
+        );
         focusFeedback();
       }
     } catch {
@@ -101,8 +127,8 @@ export const MagicLinkLogin = ({
             title="Pokud je účet připravený, odkaz byl odeslán"
           >
             <p data-login-feedback tabIndex={-1}>
-              Jednorázový odkaz platí 5 minut. Odpověď je stejná pro existující
-              i neexistující účet.
+              Odpověď je stejná pro existující i neexistující účet. Aktivační
+              odkaz platí 24 hodin, odkaz pro další přihlášení 30 minut.
             </p>
           </StatePanel>
         </div>
@@ -118,11 +144,24 @@ export const MagicLinkLogin = ({
           Přihlaste se do BYZON
         </h1>
         <p className="lead">
-          Pošleme vám jednorázový přihlašovací odkaz. Heslo nepotřebujete.
+          {directEmailLogin
+            ? 'Na stagingu stačí zadat e-mail existujícího účtu. Přihlašovací odkaz neposíláme.'
+            : 'Pošleme vám jednorázový odkaz. Pro nový účet platí 24 hodin, pro další přihlášení 30 minut. Heslo nepotřebujete.'}
         </p>
       </header>
 
       <div ref={feedback}>
+        {invalidLink ? (
+          <div data-login-feedback tabIndex={-1}>
+            <Alert title="Odkaz už není platný" tone="warning">
+              <p>
+                {directEmailLogin
+                  ? 'Odkaz vypršel nebo už byl použit. Na stagingu pokračujte zadáním e-mailu.'
+                  : 'Odkaz vypršel nebo už byl použit. Zadejte svůj e-mail a pošleme vám nový; stav účtu přitom nikomu neprozradíme.'}
+              </p>
+            </Alert>
+          </div>
+        ) : null}
         <ErrorSummary
           errors={
             fieldError ? [{ fieldId: 'login-email', message: fieldError }] : []
@@ -134,18 +173,26 @@ export const MagicLinkLogin = ({
               title={
                 failure === 'rate_limited'
                   ? 'Příliš mnoho pokusů'
-                  : failure === 'offline'
-                    ? 'Jste offline'
-                    : 'Odkaz se nepodařilo odeslat'
+                  : failure === 'unknown_account'
+                    ? 'E-mail nemá přístup'
+                    : failure === 'offline'
+                      ? 'Jste offline'
+                      : directEmailLogin
+                        ? 'Přihlášení se nepodařilo'
+                        : 'Odkaz se nepodařilo odeslat'
               }
               tone={failure === 'unavailable' ? 'danger' : 'warning'}
             >
               <p>
                 {failure === 'rate_limited'
                   ? 'Počkejte jednu minutu a potom požadavek zopakujte.'
-                  : failure === 'offline'
-                    ? 'Přihlášení vyžaduje připojení k internetu.'
-                    : 'Zkontrolujte e-mailovou službu a požadavek potom zopakujte.'}
+                  : failure === 'unknown_account'
+                    ? 'Zkontrolujte adresu. Přihlásit lze pouze účet, který je na stagingu už připravený.'
+                    : failure === 'offline'
+                      ? 'Přihlášení vyžaduje připojení k internetu.'
+                      : directEmailLogin
+                        ? 'Požadavek se nepodařilo dokončit. Zkuste to prosím znovu.'
+                        : 'Zkontrolujte e-mailovou službu a požadavek potom zopakujte.'}
               </p>
             </Alert>
           </div>
@@ -176,8 +223,12 @@ export const MagicLinkLogin = ({
           />
         </FormField>
         <div className="activation-form-actions">
-          <Button loading={submitting} loadingLabel="Odesílám…" type="submit">
-            Poslat přihlašovací odkaz
+          <Button
+            loading={submitting}
+            loadingLabel={directEmailLogin ? 'Přihlašuji…' : 'Odesílám…'}
+            type="submit"
+          >
+            {directEmailLogin ? 'Přihlásit se' : 'Poslat přihlašovací odkaz'}
           </Button>
         </div>
       </form>

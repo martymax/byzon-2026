@@ -496,8 +496,9 @@ kontrakt tohoto gate je v §1.6 `AI_IMPLEMENTATION_PLAN.md`.
   bezpečně nastavuje EB21 na 12 a dva sobotní workshopy na 20, s cutoffem v
   začátku session a vypnutým waitlistem. `P5-06` doplnilo dvě paralelní
   coaching řady; nejsou zploštěné do chybného společného slotu.
-  Dvoudílný sobotní mastermind s kapacitou 6 čeká na nový
-  `BLOCKER-RES-05`, zda jedna rezervace pokrývá obě části.
+  Dvoudílný sobotní mastermind Tomáše Ryzy je jedna rezervační skupina se
+  sdílenou kapacitou 6, jednou rezervací a jedním rosterem; program dál ukazuje
+  samostatné časové projekce obou částí.
 - Stav sloučeného PR záměrně odmítal cancel/waitlist/offer akce a pro tehdy
   nehotový `.ics` vracel poctivé `not_ready`. Následné `P5-05` zapojilo cancel
   a `P5-09` osobní `.ics`; waitlist/offer zůstávají v `P5-04` a networking za
@@ -1471,8 +1472,9 @@ Produkt 30. 8. 2026 uzavřel `BLOCKER-RES-01`, `BLOCKER-RES-04` a
 promotion větev bez nabídek a TTL. `P5-07` zpřístupňuje networking jako
 rezervaci až po auditovaném zadání kladné kapacity v administraci; používá
 stejné storno, FIFO a scoped roster a nevytváří `registration_estimate`.
-Dvě části sobotního mastermindu ještě potřebují implementovat společnou
-rezervační projekci se sdílenou kapacitou 6 a rosterem.
+Společná rezervační projekce obou částí sobotního mastermindu je implementovaná
+se sdílenou kapacitou 6, jednou rezervací a jedním rosterem; administrace
+zobrazuje a upravuje skupinu jako jeden kapacitní celek.
 Ticket transfer/storno consumer rozhodnutého cancel pravidla
 doplní `P4-09`, až vznikne skutečná ticket transition. Nejbližší neblokovaný
 vývojový řez je `P6-01`: check-in schema,
@@ -1645,6 +1647,16 @@ read-only discovery pak doplní field/status mapping a source-code test vectors.
   lokální vývoj používá výslovně neprodukční default.
 
 ## Poslední ověření
+
+- Dne 3. 9. 2026 byla custom doména `app.byzon.cz` záměrně ponechána na Railway
+  prostředí `staging` pro testování. Stagingový web i worker mají
+  `APP_BASE_URL=https://app.byzon.cz`; `production-2026` používá
+  `https://byzonconference-production-2026.up.railway.app`. DNS je propagované,
+  Railway certifikát je platný a `/health/live`, `/health/ready` i `/` na custom
+  doméně vracejí `200`; readiness hlásí `environment=staging`.
+- Better Auth v hostovaných prostředích explicitně používá Railway-overwritten
+  `X-Real-IP`, aby auth rate limiting za Railway edge nesdílel jeden fallback
+  bucket pro všechny uživatele. Development a test proxy headeru nedůvěřují.
 
 - PostgreSQL integrace: migrace, dvakrát spuštěný Node seed a 19 databázových
   testů prošly; commit/rollback/advisory lock i uzavření poolu byly ověřeny.

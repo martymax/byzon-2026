@@ -78,8 +78,14 @@ describe('CS-ANN-01 admin contracts', () => {
         recipientCount: 37,
         excludedCount: 2,
         sample: [
-          { participantReference: 'Účastník •001' },
-          { participantReference: 'Účastník •002' },
+          {
+            participantName: 'Alex Novák',
+            contactEmail: 'alex.novak@example.test',
+          },
+          {
+            participantName: 'Mila Testová',
+            contactEmail: 'mila.testova@example.test',
+          },
         ],
       },
       createdAt: '2026-07-25T12:00:00.000+02:00',
@@ -95,7 +101,12 @@ describe('CS-ANN-01 admin contracts', () => {
         audience: {
           recipientCount: 0,
           excludedCount: 39,
-          sample: [{ participantReference: 'Účastník •001' }],
+          sample: [
+            {
+              participantName: 'Alex Novák',
+              contactEmail: 'alex.novak@example.test',
+            },
+          ],
         },
       }).success,
     ).toBe(false);

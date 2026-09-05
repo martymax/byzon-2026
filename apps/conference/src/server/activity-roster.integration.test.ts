@@ -31,8 +31,11 @@ integration('CS-ROSTER-01 HTTP integration', () => {
   const networkingSessionId = crypto.randomUUID();
   const nonCapacitySessionId = crypto.randomUUID();
   const draftSessionId = crypto.randomUUID();
+  const groupedMastermindSessionId = crypto.randomUUID();
+  const groupedMastermindPartTwoSessionId = crypto.randomUUID();
   const isolationSessionId = crypto.randomUUID();
   const operatorId = crypto.randomUUID();
+  const speakerId = crypto.randomUUID();
   const emptyOperatorId = crypto.randomUUID();
   const noRoleUserId = crypto.randomUUID();
   const suspendedOperatorId = crypto.randomUUID();
@@ -43,10 +46,12 @@ integration('CS-ROSTER-01 HTTP integration', () => {
   const waitingUserId = crypto.randomUUID();
   const inactiveUserId = crypto.randomUUID();
   const reservationId = crypto.randomUUID();
+  const groupedReservationId = crypto.randomUUID();
   const waitingEntryId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T08:00:00.000Z');
   const allUserIds = [
     operatorId,
+    speakerId,
     emptyOperatorId,
     noRoleUserId,
     suspendedOperatorId,
@@ -129,6 +134,7 @@ integration('CS-ROSTER-01 HTTP integration', () => {
             networkingSessionId,
             nonCapacitySessionId,
             draftSessionId,
+            groupedMastermindPartTwoSessionId,
             isolationSessionId,
           ],
         },
@@ -138,6 +144,13 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         eventId,
         userId: emptyOperatorId,
         role: 'room_operator',
+        scope: {},
+      },
+      {
+        id: crypto.randomUUID(),
+        eventId,
+        userId: speakerId,
+        role: 'speaker',
         scope: {},
       },
       {
@@ -195,6 +208,13 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         lastName: 'Účastník',
         company: 'Nezobrazovat',
         contactEmail: `private-${inactiveUserId}@example.invalid`,
+      },
+      {
+        eventId,
+        userId: speakerId,
+        firstName: 'Dana',
+        lastName: 'Řečnice',
+        contactEmail: `private-${speakerId}@example.invalid`,
       },
     ]);
     await client.db.insert(schema.eventDays).values([
@@ -285,6 +305,36 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         sortOrder: 4,
       },
       {
+        id: groupedMastermindSessionId,
+        eventId,
+        dayId: eventDayId,
+        slug: `grouped-mastermind-one-${groupedMastermindSessionId}`,
+        title: 'Mastermind část 1',
+        type: 'mastermind',
+        startsAt: new Date('2026-09-18T13:00:00Z'),
+        endsAt: new Date('2026-09-18T14:00:00Z'),
+        status: 'draft',
+        reservationGroupId: groupedMastermindSessionId,
+        capacityMode: 'reservation',
+        capacity: 6,
+        sortOrder: 5,
+      },
+      {
+        id: groupedMastermindPartTwoSessionId,
+        eventId,
+        dayId: eventDayId,
+        slug: `grouped-mastermind-two-${groupedMastermindPartTwoSessionId}`,
+        title: 'Mastermind část 2',
+        type: 'mastermind',
+        startsAt: new Date('2026-09-18T14:15:00Z'),
+        endsAt: new Date('2026-09-18T15:15:00Z'),
+        status: 'draft',
+        reservationGroupId: groupedMastermindSessionId,
+        capacityMode: 'reservation',
+        capacity: 6,
+        sortOrder: 6,
+      },
+      {
         id: isolationSessionId,
         eventId: isolationEventId,
         dayId: isolationDayId,
@@ -299,6 +349,22 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         sortOrder: 0,
       },
     ]);
+    const speakerProfileId = crypto.randomUUID();
+    await client.db.insert(schema.speakerProfiles).values({
+      id: speakerProfileId,
+      eventId,
+      userId: speakerId,
+      slug: `speaker-${speakerId}`,
+      firstName: 'Dana',
+      lastName: 'Řečnice',
+      sortOrder: 0,
+    });
+    await client.db.insert(schema.sessionSpeakers).values({
+      eventId,
+      sessionId: nonCapacitySessionId,
+      speakerProfileId,
+      sortOrder: 0,
+    });
     await client.db.insert(schema.contentPublications).values({
       id: crypto.randomUUID(),
       eventId,
@@ -363,6 +429,30 @@ integration('CS-ROSTER-01 HTTP integration', () => {
               endsAt: '2026-09-18T12:00:00.000Z',
               sortOrder: 3,
             },
+            {
+              id: groupedMastermindSessionId,
+              dayId: eventDayId,
+              roomId: null,
+              slug: `grouped-mastermind-one-${groupedMastermindSessionId}`,
+              title: 'Mastermind část 1',
+              type: 'mastermind',
+              status: 'published',
+              startsAt: '2026-09-18T13:00:00.000Z',
+              endsAt: '2026-09-18T14:00:00.000Z',
+              sortOrder: 5,
+            },
+            {
+              id: groupedMastermindPartTwoSessionId,
+              dayId: eventDayId,
+              roomId: null,
+              slug: `grouped-mastermind-two-${groupedMastermindPartTwoSessionId}`,
+              title: 'Mastermind část 2',
+              type: 'mastermind',
+              status: 'published',
+              startsAt: '2026-09-18T14:15:00.000Z',
+              endsAt: '2026-09-18T15:15:00.000Z',
+              sortOrder: 6,
+            },
           ],
         },
       },
@@ -405,6 +495,15 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         status: 'cancelled',
         source: 'participant',
         cancelledAt: new Date('2026-08-02T08:00:00Z'),
+      },
+      {
+        id: groupedReservationId,
+        eventId,
+        sessionId: groupedMastermindSessionId,
+        userId: reservedUserId,
+        status: 'confirmed',
+        source: 'participant',
+        createdAt: new Date('2026-08-04T08:00:00Z'),
       },
     ]);
     await client.db.insert(schema.waitlistEntries).values([
@@ -474,6 +573,27 @@ integration('CS-ROSTER-01 HTTP integration', () => {
           capacity: 10,
           participants: [],
         },
+        {
+          sessionId: nonCapacitySessionId,
+          title: 'Nekapacitní přednáška',
+          startsAt: '2026-09-18T11:00:00.000Z',
+          capacity: null,
+          participants: [],
+        },
+        {
+          sessionId: groupedMastermindSessionId,
+          title: 'Mastermind část 1',
+          startsAt: '2026-09-18T13:00:00.000Z',
+          capacity: 6,
+          participants: [
+            {
+              reservationId: groupedReservationId,
+              state: 'reserved',
+              displayName: 'Alex Novák',
+              company: 'Ukázková firma',
+            },
+          ],
+        },
       ],
     });
     expect(raw).not.toContain('@example.invalid');
@@ -510,6 +630,48 @@ integration('CS-ROSTER-01 HTTP integration', () => {
       expect(response.status).toBe(404);
       expect(await response.json()).toMatchObject({ code: 'ROSTER_NOT_FOUND' });
     }
+  });
+
+  it("derives a speaker's own program sessions from the linked profile", async () => {
+    const response = await readActivityRoster(
+      request(),
+      dependencies(speakerId),
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      activityRosterResponseSchema.parse(await response.json()).sessions,
+    ).toEqual([
+      {
+        sessionId: nonCapacitySessionId,
+        title: 'Nekapacitní přednáška',
+        startsAt: '2026-09-18T11:00:00.000Z',
+        capacity: null,
+        participants: [],
+      },
+    ]);
+  });
+
+  it('resolves an assignment to the second mastermind part to the shared roster', async () => {
+    const response = await readActivityRoster(
+      request(`/api/v1/activity-roster/${groupedMastermindPartTwoSessionId}`),
+      dependencies(operatorId),
+      groupedMastermindPartTwoSessionId,
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      activityRosterResponseSchema.parse(await response.json()).sessions,
+    ).toEqual([
+      expect.objectContaining({
+        sessionId: groupedMastermindSessionId,
+        title: 'Mastermind část 1',
+        capacity: 6,
+        participants: [
+          expect.objectContaining({ reservationId: groupedReservationId }),
+        ],
+      }),
+    ]);
   });
 
   it('returns an explicit empty state for a valid operator without assignments', async () => {

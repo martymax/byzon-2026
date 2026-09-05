@@ -47,6 +47,7 @@ type AdminWorkspaceSection =
 type AdminNavigationIcon =
   | 'overview'
   | 'content'
+  | 'speakers'
   | 'participants'
   | 'tickets'
   | 'reservations'
@@ -91,6 +92,13 @@ const navigationGroups: readonly AdminNavigationGroup[] = [
         href: '/admin/obsah',
         icon: 'content',
         label: 'Program a obsah',
+        permission: 'program:manage',
+        section: 'content',
+      },
+      {
+        href: '/admin/recnici',
+        icon: 'speakers',
+        label: 'Řečníci',
         permission: 'program:manage',
         section: 'content',
       },
@@ -285,6 +293,12 @@ const AdminNavigationIcon = ({
       <>
         <path d="M8 2v4M16 2v4M3 9h18" />
         <rect height="18" rx="2" width="18" x="3" y="4" />
+      </>
+    ),
+    speakers: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M5 21v-1a7 7 0 0 1 14 0v1M19 5v6M22 8h-6" />
       </>
     ),
     participants: (
@@ -566,7 +580,8 @@ type ShellState =
 
 const requiresLogin = (failure: ApiFailure<ApiProblem>): boolean =>
   failure.kind === 'session_expired' ||
-  (failure.kind === 'problem' && failure.problem.status === 401);
+  (failure.kind === 'problem' &&
+    (failure.problem.status === 401 || failure.problem.status === 403));
 
 const failureMessage = (failure: ApiFailure<ApiProblem>): string => {
   if (failure.kind === 'offline') {

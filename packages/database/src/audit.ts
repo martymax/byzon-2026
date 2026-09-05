@@ -121,6 +121,7 @@ export interface AuditLogInput {
 
 export interface WriteAuditLogOptions {
   generateId?: () => string;
+  occurredAt?: Date;
 }
 
 export const writeAuditLog = async (
@@ -153,6 +154,7 @@ export const writeAuditLog = async (
       input.after === undefined || input.after === null
         ? input.after
         : redactAuditValue(input.after),
+    ...(options.occurredAt ? { createdAt: options.occurredAt } : {}),
   });
   return id;
 };

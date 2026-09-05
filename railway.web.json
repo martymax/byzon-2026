@@ -5,6 +5,8 @@
     "watchPatterns": [
       "/apps/conference/**",
       "/packages/**",
+      "/static-site/data/**",
+      "/static-site/public/assets/**",
       "/package.json",
       "/pnpm-lock.yaml",
       "/pnpm-workspace.yaml",
@@ -25,7 +27,7 @@
     "staging": {
       "deploy": {
         "preDeployCommand": [
-          "pnpm --filter @byzon/database db:migrate && pnpm --filter @byzon/database db:seed"
+          "pnpm --filter @byzon/database db:migrate && pnpm --filter @byzon/database db:seed && pnpm --filter @byzon/database db:import-content --event-slug byzon-2026 --allow-published-update"
         ]
       }
     }

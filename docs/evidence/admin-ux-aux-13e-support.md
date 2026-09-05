@@ -7,7 +7,8 @@ invitation/recovery handshake importovaných identit `P4-06`–`P4-09`,
 ## Implementace a invarianty
 
 - Vyhledávání používá pouze same-origin POST body, nikdy query string;
-  odpověď je private/no-store, kontakt maskovaný a server vrací nejvýše pět
+  odpověď je private/no-store, kontakt je pro autorizovaného administrátora
+  zobrazen celý a server vrací nejvýše pět
   různých osob i tehdy, když jedna osoba vlastní více legacy vstupenek.
 - Search před SQL ověří session, current-event slug a
   `participant:operational:read`; block/reactivate odděleně vyžaduje

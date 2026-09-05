@@ -1,13 +1,17 @@
 # Railway prostředí
 
-Autoritativní staging aplikace je
-`https://byzonconference-staging.up.railway.app`. Projekt `Byzon 2026` používá
-prostředí `staging` a existující služby `@byzon/conference`,
-`@byzon/worker`, `Postgres` a `Redis`. Nevytvářejte jejich duplicitní kopie.
+Autoritativní staging aplikace je během testování dostupná na
+`https://app.byzon.cz`. Generická adresa
+`https://byzonconference-staging.up.railway.app` zůstává technickým aliasem.
+Projekt `Byzon 2026` používá prostředí `staging` a existující služby
+`@byzon/conference`, `@byzon/worker`, `Postgres` a `Redis`. Nevytvářejte jejich
+duplicitní kopie.
 
-Cílová produkční doména je `https://app.byzon.cz`; DNS/proxy připojení se
-provede přes Cloudflare až po staging UAT. Railway je produkční platforma,
-nikoli dočasný hosting.
+Cílová produkční doména zůstává `https://app.byzon.cz`, ale do explicitně
+schváleného produkčního cutoveru je custom doména v Railway připojená ke
+stagingovému webu a stagingové `APP_BASE_URL` je nastavené na tuto adresu.
+Prostředí `production-2026` mezitím používá svou generickou Railway doménu.
+Railway je produkční platforma, nikoli dočasný hosting.
 
 ## Produkční klon 2026
 
@@ -41,16 +45,28 @@ nesmí spustit.
 
 ## Služby a deployment
 
-1. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
+1. Každý dokončený funkční celek nejprve projde testy, dostane samostatný Git
+   commit a odešle se do vzdáleného repozitáře. Staging se standardně nasazuje
+   pouze přes Git integraci z větve `main`; `railway up` se pro běžné nasazení
+   nepoužívá. CLI slouží k read-only diagnostice. Ruční deploy je výjimečný
+   recovery krok, který musí být předem výslovně schválený a zdokumentovaný.
+2. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
    sledují větev `main`.
-2. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
-   migraci spustí idempotentní seed. Worker migrace nespouští.
-3. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
+3. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
+   migraci spustí idempotentní seed a import kanonického obsahu z
+   `static-site/data/content.json`. Worker migrace nespouští.
+4. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
    Redis. Produkční a staging data ani credentials se nesmí sdílet.
-4. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
+5. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
    2026 neprovisionují.
-5. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
+6. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
    restart loopu a aktuální release SHA.
+
+Oznámení jsou pro event `byzon-2026` zapnutá migrací
+`0023_enable_byzon_announcements`. Seed stejnou hodnotu idempotentně zachovává
+na stagingu a současně nechává `byzon-isolation-test` vypnutý. Zapnutí flagu
+nemění klientskou navigaci; v tomto kroku se ověřuje pouze dostupnost
+administračního announcement flow a serverových endpointů.
 
 ## Proměnné webu
 
@@ -58,7 +74,7 @@ nesmí spustit.
 | --------------------------- | -------------------------------------------------- |
 | `NODE_ENV`                  | `production`                                       |
 | `APP_ENV`                   | `staging`                                          |
-| `APP_BASE_URL`              | `https://byzonconference-staging.up.railway.app`   |
+| `APP_BASE_URL`              | `https://app.byzon.cz`                             |
 | `PUBLIC_SITE_URL`           | `https://byzon.cz`                                 |
 | `DATABASE_URL`              | private reference na `Postgres.DATABASE_URL`       |
 | `REDIS_URL`                 | private reference na `Redis.REDIS_URL`             |
@@ -78,6 +94,15 @@ Worker potřebuje stejné `NODE_ENV`, `APP_ENV`, `APP_BASE_URL`,
 `REDIS_CONNECT_TIMEOUT_MS` a `RELEASE_SHA`. Dále používá
 `WORKER_CONCURRENCY_EMAIL` a `WORKER_CONCURRENCY_DEFAULT`, jakmile budou
 explicitně nastavené; do té doby platí validované serverové defaulty.
+
+Aktuálně tedy i stagingový worker používá
+`APP_BASE_URL=https://app.byzon.cz`. Při budoucím cutoveru se custom doména a
+`APP_BASE_URL` webu i workeru musí změnit společně; generická stagingová URL se
+nesmí ponechat jako povolený auth origin.
+
+Better Auth ve stagingu a produkci čte klientskou IP pouze z `X-Real-IP`, který
+Railway edge nastavuje a přepisuje. Bez tohoto explicitního headeru by se za
+proxy všechny auth požadavky propadly do jednoho sdíleného rate-limit bucketu.
 
 ## E-mailové placeholders a magic link
 
@@ -110,6 +135,12 @@ Staging ani produkce nesmí použít vestavěný in-memory `sink`; ten je povole
 jen v dev/test. Neúplná staging/produkční konfigurace failne zavřeně a magic
 link neodešle. `/` i `/prihlaseni` posílají požadavek přímo do Better Auth,
 nepoužívají ticketovou aktivaci a neznámá identita se sama nevytvoří.
+
+První aktivace neověřeného, předem provisionovaného účtu a pozvánky účastníků
+i členů týmu mají platnost 24 hodin. Pokud odkaz vyprší nebo už byl použit,
+uživatel na `/prihlaseni` zadá stejný e-mail a bezpečně si vyžádá nový;
+odpověď nesmí prozradit existenci účtu. U již aktivovaného účtu má nový
+přihlašovací odkaz platnost 30 minut. Všechny odkazy jsou jednorázové.
 
 Staging používá samostatnou Railway službu `mailpit` na připnutém image
 `axllent/mailpit:v1.31.0`. Zprávy se zachytávají do volume `/data`, po sedmi
@@ -159,16 +190,17 @@ opakované spuštění je no-op a role grant se auditovaně zapisuje bez e-mailu
   a worker. Veřejné databázové URL nepatří do aplikace ani logů.
 - Redis zůstává `noeviction`. Výpadek nesmí poškodit PostgreSQL; readiness
   jej smí hlásit jako degradaci, chráněné mutace failují podle své politiky.
-- Staging seed je idempotentní. Produkční osobní data se do stagingu
-  nekopírují.
+- Staging seed i import obsahu jsou idempotentní. Import zapisuje pouze draft a
+  zveřejnění nové verze zůstává samostatným auditovaným krokem organizátora.
+  Produkční osobní data se do stagingu nekopírují.
 
 ## Ověření releasu
 
 1. Otevřete `/health/live` a `/health/ready`; readiness musí vrátit `200` a
    databázi/Redis bez secret URL.
 2. Přihlaste se administrátorskou staging identitou a ověřte
-   `/admin/interakce`: default-off flags, výběr přednášky a maskovaný výběr
-   moderátora.
+   `/admin/interakce`: default-off flags, výběr přednášky a výběr moderátora
+   s celým jménem a kontaktním e-mailem.
 3. Otestujte zapnutí a vypnutí networkingu syntetickým účastníkem; bez opt-in
    nesmí být profil zjistitelný, po opt-in se zobrazí všechna vyplněná
    veřejná pole.

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -7,13 +9,36 @@ import {
   type DatabaseTransaction,
 } from '@byzon/database';
 import {
+  adminParticipantDetailSchema,
+  adminParticipantCreateRequestSchema,
+  adminParticipantCreateResponseSchema,
+  adminParticipantInviteRequestSchema,
+  adminParticipantInviteResponseSchema,
+  adminParticipantListRequestSchema,
+  adminParticipantListResponseSchema,
+  adminParticipantUpdateRequestSchema,
+  adminParticipantUpdateResponseSchema,
   supportMutationRequestSchema,
   supportMutationResponseSchema,
   supportSearchQuerySchema,
   supportSearchResponseSchema,
+  type AdminParticipantDetail,
+  type AdminParticipantInvitationStatus,
+  type AdminParticipantNetworkingState,
   type SupportRecord,
 } from '@byzon/domain/contracts/support';
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -38,6 +63,10 @@ export interface AdminSupportDependencies {
   getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
   now?: () => Date;
   rateLimit?: AdminSupportRateLimiter;
+  sendParticipantInvitation?: (input: {
+    email: string;
+    recipientName: string;
+  }) => Promise<void>;
 }
 
 const privateHeaders = (requestId: string) => ({
@@ -141,13 +170,6 @@ const withRateLimitHeaders = (
   return response;
 };
 
-const maskEmail = (email: string) => {
-  const at = email.lastIndexOf('@');
-  return at > 0
-    ? `${email.slice(0, 1)}***@${email.slice(at + 1)}`
-    : 'x***@invalid.example';
-};
-
 const ticketState = (
   state: (typeof schema.tickets.$inferSelect)['status'],
 ): SupportRecord['ticketState'] => {
@@ -170,6 +192,94 @@ const safeLabel = (value: string, fallback: string): string => {
   return normalized || fallback;
 };
 
+const availableActionsForTicketState = (
+  state: SupportRecord['ticketState'],
+): SupportRecord['availableActions'] =>
+  state === 'active' ? ['block'] : state === 'blocked' ? ['reactivate'] : [];
+
+const networkingStateFrom = (row: {
+  networkingEnabled: boolean | null;
+  moderationStatus: 'visible' | 'hidden';
+}): AdminParticipantNetworkingState =>
+  row.moderationStatus === 'hidden'
+    ? 'moderated'
+    : row.networkingEnabled === true
+      ? 'enabled'
+      : 'disabled';
+
+const invitationFrom = (row: {
+  emailVerified: boolean;
+  lastInvitationSentAt: Date | string | null;
+}): {
+  status: AdminParticipantInvitationStatus;
+  lastSentAt: string | null;
+} => ({
+  status: row.emailVerified
+    ? 'accepted'
+    : row.lastInvitationSentAt
+      ? 'sent'
+      : 'not_sent',
+  lastSentAt:
+    row.lastInvitationSentAt === null
+      ? null
+      : new Date(row.lastInvitationSentAt).toISOString(),
+});
+
+const participantAccessFor = (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+) =>
+  db
+    .select({
+      id: schema.tickets.id,
+      eventId: schema.tickets.eventId,
+      userId: sql<string>`${schema.tickets.holderUserId}`.as(
+        'participant_access_user_id',
+      ),
+      source: sql<'ticket' | 'simpleshop'>`'ticket'`.as('source'),
+      referenceValue: schema.tickets.codeSuffix,
+      externalId: schema.tickets.externalId,
+      orderExternalId: schema.tickets.orderExternalId,
+      status: schema.tickets.status,
+      claimedAt: schema.tickets.claimedAt,
+      version: schema.tickets.version,
+      updatedAt: schema.tickets.updatedAt,
+    })
+    .from(schema.tickets)
+    .where(
+      and(
+        eq(schema.tickets.eventId, eventId),
+        isNotNull(schema.tickets.holderUserId),
+      ),
+    )
+    .unionAll(
+      db
+        .select({
+          id: schema.ticketSourceParticipants.id,
+          eventId: schema.ticketSourceParticipants.eventId,
+          userId: schema.ticketSourceParticipants.userId,
+          source: sql<'ticket' | 'simpleshop'>`'simpleshop'`.as('source'),
+          referenceValue: schema.ticketSourceParticipants.externalId,
+          externalId: sql<
+            string | null
+          >`${schema.ticketSourceParticipants.externalId}`.as('external_id'),
+          orderExternalId: sql<
+            string | null
+          >`${schema.ticketSourceParticipants.orderExternalId}`.as(
+            'order_external_id',
+          ),
+          status: sql<
+            (typeof schema.tickets.$inferSelect)['status']
+          >`'activated'::ticket_status`.as('status'),
+          claimedAt: sql<Date | null>`null::timestamptz`.as('claimed_at'),
+          version: schema.ticketSourceParticipants.version,
+          updatedAt: schema.ticketSourceParticipants.updatedAt,
+        })
+        .from(schema.ticketSourceParticipants)
+        .where(eq(schema.ticketSourceParticipants.eventId, eventId)),
+    )
+    .as('participant_access');
+
 const recordFrom = (row: {
   eventId: string;
   ticketId: string;
@@ -190,17 +300,12 @@ const recordFrom = (row: {
       `${row.firstName} ${row.lastName}`,
       'Účastník bez uvedeného jména',
     ),
-    maskedContact: maskEmail(row.email),
+    contactEmail: row.email,
     referenceSuffix: suffix(row.suffix),
     ticketState: state,
     accessState: 'claimed',
     version: row.version,
-    availableActions:
-      state === 'active'
-        ? ['block']
-        : state === 'blocked'
-          ? ['reactivate']
-          : [],
+    availableActions: availableActionsForTicketState(state),
   };
 };
 
@@ -235,6 +340,1228 @@ const loadRecord = async (
     .limit(1);
   const row = rows[0];
   return row?.userId ? recordFrom({ ...row, userId: row.userId }) : null;
+};
+
+const loadParticipantDetail = async (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+  participantId: string,
+): Promise<AdminParticipantDetail | null> => {
+  const participantAccess = participantAccessFor(db, eventId);
+  const rows = await db
+    .select({
+      participantId: schema.participantProfiles.userId,
+      ticketId: participantAccess.id,
+      firstName: schema.participantProfiles.firstName,
+      lastName: schema.participantProfiles.lastName,
+      contactEmail: schema.participantProfiles.contactEmail,
+      phone: schema.participantProfiles.phone,
+      company: schema.participantProfiles.company,
+      jobTitle: schema.participantProfiles.jobTitle,
+      introduction: schema.participantProfiles.bio,
+      linkedinUrl: schema.participantProfiles.linkedinUrl,
+      todayHunting: schema.participantProfiles.todayHunting,
+      networkingEnabled: schema.participantProfiles.networkingEnabled,
+      moderationStatus: schema.participantProfiles.moderationStatus,
+      onboardingCompletedAt: schema.participantProfiles.onboardingCompletedAt,
+      membershipStatus: schema.eventMemberships.status,
+      profileVersion: schema.participantProfiles.version,
+      profileCreatedAt: schema.participantProfiles.createdAt,
+      profileUpdatedAt: schema.participantProfiles.updatedAt,
+      ticketSource: participantAccess.source,
+      ticketReferenceSuffix: participantAccess.referenceValue,
+      ticketExternalId: participantAccess.externalId,
+      orderExternalId: participantAccess.orderExternalId,
+      ticketStatus: participantAccess.status,
+      ticketClaimedAt: participantAccess.claimedAt,
+      ticketVersion: participantAccess.version,
+      emailVerified: schema.users.emailVerified,
+      lastInvitationSentAt: sql<Date | string | null>`(
+        select max(${schema.auditLogs.createdAt})
+        from ${schema.auditLogs}
+        where ${schema.auditLogs.eventId} = ${eventId}
+          and ${schema.auditLogs.action} = 'participant.invitation_sent'
+          and ${schema.auditLogs.targetId} = ${schema.participantProfiles.userId}::text
+      )`,
+    })
+    .from(schema.participantProfiles)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.participantProfiles.userId),
+    )
+    .innerJoin(
+      schema.eventMemberships,
+      and(
+        eq(schema.eventMemberships.eventId, schema.participantProfiles.eventId),
+        eq(schema.eventMemberships.userId, schema.participantProfiles.userId),
+      ),
+    )
+    .innerJoin(
+      participantAccess,
+      and(
+        eq(participantAccess.eventId, schema.participantProfiles.eventId),
+        eq(participantAccess.userId, schema.participantProfiles.userId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.participantProfiles.eventId, eventId),
+        eq(schema.participantProfiles.userId, participantId),
+      ),
+    )
+    .orderBy(desc(participantAccess.updatedAt))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+
+  const [reservationRows, checkInRows] = await Promise.all([
+    db
+      .select({
+        reservationId: schema.reservations.id,
+        sessionId: schema.reservations.sessionId,
+        title: schema.programSessions.title,
+        startsAt: schema.programSessions.startsAt,
+        status: schema.reservations.status,
+        source: schema.reservations.source,
+      })
+      .from(schema.reservations)
+      .innerJoin(
+        schema.programSessions,
+        and(
+          eq(schema.programSessions.eventId, schema.reservations.eventId),
+          eq(schema.programSessions.id, schema.reservations.sessionId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.reservations.eventId, eventId),
+          eq(schema.reservations.userId, participantId),
+        ),
+      )
+      .orderBy(asc(schema.programSessions.startsAt))
+      .limit(100),
+    db
+      .select({ occurredAt: schema.checkIns.occurredAt })
+      .from(schema.checkIns)
+      .where(
+        and(
+          eq(schema.checkIns.eventId, eventId),
+          eq(schema.checkIns.holderUserId, participantId),
+          isNull(schema.checkIns.undoneAt),
+        ),
+      )
+      .orderBy(desc(schema.checkIns.occurredAt))
+      .limit(1),
+  ]);
+  const state = ticketState(row.ticketStatus);
+  return adminParticipantDetailSchema.parse({
+    eventId,
+    participantId: row.participantId,
+    ticketId: row.ticketId,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    contactEmail: row.contactEmail,
+    phone: row.phone,
+    company: row.company ?? '',
+    jobTitle: row.jobTitle ?? '',
+    introduction: row.introduction ?? '',
+    linkedinUrl: row.linkedinUrl,
+    todayHunting: row.todayHunting,
+    networkingEnabled: row.networkingEnabled === true,
+    moderationStatus: row.moderationStatus,
+    onboardingCompleted: row.onboardingCompletedAt !== null,
+    membershipStatus: row.membershipStatus,
+    invitation: invitationFrom(row),
+    ticket: {
+      source: row.ticketSource,
+      referenceSuffix: suffix(row.ticketReferenceSuffix),
+      externalId: row.ticketExternalId?.slice(0, 256) ?? null,
+      orderExternalId: row.orderExternalId?.slice(0, 256) ?? null,
+      state,
+      claimedAt: row.ticketClaimedAt?.toISOString() ?? null,
+      version: row.ticketVersion,
+      availableActions:
+        row.ticketSource === 'ticket'
+          ? availableActionsForTicketState(state)
+          : [],
+    },
+    checkIn: checkInRows[0]
+      ? { occurredAt: checkInRows[0].occurredAt.toISOString() }
+      : null,
+    reservations: reservationRows.map((reservation) => ({
+      ...reservation,
+      title: safeLabel(reservation.title, 'Aktivita bez názvu'),
+      startsAt: reservation.startsAt.toISOString(),
+    })),
+    profileVersion: row.profileVersion,
+    createdAt: row.profileCreatedAt.toISOString(),
+    updatedAt: row.profileUpdatedAt.toISOString(),
+  });
+};
+
+export const handleAdminParticipantCreate = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (request.method !== 'POST') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'ticket:any:manage',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', actorId)) ?? null;
+    const rawBody = await request.text();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(rawBody);
+    } catch {
+      raw = null;
+    }
+    const parsed = adminParticipantCreateRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid participant',
+        'The new participant data is invalid.',
+        {
+          fieldErrors: Object.fromEntries(
+            parsed.error.issues.map((issue) => [
+              issue.path.join('.') || 'body',
+              [issue.message],
+            ]),
+          ),
+        },
+      );
+    }
+
+    const key = readIdempotencyKey(request.headers);
+    const createdAt = dependencies.now?.() ?? new Date();
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'participant.create',
+        key,
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: rawBody,
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now: createdAt,
+      },
+      async (transaction) => {
+        const emailDigest = createHash('sha256')
+          .update(parsed.data.profile.contactEmail)
+          .digest('hex');
+        await acquireTransactionLock(
+          transaction,
+          `participant-create:${emailDigest}`,
+        );
+        const event = await transaction.query.events.findFirst({
+          columns: { status: true },
+          where: eq(schema.events.id, eventId),
+        });
+        if (!event) {
+          throw problem(
+            403,
+            'EVENT_ACCESS_DENIED',
+            'Event access denied',
+            'The event is unavailable.',
+          );
+        }
+        if (event.status === 'archived') {
+          throw problem(
+            409,
+            'SUPPORT_INVALID_TRANSITION',
+            'Archived event',
+            'Participants cannot be added to an archived event.',
+          );
+        }
+
+        const existingUser = await transaction.query.users.findFirst({
+          columns: { id: true },
+          where: eq(schema.users.email, parsed.data.profile.contactEmail),
+        });
+        const participantId = existingUser?.id ?? generateUuidV7();
+        const [existingProfile, membership, existingTicket, sourceParticipant] =
+          await Promise.all([
+            transaction.query.participantProfiles.findFirst({
+              columns: { userId: true },
+              where: and(
+                eq(schema.participantProfiles.eventId, eventId),
+                eq(schema.participantProfiles.userId, participantId),
+              ),
+            }),
+            transaction.query.eventMemberships.findFirst({
+              columns: { status: true },
+              where: and(
+                eq(schema.eventMemberships.eventId, eventId),
+                eq(schema.eventMemberships.userId, participantId),
+              ),
+            }),
+            transaction.query.tickets.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.tickets.eventId, eventId),
+                eq(schema.tickets.holderUserId, participantId),
+              ),
+            }),
+            transaction.query.ticketSourceParticipants.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.ticketSourceParticipants.eventId, eventId),
+                eq(schema.ticketSourceParticipants.userId, participantId),
+              ),
+            }),
+          ]);
+        if (existingProfile || existingTicket || sourceParticipant) {
+          throw problem(
+            422,
+            'VALIDATION_FAILED',
+            'Participant already exists',
+            'A participant with this email address already exists in the event.',
+            {
+              fieldErrors: {
+                'profile.contactEmail': [
+                  'A participant with this email address already exists.',
+                ],
+              },
+            },
+          );
+        }
+        if (membership && membership.status !== 'active') {
+          throw problem(
+            409,
+            'SUPPORT_INVALID_TRANSITION',
+            'Membership is inactive',
+            'The existing event membership must be reviewed before adding this participant.',
+          );
+        }
+
+        if (!existingUser) {
+          await transaction.insert(schema.users).values({
+            id: participantId,
+            name: `${parsed.data.profile.firstName} ${parsed.data.profile.lastName}`,
+            email: parsed.data.profile.contactEmail,
+            emailVerified: false,
+            createdAt,
+            updatedAt: createdAt,
+          });
+        }
+        if (!membership) {
+          await transaction.insert(schema.eventMemberships).values({
+            eventId,
+            userId: participantId,
+            status: 'active',
+          });
+        }
+        await transaction.insert(schema.participantProfiles).values({
+          eventId,
+          userId: participantId,
+          firstName: parsed.data.profile.firstName,
+          lastName: parsed.data.profile.lastName,
+          contactEmail: parsed.data.profile.contactEmail,
+          phone: parsed.data.profile.phone,
+          company: parsed.data.profile.company || null,
+          jobTitle: parsed.data.profile.jobTitle || null,
+          networkingEnabled: false,
+          moderationStatus: 'visible',
+          emailVisibility: 'hidden',
+          phoneVisibility: 'hidden',
+          linkedinVisibility: 'hidden',
+          createdAt,
+          updatedAt: createdAt,
+        });
+        const participantRole = await transaction.query.eventRoles.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(schema.eventRoles.eventId, eventId),
+            eq(schema.eventRoles.userId, participantId),
+            eq(schema.eventRoles.role, 'participant'),
+            isNull(schema.eventRoles.revokedAt),
+          ),
+        });
+        if (!participantRole) {
+          await transaction.insert(schema.eventRoles).values({
+            id: generateUuidV7(),
+            eventId,
+            userId: participantId,
+            role: 'participant',
+            scope: {},
+            grantedBy: actorId,
+            grantedAt: createdAt,
+          });
+        }
+        const ticketId = generateUuidV7();
+        const ticketSuffix = `M${ticketId.replaceAll('-', '').slice(-7)}`;
+        await transaction.insert(schema.tickets).values({
+          id: ticketId,
+          eventId,
+          codeHmac: createHash('sha256')
+            .update(`manual-ticket:${eventId}:${ticketId}`)
+            .digest('hex'),
+          codeSuffix: ticketSuffix,
+          status: 'activated',
+          holderUserId: participantId,
+          claimedAt: createdAt,
+          createdAt,
+          updatedAt: createdAt,
+        });
+        await transaction.insert(schema.ticketEvents).values({
+          id: generateUuidV7(),
+          eventId,
+          ticketId,
+          actorType: 'user',
+          actorId,
+          fromStatus: null,
+          toStatus: 'activated',
+          reason: 'Ruční vytvoření účastníka v administraci.',
+          requestId,
+          occurredAt: createdAt,
+        });
+        const auditId = await writeAuditLog(transaction, {
+          eventId,
+          actorId,
+          actorType: 'user',
+          action: 'participant.created_manually',
+          targetType: 'participant_profile',
+          targetId: participantId,
+          requestId,
+          reason: parsed.data.reason,
+          after: {
+            participantId,
+            ticketId,
+            source: 'manual',
+            membershipStatus: 'active',
+            ticketState: 'activated',
+          },
+        });
+        const detail = await loadParticipantDetail(
+          transaction,
+          eventId,
+          participantId,
+        );
+        if (!detail) {
+          throw problem(
+            500,
+            'INTERNAL_ERROR',
+            'Participant unavailable',
+            'The new participant could not be loaded.',
+          );
+        }
+        return {
+          status: 201,
+          body: adminParticipantCreateResponseSchema.parse({
+            eventId,
+            outcome: 'created',
+            detail,
+            createdAt: createdAt.toISOString(),
+            audit: { auditId },
+          }),
+          resultReference: participantId,
+        };
+      },
+    );
+    return withRateLimitHeaders(
+      Response.json(
+        adminParticipantCreateResponseSchema.parse({
+          ...result.body,
+          outcome: result.replayed ? 'already_applied' : result.body.outcome,
+        }),
+        {
+          status: result.replayed ? 200 : result.status,
+          headers: {
+            ...privateHeaders(requestId),
+            'idempotency-replayed': String(result.replayed),
+          },
+        },
+      ),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return withRateLimitHeaders(response, rateLimitDecision);
+  }
+};
+
+export const handleAdminParticipantList = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (request.method !== 'POST') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'participant:operational:read',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('search', actorId)) ?? null;
+    const parsed = adminParticipantListRequestSchema.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid filters',
+        'The participant filters are invalid.',
+      );
+    }
+
+    const participantAccess = participantAccessFor(dependencies.db, eventId);
+    const filters = [eq(schema.participantProfiles.eventId, eventId)];
+    if (parsed.data.query) {
+      const escaped = parsed.data.query.replace(
+        /[\\%_]/g,
+        (value) => `\\${value}`,
+      );
+      const pattern = `%${escaped}%`;
+      filters.push(
+        or(
+          ilike(schema.participantProfiles.firstName, pattern),
+          ilike(schema.participantProfiles.lastName, pattern),
+          ilike(schema.participantProfiles.contactEmail, pattern),
+          ilike(schema.participantProfiles.company, pattern),
+          ilike(schema.participantProfiles.jobTitle, pattern),
+          ilike(participantAccess.referenceValue, pattern),
+        )!,
+      );
+    }
+    if (parsed.data.ticketStates.length > 0) {
+      const states = parsed.data.ticketStates.map((state) =>
+        state === 'active' ? ('activated' as const) : state,
+      );
+      filters.push(inArray(participantAccess.status, states));
+    }
+    if (parsed.data.networkingStates.length > 0) {
+      filters.push(
+        or(
+          ...(parsed.data.networkingStates.map((state) =>
+            state === 'enabled'
+              ? and(
+                  eq(schema.participantProfiles.networkingEnabled, true),
+                  eq(schema.participantProfiles.moderationStatus, 'visible'),
+                )
+              : state === 'moderated'
+                ? eq(schema.participantProfiles.moderationStatus, 'hidden')
+                : and(
+                    or(
+                      eq(schema.participantProfiles.networkingEnabled, false),
+                      isNull(schema.participantProfiles.networkingEnabled),
+                    ),
+                    eq(schema.participantProfiles.moderationStatus, 'visible'),
+                  ),
+          ) as [ReturnType<typeof eq>, ...ReturnType<typeof eq>[]]),
+        )!,
+      );
+    }
+
+    const where = and(...filters);
+    const [rows, filteredCountRows, summaryRows] = await Promise.all([
+      dependencies.db
+        .selectDistinctOn([schema.participantProfiles.userId], {
+          participantId: schema.participantProfiles.userId,
+          ticketId: participantAccess.id,
+          firstName: schema.participantProfiles.firstName,
+          lastName: schema.participantProfiles.lastName,
+          contactEmail: schema.participantProfiles.contactEmail,
+          company: schema.participantProfiles.company,
+          jobTitle: schema.participantProfiles.jobTitle,
+          accessSource: participantAccess.source,
+          referenceSuffix: participantAccess.referenceValue,
+          ticketStatus: participantAccess.status,
+          networkingEnabled: schema.participantProfiles.networkingEnabled,
+          moderationStatus: schema.participantProfiles.moderationStatus,
+          profileVersion: schema.participantProfiles.version,
+          ticketVersion: participantAccess.version,
+          emailVerified: schema.users.emailVerified,
+          lastInvitationSentAt: sql<Date | string | null>`(
+            select max(${schema.auditLogs.createdAt})
+            from ${schema.auditLogs}
+            where ${schema.auditLogs.eventId} = ${eventId}
+              and ${schema.auditLogs.action} = 'participant.invitation_sent'
+              and ${schema.auditLogs.targetId} = ${schema.participantProfiles.userId}::text
+          )`,
+          updatedAt: schema.participantProfiles.updatedAt,
+          checkedIn: sql<boolean>`exists (
+            select 1 from ${schema.checkIns}
+            where ${schema.checkIns.eventId} = ${eventId}
+              and ${schema.checkIns.holderUserId} = ${schema.participantProfiles.userId}
+              and ${schema.checkIns.undoneAt} is null
+          )`,
+          reservationCount: sql<number>`(
+            select count(*)::int from ${schema.reservations}
+            where ${schema.reservations.eventId} = ${eventId}
+              and ${schema.reservations.userId} = ${schema.participantProfiles.userId}
+              and ${schema.reservations.status} = 'confirmed'
+          )`,
+        })
+        .from(schema.participantProfiles)
+        .innerJoin(
+          schema.users,
+          eq(schema.users.id, schema.participantProfiles.userId),
+        )
+        .innerJoin(
+          participantAccess,
+          and(
+            eq(participantAccess.eventId, schema.participantProfiles.eventId),
+            eq(participantAccess.userId, schema.participantProfiles.userId),
+          ),
+        )
+        .where(where)
+        .orderBy(
+          schema.participantProfiles.userId,
+          desc(participantAccess.updatedAt),
+        )
+        .limit(parsed.data.limit)
+        .offset(parsed.data.offset),
+      dependencies.db
+        .select({
+          count: sql<number>`count(distinct ${schema.participantProfiles.userId})::int`,
+        })
+        .from(schema.participantProfiles)
+        .innerJoin(
+          participantAccess,
+          and(
+            eq(participantAccess.eventId, schema.participantProfiles.eventId),
+            eq(participantAccess.userId, schema.participantProfiles.userId),
+          ),
+        )
+        .where(where),
+      dependencies.db
+        .select({
+          total: sql<number>`count(distinct ${schema.participantProfiles.userId})::int`,
+          active: sql<number>`count(distinct ${schema.participantProfiles.userId}) filter (where ${participantAccess.status} = 'activated')::int`,
+          networkingEnabled: sql<number>`count(distinct ${schema.participantProfiles.userId}) filter (where ${schema.participantProfiles.networkingEnabled} = true and ${schema.participantProfiles.moderationStatus} = 'visible')::int`,
+          checkedIn: sql<number>`count(distinct ${schema.checkIns.holderUserId}) filter (where ${schema.checkIns.undoneAt} is null)::int`,
+        })
+        .from(schema.participantProfiles)
+        .innerJoin(
+          participantAccess,
+          and(
+            eq(participantAccess.eventId, schema.participantProfiles.eventId),
+            eq(participantAccess.userId, schema.participantProfiles.userId),
+          ),
+        )
+        .leftJoin(
+          schema.checkIns,
+          and(
+            eq(schema.checkIns.eventId, schema.participantProfiles.eventId),
+            eq(schema.checkIns.holderUserId, schema.participantProfiles.userId),
+          ),
+        )
+        .where(eq(schema.participantProfiles.eventId, eventId)),
+    ]);
+    const total = Number(filteredCountRows[0]?.count ?? 0);
+    const summary = summaryRows[0];
+    const items = rows
+      .map((row) => {
+        const state = ticketState(row.ticketStatus);
+        const invitation = invitationFrom(row);
+        return {
+          eventId,
+          participantId: row.participantId,
+          ticketId: row.ticketId,
+          displayName: safeLabel(
+            `${row.firstName} ${row.lastName}`,
+            'Účastník bez jména',
+          ),
+          contactEmail: row.contactEmail,
+          company: row.company ?? '',
+          jobTitle: row.jobTitle ?? '',
+          referenceSuffix: suffix(row.referenceSuffix),
+          ticketState: state,
+          accessState:
+            invitation.status === 'accepted'
+              ? ('claimed' as const)
+              : invitation.status === 'sent'
+                ? ('recovery_pending' as const)
+                : ('not_claimed' as const),
+          networkingState: networkingStateFrom(row),
+          invitation,
+          checkedIn: row.checkedIn,
+          reservationCount: Number(row.reservationCount),
+          profileVersion: row.profileVersion,
+          ticketVersion: row.ticketVersion,
+          updatedAt: row.updatedAt.toISOString(),
+          availableActions:
+            row.accessSource === 'ticket'
+              ? availableActionsForTicketState(state)
+              : [],
+        };
+      })
+      .sort((left, right) =>
+        left.displayName.localeCompare(right.displayName, 'cs'),
+      );
+    const body = adminParticipantListResponseSchema.parse({
+      eventId,
+      generatedAt: (dependencies.now?.() ?? new Date()).toISOString(),
+      items,
+      pageInfo: {
+        total,
+        offset: parsed.data.offset,
+        hasMore: parsed.data.offset + items.length < total,
+      },
+      summary: {
+        total: Number(summary?.total ?? 0),
+        active: Number(summary?.active ?? 0),
+        networkingEnabled: Number(summary?.networkingEnabled ?? 0),
+        checkedIn: Number(summary?.checkedIn ?? 0),
+      },
+    });
+    return withRateLimitHeaders(
+      Response.json(body, { headers: privateHeaders(requestId) }),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return withRateLimitHeaders(response, rateLimitDecision);
+  }
+};
+
+export const handleAdminParticipantDetail = async (
+  request: Request,
+  eventId: string,
+  participantId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'GET') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    await authorize(
+      request,
+      eventId,
+      'participant:operational:read',
+      dependencies,
+    );
+    if (!uuidSchema.safeParse(participantId).success) {
+      throw problem(
+        404,
+        'SUPPORT_RECORD_NOT_FOUND',
+        'Participant not found',
+        'The participant is unavailable.',
+      );
+    }
+    const detail = await loadParticipantDetail(
+      dependencies.db,
+      eventId,
+      participantId,
+    );
+    if (!detail) {
+      throw problem(
+        404,
+        'SUPPORT_RECORD_NOT_FOUND',
+        'Participant not found',
+        'The participant is unavailable.',
+      );
+    }
+    return Response.json(detail, { headers: privateHeaders(requestId) });
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+export const handleAdminParticipantInvite = async (
+  request: Request,
+  eventId: string,
+  participantId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (request.method !== 'POST') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'ticket:any:manage',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', actorId)) ?? null;
+    const rawBody = await request.text();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(rawBody);
+    } catch {
+      raw = null;
+    }
+    const parsed = adminParticipantInviteRequestSchema.safeParse(raw);
+    if (
+      !parsed.success ||
+      parsed.data.participantId !== participantId ||
+      !uuidSchema.safeParse(participantId).success
+    ) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid participant invitation',
+        'The participant invitation is invalid.',
+      );
+    }
+    if (!dependencies.sendParticipantInvitation) {
+      throw problem(
+        503,
+        'INVITATION_DELIVERY_UNAVAILABLE',
+        'Invitation delivery unavailable',
+        'The invitation could not be delivered. Try again later.',
+      );
+    }
+
+    const key = readIdempotencyKey(request.headers);
+    const sentAt = dependencies.now?.() ?? new Date();
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'participant.invitation',
+        key,
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: rawBody,
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now: sentAt,
+      },
+      async (transaction) => {
+        await acquireTransactionLock(
+          transaction,
+          `participant-invitation:${eventId}:${participantId}`,
+        );
+        const [participant, event, activeTicket, sourceParticipant] =
+          await Promise.all([
+            transaction
+              .select({
+                firstName: schema.participantProfiles.firstName,
+                lastName: schema.participantProfiles.lastName,
+                email: schema.users.email,
+                emailVerified: schema.users.emailVerified,
+                membershipStatus: schema.eventMemberships.status,
+                lastInvitationSentAt: sql<Date | string | null>`(
+                  select max(${schema.auditLogs.createdAt})
+                  from ${schema.auditLogs}
+                  where ${schema.auditLogs.eventId} = ${eventId}
+                    and ${schema.auditLogs.action} = 'participant.invitation_sent'
+                    and ${schema.auditLogs.targetId} = ${participantId}
+                )`,
+              })
+              .from(schema.participantProfiles)
+              .innerJoin(
+                schema.users,
+                eq(schema.users.id, schema.participantProfiles.userId),
+              )
+              .innerJoin(
+                schema.eventMemberships,
+                and(
+                  eq(
+                    schema.eventMemberships.eventId,
+                    schema.participantProfiles.eventId,
+                  ),
+                  eq(
+                    schema.eventMemberships.userId,
+                    schema.participantProfiles.userId,
+                  ),
+                ),
+              )
+              .where(
+                and(
+                  eq(schema.participantProfiles.eventId, eventId),
+                  eq(schema.participantProfiles.userId, participantId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows[0]),
+            transaction.query.events.findFirst({
+              columns: { status: true },
+              where: eq(schema.events.id, eventId),
+            }),
+            transaction.query.tickets.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.tickets.eventId, eventId),
+                eq(schema.tickets.holderUserId, participantId),
+                eq(schema.tickets.status, 'activated'),
+              ),
+            }),
+            transaction.query.ticketSourceParticipants.findFirst({
+              columns: { id: true },
+              where: and(
+                eq(schema.ticketSourceParticipants.eventId, eventId),
+                eq(schema.ticketSourceParticipants.userId, participantId),
+                eq(schema.ticketSourceParticipants.sourceStatus, 'paid'),
+              ),
+            }),
+          ]);
+        if (!participant || !event) {
+          throw problem(
+            404,
+            'SUPPORT_RECORD_NOT_FOUND',
+            'Participant not found',
+            'The participant is unavailable.',
+          );
+        }
+        if (
+          event.status === 'archived' ||
+          participant.membershipStatus !== 'active' ||
+          (!activeTicket && !sourceParticipant)
+        ) {
+          throw problem(
+            409,
+            'SUPPORT_INVALID_TRANSITION',
+            'Invitation unavailable',
+            'Only an active participant can receive an invitation.',
+          );
+        }
+        try {
+          await dependencies.sendParticipantInvitation!({
+            email: participant.email,
+            recipientName: `${participant.firstName} ${participant.lastName}`,
+          });
+        } catch {
+          throw problem(
+            503,
+            'INVITATION_DELIVERY_UNAVAILABLE',
+            'Invitation delivery unavailable',
+            'The invitation could not be delivered. Try again later.',
+          );
+        }
+        const auditId = await writeAuditLog(transaction, {
+          eventId,
+          actorId,
+          actorType: 'user',
+          action: 'participant.invitation_sent',
+          targetType: 'participant_profile',
+          targetId: participantId,
+          requestId,
+          reason: 'Pozvánka odeslána z administrace.',
+          before: {
+            invitationStatus: participant.emailVerified
+              ? 'accepted'
+              : participant.lastInvitationSentAt
+                ? 'sent'
+                : 'not_sent',
+          },
+          after: {
+            invitationStatus: participant.emailVerified ? 'accepted' : 'sent',
+            sentAt: sentAt.toISOString(),
+          },
+        });
+        return {
+          status: 200,
+          body: adminParticipantInviteResponseSchema.parse({
+            eventId,
+            participantId,
+            outcome: 'sent',
+            sentAt: sentAt.toISOString(),
+            invitation: {
+              status: participant.emailVerified ? 'accepted' : 'sent',
+              lastSentAt: sentAt.toISOString(),
+            },
+            audit: { auditId },
+          }),
+        };
+      },
+    );
+    return withRateLimitHeaders(
+      Response.json(
+        adminParticipantInviteResponseSchema.parse({
+          ...result.body,
+          outcome: result.replayed ? 'already_sent' : result.body.outcome,
+        }),
+        {
+          status: result.status,
+          headers: {
+            ...privateHeaders(requestId),
+            'idempotency-replayed': String(result.replayed),
+          },
+        },
+      ),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return withRateLimitHeaders(response, rateLimitDecision);
+  }
+};
+
+export const handleAdminParticipantUpdate = async (
+  request: Request,
+  eventId: string,
+  participantId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (request.method !== 'PATCH') {
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'ticket:any:manage',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', actorId)) ?? null;
+    const rawBody = await request.text();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(rawBody);
+    } catch {
+      raw = null;
+    }
+    const parsed = adminParticipantUpdateRequestSchema.safeParse(raw);
+    if (!parsed.success || parsed.data.participantId !== participantId) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid participant',
+        'The participant changes are invalid.',
+      );
+    }
+    const key = readIdempotencyKey(request.headers);
+    const changedAt = dependencies.now?.() ?? new Date();
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'participant.profile',
+        key,
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: rawBody,
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now: changedAt,
+      },
+      async (transaction) => {
+        await acquireTransactionLock(
+          transaction,
+          `participant-profile:${eventId}:${participantId}`,
+        );
+        const [current, event] = await Promise.all([
+          transaction.query.participantProfiles.findFirst({
+            where: and(
+              eq(schema.participantProfiles.eventId, eventId),
+              eq(schema.participantProfiles.userId, participantId),
+            ),
+          }),
+          transaction.query.events.findFirst({
+            columns: { status: true },
+            where: eq(schema.events.id, eventId),
+          }),
+        ]);
+        if (!current || !event) {
+          throw problem(
+            404,
+            'SUPPORT_RECORD_NOT_FOUND',
+            'Participant not found',
+            'The participant is unavailable.',
+          );
+        }
+        if (event.status === 'archived') {
+          throw problem(
+            409,
+            'SUPPORT_INVALID_TRANSITION',
+            'Archived event',
+            'Archived participant profiles are read-only.',
+          );
+        }
+        if (current.version !== parsed.data.expectedProfileVersion) {
+          throw problem(
+            409,
+            'STALE_VERSION',
+            'Participant changed',
+            'Reload the participant before saving.',
+            {
+              currentVersion: current.version,
+            },
+          );
+        }
+        const existingEmail = await transaction.query.users.findFirst({
+          columns: { id: true },
+          where: eq(schema.users.email, parsed.data.profile.contactEmail),
+        });
+        if (existingEmail && existingEmail.id !== participantId) {
+          throw problem(
+            422,
+            'VALIDATION_FAILED',
+            'Email is already used',
+            'Use an email address that is not assigned to another account.',
+          );
+        }
+        const nextVersion = current.version + 1;
+        const visibility = parsed.data.profile.networkingEnabled
+          ? 'directory'
+          : 'hidden';
+        await Promise.all([
+          transaction
+            .update(schema.participantProfiles)
+            .set({
+              firstName: parsed.data.profile.firstName,
+              lastName: parsed.data.profile.lastName,
+              contactEmail: parsed.data.profile.contactEmail,
+              phone: parsed.data.profile.phone,
+              company: parsed.data.profile.company || null,
+              jobTitle: parsed.data.profile.jobTitle || null,
+              bio: parsed.data.profile.introduction || null,
+              linkedinUrl: parsed.data.profile.linkedinUrl,
+              todayHunting: parsed.data.profile.todayHunting,
+              networkingEnabled: parsed.data.profile.networkingEnabled,
+              moderationStatus: parsed.data.profile.moderationStatus,
+              emailVisibility: visibility,
+              phoneVisibility: visibility,
+              linkedinVisibility: visibility,
+              version: nextVersion,
+              updatedAt: changedAt,
+            })
+            .where(
+              and(
+                eq(schema.participantProfiles.eventId, eventId),
+                eq(schema.participantProfiles.userId, participantId),
+                eq(schema.participantProfiles.version, current.version),
+              ),
+            ),
+          transaction
+            .update(schema.users)
+            .set({
+              name: `${parsed.data.profile.firstName} ${parsed.data.profile.lastName}`,
+              email: parsed.data.profile.contactEmail,
+              updatedAt: changedAt,
+            })
+            .where(eq(schema.users.id, participantId)),
+        ]);
+        const auditId = await writeAuditLog(transaction, {
+          eventId,
+          actorId,
+          actorType: 'user',
+          action: 'participant.profile_updated',
+          targetType: 'participant_profile',
+          targetId: participantId,
+          requestId,
+          reason: parsed.data.reason,
+          before: {
+            version: current.version,
+            networkingEnabled: current.networkingEnabled === true,
+            moderationStatus: current.moderationStatus,
+          },
+          after: {
+            version: nextVersion,
+            networkingEnabled: parsed.data.profile.networkingEnabled,
+            moderationStatus: parsed.data.profile.moderationStatus,
+          },
+        });
+        const detail = await loadParticipantDetail(
+          transaction,
+          eventId,
+          participantId,
+        );
+        if (!detail) {
+          throw problem(
+            404,
+            'SUPPORT_RECORD_NOT_FOUND',
+            'Participant not found',
+            'The updated participant is unavailable.',
+          );
+        }
+        return {
+          status: 200,
+          body: adminParticipantUpdateResponseSchema.parse({
+            eventId,
+            outcome: 'updated',
+            detail,
+            changedAt: changedAt.toISOString(),
+            audit: { auditId },
+          }),
+        };
+      },
+    );
+    return withRateLimitHeaders(
+      Response.json(result.body, {
+        status: result.status,
+        headers: {
+          ...privateHeaders(requestId),
+          'idempotency-replayed': String(result.replayed),
+        },
+      }),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return withRateLimitHeaders(response, rateLimitDecision);
+  }
 };
 
 export const handleAdminSupportSearch = async (

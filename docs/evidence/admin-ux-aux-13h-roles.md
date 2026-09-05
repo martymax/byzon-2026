@@ -11,7 +11,7 @@ default a dál jej vlastní `BLOCKER-OPS-01`.
   ověřený station/session scope.
 - `POST .../role-assignments/search` drží jméno či e-mail mimo URL, přijímá jen
   same-origin no-store body a vrací nejvýše 20 aktivních ověřených členů s
-  maskovaným kontaktem.
+  celým kontaktním e-mailem pro autorizovaného administrátora.
 - `POST .../role-assignments/scope-options` nabízí stanice pouze check-in roli,
   otázkové session moderátorovi a kapacitní session Vedoucímu aktivity.
   Moderator ani `room_operator` nedostanou globální scope.
@@ -29,6 +29,6 @@ default a dál jej vlastní `BLOCKER-OPS-01`.
 - browser component gate: 69 souborů, 1050/1050 scénářů v phone/tablet/desktop
   Chromium, včetně produkčního read portu, axe, guard chyb, stale reloadu,
   exact retry a security wipe;
-- PostgreSQL integrační test připravený pro CI pokrývá named list, maskovaný
+- PostgreSQL integrační test připravený pro CI pokrývá named list, transparentní
   POST search, všechny tři role-compatible options, chybějící permission a
   nepovolený session scope.

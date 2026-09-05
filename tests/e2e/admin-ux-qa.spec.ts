@@ -414,7 +414,7 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
       await page
         .getByRole('combobox', { name: 'Filtrovat záznamy' })
         .selectOption('new');
-      await expect(page.getByText('Nové vstupenky').first()).toBeVisible();
+      await expect(page.getByText('Nová vstupenka').first()).toBeVisible();
     });
     const ticketPagination = page.getByRole('navigation', {
       name: 'Stránkování kontroly vstupenek',
@@ -440,21 +440,29 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
       '/admin/ucastnici?adminQa=max-page',
       'Účastníci',
     );
-    await page
-      .getByRole('searchbox', { name: 'Jméno, e-mail nebo reference' })
-      .fill('admin-qa-max-page');
-    await capture('support-search-5', 'search-and-render', async () => {
-      await page.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await capture('participant-list-100', 'load-and-render', async () => {
       await expect(
-        page.getByRole('button', { name: 'Zobrazit detail' }),
-      ).toHaveCount(5);
+        page.getByText('100 odpovídá aktuálním filtrům'),
+      ).toBeVisible();
+      await expect(page.locator('table tbody tr')).toHaveCount(20);
+      await expect(page.getByText('20 z 100 načtených')).toBeVisible();
     });
-    await capture('support-search-5', 'open-detail', async () => {
+    await capture('participant-list-100', 'filter', async () => {
       await page
-        .getByRole('button', { name: 'Zobrazit detail' })
+        .getByRole('searchbox', { name: 'Filtrovat účastníky' })
+        .fill('max-page-001');
+      await expect(
+        page.getByText('1 odpovídá aktuálním filtrům'),
+      ).toBeVisible();
+    });
+    await capture('participant-list-100', 'open-detail', async () => {
+      await page
+        .getByRole('link', { name: 'Syntetický účastník 001' })
         .first()
         .click();
-      await expect(page.getByText('Detail účastníka')).toBeVisible();
+      await expect(
+        page.getByText('Detail účastníka', { exact: true }),
+      ).toBeVisible();
     });
     await expectNoPageOverflow(page);
 

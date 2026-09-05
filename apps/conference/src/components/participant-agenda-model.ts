@@ -21,6 +21,7 @@ export interface AgendaItemStatusCopy {
 export type AgendaMutationIntent = {
   readonly action: AgendaMutationAction;
   readonly sessionId: string;
+  readonly replaceReservationSessionIds?: readonly string[];
 };
 
 export interface AgendaItemAction {

@@ -208,7 +208,7 @@ postup. Opakovaný pokus po nápovědě se zapisuje zvlášť a nepočítá se m
 - serverový zdroj vstupenek vrátí dávku 12 záznamů — 8 nových, 2 beze změny, 1
   konflikt a 1 nerozpoznaný; uživatel nemá žádný soubor a první pokus nesmí nic
   zapsat;
-- účastník: dva podobné výsledky, jen jeden odpovídá maskovanému kontaktu a má
+- účastník: dva podobné výsledky, jen jeden odpovídá celému e-mailu a má
   dostupnou akci znovu poslat aktivaci;
 - kapacita: jedna aktivita „Růst bez zkratek“ má 78 z 80 míst a server povolí
   bezpečnou změnu na 90;
@@ -745,7 +745,7 @@ Každá routa používá v tomto pořadí:
 | `/admin/vstupenky` | Aktualizace vstupenek | Aktualizace vstupenek \| Administrace BYZON | Načíst, zkontrolovat a použít změny       |
 | `/admin/rezervace` | Rezervace a kapacity  | Rezervace a kapacity \| Administrace BYZON  | Vyřešit kapacitní výjimku                 |
 | `/admin/oznameni`  | Oznámení              | Oznámení \| Administrace BYZON              | Poslat kritickou informaci správným lidem |
-| `/admin/role`      | Tým a oprávnění       | Tým a oprávnění \| Administrace BYZON       | Přidělit nebo odebrat omezenou roli       |
+| `/admin/role`      | Tým a oprávnění       | Tým a oprávnění \| Administrace BYZON       | Spravovat členy, pozvánky a oprávnění     |
 | `/admin/reporty`   | Reporty               | Reporty \| Administrace BYZON               | Připravit a stáhnout report               |
 | `/admin/audit`     | Historie změn         | Historie změn \| Administrace BYZON         | Dohledat kdo, kdy a co změnil             |
 | `/admin/nastaveni` | Nastavení akce        | Nastavení akce \| Administrace BYZON        | Bezpečně změnit provozní pravidla         |
@@ -918,13 +918,13 @@ pro jeho aktuální stav dostupná.
 
 **Výsledky**
 
-- Desktop: kompaktní seznam jméno, maskovaný kontakt, poslední znaky reference,
+- Desktop: kompaktní seznam jméno, celý e-mail, poslední znaky reference,
   stav vstupenky a stav aktivace.
 - Mobil: jedna karta na výsledek.
 - Backendové enumy se vždy lokalizují přes registry z §6.3.
 - 0 výsledků: „Nikoho jsme nenašli. Zkontrolujte zápis nebo zkuste jiný údaj.“
 - Více výsledků: vysvětlit „Našli jsme více lidí. Vyberte správný záznam podle
-  maskovaného kontaktu nebo reference.“
+  jména, e-mailu nebo reference.“
 
 **Detail a akce**
 
@@ -1037,8 +1037,8 @@ produkční cesta.
 **Výchozí přehled aktivit**
 
 - Summary: počet plných, téměř plných a bezproblémových aktivit.
-- Filtry: den, aktivita, kapacitní stav. Hledání reference účastníka zůstává
-  lokální a mimo URL.
+- Filtry: den, aktivita, kapacitní stav. Hledání podle jména nebo e-mailu
+  účastníka zůstává lokální a mimo URL.
 - Řádek: název aktivity, čas/místnost pokud data existují, „65 z 80 míst“,
   textový stav a progress bar s přístupným labelem.
 - Řazení: plné → téměř plné → ostatní.
@@ -1047,9 +1047,9 @@ produkční cesta.
 
 - Hlavní karta kapacity: obsazeno/celkem, čekající pokud kontrakt poskytne,
   „Upravit kapacitu“.
-- Seznam rezervací: bezpečná maskovaná reference, stav, kontextová akce.
-  Produkční session-first DTO maskování smluvně validuje a klient má ještě
-  obranný fallback proti neočekávanému raw kontaktu.
+- Seznam rezervací: jméno, celý e-mail, stav a kontextová akce. Produkční
+  session-first DTO validuje bezpečný text a e-mail; maskovanou identitu ani
+  odvozený kód nevytváří.
 - „Změnit kapacitu“ a „Zrušit rezervaci účastníka“ jsou dva oddělené formuláře.
 - Snížení kapacity pod potvrzený počet je podle dnešního kontraktu vždy
   odmítnuté. UI zobrazí minimum rovné počtu rezervací a server je stále
@@ -1116,15 +1116,30 @@ neúplnými či ručně zadanými daty.
 
 ### 10.7 Tým a oprávnění — `/admin/role`
 
-**Uživatelský výsledek:** vybrat člověka, srozumitelnou roli a konkrétní oblast,
-potom oprávnění později bezpečně odebrat.
+**Uživatelský výsledek:** spravovat členy organizačního týmu včetně jejich
+identity, pozvánek, administrátorského přístupu a omezených provozních rolí.
 
-**Seznam**
+**Členové týmu**
 
-- Sloupce: Člen týmu, Role, Oblast, Stav, Platnost/začátek pokud existuje, Akce.
+- Sloupce: člen, e-mail, role, stav přijetí pozvánky a akce.
+- Filtry: jméno/e-mail a stav pozvánky; PII zůstává pouze v paměti a neukládá se
+  do URL ani browser persistence.
+- Primární CTA: „Přidat člena“ otevře modal pro jméno, e-mail, počáteční roli,
+  důvod změny a volitelné okamžité odeslání pozvánky.
+- Řádkové akce: „Upravit“, „Poslat pozvánku“ / „Poslat znovu“ a „Odebrat“.
+- Úprava i odebrání probíhají v modalu. Odebrání ruší pouze eventové členství,
+  role a aktivní relace; globální identita se nemaže.
+- Změna e-mailu ruší jeho ověření a aktivní relace. Další přístup vyžaduje nový
+  jednorázový odkaz.
+- Pozvánkový endpoint odkaz pouze odešle e-mailem a nikdy jej nevrací klientovi.
+- Vlastní přístup ani posledního administrátora nelze odebrat. Ochranu rozhoduje
+  server a změny mají povinný důvod a auditní záznam.
+
+**Provozní oprávnění**
+
+- Sloupce: Člen týmu, Role, Oblast, Stav a Akce.
 - Filtry: role, stav, aktivita/stanice.
-- Primární CTA: „Přiřadit roli“; flow vybírá existující osobu, nevytváří ani
-  nezve nového člena.
+- CTA „Přiřadit roli“ vybírá existujícího aktivního člena a konkrétní oblast.
 - Empty: „Nikdo zatím nemá přidělenou provozní roli.“
 
 **Přiřazení role**
@@ -1139,10 +1154,10 @@ potom oprávnění později bezpečně odebrat.
    podle povoleného typu role.
 4. Zkontrolovat shrnutí a přidat důvod změny.
 
-`organizer_admin` není součástí současného grant kontraktu a nesmí se tiše
-přidat do formuláře. Odebírání používá row action „Odebrat oprávnění“ a danger
-potvrzení. Pokud server vrátí explicitní self-lockout nebo last-administrator
-problem branch, UI jej přeloží do lidské chyby; klient tuto podmínku neodhaduje.
+`organizer_admin` se přiděluje pouze přes přidání nebo detail člena. Odebírání
+provozní role používá row action „Odebrat oprávnění“ a danger potvrzení. Pokud
+server vrátí explicitní self-lockout nebo last-administrator problem branch, UI
+jej přeloží do lidské chyby; klient tuto podmínku neodhaduje.
 
 Strict list/search/scope-options kontrakt je uzavřený v `AUX-09A`; produkční
 endpointy a napojení dokončuje `AUX-13H`. Seznam je bounded keyset read,
@@ -1354,7 +1369,7 @@ pokud nefixují neznámé produkční chování.
 | `GAP-AUX-ANN-TARGET-01`      | [x]  | Event-scoped pojmenované session options povolené pro announcement preview/send                                        | `AUX-08D`, `P8-05` / 2026-09-02                                           | —                                   | Strict options DTO s názvem/časem/místností, unikátními ID a auth/forbidden problem kontraktem             |
 | `GAP-AUX-CONTENT-01`         | [x]  | Human diff, published revision/time a autoritativní počet nezveřejněných změn                                          | `AUX-04C`, `P3-05` až `P3-08` / 2026-09-02                                | —                                   | Event-scoped DTO, serverový title-level diff, published time/revision a negativní ID test                  |
 | `GAP-AUX-ASSET-01`           | [!]  | Autorizovaný asset read/resolver i picker/upload/výměna fotek řečníků a log partnerů                                   | `AUX-00B`, `AUX-04F`, `AUX-13L`, `P3-01`, `BLOCKER-INFRA-01` / 2026-09-01 | asset read/mutation `integrated`    | Placeholder bez raw ID; zavře nový backend slice, storage gate, auth a E2E                                 |
-| `GAP-AUX-RES-01`             | [x]  | Session agregace, cursor pagination a smluvně maskovaná participant reference                                          | `AUX-07A`, `P5-05`, `P9-01` / 2026-09-02                                  | —                                   | Session-first pageInfo DTO, produkční keyset endpoint, fixtures, PII test a klientské skládání stránek     |
+| `GAP-AUX-RES-01`             | [x]  | Session agregace, cursor pagination a transparentní identita pro administrátora                                        | `AUX-07A`, `P5-05`, `P9-01` / 2026-09-03                                  | —                                   | Session-first pageInfo DTO, produkční keyset endpoint, jméno/e-mail a klientské skládání stránek           |
 | `GAP-AUX-ROLE-01`            | [x]  | Assignment list, person directory, scope options a revoke flow                                                         | `AUX-09A`, `P9-02` / 2026-09-02                                           | —                                   | Strict cursor list, POST person search, role-compatible named options, revoke a guard fixtures             |
 | `GAP-AUX-EXPORT-01`          | [x]  | Export job list, ready/download/expired/failed                                                                         | `AUX-10B`, `P9-05`, `P9-06`, `P9-07` / 2026-09-02                         | —                                   | Strict event-scoped job DTO, exact ready-only download path, expiry/range a CSV-injection regrese          |
 | `GAP-AUX-AUDIT-01`           | [x]  | Actor/outcome server filtry a úplný action label registry                                                              | `AUX-10D`, `AUX-13J`, `P9-04` / 2026-09-02                                | —                                   | PII-safe actor/outcome query před limitem, přesný outcome model a exhaustive typovaný registr              |
@@ -1405,14 +1420,14 @@ PR/commit; samotný popis práce nestačí.
 | `AUX-06B` | U1  | [x]  | contract      | Target-ticket search/picker kontrakt bez UUID vstupu                               | `AUX-00B`                                                                                                                                   | —                                               | `AUX-06A`                                                                   | `GAP-AUX-TICKET-01`, `CS-SUPPORT-01`                     | contract ready    | reference request + source version; no/single/ambiguous/stale fixtures a PII negativní test                                |
 | `AUX-06C` | U1  | [!]  | UI            | Lidské support akce a target picker nad `AUX-06B`                                  | `AUX-01C`, `AUX-06A`, `AUX-06B`                                                                                                             | `GAP-AUX-SUPPORT-ACTIONS-01`                    | —                                                                           | `GAP-AUX-SUPPORT-ACTIONS-01`, `CS-SUPPORT-01`            | N/A               | block/reactivate/resend mají lidský dopad; reassign/transfer i UUID vstup jsou fail-closed skryté                          |
 | `AUX-06D` | U1  | [x]  | QA            | Read/mutate/stale/ambiguous/session wipe test matice                               | `AUX-06C`                                                                                                                                   | —                                               | `AUX-04E`, `AUX-05C`                                                        | `CS-SUPPORT-01`                                          | UI ready (mocked) | browser 978/978; POST PII, read-only, exact retry, stale, 401/403/offline a skryté blokované akce                          |
-| `AUX-07A` | U1  | [x]  | contract      | Session agregace, cursor a maskovaná participant reference                         | `AUX-00B`                                                                                                                                   | —                                               | `AUX-08A`, `AUX-09A`                                                        | `GAP-AUX-RES-01`, `CS-ADMIN-01`                          | contract ready    | session-first DTO + pageInfo/cursor; masked reference fixtures a PII negativní test                                        |
+| `AUX-07A` | U1  | [x]  | contract      | Session agregace, cursor a transparentní participant identita                      | `AUX-00B`                                                                                                                                   | —                                               | `AUX-08A`, `AUX-09A`                                                        | `GAP-AUX-RES-01`, `CS-ADMIN-01`                          | contract ready    | session-first DTO + pageInfo/cursor; jméno a e-mail pouze v autorizované private/no-store odpovědi                         |
 | `AUX-07B` | U1  | [x]  | UI            | Session-first kapacity, změna kapacity a storno jako oddělené flow                 | `AUX-01B`, `AUX-07A`                                                                                                                        | —                                               | `AUX-08A`, `AUX-09B`                                                        | `CS-ADMIN-01`                                            | N/A               | plné→téměř plné řazení, text+progress, detail aktivity a minimum=`confirmedCount`                                          |
 | `AUX-07C` | U1  | [x]  | QA            | Full/stale/cancel/permission/offline/no-attendance matice                          | `AUX-07B`                                                                                                                                   | —                                               | `AUX-08C`, `AUX-09C`                                                        | `CS-ADMIN-01`                                            | UI ready (mocked) | browser 993/993; full, exact cancel retry, stale reload, read-only/offline, žádná attendance mutace                        |
 | `AUX-08A` | U1  | [x]  | UI            | Text→Komu(event/jedna session)→Kontrola→Odeslání + dirty guard                     | `AUX-01B`, `AUX-03A`, `AUX-08D`                                                                                                             | —                                               | `AUX-07A`, `AUX-09A`                                                        | `GAP-AUX-ANN-TARGET-01`, `CS-ANN-01`                     | N/A               | critical-only průvodce, live karta, počítadla, named session picker a beforeunload guard                                   |
 | `AUX-08B` | U1  | [x]  | UI            | Kanonický `sent`/`already_sent` receipt bez falešného delivery reportu             | `AUX-01C`, `AUX-08A`                                                                                                                        | —                                               | `AUX-07B`, `AUX-09B`                                                        | `CS-ANN-01`                                              | N/A               | exact recipient count; audit/preview verze jen v technických údajích                                                       |
 | `AUX-08C` | U1  | [x]  | QA            | Preview invalidation, zero audience, duplicate, feature-off a send matice          | `AUX-08B`                                                                                                                                   | —                                               | `AUX-07C`, `AUX-09C`                                                        | `CS-ANN-01`                                              | UI ready (mocked) | browser 1014/1014; event/session, stale, exact retry, offline/session wipe a axe                                           |
 | `AUX-08D` | U1  | [x]  | contract      | Pojmenované, event-scoped a povolené session options pro announcement picker       | `AUX-00B`                                                                                                                                   | —                                               | `AUX-07A`, `AUX-09A`                                                        | `GAP-AUX-ANN-TARGET-01`, `CS-ANN-01`                     | contract ready    | strict options DTO, unique session ID, název/čas/místnost a problem fixtures                                               |
-| `AUX-09A` | U2  | [x]  | contract      | Assignment list, person directory a pojmenované scope options                      | `AUX-00B`, `AUX-03A`                                                                                                                        | —                                               | `AUX-07A`, `AUX-08A`                                                        | `GAP-AUX-ROLE-01`, `CS-ADMIN-01`                         | contract ready    | cursor list, POST person search, masked contact, compatible event/station/session options                                  |
+| `AUX-09A` | U2  | [x]  | contract      | Assignment list, person directory a pojmenované scope options                      | `AUX-00B`, `AUX-03A`                                                                                                                        | —                                               | `AUX-07A`, `AUX-08A`                                                        | `GAP-AUX-ROLE-01`, `CS-ADMIN-01`                         | contract ready    | cursor list, POST person search, celý e-mail, compatible event/station/session options                                     |
 | `AUX-09B` | U2  | [x]  | UI            | Přidání a odebrání role s lidským impact review                                    | `AUX-01B`, `AUX-09A`                                                                                                                        | —                                               | `AUX-07B`, `AUX-08B`                                                        | `CS-ADMIN-01`                                            | N/A               | existující osoba, popis dopadu, named scope, revoke danger a lidské guard chyby                                            |
 | `AUX-09C` | U2  | [x]  | QA            | Team list/grant/revoke/stale/permission test matice                                | `AUX-09B`                                                                                                                                   | —                                               | `AUX-07C`, `AUX-08C`                                                        | `CS-ADMIN-01`                                            | UI ready (mocked) | browser 1029/1029; grant/revoke/guard/stale/permission/exact retry, axe a responsive                                       |
 | `AUX-10A` | U1  | [x]  | UI            | Report cards, období/formát a bezpečný request flow                                | `AUX-01B`, `AUX-03A`                                                                                                                        | —                                               | `AUX-10D`, `AUX-10E`                                                        | `CS-ADMIN-01`                                            | N/A               | CSV default, event-timezone období, reason, P3 dopad a pravdivý queued receipt                                             |
@@ -1647,8 +1662,8 @@ none` není řešení landmark problému.
 
 **Rezervace akceptace**
 
-- [x] **07A-1:** DTO je session-first, cursor-paginated a validuje maskovanou
-      participant reference; netvrdí úplnost bez `pageInfo`.
+- [x] **07A-1:** DTO je session-first, cursor-paginated a autorizovanému
+      administrátorovi vrací jméno a e-mail; netvrdí úplnost bez `pageInfo`.
 - [x] **07B-1:** Aktivita/kapacita jsou hlavní hierarchie; kapacita a storno
       mají odlišný formulář/copy a minimum kapacity je `reservedCount`.
 - [x] **07B-2:** Progress má textovou hodnotu a význam není jen barvou.
@@ -1926,6 +1941,7 @@ vlastníky, ne důvod hádat produktové chování.
 
 | Verze | Datum      | Změna                                                                                                                                                                                                  | Evidence                                                                                                   |
 | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 4.0   | 2026-09-03 | Sjednocena viditelnost identity: admin pracuje s celým jménem a e-mailem bez maskovaných referencí; vedoucí aktivit a moderátoři dostávají jméno bez e-mailu                                           | Domain 204/204; conference 651/651; browser components 1101/1101                                           |
 | 3.9   | 2026-09-02 | `GAP-AUX-AUDIT-01` uzavřen: actor/outcome se filtrují serverově před stránkováním bez PII a všechny podporované auditní akce mají exhaustive typovaný český label                                      | Unit 609/609; browser 1053/1053; `docs/evidence/admin-ux-aux-13j-audit.md`                                 |
 | 3.8   | 2026-09-02 | Audit zbývajících gate potvrdil lokálně úplný shell/route/security řez; veřejný staging je ready a anonymní context failuje private/no-store 401, ale běží starý release a nemá předaný UAT účet       | `docs/evidence/admin-ux-remaining-gates.md`                                                                |
 | 3.7   | 2026-09-02 | `AUX-13E` zpevnil legacy support search/mutace o current-event, oddělené permissions, PII-safe Redis limit, audit a exact replay; imported identity resend zůstává za invitation handshake             | Unit 609/609; browser 1053/1053; `docs/evidence/admin-ux-aux-13e-support.md`                               |

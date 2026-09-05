@@ -32,7 +32,7 @@ import {
   type SimpleShopTicketSourceAdapter,
 } from './simpleshop-ticket-source';
 
-const REQUEST_MAX_BYTES = 16_384;
+const REQUEST_MAX_BYTES = 32_768;
 const PREVIEW_TTL_MS = 20 * 60_000;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 const PREVIEW_VERSION = 1;
@@ -226,6 +226,32 @@ const summaryMatches = (
     (key) => left[key] === right[key],
   );
 
+const sameRowSelection = (
+  left: readonly string[],
+  right: readonly string[],
+): boolean =>
+  left.length === right.length && left.every((rowId) => right.includes(rowId));
+
+const participantNameFrom = (
+  contactName: string | null,
+): { firstName: string; lastName: string } => {
+  const parts = (contactName ?? 'Nový účastník')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return {
+    firstName: (parts.shift() ?? 'Nový').slice(0, 128),
+    lastName: (parts.join(' ') || 'Účastník').slice(0, 128),
+  };
+};
+
+const appliedAuditAfterSchema = z.object({
+  selectedRowIds: z.array(uuidSchema).min(1),
+  created: z.number().int().nonnegative(),
+  statusChanged: z.number().int().nonnegative(),
+  unchanged: z.number().int().nonnegative(),
+});
+
 const requireAccess = async (
   db: Database | DatabaseTransaction,
   eventId: string,
@@ -260,10 +286,10 @@ const existingAppliedResponse = async (
   eventId: string,
   previewId: string,
   completedAt: Date,
-  summary: TicketImportSummary,
+  requestedRowIds: readonly string[],
 ): Promise<TicketImportApplyResponse> => {
   const audit = await transaction.query.auditLogs.findFirst({
-    columns: { id: true },
+    columns: { id: true, after: true },
     where: and(
       eq(schema.auditLogs.eventId, eventId),
       eq(schema.auditLogs.action, 'ticket_import.applied'),
@@ -272,16 +298,26 @@ const existingAppliedResponse = async (
   });
   if (!audit)
     throw previewBlocked('The applied import audit receipt is missing.');
+  const after = appliedAuditAfterSchema.safeParse(audit.after);
+  if (
+    !after.success ||
+    !sameRowSelection(after.data.selectedRowIds, requestedRowIds)
+  ) {
+    throw previewBlocked(
+      'The preview was already applied with a different row selection.',
+    );
+  }
   return ticketImportApplyResponseSchema.parse({
     eventId,
     batchId: previewId,
     previewId,
     previewVersion: PREVIEW_VERSION,
+    selectedRowIds: after.data.selectedRowIds,
     outcome: 'already_applied',
     result: {
-      created: summary.new,
-      statusChanged: summary.statusChanged,
-      unchanged: summary.unchanged,
+      created: after.data.created,
+      statusChanged: after.data.statusChanged,
+      unchanged: after.data.unchanged,
     },
     completedAt: completedAt.toISOString(),
     audit: { auditId: audit.id },
@@ -379,7 +415,7 @@ export const applySimpleShopTicketImport = async (
             eventId,
             batch.id,
             batch.appliedAt,
-            summary.data,
+            parsed.data.selectedRowIds,
           );
           return { status: 200, body: replay, resultReference: batch.id };
         }
@@ -410,32 +446,24 @@ export const applySimpleShopTicketImport = async (
         if (rows.length !== batch.rowCount) {
           throw previewBlocked('The immutable preview rows do not reconcile.');
         }
+        const rowsById = new Map(rows.map((row) => [row.id, row]));
+        const selectedRows = parsed.data.selectedRowIds.map((rowId) =>
+          rowsById.get(rowId),
+        );
+        if (selectedRows.some((row) => row === undefined)) {
+          throw new TicketImportStaleError(PREVIEW_VERSION);
+        }
         if (
-          rows.some((row) => {
-            if (
-              !row.previewStatus ||
-              !['new', 'unchanged', 'excluded'].includes(row.previewStatus)
-            ) {
-              return true;
-            }
-            if (row.previewStatus === 'excluded') {
-              return (
-                !['unpaid', 'cancelled', 'refunded'].includes(
-                  row.sourceStatus ?? '',
-                ) ||
-                row.mappedStatus !== null ||
-                !row.validationErrors.includes('source_status_excluded')
-              );
-            }
-            return (
+          selectedRows.some(
+            (row) =>
+              row?.previewStatus !== 'new' ||
               row.sourceStatus !== 'paid' ||
               row.mappedStatus !== 'valid' ||
-              row.validationErrors.length > 0
-            );
-          })
+              row.validationErrors.length > 0,
+          )
         ) {
           throw previewBlocked(
-            'The preview contains an unsafe or unresolved row.',
+            'Only safe new participants from this preview can be imported.',
           );
         }
         const sourceByExternalId = new Map(
@@ -460,10 +488,14 @@ export const applySimpleShopTicketImport = async (
           }
           return { row, source };
         });
-        const relevantRows = reconciledRows.filter(
-          ({ row }) =>
-            row.previewStatus === 'new' || row.previewStatus === 'unchanged',
+        const reconciledByRowId = new Map(
+          reconciledRows.map((value) => [value.row.id, value]),
         );
+        const relevantRows = parsed.data.selectedRowIds.map((rowId) => {
+          const reconciled = reconciledByRowId.get(rowId);
+          if (!reconciled) throw new TicketImportStaleError(PREVIEW_VERSION);
+          return reconciled;
+        });
         if (
           relevantRows.some(
             ({ source }) =>
@@ -521,18 +553,13 @@ export const applySimpleShopTicketImport = async (
               : 'invalid',
           );
         }
-        for (const { row, source } of relevantRows) {
+        for (const { source } of relevantRows) {
           const current = existing.get(source.externalId);
-          if (
-            (row.previewStatus === 'new' && current !== undefined) ||
-            (row.previewStatus === 'unchanged' && current !== 'valid')
-          ) {
+          if (current !== undefined) {
             throw new TicketImportStaleError(PREVIEW_VERSION);
           }
         }
-        const newRows = relevantRows.filter(
-          ({ row }) => row.previewStatus === 'new',
-        );
+        const newRows = relevantRows;
         const emails = [
           ...new Set(newRows.map(({ source }) => source.contactEmail!)),
         ].sort();
@@ -592,6 +619,34 @@ export const applySimpleShopTicketImport = async (
               eventId,
               userId: user.id,
               status: 'active',
+            });
+          }
+          const profile = await transaction.query.participantProfiles.findFirst(
+            {
+              columns: { userId: true },
+              where: and(
+                eq(schema.participantProfiles.eventId, eventId),
+                eq(schema.participantProfiles.userId, user.id),
+              ),
+            },
+          );
+          if (!profile) {
+            const name = participantNameFrom(source.contactName);
+            await transaction.insert(schema.participantProfiles).values({
+              eventId,
+              userId: user.id,
+              ...name,
+              contactEmail: email,
+              company: source.contactCompany,
+              jobTitle: source.contactPosition,
+              phone:
+                source.contactPhone &&
+                /^\+[1-9]\d{7,14}$/.test(source.contactPhone)
+                  ? source.contactPhone
+                  : null,
+              networkingEnabled: false,
+              createdAt: appliedAt,
+              updatedAt: appliedAt,
             });
           }
           const role = await transaction.query.eventRoles.findFirst({
@@ -655,9 +710,12 @@ export const applySimpleShopTicketImport = async (
             before: { status: 'validated', previewVersion: PREVIEW_VERSION },
             after: {
               status: 'applied',
-              created: summary.data.new,
-              unchanged: summary.data.unchanged,
-              excluded: summary.data.excluded,
+              selectedRowIds: parsed.data.selectedRowIds,
+              selectedCount: parsed.data.selectedRowIds.length,
+              created: newRows.length,
+              statusChanged: 0,
+              unchanged: 0,
+              skipped: summary.data.total - parsed.data.selectedRowIds.length,
               emailSent: false,
               ticketCredentialCreated: false,
             },
@@ -669,11 +727,12 @@ export const applySimpleShopTicketImport = async (
           batchId: batch.id,
           previewId: batch.id,
           previewVersion: PREVIEW_VERSION,
+          selectedRowIds: parsed.data.selectedRowIds,
           outcome: 'applied',
           result: {
-            created: summary.data.new,
-            statusChanged: summary.data.statusChanged,
-            unchanged: summary.data.unchanged,
+            created: newRows.length,
+            statusChanged: 0,
+            unchanged: 0,
           },
           completedAt: appliedAt.toISOString(),
           audit: { auditId },

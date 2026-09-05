@@ -39,6 +39,29 @@ const ticketParticipantApplyMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0020_goofy_green_goblin.sql'),
   'utf8',
 );
+const ticketParticipantProfileBackfillMigration = readFileSync(
+  resolve(
+    packageRoot,
+    'drizzle/0022_backfill_simpleshop_participant_profiles.sql',
+  ),
+  'utf8',
+);
+const announcementRolloutMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0023_enable_byzon_announcements.sql'),
+  'utf8',
+);
+const networkingRolloutMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0024_enable_byzon_networking.sql'),
+  'utf8',
+);
+const mastermindGroupMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0025_group_tomas_ryza_mastermind.sql'),
+  'utf8',
+);
+const coachingReservationLimitMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0026_one_coaching_reservation.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -75,6 +98,21 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0020_goofy_green_goblin',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0022_backfill_simpleshop_participant_profiles',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0023_enable_byzon_announcements',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0024_enable_byzon_networking',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0025_group_tomas_ryza_mastermind',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0026_one_coaching_reservation',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -179,6 +217,38 @@ describe('versioned database artifacts', () => {
     );
     expect(ticketParticipantApplyMigration).not.toContain('contact_email');
     expect(ticketParticipantApplyMigration).not.toContain('code_hmac');
+    expect(ticketParticipantProfileBackfillMigration).toContain(
+      'INSERT INTO "participant_profiles"',
+    );
+    expect(ticketParticipantProfileBackfillMigration).toContain(
+      'FROM "ticket_source_participants"',
+    );
+    expect(ticketParticipantProfileBackfillMigration).toContain(
+      'ON CONFLICT ("event_id", "user_id") DO NOTHING',
+    );
+    expect(mastermindGroupMigration).toContain('"reservation_group_id" uuid');
+    expect(mastermindGroupMigration).toContain(
+      'sessions_reservation_group_event_fk',
+    );
+    expect(mastermindGroupMigration).toContain(
+      "'program.days[1].stages[1].events[1]'",
+    );
+    expect(mastermindGroupMigration).toContain(
+      "'program.days[1].stages[1].events[3]'",
+    );
+    expect(mastermindGroupMigration).toContain('"capacity" = 6');
+    expect(mastermindGroupMigration).toContain(
+      'Mastermind reservation group contains participant state for event %',
+    );
+    expect(coachingReservationLimitMigration).toContain(
+      'reservations_single_coaching_trigger',
+    );
+    expect(coachingReservationLimitMigration).toContain(
+      'reservations_active_user_coaching_unique',
+    );
+    expect(coachingReservationLimitMigration).toContain(
+      "'coaching-reservation:'",
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -191,12 +261,44 @@ describe('versioned database artifacts', () => {
     expect(reservationWindowMigration).not.toContain('gen_random_uuid()');
     expect(coachingMigration).not.toContain('gen_random_uuid()');
     expect(ticketParticipantApplyMigration).not.toContain('gen_random_uuid()');
+    expect(ticketParticipantProfileBackfillMigration).not.toContain(
+      'gen_random_uuid()',
+    );
+    expect(mastermindGroupMigration).not.toContain('gen_random_uuid()');
+    expect(coachingReservationLimitMigration).not.toContain(
+      'gen_random_uuid()',
+    );
   });
 
-  it('seeds both event scopes idempotently and keeps the test event archived', () => {
+  it('seeds both event scopes idempotently, enables current participant features and keeps isolation disabled', () => {
     expect(seed).toContain("'byzon-2026'");
     expect(seed).toContain("'byzon-isolation-test'");
     expect(seed).toContain("'archived'");
+    expect(seed).toContain(
+      `CASE WHEN "slug" = 'byzon-2026' THEN true ELSE false END`,
+    );
+    expect(seed).toContain(
+      '"announcements_enabled" = EXCLUDED."announcements_enabled"',
+    );
+    expect(seed).toContain(
+      '"networking_enabled" = EXCLUDED."networking_enabled"',
+    );
     expect(seed.match(/ON CONFLICT/g)).toHaveLength(4);
+  });
+
+  it('rolls announcements out only to the canonical BYZON 2026 event', () => {
+    expect(announcementRolloutMigration).toContain(
+      `WHERE "slug" = 'byzon-2026'`,
+    );
+    expect(announcementRolloutMigration).toContain(
+      '"announcements_enabled" = true',
+    );
+    expect(announcementRolloutMigration).not.toContain('byzon-isolation-test');
+  });
+
+  it('rolls networking out only to the canonical BYZON 2026 event', () => {
+    expect(networkingRolloutMigration).toContain(`WHERE "slug" = 'byzon-2026'`);
+    expect(networkingRolloutMigration).toContain('"networking_enabled" = true');
+    expect(networkingRolloutMigration).not.toContain('byzon-isolation-test');
   });
 });

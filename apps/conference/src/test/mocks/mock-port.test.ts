@@ -780,7 +780,7 @@ describe('MSW through the production API port', () => {
     ).resolves.toEqual(first);
   });
 
-  it('replays the exact successful conflict warning after later canonical changes', async () => {
+  it('replays the exact successful reservation after later canonical changes', async () => {
     configureMockParticipantPrincipal({ active: true });
     const request = {
       sessionId: agendaFixtureIds.conflictTargetSession,
@@ -798,10 +798,7 @@ describe('MSW through the production API port', () => {
       data: {
         version: 8,
         mutation: { action: 'reserve', outcome: 'applied' },
-        timeConflict: {
-          sessionId: agendaFixtureIds.conflictTargetSession,
-          conflictingSessions: [{ id: agendaFixtureIds.savedSession }],
-        },
+        timeConflict: null,
       },
     });
     await expect(
@@ -1029,12 +1026,7 @@ describe('MSW through the production API port', () => {
           outcome: 'applied',
           sessionId: agendaFixtureIds.conflictTargetSession,
         },
-        timeConflict: {
-          eventId: agendaFixtureIds.event,
-          sessionId: agendaFixtureIds.conflictTargetSession,
-          targetSession: { id: agendaFixtureIds.conflictTargetSession },
-          conflictingSessions: [{ id: agendaFixtureIds.savedSession }],
-        },
+        timeConflict: null,
         items: expect.arrayContaining([
           expect.objectContaining({
             state: 'reserved',

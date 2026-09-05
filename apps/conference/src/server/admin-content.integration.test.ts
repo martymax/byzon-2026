@@ -1,4 +1,4 @@
-import { and, count, eq } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { createDatabaseClient, generateUuidV7, schema } from '@byzon/database';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -65,6 +65,13 @@ integration('admin content CRUD integration', () => {
         role: 'participant',
       },
     ]);
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: participantId,
+      firstName: 'Pat',
+      lastName: 'Participant',
+      contactEmail: `${participantId}@example.invalid`,
+    });
   });
   afterAll(async () => client.close());
 
@@ -100,7 +107,11 @@ integration('admin content CRUD integration', () => {
     );
     expect((await list.json()).items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id, slug: 'partner-test' }),
+        expect.objectContaining({
+          id,
+          publicationState: 'unpublished',
+          slug: 'partner-test',
+        }),
       ]),
     );
     const update = await handleAdminContent(
@@ -224,6 +235,114 @@ integration('admin content CRUD integration', () => {
         where: eq(schema.sessionSpeakers.sessionId, id),
       }),
     ).toEqual([]);
+  });
+
+  it('links a speaker to one existing participant identity and can unlink it', async () => {
+    const accountEmail = `${participantId}@example.invalid`;
+    const create = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          accountEmail: accountEmail.toUpperCase(),
+          slug: `linked-speaker-${participantId}`,
+          firstName: 'Pat',
+          lastName: 'Participant',
+          sortOrder: 77,
+        }),
+      }),
+      eventId,
+      'speakers',
+      null,
+      dependencies(organizerId),
+    );
+    expect(create.status).toBe(201);
+    const { id } = (await create.json()) as { id: string };
+
+    await expect(
+      client.db.query.speakerProfiles.findFirst({
+        columns: { userId: true },
+        where: eq(schema.speakerProfiles.id, id),
+      }),
+    ).resolves.toMatchObject({ userId: participantId });
+    await expect(
+      client.db.query.eventRoles.findFirst({
+        where: and(
+          eq(schema.eventRoles.eventId, eventId),
+          eq(schema.eventRoles.userId, participantId),
+          eq(schema.eventRoles.role, 'speaker'),
+          isNull(schema.eventRoles.revokedAt),
+        ),
+      }),
+    ).resolves.toBeTruthy();
+
+    const list = await handleAdminContent(
+      new Request(`${origin}/api`),
+      eventId,
+      'speakers',
+      null,
+      dependencies(organizerId),
+    );
+    expect((await list.json()).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id, accountEmail })]),
+    );
+
+    const unlink = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'PATCH',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({ accountEmail: null, version: 1 }),
+      }),
+      eventId,
+      'speakers',
+      id,
+      dependencies(organizerId),
+    );
+    expect(unlink.status).toBe(200);
+    await expect(
+      client.db.query.speakerProfiles.findFirst({
+        columns: { userId: true },
+        where: eq(schema.speakerProfiles.id, id),
+      }),
+    ).resolves.toMatchObject({ userId: null });
+    await expect(
+      client.db.query.eventRoles.findFirst({
+        where: and(
+          eq(schema.eventRoles.eventId, eventId),
+          eq(schema.eventRoles.userId, participantId),
+          eq(schema.eventRoles.role, 'speaker'),
+          isNull(schema.eventRoles.revokedAt),
+        ),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects linking a speaker before the participant account exists', async () => {
+    const response = await handleAdminContent(
+      new Request(`${origin}/api`, {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          accountEmail: 'missing-speaker@example.invalid',
+          slug: `missing-speaker-${participantId}`,
+          firstName: 'Missing',
+          lastName: 'Speaker',
+          sortOrder: 78,
+        }),
+      }),
+      eventId,
+      'speakers',
+      null,
+      dependencies(organizerId),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'SPEAKER_ACCOUNT_NOT_FOUND',
+      fieldErrors: {
+        accountEmail: [expect.stringContaining('Účastníci')],
+      },
+    });
   });
 
   it('does not expose admin resources to a participant or accept cross-origin writes', async () => {

@@ -149,6 +149,7 @@ describe('CS-ACT-01 activation contract', () => {
     '/app',
     '/app/agenda',
     '/app/informace',
+    '/app/networking',
     '/app/nastaveni',
     '/app/oznameni',
     '/app/oznameni?view=unread',
@@ -162,6 +163,7 @@ describe('CS-ACT-01 activation contract', () => {
     '/app/program/550e8400-e29b-41d4-a716-446655440000',
     '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda',
     '/app/oznameni/01910000-0000-7000-8000-000000000011',
+    '/app/networking/01910000-0000-7000-8000-000000000011',
     '/app/recnici/jana-novakova',
   ] as const)(
     'accepts the exact participant return destination %s',

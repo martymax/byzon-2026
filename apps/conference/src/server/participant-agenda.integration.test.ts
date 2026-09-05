@@ -18,8 +18,9 @@ import {
   mutateParticipantAgenda,
   readParticipantAgenda,
   readParticipantAgendaCalendar,
-  type ParticipantAgendaDependencies,
+  type ParticipantAgendaCalendarDependencies,
 } from './participant-agenda';
+import { issueAgendaCalendarTicket } from './agenda-calendar-ticket';
 import { createParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -46,7 +47,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const contenderOneId = crypto.randomUUID();
   const contenderTwoId = crypto.randomUUID();
   const isolationUserId = crypto.randomUUID();
-  const inactiveTicketUserId = crypto.randomUUID();
+  const participantWithoutLegacyTicketUserId = crypto.randomUUID();
   const driftUserId = crypto.randomUUID();
   const cancellationRaceUserId = crypto.randomUUID();
   const cutoffRaceUserId = crypto.randomUUID();
@@ -64,11 +65,14 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const participantCancelCutoffUserId = crypto.randomUUID();
   const coachingContenderOneId = crypto.randomUUID();
   const coachingContenderTwoId = crypto.randomUUID();
+  const coachingSwitchUserId = crypto.randomUUID();
   const contentMutationRaceUserId = crypto.randomUUID();
   const calendarUserId = crypto.randomUUID();
   const waitlistOwnerId = crypto.randomUUID();
   const waitlistFirstId = crypto.randomUUID();
   const waitlistSecondId = crypto.randomUUID();
+  const mastermindGroupUserId = crypto.randomUUID();
+  const reservationSwitchUserId = crypto.randomUUID();
   const savedSessionId = crypto.randomUUID();
   const conflictingSessionId = crypto.randomUUID();
   const reservedSessionId = crypto.randomUUID();
@@ -83,15 +87,23 @@ integration('CS-AGENDA-01 HTTP integration', () => {
   const archivedOperationalSessionId = crypto.randomUUID();
   const participantCancelSessionId = crypto.randomUUID();
   const coachingSessionId = crypto.randomUUID();
+  const coachingSecondSessionId = crypto.randomUUID();
+  const coachingReplacementSessionId = crypto.randomUUID();
   const waitlistSessionId = crypto.randomUUID();
+  const mastermindGroupSessionId = crypto.randomUUID();
+  const mastermindGroupPartTwoSessionId = crypto.randomUUID();
+  const reservationSwitchSessionId = crypto.randomUUID();
   const fixedNow = new Date('2026-09-18T07:00:00.000Z');
   const onOperationalDrift = vi.fn();
+  const calendarTicketSecret =
+    'participant-agenda-calendar-test-secret-at-least-32-characters';
 
   const dependencies = (
     userId: string | null,
-  ): ParticipantAgendaDependencies => ({
+  ): ParticipantAgendaCalendarDependencies => ({
     db: client.db,
     allowedOrigin: appOrigin,
+    calendarTicketSecret,
     currentEventSlug: eventSlug,
     getSession: vi.fn(async () => (userId ? { user: { id: userId } } : null)),
     now: () => fixedNow,
@@ -175,7 +187,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       contenderOneId,
       contenderTwoId,
       isolationUserId,
-      inactiveTicketUserId,
+      participantWithoutLegacyTicketUserId,
       driftUserId,
       cancellationRaceUserId,
       cutoffRaceUserId,
@@ -193,11 +205,14 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       participantCancelCutoffUserId,
       coachingContenderOneId,
       coachingContenderTwoId,
+      coachingSwitchUserId,
       contentMutationRaceUserId,
       calendarUserId,
       waitlistOwnerId,
       waitlistFirstId,
       waitlistSecondId,
+      mastermindGroupUserId,
+      reservationSwitchUserId,
     ];
     await client.db.insert(schema.users).values(
       userIds.map((id) => ({
@@ -212,7 +227,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         primaryUserId,
         contenderOneId,
         contenderTwoId,
-        inactiveTicketUserId,
+        participantWithoutLegacyTicketUserId,
         driftUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
@@ -230,11 +245,14 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelCutoffUserId,
         coachingContenderOneId,
         coachingContenderTwoId,
+        coachingSwitchUserId,
         contentMutationRaceUserId,
         calendarUserId,
         waitlistOwnerId,
         waitlistFirstId,
         waitlistSecondId,
+        mastermindGroupUserId,
+        reservationSwitchUserId,
       ].map((userId) => ({ eventId, userId, status: 'active' as const })),
       {
         eventId: isolationEventId,
@@ -247,7 +265,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         primaryUserId,
         contenderOneId,
         contenderTwoId,
-        inactiveTicketUserId,
+        participantWithoutLegacyTicketUserId,
         driftUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
@@ -265,11 +283,14 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelCutoffUserId,
         coachingContenderOneId,
         coachingContenderTwoId,
+        coachingSwitchUserId,
         contentMutationRaceUserId,
         calendarUserId,
         waitlistOwnerId,
         waitlistFirstId,
         waitlistSecondId,
+        mastermindGroupUserId,
+        reservationSwitchUserId,
       ].map((userId) => ({
         id: crypto.randomUUID(),
         eventId,
@@ -288,7 +309,6 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         primaryUserId,
         contenderOneId,
         contenderTwoId,
-        inactiveTicketUserId,
         cancellationRaceUserId,
         cutoffRaceUserId,
         publicationPolicyUserId,
@@ -298,21 +318,20 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         participantCancelCutoffUserId,
         coachingContenderOneId,
         coachingContenderTwoId,
+        coachingSwitchUserId,
         contentMutationRaceUserId,
         waitlistOwnerId,
-        waitlistFirstId,
         waitlistSecondId,
+        mastermindGroupUserId,
+        reservationSwitchUserId,
       ].map((userId, index) => ({
         id: crypto.randomUUID(),
         eventId,
         codeHmac: (index + 1).toString(16).padStart(64, '0'),
         codeSuffix: `agenda-${index + 1}`,
-        status:
-          userId === inactiveTicketUserId
-            ? ('blocked' as const)
-            : ('activated' as const),
+        status: 'activated' as const,
         holderUserId: userId,
-        ...(userId === inactiveTicketUserId ? {} : { claimedAt: fixedNow }),
+        claimedAt: fixedNow,
       })),
     );
     await client.db.insert(schema.eventDays).values({
@@ -373,6 +392,16 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'workshop' as const,
         capacityMode: 'reservation' as const,
         capacity: 2,
+      },
+      {
+        id: reservationSwitchSessionId,
+        slug: `reservation-switch-${reservationSwitchSessionId}`,
+        title: 'Překrývající se rezervovatelný workshop',
+        startsAt: new Date('2026-09-18T10:30:00Z'),
+        endsAt: new Date('2026-09-18T11:30:00Z'),
+        type: 'workshop' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 10,
       },
       {
         id: lastSeatSessionId,
@@ -488,6 +517,26 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         capacity: 1,
       },
       {
+        id: coachingSecondSessionId,
+        slug: `coaching-second-${coachingSecondSessionId}`,
+        title: 'Koučink – druhý slot',
+        startsAt: new Date('2026-09-18T13:30:00Z'),
+        endsAt: new Date('2026-09-18T14:00:00Z'),
+        type: 'coaching' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
+      },
+      {
+        id: coachingReplacementSessionId,
+        slug: `coaching-replacement-${coachingReplacementSessionId}`,
+        title: 'Koučink – náhradní slot',
+        startsAt: new Date('2026-09-18T15:30:00Z'),
+        endsAt: new Date('2026-09-18T16:00:00Z'),
+        type: 'coaching' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 1,
+      },
+      {
         id: waitlistSessionId,
         slug: `waitlist-${waitlistSessionId}`,
         title: 'Automatický FIFO pořadník',
@@ -496,6 +545,29 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         type: 'workshop' as const,
         capacityMode: 'reservation' as const,
         capacity: 1,
+      },
+      {
+        id: mastermindGroupSessionId,
+        slug: `mastermind-group-one-${mastermindGroupSessionId}`,
+        title: 'Mastermind část 1',
+        startsAt: new Date('2026-09-18T12:30:00Z'),
+        endsAt: new Date('2026-09-18T13:30:00Z'),
+        type: 'mastermind' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 6,
+        reservationGroupId: mastermindGroupSessionId,
+      },
+      {
+        id: mastermindGroupPartTwoSessionId,
+        slug: `mastermind-group-two-${mastermindGroupPartTwoSessionId}`,
+        title: 'Mastermind část 2',
+        startsAt: new Date('2026-09-18T14:00:00Z'),
+        endsAt: new Date('2026-09-18T15:00:00Z'),
+        type: 'mastermind' as const,
+        capacityMode: 'reservation' as const,
+        capacity: 6,
+        reservationGroupId: mastermindGroupSessionId,
+        reservationClosesAt: new Date('2026-09-18T12:30:00Z'),
       },
     ];
     await client.db.insert(schema.programSessions).values(
@@ -625,7 +697,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     await client.close();
   });
 
-  it('joins and leaves a stable FIFO waitlist and auto-promotes the first eligible participant', async () => {
+  it('auto-promotes an eligible participant without a legacy ticket credential', async () => {
     const addAndReturnVersion = async (userId: string, key: string) => {
       const added = await mutate(
         userId,
@@ -850,9 +922,14 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     );
     expect(query.status).toBe(422);
 
-    const otherOwner = await readParticipantAgendaCalendar(
+    const otherOwnerRedirect = await readParticipantAgendaCalendar(
       calendarRequest(),
       dependencies(primaryUserId),
+    );
+    expect(otherOwnerRedirect.status).toBe(303);
+    const otherOwner = await readParticipantAgendaCalendar(
+      new Request(otherOwnerRedirect.headers.get('location')!),
+      dependencies(null),
     );
     expect(otherOwner.status).toBe(200);
     expect(await otherOwner.text()).not.toContain(
@@ -868,9 +945,24 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         .calendarExport,
     ).toEqual({ state: 'available', href: '/api/v1/me/agenda.ics' });
 
-    const response = await readParticipantAgendaCalendar(
+    const redirect = await readParticipantAgendaCalendar(
       calendarRequest(),
       dependencies(calendarUserId),
+    );
+    expect(redirect.status).toBe(303);
+    expect(redirect.headers.get('cache-control')).toBe('private, no-store');
+    expect(redirect.headers.get('vary')).toBe('Authorization, Cookie');
+    expect(redirect.headers.get('referrer-policy')).toBe('no-referrer');
+    const location = redirect.headers.get('location');
+    expect(location).not.toBeNull();
+    const ticketUrl = new URL(location!);
+    expect(ticketUrl.origin).toBe(appOrigin);
+    expect(ticketUrl.pathname).toBe('/api/v1/me/agenda.ics');
+    expect(ticketUrl.searchParams.get('ticket')).toBeTruthy();
+
+    const response = await readParticipantAgendaCalendar(
+      new Request(ticketUrl),
+      dependencies(null),
     );
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -891,6 +983,36 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(calendar).not.toContain(calendarUserId);
     expect(calendar).not.toContain('@example.invalid');
     expect(calendar.endsWith('\r\n')).toBe(true);
+
+    const repeatedDownload = await readParticipantAgendaCalendar(
+      new Request(ticketUrl),
+      dependencies(null),
+    );
+    expect(repeatedDownload.status).toBe(200);
+    expect(await repeatedDownload.text()).toBe(calendar);
+
+    const expiredDownload = await readParticipantAgendaCalendar(
+      new Request(ticketUrl),
+      {
+        ...dependencies(null),
+        now: () => new Date(fixedNow.getTime() + 60_000),
+      },
+    );
+    expect(expiredDownload.status).toBe(401);
+
+    const staleTicket = issueAgendaCalendarTicket({
+      secret: calendarTicketSecret,
+      now: fixedNow,
+      userId: calendarUserId,
+      eventId,
+      agendaVersion: 999,
+      publicationVersion: 3,
+    });
+    const staleDownload = await readParticipantAgendaCalendar(
+      calendarRequest(`?ticket=${encodeURIComponent(staleTicket)}`),
+      dependencies(null),
+    );
+    expect(staleDownload.status).toBe(401);
   });
 
   it('reads the version and projected items under the participant mutation lock', async () => {
@@ -1552,7 +1674,7 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       ...dependencies(primaryUserId),
       rateLimit: calendarRateLimit,
     });
-    expect(calendar.status).toBe(200);
+    expect(calendar.status).toBe(303);
     expect(calendar.headers.get('ratelimit-limit')).toBe('120');
     expect(calendar.headers.get('ratelimit-remaining')).toBe('118');
     expect(calendarRateLimit).toHaveBeenCalledWith('read', primaryUserId);
@@ -1855,6 +1977,220 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     expect(
       participantAgendaMutationProblemSchema.parse(await reused.json()).code,
     ).toBe('IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('offers an atomic reservation replacement and rejects changes from the activity start', async () => {
+    const addedOriginal = await mutate(
+      reservationSwitchUserId,
+      { action: 'add', sessionId: reservedSessionId, expectedVersion: 1 },
+      'agenda-switch-add-original-0001',
+    );
+    expect(addedOriginal.status).toBe(200);
+    const reservedOriginal = await mutate(
+      reservationSwitchUserId,
+      { action: 'reserve', sessionId: reservedSessionId, expectedVersion: 2 },
+      'agenda-switch-reserve-original-0001',
+    );
+    expect(reservedOriginal.status).toBe(200);
+    const addedTarget = await mutate(
+      reservationSwitchUserId,
+      {
+        action: 'add',
+        sessionId: reservationSwitchSessionId,
+        expectedVersion: 3,
+      },
+      'agenda-switch-add-target-0001',
+    );
+    expect(addedTarget.status).toBe(200);
+
+    const blocked = await mutate(
+      reservationSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: reservationSwitchSessionId,
+        expectedVersion: 4,
+      },
+      'agenda-switch-detect-conflict-0001',
+    );
+    expect(blocked.status).toBe(409);
+    const problem = participantAgendaMutationProblemSchema.parse(
+      await blocked.json(),
+    );
+    expect(problem).toMatchObject({
+      code: 'RESERVATION_CONFLICT',
+      sessionId: reservationSwitchSessionId,
+      agenda: { version: 4 },
+      conflict: {
+        targetSessions: [{ id: reservationSwitchSessionId }],
+        conflictingSessions: [{ id: reservedSessionId }],
+      },
+      replacement: {
+        allowed: true,
+        until: '2026-09-18T10:00:00.000Z',
+        reservationSessionIds: [reservedSessionId],
+      },
+    });
+    const beforeSwitch = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, reservationSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(beforeSwitch).toEqual([{ sessionId: reservedSessionId }]);
+
+    const lateReplacement = await mutateParticipantAgenda(
+      mutationRequest(
+        {
+          action: 'reserve',
+          sessionId: reservationSwitchSessionId,
+          expectedVersion: 4,
+          replaceReservationSessionIds: [reservedSessionId],
+        },
+        'agenda-switch-too-late-0001',
+      ),
+      {
+        ...dependencies(reservationSwitchUserId),
+        now: () => new Date('2026-09-18T10:15:00.000Z'),
+      },
+    );
+    expect(lateReplacement.status).toBe(409);
+    expect(
+      participantAgendaMutationProblemSchema.parse(
+        await lateReplacement.json(),
+      ),
+    ).toMatchObject({
+      code: 'RESERVATION_CONFLICT',
+      agenda: { version: 4 },
+      replacement: { allowed: false },
+    });
+
+    const switched = await mutate(
+      reservationSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: reservationSwitchSessionId,
+        expectedVersion: 4,
+        replaceReservationSessionIds: [reservedSessionId],
+      },
+      'agenda-switch-confirm-0001',
+    );
+    expect(switched.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema.parse(await switched.json()),
+    ).toMatchObject({
+      version: 5,
+      mutation: { action: 'reserve', outcome: 'applied' },
+      items: [
+        { state: 'saved', session: { id: reservedSessionId } },
+        {
+          state: 'reserved',
+          session: { id: reservationSwitchSessionId },
+        },
+      ],
+    });
+    const afterSwitch = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, reservationSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(afterSwitch).toEqual([{ sessionId: reservationSwitchSessionId }]);
+
+    const afterOriginalStart = await mutateParticipantAgenda(
+      mutationRequest(
+        {
+          action: 'reserve',
+          sessionId: reservedSessionId,
+          expectedVersion: 5,
+          replaceReservationSessionIds: [reservationSwitchSessionId],
+        },
+        'agenda-switch-after-start-0001',
+      ),
+      {
+        ...dependencies(reservationSwitchUserId),
+        now: () => new Date('2026-09-18T10:00:00.000Z'),
+      },
+    );
+    expect(afterOriginalStart.status).toBe(409);
+    expect(
+      participantAgendaMutationProblemSchema.parse(
+        await afterOriginalStart.json(),
+      ).code,
+    ).toBe('RESERVATION_CLOSED');
+    const afterDeadline = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, reservationSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(afterDeadline).toEqual([{ sessionId: reservationSwitchSessionId }]);
+  });
+
+  it('uses one reservation and one shared capacity projection for both mastermind parts', async () => {
+    const added = await mutate(
+      mastermindGroupUserId,
+      {
+        action: 'add',
+        sessionId: mastermindGroupPartTwoSessionId,
+        expectedVersion: 1,
+      },
+      'agenda-mastermind-group-add-0001',
+    );
+    expect(added.status).toBe(200);
+
+    const reserved = await mutate(
+      mastermindGroupUserId,
+      {
+        action: 'reserve',
+        sessionId: mastermindGroupPartTwoSessionId,
+        expectedVersion: 2,
+      },
+      'agenda-mastermind-group-reserve-0001',
+    );
+    const body = participantAgendaMutationResponseSchema.parse(
+      await reserved.json(),
+    );
+    expect(reserved.status).toBe(200);
+    const projectedParts = body.items.filter(({ session }) =>
+      [mastermindGroupSessionId, mastermindGroupPartTwoSessionId].includes(
+        session.id,
+      ),
+    );
+    expect(projectedParts).toHaveLength(2);
+    expect(
+      projectedParts.every(
+        (item) =>
+          item.state === 'reserved' &&
+          item.capacity.mode === 'reservation' &&
+          item.capacity.capacity === 6 &&
+          item.capacity.confirmed === 1,
+      ),
+    ).toBe(true);
+    expect(
+      new Set(
+        projectedParts.flatMap((item) =>
+          item.state === 'reserved' ? [item.reservation.id] : [],
+        ),
+      ).size,
+    ).toBe(1);
+
+    const storedReservations = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, mastermindGroupUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(storedReservations).toEqual([
+      { sessionId: mastermindGroupSessionId },
+    ]);
   });
 
   it('cancels before the session starts, audits once and supersedes an old replay after re-reservation', async () => {
@@ -2304,6 +2640,93 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       ),
     });
     expect(reservations).toEqual([{ userId: winnerId }]);
+  });
+
+  it('allows one coaching reservation per participant and switches slots atomically', async () => {
+    const addedFirst = await mutate(
+      coachingSwitchUserId,
+      { action: 'add', sessionId: coachingSecondSessionId, expectedVersion: 1 },
+      'agenda-coaching-limit-add-first-0001',
+    );
+    expect(addedFirst.status).toBe(200);
+    const reservedFirst = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: coachingSecondSessionId,
+        expectedVersion: 2,
+      },
+      'agenda-coaching-limit-reserve-first-0001',
+    );
+    expect(reservedFirst.status).toBe(200);
+    const addedSecond = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'add',
+        sessionId: coachingReplacementSessionId,
+        expectedVersion: 3,
+      },
+      'agenda-coaching-limit-add-second-0001',
+    );
+    expect(addedSecond.status).toBe(200);
+
+    const blocked = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: coachingReplacementSessionId,
+        expectedVersion: 4,
+      },
+      'agenda-coaching-limit-block-second-0001',
+    );
+    expect(blocked.status).toBe(409);
+    const problem = participantAgendaMutationProblemSchema.parse(
+      await blocked.json(),
+    );
+    expect(problem).toMatchObject({
+      code: 'RESERVATION_CONFLICT',
+      sessionId: coachingReplacementSessionId,
+      conflict: {
+        reason: 'coaching_limit',
+        targetSessions: [{ id: coachingReplacementSessionId }],
+        conflictingSessions: [{ id: coachingSecondSessionId }],
+      },
+      replacement: {
+        allowed: true,
+        until: '2026-09-18T13:30:00.000Z',
+        reservationSessionIds: [coachingSecondSessionId],
+      },
+    });
+
+    const switched = await mutate(
+      coachingSwitchUserId,
+      {
+        action: 'reserve',
+        sessionId: coachingReplacementSessionId,
+        expectedVersion: 4,
+        replaceReservationSessionIds: [coachingSecondSessionId],
+      },
+      'agenda-coaching-limit-switch-0001',
+    );
+    expect(switched.status).toBe(200);
+    expect(
+      participantAgendaMutationResponseSchema.parse(await switched.json()),
+    ).toMatchObject({
+      version: 5,
+      items: [
+        { state: 'saved', session: { id: coachingSecondSessionId } },
+        { state: 'reserved', session: { id: coachingReplacementSessionId } },
+      ],
+    });
+    const active = await client.db.query.reservations.findMany({
+      columns: { sessionId: true },
+      where: and(
+        eq(schema.reservations.eventId, eventId),
+        eq(schema.reservations.userId, coachingSwitchUserId),
+        eq(schema.reservations.status, 'confirmed'),
+      ),
+    });
+    expect(active).toEqual([{ sessionId: coachingReplacementSessionId }]);
   });
 
   it('serializes add with content replacement and revalidates the operational session', async () => {
@@ -2761,29 +3184,34 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     });
   });
 
-  it('requires an active ticket for the reservation itself', async () => {
+  it('allows an active participant to reserve without a legacy ticket credential', async () => {
     const added = await mutate(
-      inactiveTicketUserId,
+      participantWithoutLegacyTicketUserId,
       { action: 'add', sessionId: reservedSessionId, expectedVersion: 1 },
-      'agenda-inactive-ticket-add-0001',
+      'agenda-ticketless-participant-add-0001',
     );
     expect(added.status).toBe(200);
 
     const response = await mutate(
-      inactiveTicketUserId,
+      participantWithoutLegacyTicketUserId,
       { action: 'reserve', sessionId: reservedSessionId, expectedVersion: 2 },
-      'agenda-inactive-ticket-reserve-0001',
+      'agenda-ticketless-participant-reserve-0001',
     );
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
     expect(
-      participantAgendaMutationProblemSchema.parse(await response.json()),
+      participantAgendaMutationResponseSchema.parse(await response.json()),
     ).toMatchObject({
-      code: 'TICKET_INACTIVE',
-      sessionId: reservedSessionId,
-      agenda: {
-        version: 2,
-        items: [{ state: 'saved', session: { id: reservedSessionId } }],
+      mutation: {
+        action: 'reserve',
+        outcome: 'applied',
+        sessionId: reservedSessionId,
       },
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          state: 'reserved',
+          session: expect.objectContaining({ id: reservedSessionId }),
+        }),
+      ]),
     });
   });
 

@@ -5,6 +5,7 @@ import {
   POST_LOGIN_DESTINATION,
   resolveAuthReturnTo,
 } from '../lib/auth-return';
+import { isStagingEnvironment } from '../server/staging-environment';
 
 export const metadata: Metadata = {
   title: 'Přihlášení',
@@ -21,6 +22,7 @@ export default async function HomePage({
   const query = searchParams ? await searchParams : undefined;
   return (
     <MagicLinkLogin
+      {...(isStagingEnvironment(process.env) ? { directEmailLogin: true } : {})}
       returnTo={resolveAuthReturnTo(query?.returnTo, POST_LOGIN_DESTINATION)}
     />
   );

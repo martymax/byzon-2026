@@ -1,4 +1,5 @@
 import {
+  contentFixtureIds,
   participantContentProblemFixtures,
   participantContentFixtures,
   participantProgramFixtures,
@@ -14,6 +15,7 @@ import {
 import { EmptyContent, ResourceStatus } from '../../components/content-state';
 import { ProgramView, SessionView } from '../../components/program-view';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
+import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
 const apiFor = (fixture: unknown) =>
@@ -29,13 +31,108 @@ const apiFor = (fixture: unknown) =>
       }),
   });
 
+const contentAndProgramApi = createFetchApiClient({
+  maxRetries: 0,
+  fetch: async (input) => {
+    const url = input instanceof Request ? input.url : String(input);
+    const fixture = url.endsWith('/program')
+      ? participantProgramFixtures.happy
+      : participantContentFixtures.happy;
+    return new Response(JSON.stringify(fixture), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'x-request-id': 'component-content-program-0001',
+      },
+    });
+  },
+});
+
+const coachingIds = {
+  zone: '01910000-0000-7000-8000-00000000000d',
+  radimRoom: '01910000-0000-7000-8000-00000000000e',
+  stanaRoom: '01910000-0000-7000-8000-00000000000f',
+  radim: '01910000-0000-7000-8000-000000000010',
+  stana: '01910000-0000-7000-8000-000000000011',
+} as const;
+
+const coachingProgram = (() => {
+  const fixture = participantProgramFixtures.happy!;
+  const room = fixture.program.rooms[0]!;
+  const session = fixture.program.sessions[0]!;
+  return {
+    ...fixture,
+    program: {
+      ...fixture.program,
+      days: fixture.program.days.map((day) => ({
+        ...day,
+        title:
+          day.localDate === '2026-09-18' ? '18. září 2026' : '19. září 2026',
+      })),
+      rooms: [
+        ...fixture.program.rooms,
+        {
+          ...room,
+          id: coachingIds.zone,
+          slug: 'koucovaci-zona',
+          name: 'Koučovací zóna',
+          sortOrder: 2,
+        },
+        {
+          ...room,
+          id: coachingIds.radimRoom,
+          slug: 'koucovaci-zona-radim',
+          name: 'Koučovací zóna · Radim Roček',
+          sortOrder: 3,
+        },
+        {
+          ...room,
+          id: coachingIds.stanaRoom,
+          slug: 'koucovaci-zona-stana',
+          name: 'Koučovací zóna · Stanislava Maunová',
+          sortOrder: 4,
+        },
+      ],
+      sessions: [
+        ...fixture.program.sessions,
+        {
+          ...session,
+          id: coachingIds.radim,
+          roomId: coachingIds.radimRoom,
+          slug: 'koucink-radim-0915',
+          title: 'Koučink – Radim Roček',
+          summary: 'Koučovací zóna · Individuální 30minutový koučink',
+          description: null,
+          type: 'coaching' as const,
+          startsAt: '2026-09-18T07:15:00.000Z',
+          endsAt: '2026-09-18T07:45:00.000Z',
+          sortOrder: 20,
+        },
+        {
+          ...session,
+          id: coachingIds.stana,
+          roomId: coachingIds.stanaRoom,
+          slug: 'koucink-stana-0915',
+          title: 'Koučink – Stanislava Maunová',
+          summary: 'Koučovací zóna · Individuální 30minutový koučink',
+          description: null,
+          type: 'coaching' as const,
+          startsAt: '2026-09-18T07:15:00.000Z',
+          endsAt: '2026-09-18T07:45:00.000Z',
+          sortOrder: 21,
+        },
+      ],
+    },
+  };
+})();
+
 beforeEach(() => {
   window.sessionStorage.clear();
   window.history.replaceState({}, '', window.location.pathname);
 });
 
 describe('CS-CONTENT-01 participant UI', () => {
-  it('filters a contract-valid program and preserves the selection in the URL', async () => {
+  it('switches conference days and preserves the selection in the URL', async () => {
     const screen = await renderComponent(
       <ProgramView
         eventId={participantProgramFixtures.happy!.eventId}
@@ -43,23 +140,92 @@ describe('CS-CONTENT-01 participant UI', () => {
       />,
     );
 
-    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
-    await screen
-      .getByRole('combobox', { name: 'Typ' })
-      .selectOptions('workshop');
-
-    const workshopCount =
-      participantProgramFixtures.happy!.program.sessions.filter(
-        ({ type }) => type === 'workshop',
-      ).length;
     await expect
-      .element(screen.getByText(`${String(workshopCount)} bodů programu`))
+      .element(
+        screen.getByRole('link', {
+          name: 'Detail programu: Otevření konference',
+        }),
+      )
       .toBeVisible();
-    await expect.element(screen.getByText('Růst bez zkratek')).toBeVisible();
-    expect(screen.getByText('Otevření konference').elements()).toHaveLength(0);
-    expect(new URL(window.location.href).searchParams.get('type')).toBe(
-      'workshop',
+    await screen.getByRole('tab', { name: 'Sobota' }).click();
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Detail programu: Růst bez zkratek',
+        }),
+      )
+      .toBeVisible();
+    expect(
+      screen
+        .getByRole('link', {
+          name: 'Detail programu: Otevření konference',
+        })
+        .elements(),
+    ).toHaveLength(0);
+    expect(new URL(window.location.href).searchParams.get('day')).toBe(
+      contentFixtureIds.saturday,
     );
+    expect(new URL(window.location.href).searchParams.get('type')).toBeNull();
+  });
+
+  it('shows one static-site coaching slot and defers the coach choice to its detail', async () => {
+    const fixture = coachingProgram;
+    const screen = await renderComponent(
+      <ProgramView eventId={fixture.eventId} api={apiFor(fixture)} />,
+    );
+
+    const coachingLinks = screen
+      .getByRole('link', { name: 'Detail programu: Koučovací sloty' })
+      .elements();
+    expect(coachingLinks).toHaveLength(1);
+    expect(screen.getByText('Koučink – Radim Roček').elements()).toHaveLength(
+      0,
+    );
+    expect(
+      screen.getByText('Koučink – Stanislava Maunová').elements(),
+    ).toHaveLength(0);
+    expect(coachingLinks[0]?.getAttribute('href')).toContain('coaching=choose');
+    expect(
+      Array.from(
+        screen.container.querySelectorAll('.program-calendar__stage-head h3'),
+      ).filter(({ textContent }) => textContent === 'Koučovací zóna'),
+    ).toHaveLength(1);
+
+    await screen.unmount();
+    const detail = await renderComponent(
+      <SessionView
+        chooseCoach
+        eventId={fixture.eventId}
+        sessionId={coachingIds.radim}
+        api={apiFor(fixture)}
+      />,
+    );
+
+    await expect
+      .element(
+        detail.getByRole('heading', { level: 1, name: 'Koučovací slot' }),
+      )
+      .toBeVisible();
+    expect(
+      detail.getByRole('link', { name: 'Přidat tento bod' }).elements(),
+    ).toHaveLength(0);
+    await detail
+      .getByRole('button', { name: /Radim Roček.*Vybrat kouče/ })
+      .click();
+    await expect
+      .element(detail.getByRole('link', { name: 'Přidat tento bod' }))
+      .toHaveAttribute(
+        'href',
+        `/api/v1/events/${fixture.eventId}/program/${coachingIds.radim}/calendar.ics`,
+      );
+    await expect
+      .element(
+        detail.getByRole('button', {
+          name: /Stanislava Maunová.*Vybrat kouče/,
+        }),
+      )
+      .toBeVisible();
+    await expectComponentToPassAxe(detail.container);
   });
 
   it('renders explicit empty and offline recovery states with touch targets', async () => {
@@ -83,6 +249,37 @@ describe('CS-CONTENT-01 participant UI', () => {
     expect(retry).toHaveBeenCalledOnce();
     const bounds = await action.element().getBoundingClientRect();
     expect(bounds.height).toBeGreaterThanOrEqual(44);
+  });
+
+  it('offers a portable calendar export on the program detail', async () => {
+    const fixture = participantProgramFixtures.happy!;
+    const session = fixture.program.sessions[0]!;
+    const screen = await renderComponent(
+      <SessionView
+        eventId={fixture.eventId}
+        sessionId={session.id}
+        api={apiFor(fixture)}
+      />,
+    );
+
+    await expect
+      .element(screen.getByText(/Google Kalendáři, Apple Kalendáři/))
+      .toBeVisible();
+    const exportLink = screen
+      .getByRole('link', { name: 'Přidat tento bod' })
+      .element();
+    expect(exportLink.getAttribute('href')).toBe(
+      `/api/v1/events/${fixture.eventId}/program/${session.id}/calendar.ics`,
+    );
+    expect(exportLink.getAttribute('download')).toBe(
+      `byzon-2026-${session.slug}.ics`,
+    );
+    const bounds = exportLink.getBoundingClientRect();
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
   });
 
   it('maps an obfuscated server permission response to safe participant copy', async () => {
@@ -229,6 +426,62 @@ describe('CS-CONTENT-01 participant UI', () => {
           `/app/recnici/${speakerSlug}`,
         )}`,
       );
+  });
+
+  it('shows the published speaker medallion and all configured social links', async () => {
+    const speaker = participantContentFixtures.happy!.content.speakers[0]!;
+    const screen = await renderComponent(
+      <SpeakerDetail
+        eventId={participantContentFixtures.happy!.eventId}
+        slug={speaker.slug}
+        api={apiFor(participantContentFixtures.happy)}
+      />,
+    );
+
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: `${speaker.firstName} ${speaker.lastName}`,
+        }),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Instagram' }))
+      .toHaveAttribute('href', speaker.instagramUrl!);
+    await expect
+      .element(screen.getByRole('link', { name: 'Facebook' }))
+      .toHaveAttribute('href', speaker.facebookUrl!);
+  });
+
+  it('links the speaker to their published program item', async () => {
+    const speaker = participantContentFixtures.happy!.content.speakers[0]!;
+    const session = participantProgramFixtures.happy!.program.sessions.find(
+      (item) => item.speakerIds?.includes(speaker.id),
+    )!;
+    const screen = await renderComponent(
+      <SpeakerDetail
+        eventId={participantContentFixtures.happy!.eventId}
+        slug={speaker.slug}
+        api={contentAndProgramApi}
+      />,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { level: 2, name: 'V programu' }))
+      .toBeVisible();
+    const link = screen.getByRole('link', {
+      name: `Detail bodu programu: ${session.title}`,
+    });
+    await expect
+      .element(link)
+      .toHaveAttribute('href', `/app/program/${session.id}`);
+    await expect.element(screen.getByText(session.summary!)).toBeVisible();
+    const bounds = await link.element().getBoundingClientRect();
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
+    await expectComponentToPassAxe(screen.container);
   });
 
   it('wraps long Czech practical content without horizontal overflow', async () => {

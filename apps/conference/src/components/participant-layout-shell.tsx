@@ -12,18 +12,25 @@ import {
   ParticipantShellNavigation,
   type ParticipantShellNavigationMode,
 } from './participant-shell-navigation';
+import { ParticipantNotificationCenter } from './participant-notification-center';
 import { RouteFocus } from './route-focus';
 
 export const ParticipantLayoutShell = ({
   accountApi,
   accountScope,
+  announcementApi,
+  announcementPollIntervalMs,
   children,
   navigationMode = 'active',
+  notificationsEnabled = false,
 }: {
   readonly accountApi?: ApiPort;
   readonly accountScope: ParticipantAccountScope;
+  readonly announcementApi?: ApiPort;
+  readonly announcementPollIntervalMs?: number;
   readonly children: ReactNode;
   readonly navigationMode?: ParticipantShellNavigationMode;
+  readonly notificationsEnabled?: boolean;
 }) => {
   const accountScopeKey =
     accountScope.kind === 'active'
@@ -38,6 +45,18 @@ export const ParticipantLayoutShell = ({
       scope={accountScope}
     >
       <RouteFocus />
+      {notificationsEnabled &&
+      accountScope.kind === 'active' &&
+      (navigationMode === 'active' || navigationMode === 'active-preview') ? (
+        <ParticipantNotificationCenter
+          eventId={accountScope.eventId}
+          key={accountScope.eventId}
+          {...(announcementApi ? { api: announcementApi } : {})}
+          {...(announcementPollIntervalMs !== undefined
+            ? { pollIntervalMs: announcementPollIntervalMs }
+            : {})}
+        />
+      ) : null}
       <ParticipantShellNavigation mode={navigationMode} />
       <div className="participant-shell-content">{children}</div>
     </ParticipantAccountResourceProvider>

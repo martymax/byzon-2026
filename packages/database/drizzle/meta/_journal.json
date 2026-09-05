@@ -148,6 +148,48 @@
       "when": 1788316966440,
       "tag": "0020_goofy_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788346282162,
+      "tag": "0021_nostalgic_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788352028069,
+      "tag": "0022_backfill_simpleshop_participant_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788370200000,
+      "tag": "0023_enable_byzon_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788383454000,
+      "tag": "0024_enable_byzon_networking",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788390000000,
+      "tag": "0025_group_tomas_ryza_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788393129000,
+      "tag": "0026_one_coaching_reservation",
+      "breakpoints": true
     }
   ]
 }

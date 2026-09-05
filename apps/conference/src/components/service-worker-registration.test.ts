@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   APP_SERVICE_WORKER_VERSION,
+  INSTALL_PROMPT_DISMISSAL_MS,
+  INSTALL_PROMPT_DISMISSAL_STORAGE_KEY,
+  isInstallPromptDismissed,
+  rememberInstallPromptDismissal,
   requestServiceWorkerVersion,
   serviceWorkerNotice,
   shouldEnableAppServiceWorker,
@@ -181,5 +185,45 @@ describe('service worker notice priority', () => {
         updateAvailable: false,
       }),
     ).toBe('none');
+  });
+});
+
+describe('install prompt dismissal', () => {
+  it('suppresses the prompt until the 30-day dismissal expires', () => {
+    const now = Date.UTC(2026, 8, 2, 12);
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+
+    expect(isInstallPromptDismissed(storage, now)).toBe(false);
+    rememberInstallPromptDismissal(storage, now);
+    expect(values.get(INSTALL_PROMPT_DISMISSAL_STORAGE_KEY)).toBe(
+      String(now + INSTALL_PROMPT_DISMISSAL_MS),
+    );
+    expect(
+      isInstallPromptDismissed(storage, now + INSTALL_PROMPT_DISMISSAL_MS - 1),
+    ).toBe(true);
+    expect(
+      isInstallPromptDismissed(storage, now + INSTALL_PROMPT_DISMISSAL_MS),
+    ).toBe(false);
+  });
+
+  it('fails open when browser storage is unavailable', () => {
+    expect(
+      isInstallPromptDismissed({
+        getItem: () => {
+          throw new DOMException('Storage unavailable');
+        },
+      }),
+    ).toBe(false);
+    expect(() =>
+      rememberInstallPromptDismissal({
+        setItem: () => {
+          throw new DOMException('Storage unavailable');
+        },
+      }),
+    ).not.toThrow();
   });
 });

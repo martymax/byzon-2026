@@ -104,6 +104,8 @@ export const mapParticipantAgendaMutationFailure = (
       return { kind: 'error', retry: 'mutation' };
     case 'problem':
       switch (failure.problem.code) {
+        case 'RESERVATION_CONFLICT':
+          return null;
         case 'CAPACITY_FULL':
           return {
             kind: 'capacity_full',

@@ -66,6 +66,7 @@ const participantActivationStaticReturnToValues = [
   '/app',
   '/app/agenda',
   '/app/informace',
+  '/app/networking',
   '/app/nastaveni',
   '/app/oznameni',
   '/app/oznameni?view=unread',
@@ -90,7 +91,7 @@ const participantActivationStaticReturnToSet = new Set<string>(
   participantActivationStaticReturnToValues,
 );
 const participantActivationDetailReturnToPattern =
-  /^\/app\/(program|oznameni)\/([^/?]+)(\?from=agenda)?$/;
+  /^\/app\/(program|oznameni|networking)\/([^/?]+)(\?from=agenda)?$/;
 const participantSpeakerReturnToPattern =
   /^\/app\/recnici\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 

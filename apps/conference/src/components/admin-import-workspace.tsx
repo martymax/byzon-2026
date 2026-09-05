@@ -2,6 +2,7 @@
 
 import {
   canApplyTicketImportPreview,
+  isTicketImportRowSelectable,
   ticketImportApplyRequestSchema,
   type TicketImportApplyRequest,
   type TicketImportApplyResponse,
@@ -11,7 +12,7 @@ import {
 } from '@byzon/domain/contracts/ticket-import';
 import { AdminTechnicalDetails } from '@byzon/ui';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   requestAdminTicketImportApply,
@@ -37,7 +38,7 @@ const statusLabels: Record<TicketImportRowStatus, string> = {
   new: 'Nová vstupenka',
   unchanged: 'Beze změny',
   status_changed: 'Změněný stav',
-  excluded: 'Vyžaduje opravu',
+  excluded: 'Nelze importovat',
   conflict: 'Vyžaduje opravu',
   unknown: 'Nerozpoznáno',
 };
@@ -52,7 +53,7 @@ const statusClass: Record<TicketImportRowStatus, string> = {
 };
 
 const filterOptions = [
-  ['needs_attention', 'Vyžaduje opravu'],
+  ['needs_attention', 'Nelze importovat / k ruční kontrole'],
   ['all', 'Vše'],
   ['new', 'Nové'],
   ['unchanged', 'Beze změny'],
@@ -134,19 +135,6 @@ const checkedAtFormatter = new Intl.DateTimeFormat('cs-CZ', {
   timeZone: 'Europe/Prague',
 });
 
-const addedTicketLabel = (count: number): string =>
-  count === 1
-    ? '1 vstupenku'
-    : count >= 2 && count <= 4
-      ? `${count} vstupenky`
-      : `${count} vstupenek`;
-
-const unchangedTicketLabel = (count: number): string =>
-  count === 1 ? '1 zůstane beze změny' : `${count} zůstane beze změny`;
-
-const changedTicketLabel = (count: number): string =>
-  count === 1 ? '1 vstupenky' : `${count} vstupenek`;
-
 const useCompactDataView = (): boolean => {
   const [compact, setCompact] = useState(false);
 
@@ -184,6 +172,7 @@ export const AdminImportWorkspace = ({
   );
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
+  const [selectedRowIds, setSelectedRowIds] = useState<readonly string[]>([]);
   const [filter, setFilter] = useState<ImportFilter>('all');
   const [pageIndex, setPageIndex] = useState(0);
   const [reason, setReason] = useState('');
@@ -210,6 +199,18 @@ export const AdminImportWorkspace = ({
       ) ?? [],
     [filter, preview],
   );
+  const selectableRows = useMemo(
+    () => preview?.rows.filter(isTicketImportRowSelectable) ?? [],
+    [preview],
+  );
+  const selectedRowIdSet = useMemo(
+    () => new Set(selectedRowIds),
+    [selectedRowIds],
+  );
+  const selectedRows = useMemo(
+    () => selectableRows.filter(({ rowId }) => selectedRowIdSet.has(rowId)),
+    [selectableRows, selectedRowIdSet],
+  );
   const pageCount = Math.max(
     1,
     Math.ceil(filteredRows.length / importPageSize),
@@ -221,6 +222,18 @@ export const AdminImportWorkspace = ({
         (pageIndex + 1) * importPageSize,
       ),
     [filteredRows, pageIndex],
+  );
+  const displayRows = useMemo(
+    () =>
+      visibleRows.map((row) => ({
+        companyPosition: companyAndPosition(row),
+        issueMessage:
+          row.issues.map(({ message }) => message).join('; ') || 'Bez problému',
+        orderSummary: orderTicketSummary(row),
+        purchaseDate: formatPurchaseDate(row.purchasedOn),
+        row,
+      })),
+    [visibleRows],
   );
   const firstVisibleRow =
     filteredRows.length === 0 ? 0 : pageIndex * importPageSize + 1;
@@ -235,11 +248,14 @@ export const AdminImportWorkspace = ({
         previewId: preview.previewId,
         previewVersion: preview.previewVersion,
         expectedImpact: preview.summary,
+        selectedRowIds: selectedRows.map(({ rowId }) => rowId),
         reason,
       })
     : null;
   const canPrepareApply =
-    preview !== null && canApplyTicketImportPreview(preview);
+    preview !== null &&
+    canApplyTicketImportPreview(preview) &&
+    selectedRows.length > 0;
   const applyValidationFailed =
     attempted && requestCandidate?.success === false;
 
@@ -257,6 +273,7 @@ export const AdminImportWorkspace = ({
     setErrorScope(null);
     setPreview(null);
     setReport(null);
+    setSelectedRowIds([]);
     setPending(null);
     setAmbiguous(false);
     setPageIndex(0);
@@ -281,14 +298,7 @@ export const AdminImportWorkspace = ({
         setPreview(result.data);
         setLastCheckedAt(result.data.createdAt);
         setPreviewState('validated');
-        setFilter(
-          result.data.summary.excluded +
-            result.data.summary.conflict +
-            result.data.summary.unknown >
-            0
-            ? 'needs_attention'
-            : 'all',
-        );
+        setFilter('all');
         setPageIndex(0);
         setReason('');
         setAttempted(false);
@@ -314,7 +324,7 @@ export const AdminImportWorkspace = ({
 
   const prepareApply = () => {
     setAttempted(true);
-    if (!requestCandidate?.success || !canApplyTicketImportPreview(preview!)) {
+    if (!requestCandidate?.success || !canPrepareApply) {
       return;
     }
     setPending({
@@ -377,6 +387,7 @@ export const AdminImportWorkspace = ({
   const backToSource = () => {
     setPreview(null);
     setReport(null);
+    setSelectedRowIds([]);
     setPending(null);
     setConfirming(false);
     setAmbiguous(false);
@@ -391,7 +402,7 @@ export const AdminImportWorkspace = ({
 
   const currentStep = report
     ? 4
-    : preview?.source.kind === 'file'
+    : confirming || busy === 'apply'
       ? 3
       : preview
         ? 2
@@ -399,12 +410,23 @@ export const AdminImportWorkspace = ({
   const blockingCount = preview
     ? preview.summary.conflict + preview.summary.unknown
     : 0;
-  const noChanges = preview
-    ? preview.summary.new === 0 && preview.summary.statusChanged === 0
-    : false;
+  const noChanges = preview ? selectableRows.length === 0 : false;
   const impactText = preview
-    ? `Přidá ${addedTicketLabel(preview.summary.new)}, změní stav u ${changedTicketLabel(preview.summary.statusChanged)}, ${unchangedTicketLabel(preview.summary.unchanged)}.`
+    ? `Importuje ${formatCzechCount(selectedRows.length, adminCountForms.attendee)}. Ostatní záznamy zůstanou beze změny.`
     : '';
+
+  const toggleRowSelection = (rowId: string) => {
+    setSelectedRowIds((current) =>
+      current.includes(rowId)
+        ? current.filter((selectedId) => selectedId !== rowId)
+        : [...current, rowId],
+    );
+    setReport(null);
+    setPending(null);
+    setAttempted(false);
+    setError(null);
+    setErrorScope(null);
+  };
 
   return (
     <div className={styles.stack}>
@@ -412,8 +434,8 @@ export const AdminImportWorkspace = ({
         <p className={styles.eyebrow}>Účastníci a vstupenky</p>
         <h1>Aktualizace vstupenek</h1>
         <p>
-          Načtěte změny ze SimpleShopu, zkontrolujte jejich dopad a použijte jen
-          přesně ověřenou dávku. Samotné načtení nic nemění.
+          Načtěte účastníky ze SimpleShopu, vyberte jednoho nebo více a
+          importujte jen označené záznamy. Samotné načtení nic nemění.
         </p>
       </header>
 
@@ -421,8 +443,8 @@ export const AdminImportWorkspace = ({
         <ol className={styles.importSteps}>
           {[
             'Načíst ze SimpleShopu',
-            'Zkontrolovat změny',
-            'Potvrdit změny',
+            'Vybrat účastníky',
+            'Potvrdit import',
             'Výsledek',
           ].map((label, index) => {
             const step = index + 1;
@@ -531,22 +553,23 @@ export const AdminImportWorkspace = ({
                 Opravu ve zdroji prodeje vyžaduje:{' '}
                 {formatCzechCount(blockingCount, adminCountForms.record)}.
               </strong>{' '}
-              Dokud je neopravíte a změny znovu nenačtete, dávku nelze použít.
+              Tyto záznamy nelze vybrat, bezpečné nové účastníky ale můžete
+              importovat samostatně.
             </div>
           ) : noChanges ? (
             <p className={styles.callout} role="status">
-              Od poslední kontroly nejsou žádné nové změny.
+              V SimpleShopu nejsou žádní noví účastníci k importu.
             </p>
           ) : (
             <p className={styles.callout} role="status">
-              Kontrola je hotová. Před pokračováním projděte souhrn i jednotlivé
-              záznamy.
+              Kontrola je hotová. Označte nové účastníky, které chcete
+              importovat.
             </p>
           )}
 
           <div className={styles.summaryGrid} aria-label="Souhrn změn">
             <div className={styles.metric}>
-              <small>Nové vstupenky</small>
+              <small>Lze importovat</small>
               <strong>{preview.summary.new}</strong>
             </div>
             <div className={styles.metric}>
@@ -558,11 +581,11 @@ export const AdminImportWorkspace = ({
               <strong>{preview.summary.statusChanged}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Vyžaduje opravu</small>
+              <small>Nevhodné k importu</small>
               <strong>{preview.summary.excluded}</strong>
             </div>
             <div className={styles.metric}>
-              <small>Konflikt / nerozpoznáno</small>
+              <small>Ke kontrole</small>
               <strong>
                 {preview.summary.conflict} / {preview.summary.unknown}
               </strong>
@@ -585,6 +608,61 @@ export const AdminImportWorkspace = ({
               ))}
             </select>
           </label>
+          {selectableRows.length > 0 ? (
+            <div className={styles.importSelectionBar}>
+              <div aria-live="polite" role="status">
+                <strong>
+                  Vybráno{' '}
+                  {formatCzechCount(
+                    selectedRows.length,
+                    adminCountForms.attendee,
+                  )}
+                </strong>
+                <span>
+                  Z{' '}
+                  {formatCzechCount(
+                    selectableRows.length,
+                    adminCountForms.attendee,
+                  )}{' '}
+                  dostupných k importu
+                </span>
+              </div>
+              <div className={styles.actionRow}>
+                <button
+                  className={styles.secondaryButton}
+                  disabled={
+                    busy !== null ||
+                    pending !== null ||
+                    report !== null ||
+                    selectedRows.length === selectableRows.length
+                  }
+                  onClick={() => {
+                    setSelectedRowIds(selectableRows.map(({ rowId }) => rowId));
+                    setAttempted(false);
+                  }}
+                  type="button"
+                >
+                  Vybrat všechny k importu
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  disabled={
+                    busy !== null ||
+                    pending !== null ||
+                    report !== null ||
+                    selectedRows.length === 0
+                  }
+                  onClick={() => {
+                    setSelectedRowIds([]);
+                    setAttempted(false);
+                  }}
+                  type="button"
+                >
+                  Zrušit výběr
+                </button>
+              </div>
+            </div>
+          ) : null}
           <p className={styles.callout}>
             Údaje slouží pouze ke kontrole oprávněným administrátorem.
             Neukládají se do cache prohlížeče a načtení se zapisuje do historie
@@ -596,70 +674,100 @@ export const AdminImportWorkspace = ({
                 className={styles.cardList}
                 aria-label="Záznamy změn vstupenek"
               >
-                {visibleRows.map((row) => (
-                  <li className={styles.dataCard} key={row.rowId}>
-                    <div className={styles.panelHeader}>
-                      <strong>
-                        Záznam #{row.sourceRowNumber} ·{' '}
-                        {row.contactName ?? 'Jméno neuvedeno'}
-                      </strong>
-                      <span
-                        className={`${styles.statusBadge} ${statusClass[row.status]}`}
-                      >
-                        {statusLabels[row.status]}
-                      </span>
-                    </div>
-                    <dl>
-                      <dt>E-mail</dt>
-                      <dd>{row.contactEmail ?? 'Neuveden'}</dd>
-                      <dt>Zdroj identity</dt>
-                      <dd>{identitySourceLabels[row.identitySource]}</dd>
-                      {companyAndPosition(row) ? (
-                        <>
-                          <dt>Firma / pozice</dt>
-                          <dd>{companyAndPosition(row)}</dd>
-                        </>
-                      ) : null}
-                      {row.contactPhone ? (
-                        <>
-                          <dt>Telefon</dt>
-                          <dd>{row.contactPhone}</dd>
-                        </>
-                      ) : null}
-                      <dt>Vstupenka</dt>
-                      <dd>{row.sourceTicketId}</dd>
-                      <dt>Doklad / objednávka</dt>
-                      <dd>
-                        {row.sourceOrderId} · {orderTicketSummary(row)}
-                      </dd>
-                      <dt>Reference kontroly</dt>
-                      <dd>•{row.referenceSuffix}</dd>
-                      <dt>Datum nákupu</dt>
-                      <dd>
-                        <time dateTime={row.purchasedOn}>
-                          {formatPurchaseDate(row.purchasedOn)}
-                        </time>
-                      </dd>
-                      <dt>Slevový kupón</dt>
-                      <dd>{row.discountCoupon ?? 'Bez slevového kupónu'}</dd>
-                      <dt>Co se změní</dt>
-                      <dd>
-                        {formatTicketState(row.currentState)} →{' '}
-                        {formatTicketState(row.incomingState)}
-                      </dd>
-                      <dt>Výsledek kontroly</dt>
-                      <dd>
-                        {statusLabels[row.status]} ·{' '}
-                        {sourceStatusLabels[row.sourceStatus]}
-                      </dd>
-                      <dt>Poznámka</dt>
-                      <dd>
-                        {row.issues.map(({ message }) => message).join('; ') ||
-                          'Bez problému'}
-                      </dd>
-                    </dl>
-                  </li>
-                ))}
+                {displayRows.map(
+                  ({
+                    companyPosition,
+                    issueMessage,
+                    orderSummary,
+                    purchaseDate,
+                    row,
+                  }) => (
+                    <li
+                      className={styles.dataCard}
+                      data-selected={
+                        selectedRowIdSet.has(row.rowId) || undefined
+                      }
+                      key={row.rowId}
+                    >
+                      <div className={styles.panelHeader}>
+                        <strong>
+                          Záznam #{row.sourceRowNumber} ·{' '}
+                          {row.contactName ?? 'Jméno neuvedeno'}
+                        </strong>
+                        <span
+                          className={`${styles.statusBadge} ${statusClass[row.status]}`}
+                        >
+                          {statusLabels[row.status]}
+                        </span>
+                      </div>
+                      {isTicketImportRowSelectable(row) ? (
+                        <label className={styles.importCardChoice}>
+                          <input
+                            aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
+                            checked={selectedRowIdSet.has(row.rowId)}
+                            disabled={
+                              busy !== null ||
+                              pending !== null ||
+                              report !== null
+                            }
+                            onChange={() => toggleRowSelection(row.rowId)}
+                            type="checkbox"
+                          />
+                          <span>Importovat tohoto účastníka</span>
+                        </label>
+                      ) : (
+                        <p className={styles.helper}>
+                          {row.status === 'unchanged'
+                            ? 'Účastník už byl importován.'
+                            : 'Tento záznam nelze importovat.'}
+                        </p>
+                      )}
+                      <dl>
+                        <dt>E-mail</dt>
+                        <dd>{row.contactEmail ?? 'Neuveden'}</dd>
+                        <dt>Zdroj identity</dt>
+                        <dd>{identitySourceLabels[row.identitySource]}</dd>
+                        {companyPosition ? (
+                          <>
+                            <dt>Firma / pozice</dt>
+                            <dd>{companyPosition}</dd>
+                          </>
+                        ) : null}
+                        {row.contactPhone ? (
+                          <>
+                            <dt>Telefon</dt>
+                            <dd>{row.contactPhone}</dd>
+                          </>
+                        ) : null}
+                        <dt>Vstupenka / doklad</dt>
+                        <dd>
+                          {row.sourceTicketId} · {row.sourceOrderId} ·{' '}
+                          {orderSummary} · kontrola •{row.referenceSuffix}
+                        </dd>
+                        <dt>Nákup</dt>
+                        <dd>
+                          <time dateTime={row.purchasedOn}>{purchaseDate}</time>
+                          {' · '}
+                          {row.discountCoupon
+                            ? `Kupón ${row.discountCoupon}`
+                            : 'Bez slevového kupónu'}
+                        </dd>
+                        <dt>Co se změní</dt>
+                        <dd>
+                          {formatTicketState(row.currentState)} →{' '}
+                          {formatTicketState(row.incomingState)}
+                        </dd>
+                        <dt>Výsledek kontroly</dt>
+                        <dd>
+                          {statusLabels[row.status]} ·{' '}
+                          {sourceStatusLabels[row.sourceStatus]}
+                        </dd>
+                        <dt>Poznámka</dt>
+                        <dd>{issueMessage}</dd>
+                      </dl>
+                    </li>
+                  ),
+                )}
               </ul>
             </div>
           ) : (
@@ -672,6 +780,7 @@ export const AdminImportWorkspace = ({
                 <caption>Záznamy načtené ze SimpleShopu ke kontrole.</caption>
                 <thead>
                   <tr>
+                    <th scope="col">Importovat</th>
                     <th scope="col">Záznam</th>
                     <th scope="col">Účastník</th>
                     <th scope="col">Nákup</th>
@@ -681,57 +790,94 @@ export const AdminImportWorkspace = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row) => (
-                    <tr key={row.rowId}>
-                      <td className={styles.referenceCell}>
-                        <span>
-                          #{row.sourceRowNumber} · •{row.referenceSuffix}
-                        </span>
-                        <small>Vstupenka {row.sourceTicketId}</small>
-                        <small>Doklad {row.sourceOrderId}</small>
-                        <small>{orderTicketSummary(row)}</small>
-                      </td>
-                      <td className={styles.identityCell}>
-                        <strong>{row.contactName ?? 'Jméno neuvedeno'}</strong>
-                        <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
-                        <small>
-                          {identitySourceLabels[row.identitySource]}
-                        </small>
-                        {companyAndPosition(row) ? (
-                          <small>{companyAndPosition(row)}</small>
-                        ) : null}
-                        {row.contactPhone ? (
-                          <small>{row.contactPhone}</small>
-                        ) : null}
-                      </td>
-                      <td className={styles.purchaseCell}>
-                        <time dateTime={row.purchasedOn}>
-                          {formatPurchaseDate(row.purchasedOn)}
-                        </time>
-                        <small>
-                          {row.discountCoupon
-                            ? `Kupón ${row.discountCoupon}`
-                            : 'Bez slevového kupónu'}
-                        </small>
-                      </td>
-                      <td>
-                        {formatTicketState(row.currentState)} →{' '}
-                        {formatTicketState(row.incomingState)}
-                      </td>
-                      <td>
-                        <span
-                          className={`${styles.statusBadge} ${statusClass[row.status]}`}
-                        >
-                          {statusLabels[row.status]}
-                        </span>
-                        <small>{sourceStatusLabels[row.sourceStatus]}</small>
-                      </td>
-                      <td>
-                        {row.issues.map(({ message }) => message).join('; ') ||
-                          'Bez problému'}
-                      </td>
-                    </tr>
-                  ))}
+                  {displayRows.map(
+                    ({
+                      companyPosition,
+                      issueMessage,
+                      orderSummary,
+                      purchaseDate,
+                      row,
+                    }) => (
+                      <tr
+                        data-selected={
+                          selectedRowIdSet.has(row.rowId) || undefined
+                        }
+                        key={row.rowId}
+                      >
+                        <td className={styles.importSelectionCell}>
+                          {isTicketImportRowSelectable(row) ? (
+                            <label className={styles.importRowChoice}>
+                              <input
+                                aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
+                                checked={selectedRowIdSet.has(row.rowId)}
+                                disabled={
+                                  busy !== null ||
+                                  pending !== null ||
+                                  report !== null
+                                }
+                                onChange={() => toggleRowSelection(row.rowId)}
+                                type="checkbox"
+                              />
+                              <span className={styles.visuallyHidden}>
+                                Importovat
+                              </span>
+                            </label>
+                          ) : (
+                            <small>
+                              {row.status === 'unchanged'
+                                ? 'Již importováno'
+                                : 'Nelze importovat'}
+                            </small>
+                          )}
+                        </td>
+                        <td className={styles.referenceCell}>
+                          <span>
+                            #{row.sourceRowNumber} · •{row.referenceSuffix}
+                          </span>
+                          <small>
+                            Vstupenka {row.sourceTicketId} · Doklad{' '}
+                            {row.sourceOrderId} · {orderSummary}
+                          </small>
+                        </td>
+                        <td className={styles.identityCell}>
+                          <strong>
+                            {row.contactName ?? 'Jméno neuvedeno'}
+                          </strong>
+                          <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
+                          <small>
+                            {identitySourceLabels[row.identitySource]}
+                          </small>
+                          {companyPosition ? (
+                            <small>{companyPosition}</small>
+                          ) : null}
+                          {row.contactPhone ? (
+                            <small>{row.contactPhone}</small>
+                          ) : null}
+                        </td>
+                        <td className={styles.purchaseCell}>
+                          <time dateTime={row.purchasedOn}>{purchaseDate}</time>
+                          <small>
+                            {row.discountCoupon
+                              ? `Kupón ${row.discountCoupon}`
+                              : 'Bez slevového kupónu'}
+                          </small>
+                        </td>
+                        <td>
+                          {formatTicketState(row.currentState)} →{' '}
+                          {formatTicketState(row.incomingState)}
+                        </td>
+                        <td>
+                          <span
+                            className={`${styles.statusBadge} ${statusClass[row.status]}`}
+                          >
+                            {statusLabels[row.status]}
+                          </span>
+                          <small>{sourceStatusLabels[row.sourceStatus]}</small>
+                        </td>
+                        <td>{issueMessage}</td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
             </div>
@@ -745,7 +891,9 @@ export const AdminImportWorkspace = ({
               <button
                 className={styles.secondaryButton}
                 disabled={pageIndex === 0}
-                onClick={() => setPageIndex((current) => current - 1)}
+                onClick={() =>
+                  startTransition(() => setPageIndex((current) => current - 1))
+                }
                 type="button"
               >
                 Předchozí záznamy
@@ -757,7 +905,9 @@ export const AdminImportWorkspace = ({
               <button
                 className={styles.secondaryButton}
                 disabled={pageIndex >= pageCount - 1}
-                onClick={() => setPageIndex((current) => current + 1)}
+                onClick={() =>
+                  startTransition(() => setPageIndex((current) => current + 1))
+                }
                 type="button"
               >
                 Další záznamy
@@ -806,9 +956,9 @@ export const AdminImportWorkspace = ({
           </AdminTechnicalDetails>
 
           {!canApplyTicketImportPreview(preview) ? (
-            <p className={styles.warning} role="alert">
-              Dávka obsahuje konflikt nebo nerozpoznaný stav. Opravte jej ve
-              zdroji a změny znovu načtěte.
+            <p className={styles.warning} role="status">
+              V této kontrole není žádný nový účastník, kterého lze importovat.
+              Problémové záznamy opravte v SimpleShopu a načtěte je znovu.
             </p>
           ) : null}
           {canApplyTicketImportPreview(preview) && !report ? (
@@ -817,8 +967,14 @@ export const AdminImportWorkspace = ({
               className={styles.importConfirmSection}
             >
               <p className={styles.eyebrow}>Krok 3</p>
-              <h2 id="ticket-confirm-title">Potvrdit změny</h2>
-              <p>{impactText}</p>
+              <h2 id="ticket-confirm-title">Potvrdit import</h2>
+              {selectedRows.length > 0 ? (
+                <p>{impactText}</p>
+              ) : (
+                <p className={styles.callout} role="status">
+                  Nejprve v seznamu vyberte alespoň jednoho účastníka.
+                </p>
+              )}
               {applyValidationFailed || (error && errorScope === 'apply') ? (
                 <section
                   className={styles.errorSummary}
@@ -826,7 +982,7 @@ export const AdminImportWorkspace = ({
                   role="alert"
                   tabIndex={-1}
                 >
-                  <h3>Změny zatím nelze potvrdit</h3>
+                  <h3>Import zatím nelze potvrdit</h3>
                   <p id="admin-import-apply-error">
                     {error && errorScope === 'apply'
                       ? error
@@ -835,7 +991,7 @@ export const AdminImportWorkspace = ({
                 </section>
               ) : null}
               <label className={styles.field} htmlFor="admin-import-reason">
-                <span>Důvod aktualizace</span>
+                <span>Důvod importu</span>
                 <textarea
                   aria-describedby={
                     applyValidationFailed || errorScope === 'apply'
@@ -858,7 +1014,7 @@ export const AdminImportWorkspace = ({
                 onClick={prepareApply}
                 type="button"
               >
-                Použít změny
+                Importovat vybrané ({selectedRows.length})
               </button>
               {ambiguous && pending ? (
                 <button
@@ -880,13 +1036,19 @@ export const AdminImportWorkspace = ({
           <p className={styles.eyebrow}>Krok 4</p>
           <h2>
             {report.outcome === 'already_applied'
-              ? 'Server potvrdil dříve dokončenou aktualizaci'
-              : 'Změny vstupenek byly použity'}
+              ? 'Server potvrdil dříve dokončený import'
+              : 'Vybraní účastníci byli importováni'}
           </h2>
           <p>
-            Přidáno {report.result.created}, změněn stav{' '}
-            {report.result.statusChanged}, beze změny {report.result.unchanged}.
+            Importováno{' '}
+            {formatCzechCount(report.result.created, adminCountForms.attendee)}.
           </p>
+          {preview.summary.new > report.result.created ? (
+            <p>
+              Nevybraní noví účastníci zůstali beze změny a znovu se objeví při
+              dalším načtení ze SimpleShopu.
+            </p>
+          ) : null}
           <Link href="/admin/ucastnici" prefetch={false}>
             Zobrazit účastníky
           </Link>
@@ -903,16 +1065,16 @@ export const AdminImportWorkspace = ({
 
       {confirming && pending && preview ? (
         <AdminConfirmDialog
-          acknowledgement="Zkontroloval/a jsem uvedený dopad a správnost změn."
-          confirmLabel="Použít změny"
-          description="Server použije právě zkontrolovanou verzi změn. Pokud už není aktuální, operaci bezpečně odmítne."
+          acknowledgement="Zkontroloval/a jsem vybrané účastníky a chci je importovat."
+          confirmLabel={`Importovat vybrané (${selectedRows.length})`}
+          description="Server importuje pouze označené účastníky z právě zkontrolované verze. Pokud už není aktuální, operaci bezpečně odmítne."
           impact={<p>{impactText}</p>}
           onConfirm={() => void submitPending(pending)}
           onDismiss={() => {
             setConfirming(false);
             setPending(null);
           }}
-          title="Použít tyto změny vstupenek?"
+          title="Importovat vybrané účastníky?"
         />
       ) : null}
     </div>

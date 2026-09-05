@@ -14,10 +14,10 @@ export const ParticipantAgendaCalendarExport = ({
   >
     <div>
       <p className="agenda-section-kicker">Kalendář</p>
-      <h2 id="agenda-calendar-heading">Vzít osobní plán s sebou</h2>
+      <h2 id="agenda-calendar-heading">Přidat celou agendu do kalendáře</h2>
       <p>
-        Soubor obsahuje jen aktuální kanonické položky této osobní agendy. Odkaz
-        je stejnopůvodový a při stažení znovu ověří přihlášení.
+        Stáhněte si všechny vybrané body jako soubor .ics pro Google Kalendář,
+        Apple Kalendář nebo Outlook.
       </p>
     </div>
     {calendarExport.state === 'available' ? (
@@ -25,7 +25,7 @@ export const ParticipantAgendaCalendarExport = ({
         download="byzon-2026-moje-agenda.ics"
         href={calendarExport.href}
       >
-        Stáhnout osobní agendu (.ics)
+        Přidat celou agendu
       </ActionLink>
     ) : (
       <p role="status">

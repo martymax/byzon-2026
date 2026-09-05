@@ -312,6 +312,7 @@ export const programSessions = pgTable(
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
     status: sessionStatus('status').default('draft').notNull(),
+    reservationGroupId: uuid('reservation_group_id'),
     capacityMode: capacityMode('capacity_mode').default('none').notNull(),
     capacity: integer('capacity'),
     reservationOpensAt: timestamp('reservation_opens_at', {
@@ -348,6 +349,11 @@ export const programSessions = pgTable(
       foreignColumns: [rooms.eventId, rooms.id],
       name: 'sessions_room_event_fk',
     }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.eventId, table.reservationGroupId],
+      foreignColumns: [table.eventId, table.id],
+      name: 'sessions_reservation_group_event_fk',
+    }).onDelete('restrict'),
     index('sessions_event_id_idx').on(table.eventId),
     index('sessions_event_day_time_idx').on(
       table.eventId,
@@ -359,6 +365,10 @@ export const programSessions = pgTable(
       table.roomId,
       table.startsAt,
     ),
+    index('sessions_event_reservation_group_idx').on(
+      table.eventId,
+      table.reservationGroupId,
+    ),
     check(
       'sessions_time_range_check',
       sql`${table.endsAt} > ${table.startsAt}`,
@@ -368,6 +378,10 @@ export const programSessions = pgTable(
     check(
       'sessions_capacity_policy_check',
       sql`(${table.capacityMode} = 'none' and ${table.capacity} is null) or (${table.capacityMode} <> 'none' and ${table.capacity} is not null and ${table.capacity} > 0)`,
+    ),
+    check(
+      'sessions_reservation_group_policy_check',
+      sql`${table.reservationGroupId} is null or ${table.capacityMode} = 'reservation'`,
     ),
     check(
       'sessions_reservation_window_check',
@@ -399,6 +413,8 @@ export const speakerProfiles = pgTable(
     jobTitle: text('job_title'),
     bioMarkdown: text('bio_markdown'),
     linkedinUrl: text('linkedin_url'),
+    instagramUrl: text('instagram_url'),
+    facebookUrl: text('facebook_url'),
     websiteUrl: text('website_url'),
     photoAssetId: uuid('photo_asset_id'),
     status: contentStatus('status').default('draft').notNull(),

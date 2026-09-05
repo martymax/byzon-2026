@@ -311,10 +311,11 @@ const applyResponse = {
   batchId: ticketImportFixtureIds.batch,
   previewId: ticketImportFixtureIds.cleanPreview,
   previewVersion: 3,
+  selectedRowIds: [ticketImportFixtureIds.rowNew],
   result: {
     created: 1,
-    statusChanged: 1,
-    unchanged: 1,
+    statusChanged: 0,
+    unchanged: 0,
   },
   completedAt: '2026-07-25T12:05:00.000+02:00',
   audit: { auditId: ticketImportFixtureIds.audit },

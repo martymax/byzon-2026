@@ -24,8 +24,10 @@ Hotový frontend neznamená hotový backend, produkční přihlášení, skuteč
 vstupenky, staging UAT ani provozní schválení. UI tyto hranice výslovně
 označuje a u neintegrovaných autoritativních funkcí failne zavřeně.
 Produkční participant shell proto nabízí jen trasy se skutečným serverovým
-protějškem; agenda, oznámení a účetní hub se zpřístupní pouze v explicitním
-frontendovém preview. Stejná hranice platí pro odkazy archivovaného účtu.
+protějškem. Účetní hub, správa osobních údajů, soukromí, relací a dobrovolného
+networkingu jsou produkčně dostupné; agenda a oznámení zůstávají v navigaci
+podle samostatného rollout rozhodnutí. Správa soukromí a relací zůstává
+dostupná i po archivaci akce.
 
 ## 2. Spuštění mockovaného preview
 
@@ -159,8 +161,9 @@ v desktopové tabulce i mobilních kartách. Browser nevytváří `File`, `FormD
 ani multipart request. Produkční `P4-03`/`AUX-13D` po potvrzení přesného dopadu
 a důvodu znovu ověří immutable source snapshot, atomicky vytvoří jen způsobilé
 identity/membershipy a vrátí kanonický report s exact idempotency retry. Ticket
-credential ani automatický e-mail nevzniká. Support pracuje s maskovanými PII,
-POST/no-store search body, current-event guardem, HMACovaným rate limitem,
+credential ani automatický e-mail nevzniká. Support autorizovanému
+administrátorovi ukazuje jméno a celý e-mail, používá POST/no-store search body,
+current-event guard, HMACovaný rate limit,
 odděleným read/write oprávněním, lidskými stavy a akcemi, důvodem, potvrzením,
 idempotencí a výsledným auditem. `AUX-13E` tento řez produkčně zpevnil pro
 legacy ticket `block`/`reactivate`; resend/recovery importované identity čeká
@@ -180,7 +183,7 @@ existující osobu, popsanou roli a serverem povolený pojmenovaný
 event/station/session rozsah. Ruční ID i grant `organizer_admin` jsou skryté;
 grant/revoke má lidské guard chyby, stale reload a exact retry. Produkční
 `AUX-13H` nyní připojuje bounded list, POST/no-store hledání ověřených členů s
-maskovaným kontaktem a serverem pojmenované role-compatible station/session
+celým kontaktním e-mailem a serverem pojmenované role-compatible station/session
 options. Current event, fáze, permission a scope se ověřují i při zápisu;
 konkrétní osoby pro ostrou akci zůstávají personálním UAT rozhodnutím
 `BLOCKER-OPS-01`. Reporty mají čtyři popsané typy, CSV jako výchozí formát,
@@ -302,6 +305,7 @@ operátorský check-in má jedinou route `/check-in`.
 - `/app/vstupenka`, `/app/informace`
 - `/app/recnici`, `/app/recnici/[slug]`, `/app/partneri`
 - `/app/vice`, `/app/profil`, `/app/soukromi`, `/app/nastaveni`
+- `/app/networking`, `/app/networking/[profileId]`
 
 ### Admin, vedoucí aktivity a operátor
 

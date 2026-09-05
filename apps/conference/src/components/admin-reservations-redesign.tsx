@@ -19,6 +19,7 @@ import {
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { adminCountForms, formatCzechCount } from './admin-copy';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
+import { AdminModal } from './admin-modal';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -73,11 +74,6 @@ const reservationStateLabels: Record<ReservationItem['state'], string> = {
   cancelled: 'Zrušeno',
 };
 
-const safeParticipantReference = (value: string): string =>
-  /[*•…]/.test(value) && !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)
-    ? value
-    : 'Účastník · reference skrytá';
-
 export const AdminReservationsRedesign = () => {
   const { api, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
@@ -96,7 +92,7 @@ export const AdminReservationsRedesign = () => {
   );
   const [dayFilter, setDayFilter] = useState('all');
   const [activityFilter, setActivityFilter] = useState('all');
-  const [referenceFilter, setReferenceFilter] = useState('');
+  const [participantFilter, setParticipantFilter] = useState('');
   const [capacityDraft, setCapacityDraft] = useState(1);
   const [capacityReason, setCapacityReason] = useState('');
   const [selectedReservation, setSelectedReservation] =
@@ -122,7 +118,7 @@ export const AdminReservationsRedesign = () => {
     setSessions([]);
     setNextCursor(null);
     setSelectedSessionId(null);
-    setReferenceFilter('');
+    setParticipantFilter('');
     setCapacityReason('');
     setCancelReason('');
     setSelectedReservation(null);
@@ -236,11 +232,14 @@ export const AdminReservationsRedesign = () => {
   const selectedSession =
     sessions.find(({ sessionId }) => sessionId === selectedSessionId) ?? null;
   const selectedReservations = (selectedSession?.reservations ?? []).filter(
-    (record) =>
-      referenceFilter.trim() === '' ||
-      record.maskedParticipantReference
-        .toLocaleLowerCase('cs')
-        .includes(referenceFilter.trim().toLocaleLowerCase('cs')),
+    (record) => {
+      const filter = participantFilter.trim().toLocaleLowerCase('cs');
+      return (
+        filter === '' ||
+        record.participantName.toLocaleLowerCase('cs').includes(filter) ||
+        record.contactEmail.toLocaleLowerCase('cs').includes(filter)
+      );
+    },
   );
   const summary = sessions.reduce(
     (current, session) => {
@@ -279,6 +278,33 @@ export const AdminReservationsRedesign = () => {
     setError(null);
     setRecoveryMessage(null);
     setSuccess(null);
+  };
+
+  const closeSessionEditor = () => {
+    const hasDraft = Boolean(
+      selectedSession &&
+      (capacityDraft !==
+        (selectedSession.capacity ??
+          Math.max(1, selectedSession.confirmedCount)) ||
+        capacityReason.trim() ||
+        selectedReservation ||
+        cancelReason.trim()),
+    );
+    if (
+      hasDraft &&
+      !window.confirm(
+        'Opravdu chcete editor zavřít? Neuložené změny se zahodí.',
+      )
+    ) {
+      return;
+    }
+    setSelectedSessionId(null);
+    setSelectedReservation(null);
+    setCapacityReason('');
+    setCancelReason('');
+    setAttempted(null);
+    setPending(null);
+    setAmbiguous(false);
   };
 
   const prepareCapacity = () => {
@@ -374,6 +400,7 @@ export const AdminReservationsRedesign = () => {
       setAttempted(null);
       setCapacityReason('');
       setCancelReason('');
+      setSelectedSessionId(null);
       setSelectedReservation(null);
       setRecoveryMessage(null);
       setSuccess({
@@ -572,186 +599,201 @@ export const AdminReservationsRedesign = () => {
         ) : null}
       </section>
 
-      {selectedSession ? (
-        <section
-          className={styles.panel}
-          aria-labelledby="reservation-session-detail-title"
+      {selectedSession && !confirming ? (
+        <AdminModal
+          dismissDisabled={busy}
+          labelledBy="reservation-session-detail-title"
+          onDismiss={closeSessionEditor}
+          size="wide"
         >
-          <div className={styles.panelHeader}>
+          <div className={styles.dialogHeader}>
             <div>
               <p className={styles.eyebrow}>Detail aktivity</p>
-              <h2 id="reservation-session-detail-title">
+              <h2
+                data-modal-initial-focus="true"
+                id="reservation-session-detail-title"
+                tabIndex={-1}
+              >
                 {selectedSession.sessionTitle}
               </h2>
             </div>
-            <span className={styles.statusBadge}>
-              {capacityStateLabels[capacityState(selectedSession)]}
-            </span>
-          </div>
-          <div className={styles.twoColumn}>
-            <section className={styles.dataCard}>
-              <h3>Kapacita</h3>
-              <p>
-                <strong>
-                  {selectedSession.confirmedCount} z{' '}
-                  {selectedSession.capacity ?? '—'} míst
-                </strong>
-              </p>
-              {selectedSession.waitingCount !== null ? (
-                <p>
-                  Na uvolnění místa čeká {selectedSession.waitingCount}{' '}
-                  účastníků.
-                </p>
-              ) : null}
-              {canManage && !selectedReservation ? (
-                <div className={styles.stack}>
-                  <label className={styles.field}>
-                    <span>Nová kapacita</span>
-                    <input
-                      min={Math.max(1, selectedSession.confirmedCount)}
-                      onChange={(event) =>
-                        setCapacityDraft(Number(event.target.value))
-                      }
-                      type="number"
-                      value={capacityDraft}
-                    />
-                    <span className={styles.helper}>
-                      Minimum je {Math.max(1, selectedSession.confirmedCount)}{' '}
-                      podle aktuálně potvrzených rezervací.
-                    </span>
-                  </label>
-                  <label className={styles.field}>
-                    <span>Důvod změny kapacity</span>
-                    <textarea
-                      onChange={(event) =>
-                        setCapacityReason(event.target.value)
-                      }
-                      value={capacityReason}
-                    />
-                    <span className={styles.helper}>
-                      Uloží se do historie změn.
-                    </span>
-                  </label>
-                  {attempted === 'capacity' && !capacityCandidate?.success ? (
-                    <p className={styles.errorSummary} role="alert">
-                      Zkontrolujte minimální kapacitu a doplňte důvod o alespoň
-                      8 znaků.
-                    </p>
-                  ) : null}
-                  <button
-                    className={styles.button}
-                    disabled={busy || pending !== null}
-                    onClick={prepareCapacity}
-                    type="button"
-                  >
-                    Upravit kapacitu
-                  </button>
-                </div>
-              ) : null}
-            </section>
-
-            <section className={styles.dataCard}>
-              <h3>Rezervace účastníků</h3>
-              <label className={styles.field}>
-                <span>Maskovaná reference účastníka</span>
-                <input
-                  autoComplete="off"
-                  onChange={(event) => setReferenceFilter(event.target.value)}
-                  type="search"
-                  value={referenceFilter}
-                />
-                <span className={styles.helper}>
-                  Hledání zůstává jen v této stránce a neukládá se do URL.
-                </span>
-              </label>
-              <ul className={styles.cardList}>
-                {selectedReservations.map((record) => (
-                  <li className={styles.dataCard} key={record.reservationId}>
-                    <div className={styles.panelHeader}>
-                      <strong>
-                        {safeParticipantReference(
-                          record.maskedParticipantReference,
-                        )}
-                      </strong>
-                      <span className={styles.statusBadge}>
-                        {reservationStateLabels[record.state]}
-                      </span>
-                    </div>
-                    {canManage &&
-                    record.availableActions.includes('cancel_reservation') ? (
-                      <button
-                        className={styles.secondaryButton}
-                        onClick={() => {
-                          setSelectedReservation(record);
-                          setCancelReason('');
-                          setAttempted(null);
-                          setPending(null);
-                        }}
-                        type="button"
-                      >
-                        Zrušit rezervaci účastníka
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              {selectedReservations.length === 0 ? (
-                <p className={styles.empty}>
-                  Žádná rezervace neodpovídá bezpečnému filtru.
-                </p>
-              ) : null}
-            </section>
-          </div>
-
-          {selectedReservation ? (
-            <section className={styles.warning}>
-              <h3>Zrušit rezervaci účastníka</h3>
-              <p>
-                <strong>
-                  {safeParticipantReference(
-                    selectedReservation.maskedParticipantReference,
-                  )}
-                </strong>{' '}
-                ztratí rezervaci na aktivitu {selectedSession.sessionTitle}.
-                Uvolněné místo může získat další čekající.
-              </p>
-              <label className={styles.field}>
-                <span>Důvod zrušení</span>
-                <textarea
-                  onChange={(event) => setCancelReason(event.target.value)}
-                  value={cancelReason}
-                />
-                <span className={styles.helper}>
-                  Uloží se do historie změn.
-                </span>
-              </label>
-              {attempted === 'reservation' && !reservationCandidate?.success ? (
-                <p className={styles.errorSummary} role="alert">
-                  Doplňte důvod zrušení o alespoň 8 znaků.
-                </p>
-              ) : null}
+            <div className={styles.actionRow}>
+              <span className={styles.statusBadge}>
+                {capacityStateLabels[capacityState(selectedSession)]}
+              </span>
               <button
-                className={styles.dangerButton}
-                disabled={busy || pending !== null}
-                onClick={prepareCancellation}
+                className={styles.secondaryButton}
+                onClick={closeSessionEditor}
                 type="button"
               >
-                Zkontrolovat zrušení
+                Zavřít
               </button>
-            </section>
-          ) : null}
+            </div>
+          </div>
+          <div className={styles.dialogBody}>
+            <div className={styles.twoColumn}>
+              <section className={styles.dataCard}>
+                <h3>Kapacita</h3>
+                <p>
+                  <strong>
+                    {selectedSession.confirmedCount} z{' '}
+                    {selectedSession.capacity ?? '—'} míst
+                  </strong>
+                </p>
+                {selectedSession.waitingCount !== null ? (
+                  <p>
+                    Na uvolnění místa čeká {selectedSession.waitingCount}{' '}
+                    účastníků.
+                  </p>
+                ) : null}
+                {canManage && !selectedReservation ? (
+                  <div className={styles.stack}>
+                    <label className={styles.field}>
+                      <span>Nová kapacita</span>
+                      <input
+                        min={Math.max(1, selectedSession.confirmedCount)}
+                        onChange={(event) =>
+                          setCapacityDraft(Number(event.target.value))
+                        }
+                        type="number"
+                        value={capacityDraft}
+                      />
+                      <span className={styles.helper}>
+                        Minimum je {Math.max(1, selectedSession.confirmedCount)}{' '}
+                        podle aktuálně potvrzených rezervací.
+                      </span>
+                    </label>
+                    <label className={styles.field}>
+                      <span>Důvod změny kapacity</span>
+                      <textarea
+                        onChange={(event) =>
+                          setCapacityReason(event.target.value)
+                        }
+                        value={capacityReason}
+                      />
+                      <span className={styles.helper}>
+                        Uloží se do historie změn.
+                      </span>
+                    </label>
+                    {attempted === 'capacity' && !capacityCandidate?.success ? (
+                      <p className={styles.errorSummary} role="alert">
+                        Zkontrolujte minimální kapacitu a doplňte důvod o
+                        alespoň 8 znaků.
+                      </p>
+                    ) : null}
+                    <button
+                      className={styles.button}
+                      disabled={busy || pending !== null}
+                      onClick={prepareCapacity}
+                      type="button"
+                    >
+                      Upravit kapacitu
+                    </button>
+                  </div>
+                ) : null}
+              </section>
 
-          {ambiguous && pending ? (
-            <button
-              className={styles.secondaryButton}
-              disabled={busy}
-              onClick={() => void execute(pending)}
-              type="button"
-            >
-              Zopakovat přesně stejný pokus
-            </button>
-          ) : null}
-        </section>
+              <section className={styles.dataCard}>
+                <h3>Rezervace účastníků</h3>
+                <label className={styles.field}>
+                  <span>Jméno nebo e-mail účastníka</span>
+                  <input
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setParticipantFilter(event.target.value)
+                    }
+                    type="search"
+                    value={participantFilter}
+                  />
+                  <span className={styles.helper}>
+                    Hledání zůstává jen v této stránce a neukládá se do URL.
+                  </span>
+                </label>
+                <ul className={styles.cardList}>
+                  {selectedReservations.map((record) => (
+                    <li className={styles.dataCard} key={record.reservationId}>
+                      <div className={styles.panelHeader}>
+                        <div className={styles.identityCell}>
+                          <strong>{record.participantName}</strong>
+                          <small>{record.contactEmail}</small>
+                        </div>
+                        <span className={styles.statusBadge}>
+                          {reservationStateLabels[record.state]}
+                        </span>
+                      </div>
+                      {canManage &&
+                      record.availableActions.includes('cancel_reservation') ? (
+                        <button
+                          className={styles.secondaryButton}
+                          onClick={() => {
+                            setSelectedReservation(record);
+                            setCancelReason('');
+                            setAttempted(null);
+                            setPending(null);
+                          }}
+                          type="button"
+                        >
+                          Zrušit rezervaci účastníka
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                {selectedReservations.length === 0 ? (
+                  <p className={styles.empty}>
+                    Žádná rezervace neodpovídá bezpečnému filtru.
+                  </p>
+                ) : null}
+              </section>
+            </div>
+
+            {selectedReservation ? (
+              <section className={styles.warning}>
+                <h3>Zrušit rezervaci účastníka</h3>
+                <p>
+                  <strong>{selectedReservation.participantName}</strong> ztratí
+                  rezervaci na aktivitu {selectedSession.sessionTitle}. Uvolněné
+                  místo může získat další čekající.
+                </p>
+                <label className={styles.field}>
+                  <span>Důvod zrušení</span>
+                  <textarea
+                    onChange={(event) => setCancelReason(event.target.value)}
+                    value={cancelReason}
+                  />
+                  <span className={styles.helper}>
+                    Uloží se do historie změn.
+                  </span>
+                </label>
+                {attempted === 'reservation' &&
+                !reservationCandidate?.success ? (
+                  <p className={styles.errorSummary} role="alert">
+                    Doplňte důvod zrušení o alespoň 8 znaků.
+                  </p>
+                ) : null}
+                <button
+                  className={styles.dangerButton}
+                  disabled={busy || pending !== null}
+                  onClick={prepareCancellation}
+                  type="button"
+                >
+                  Zkontrolovat zrušení
+                </button>
+              </section>
+            ) : null}
+
+            {ambiguous && pending ? (
+              <button
+                className={styles.secondaryButton}
+                disabled={busy}
+                onClick={() => void execute(pending)}
+                type="button"
+              >
+                Zopakovat přesně stejný pokus
+              </button>
+            ) : null}
+          </div>
+        </AdminModal>
       ) : null}
 
       {confirming && pending ? (
@@ -772,7 +814,7 @@ export const AdminReservationsRedesign = () => {
                 {selectedSession?.sessionTitle ?? 'Vybraná aktivita'}
               </strong>
               {pending.kind === 'reservation'
-                ? ` · ${selectedReservation ? safeParticipantReference(selectedReservation.maskedParticipantReference) : ''}`
+                ? ` · ${selectedReservation?.participantName ?? ''}`
                 : ''}
             </p>
           }

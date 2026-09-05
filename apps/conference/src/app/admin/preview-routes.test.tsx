@@ -9,6 +9,7 @@ const routeWorkspaceMocks = vi.hoisted(() => ({
   reports: vi.fn(() => null),
   reservations: vi.fn(() => null),
   settings: vi.fn(() => null),
+  speakers: vi.fn(() => null),
   team: vi.fn(() => null),
 }));
 
@@ -57,6 +58,9 @@ vi.mock('@/components/admin-reservations-redesign', () => ({
 vi.mock('@/components/admin-settings-workspace', () => ({
   AdminSettingsRedesign: routeWorkspaceMocks.settings,
 }));
+vi.mock('@/components/admin-content-production-workspace', () => ({
+  AdminContentProductionWorkspace: routeWorkspaceMocks.speakers,
+}));
 
 import AdminAuditPage from './audit/page';
 import AdminImportPage from './import/page';
@@ -66,6 +70,7 @@ import AdminAnnouncementsPage from './oznameni/page';
 import AdminOverviewPage from './page';
 import AdminOperationsPage from './provoz/page';
 import AdminReportsPage from './reporty/page';
+import AdminSpeakersPage from './recnici/page';
 import AdminReservationsPage from './rezervace/page';
 import AdminRolesPage from './role/page';
 import AdminSupportPage from './support/page';
@@ -84,6 +89,7 @@ const integratedRoutes = [
   ['canonical participants', AdminParticipantsPage],
   ['canonical roles', AdminRolesPage],
   ['canonical reports', AdminReportsPage],
+  ['canonical speakers', AdminSpeakersPage],
   ['canonical audit', AdminAuditPage],
   ['canonical settings', AdminSettingsPage],
   ['canonical engagement', AdminEngagementPage],
@@ -116,6 +122,7 @@ describe('F4 direct mock admin route boundary', () => {
     expect(AdminReportsPage().type).toBe(routeWorkspaceMocks.reports);
     expect(AdminAuditPage().type).toBe(routeWorkspaceMocks.audit);
     expect(AdminSettingsPage().type).toBe(routeWorkspaceMocks.settings);
+    expect(AdminSpeakersPage().type).toBe(routeWorkspaceMocks.speakers);
     expect(gateMock).not.toHaveBeenCalled();
   });
 

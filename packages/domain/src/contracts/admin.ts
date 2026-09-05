@@ -231,6 +231,11 @@ export const adminAssignmentScopeSchema = z.discriminatedUnion('kind', [
     label: safeInlineTextSchema(120),
   }),
   z.strictObject({
+    kind: z.literal('room'),
+    roomId: uuidSchema,
+    label: safeInlineTextSchema(160),
+  }),
+  z.strictObject({
     kind: z.literal('session'),
     sessionId: uuidSchema,
     label: safeInlineTextSchema(160),
@@ -255,7 +260,7 @@ export type AdminRoleAssignment = z.infer<typeof adminRoleAssignmentSchema>;
 export const adminRoleAssignmentListQuerySchema = z.strictObject({
   role: adminAssignmentRoleSchema.optional(),
   state: z.enum(['active', 'scheduled']).optional(),
-  scopeKind: z.enum(['event', 'station', 'session']).optional(),
+  scopeKind: z.enum(['event', 'station', 'room', 'session']).optional(),
   cursor: opaqueCursorSchema.optional(),
 });
 
@@ -307,10 +312,7 @@ export type AdminRolePersonSearchRequest = z.infer<
 export const adminRolePersonSchema = z.strictObject({
   operatorId: uuidSchema,
   displayName: safeInlineTextSchema(120),
-  maskedVerifiedContact: safeInlineTextSchema(160).refine(
-    (value) => /[*•…]/.test(value),
-    'Verified contact must remain masked',
-  ),
+  verifiedEmail: z.string().email().max(320),
 });
 
 export type AdminRolePerson = z.infer<typeof adminRolePersonSchema>;
@@ -355,13 +357,15 @@ export const adminRoleScopeOptionsResponseSchema = z
         ? kind === 'station'
         : response.role === 'moderator'
           ? kind === 'session'
-          : kind === 'session';
+          : kind === 'room' || kind === 'session';
     const ids = response.options.map((option) =>
       option.kind === 'event'
         ? 'event'
         : option.kind === 'station'
           ? option.stationId
-          : option.sessionId,
+          : option.kind === 'room'
+            ? option.roomId
+            : option.sessionId,
     );
     if (
       response.options.some(({ kind }) => !compatible(kind)) ||
@@ -445,6 +449,158 @@ export const adminRoleAssignmentMutationResponseSchema = z
 
 export type AdminRoleAssignmentMutationResponse = z.infer<
   typeof adminRoleAssignmentMutationResponseSchema
+>;
+
+export const adminTeamRoleSchema = z.enum([
+  'organizer_admin',
+  'checkin_operator',
+  'moderator',
+  'room_operator',
+]);
+
+export type AdminTeamRole = z.infer<typeof adminTeamRoleSchema>;
+
+export const adminTeamAccessSchema = z.discriminatedUnion('role', [
+  z.strictObject({ role: z.literal('organizer_admin') }),
+  z.strictObject({
+    role: z.literal('checkin_operator'),
+    scope: adminAssignmentScopeSchema,
+  }),
+  z.strictObject({
+    role: z.literal('moderator'),
+    scope: adminAssignmentScopeSchema,
+  }),
+  z.strictObject({
+    role: z.literal('room_operator'),
+    scope: adminAssignmentScopeSchema,
+  }),
+]);
+
+export type AdminTeamAccess = z.infer<typeof adminTeamAccessSchema>;
+
+export const adminTeamMemberSchema = z.strictObject({
+  memberId: uuidSchema,
+  displayName: safeInlineTextSchema(120),
+  email: z.string().trim().toLowerCase().email().max(320),
+  emailVerified: z.boolean(),
+  isCurrentActor: z.boolean(),
+  roles: z.array(adminTeamRoleSchema).min(1).max(4),
+  invitation: z.strictObject({
+    status: z.enum(['not_sent', 'sent', 'accepted']),
+    lastSentAt: dateTimeSchema.nullable(),
+  }),
+});
+
+export type AdminTeamMember = z.infer<typeof adminTeamMemberSchema>;
+
+export const adminTeamMemberListResponseSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    teamVersion: versionSchema,
+    generatedAt: dateTimeSchema,
+    members: z.array(adminTeamMemberSchema).max(200),
+    summary: z.strictObject({
+      total: z.number().int().nonnegative(),
+      administrators: z.number().int().nonnegative(),
+      awaitingInvitation: z.number().int().nonnegative(),
+    }),
+  })
+  .superRefine((response, context) => {
+    const ids = response.members.map(({ memberId }) => memberId);
+    if (
+      new Set(ids).size !== ids.length ||
+      response.summary.total !== response.members.length ||
+      response.summary.administrators !==
+        response.members.filter(({ roles }) =>
+          roles.includes('organizer_admin'),
+        ).length ||
+      response.summary.awaitingInvitation !==
+        response.members.filter(
+          ({ invitation }) => invitation.status !== 'accepted',
+        ).length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['members'],
+        message: 'Team member summary must be consistent and members unique',
+      });
+    }
+  });
+
+export type AdminTeamMemberListResponse = z.infer<
+  typeof adminTeamMemberListResponseSchema
+>;
+
+const teamMemberMutationBase = {
+  expectedVersion: versionSchema,
+  reason: mutationReasonSchema,
+} as const;
+
+export const adminTeamMemberMutationRequestSchema = z.discriminatedUnion(
+  'action',
+  [
+    z.strictObject({
+      ...teamMemberMutationBase,
+      action: z.literal('add'),
+      displayName: safeInlineTextSchema(120),
+      email: z.string().trim().toLowerCase().email().max(320),
+      access: adminTeamAccessSchema,
+    }),
+    z.strictObject({
+      ...teamMemberMutationBase,
+      action: z.literal('update'),
+      memberId: uuidSchema,
+      displayName: safeInlineTextSchema(120),
+      email: z.string().trim().toLowerCase().email().max(320),
+      administrator: z.boolean(),
+    }),
+    z.strictObject({
+      ...teamMemberMutationBase,
+      action: z.literal('remove'),
+      memberId: uuidSchema,
+    }),
+  ],
+);
+
+export type AdminTeamMemberMutationRequest = z.infer<
+  typeof adminTeamMemberMutationRequestSchema
+>;
+
+export const adminTeamMemberMutationResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  outcome: z.enum(['added', 'updated', 'removed', 'already_applied']),
+  teamVersion: versionSchema,
+  member: adminTeamMemberSchema.nullable(),
+  changedAt: dateTimeSchema,
+  audit: z.strictObject({ auditId: uuidSchema }),
+});
+
+export type AdminTeamMemberMutationResponse = z.infer<
+  typeof adminTeamMemberMutationResponseSchema
+>;
+
+export const adminTeamInvitationRequestSchema = z.strictObject({
+  memberId: uuidSchema,
+});
+
+export type AdminTeamInvitationRequest = z.infer<
+  typeof adminTeamInvitationRequestSchema
+>;
+
+export const adminTeamInvitationResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  memberId: uuidSchema,
+  outcome: z.enum(['sent', 'already_sent']),
+  sentAt: dateTimeSchema,
+  invitation: z.strictObject({
+    status: z.enum(['sent', 'accepted']),
+    lastSentAt: dateTimeSchema,
+  }),
+  audit: z.strictObject({ auditId: uuidSchema }),
+});
+
+export type AdminTeamInvitationResponse = z.infer<
+  typeof adminTeamInvitationResponseSchema
 >;
 
 export const adminExportReportSchema = z.enum([
@@ -686,7 +842,8 @@ export const adminReservationRecordSchema = z
     eventId: uuidSchema,
     sessionId: uuidSchema,
     sessionTitle: safeInlineTextSchema(160),
-    participantReference: safeInlineTextSchema(80),
+    participantName: safeInlineTextSchema(257),
+    contactEmail: z.string().email().max(320),
     state: z.enum(['reserved', 'cancelled']),
     capacity: adminReservationCapacitySchema,
     reservedCount: z.number().int().nonnegative().max(100_000),
@@ -741,13 +898,6 @@ export type AdminReservationListResponse = z.infer<
   typeof adminReservationListResponseSchema
 >;
 
-const maskedParticipantReferenceSchema = safeInlineTextSchema(80).refine(
-  (value) =>
-    /[*•…]/.test(value) &&
-    !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value),
-  'Participant reference must be masked',
-);
-
 export const adminReservationSessionQuerySchema = z.strictObject({
   cursor: z.string().min(1).max(200).optional(),
   limit: z.number().int().min(1).max(50).default(25),
@@ -773,7 +923,8 @@ export const adminReservationSessionItemSchema = z
       .array(
         z.strictObject({
           reservationId: uuidSchema,
-          maskedParticipantReference: maskedParticipantReferenceSchema,
+          participantName: safeInlineTextSchema(257),
+          contactEmail: z.string().email().max(320),
           state: z.enum(['reserved', 'cancelled']),
           version: versionSchema,
           availableActions: z.array(adminReservationActionSchema).max(2),
@@ -954,6 +1105,8 @@ export const adminAuditActionSchema = z.enum([
   'support.block',
   'support.reactivate',
   'support.resend',
+  'participant.invitation_sent',
+  'participant.profile_updated',
   'ticket_import.preview_created',
   'ticket_import.applied',
   'announcement.send',
@@ -961,6 +1114,10 @@ export const adminAuditActionSchema = z.enum([
   'role.revoke',
   'role.moderator.assign',
   'role.moderator.remove',
+  'team.member_added',
+  'team.member_updated',
+  'team.member_removed',
+  'team.invitation_sent',
   'reservation.admin_cancelled',
   'session.capacity_updated',
   'waitlist.auto_cancelled',
@@ -1157,6 +1314,8 @@ export const adminInternalErrorProblemSchema = defineApiProblemSchema(
   'INTERNAL_ERROR',
   500,
 );
+export const adminInvitationDeliveryUnavailableProblemSchema =
+  defineApiProblemSchema('INVITATION_DELIVERY_UNAVAILABLE', 503);
 
 const adminReadProblems = [
   adminAuthenticationRequiredProblemSchema,
@@ -1178,6 +1337,7 @@ export const adminMutationProblemSchema = z.discriminatedUnion('code', [
   adminInvalidTransitionProblemSchema,
   adminLastAdministratorProblemSchema,
   adminSelfLockoutProblemSchema,
+  adminInvitationDeliveryUnavailableProblemSchema,
   idempotencyKeyReusedProblemSchema,
   idempotencyInProgressProblemSchema,
 ]);

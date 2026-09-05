@@ -2,12 +2,19 @@
 
 import { ActionLink, Button, Skeleton, StatePanel } from '@byzon/ui';
 import type { IdentityBootstrapResponse } from '@byzon/domain/contracts';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 
 import {
   useParticipantAccountResource,
   type ParticipantAccountResourceState,
 } from '@/components/participant-account-resource';
+import { requestClientNavigation } from '@/lib/client-navigation-events';
+
+const accountLoginHref = (
+  mode: 'recovery' | 'switch',
+  returnTo: ParticipantAccountReturnTo,
+): string =>
+  `/prihlaseni?mode=${mode}&returnTo=${encodeURIComponent(returnTo)}`;
 
 const AccountFailure = ({
   loginReturnTo,
@@ -39,11 +46,7 @@ const AccountFailure = ({
     return (
       <StatePanel
         action={
-          <ActionLink
-            href={`/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(
-              loginReturnTo,
-            )}`}
-          >
+          <ActionLink href={accountLoginHref('recovery', loginReturnTo)}>
             Obnovit přihlášení
           </ActionLink>
         }
@@ -95,8 +98,11 @@ const AccountFailure = ({
     return (
       <StatePanel
         action={
-          <ActionLink href="/app" variant="secondary">
-            Zpět na přehled
+          <ActionLink
+            href={accountLoginHref('switch', loginReturnTo)}
+            variant="secondary"
+          >
+            Použít jiný účet
           </ActionLink>
         }
         kind="permission"
@@ -131,17 +137,46 @@ const AccountFailure = ({
 export type ParticipantAccountReturnTo =
   '/app/vice' | '/app/profil' | '/app/soukromi' | '/app/nastaveni';
 
+const defaultNavigate = requestClientNavigation;
+
 export const ParticipantAccountBoundary = ({
   children,
   loginReturnTo,
+  navigate = defaultNavigate,
 }: {
   readonly children: (
     data: IdentityBootstrapResponse,
     resource: ReturnType<typeof useParticipantAccountResource>,
   ) => ReactNode;
   readonly loginReturnTo: ParticipantAccountReturnTo;
+  readonly navigate?: (href: string) => void;
 }) => {
   const resource = useParticipantAccountResource();
+  const retryResource = resource.retry;
+  const recoverAfterRetry = useRef(false);
+  const recoveryLoginHref = accountLoginHref('recovery', loginReturnTo);
+  const switchLoginHref = accountLoginHref('switch', loginReturnTo);
+  const retry = useCallback(() => {
+    recoverAfterRetry.current = true;
+    retryResource();
+  }, [retryResource]);
+
+  useEffect(() => {
+    if (
+      !recoverAfterRetry.current ||
+      resource.state.status === 'idle' ||
+      resource.state.status === 'loading'
+    ) {
+      return;
+    }
+    recoverAfterRetry.current = false;
+    if (resource.state.status === 'session_expired') {
+      navigate(recoveryLoginHref);
+    } else if (resource.state.status === 'permission') {
+      navigate(switchLoginHref);
+    }
+  }, [navigate, recoveryLoginHref, resource.state.status, switchLoginHref]);
+
   if (resource.state.status === 'idle' || resource.state.status === 'loading') {
     return (
       <Skeleton
@@ -155,7 +190,7 @@ export const ParticipantAccountBoundary = ({
     return (
       <AccountFailure
         loginReturnTo={loginReturnTo}
-        retry={resource.retry}
+        retry={retry}
         state={resource.state}
       />
     );

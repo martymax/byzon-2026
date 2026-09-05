@@ -539,6 +539,10 @@
   height: calc(4.25rem + var(--byzon-safe-bottom));
 }
 
+.ui-participant-nav__inner {
+  position: relative;
+}
+
 .ui-participant-nav ul,
 .ui-admin-nav ul {
   display: grid;
@@ -563,6 +567,27 @@
   color: var(--byzon-text-muted);
   font: 600 0.75rem/1 var(--byzon-font-display);
   text-decoration: none;
+}
+
+.ui-participant-nav .ui-participant-nav__context {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--byzon-space-3));
+  min-height: var(--byzon-touch-target);
+  flex-direction: row;
+  gap: var(--byzon-space-2);
+  padding-inline: var(--byzon-space-4);
+  border: 1px solid var(--byzon-brand);
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-brand-active);
+  background: var(--byzon-surface-translucent);
+  box-shadow: var(--byzon-shadow-sm);
+  font-size: 0.875rem;
+  backdrop-filter: blur(14px);
+}
+
+.ui-participant-nav .ui-participant-nav__context:hover {
+  background: var(--byzon-brand-soft);
 }
 
 .ui-participant-nav a[aria-current='page'] {
@@ -721,6 +746,7 @@
 .ui-dialog {
   width: min(calc(100% - 2rem), 34rem);
   max-height: min(44rem, calc(100dvh - 2rem));
+  margin: auto;
   padding: 0;
   overflow: auto;
   border: 0;
@@ -1175,6 +1201,18 @@
   .ui-participant-nav ul {
     display: flex;
     gap: var(--byzon-space-2);
+  }
+
+  .ui-participant-nav__inner {
+    display: flex;
+    align-items: center;
+  }
+
+  .ui-participant-nav .ui-participant-nav__context {
+    position: static;
+    margin-left: auto;
+    box-shadow: none;
+    font-size: 1rem;
   }
 
   .ui-participant-nav a {

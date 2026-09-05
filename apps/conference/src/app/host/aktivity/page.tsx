@@ -12,7 +12,7 @@ import { database } from '@/server/database';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Vedoucí aktivity',
+  title: 'Moje aktivity',
   robots: { index: false, follow: false },
 };
 

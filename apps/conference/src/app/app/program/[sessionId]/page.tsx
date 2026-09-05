@@ -28,6 +28,7 @@ export default async function SessionPage({
     <section className="app-page">
       {eventId ? (
         <SessionView
+          chooseCoach={query.coaching === 'choose'}
           eventId={eventId}
           sessionId={sessionId}
           showAgendaAction

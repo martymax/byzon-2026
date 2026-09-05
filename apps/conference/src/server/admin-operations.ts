@@ -33,6 +33,7 @@ export interface AdminOperationsSnapshot {
   announcements: { enabled: boolean; total: number };
   latestImport: { rowCount: number; status: ImportStatus } | null;
   publication: { syncStatus: SyncStatus; version: number } | null;
+  publicContentSyncEnabled: boolean;
   queue: { failed: number; pending: number; processing: number };
   reservations: {
     capacity: number;
@@ -65,18 +66,21 @@ export const buildAdminOperationsOverview = (
     : { state: 'attention' as const, value: 'Bez importu' };
   const contentState = !snapshot.publication
     ? 'degraded'
-    : snapshot.publication.syncStatus === 'sync_failed'
-      ? 'degraded'
-      : snapshot.publication.syncStatus === 'synced'
-        ? 'healthy'
+    : !snapshot.publicContentSyncEnabled ||
+        snapshot.publication.syncStatus === 'synced'
+      ? 'healthy'
+      : snapshot.publication.syncStatus === 'sync_failed'
+        ? 'degraded'
         : 'attention';
   const contentDetail = !snapshot.publication
     ? 'Chybí publikovaný obsah aplikace.'
-    : snapshot.publication.syncStatus === 'synced'
-      ? 'Publikovaná verze je synchronizovaná.'
-      : snapshot.publication.syncStatus === 'sync_failed'
-        ? 'Synchronizace publikované verze se nepodařila.'
-        : 'Publikovaná verze čeká na dokončení synchronizace.';
+    : !snapshot.publicContentSyncEnabled
+      ? 'Publikovaná verze je dostupná v aplikaci.'
+      : snapshot.publication.syncStatus === 'synced'
+        ? 'Publikovaná verze je synchronizovaná.'
+        : snapshot.publication.syncStatus === 'sync_failed'
+          ? 'Synchronizace publikované verze se nepodařila.'
+          : 'Publikovaná verze čeká na dokončení synchronizace.';
   const reservationState =
     snapshot.reservations.overbookedSessions > 0
       ? 'degraded'
@@ -295,7 +299,10 @@ export const handleAdminOperations = async (
         .from(schema.announcements)
         .where(eq(schema.announcements.eventId, eventId)),
       dependencies.db.query.eventFeatures.findFirst({
-        columns: { announcementsEnabled: true },
+        columns: {
+          announcementsEnabled: true,
+          publicContentSyncEnabled: true,
+        },
         where: eq(schema.eventFeatures.eventId, eventId),
       }),
       dependencies.db
@@ -339,6 +346,7 @@ export const handleAdminOperations = async (
         },
         latestImport: latestImport ?? null,
         publication: publication ?? null,
+        publicContentSyncEnabled: features?.publicContentSyncEnabled ?? false,
         queue: { failed, pending, processing },
         reservations: reservationSnapshot,
       },

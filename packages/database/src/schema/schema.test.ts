@@ -16,6 +16,7 @@ import {
   participantProfiles,
   participantAgendas,
   privacyRequests,
+  programSessions,
   reservations,
   sessions,
   users,
@@ -138,6 +139,24 @@ describe('stage 2 database schema', () => {
             .columns.map((column) => column.name)
             .join(',') === 'event_id,user_id',
       ),
+    ).toBe(true);
+  });
+
+  it('stores an optional event-scoped reservation group on program sessions', () => {
+    const sessionConfig = getTableConfig(programSessions);
+    expect(sessionConfig.columns.map((column) => column.name)).toContain(
+      'reservation_group_id',
+    );
+    expect(
+      sessionConfig.foreignKeys.some((key) => {
+        const reference = key.reference();
+        return (
+          reference.columns.map(({ name }) => name).join(',') ===
+            'event_id,reservation_group_id' &&
+          reference.foreignColumns.map(({ name }) => name).join(',') ===
+            'event_id,id'
+        );
+      }),
     ).toBe(true);
   });
 

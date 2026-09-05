@@ -860,6 +860,7 @@ type MockAgendaApplication =
       readonly kind: 'failure';
       readonly failure:
         | 'capacity_full'
+        | 'reservation_conflict'
         | 'reservation_closed'
         | 'session_not_found'
         | 'ticket_inactive'
@@ -897,6 +898,7 @@ const applyMockAgendaAction = (
 
   let next: ParticipantAgendaItem | undefined;
   let outcome: 'applied' | 'already_applied' = 'applied';
+  let replacementIndexes: number[] = [];
   switch (request.action) {
     case 'add':
       if (current) {
@@ -926,6 +928,35 @@ const applyMockAgendaAction = (
         template.capacity.remaining === 0
       ) {
         return { kind: 'failure', failure: 'validation' };
+      }
+      replacementIndexes = mockAgendaState.items
+        .map((item, itemIndex) => ({ item, itemIndex }))
+        .filter(
+          ({ item }) =>
+            item.state === 'reserved' &&
+            item.session.id !== template.session.id &&
+            Date.parse(item.session.startsAt) <
+              Date.parse(template.session.endsAt) &&
+            Date.parse(item.session.endsAt) >
+              Date.parse(template.session.startsAt),
+        )
+        .map(({ itemIndex }) => itemIndex);
+      if (replacementIndexes.length > 0) {
+        const expectedReplacementIds = replacementIndexes
+          .map((itemIndex) => mockAgendaState.items[itemIndex]!.session.id)
+          .sort();
+        const requestedReplacementIds = [
+          ...(request.replaceReservationSessionIds ?? []),
+        ].sort();
+        if (
+          expectedReplacementIds.length !== requestedReplacementIds.length ||
+          expectedReplacementIds.some(
+            (id, replacementIndex) =>
+              id !== requestedReplacementIds[replacementIndex],
+          )
+        ) {
+          return { kind: 'failure', failure: 'reservation_conflict' };
+        }
       }
       next = {
         day: template.day,
@@ -1027,6 +1058,22 @@ const applyMockAgendaAction = (
   if (outcome === 'already_applied') {
     return { kind: 'success', outcome };
   }
+  replacementIndexes.forEach((replacementIndex) => {
+    const replaced = mockAgendaState.items[replacementIndex];
+    if (!replaced || replaced.state !== 'reserved') return;
+    mockAgendaState.items[replacementIndex] = savedAgendaItem(
+      replaced,
+      replaced.capacity.mode === 'reservation'
+        ? {
+            ...replaced.capacity,
+            confirmed: Math.max(0, replaced.capacity.confirmed - 1),
+            remaining: replaced.capacity.remaining + 1,
+            actorAvailability: { state: 'available' },
+          }
+        : replaced.capacity,
+      { state: 'available' },
+    );
+  });
   if (request.action === 'remove') {
     mockAgendaState.items.splice(index, 1);
   } else if (next && index >= 0) {
@@ -2111,6 +2158,53 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
 
       const application = applyMockAgendaAction(parsed.data);
       if (application.kind === 'failure') {
+        if (application.failure === 'reservation_conflict') {
+          const target = canonicalAgenda.items.find(
+            ({ session }) => session.id === parsed.data.sessionId,
+          );
+          const conflicts = target
+            ? canonicalAgenda.items.filter(
+                (item) =>
+                  item.state === 'reserved' &&
+                  item.session.id !== target.session.id &&
+                  Date.parse(item.session.startsAt) <
+                    Date.parse(target.session.endsAt) &&
+                  Date.parse(item.session.endsAt) >
+                    Date.parse(target.session.startsAt),
+              )
+            : [];
+          if (!target || conflicts.length === 0) {
+            return completeProblem(
+              participantAgendaMutationProblemFixtures.validation,
+              'agenda.mock.action-reservation-conflict-invalid',
+            );
+          }
+          const until = Math.min(
+            ...conflicts.map(({ session }) => Date.parse(session.startsAt)),
+          );
+          return completeProblem(
+            {
+              ...participantAgendaMutationProblemFixtures.reservation_conflict,
+              sessionId: parsed.data.sessionId,
+              agenda: canonicalAgenda,
+              conflict: {
+                eventId: canonicalAgenda.eventId,
+                sessionId: parsed.data.sessionId,
+                reason: 'time_overlap',
+                targetSessions: [target.session],
+                conflictingSessions: conflicts.map(({ session }) => session),
+              },
+              replacement: {
+                allowed: Date.parse(canonicalAgenda.serverNow) < until,
+                until: new Date(until).toISOString(),
+                reservationSessionIds: conflicts.map(
+                  ({ session }) => session.id,
+                ),
+              },
+            },
+            'agenda.mock.action-reservation-conflict',
+          );
+        }
         if (application.failure === 'capacity_full') {
           return completeProblem(
             {
@@ -2159,9 +2253,7 @@ export const mockHandlers: readonly RequestHandler[] = Object.freeze([
       )?.session;
       const conflicts =
         targetSession &&
-        (parsed.data.action === 'add' ||
-          parsed.data.action === 'join_waitlist' ||
-          parsed.data.action === 'reserve')
+        (parsed.data.action === 'add' || parsed.data.action === 'join_waitlist')
           ? selectMockAgendaConflictingSessions(
               successAgenda.items.map(({ session }) => session),
               targetSession,

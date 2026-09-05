@@ -23,6 +23,7 @@ integration('audit helper integration', () => {
   const requestId = generateUuidV7();
   const email = 'audit-person@example.invalid';
   const secret = 'raw-audit-secret';
+  const occurredAt = new Date('2026-09-02T10:00:00.000Z');
 
   beforeAll(async () => {
     await client.db.insert(schema.events).values({
@@ -50,26 +51,30 @@ integration('audit helper integration', () => {
   });
 
   it('does not persist raw secrets or PII in any free-form audit field', async () => {
-    await writeAuditLog(client.db, {
-      eventId,
-      actorId: userId,
-      actorType: 'user',
-      action: 'audit.redaction_tested',
-      targetType: 'event_membership',
-      targetId: email,
-      requestId,
-      reason: `Requested by ${email} with Bearer ${secret}`,
-      before: {
-        firstName: 'Anna',
-        contactEmail: email,
-        nested: { password: secret },
+    await writeAuditLog(
+      client.db,
+      {
+        eventId,
+        actorId: userId,
+        actorType: 'user',
+        action: 'audit.redaction_tested',
+        targetType: 'event_membership',
+        targetId: email,
+        requestId,
+        reason: `Requested by ${email} with Bearer ${secret}`,
+        before: {
+          firstName: 'Anna',
+          contactEmail: email,
+          nested: { password: secret },
+        },
+        after: {
+          state: 'complete',
+          note: `Notify ${email}`,
+          safeUserId: userId,
+        },
       },
-      after: {
-        state: 'complete',
-        note: `Notify ${email}`,
-        safeUserId: userId,
-      },
-    });
+      { occurredAt },
+    );
 
     const audit = await client.db.query.auditLogs.findFirst({
       where: eq(schema.auditLogs.requestId, requestId),
@@ -83,6 +88,7 @@ integration('audit helper integration', () => {
     expect(audit).toMatchObject({
       actorId: userId,
       action: 'audit.redaction_tested',
+      createdAt: occurredAt,
       targetId: '[REDACTED]',
       before: {
         firstName: '[REDACTED]',

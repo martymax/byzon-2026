@@ -17,6 +17,7 @@ export const AdminContentWorkspace = ({
   assetPort,
   eventId,
   initialResource,
+  showAreaNavigation = true,
   onDirtyChange,
   onSecurityFailure,
   port,
@@ -26,6 +27,7 @@ export const AdminContentWorkspace = ({
   readonly assetPort?: AdminContentAssetPort;
   readonly eventId: string;
   readonly initialResource?: AdminContentResource;
+  readonly showAreaNavigation?: boolean;
   readonly onDirtyChange?: (dirty: boolean) => void;
   readonly onSecurityFailure?: (failure: AdminContentFailure) => void;
   readonly port?: AdminContentPort;
@@ -97,6 +99,7 @@ export const AdminContentWorkspace = ({
         {...(assetPort ? { assetPort } : {})}
         eventId={eventId}
         {...(initialResource ? { initialResource } : {})}
+        showAreaNavigation={showAreaNavigation}
         onContentChanged={() => setContentRevision((value) => value + 1)}
         onDirtyChange={handleDirtyChange}
         onSecurityFailure={handleSecurityFailure}

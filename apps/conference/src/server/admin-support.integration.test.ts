@@ -1,5 +1,7 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import {
+  adminParticipantCreateResponseSchema,
+  adminParticipantInviteResponseSchema,
   supportMutationResponseSchema,
   supportSearchResponseSchema,
 } from '@byzon/domain/contracts/support';
@@ -7,6 +9,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  handleAdminParticipantCreate,
+  handleAdminParticipantInvite,
   handleAdminSupportMutation,
   handleAdminSupportSearch,
 } from './admin-support';
@@ -31,8 +35,12 @@ integration('admin participant support integration', () => {
   const participantId = crypto.randomUUID();
   const ticketId = crypto.randomUUID();
   const olderTicketId = crypto.randomUUID();
+  const manualEmail = `manual-${eventId}@example.invalid`;
+  let manualParticipantId: string | null = null;
   const searchUrl = `${origin}/api/v1/admin/events/${eventId}/support/search`;
   const mutationUrl = `${origin}/api/v1/admin/events/${eventId}/support/actions`;
+  const inviteUrl = `${origin}/api/v1/admin/events/${eventId}/participants/${participantId}/invite`;
+  const createUrl = `${origin}/api/v1/admin/events/${eventId}/participants`;
 
   beforeAll(async () => {
     await client.db.insert(schema.events).values({
@@ -132,7 +140,14 @@ integration('admin participant support integration', () => {
     await client.db.delete(schema.events).where(eq(schema.events.id, eventId));
     await client.db
       .delete(schema.users)
-      .where(inArray(schema.users.id, [adminId, participantId]));
+      .where(
+        inArray(
+          schema.users.id,
+          manualParticipantId
+            ? [adminId, participantId, manualParticipantId]
+            : [adminId, participantId],
+        ),
+      );
     await client.close();
   });
 
@@ -153,7 +168,7 @@ integration('admin participant support integration', () => {
     rateLimit,
   });
 
-  it('searches through a POST body, deduplicates people and masks contact PII', async () => {
+  it('searches through a POST body, deduplicates people and returns complete admin identities', async () => {
     rateLimit.mockClear();
     const request = new Request(searchUrl, {
       method: 'POST',
@@ -177,13 +192,12 @@ integration('admin participant support integration', () => {
         {
           participantId,
           ticketId,
-          maskedContact: `p***@example.invalid`,
+          contactEmail: `private-${participantId}@example.invalid`,
           referenceSuffix: 'LIVE9876',
           availableActions: ['block'],
         },
       ],
     });
-    expect(JSON.stringify(body)).not.toContain(`private-${participantId}@`);
     expect(rateLimit).toHaveBeenCalledWith('search', adminId);
   });
 
@@ -213,6 +227,199 @@ integration('admin participant support integration', () => {
       dependencies(participantId),
     );
     expect(missingPermission.status).toBe(403);
+  });
+
+  it('creates one complete participant atomically and replays without duplicates', async () => {
+    const idempotencyKey = crypto.randomUUID();
+    const body = JSON.stringify({
+      reason: 'Ruční registrace hosta mimo SimpleShop.',
+      profile: {
+        firstName: 'Ruční',
+        lastName: 'Host',
+        contactEmail: manualEmail,
+        phone: '+420777111222',
+        company: 'Manual Labs',
+        jobTitle: 'Host',
+      },
+    });
+    const send = (key = idempotencyKey) =>
+      handleAdminParticipantCreate(
+        new Request(createUrl, {
+          method: 'POST',
+          headers: {
+            origin,
+            'content-type': 'application/json',
+            'idempotency-key': key,
+          },
+          body,
+        }),
+        eventId,
+        dependencies(),
+      );
+
+    const first = await send();
+    expect(first.status).toBe(201);
+    expect(first.headers.get('idempotency-replayed')).toBe('false');
+    const created = adminParticipantCreateResponseSchema.parse(
+      await first.json(),
+    );
+    manualParticipantId = created.detail.participantId;
+    expect(created).toMatchObject({
+      eventId,
+      outcome: 'created',
+      detail: {
+        firstName: 'Ruční',
+        lastName: 'Host',
+        contactEmail: manualEmail,
+        membershipStatus: 'active',
+        networkingEnabled: false,
+        onboardingCompleted: false,
+        invitation: { status: 'not_sent', lastSentAt: null },
+        ticket: {
+          source: 'ticket',
+          state: 'active',
+          availableActions: ['block'],
+        },
+      },
+    });
+
+    const [membership, role, ticket, audit] = await Promise.all([
+      client.db.query.eventMemberships.findFirst({
+        where: and(
+          eq(schema.eventMemberships.eventId, eventId),
+          eq(schema.eventMemberships.userId, manualParticipantId),
+        ),
+      }),
+      client.db.query.eventRoles.findFirst({
+        where: and(
+          eq(schema.eventRoles.eventId, eventId),
+          eq(schema.eventRoles.userId, manualParticipantId),
+          eq(schema.eventRoles.role, 'participant'),
+        ),
+      }),
+      client.db.query.tickets.findFirst({
+        where: and(
+          eq(schema.tickets.eventId, eventId),
+          eq(schema.tickets.holderUserId, manualParticipantId),
+        ),
+      }),
+      client.db.query.auditLogs.findFirst({
+        where: and(
+          eq(schema.auditLogs.eventId, eventId),
+          eq(schema.auditLogs.action, 'participant.created_manually'),
+          eq(schema.auditLogs.targetId, manualParticipantId),
+        ),
+      }),
+    ]);
+    expect(membership?.status).toBe('active');
+    expect(role?.grantedBy).toBe(adminId);
+    expect(ticket).toMatchObject({ status: 'activated' });
+    expect(ticket?.codeHmac).toMatch(/^[a-f0-9]{64}$/);
+    expect(audit).toBeTruthy();
+    expect(JSON.stringify(audit)).not.toContain(manualEmail);
+
+    const replay = await send();
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      adminParticipantCreateResponseSchema.parse(await replay.json()).outcome,
+    ).toBe('already_applied');
+
+    const duplicate = await send(crypto.randomUUID());
+    expect(duplicate.status).toBe(422);
+    expect(await duplicate.json()).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      fieldErrors: {
+        'profile.contactEmail': [
+          'A participant with this email address already exists.',
+        ],
+      },
+    });
+  });
+
+  it('sends one audited participant invitation and replays it without another email', async () => {
+    const sendParticipantInvitation = vi.fn(async () => undefined);
+    const idempotencyKey = crypto.randomUUID();
+    const send = () =>
+      handleAdminParticipantInvite(
+        new Request(inviteUrl, {
+          method: 'POST',
+          headers: {
+            origin,
+            'content-type': 'application/json',
+            'idempotency-key': idempotencyKey,
+          },
+          body: JSON.stringify({ participantId }),
+        }),
+        eventId,
+        participantId,
+        { ...dependencies(), sendParticipantInvitation },
+      );
+
+    const first = await send();
+    expect(first.status).toBe(200);
+    expect(
+      adminParticipantInviteResponseSchema.parse(await first.json()),
+    ).toMatchObject({
+      eventId,
+      participantId,
+      outcome: 'sent',
+      invitation: { status: 'sent', lastSentAt: now.toISOString() },
+    });
+    expect(sendParticipantInvitation).toHaveBeenCalledWith({
+      email: `private-${participantId}@example.invalid`,
+      recipientName: 'Citlivý Účastník',
+    });
+
+    const replay = await send();
+    expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    expect(
+      adminParticipantInviteResponseSchema.parse(await replay.json()).outcome,
+    ).toBe('already_sent');
+    expect(sendParticipantInvitation).toHaveBeenCalledTimes(1);
+    const audits = await client.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'participant.invitation_sent'),
+        eq(schema.auditLogs.targetId, participantId),
+      ),
+    });
+    expect(audits).toHaveLength(1);
+    expect(JSON.stringify(audits)).not.toContain(`private-${participantId}@`);
+  });
+
+  it('fails closed without an audit when invitation delivery is unavailable', async () => {
+    const response = await handleAdminParticipantInvite(
+      new Request(inviteUrl, {
+        method: 'POST',
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'idempotency-key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ participantId }),
+      }),
+      eventId,
+      participantId,
+      {
+        ...dependencies(),
+        sendParticipantInvitation: vi.fn(async () => {
+          throw new Error('synthetic delivery failure');
+        }),
+      },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      code: 'INVITATION_DELIVERY_UNAVAILABLE',
+    });
+    const audits = await client.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'participant.invitation_sent'),
+        eq(schema.auditLogs.targetId, participantId),
+      ),
+    });
+    expect(audits).toHaveLength(1);
   });
 
   it('blocks with manage permission, audit and exact idempotent replay', async () => {

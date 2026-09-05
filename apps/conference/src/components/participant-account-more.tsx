@@ -10,16 +10,19 @@ const SupportLink = ({ email }: { readonly email: string }) => (
   </a>
 );
 
-export const ParticipantMoreHub = () => (
+export const ParticipantMoreHub = ({
+  ticketAvailable = false,
+}: {
+  readonly ticketAvailable?: boolean;
+}) => (
   <section className="app-page participant-account-page participant-more-page">
     <header className="participant-account-heading">
-      <p className="eyebrow">Více</p>
+      <p className="eyebrow">Účet</p>
       <h1 data-route-heading tabIndex={-1}>
-        Účet a informace
+        Můj účet
       </h1>
       <p className="lead">
-        Spravujte jen nezbytné údaje, právní dokumenty, soukromí a přihlášení na
-        jednom místě.
+        Spravujte své osobní údaje, soukromí a přihlášení na jednom místě.
       </p>
     </header>
 
@@ -44,28 +47,18 @@ export const ParticipantMoreHub = () => (
             className="participant-more-grid"
           >
             <ActionLink block href="/app/profil">
-              Profilové údaje
+              Moje osobní údaje
             </ActionLink>
+            {ticketAvailable ? (
+              <ActionLink block href="/app/vstupenka" variant="secondary">
+                Moje vstupenka
+              </ActionLink>
+            ) : null}
             <ActionLink block href="/app/soukromi" variant="secondary">
               Soukromí a právní dokumenty
             </ActionLink>
             <ActionLink block href="/app/nastaveni" variant="secondary">
               Nastavení a přihlášení
-            </ActionLink>
-            <ActionLink block href="/app/vstupenka" variant="secondary">
-              Vstupenka
-            </ActionLink>
-            <ActionLink block href="/app/informace" variant="secondary">
-              Praktické informace
-            </ActionLink>
-            <ActionLink block href="/app/recnici" variant="secondary">
-              Řečníci
-            </ActionLink>
-            <ActionLink block href="/app/partneri" variant="secondary">
-              Partneři
-            </ActionLink>
-            <ActionLink block href="/app/networking" variant="secondary">
-              Networkingový adresář
             </ActionLink>
           </nav>
 

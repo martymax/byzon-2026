@@ -41,7 +41,7 @@ použito přímo buildem nebo jde o starší/neaktivní varianty:
 | `vstupenky` | veřejný prodejní obsah | Cenové texty a období ponechat jako marketingový obsah. Nevytvářet z nich ticket typy ani nároky; autoritou bude potvrzený SimpleShop API sync. |
 | `speakers.list[]` | `speakers`, veřejné profily, `assets` | Slug, jméno, role, bio, foto a odkazy importovat do draftu ročníku. Vazbu na program vytvářet přes stabilní ID po řízeném spárování, ne porovnáním textu za běhu. |
 | `program.days[]` | event days | Převést na lokální data ročníku. Řetězce dat nejdřív normalizovat na ISO `2026-09-18` a `2026-09-19`. |
-| `program.days[].stages[]` | `rooms` a prezentační programové sekce | Sedm současných sekcí není sedm fyzických místností. Před importem rozlišit místnost, track a seskupení večerního programu. |
+| `program.days[].stages[]` | `rooms` jako programové stage/sekce | Importovat zdrojový popisek stage, aby jej program mohl jednotně zobrazit v aplikaci i na statickém webu. Nevyvozovat z něj fyzickou místnost; paralelní koučovací linky držet odděleně kvůli kolizím. |
 | `program...events[]` | `sessions`, vazby na řečníky, případně kapacitní aktivita | Importovat jako draft. Čas nejdřív rozdělit na začátek/konec; `24:00 - ?` je validační chyba. `type` je prezentační klasifikace, ne rezervační politika. |
 | `location` | venue, praktická stránka/blok, `assets` | Převést název, text, mapový dotaz a obrázek. Doplnit strukturovanou adresu, souřadnice, navigační instrukce a případný plánek. |
 | `partners.logos[]` | `partners`, veřejné profily, `assets` | Importovat název a logo do draftu. Doplnit popis, URL, kategorii/úroveň a explicitní pořadí před publikací profilů. |

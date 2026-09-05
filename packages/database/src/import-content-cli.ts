@@ -10,6 +10,7 @@ const { values } = parseArgs({
     source: { type: 'string' },
     'repository-root': { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
+    'allow-published-update': { type: 'boolean', default: false },
   },
   strict: true,
 });
@@ -28,6 +29,7 @@ if (values['dry-run']) {
     sourceFile,
     repositoryRoot,
     dryRun: true,
+    allowPublishedUpdate: values['allow-published-update'],
   });
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 } else {
@@ -50,6 +52,7 @@ if (values['dry-run']) {
       eventSlug,
       sourceFile,
       repositoryRoot,
+      allowPublishedUpdate: values['allow-published-update'],
     });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } finally {

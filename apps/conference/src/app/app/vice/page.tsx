@@ -12,8 +12,9 @@ export const canOpenParticipantMore = (
 ): boolean => state.kind === 'available';
 
 export default async function ParticipantMorePage() {
-  if (!isFrontendPreviewAvailable()) notFound();
   const currentEvent = await loadParticipantCurrentEvent();
   if (!canOpenParticipantMore(currentEvent)) notFound();
-  return <ParticipantMoreHub />;
+  return (
+    <ParticipantMoreHub ticketAvailable={isFrontendPreviewAvailable()} />
+  );
 }

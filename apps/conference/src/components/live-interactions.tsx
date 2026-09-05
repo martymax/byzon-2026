@@ -145,6 +145,7 @@ export const ModeratorQuestionList = ({ sessionId }: { sessionId: string }) => {
           {feed.items.map((question) => (
             <li key={question.questionId}>
               <Card>
+                <strong>{question.authorName}</strong>
                 <time dateTime={question.submittedAt}>
                   {new Intl.DateTimeFormat('cs-CZ', {
                     hour: '2-digit',

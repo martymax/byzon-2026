@@ -177,6 +177,7 @@ describe('CS-CONTENT-01 contracts', () => {
             capacity: 10,
             reservationOpensAt: null,
             reservationClosesAt: '2026-09-18T06:45:00.000Z',
+            speakerIds: ['01910000-0000-7000-8000-000000000005'],
           },
         ],
       },
@@ -192,6 +193,12 @@ describe('CS-CONTENT-01 contracts', () => {
       publishedProgramSnapshotSchema.parse(programWithWindow).program
         .sessions[0],
     ).not.toHaveProperty('reservationClosesAt');
+    expect(
+      publishedProgramSnapshotSchema.parse(programWithWindow).program
+        .sessions[0],
+    ).toMatchObject({
+      speakerIds: ['01910000-0000-7000-8000-000000000005'],
+    });
     expect(
       publishedProgramAgendaSnapshotSchema.safeParse({
         program: {

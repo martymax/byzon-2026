@@ -5,7 +5,12 @@ import Link from 'next/link';
 
 import type { ApiPort } from '@/lib/api';
 
-import { ParticipantAgendaConflictDialog } from './participant-agenda-dialogs';
+import { ParticipantAgendaItemActions } from './participant-agenda-actions';
+import {
+  ParticipantAgendaConflictDialog,
+  ParticipantAgendaReservationConflictDialog,
+  ParticipantAgendaReservationOfferDialog,
+} from './participant-agenda-dialogs';
 import { participantAgendaItemStatus } from './participant-agenda-model';
 import { useParticipantAgendaResource } from './participant-agenda-resource';
 import { ParticipantAgendaMutationFeedback } from './participant-agenda-status';
@@ -46,6 +51,14 @@ export const ParticipantSessionAgendaAction = ({
         resource={resource}
         timezone={state.data.eventTimezone}
       />
+      <ParticipantAgendaReservationOfferDialog
+        resource={resource}
+        timezone={state.data.eventTimezone}
+      />
+      <ParticipantAgendaReservationConflictDialog
+        resource={resource}
+        timezone={state.data.eventTimezone}
+      />
     </>
   );
   const item = state.data.items.find(({ session }) => session.id === sessionId);
@@ -58,6 +71,7 @@ export const ParticipantSessionAgendaAction = ({
           <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
           <p>{status.detail}</p>
         </div>
+        <ParticipantAgendaItemActions item={item} resource={resource} />
         <Link href="/app/agenda">Spravovat v osobní agendě</Link>
       </section>
     );

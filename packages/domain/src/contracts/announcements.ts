@@ -419,10 +419,8 @@ export const adminAnnouncementPreviewResponseSchema = z
       sample: z
         .array(
           z.strictObject({
-            participantReference: safeInlineTextSchema(80).refine(
-              (value) => /[*•…]/.test(value),
-              'Audience sample reference must remain masked',
-            ),
+            participantName: safeInlineTextSchema(257),
+            contactEmail: z.string().email().max(320),
           }),
         )
         .max(5),

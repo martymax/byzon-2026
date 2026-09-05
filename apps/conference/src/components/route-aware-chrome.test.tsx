@@ -54,5 +54,47 @@ describe('route-aware root chrome', () => {
     expect(markup.match(/<main/g)).toHaveLength(1);
     expect(markup.match(/skip-link/g)).toHaveLength(1);
     expect(markup).toContain('app-header');
+    expect(markup).toContain('href="/"');
+    expect(markup).toContain('BYZON – přihlášení');
+  });
+
+  it('uses the brand as a direct return to the participant overview', () => {
+    navigationMocks.pathname.mockReturnValue('/app/networking');
+
+    const markup = renderToStaticMarkup(
+      <RouteAwareChrome>
+        <section>Networking</section>
+      </RouteAwareChrome>,
+    );
+
+    expect(markup).toContain('href="/app"');
+    expect(markup).toContain('BYZON – účastnická aplikace');
+    expect(markup).not.toContain('aria-current="page"');
+  });
+
+  it('marks the participant overview brand as the current page', () => {
+    navigationMocks.pathname.mockReturnValue('/app');
+
+    const markup = renderToStaticMarkup(
+      <RouteAwareChrome>
+        <section>Přehled</section>
+      </RouteAwareChrome>,
+    );
+
+    expect(markup).toContain('href="/app"');
+    expect(markup).toContain('aria-current="page"');
+  });
+
+  it('returns from activity management to the participant application', () => {
+    navigationMocks.pathname.mockReturnValue('/host/aktivity');
+
+    const markup = renderToStaticMarkup(
+      <RouteAwareChrome>
+        <section>Moje aktivity</section>
+      </RouteAwareChrome>,
+    );
+
+    expect(markup).toContain('href="/app"');
+    expect(markup).toContain('BYZON – účastnická aplikace');
   });
 });

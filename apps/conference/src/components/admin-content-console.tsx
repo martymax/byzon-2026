@@ -1,11 +1,15 @@
 'use client';
 
 import {
+  memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 
 import {
@@ -91,6 +95,22 @@ const contentStatusLabels: Readonly<Record<string, string>> = {
   archived: 'Archivováno',
 };
 
+const contentPublicationStateLabel = (item: AdminContentItem): string => {
+  if (item.status === 'cancelled') return contentStatusLabels.cancelled!;
+  if (item.publicationState === 'archived') {
+    return contentStatusLabels.archived!;
+  }
+  if (item.publicationState === 'published') {
+    return 'Ve zveřejněné verzi';
+  }
+  if (item.publicationState === 'unpublished') {
+    return 'Čeká na zveřejnění';
+  }
+  return (
+    contentStatusLabels[String(item.status)] ?? 'Stav zveřejnění není dostupný'
+  );
+};
+
 const slugFromTitle = (value: string): string =>
   value
     .normalize('NFD')
@@ -111,9 +131,10 @@ const bodyFieldNames: Partial<Record<AdminContentResource, string>> = {
 const emptyReferences = (): {
   days: readonly AdminContentItem[];
   rooms: readonly AdminContentItem[];
+  sessions: readonly AdminContentItem[];
   speakers: readonly AdminContentItem[];
   venues: readonly AdminContentItem[];
-} => ({ days: [], rooms: [], speakers: [], venues: [] });
+} => ({ days: [], rooms: [], sessions: [], speakers: [], venues: [] });
 
 export const localInputValue = (value: unknown, timezone: string) => {
   if (!value) return '';
@@ -129,6 +150,41 @@ export const localInputValue = (value: unknown, timezone: string) => {
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((item) => item.type === type)?.value ?? '';
   return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
+};
+
+const programSlotLabel = (value: unknown, timezone: string) =>
+  new Intl.DateTimeFormat('cs-CZ', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(new Date(String(value)));
+
+export const programTimeRangeLabel = (
+  startsAt: unknown,
+  endsAt: unknown,
+  timezone: string,
+): string =>
+  formatProgramTimeRange(
+    startsAt,
+    endsAt,
+    new Intl.DateTimeFormat('cs-CZ', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: timezone,
+    }),
+  );
+
+const formatProgramTimeRange = (
+  startsAt: unknown,
+  endsAt: unknown,
+  formatter: Intl.DateTimeFormat,
+): string => {
+  const start = new Date(String(startsAt));
+  const end = new Date(String(endsAt));
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+    return 'Čas neurčen';
+  }
+  return `${formatter.format(start)}–${formatter.format(end)}`;
 };
 
 export const zonedLocalToIso = (value: string, timezone: string) => {
@@ -285,22 +341,20 @@ export const adminContentBodyFromForm = (
     };
   }
   if (resource === 'speakers') {
-    const names = value('title').split(/\s+/).filter(Boolean);
-    if (names.length < 2) {
-      throw new AdminContentFormError({
-        title: 'Zadejte jméno i příjmení.',
-      });
-    }
     body = {
       ...body,
       slug: value('slug'),
-      firstName: names.slice(0, -1).join(' '),
-      lastName: names.at(-1),
+      firstName: value('firstName'),
+      lastName: value('lastName'),
       jobTitle: value('jobTitle') || null,
       company: value('company') || null,
       bioMarkdown: value('bioMarkdown') || null,
+      accountEmail: value('accountEmail').toLowerCase() || null,
       linkedinUrl: value('linkedinUrl') || null,
+      instagramUrl: value('instagramUrl') || null,
+      facebookUrl: value('facebookUrl') || null,
       websiteUrl: value('websiteUrl') || null,
+      sessionIds: form.getAll('sessionIds').map(String),
     };
   }
   if (resource === 'partners') {
@@ -350,6 +404,160 @@ const itemLabel = (item: AdminContentItem): string =>
           'Položka bez názvu',
       );
 
+const contentListRenderBatchSize = 20;
+
+const AdminContentItemList = memo(function AdminContentItemList({
+  archiveBlocked,
+  items,
+  onArchive,
+  onEdit,
+  readOnly,
+  references,
+  resource,
+  timezone,
+  writesBlocked,
+}: {
+  readonly archiveBlocked: boolean;
+  readonly items: readonly AdminContentItem[];
+  readonly onArchive: (item: AdminContentItem) => void;
+  readonly onEdit: (item: AdminContentItem) => void;
+  readonly readOnly: boolean;
+  readonly references: ReturnType<typeof emptyReferences>;
+  readonly resource: AdminContentResource;
+  readonly timezone: string;
+  readonly writesBlocked: boolean;
+}) {
+  const [visibleCount, setVisibleCount] = useState(() =>
+    Math.min(contentListRenderBatchSize, items.length),
+  );
+  const roomsById = useMemo(
+    () => new Map(references.rooms.map((room) => [room.id, itemLabel(room)])),
+    [references.rooms],
+  );
+  const daysById = useMemo(
+    () => new Map(references.days.map((day) => [day.id, itemLabel(day)])),
+    [references.days],
+  );
+  const speakersById = useMemo(
+    () =>
+      new Map(
+        references.speakers.map((speaker) => [speaker.id, itemLabel(speaker)]),
+      ),
+    [references.speakers],
+  );
+  const timeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('cs-CZ', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: timezone,
+      }),
+    [timezone],
+  );
+
+  useEffect(() => {
+    if (visibleCount >= items.length) return;
+    const frame = window.requestAnimationFrame(() => {
+      setVisibleCount((current) =>
+        Math.min(current + contentListRenderBatchSize, items.length),
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [items.length, visibleCount]);
+
+  const renderedItems = items.slice(0, visibleCount);
+
+  return (
+    <ul
+      aria-busy={renderedItems.length < items.length}
+      className={styles.contentList}
+    >
+      {renderedItems.map((item) => (
+        <li data-archived={item.status === 'archived'} key={item.id}>
+          <span>
+            <strong>{itemLabel(item)}</strong>
+            {resource === 'sessions' ? (
+              <dl className={styles.sessionMetadata}>
+                <div>
+                  <dt>Čas</dt>
+                  <dd>
+                    {daysById.get(String(item.dayId))
+                      ? `${daysById.get(String(item.dayId))} · `
+                      : ''}
+                    {formatProgramTimeRange(
+                      item.startsAt,
+                      item.endsAt,
+                      timeFormatter,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Stage</dt>
+                  <dd>
+                    {roomsById.get(String(item.roomId)) ?? 'Stage neurčena'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Řečníci</dt>
+                  <dd>
+                    {Array.isArray(item.speakerIds) &&
+                    item.speakerIds.length > 0
+                      ? item.speakerIds
+                          .map((id) => speakersById.get(String(id)))
+                          .filter(Boolean)
+                          .join(', ') || 'Řečník neurčen'
+                      : 'Bez řečníka'}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
+            <small>
+              {resource === 'speakers' ? (
+                <>
+                  {[item.jobTitle, item.company]
+                    .filter(Boolean)
+                    .map(String)
+                    .join(' · ') || 'Bez uvedené role'}
+                  {' · '}
+                  {Array.isArray(item.sessionIds)
+                    ? `${item.sessionIds.length} vystoupení`
+                    : '0 vystoupení'}
+                  {' · '}
+                </>
+              ) : null}
+              {contentPublicationStateLabel(item)}
+            </small>
+          </span>
+          {!readOnly && item.status !== 'archived' ? (
+            <span className={styles.contentActions}>
+              <button
+                aria-label={`Upravit: ${itemLabel(item)}`}
+                className={styles.secondaryButton}
+                disabled={writesBlocked}
+                onClick={() => onEdit(item)}
+                type="button"
+              >
+                Upravit
+              </button>
+              {resource !== 'days' ? (
+                <button
+                  aria-label={`Archivovat: ${itemLabel(item)}`}
+                  className={styles.dangerButton}
+                  disabled={archiveBlocked}
+                  onClick={() => onArchive(item)}
+                  type="button"
+                >
+                  Archivovat
+                </button>
+              ) : null}
+            </span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+});
+
 const failureMessage = (failure: AdminContentFailure): string =>
   failure.requestId
     ? `${failure.message} Reference požadavku: ${failure.requestId}.`
@@ -357,7 +565,7 @@ const failureMessage = (failure: AdminContentFailure): string =>
 
 const fieldLabels: Readonly<Record<string, string>> = {
   answerMarkdown: 'Odpověď',
-  bioMarkdown: 'Bio',
+  bioMarkdown: 'Medailonek',
   bodyMarkdown: 'Obsah stránky',
   capacity: 'Kapacita',
   category: 'Kategorie',
@@ -366,7 +574,11 @@ const fieldLabels: Readonly<Record<string, string>> = {
   dayId: 'Den',
   description: 'Popis',
   endsAt: 'Konec',
+  firstName: 'Jméno',
+  facebookUrl: 'Facebook URL',
   linkedinUrl: 'LinkedIn URL',
+  instagramUrl: 'Instagram URL',
+  lastName: 'Příjmení',
   localDate: 'Datum',
   mapQuery: 'Místo pro mapu',
   navigationMarkdown: 'Navigační pokyny',
@@ -374,6 +586,7 @@ const fieldLabels: Readonly<Record<string, string>> = {
   slug: 'Adresa stránky',
   sortOrder: 'Pořadí',
   speakerIds: 'Řečníci',
+  sessionIds: 'Body programu',
   startsAt: 'Začátek',
   status: 'Stav',
   summary: 'Shrnutí',
@@ -563,6 +776,7 @@ export const AdminContentConsole = ({
   assetPort,
   eventId,
   initialResource = 'sessions',
+  showAreaNavigation = true,
   onContentChanged,
   onDirtyChange,
   onSecurityFailure,
@@ -573,6 +787,7 @@ export const AdminContentConsole = ({
   readonly assetPort?: AdminContentAssetPort;
   readonly eventId: string;
   readonly initialResource?: AdminContentResource;
+  readonly showAreaNavigation?: boolean;
   readonly onContentChanged?: () => void;
   readonly onDirtyChange?: (dirty: boolean) => void;
   readonly onSecurityFailure?: (failure: AdminContentFailure) => void;
@@ -588,7 +803,9 @@ export const AdminContentConsole = ({
   const [references, setReferences] = useState(emptyReferences);
   const [editing, setEditing] = useState<AdminContentItem | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorFieldsReady, setEditorFieldsReady] = useState(false);
   const [listFilter, setListFilter] = useState<'active' | 'archived'>('active');
+  const [speakerListQuery, setSpeakerListQuery] = useState('');
   const [slugValue, setSlugValue] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [sortOrder, setSortOrder] = useState(0);
@@ -611,10 +828,15 @@ export const AdminContentConsole = ({
   const [reconciliationRequired, setReconciliationRequired] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [localFormAvailable, setLocalFormAvailable] = useState(false);
+  const working = busy !== null;
   const operationLocked = useRef(false);
   const activeMutation = useRef<AbortController | null>(null);
   const activeResource = useRef<AdminContentResource>(initialResource);
   const editorHistoryActive = useRef(false);
+  const editorDialogRef = useRef<HTMLFormElement>(null);
+  const editorTitleRef = useRef<HTMLHeadingElement>(null);
+  const editorTriggerRef = useRef<HTMLElement | null>(null);
+  const listTitleRef = useRef<HTMLHeadingElement>(null);
   const listScrollPosition = useRef(0);
 
   useUnsavedContentGuard(dirty);
@@ -629,6 +851,7 @@ export const AdminContentConsole = ({
       }
       editorHistoryActive.current = false;
       setEditorOpen(false);
+      setEditorFieldsReady(false);
       setEditing(null);
       setDirty(false);
       window.requestAnimationFrame(() =>
@@ -638,6 +861,20 @@ export const AdminContentConsole = ({
     window.addEventListener('popstate', closeFromHistory);
     return () => window.removeEventListener('popstate', closeFromHistory);
   }, []);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => {
+      setEditorFieldsReady(true);
+      editorTitleRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [editorOpen]);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -664,6 +901,7 @@ export const AdminContentConsole = ({
     setReferences(emptyReferences());
     setEditing(null);
     setEditorOpen(false);
+    setEditorFieldsReady(false);
     setArchiveCandidate(null);
     setDirty(false);
     setMessage('');
@@ -696,7 +934,13 @@ export const AdminContentConsole = ({
     setItems([]);
     setReferences(emptyReferences());
     setSnapshotReady(false);
-    const referenceResources = ['days', 'venues', 'rooms', 'speakers'] as const;
+    const referenceResources = [
+      'days',
+      'venues',
+      'rooms',
+      'sessions',
+      'speakers',
+    ] as const;
     void Promise.all([
       port.list(eventId, targetResource, controller.signal),
       ...referenceResources.map((reference) =>
@@ -731,6 +975,7 @@ export const AdminContentConsole = ({
       setReferences(next);
       setEditing(null);
       setEditorOpen(false);
+      setEditorFieldsReady(false);
       setDirty(false);
       setReconciliationRequired(false);
       setSnapshotReady(true);
@@ -750,8 +995,10 @@ export const AdminContentConsole = ({
     }
     setSelectedResource(next);
     setEditorOpen(false);
+    setEditorFieldsReady(false);
     setEditing(null);
     setListFilter('active');
+    setSpeakerListQuery('');
     editorHistoryActive.current = false;
     setError(null);
     setMessage('');
@@ -771,42 +1018,55 @@ export const AdminContentConsole = ({
     );
   };
 
-  const openEditor = (item: AdminContentItem | null) => {
-    listScrollPosition.current = window.scrollY;
-    editorHistoryActive.current = true;
-    window.history.pushState(
-      { ...window.history.state, __byzonAdminContentEditor: true },
-      '',
-      `${window.location.pathname}${window.location.search}#uprava`,
-    );
-    setEditing(item);
-    setEditorOpen(true);
-    setError(null);
-    setDirty(false);
-    setSlugValue(String(item?.slug ?? ''));
-    setSlugTouched(Boolean(item));
-    setSortOrder(
-      Number(
-        item?.sortOrder ??
-          Math.max(
-            -1,
-            ...items.map((candidate) => Number(candidate.sortOrder)),
-          ) + 1,
-      ),
-    );
-    setSpeakerSearch('');
-    setSpeakerSelection(
-      Array.isArray(item?.speakerIds)
-        ? item.speakerIds.filter(
-            (value): value is string => typeof value === 'string',
-          )
-        : [],
-    );
-  };
+  const openEditor = useCallback(
+    (item: AdminContentItem | null) => {
+      if (editorHistoryActive.current) return;
+      listScrollPosition.current = window.scrollY;
+      editorTriggerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      editorHistoryActive.current = true;
+      window.history.pushState(
+        { ...window.history.state, __byzonAdminContentEditor: true },
+        '',
+        `${window.location.pathname}${window.location.search}#uprava`,
+      );
+      window.requestAnimationFrame(() => {
+        if (!editorHistoryActive.current) return;
+        setEditing(item);
+        setEditorFieldsReady(false);
+        setError(null);
+        setDirty(false);
+        setSlugValue(String(item?.slug ?? ''));
+        setSlugTouched(Boolean(item));
+        setSortOrder(
+          Number(
+            item?.sortOrder ??
+              Math.max(
+                -1,
+                ...items.map((candidate) => Number(candidate.sortOrder)),
+              ) + 1,
+          ),
+        );
+        setSpeakerSearch('');
+        setSpeakerSelection(
+          Array.isArray(item?.speakerIds)
+            ? item.speakerIds.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
+        );
+        setEditorOpen(true);
+      });
+    },
+    [items],
+  );
 
-  const closeEditor = () => {
+  const closeEditor = useCallback((focusList = false) => {
     editorHistoryActive.current = false;
     setEditorOpen(false);
+    setEditorFieldsReady(false);
     setEditing(null);
     setDirty(false);
     setError(null);
@@ -815,9 +1075,50 @@ export const AdminContentConsole = ({
       '',
       `${window.location.pathname}${window.location.search}`,
     );
-    window.requestAnimationFrame(() =>
-      window.scrollTo({ top: listScrollPosition.current }),
-    );
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: listScrollPosition.current });
+      const target = focusList
+        ? listTitleRef.current
+        : editorTriggerRef.current;
+      if (target?.isConnected) target.focus({ preventScroll: true });
+      else listTitleRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const requestEditorClose = useCallback(() => {
+    if (working) return;
+    if (dirty && !window.confirm('Zahodit neuložené změny formuláře?')) {
+      return;
+    }
+    closeEditor();
+  }, [closeEditor, dirty, working]);
+
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      requestEditorClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      editorDialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary',
+      ) ?? [],
+    ).filter((element) => !element.hasAttribute('hidden'));
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (
+      event.shiftKey &&
+      (document.activeElement === first ||
+        document.activeElement === editorTitleRef.current)
+    ) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -899,7 +1200,7 @@ export const AdminContentConsole = ({
         ? 'Položka byla vytvořena a potvrzena serverem.'
         : 'Položka byla upravena a potvrzena serverem.',
     );
-    closeEditor();
+    closeEditor(true);
     onContentChanged?.();
     setLoadRequest(({ sequence }) => ({
       resource,
@@ -951,6 +1252,7 @@ export const AdminContentConsole = ({
     }
     setMessage('Položka byla archivována a potvrzena serverem.');
     setEditorOpen(false);
+    setEditorFieldsReady(false);
     onContentChanged?.();
     setLoadRequest(({ sequence }) => ({
       resource,
@@ -959,15 +1261,41 @@ export const AdminContentConsole = ({
   };
 
   const fieldErrors = error?.fieldErrors ?? {};
-  const working = busy !== null;
   const writesBlocked = working || reconciliationRequired || !snapshotReady;
+
+  useLayoutEffect(() => {
+    if (!editorOpen) return;
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      requestEditorClose();
+    };
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [editorOpen, requestEditorClose]);
+
   const bodyFieldName = bodyFieldNames[resource];
   const area = resourceArea[selectedResource];
   const areaResources = contentAreaResources[area];
-  const visibleItems = items.filter((item) =>
-    listFilter === 'archived'
-      ? item.status === 'archived'
-      : item.status !== 'archived',
+  const visibleItems = useMemo(
+    () =>
+      items.filter((item) => {
+        const statusMatches =
+          listFilter === 'archived'
+            ? item.status === 'archived'
+            : item.status !== 'archived';
+        if (!statusMatches || resource !== 'speakers') return statusMatches;
+        const query = speakerListQuery.trim().toLocaleLowerCase('cs-CZ');
+        return (
+          !query ||
+          [item.firstName, item.lastName, item.company, item.jobTitle]
+            .filter(Boolean)
+            .join(' ')
+            .toLocaleLowerCase('cs-CZ')
+            .includes(query)
+        );
+      }),
+    [items, listFilter, resource, speakerListQuery],
   );
   const visibleSpeakers = references.speakers.filter((speaker) => {
     const query = speakerSearch.trim().toLocaleLowerCase('cs-CZ');
@@ -978,7 +1306,10 @@ export const AdminContentConsole = ({
         .includes(query)
     );
   });
-
+  const activeSpeakers =
+    resource === 'speakers'
+      ? items.filter((item) => item.status !== 'archived')
+      : [];
   const requestReload = () => {
     if (
       dirty &&
@@ -1002,9 +1333,15 @@ export const AdminContentConsole = ({
     >
       <div className={styles.panelHeader}>
         <div>
-          <p className={styles.eyebrow}>Jediný editor obsahu</p>
+          <p className={styles.eyebrow}>
+            {resource === 'speakers'
+              ? 'Profily, medailonky a vystoupení'
+              : 'Jediný editor obsahu'}
+          </p>
           <h2 id="admin-content-editor-title">
-            Program a publikované informace
+            {resource === 'speakers'
+              ? 'Správa řečníků'
+              : 'Program a publikované informace'}
           </h2>
         </div>
         {readOnly ? (
@@ -1012,42 +1349,48 @@ export const AdminContentConsole = ({
         ) : null}
       </div>
 
-      <nav aria-label="Oblasti obsahu" className={styles.contentAreaTabs}>
-        {contentAreas.map((item) => (
-          <button
-            aria-current={area === item ? 'page' : undefined}
-            className={
-              area === item ? styles.filterActive : styles.filterButton
-            }
-            disabled={working}
-            key={item}
-            onClick={() => changeResource(contentAreaResources[item][0]!)}
-            type="button"
-          >
-            {contentAreaLabels[item]}
-          </button>
-        ))}
-      </nav>
-      <label className={`${styles.field} ${styles.contentAreaSelect}`}>
-        <span>Oblast obsahu</span>
-        <select
-          disabled={working}
-          onChange={(event) =>
-            changeResource(
-              contentAreaResources[event.target.value as AdminContentArea][0]!,
-            )
-          }
-          value={area}
-        >
-          {contentAreas.map((item) => (
-            <option key={item} value={item}>
-              {contentAreaLabels[item]}
-            </option>
-          ))}
-        </select>
-      </label>
+      {showAreaNavigation ? (
+        <>
+          <nav aria-label="Oblasti obsahu" className={styles.contentAreaTabs}>
+            {contentAreas.map((item) => (
+              <button
+                aria-current={area === item ? 'page' : undefined}
+                className={
+                  area === item ? styles.filterActive : styles.filterButton
+                }
+                disabled={working}
+                key={item}
+                onClick={() => changeResource(contentAreaResources[item][0]!)}
+                type="button"
+              >
+                {contentAreaLabels[item]}
+              </button>
+            ))}
+          </nav>
+          <label className={`${styles.field} ${styles.contentAreaSelect}`}>
+            <span>Oblast obsahu</span>
+            <select
+              disabled={working}
+              onChange={(event) =>
+                changeResource(
+                  contentAreaResources[
+                    event.target.value as AdminContentArea
+                  ][0]!,
+                )
+              }
+              value={area}
+            >
+              {contentAreas.map((item) => (
+                <option key={item} value={item}>
+                  {contentAreaLabels[item]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      ) : null}
 
-      {areaResources.length > 1 ? (
+      {showAreaNavigation && areaResources.length > 1 ? (
         <fieldset className={styles.contentTypeSelector}>
           <legend>Typ obsahu</legend>
           <div>
@@ -1071,7 +1414,7 @@ export const AdminContentConsole = ({
         </fieldset>
       ) : null}
 
-      {error ? (
+      {error && !editorOpen ? (
         <AdminFormErrorSummary
           descriptionId="admin-content-form-error"
           details={failureDetails(fieldErrors)}
@@ -1094,7 +1437,7 @@ export const AdminContentConsole = ({
         </p>
       ) : null}
 
-      {reconciliationRequired ? (
+      {reconciliationRequired && !editorOpen ? (
         <p className={styles.warning} role="status">
           {error?.kind === 'stale'
             ? 'Další zápisy jsou zamčené. Rozepsaný formulář zůstal zachovaný; před načtením aktuálního stavu potvrďte jeho zahození.'
@@ -1105,12 +1448,46 @@ export const AdminContentConsole = ({
       {!reconciliationRequired &&
       !snapshotReady &&
       localFormAvailable &&
-      error ? (
+      error &&
+      !editorOpen ? (
         <p className={styles.warning} role="status">
           Nový stav obsahu se nepodařilo potvrdit. Rozepsaný formulář zůstal
           zachovaný pouze pro kontrolu; zápisy jsou uzamčené, dokud nenačtete
           aktuální stav.
         </p>
+      ) : null}
+
+      {resource === 'speakers' && snapshotReady ? (
+        <section
+          aria-label="Souhrn řečníků"
+          className={styles.speakerAdminSummary}
+        >
+          <article>
+            <span>Aktivní profily</span>
+            <strong>{activeSpeakers.length}</strong>
+          </article>
+          <article>
+            <span>Zveřejněné</span>
+            <strong>
+              {
+                activeSpeakers.filter((item) => item.status === 'published')
+                  .length
+              }
+            </strong>
+          </article>
+          <article>
+            <span>Bez programu</span>
+            <strong>
+              {
+                activeSpeakers.filter(
+                  (item) =>
+                    !Array.isArray(item.sessionIds) ||
+                    item.sessionIds.length === 0,
+                ).length
+              }
+            </strong>
+          </article>
+        </section>
       ) : null}
 
       <section
@@ -1120,7 +1497,9 @@ export const AdminContentConsole = ({
       >
         <div className={styles.panelHeader}>
           <div>
-            <h3 id="content-list-title">{resourceLabels[resource]}</h3>
+            <h3 id="content-list-title" ref={listTitleRef} tabIndex={-1}>
+              {resourceLabels[resource]}
+            </h3>
             <p className={styles.muted}>
               Nejdřív vyberte existující položku, nebo přidejte novou.
             </p>
@@ -1147,6 +1526,17 @@ export const AdminContentConsole = ({
           </div>
         </div>
         <div aria-label="Zobrazené položky" className={styles.contentFilters}>
+          {resource === 'speakers' ? (
+            <label className={styles.contentListSearch}>
+              <span>Filtrovat řečníky</span>
+              <input
+                onChange={(event) => setSpeakerListQuery(event.target.value)}
+                placeholder="Jméno, firma nebo role"
+                type="search"
+                value={speakerListQuery}
+              />
+            </label>
+          ) : null}
           <button
             aria-pressed={listFilter === 'active'}
             className={
@@ -1185,641 +1575,826 @@ export const AdminContentConsole = ({
               : 'V této oblasti zatím není žádná položka.'}
           </p>
         ) : (
-          <ul className={styles.contentList}>
-            {visibleItems.map((item) => (
-              <li data-archived={item.status === 'archived'} key={item.id}>
-                <span>
-                  <strong>{itemLabel(item)}</strong>
-                  <small>
-                    {contentStatusLabels[String(item.status)] ??
-                      'Bez stavového příznaku'}
-                  </small>
-                </span>
-                {!readOnly && item.status !== 'archived' ? (
-                  <span className={styles.contentActions}>
-                    <button
-                      aria-label={`Upravit: ${itemLabel(item)}`}
-                      className={styles.secondaryButton}
-                      disabled={writesBlocked}
-                      onClick={() => openEditor(item)}
-                      type="button"
-                    >
-                      Upravit
-                    </button>
-                    {resource !== 'days' ? (
-                      <button
-                        aria-label={`Archivovat: ${itemLabel(item)}`}
-                        className={styles.dangerButton}
-                        disabled={writesBlocked || dirty}
-                        onClick={() => setArchiveCandidate(item)}
-                        type="button"
-                      >
-                        Archivovat
-                      </button>
-                    ) : null}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <AdminContentItemList
+            archiveBlocked={writesBlocked || dirty}
+            items={visibleItems}
+            onArchive={setArchiveCandidate}
+            onEdit={openEditor}
+            readOnly={readOnly}
+            references={references}
+            resource={resource}
+            timezone={timezone}
+            writesBlocked={writesBlocked}
+          />
         )}
       </section>
 
       {!readOnly && localFormAvailable && editorOpen ? (
-        <form
-          aria-busy={busy === 'loading'}
-          className={styles.contentForm}
-          inert={snapshotReady ? undefined : true}
-          key={`${resource}:${editing?.id ?? 'new'}`}
-          noValidate
-          onChange={() => {
-            if (!snapshotReady) return;
-            setDirty(true);
-            onDirtyChange?.(true);
+        <div
+          className={styles.contentEditorScrim}
+          onKeyDown={handleEditorKeyDown}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              requestEditorClose();
+            }
           }}
-          onSubmit={submit}
         >
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.eyebrow}>
-                {editing ? 'Úprava obsahu' : 'Nový obsah'}
-              </p>
-              <h3>{editing ? itemLabel(editing) : createLabels[resource]}</h3>
-            </div>
-            <div className={styles.actionRow}>
-              {dirty ? (
-                <span className={styles.badge}>Neuložené změny</span>
-              ) : null}
-              <button
-                className={styles.secondaryButton}
-                onClick={() => {
-                  if (
-                    dirty &&
-                    !window.confirm('Zahodit neuložené změny formuláře?')
-                  ) {
-                    return;
-                  }
-                  closeEditor();
-                }}
-                type="button"
-              >
-                Zpět na seznam
-              </button>
-            </div>
-          </div>
-          {resource === 'days' ? (
-            <label className={styles.field}>
-              <span>Datum</span>
-              <input
-                defaultValue={String(editing?.localDate ?? '')}
-                name="localDate"
-                required
-                type="date"
-                {...fieldA11y(fieldErrors, 'localDate')}
-              />
-              <FieldError errors={fieldErrors} name="localDate" />
-            </label>
-          ) : null}
-          {resource === 'rooms' ? (
-            <label className={styles.field}>
-              <span>Místo</span>
-              <select
-                defaultValue={String(editing?.venueId ?? '')}
-                name="venueId"
-                required
-                {...fieldA11y(fieldErrors, 'venueId')}
-              >
-                <option value="">Vyberte místo</option>
-                {references.venues.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {String(item.name)}
-                  </option>
-                ))}
-              </select>
-              <FieldError errors={fieldErrors} name="venueId" />
-            </label>
-          ) : null}
-          {resource === 'sessions' ? (
-            <>
-              <label className={styles.field}>
-                <span>Den</span>
-                <select
-                  defaultValue={String(editing?.dayId ?? '')}
-                  name="dayId"
-                  required
-                  {...fieldA11y(fieldErrors, 'dayId')}
+          <form
+            aria-busy={!editorFieldsReady || busy === 'loading'}
+            aria-labelledby="admin-content-form-title"
+            aria-modal="true"
+            className={`${styles.contentForm} ${styles.contentFormModal}`}
+            inert={snapshotReady ? undefined : true}
+            key={`${resource}:${editing?.id ?? 'new'}`}
+            noValidate
+            onChange={() => {
+              if (!snapshotReady) return;
+              setDirty(true);
+              onDirtyChange?.(true);
+            }}
+            onSubmit={submit}
+            ref={editorDialogRef}
+            role="dialog"
+          >
+            <div className={styles.panelHeader}>
+              <div>
+                <p className={styles.eyebrow}>
+                  {editing ? 'Úprava obsahu' : 'Nový obsah'}
+                </p>
+                <h3
+                  id="admin-content-form-title"
+                  ref={editorTitleRef}
+                  tabIndex={-1}
                 >
-                  <option value="">Vyberte den</option>
-                  {references.days.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {itemLabel(item)}
-                    </option>
-                  ))}
-                </select>
-                <FieldError errors={fieldErrors} name="dayId" />
-              </label>
-              <label className={styles.field}>
-                <span>Místnost</span>
-                <select
-                  defaultValue={String(editing?.roomId ?? '')}
-                  name="roomId"
-                  {...fieldA11y(fieldErrors, 'roomId')}
-                >
-                  <option value="">Bez místnosti</option>
-                  {references.rooms.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {itemLabel(item)}
-                    </option>
-                  ))}
-                </select>
-                <FieldError errors={fieldErrors} name="roomId" />
-              </label>
-              <label className={styles.field}>
-                <span>Začátek ({timezone})</span>
-                <input
-                  defaultValue={localInputValue(editing?.startsAt, timezone)}
-                  name="startsAt"
-                  required
-                  type="datetime-local"
-                  {...fieldA11y(fieldErrors, 'startsAt')}
-                />
-                <FieldError errors={fieldErrors} name="startsAt" />
-              </label>
-              <label className={styles.field}>
-                <span>Konec ({timezone})</span>
-                <input
-                  defaultValue={localInputValue(editing?.endsAt, timezone)}
-                  name="endsAt"
-                  required
-                  type="datetime-local"
-                  {...fieldA11y(fieldErrors, 'endsAt')}
-                />
-                <FieldError errors={fieldErrors} name="endsAt" />
-              </label>
-              <label className={styles.field}>
-                <span>Typ</span>
-                <select
-                  defaultValue={String(editing?.type ?? 'talk')}
-                  name="type"
-                  {...fieldA11y(fieldErrors, 'type')}
-                >
-                  <option value="talk">Přednáška</option>
-                  <option value="panel">Panel</option>
-                  <option value="workshop">Workshop</option>
-                  <option value="mastermind">Mastermind</option>
-                  <option value="coaching">Koučink</option>
-                  <option value="networking">Networking</option>
-                  <option value="break">Přestávka</option>
-                  <option value="meal">Jídlo</option>
-                  <option value="gala">Gala</option>
-                  <option value="other">Jiné</option>
-                </select>
-                <FieldError errors={fieldErrors} name="type" />
-              </label>
-              <fieldset
-                className={`${styles.speakerPicker} ${styles.contentWide}`}
-                {...fieldA11y(fieldErrors, 'speakerIds')}
-              >
-                <legend>Řečníci</legend>
-                <label className={styles.field}>
-                  <span>Najít řečníka</span>
-                  <input
-                    onChange={(event) => setSpeakerSearch(event.target.value)}
-                    placeholder="Začněte psát jméno"
-                    type="search"
-                    value={speakerSearch}
-                  />
-                </label>
-                {speakerSelection.length ? (
-                  <ul
-                    aria-label="Vybraní řečníci"
-                    className={styles.speakerChips}
-                  >
-                    {speakerSelection.map((id) => {
-                      const speaker = references.speakers.find(
-                        (candidate) => candidate.id === id,
-                      );
-                      return speaker ? (
-                        <li key={id}>
-                          {String(speaker.firstName)} {String(speaker.lastName)}
-                        </li>
-                      ) : null;
-                    })}
-                  </ul>
-                ) : (
-                  <p className={styles.helper}>
-                    Zatím není vybraný žádný řečník.
-                  </p>
-                )}
-                <div className={styles.speakerOptions}>
-                  {visibleSpeakers.map((item) => {
-                    const selected = speakerSelection.includes(item.id);
-                    return (
-                      <label key={item.id}>
-                        <input
-                          checked={selected}
-                          name="speakerIds"
-                          onChange={(event) =>
-                            setSpeakerSelection((current) =>
-                              event.target.checked
-                                ? [...current, item.id]
-                                : current.filter((id) => id !== item.id),
-                            )
-                          }
-                          type="checkbox"
-                          value={item.id}
-                        />
-                        <span>
-                          {String(item.firstName)} {String(item.lastName)}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <FieldError errors={fieldErrors} name="speakerIds" />
-              </fieldset>
-            </>
-          ) : null}
-          {resource === 'rooms' ? (
-            <label className={styles.field}>
-              <span>Kapacita</span>
-              <input
-                defaultValue={
-                  editing?.capacity == null ? '' : String(editing.capacity)
-                }
-                min="1"
-                name="capacity"
-                type="number"
-                {...fieldA11y(fieldErrors, 'capacity')}
-              />
-              <FieldError errors={fieldErrors} name="capacity" />
-            </label>
-          ) : null}
-          <label className={styles.field}>
-            <span>
-              {resource === 'faqs'
-                ? 'Otázka'
-                : resource === 'speakers'
-                  ? 'Celé jméno'
-                  : 'Název'}
-            </span>
-            <input
-              defaultValue={String(
-                editing?.title ??
-                  editing?.name ??
-                  editing?.question ??
-                  (resource === 'speakers'
-                    ? `${String(editing?.firstName ?? '')} ${String(
-                        editing?.lastName ?? '',
-                      )}`.trim()
-                    : ''),
-              )}
-              name="title"
-              onChange={(event) => {
-                if (
-                  !editing &&
-                  !slugTouched &&
-                  resource !== 'days' &&
-                  resource !== 'faqs'
-                ) {
-                  setSlugValue(slugFromTitle(event.target.value));
-                }
-              }}
-              required
-              {...fieldA11y(fieldErrors, 'title')}
-            />
-            <FieldError errors={fieldErrors} name="title" />
-          </label>
-          {bodyFieldName ? (
-            <label className={`${styles.field} ${styles.contentWide}`}>
-              <span>
-                {resource === 'faqs'
-                  ? 'Odpověď'
-                  : resource === 'pages'
-                    ? 'Obsah stránky'
-                    : resource === 'partners'
-                      ? 'Popis partnera'
-                      : resource === 'speakers'
-                        ? 'Pozice nebo role'
-                        : 'Místo pro mapu'}
-              </span>
-              <textarea
-                defaultValue={String(
-                  editing?.bodyMarkdown ??
-                    editing?.answerMarkdown ??
-                    editing?.descriptionMarkdown ??
-                    editing?.jobTitle ??
-                    editing?.mapQuery ??
-                    '',
-                )}
-                name={bodyFieldName}
-                required={resource === 'pages' || resource === 'faqs'}
-                {...fieldA11y(fieldErrors, bodyFieldName)}
-              />
-              <FieldError errors={fieldErrors} name={bodyFieldName} />
-            </label>
-          ) : null}
-          {resource === 'venues' ? (
-            <label className={`${styles.field} ${styles.contentWide}`}>
-              <span>Navigační pokyny</span>
-              <textarea
-                defaultValue={String(editing?.navigationMarkdown ?? '')}
-                name="navigationMarkdown"
-                {...fieldA11y(fieldErrors, 'navigationMarkdown')}
-              />
-              <FieldError errors={fieldErrors} name="navigationMarkdown" />
-            </label>
-          ) : null}
-          {resource === 'days' || resource === 'rooms' ? (
-            <label className={`${styles.field} ${styles.contentWide}`}>
-              <span>Popis</span>
-              <textarea
-                defaultValue={String(editing?.description ?? '')}
-                name="description"
-                {...fieldA11y(fieldErrors, 'description')}
-              />
-              <FieldError errors={fieldErrors} name="description" />
-            </label>
-          ) : null}
-          {resource === 'sessions' ? (
-            <>
-              <label className={`${styles.field} ${styles.contentWide}`}>
-                <span>Shrnutí</span>
-                <textarea
-                  defaultValue={String(editing?.summary ?? '')}
-                  name="summary"
-                  {...fieldA11y(fieldErrors, 'summary')}
-                />
-                <FieldError errors={fieldErrors} name="summary" />
-              </label>
-              <label className={`${styles.field} ${styles.contentWide}`}>
-                <span>Detail</span>
-                <textarea
-                  defaultValue={String(editing?.description ?? '')}
-                  name="description"
-                  {...fieldA11y(fieldErrors, 'description')}
-                />
-                <FieldError errors={fieldErrors} name="description" />
-              </label>
-            </>
-          ) : null}
-          {resource === 'speakers' ? (
-            <>
-              {editing ? (
-                <AdminContentAssetField
-                  eventId={eventId}
-                  owner={{ kind: 'speaker', id: editing.id }}
-                  ownerVersion={Number(editing.version ?? 1)}
-                  {...(assetPort ? { port: assetPort } : {})}
-                  purpose="speaker_photo"
-                  readOnly={readOnly}
-                />
-              ) : (
-                <section
-                  aria-label="Fotografie řečníka"
-                  className={`${styles.assetPlaceholder} ${styles.contentWide}`}
-                >
-                  <div aria-hidden="true">Foto</div>
-                  <p>
-                    <strong>Fotografii lze přidat po uložení řečníka</strong>
-                    <span>Nejdřív vyplňte a uložte základní údaje.</span>
-                  </p>
-                </section>
-              )}
-              <label className={styles.field}>
-                <span>Firma</span>
-                <input
-                  defaultValue={String(editing?.company ?? '')}
-                  name="company"
-                  {...fieldA11y(fieldErrors, 'company')}
-                />
-                <FieldError errors={fieldErrors} name="company" />
-              </label>
-              <label className={`${styles.field} ${styles.contentWide}`}>
-                <span>Bio</span>
-                <textarea
-                  defaultValue={String(editing?.bioMarkdown ?? '')}
-                  name="bioMarkdown"
-                  {...fieldA11y(fieldErrors, 'bioMarkdown')}
-                />
-                <FieldError errors={fieldErrors} name="bioMarkdown" />
-              </label>
-              <label className={styles.field}>
-                <span>LinkedIn URL</span>
-                <input
-                  defaultValue={String(editing?.linkedinUrl ?? '')}
-                  name="linkedinUrl"
-                  type="url"
-                  {...fieldA11y(fieldErrors, 'linkedinUrl')}
-                />
-                <FieldError errors={fieldErrors} name="linkedinUrl" />
-              </label>
-              <label className={styles.field}>
-                <span>Web URL</span>
-                <input
-                  defaultValue={String(editing?.websiteUrl ?? '')}
-                  name="websiteUrl"
-                  type="url"
-                  {...fieldA11y(fieldErrors, 'websiteUrl')}
-                />
-                <FieldError errors={fieldErrors} name="websiteUrl" />
-              </label>
-            </>
-          ) : null}
-          {resource === 'partners' ? (
-            <>
-              {editing ? (
-                <AdminContentAssetField
-                  eventId={eventId}
-                  owner={{ kind: 'partner', id: editing.id }}
-                  ownerVersion={Number(editing.version ?? 1)}
-                  {...(assetPort ? { port: assetPort } : {})}
-                  purpose="partner_logo"
-                  readOnly={readOnly}
-                />
-              ) : (
-                <section
-                  aria-label="Logo partnera"
-                  className={`${styles.assetPlaceholder} ${styles.contentWide}`}
-                >
-                  <div aria-hidden="true">Logo</div>
-                  <p>
-                    <strong>Logo lze přidat po uložení partnera</strong>
-                    <span>Nejdřív vyplňte a uložte základní údaje.</span>
-                  </p>
-                </section>
-              )}
-              <label className={styles.field}>
-                <span>Web URL</span>
-                <input
-                  defaultValue={String(editing?.websiteUrl ?? '')}
-                  name="websiteUrl"
-                  type="url"
-                  {...fieldA11y(fieldErrors, 'websiteUrl')}
-                />
-                <FieldError errors={fieldErrors} name="websiteUrl" />
-              </label>
-              <label className={styles.field}>
-                <span>Kategorie</span>
-                <input
-                  defaultValue={String(editing?.category ?? '')}
-                  name="category"
-                  {...fieldA11y(fieldErrors, 'category')}
-                />
-                <FieldError errors={fieldErrors} name="category" />
-              </label>
-              <label className={styles.field}>
-                <span>Úroveň</span>
-                <input
-                  defaultValue={String(editing?.tier ?? '')}
-                  name="tier"
-                  {...fieldA11y(fieldErrors, 'tier')}
-                />
-                <FieldError errors={fieldErrors} name="tier" />
-              </label>
-            </>
-          ) : null}
-          {resource === 'pages' ? (
-            <>
-              <label className={styles.field}>
-                <span>Druh</span>
-                <select
-                  defaultValue={String(editing?.kind ?? 'practical')}
-                  name="kind"
-                  {...fieldA11y(fieldErrors, 'kind')}
-                >
-                  <option value="practical">Praktické</option>
-                  <option value="marketing">Marketing</option>
-                  <option value="other">Jiné</option>
-                </select>
-                <FieldError errors={fieldErrors} name="kind" />
-              </label>
-              <label className={styles.field}>
-                <span>Shrnutí</span>
-                <input
-                  defaultValue={String(editing?.summary ?? '')}
-                  name="summary"
-                  {...fieldA11y(fieldErrors, 'summary')}
-                />
-                <FieldError errors={fieldErrors} name="summary" />
-              </label>
-            </>
-          ) : null}
-          {resource === 'faqs' ? (
-            <label className={styles.field}>
-              <span>Kategorie</span>
-              <input
-                defaultValue={String(editing?.category ?? '')}
-                name="category"
-                {...fieldA11y(fieldErrors, 'category')}
-              />
-              <FieldError errors={fieldErrors} name="category" />
-            </label>
-          ) : null}
-          {resource !== 'days' ? (
-            <label className={styles.field}>
-              <span>Stav</span>
-              <select
-                defaultValue={String(editing?.status ?? 'draft')}
-                name="status"
-                {...fieldA11y(fieldErrors, 'status')}
-              >
-                <option value="draft">Rozpracováno</option>
-                <option value="published">Zveřejněno</option>
-                {resource === 'sessions' ? (
-                  <option value="cancelled">Zrušeno</option>
+                  {editing ? itemLabel(editing) : createLabels[resource]}
+                </h3>
+              </div>
+              <div className={styles.actionRow}>
+                {dirty ? (
+                  <span className={styles.badge}>Neuložené změny</span>
                 ) : null}
-              </select>
-              <FieldError errors={fieldErrors} name="status" />
-            </label>
-          ) : null}
-          <details className={`${styles.advancedFields} ${styles.contentWide}`}>
-            <summary>Pokročilé</summary>
-            <div>
-              {resource !== 'days' && resource !== 'faqs' ? (
-                <label className={styles.field}>
-                  <span>Adresa stránky</span>
-                  <input
-                    name="slug"
-                    onChange={(event) => {
-                      setSlugTouched(true);
-                      setSlugValue(event.target.value);
-                    }}
-                    pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-                    required
-                    value={slugValue}
-                    {...fieldA11y(fieldErrors, 'slug')}
-                  />
-                  <small>
-                    Vytváří se automaticky z názvu. Měňte ji jen kvůli stálému
-                    odkazu.
-                  </small>
-                  <FieldError errors={fieldErrors} name="slug" />
-                </label>
-              ) : null}
-              <div className={styles.field}>
-                <span>Pořadí</span>
-                <input name="sortOrder" type="hidden" value={sortOrder} />
-                <output aria-live="polite">Pozice {sortOrder + 1}</output>
-                <div className={styles.actionRow}>
-                  <button
-                    className={styles.secondaryButton}
-                    disabled={sortOrder === 0}
-                    onClick={() => {
-                      setSortOrder((value) => Math.max(0, value - 1));
-                      setDirty(true);
-                    }}
-                    type="button"
-                  >
-                    Posunout nahoru
-                  </button>
-                  <button
-                    className={styles.secondaryButton}
-                    onClick={() => {
-                      setSortOrder((value) => value + 1);
-                      setDirty(true);
-                    }}
-                    type="button"
-                  >
-                    Posunout dolů
-                  </button>
-                </div>
-                <FieldError errors={fieldErrors} name="sortOrder" />
+                <button
+                  className={styles.secondaryButton}
+                  disabled={working}
+                  onClick={requestEditorClose}
+                  type="button"
+                >
+                  Zavřít editor
+                </button>
               </div>
             </div>
-          </details>
-          {busy === 'loading' ? null : (
-            <div className={`${styles.actionRow} ${styles.contentWide}`}>
-              <button
-                className={styles.button}
-                disabled={writesBlocked}
-                type="submit"
-              >
-                {busy === 'saving'
-                  ? 'Ukládám…'
-                  : editing
-                    ? 'Uložit změny'
-                    : 'Uložit novou položku'}
-              </button>
-              <button
-                className={styles.secondaryButton}
-                disabled={working}
-                onClick={() => {
-                  if (
-                    dirty &&
-                    !window.confirm('Zahodit neuložené změny formuláře?')
-                  ) {
-                    return;
-                  }
-                  closeEditor();
-                }}
-                type="button"
-              >
-                Zrušit úpravy
-              </button>
-            </div>
-          )}
-        </form>
+            {!editorFieldsReady ? (
+              <p className={styles.contentWide} role="status">
+                Připravuji editor…
+              </p>
+            ) : (
+              <>
+                {error ? (
+                  <div className={styles.contentWide}>
+                    <AdminFormErrorSummary
+                      descriptionId="admin-content-modal-form-error"
+                      details={failureDetails(fieldErrors)}
+                      heading={
+                        error.kind === 'stale'
+                          ? 'Obsah na serveru se změnil'
+                          : reconciliationRequired
+                            ? 'Výsledek změny není potvrzen'
+                            : error.kind === 'conflict'
+                              ? 'Změna koliduje s obsahem'
+                              : 'Obsahovou operaci nelze dokončit'
+                      }
+                      message={failureMessage(error)}
+                    />
+                  </div>
+                ) : null}
+                {reconciliationRequired ? (
+                  <p
+                    className={`${styles.warning} ${styles.contentWide}`}
+                    role="status"
+                  >
+                    Další zápisy jsou zamčené. Nejdřív zavřete editor a načtěte
+                    aktuální stav ze serveru.
+                  </p>
+                ) : null}
+                {resource === 'days' ? (
+                  <label className={styles.field}>
+                    <span>Datum</span>
+                    <input
+                      defaultValue={String(editing?.localDate ?? '')}
+                      name="localDate"
+                      required
+                      type="date"
+                      {...fieldA11y(fieldErrors, 'localDate')}
+                    />
+                    <FieldError errors={fieldErrors} name="localDate" />
+                  </label>
+                ) : null}
+                {resource === 'rooms' ? (
+                  <label className={styles.field}>
+                    <span>Místo</span>
+                    <select
+                      defaultValue={String(editing?.venueId ?? '')}
+                      name="venueId"
+                      required
+                      {...fieldA11y(fieldErrors, 'venueId')}
+                    >
+                      <option value="">Vyberte místo</option>
+                      {references.venues.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {String(item.name)}
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError errors={fieldErrors} name="venueId" />
+                  </label>
+                ) : null}
+                {resource === 'sessions' ? (
+                  <>
+                    <label className={styles.field}>
+                      <span>Den</span>
+                      <select
+                        defaultValue={String(editing?.dayId ?? '')}
+                        name="dayId"
+                        required
+                        {...fieldA11y(fieldErrors, 'dayId')}
+                      >
+                        <option value="">Vyberte den</option>
+                        {references.days.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {itemLabel(item)}
+                          </option>
+                        ))}
+                      </select>
+                      <FieldError errors={fieldErrors} name="dayId" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Místnost</span>
+                      <select
+                        defaultValue={String(editing?.roomId ?? '')}
+                        name="roomId"
+                        {...fieldA11y(fieldErrors, 'roomId')}
+                      >
+                        <option value="">Bez místnosti</option>
+                        {references.rooms.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {itemLabel(item)}
+                          </option>
+                        ))}
+                      </select>
+                      <FieldError errors={fieldErrors} name="roomId" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Začátek ({timezone})</span>
+                      <input
+                        defaultValue={localInputValue(
+                          editing?.startsAt,
+                          timezone,
+                        )}
+                        name="startsAt"
+                        required
+                        type="datetime-local"
+                        {...fieldA11y(fieldErrors, 'startsAt')}
+                      />
+                      <FieldError errors={fieldErrors} name="startsAt" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Konec ({timezone})</span>
+                      <input
+                        defaultValue={localInputValue(
+                          editing?.endsAt,
+                          timezone,
+                        )}
+                        name="endsAt"
+                        required
+                        type="datetime-local"
+                        {...fieldA11y(fieldErrors, 'endsAt')}
+                      />
+                      <FieldError errors={fieldErrors} name="endsAt" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Typ</span>
+                      <select
+                        defaultValue={String(editing?.type ?? 'talk')}
+                        name="type"
+                        {...fieldA11y(fieldErrors, 'type')}
+                      >
+                        <option value="talk">Přednáška</option>
+                        <option value="panel">Panel</option>
+                        <option value="workshop">Workshop</option>
+                        <option value="mastermind">Mastermind</option>
+                        <option value="coaching">Koučink</option>
+                        <option value="networking">Networking</option>
+                        <option value="break">Přestávka</option>
+                        <option value="meal">Jídlo</option>
+                        <option value="gala">Gala</option>
+                        <option value="other">Jiné</option>
+                      </select>
+                      <FieldError errors={fieldErrors} name="type" />
+                    </label>
+                    <fieldset
+                      className={`${styles.speakerPicker} ${styles.contentWide}`}
+                      {...fieldA11y(fieldErrors, 'speakerIds')}
+                    >
+                      <legend>Řečníci</legend>
+                      <label className={styles.field}>
+                        <span>Najít řečníka</span>
+                        <input
+                          onChange={(event) =>
+                            setSpeakerSearch(event.target.value)
+                          }
+                          placeholder="Začněte psát jméno"
+                          type="search"
+                          value={speakerSearch}
+                        />
+                      </label>
+                      {speakerSelection.length ? (
+                        <ul
+                          aria-label="Vybraní řečníci"
+                          className={styles.speakerChips}
+                        >
+                          {speakerSelection.map((id) => {
+                            const speaker = references.speakers.find(
+                              (candidate) => candidate.id === id,
+                            );
+                            return speaker ? (
+                              <li key={id}>
+                                {String(speaker.firstName)}{' '}
+                                {String(speaker.lastName)}
+                              </li>
+                            ) : null;
+                          })}
+                        </ul>
+                      ) : (
+                        <p className={styles.helper}>
+                          Zatím není vybraný žádný řečník.
+                        </p>
+                      )}
+                      <div className={styles.speakerOptions}>
+                        {visibleSpeakers.map((item) => {
+                          const selected = speakerSelection.includes(item.id);
+                          return (
+                            <label key={item.id}>
+                              <input
+                                checked={selected}
+                                name="speakerIds"
+                                onChange={(event) =>
+                                  setSpeakerSelection((current) =>
+                                    event.target.checked
+                                      ? [...current, item.id]
+                                      : current.filter((id) => id !== item.id),
+                                  )
+                                }
+                                type="checkbox"
+                                value={item.id}
+                              />
+                              <span>
+                                {String(item.firstName)} {String(item.lastName)}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <FieldError errors={fieldErrors} name="speakerIds" />
+                    </fieldset>
+                  </>
+                ) : null}
+                {resource === 'rooms' ? (
+                  <label className={styles.field}>
+                    <span>Kapacita</span>
+                    <input
+                      defaultValue={
+                        editing?.capacity == null
+                          ? ''
+                          : String(editing.capacity)
+                      }
+                      min="1"
+                      name="capacity"
+                      type="number"
+                      {...fieldA11y(fieldErrors, 'capacity')}
+                    />
+                    <FieldError errors={fieldErrors} name="capacity" />
+                  </label>
+                ) : null}
+                {resource === 'speakers' ? (
+                  <>
+                    <label className={styles.field}>
+                      <span>Jméno</span>
+                      <input
+                        defaultValue={String(editing?.firstName ?? '')}
+                        name="firstName"
+                        onChange={(event) => {
+                          if (
+                            !editing &&
+                            !slugTouched &&
+                            event.currentTarget.form
+                          ) {
+                            const values = new FormData(
+                              event.currentTarget.form,
+                            );
+                            setSlugValue(
+                              slugFromTitle(
+                                `${String(values.get('firstName') ?? '')} ${String(values.get('lastName') ?? '')}`,
+                              ),
+                            );
+                          }
+                        }}
+                        required
+                        {...fieldA11y(fieldErrors, 'firstName')}
+                      />
+                      <FieldError errors={fieldErrors} name="firstName" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Příjmení</span>
+                      <input
+                        defaultValue={String(editing?.lastName ?? '')}
+                        name="lastName"
+                        onChange={(event) => {
+                          if (
+                            !editing &&
+                            !slugTouched &&
+                            event.currentTarget.form
+                          ) {
+                            const values = new FormData(
+                              event.currentTarget.form,
+                            );
+                            setSlugValue(
+                              slugFromTitle(
+                                `${String(values.get('firstName') ?? '')} ${String(values.get('lastName') ?? '')}`,
+                              ),
+                            );
+                          }
+                        }}
+                        required
+                        {...fieldA11y(fieldErrors, 'lastName')}
+                      />
+                      <FieldError errors={fieldErrors} name="lastName" />
+                    </label>
+                  </>
+                ) : (
+                  <label className={styles.field}>
+                    <span>{resource === 'faqs' ? 'Otázka' : 'Název'}</span>
+                    <input
+                      defaultValue={String(
+                        editing?.title ??
+                          editing?.name ??
+                          editing?.question ??
+                          '',
+                      )}
+                      name="title"
+                      onChange={(event) => {
+                        if (
+                          !editing &&
+                          !slugTouched &&
+                          resource !== 'days' &&
+                          resource !== 'faqs'
+                        ) {
+                          setSlugValue(slugFromTitle(event.target.value));
+                        }
+                      }}
+                      required
+                      {...fieldA11y(fieldErrors, 'title')}
+                    />
+                    <FieldError errors={fieldErrors} name="title" />
+                  </label>
+                )}
+                {bodyFieldName ? (
+                  <label className={`${styles.field} ${styles.contentWide}`}>
+                    <span>
+                      {resource === 'faqs'
+                        ? 'Odpověď'
+                        : resource === 'pages'
+                          ? 'Obsah stránky'
+                          : resource === 'partners'
+                            ? 'Popis partnera'
+                            : resource === 'speakers'
+                              ? 'Pozice nebo role'
+                              : 'Místo pro mapu'}
+                    </span>
+                    <textarea
+                      defaultValue={String(
+                        editing?.bodyMarkdown ??
+                          editing?.answerMarkdown ??
+                          editing?.descriptionMarkdown ??
+                          editing?.jobTitle ??
+                          editing?.mapQuery ??
+                          '',
+                      )}
+                      name={bodyFieldName}
+                      required={resource === 'pages' || resource === 'faqs'}
+                      {...fieldA11y(fieldErrors, bodyFieldName)}
+                    />
+                    <FieldError errors={fieldErrors} name={bodyFieldName} />
+                  </label>
+                ) : null}
+                {resource === 'venues' ? (
+                  <label className={`${styles.field} ${styles.contentWide}`}>
+                    <span>Navigační pokyny</span>
+                    <textarea
+                      defaultValue={String(editing?.navigationMarkdown ?? '')}
+                      name="navigationMarkdown"
+                      {...fieldA11y(fieldErrors, 'navigationMarkdown')}
+                    />
+                    <FieldError
+                      errors={fieldErrors}
+                      name="navigationMarkdown"
+                    />
+                  </label>
+                ) : null}
+                {resource === 'days' || resource === 'rooms' ? (
+                  <label className={`${styles.field} ${styles.contentWide}`}>
+                    <span>Popis</span>
+                    <textarea
+                      defaultValue={String(editing?.description ?? '')}
+                      name="description"
+                      {...fieldA11y(fieldErrors, 'description')}
+                    />
+                    <FieldError errors={fieldErrors} name="description" />
+                  </label>
+                ) : null}
+                {resource === 'sessions' ? (
+                  <>
+                    <label className={`${styles.field} ${styles.contentWide}`}>
+                      <span>Shrnutí</span>
+                      <textarea
+                        defaultValue={String(editing?.summary ?? '')}
+                        name="summary"
+                        {...fieldA11y(fieldErrors, 'summary')}
+                      />
+                      <FieldError errors={fieldErrors} name="summary" />
+                    </label>
+                    <label className={`${styles.field} ${styles.contentWide}`}>
+                      <span>Detail</span>
+                      <textarea
+                        defaultValue={String(editing?.description ?? '')}
+                        name="description"
+                        {...fieldA11y(fieldErrors, 'description')}
+                      />
+                      <FieldError errors={fieldErrors} name="description" />
+                    </label>
+                  </>
+                ) : null}
+                {resource === 'speakers' ? (
+                  <>
+                    <label className={`${styles.field} ${styles.contentWide}`}>
+                      <span>E-mail účastnického účtu (nepovinný)</span>
+                      <input
+                        autoComplete="email"
+                        defaultValue={String(editing?.accountEmail ?? '')}
+                        name="accountEmail"
+                        placeholder="jmeno@example.cz"
+                        type="email"
+                        {...fieldA11y(fieldErrors, 'accountEmail')}
+                      />
+                      <span className={styles.helper}>
+                        Propojí profil s existujícím účastníkem. Pokud účet
+                        ještě neexistuje, vytvořte ho nejdřív v části Účastníci.
+                        Řečník pak může přepínat mezi účastnickou aplikací a
+                        správou svých aktivit.
+                      </span>
+                      <FieldError errors={fieldErrors} name="accountEmail" />
+                    </label>
+                    {editing ? (
+                      <AdminContentAssetField
+                        eventId={eventId}
+                        owner={{ kind: 'speaker', id: editing.id }}
+                        ownerVersion={Number(editing.version ?? 1)}
+                        {...(assetPort ? { port: assetPort } : {})}
+                        purpose="speaker_photo"
+                        readOnly={readOnly}
+                      />
+                    ) : (
+                      <section
+                        aria-label="Fotografie řečníka"
+                        className={`${styles.assetPlaceholder} ${styles.contentWide}`}
+                      >
+                        <div aria-hidden="true">Foto</div>
+                        <p>
+                          <strong>
+                            Fotografii lze přidat po uložení řečníka
+                          </strong>
+                          <span>Nejdřív vyplňte a uložte základní údaje.</span>
+                        </p>
+                      </section>
+                    )}
+                    <label className={styles.field}>
+                      <span>Firma</span>
+                      <input
+                        defaultValue={String(editing?.company ?? '')}
+                        name="company"
+                        {...fieldA11y(fieldErrors, 'company')}
+                      />
+                      <FieldError errors={fieldErrors} name="company" />
+                    </label>
+                    <label className={`${styles.field} ${styles.contentWide}`}>
+                      <span>Medailonek</span>
+                      <textarea
+                        defaultValue={String(editing?.bioMarkdown ?? '')}
+                        name="bioMarkdown"
+                        {...fieldA11y(fieldErrors, 'bioMarkdown')}
+                      />
+                      <FieldError errors={fieldErrors} name="bioMarkdown" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>LinkedIn</span>
+                      <input
+                        defaultValue={String(editing?.linkedinUrl ?? '')}
+                        name="linkedinUrl"
+                        type="url"
+                        {...fieldA11y(fieldErrors, 'linkedinUrl')}
+                      />
+                      <FieldError errors={fieldErrors} name="linkedinUrl" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Instagram</span>
+                      <input
+                        defaultValue={String(editing?.instagramUrl ?? '')}
+                        name="instagramUrl"
+                        placeholder="https://www.instagram.com/…"
+                        type="url"
+                        {...fieldA11y(fieldErrors, 'instagramUrl')}
+                      />
+                      <FieldError errors={fieldErrors} name="instagramUrl" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Facebook</span>
+                      <input
+                        defaultValue={String(editing?.facebookUrl ?? '')}
+                        name="facebookUrl"
+                        placeholder="https://www.facebook.com/…"
+                        type="url"
+                        {...fieldA11y(fieldErrors, 'facebookUrl')}
+                      />
+                      <FieldError errors={fieldErrors} name="facebookUrl" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Osobní web</span>
+                      <input
+                        defaultValue={String(editing?.websiteUrl ?? '')}
+                        name="websiteUrl"
+                        type="url"
+                        {...fieldA11y(fieldErrors, 'websiteUrl')}
+                      />
+                      <FieldError errors={fieldErrors} name="websiteUrl" />
+                    </label>
+                    <fieldset
+                      className={`${styles.speakerProgramPicker} ${styles.contentWide}`}
+                      {...fieldA11y(fieldErrors, 'sessionIds')}
+                    >
+                      <legend>Vystoupení v programu</legend>
+                      <p className={styles.helper}>
+                        Vyberte všechny body programu, ve kterých řečník
+                        vystupuje. Vazba se projeví v programu i veřejném
+                        profilu.
+                      </p>
+                      {references.sessions
+                        .filter(
+                          (session) =>
+                            session.status === 'archived' &&
+                            Array.isArray(editing?.sessionIds) &&
+                            editing.sessionIds.includes(session.id),
+                        )
+                        .map((session) => (
+                          <input
+                            key={session.id}
+                            name="sessionIds"
+                            type="hidden"
+                            value={session.id}
+                          />
+                        ))}
+                      {references.sessions.filter(
+                        (session) => session.status !== 'archived',
+                      ).length ? (
+                        <div className={styles.speakerProgramOptions}>
+                          {references.sessions
+                            .filter((session) => session.status !== 'archived')
+                            .map((session) => (
+                              <label key={session.id}>
+                                <input
+                                  defaultChecked={
+                                    Array.isArray(editing?.sessionIds) &&
+                                    editing.sessionIds.includes(session.id)
+                                  }
+                                  name="sessionIds"
+                                  type="checkbox"
+                                  value={session.id}
+                                />
+                                <span>
+                                  <strong>{String(session.title)}</strong>
+                                  <small>
+                                    {programSlotLabel(
+                                      session.startsAt,
+                                      timezone,
+                                    )}
+                                    {session.status === 'cancelled'
+                                      ? ' · Zrušeno'
+                                      : ''}
+                                  </small>
+                                </span>
+                              </label>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className={styles.empty}>
+                          Nejdřív vytvořte alespoň jeden bod programu.
+                        </p>
+                      )}
+                      <FieldError errors={fieldErrors} name="sessionIds" />
+                    </fieldset>
+                  </>
+                ) : null}
+                {resource === 'partners' ? (
+                  <>
+                    {editing ? (
+                      <AdminContentAssetField
+                        eventId={eventId}
+                        owner={{ kind: 'partner', id: editing.id }}
+                        ownerVersion={Number(editing.version ?? 1)}
+                        {...(assetPort ? { port: assetPort } : {})}
+                        purpose="partner_logo"
+                        readOnly={readOnly}
+                      />
+                    ) : (
+                      <section
+                        aria-label="Logo partnera"
+                        className={`${styles.assetPlaceholder} ${styles.contentWide}`}
+                      >
+                        <div aria-hidden="true">Logo</div>
+                        <p>
+                          <strong>Logo lze přidat po uložení partnera</strong>
+                          <span>Nejdřív vyplňte a uložte základní údaje.</span>
+                        </p>
+                      </section>
+                    )}
+                    <label className={styles.field}>
+                      <span>Web URL</span>
+                      <input
+                        defaultValue={String(editing?.websiteUrl ?? '')}
+                        name="websiteUrl"
+                        type="url"
+                        {...fieldA11y(fieldErrors, 'websiteUrl')}
+                      />
+                      <FieldError errors={fieldErrors} name="websiteUrl" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Kategorie</span>
+                      <input
+                        defaultValue={String(editing?.category ?? '')}
+                        name="category"
+                        {...fieldA11y(fieldErrors, 'category')}
+                      />
+                      <FieldError errors={fieldErrors} name="category" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Úroveň</span>
+                      <input
+                        defaultValue={String(editing?.tier ?? '')}
+                        name="tier"
+                        {...fieldA11y(fieldErrors, 'tier')}
+                      />
+                      <FieldError errors={fieldErrors} name="tier" />
+                    </label>
+                  </>
+                ) : null}
+                {resource === 'pages' ? (
+                  <>
+                    <label className={styles.field}>
+                      <span>Druh</span>
+                      <select
+                        defaultValue={String(editing?.kind ?? 'practical')}
+                        name="kind"
+                        {...fieldA11y(fieldErrors, 'kind')}
+                      >
+                        <option value="practical">Praktické</option>
+                        <option value="marketing">Marketing</option>
+                        <option value="other">Jiné</option>
+                      </select>
+                      <FieldError errors={fieldErrors} name="kind" />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Shrnutí</span>
+                      <input
+                        defaultValue={String(editing?.summary ?? '')}
+                        name="summary"
+                        {...fieldA11y(fieldErrors, 'summary')}
+                      />
+                      <FieldError errors={fieldErrors} name="summary" />
+                    </label>
+                  </>
+                ) : null}
+                {resource === 'faqs' ? (
+                  <label className={styles.field}>
+                    <span>Kategorie</span>
+                    <input
+                      defaultValue={String(editing?.category ?? '')}
+                      name="category"
+                      {...fieldA11y(fieldErrors, 'category')}
+                    />
+                    <FieldError errors={fieldErrors} name="category" />
+                  </label>
+                ) : null}
+                {resource !== 'days' ? (
+                  <label className={styles.field}>
+                    <span>Stav</span>
+                    <select
+                      defaultValue={String(editing?.status ?? 'draft')}
+                      name="status"
+                      {...fieldA11y(fieldErrors, 'status')}
+                    >
+                      <option value="draft">Rozpracováno</option>
+                      <option value="published">Zveřejněno</option>
+                      {resource === 'sessions' ? (
+                        <option value="cancelled">Zrušeno</option>
+                      ) : null}
+                    </select>
+                    <FieldError errors={fieldErrors} name="status" />
+                  </label>
+                ) : null}
+                <details
+                  className={`${styles.advancedFields} ${styles.contentWide}`}
+                >
+                  <summary>Pokročilé</summary>
+                  <div>
+                    {resource !== 'days' && resource !== 'faqs' ? (
+                      <label className={styles.field}>
+                        <span>Adresa stránky</span>
+                        <input
+                          name="slug"
+                          onChange={(event) => {
+                            setSlugTouched(true);
+                            setSlugValue(event.target.value);
+                          }}
+                          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                          required
+                          value={slugValue}
+                          {...fieldA11y(fieldErrors, 'slug')}
+                        />
+                        <small>
+                          Vytváří se automaticky z názvu. Měňte ji jen kvůli
+                          stálému odkazu.
+                        </small>
+                        <FieldError errors={fieldErrors} name="slug" />
+                      </label>
+                    ) : null}
+                    <div className={styles.field}>
+                      <span>Pořadí</span>
+                      <input name="sortOrder" type="hidden" value={sortOrder} />
+                      <output aria-live="polite">Pozice {sortOrder + 1}</output>
+                      <div className={styles.actionRow}>
+                        <button
+                          className={styles.secondaryButton}
+                          disabled={sortOrder === 0}
+                          onClick={() => {
+                            setSortOrder((value) => Math.max(0, value - 1));
+                            setDirty(true);
+                          }}
+                          type="button"
+                        >
+                          Posunout nahoru
+                        </button>
+                        <button
+                          className={styles.secondaryButton}
+                          onClick={() => {
+                            setSortOrder((value) => value + 1);
+                            setDirty(true);
+                          }}
+                          type="button"
+                        >
+                          Posunout dolů
+                        </button>
+                      </div>
+                      <FieldError errors={fieldErrors} name="sortOrder" />
+                    </div>
+                  </div>
+                </details>
+                {busy === 'loading' ? null : (
+                  <div
+                    className={`${styles.actionRow} ${styles.contentWide} ${styles.contentFormActions}`}
+                  >
+                    <button
+                      className={styles.button}
+                      disabled={writesBlocked}
+                      type="submit"
+                    >
+                      {busy === 'saving'
+                        ? 'Ukládám…'
+                        : editing
+                          ? 'Uložit změny'
+                          : 'Uložit novou položku'}
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={working}
+                      onClick={requestEditorClose}
+                      type="button"
+                    >
+                      Zrušit a zavřít
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </form>
+        </div>
       ) : readOnly ? (
         <p className={styles.callout}>
           Archivovaná akce je pouze ke čtení. Obsah ani zveřejnění nelze měnit.

@@ -39,13 +39,13 @@ import {
   and,
   asc,
   count,
-  countDistinct,
   desc,
   eq,
   gt,
   inArray,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from 'drizzle-orm';
@@ -416,8 +416,17 @@ const safeLabel = (
   return normalized.length > 0 ? normalized : fallback;
 };
 
-const participantReference = (userId: string): string =>
-  `Účastník •${userId.replaceAll('-', '').slice(-4).toUpperCase()}`;
+const participantDisplayName = (
+  firstName: string | null,
+  lastName: string | null,
+  accountName: string,
+): string =>
+  safeLabel(
+    [firstName, lastName].filter((value) => value !== null).join(' ') ||
+      accountName,
+    'Účastník',
+    257,
+  );
 
 const permissionContext = (
   permission: AdminPermission,
@@ -576,6 +585,11 @@ const loadReservationRecords = async (
     .select({
       reservationId: schema.reservations.id,
       userId: schema.reservations.userId,
+      participantFirstName: schema.participantProfiles.firstName,
+      participantLastName: schema.participantProfiles.lastName,
+      participantContactEmail: schema.participantProfiles.contactEmail,
+      participantAccountName: schema.users.name,
+      participantAccountEmail: schema.users.email,
       sessionId: schema.reservations.sessionId,
       sessionTitle: schema.programSessions.title,
       state: schema.reservations.status,
@@ -588,6 +602,14 @@ const loadReservationRecords = async (
       and(
         eq(schema.programSessions.eventId, schema.reservations.eventId),
         eq(schema.programSessions.id, schema.reservations.sessionId),
+      ),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.reservations.userId))
+    .leftJoin(
+      schema.participantProfiles,
+      and(
+        eq(schema.participantProfiles.eventId, eventId),
+        eq(schema.participantProfiles.userId, schema.reservations.userId),
       ),
     )
     .where(
@@ -631,7 +653,13 @@ const loadReservationRecords = async (
         eventId,
         sessionId: row.sessionId,
         sessionTitle: safeLabel(row.sessionTitle, 'Rezervovaná aktivita', 160),
-        participantReference: participantReference(row.userId),
+        participantName: participantDisplayName(
+          row.participantFirstName,
+          row.participantLastName,
+          row.participantAccountName,
+        ),
+        contactEmail:
+          row.participantContactEmail ?? row.participantAccountEmail,
         state: row.state === 'confirmed' ? 'reserved' : 'cancelled',
         capacity: row.capacity,
         reservedCount: confirmedBySession.get(row.sessionId) ?? 0,
@@ -656,18 +684,11 @@ const loadSessionCapacityRecords = async (
       sessionType: schema.programSessions.type,
       sessionStatus: schema.programSessions.status,
       capacity: schema.programSessions.capacity,
-      confirmedCount: count(schema.reservations.id),
+      reservationGroupId: schema.programSessions.reservationGroupId,
+      startsAt: schema.programSessions.startsAt,
       version: schema.programSessions.version,
     })
     .from(schema.programSessions)
-    .leftJoin(
-      schema.reservations,
-      and(
-        eq(schema.reservations.eventId, schema.programSessions.eventId),
-        eq(schema.reservations.sessionId, schema.programSessions.id),
-        eq(schema.reservations.status, 'confirmed'),
-      ),
-    )
     .where(
       and(
         eq(schema.programSessions.eventId, eventId),
@@ -675,22 +696,75 @@ const loadSessionCapacityRecords = async (
           eq(schema.programSessions.capacityMode, 'reservation'),
           eq(schema.programSessions.type, 'networking'),
         ),
+        or(
+          isNull(schema.programSessions.reservationGroupId),
+          eq(
+            schema.programSessions.reservationGroupId,
+            schema.programSessions.id,
+          ),
+        ),
       ),
-    )
-    .groupBy(
-      schema.programSessions.id,
-      schema.programSessions.title,
-      schema.programSessions.type,
-      schema.programSessions.status,
-      schema.programSessions.capacity,
-      schema.programSessions.version,
-      schema.programSessions.startsAt,
     )
     .orderBy(
       asc(schema.programSessions.startsAt),
       asc(schema.programSessions.id),
     )
     .limit(MAX_CAPACITY_SESSIONS);
+  const sessionIds = sessions.map(({ sessionId }) => sessionId);
+  const confirmedRows =
+    sessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            sessionId: schema.reservations.sessionId,
+            confirmedCount: count(),
+          })
+          .from(schema.reservations)
+          .where(
+            and(
+              eq(schema.reservations.eventId, eventId),
+              eq(schema.reservations.status, 'confirmed'),
+              inArray(schema.reservations.sessionId, sessionIds),
+            ),
+          )
+          .groupBy(schema.reservations.sessionId);
+  const confirmedBySession = new Map(
+    confirmedRows.map(({ sessionId, confirmedCount }) => [
+      sessionId,
+      confirmedCount,
+    ]),
+  );
+  const groupedIds = sessions
+    .filter(({ reservationGroupId }) => reservationGroupId !== null)
+    .map(({ sessionId }) => sessionId);
+  const groupedMembers =
+    groupedIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: schema.programSessions.id,
+            reservationGroupId: schema.programSessions.reservationGroupId,
+            startsAt: schema.programSessions.startsAt,
+            title: schema.programSessions.title,
+          })
+          .from(schema.programSessions)
+          .where(
+            and(
+              eq(schema.programSessions.eventId, eventId),
+              inArray(schema.programSessions.reservationGroupId, groupedIds),
+            ),
+          )
+          .orderBy(
+            asc(schema.programSessions.startsAt),
+            asc(schema.programSessions.id),
+          );
+  const titlesByGroup = new Map<string, string[]>();
+  for (const member of groupedMembers) {
+    if (!member.reservationGroupId) continue;
+    const titles = titlesByGroup.get(member.reservationGroupId) ?? [];
+    titles.push(member.title);
+    titlesByGroup.set(member.reservationGroupId, titles);
+  }
   return sessions.flatMap((session) =>
     session.capacity === null && session.sessionType !== 'networking'
       ? []
@@ -699,14 +773,15 @@ const loadSessionCapacityRecords = async (
             eventId,
             sessionId: session.sessionId,
             sessionTitle: safeLabel(
-              session.sessionTitle,
+              titlesByGroup.get(session.sessionId)?.join(' + ') ??
+                session.sessionTitle,
               'Rezervovatelná aktivita',
               160,
             ),
             sessionType: session.sessionType,
             sessionStatus: session.sessionStatus,
             capacity: session.capacity,
-            confirmedCount: session.confirmedCount,
+            confirmedCount: confirmedBySession.get(session.sessionId) ?? 0,
             version: session.version,
           },
         ],
@@ -731,8 +806,7 @@ const loadReservationSessionPage = async (
       startsAt: schema.programSessions.startsAt,
       roomLabel: schema.rooms.name,
       capacity: schema.programSessions.capacity,
-      confirmedCount: countDistinct(schema.reservations.id),
-      waitingCount: countDistinct(schema.waitlistEntries.id),
+      reservationGroupId: schema.programSessions.reservationGroupId,
       waitlistMode: schema.programSessions.waitlistMode,
       capacityVersion: schema.programSessions.version,
     })
@@ -751,28 +825,19 @@ const loadReservationSessionPage = async (
         eq(schema.rooms.id, schema.programSessions.roomId),
       ),
     )
-    .leftJoin(
-      schema.reservations,
-      and(
-        eq(schema.reservations.eventId, schema.programSessions.eventId),
-        eq(schema.reservations.sessionId, schema.programSessions.id),
-        eq(schema.reservations.status, 'confirmed'),
-      ),
-    )
-    .leftJoin(
-      schema.waitlistEntries,
-      and(
-        eq(schema.waitlistEntries.eventId, schema.programSessions.eventId),
-        eq(schema.waitlistEntries.sessionId, schema.programSessions.id),
-        eq(schema.waitlistEntries.status, 'waiting'),
-      ),
-    )
     .where(
       and(
         eq(schema.programSessions.eventId, eventId),
         or(
           eq(schema.programSessions.capacityMode, 'reservation'),
           eq(schema.programSessions.type, 'networking'),
+        ),
+        or(
+          isNull(schema.programSessions.reservationGroupId),
+          eq(
+            schema.programSessions.reservationGroupId,
+            schema.programSessions.id,
+          ),
         ),
         cursor && cursorStartsAt
           ? or(
@@ -785,16 +850,6 @@ const loadReservationSessionPage = async (
           : undefined,
       ),
     )
-    .groupBy(
-      schema.programSessions.id,
-      schema.programSessions.title,
-      schema.eventDays.localDate,
-      schema.programSessions.startsAt,
-      schema.rooms.name,
-      schema.programSessions.capacity,
-      schema.programSessions.waitlistMode,
-      schema.programSessions.version,
-    )
     .orderBy(
       asc(schema.programSessions.startsAt),
       asc(schema.programSessions.id),
@@ -802,6 +857,78 @@ const loadReservationSessionPage = async (
     .limit(limit + 1);
   const pageRows = sessionRows.slice(0, limit);
   const sessionIds = pageRows.map(({ sessionId }) => sessionId);
+  const countRows =
+    sessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            sessionId: schema.reservations.sessionId,
+            confirmedCount: count(),
+          })
+          .from(schema.reservations)
+          .where(
+            and(
+              eq(schema.reservations.eventId, eventId),
+              eq(schema.reservations.status, 'confirmed'),
+              inArray(schema.reservations.sessionId, sessionIds),
+            ),
+          )
+          .groupBy(schema.reservations.sessionId);
+  const waitingRows =
+    sessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            sessionId: schema.waitlistEntries.sessionId,
+            waitingCount: count(),
+          })
+          .from(schema.waitlistEntries)
+          .where(
+            and(
+              eq(schema.waitlistEntries.eventId, eventId),
+              eq(schema.waitlistEntries.status, 'waiting'),
+              inArray(schema.waitlistEntries.sessionId, sessionIds),
+            ),
+          )
+          .groupBy(schema.waitlistEntries.sessionId);
+  const confirmedBySession = new Map(
+    countRows.map(({ sessionId, confirmedCount }) => [
+      sessionId,
+      confirmedCount,
+    ]),
+  );
+  const waitingBySession = new Map(
+    waitingRows.map(({ sessionId, waitingCount }) => [sessionId, waitingCount]),
+  );
+  const groupedIds = pageRows
+    .filter(({ reservationGroupId }) => reservationGroupId !== null)
+    .map(({ sessionId }) => sessionId);
+  const groupedMembers =
+    groupedIds.length === 0
+      ? []
+      : await db
+          .select({
+            reservationGroupId: schema.programSessions.reservationGroupId,
+            title: schema.programSessions.title,
+          })
+          .from(schema.programSessions)
+          .where(
+            and(
+              eq(schema.programSessions.eventId, eventId),
+              inArray(schema.programSessions.reservationGroupId, groupedIds),
+            ),
+          )
+          .orderBy(
+            asc(schema.programSessions.startsAt),
+            asc(schema.programSessions.id),
+          );
+  const titlesByGroup = new Map<string, string[]>();
+  for (const member of groupedMembers) {
+    if (!member.reservationGroupId) continue;
+    const titles = titlesByGroup.get(member.reservationGroupId) ?? [];
+    titles.push(member.title);
+    titlesByGroup.set(member.reservationGroupId, titles);
+  }
   const rankedReservations = db
     .select({
       reservationId: schema.reservations.id,
@@ -836,10 +963,26 @@ const loadReservationSessionPage = async (
             reservationId: rankedReservations.reservationId,
             sessionId: rankedReservations.sessionId,
             userId: rankedReservations.userId,
+            participantFirstName: schema.participantProfiles.firstName,
+            participantLastName: schema.participantProfiles.lastName,
+            participantContactEmail: schema.participantProfiles.contactEmail,
+            participantAccountName: schema.users.name,
+            participantAccountEmail: schema.users.email,
             state: rankedReservations.state,
             version: rankedReservations.version,
           })
           .from(rankedReservations)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, rankedReservations.userId),
+          )
+          .leftJoin(
+            schema.participantProfiles,
+            and(
+              eq(schema.participantProfiles.eventId, eventId),
+              eq(schema.participantProfiles.userId, rankedReservations.userId),
+            ),
+          )
           .where(lte(rankedReservations.rank, MAX_SESSION_RESERVATIONS))
           .orderBy(
             asc(rankedReservations.sessionId),
@@ -854,7 +997,14 @@ const loadReservationSessionPage = async (
     if (items.length >= MAX_SESSION_RESERVATIONS) continue;
     items.push({
       reservationId: reservation.reservationId,
-      maskedParticipantReference: participantReference(reservation.userId),
+      participantName: participantDisplayName(
+        reservation.participantFirstName,
+        reservation.participantLastName,
+        reservation.participantAccountName,
+      ),
+      contactEmail:
+        reservation.participantContactEmail ??
+        reservation.participantAccountEmail,
       state: reservation.state === 'confirmed' ? 'reserved' : 'cancelled',
       version: reservation.version,
       availableActions:
@@ -871,7 +1021,8 @@ const loadReservationSessionPage = async (
       eventId,
       sessionId: session.sessionId,
       sessionTitle: safeLabel(
-        session.sessionTitle,
+        titlesByGroup.get(session.sessionId)?.join(' + ') ??
+          session.sessionTitle,
         'Rezervovatelná aktivita',
         160,
       ),
@@ -882,9 +1033,11 @@ const loadReservationSessionPage = async (
           ? null
           : safeLabel(session.roomLabel, 'Místnost', 120),
       capacity: session.capacity,
-      confirmedCount: session.confirmedCount,
+      confirmedCount: confirmedBySession.get(session.sessionId) ?? 0,
       waitingCount:
-        session.waitlistMode === 'disabled' ? null : session.waitingCount,
+        session.waitlistMode === 'disabled'
+          ? null
+          : (waitingBySession.get(session.sessionId) ?? 0),
       capacityVersion: session.capacityVersion,
       reservations: reservationsBySession.get(session.sessionId) ?? [],
     })),
@@ -1069,6 +1222,11 @@ const loadMutationReservation = async (
     .select({
       id: schema.reservations.id,
       userId: schema.reservations.userId,
+      participantFirstName: schema.participantProfiles.firstName,
+      participantLastName: schema.participantProfiles.lastName,
+      participantContactEmail: schema.participantProfiles.contactEmail,
+      participantAccountName: schema.users.name,
+      participantAccountEmail: schema.users.email,
       sessionId: schema.reservations.sessionId,
       status: schema.reservations.status,
       version: schema.reservations.version,
@@ -1085,6 +1243,14 @@ const loadMutationReservation = async (
       and(
         eq(schema.programSessions.eventId, schema.reservations.eventId),
         eq(schema.programSessions.id, schema.reservations.sessionId),
+      ),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.reservations.userId))
+    .leftJoin(
+      schema.participantProfiles,
+      and(
+        eq(schema.participantProfiles.eventId, eventId),
+        eq(schema.participantProfiles.userId, schema.reservations.userId),
       ),
     )
     .where(
@@ -1177,6 +1343,7 @@ export const mutateAdminSessionCapacity = async (
             status: true,
             capacityMode: true,
             capacity: true,
+            reservationGroupId: true,
             version: true,
           },
           where: and(
@@ -1185,6 +1352,14 @@ export const mutateAdminSessionCapacity = async (
           ),
         });
         if (!current) throw resourceNotFound();
+        if (
+          current.reservationGroupId !== null &&
+          current.reservationGroupId !== current.id
+        ) {
+          throw invalidTransition(
+            'Grouped reservation capacity must be changed through its canonical session.',
+          );
+        }
         if (current.version !== parsed.data.expectedVersion) {
           throw new AdminStaleVersionError(current.version);
         }
@@ -1247,6 +1422,23 @@ export const mutateAdminSessionCapacity = async (
           throw latest
             ? new AdminStaleVersionError(latest.version)
             : resourceNotFound();
+        }
+        if (current.reservationGroupId === current.id) {
+          await transaction
+            .update(schema.programSessions)
+            .set({
+              capacity: parsed.data.capacity,
+              capacityMode: 'reservation',
+              updatedAt: changedAt,
+              version: sql`${schema.programSessions.version} + 1`,
+            })
+            .where(
+              and(
+                eq(schema.programSessions.eventId, event.id),
+                eq(schema.programSessions.reservationGroupId, current.id),
+                ne(schema.programSessions.id, current.id),
+              ),
+            );
         }
         await transaction
           .update(schema.reservations)
@@ -1491,6 +1683,23 @@ export const mutateAdminReservation = async (
               ),
             );
           await transaction
+            .update(schema.programSessions)
+            .set({
+              capacity: nextCapacity,
+              updatedAt: changedAt,
+              version: sql`${schema.programSessions.version} + 1`,
+            })
+            .where(
+              and(
+                eq(schema.programSessions.eventId, event.id),
+                eq(
+                  schema.programSessions.reservationGroupId,
+                  current.sessionId,
+                ),
+                ne(schema.programSessions.id, current.sessionId),
+              ),
+            );
+          await transaction
             .update(schema.reservations)
             .set({ version: sql`${schema.reservations.version} + 1` })
             .where(
@@ -1619,7 +1828,13 @@ export const mutateAdminReservation = async (
             'Rezervovaná aktivita',
             160,
           ),
-          participantReference: participantReference(current.userId),
+          participantName: participantDisplayName(
+            current.participantFirstName,
+            current.participantLastName,
+            current.participantAccountName,
+          ),
+          contactEmail:
+            current.participantContactEmail ?? current.participantAccountEmail,
           state: nextState,
           capacity: nextCapacity,
           reservedCount: confirmedAfter,

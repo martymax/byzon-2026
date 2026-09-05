@@ -12,7 +12,11 @@ import type { ApiPort } from '@/lib/api';
 import { subscribeToPrivateResourceInvalidation } from '@/lib/private-resource-events';
 
 import { ParticipantAgendaItemActions } from './participant-agenda-actions';
-import { ParticipantAgendaConflictDialog } from './participant-agenda-dialogs';
+import {
+  ParticipantAgendaConflictDialog,
+  ParticipantAgendaReservationConflictDialog,
+  ParticipantAgendaReservationOfferDialog,
+} from './participant-agenda-dialogs';
 import { ParticipantAgendaCalendarExport } from './participant-agenda-export';
 import {
   formatAgendaLocalDate,
@@ -171,6 +175,11 @@ const ParticipantAgendaReadyView = ({
         </Alert>
       ) : null}
       <ParticipantAgendaMutationFeedback resource={resource} />
+      {ready.items.length > 0 ? (
+        <ParticipantAgendaCalendarExport
+          calendarExport={ready.calendarExport}
+        />
+      ) : null}
       {ready.items.length === 0 ? (
         <StatePanel
           action={
@@ -215,8 +224,22 @@ const ParticipantAgendaReadyView = ({
           ))}
         </div>
       )}
-      <ParticipantAgendaCalendarExport calendarExport={ready.calendarExport} />
+      {ready.items.length === 0 ? (
+        <ParticipantAgendaCalendarExport
+          calendarExport={ready.calendarExport}
+        />
+      ) : null}
       <ParticipantAgendaConflictDialog
+        onOpenSession={rememberScroll}
+        resource={resource}
+        returnOrigin="agenda"
+        timezone={ready.eventTimezone}
+      />
+      <ParticipantAgendaReservationOfferDialog
+        resource={resource}
+        timezone={ready.eventTimezone}
+      />
+      <ParticipantAgendaReservationConflictDialog
         onOpenSession={rememberScroll}
         resource={resource}
         returnOrigin="agenda"

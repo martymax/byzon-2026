@@ -152,4 +152,79 @@ describe('production auth mail provider', () => {
     expect(body.html).toContain('callbackURL=%2Fadmin');
     expect(JSON.stringify(body)).not.toContain('re_secret');
   });
+
+  it('renders participant invitations with the app call to action and escaped name', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(new Response('{"id":"mail-id"}')),
+    );
+    const provider = new ResendAuthMailProvider({
+      apiKey: 're_secret',
+      fetch,
+      from: 'BYZON <login@app.byzon.cz>',
+      replyTo: 'podpora@byzon.cz',
+    });
+    await provider.sendMagicLink({
+      to: 'participant@example.test',
+      url: 'https://app.byzon.cz/api/auth/magic-link/verify?token=synthetic&callbackURL=%2Fapp',
+      purpose: 'participant-invitation',
+      recipientName: 'Kateřina <Novotná>',
+    });
+
+    const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
+    expect(body.subject).toBe('Pozvánka do účastnické aplikace BYZON 2026');
+    expect(body.text).toContain('účastnické aplikace BYZON 2026');
+    expect(body.text).toContain('Aktivační odkaz platí 24 hodin');
+    expect(body.html).toContain('Otevřít účastnickou aplikaci');
+    expect(body.html).toContain('Kateřina &lt;Novotná&gt;');
+    expect(body.html).not.toContain('Kateřina <Novotná>');
+  });
+
+  it('renders team invitations with an admin call to action', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(new Response('{"id":"mail-id"}')),
+    );
+    const provider = new ResendAuthMailProvider({
+      apiKey: 're_secret',
+      fetch,
+      from: 'BYZON <login@app.byzon.cz>',
+      replyTo: 'podpora@byzon.cz',
+    });
+    await provider.sendMagicLink({
+      to: 'team@example.test',
+      url: 'https://app.byzon.cz/api/auth/magic-link/verify?token=synthetic&callbackURL=%2Fadmin',
+      purpose: 'team-invitation',
+      recipientName: 'Jana <Týmová>',
+    });
+
+    const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
+    expect(body.subject).toBe('Pozvánka do administrace BYZON 2026');
+    expect(body.text).toContain('týmu BYZON 2026');
+    expect(body.text).toContain('Aktivační odkaz platí 24 hodin');
+    expect(body.html).toContain('Otevřít administraci');
+    expect(body.html).toContain('Jana &lt;Týmová&gt;');
+    expect(body.html).not.toContain('Jana <Týmová>');
+  });
+
+  it('renders a self-service account activation with the 24-hour policy', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(new Response('{"id":"mail-id"}')),
+    );
+    const provider = new ResendAuthMailProvider({
+      apiKey: 're_secret',
+      fetch,
+      from: 'BYZON <login@app.byzon.cz>',
+      replyTo: 'podpora@byzon.cz',
+    });
+
+    await provider.sendMagicLink({
+      to: 'participant@example.test',
+      url: 'https://app.byzon.cz/api/auth/magic-link/verify?token=synthetic&callbackURL=%2Fapp',
+      purpose: 'account-activation',
+    });
+
+    const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
+    expect(body.subject).toBe('Aktivace účtu BYZON 2026');
+    expect(body.text).toContain('Aktivační odkaz platí 24 hodin');
+    expect(body.html).toContain('Aktivovat účet');
+  });
 });

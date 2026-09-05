@@ -4,6 +4,8 @@ import { ParticipantNavigation, type NavigationItem } from '@byzon/ui';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { useParticipantAccountResourceOptional } from './participant-account-resource';
+
 export type ParticipantShellNavigationMode =
   'active' | 'active-preview' | 'archived' | 'archived-preview' | 'unavailable';
 
@@ -22,18 +24,6 @@ const NavigationIcon = ({ children }: { readonly children: ReactNode }) => (
   </svg>
 );
 
-const overviewNavigationItem: NavigationItem = {
-  id: 'overview',
-  href: '/app',
-  label: 'Přehled',
-  icon: (
-    <NavigationIcon>
-      <path d="m3 11 9-8 9 8" />
-      <path d="M5 10v10h14V10M9 20v-6h6v6" />
-    </NavigationIcon>
-  ),
-};
-
 const programNavigationItem: NavigationItem = {
   id: 'program',
   href: '/app/program',
@@ -46,8 +36,31 @@ const programNavigationItem: NavigationItem = {
   ),
 };
 
+const accountNavigationItem: NavigationItem = {
+  id: 'account',
+  href: '/app/vice',
+  label: 'Můj účet',
+  icon: (
+    <NavigationIcon>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+    </NavigationIcon>
+  ),
+};
+
+const activityManagementNavigationItem: NavigationItem = {
+  id: 'activity-management',
+  href: '/host/aktivity',
+  label: 'Správa aktivit',
+  icon: (
+    <NavigationIcon>
+      <rect height="15" rx="2" width="18" x="3" y="5" />
+      <path d="M8 3v4M16 3v4M3 10h18M8 15h8M8 18h5" />
+    </NavigationIcon>
+  ),
+};
+
 const participantNavigationItems: NavigationItem[] = [
-  overviewNavigationItem,
   programNavigationItem,
   {
     id: 'agenda',
@@ -62,37 +75,43 @@ const participantNavigationItems: NavigationItem[] = [
     ),
   },
   {
-    id: 'announcements',
-    href: '/app/oznameni',
-    label: 'Oznámení',
+    id: 'networking',
+    href: '/app/networking',
+    label: 'Networking',
     icon: (
       <NavigationIcon>
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-        <path d="M10 21h4" />
+        <circle cx="9" cy="8" r="3" />
+        <circle cx="17" cy="10" r="2.5" />
+        <path d="M3 20a6 6 0 0 1 12 0M14 15.5a5 5 0 0 1 7 4.5" />
       </NavigationIcon>
     ),
   },
   {
-    id: 'more',
-    href: '/app/vice',
-    label: 'Více',
+    id: 'speakers',
+    href: '/app/recnici',
+    label: 'Řečníci',
     icon: (
       <NavigationIcon>
-        <circle cx="5" cy="12" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="19" cy="12" r="1.5" />
+        <rect height="11" rx="4" width="8" x="8" y="3" />
+        <path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" />
       </NavigationIcon>
     ),
   },
-];
-
-const productionNavigationItems: NavigationItem[] = [
-  overviewNavigationItem,
-  programNavigationItem,
+  accountNavigationItem,
 ];
 
 const archivedPreviewNavigationItems: NavigationItem[] = [
-  overviewNavigationItem,
+  {
+    id: 'overview',
+    href: '/app',
+    label: 'Přehled',
+    icon: (
+      <NavigationIcon>
+        <path d="m3 11 9-8 9 8" />
+        <path d="M5 10v10h14V10M9 20v-6h6v6" />
+      </NavigationIcon>
+    ),
+  },
   {
     id: 'privacy',
     href: '/app/soukromi',
@@ -117,14 +136,12 @@ const archivedPreviewNavigationItems: NavigationItem[] = [
   },
 ];
 
-const moreDestinations = [
+const accountDestinations = [
   '/app/vice',
   '/app/profil',
   '/app/soukromi',
   '/app/nastaveni',
   '/app/vstupenka',
-  '/app/recnici',
-  '/app/partneri',
   '/app/informace',
 ] as const;
 
@@ -132,24 +149,23 @@ const isDestination = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
 
 export const participantNavigationActiveId = (pathname: string): string => {
-  if (pathname === '/app') return 'overview';
   if (isDestination(pathname, '/app/program')) return 'program';
   if (isDestination(pathname, '/app/agenda')) return 'agenda';
-  if (isDestination(pathname, '/app/oznameni')) return 'announcements';
-  return moreDestinations.some((href) => isDestination(pathname, href))
-    ? 'more'
+  if (isDestination(pathname, '/app/networking')) return 'networking';
+  if (isDestination(pathname, '/app/recnici')) return 'speakers';
+  return accountDestinations.some((href) => isDestination(pathname, href))
+    ? 'account'
     : '';
 };
 
 export const participantNavigationItemsForMode = (
   mode: ParticipantShellNavigationMode,
 ): NavigationItem[] => {
-  if (mode === 'archived-preview') return archivedPreviewNavigationItems;
-  if (mode === 'archived') return [overviewNavigationItem];
+  if (mode === 'archived-preview' || mode === 'archived') {
+    return archivedPreviewNavigationItems;
+  }
   if (mode === 'unavailable') return [];
-  return mode === 'active-preview'
-    ? participantNavigationItems
-    : productionNavigationItems;
+  return participantNavigationItems;
 };
 
 export const archivedNavigationActiveId = (pathname: string): string => {
@@ -159,14 +175,30 @@ export const archivedNavigationActiveId = (pathname: string): string => {
   return '';
 };
 
+export const participantActivityContextAction = (
+  roles: readonly string[],
+  mode: ParticipantShellNavigationMode,
+): NavigationItem | undefined =>
+  (mode === 'active' || mode === 'active-preview') &&
+  (roles.includes('speaker') || roles.includes('room_operator'))
+    ? activityManagementNavigationItem
+    : undefined;
+
 export const ParticipantShellNavigation = ({
   mode = 'active',
 }: {
   readonly mode?: ParticipantShellNavigationMode;
 }) => {
   const pathname = usePathname();
+  const account = useParticipantAccountResourceOptional();
   const items = participantNavigationItemsForMode(mode);
   const archived = mode === 'archived' || mode === 'archived-preview';
+  const contextAction = participantActivityContextAction(
+    account?.state.status === 'ready'
+      ? account.state.data.membership.roles
+      : [],
+    mode,
+  );
 
   if (items.length === 0) return null;
 
@@ -177,6 +209,7 @@ export const ParticipantShellNavigation = ({
           ? archivedNavigationActiveId(pathname)
           : participantNavigationActiveId(pathname)
       }
+      {...(contextAction ? { contextAction } : {})}
       items={items}
       label={archived ? 'Navigace archivovaného účtu' : 'Hlavní navigace'}
     />

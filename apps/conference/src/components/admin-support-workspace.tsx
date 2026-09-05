@@ -1,27 +1,42 @@
 'use client';
 
 import {
-  supportMutationRequestSchema,
-  supportSearchQuerySchema,
-  type SupportAction,
-  type SupportMutationRequest,
-  type SupportRecord,
+  adminParticipantCreateRequestSchema,
+  adminParticipantListRequestSchema,
+  adminParticipantUpdateRequestSchema,
+  type AdminParticipantCreateRequest,
+  type AdminParticipantDetail,
+  type AdminParticipantListItem,
+  type AdminParticipantNetworkingState,
+  type SupportTicketState,
 } from '@byzon/domain/contracts/support';
 import { AdminTechnicalDetails } from '@byzon/ui';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 
 import {
+  requestAdminParticipantCreate,
+  requestAdminParticipantDetail,
+  requestAdminParticipantInvite,
+  requestAdminParticipantList,
+  requestAdminParticipantUpdate,
   requestAdminSupportMutation,
-  requestAdminSupportSearch,
 } from '@/lib/admin-api';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
-import {
-  supportAccessStateLabels,
-  supportActionLabels,
-  ticketStateLabels,
-} from './admin-ui-registry';
+import { AdminFormErrorSummary } from './admin-form-error-summary';
+import { AdminModal } from './admin-modal';
+import { supportActionLabels, ticketStateLabels } from './admin-ui-registry';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -35,241 +50,1226 @@ import {
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-const visibleSupportActions = [
-  'resend',
+const participantPageSize = 100;
+const participantBulkInvitationLimit = 25;
+const participantRenderChunkSize = 20;
+const participantCompactDataViewQuery = '(max-width: 48rem)';
+type ParticipantBulkAction = 'invite' | 'block' | 'reactivate';
+const bulkActions = [
+  'invite',
   'block',
   'reactivate',
-] as const satisfies readonly SupportAction[];
+] as const satisfies readonly ParticipantBulkAction[];
 
-const actionGuidance: Record<
-  (typeof visibleSupportActions)[number],
-  Readonly<{
-    when: string;
-    impact: string;
-    success: string;
-    recovery: string;
-    danger: boolean;
-  }>
-> = {
-  resend: {
-    when: 'Účastník aktivační výzvu nedostal nebo její platnost skončila.',
-    impact:
-      'Odešle novou aktivační výzvu. Stav vstupenky ani rezervace se nezmění.',
-    success: 'Aktivační výzva byla znovu odeslána.',
-    recovery:
-      'Pokud zpráva nedorazí, ověřte maskovaný kontakt a zkuste akci později.',
-    danger: false,
-  },
-  block: {
-    when: 'Vstupenka nesmí dál umožnit vstup do aplikace ani na akci.',
-    impact:
-      'Zablokuje přístup a zruší potvrzené rezervace i čekání na uvolněná místa.',
-    success: 'Přístup byl zablokován a související rezervace byly zrušeny.',
-    recovery:
-      'Přístup lze později obnovit; zrušené rezervace se samy neobnoví.',
-    danger: true,
-  },
-  reactivate: {
-    when: 'Dříve zablokovaná vstupenka má znovu umožnit přístup.',
-    impact:
-      'Obnoví přístup. Dříve zrušené rezervace ani místo na čekací listině se neobnoví.',
-    success: 'Přístup byl obnoven.',
-    recovery: 'Pokud účastník potřebuje aktivity, musí si je znovu rezervovat.',
-    danger: false,
-  },
+const emptyParticipantCreateForm = {
+  firstName: '',
+  lastName: '',
+  contactEmail: '',
+  phone: '',
+  company: '',
+  jobTitle: '',
+  reason: '',
 };
 
-const isVisibleSupportAction = (
-  action: SupportAction,
-): action is (typeof visibleSupportActions)[number] =>
-  visibleSupportActions.includes(
-    action as (typeof visibleSupportActions)[number],
-  );
-
-type PendingMutation = Readonly<{
-  body: SupportMutationRequest;
+type PendingParticipantCreate = Readonly<{
+  body: AdminParticipantCreateRequest;
   idempotencyKey: string;
 }>;
+
+const networkingStateLabels: Record<AdminParticipantNetworkingState, string> = {
+  enabled: 'Zapnutý',
+  disabled: 'Vypnutý',
+  moderated: 'Skrytý správcem',
+};
+
+const invitationStatusLabels = {
+  not_sent: 'Pozvánka neodeslána',
+  sent: 'Pozvánka odeslána',
+  accepted: 'Přihlášení aktivováno',
+} as const;
+
+const huntingLabels = {
+  know_how: 'Know-how',
+  team: 'Lidé do týmu',
+  investors: 'Investoři',
+  business_partners: 'Obchodní partneři',
+  suppliers: 'Dodavatelé',
+  clients: 'Klienti',
+} as const;
+
+const formatDateTime = (value: string) =>
+  new Intl.DateTimeFormat('cs-CZ', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Prague',
+  }).format(new Date(value));
+
+const ParticipantIcon = ({ children }: { readonly children: ReactNode }) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    height="18"
+    viewBox="0 0 24 24"
+    width="18"
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth="1.8"
+  >
+    {children}
+  </svg>
+);
+
+const StateBadge = ({
+  children,
+  tone = 'neutral',
+}: {
+  readonly children: ReactNode;
+  readonly tone?: 'neutral' | 'success' | 'warning' | 'danger';
+}) => (
+  <span className={styles.participantBadge} data-tone={tone}>
+    {children}
+  </span>
+);
+
+const ticketTone = (
+  state: SupportTicketState,
+): 'success' | 'warning' | 'danger' =>
+  state === 'active' ? 'success' : state === 'blocked' ? 'warning' : 'danger';
+
+const SelectionCheckbox = ({
+  checked,
+  indeterminate = false,
+  label,
+  onChange,
+}: {
+  readonly checked: boolean;
+  readonly indeterminate?: boolean;
+  readonly label: string;
+  readonly onChange: (checked: boolean) => void;
+}) => {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      aria-label={label}
+      checked={checked}
+      className={styles.participantCheckbox}
+      onChange={(event) => onChange(event.target.checked)}
+      ref={ref}
+      type="checkbox"
+    />
+  );
+};
+
+const ParticipantTableRow = memo(
+  ({
+    participant,
+    selected,
+    onSelectionChange,
+  }: {
+    readonly participant: AdminParticipantListItem;
+    readonly selected: boolean;
+    readonly onSelectionChange: (
+      participantId: string,
+      checked: boolean,
+    ) => void;
+  }) => (
+    <tr>
+      <td>
+        <SelectionCheckbox
+          checked={selected}
+          label={`Vybrat ${participant.displayName}`}
+          onChange={(checked) =>
+            onSelectionChange(participant.participantId, checked)
+          }
+        />
+      </td>
+      <td className={styles.participantIdentityCell}>
+        <Link href={`/admin/ucastnici/${participant.participantId}`}>
+          {participant.displayName}
+        </Link>
+        <span>{participant.contactEmail}</span>
+      </td>
+      <td className={styles.participantCompanyCell}>
+        <strong>{participant.company || '—'}</strong>
+        <span>{participant.jobTitle || 'Neuvedeno'}</span>
+      </td>
+      <td>
+        <StateBadge tone={ticketTone(participant.ticketState)}>
+          {ticketStateLabels[participant.ticketState]}
+        </StateBadge>
+        <small className={styles.participantCellNote}>
+          ••{participant.referenceSuffix}
+        </small>
+        <small className={styles.participantCellNote}>
+          {invitationStatusLabels[participant.invitation.status]}
+        </small>
+      </td>
+      <td>
+        <StateBadge
+          tone={
+            participant.networkingState === 'enabled'
+              ? 'success'
+              : participant.networkingState === 'moderated'
+                ? 'warning'
+                : 'neutral'
+          }
+        >
+          {networkingStateLabels[participant.networkingState]}
+        </StateBadge>
+      </td>
+      <td>
+        <strong>{participant.reservationCount} rezervací</strong>
+        <span className={styles.participantCellNote}>
+          {participant.checkedIn ? 'Odbaven/a' : 'Neodbaven/a'}
+        </span>
+      </td>
+      <td>
+        <Link
+          aria-label={`Zobrazit detail: ${participant.displayName}`}
+          className={styles.participantDetailLink}
+          href={`/admin/ucastnici/${participant.participantId}`}
+        >
+          <ParticipantIcon>
+            <path d="m9 18 6-6-6-6" />
+          </ParticipantIcon>
+        </Link>
+      </td>
+    </tr>
+  ),
+);
+ParticipantTableRow.displayName = 'ParticipantTableRow';
+
+const ParticipantCard = memo(
+  ({
+    participant,
+    selected,
+    onSelectionChange,
+  }: {
+    readonly participant: AdminParticipantListItem;
+    readonly selected: boolean;
+    readonly onSelectionChange: (
+      participantId: string,
+      checked: boolean,
+    ) => void;
+  }) => (
+    <li>
+      <div className={styles.participantCardHeader}>
+        <SelectionCheckbox
+          checked={selected}
+          label={`Vybrat ${participant.displayName}`}
+          onChange={(checked) =>
+            onSelectionChange(participant.participantId, checked)
+          }
+        />
+        <div>
+          <Link href={`/admin/ucastnici/${participant.participantId}`}>
+            {participant.displayName}
+          </Link>
+          <span>{participant.contactEmail}</span>
+        </div>
+        <ParticipantIcon>
+          <path d="m9 18 6-6-6-6" />
+        </ParticipantIcon>
+      </div>
+      <div className={styles.participantCardBody}>
+        <p>
+          <span>Firma</span>
+          <strong>{participant.company || '—'}</strong>
+        </p>
+        <p>
+          <span>Vstupenka</span>
+          <StateBadge tone={ticketTone(participant.ticketState)}>
+            {ticketStateLabels[participant.ticketState]}
+          </StateBadge>
+        </p>
+        <p>
+          <span>Networking</span>
+          <strong>{networkingStateLabels[participant.networkingState]}</strong>
+        </p>
+        <p>
+          <span>Přístup</span>
+          <strong>
+            {invitationStatusLabels[participant.invitation.status]}
+          </strong>
+        </p>
+        <p>
+          <span>Rezervace</span>
+          <strong>{participant.reservationCount}</strong>
+        </p>
+      </div>
+    </li>
+  ),
+);
+ParticipantCard.displayName = 'ParticipantCard';
+
+const ParticipantDataView = memo(
+  ({
+    allSelected,
+    compact,
+    items,
+    onAllSelectionChange,
+    onScrollEnd,
+    onSelectionChange,
+    selectedCount,
+    selectedIds,
+  }: {
+    readonly allSelected: boolean;
+    readonly compact: boolean;
+    readonly items: readonly AdminParticipantListItem[];
+    readonly onAllSelectionChange: (checked: boolean) => void;
+    readonly onScrollEnd: () => void;
+    readonly onSelectionChange: (
+      participantId: string,
+      checked: boolean,
+    ) => void;
+    readonly selectedCount: number;
+    readonly selectedIds: ReadonlySet<string>;
+  }) => {
+    if (compact) {
+      return (
+        <ul className={styles.participantCards}>
+          {items.map((participant) => (
+            <ParticipantCard
+              key={participant.participantId}
+              onSelectionChange={onSelectionChange}
+              participant={participant}
+              selected={selectedIds.has(participant.participantId)}
+            />
+          ))}
+        </ul>
+      );
+    }
+
+    return (
+      <div
+        className={styles.participantTableWrap}
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          if (
+            element.scrollTop + element.clientHeight >=
+            element.scrollHeight - 64
+          ) {
+            onScrollEnd();
+          }
+        }}
+      >
+        <table className={styles.participantTable}>
+          <caption className={styles.visuallyHidden}>Účastníci akce</caption>
+          <thead>
+            <tr>
+              <th scope="col">
+                <SelectionCheckbox
+                  checked={allSelected}
+                  indeterminate={selectedCount > 0 && !allSelected}
+                  label="Vybrat všechny zobrazené účastníky"
+                  onChange={onAllSelectionChange}
+                />
+              </th>
+              <th scope="col">Účastník</th>
+              <th scope="col">Firma a pozice</th>
+              <th scope="col">Vstupenka</th>
+              <th scope="col">Networking</th>
+              <th scope="col">Aktivita</th>
+              <th scope="col">
+                <span className={styles.visuallyHidden}>Detail</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((participant) => (
+              <ParticipantTableRow
+                key={participant.participantId}
+                onSelectionChange={onSelectionChange}
+                participant={participant}
+                selected={selectedIds.has(participant.participantId)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  },
+);
+ParticipantDataView.displayName = 'ParticipantDataView';
+
+const useCompactDataView = (): boolean => {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia(participantCompactDataViewQuery);
+    const update = () => setCompact(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
+};
 
 export const AdminSupportWorkspace = () => {
   const { api, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
-  const canReadSupport = permissions.includes('participant:operational:read');
-  const canMutateSupport = permissions.includes('ticket:any:manage');
+  const canMutate = permissions.includes('ticket:any:manage');
   const requestFence = useAdminRequestFence();
-  const mutationErrorSummaryRef = useRef<HTMLElement | null>(null);
-  const searchErrorSummaryRef = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
-  const [records, setRecords] = useState<readonly SupportRecord[]>([]);
-  const [searchOutcome, setSearchOutcome] = useState<
-    'idle' | 'no_match' | 'single_match' | 'ambiguous'
-  >('idle');
-  const [selected, setSelected] = useState<SupportRecord | null>(null);
-  const [solving, setSolving] = useState(false);
-  const [action, setAction] = useState<SupportAction>('resend');
-  const [reason, setReason] = useState('');
-  const [attempted, setAttempted] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState<PendingMutation | null>(null);
-  const [ambiguous, setAmbiguous] = useState(false);
-  const [busy, setBusy] = useState<'search' | 'mutation' | null>(null);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{
-    message: string;
-    auditId: string;
-  } | null>(null);
-  const [searchInvalid, setSearchInvalid] = useState(false);
-
-  const availableActions = useMemo<
-    readonly (typeof visibleSupportActions)[number][]
-  >(
-    () => selected?.availableActions.filter(isVisibleSupportAction) ?? [],
-    [selected],
+  const [ticketState, setTicketState] = useState<SupportTicketState | ''>('');
+  const [networkingState, setNetworkingState] = useState<
+    AdminParticipantNetworkingState | ''
+  >('');
+  const [items, setItems] = useState<readonly AdminParticipantListItem[]>([]);
+  const [summary, setSummary] = useState({
+    total: 0,
+    active: 0,
+    networkingEnabled: 0,
+    checkedIn: 0,
+  });
+  const [filteredTotal, setFilteredTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    new Set(),
   );
-  const selectedGuidance = isVisibleSupportAction(action)
-    ? actionGuidance[action]
-    : null;
-  const requestCandidate = selected
-    ? supportMutationRequestSchema.safeParse({
-        participantId: selected.participantId,
-        ticketId: selected.ticketId,
-        action,
-        expectedVersion: selected.version,
-        reason,
-        targetTicketId: null,
-      })
-    : null;
-  const mutationValidationFailed =
-    attempted && requestCandidate?.success === false;
-  const mutationInvalidPaths = new Set(
-    mutationValidationFailed && requestCandidate
-      ? requestCandidate.error.issues.map(({ path }) => path[0])
-      : [],
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(emptyParticipantCreateForm);
+  const [createAttempted, setCreateAttempted] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingCreate, setPendingCreate] =
+    useState<PendingParticipantCreate | null>(null);
+  const [reload, setReload] = useState(0);
+  const [bulkAction, setBulkAction] = useState<ParticipantBulkAction | null>(
+    null,
+  );
+  const [bulkReason, setBulkReason] = useState('');
+  const compactDataView = useCompactDataView();
+  const [renderedItemCount, setRenderedItemCount] = useState(
+    participantRenderChunkSize,
   );
 
-  useEffect(() => {
-    if (searchInvalid) {
-      searchErrorSummaryRef.current?.focus();
-    } else if (mutationValidationFailed || mutationError) {
-      mutationErrorSummaryRef.current?.focus();
-    }
-  }, [mutationError, mutationValidationFailed, searchInvalid]);
-
-  const clearMutationDraft = () => {
-    setSelected(null);
-    setSolving(false);
-    setReason('');
-    setAttempted(false);
-    setPending(null);
-    setConfirming(false);
-    setAmbiguous(false);
-    setMutationError(null);
-    setSuccess(null);
-  };
-
-  const wipeSensitiveState = () => {
-    setQuery('');
-    setRecords([]);
-    setSearchOutcome('idle');
-    clearMutationDraft();
-  };
-
-  const search = async (staleMessage?: string) => {
-    if (!canReadSupport) return;
-    const validated = supportSearchQuerySchema.safeParse({ query, limit: 5 });
-    if (!validated.success) {
-      setSearchInvalid(true);
-      setSearchError('Zadejte 2 až 80 bezpečných znaků.');
-      return;
-    }
-    const request = requestFence.begin('support-search');
-    setSearchInvalid(false);
-    setBusy('search');
-    setSearchError(null);
-    clearMutationDraft();
-    const result = await requestAdminSupportSearch(
+  const load = async (append = false) => {
+    const offset = append ? items.length : 0;
+    const parsed = adminParticipantListRequestSchema.safeParse({
+      query,
+      ticketStates: ticketState ? [ticketState] : [],
+      networkingStates: networkingState ? [networkingState] : [],
+      limit: participantPageSize,
+      offset,
+    });
+    if (!parsed.success) return;
+    const request = requestFence.begin('participant-list');
+    setBusy(true);
+    setError(null);
+    const result = await requestAdminParticipantList(
       api,
       eventId,
-      validated.data.query,
+      parsed.data,
       request.signal,
     );
     if (!request.isCurrent()) return;
     request.finish();
-    setBusy(null);
+    setBusy(false);
     if (!result.ok) {
-      setRecords([]);
-      setSearchOutcome('idle');
+      setItems([]);
+      setSelectedIds(new Set());
       if (isAdminSecurityFailure(result)) {
-        wipeSensitiveState();
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
       }
-      setSearchError(
-        adminFailureMessage(result.failure, result.metadata?.requestId),
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      return;
+    }
+    if (result.kind !== 'success') return;
+    startTransition(() => {
+      setItems((current) =>
+        append ? [...current, ...result.data.items] : result.data.items,
+      );
+      setSummary(result.data.summary);
+      setFilteredTotal(result.data.pageInfo.total);
+      setHasMore(result.data.pageInfo.hasMore);
+      if (!append) {
+        setRenderedItemCount(
+          Math.min(participantRenderChunkSize, result.data.items.length),
+        );
+        setSelectedIds((current) => {
+          const visible = new Set(
+            result.data.items.map(({ participantId }) => participantId),
+          );
+          return new Set([...current].filter((id) => visible.has(id)));
+        });
+      }
+    });
+  };
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => void load(), query ? 250 : 0);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, ticketState, networkingState, eventId, reload]);
+
+  const createCandidate = adminParticipantCreateRequestSchema.safeParse({
+    reason: createForm.reason,
+    profile: {
+      firstName: createForm.firstName.trim(),
+      lastName: createForm.lastName.trim(),
+      contactEmail: createForm.contactEmail,
+      phone: createForm.phone.trim() || null,
+      company: createForm.company,
+      jobTitle: createForm.jobTitle,
+    },
+  });
+  const invalidCreateFields = new Set(
+    createCandidate.success
+      ? []
+      : createCandidate.error.issues.map((issue) => issue.path.join('.')),
+  );
+
+  const closeCreate = () => {
+    if (createBusy) return;
+    setCreateOpen(false);
+    setCreateForm(emptyParticipantCreateForm);
+    setCreateAttempted(false);
+    setCreateError(null);
+    setPendingCreate(null);
+  };
+
+  const executeCreate = async (change: PendingParticipantCreate) => {
+    setCreateBusy(true);
+    setCreateError(null);
+    const result = await requestAdminParticipantCreate(
+      api,
+      eventId,
+      change.body,
+      change.idempotencyKey,
+    );
+    setCreateBusy(false);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        setCreateOpen(false);
+        setPendingCreate(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (!isAmbiguousAdminMutationFailure(result)) setPendingCreate(null);
+      const duplicateEmail =
+        result.failure.kind === 'problem' &&
+        result.failure.problem.code === 'VALIDATION_FAILED' &&
+        result.failure.problem.fieldErrors?.['profile.contactEmail']?.some(
+          (message) => message.toLowerCase().includes('already exists'),
+        );
+      setCreateError(
+        duplicateEmail
+          ? 'Účastník s tímto e-mailem už v akci existuje.'
+          : adminFailureMessage(result.failure, result.metadata?.requestId),
       );
       return;
     }
-    if (result.kind === 'success') {
-      setRecords(result.data.matches);
-      setSearchOutcome(result.data.outcome);
-      if (staleMessage) setSearchError(staleMessage);
+    if (result.kind !== 'success') {
+      setCreateError('Server nepotvrdil vytvoření účastníka.');
+      return;
     }
+    const displayName = `${result.data.detail.firstName} ${result.data.detail.lastName}`;
+    setNotice(
+      result.data.outcome === 'already_applied'
+        ? `Účastník ${displayName} už byl vytvořen při předchozím pokusu.`
+        : `Účastník ${displayName} byl vytvořen. Může se přihlásit svým e-mailem nebo mu můžete poslat pozvánku.`,
+    );
+    setCreateOpen(false);
+    setCreateForm(emptyParticipantCreateForm);
+    setCreateAttempted(false);
+    setCreateError(null);
+    setPendingCreate(null);
+    setQuery('');
+    setTicketState('');
+    setNetworkingState('');
+    setReload((value) => value + 1);
   };
 
-  const selectRecord = (record: SupportRecord) => {
-    setSelected(record);
-    setSolving(false);
-    setAction(record.availableActions.find(isVisibleSupportAction) ?? 'resend');
-    setReason('');
-    setAttempted(false);
-    setPending(null);
-    setConfirming(false);
-    setAmbiguous(false);
-    setSearchError(null);
-    setMutationError(null);
-    setSuccess(null);
+  const submitCreate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateAttempted(true);
+    setCreateError(null);
+    if (!createCandidate.success) return;
+    const change = {
+      body: createCandidate.data,
+      idempotencyKey: createAdminIdempotencyKey('participant-create'),
+    };
+    setPendingCreate(change);
+    void executeCreate(change);
   };
 
-  const openActions = () => {
-    if (!canMutateSupport || availableActions.length === 0) return;
-    setAction(availableActions[0]!);
-    setSolving(true);
-  };
+  const selected = useMemo(
+    () => items.filter(({ participantId }) => selectedIds.has(participantId)),
+    [items, selectedIds],
+  );
+  const allSelected = items.length > 0 && selected.length === items.length;
+  const renderedItems = useMemo(
+    () => items.slice(0, renderedItemCount),
+    [items, renderedItemCount],
+  );
+  const changeParticipantSelection = useCallback(
+    (participantId: string, checked: boolean) =>
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        if (checked) next.add(participantId);
+        else next.delete(participantId);
+        return next;
+      }),
+    [],
+  );
+  const changeAllParticipantSelection = useCallback(
+    (checked: boolean) =>
+      setSelectedIds(
+        checked
+          ? new Set(items.map(({ participantId }) => participantId))
+          : new Set(),
+      ),
+    [items],
+  );
+  const revealMoreParticipants = useCallback(
+    () =>
+      startTransition(() =>
+        setRenderedItemCount((current) =>
+          Math.min(items.length, current + participantRenderChunkSize),
+        ),
+      ),
+    [items.length],
+  );
+  const commonActions = bulkActions.filter((action) =>
+    selected.every((participant) =>
+      action === 'invite'
+        ? selected.length <= participantBulkInvitationLimit &&
+          participant.ticketState === 'active'
+        : participant.availableActions.includes(action),
+    ),
+  );
 
-  const prepare = () => {
-    setAttempted(true);
+  const runBulkAction = async () => {
     if (
-      !canMutateSupport ||
-      !isVisibleSupportAction(action) ||
-      !availableActions.includes(action) ||
-      !requestCandidate?.success
-    ) {
+      !bulkAction ||
+      selected.length === 0 ||
+      (bulkAction !== 'invite' && bulkReason.trim().length < 8)
+    )
       return;
-    }
-    setPending({
-      body: requestCandidate.data,
-      idempotencyKey: createAdminIdempotencyKey('support'),
-    });
-    setConfirming(true);
-    setAmbiguous(false);
+    const appliedAction = bulkAction;
+    setBulkAction(null);
+    setBusy(true);
+    setError(null);
+    const results = await Promise.all(
+      selected.map((participant) =>
+        appliedAction === 'invite'
+          ? requestAdminParticipantInvite(
+              api,
+              eventId,
+              participant.participantId,
+              { participantId: participant.participantId },
+              createAdminIdempotencyKey('participant-invite'),
+            )
+          : requestAdminSupportMutation(
+              api,
+              eventId,
+              {
+                participantId: participant.participantId,
+                ticketId: participant.ticketId,
+                action: appliedAction,
+                expectedVersion: participant.ticketVersion,
+                reason: bulkReason.trim(),
+                targetTicketId: null,
+              },
+              createAdminIdempotencyKey('participant-bulk'),
+            ),
+      ),
+    );
+    const succeeded = results.filter((result) => result.ok).length;
+    setBusy(false);
+    setBulkReason('');
+    setSelectedIds(new Set());
+    setNotice(
+      succeeded === selected.length
+        ? appliedAction === 'invite'
+          ? `Pozvánka byla odeslána ${succeeded} účastníkům.`
+          : `Hromadná změna byla provedena u ${succeeded} účastníků.`
+        : `${appliedAction === 'invite' ? 'Pozvánka byla odeslána' : 'Změna proběhla'} u ${succeeded} z ${selected.length} účastníků. Zkontrolujte aktuální stav seznamu.`,
+    );
+    await load();
   };
 
-  const mutate = async (attempt: PendingMutation) => {
-    if (!canMutateSupport || !isVisibleSupportAction(attempt.body.action)) {
-      return;
-    }
-    const request = requestFence.begin('support-mutation');
-    setBusy('mutation');
-    setConfirming(false);
-    setMutationError(null);
-    const result = await requestAdminSupportMutation(
+  return (
+    <div className={styles.participantWorkspace}>
+      <header className={styles.participantPageHeader}>
+        <div>
+          <h1>Účastníci</h1>
+          <p>Kompletní přehled účastníků, jejich přístupu a networkingu.</p>
+        </div>
+        <div className={styles.participantHeaderActions}>
+          {canMutate ? (
+            <button
+              className={styles.button}
+              onClick={() => {
+                setCreateOpen(true);
+                setCreateError(null);
+                setNotice(null);
+              }}
+              type="button"
+            >
+              Přidat účastníka
+            </button>
+          ) : null}
+          <Link className={styles.secondaryButton} href="/admin/reporty">
+            Exportovat seznam
+          </Link>
+        </div>
+      </header>
+
+      <section
+        className={styles.participantMetrics}
+        aria-label="Souhrn účastníků"
+      >
+        <article>
+          <span>Celkem</span>
+          <strong>{summary.total}</strong>
+        </article>
+        <article>
+          <span>Aktivní přístup</span>
+          <strong>{summary.active}</strong>
+        </article>
+        <article>
+          <span>Zapnutý networking</span>
+          <strong>{summary.networkingEnabled}</strong>
+        </article>
+        <article>
+          <span>Odbavení</span>
+          <strong>{summary.checkedIn}</strong>
+        </article>
+      </section>
+
+      <section
+        className={styles.participantListPanel}
+        aria-labelledby="participant-list-title"
+      >
+        <div className={styles.participantListHeading}>
+          <div>
+            <h2 id="participant-list-title">Seznam účastníků</h2>
+            <p>{filteredTotal} odpovídá aktuálním filtrům</p>
+          </div>
+          <button
+            className={styles.secondaryButton}
+            disabled={busy}
+            onClick={() => void load()}
+            type="button"
+          >
+            Obnovit
+          </button>
+        </div>
+
+        <div className={styles.participantFilters} role="search">
+          <label className={styles.participantSearch}>
+            <span className={styles.visuallyHidden}>Filtrovat účastníky</span>
+            <ParticipantIcon>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
+            </ParticipantIcon>
+            <input
+              autoComplete="off"
+              maxLength={80}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Jméno, e-mail, firma nebo vstupenka…"
+              type="search"
+              value={query}
+            />
+          </label>
+          <label className={styles.participantFilterField}>
+            <span>Vstupenka</span>
+            <select
+              onChange={(event) =>
+                setTicketState(event.target.value as SupportTicketState | '')
+              }
+              value={ticketState}
+            >
+              <option value="">Všechny stavy</option>
+              <option value="active">Aktivní</option>
+              <option value="blocked">Zablokované</option>
+              <option value="cancelled">Zrušené</option>
+              <option value="refunded">Vrácené</option>
+            </select>
+          </label>
+          <label className={styles.participantFilterField}>
+            <span>Networking</span>
+            <select
+              onChange={(event) =>
+                setNetworkingState(
+                  event.target.value as AdminParticipantNetworkingState | '',
+                )
+              }
+              value={networkingState}
+            >
+              <option value="">Všechny stavy</option>
+              <option value="enabled">Zapnutý</option>
+              <option value="disabled">Vypnutý</option>
+              <option value="moderated">Skrytý správcem</option>
+            </select>
+          </label>
+          {query || ticketState || networkingState ? (
+            <button
+              className={styles.participantClearFilters}
+              onClick={() => {
+                setQuery('');
+                setTicketState('');
+                setNetworkingState('');
+              }}
+              type="button"
+            >
+              Zrušit filtry
+            </button>
+          ) : null}
+        </div>
+
+        {selected.length > 0 ? (
+          <div
+            className={styles.participantBulkBar}
+            role="region"
+            aria-label="Hromadné akce"
+          >
+            <strong>Vybráno: {selected.length}</strong>
+            <span>
+              {selected.length > participantBulkInvitationLimit
+                ? `Pozvánky lze odeslat nejvýše ${participantBulkInvitationLimit} účastníkům najednou; ostatní společné akce zůstávají dostupné.`
+                : commonActions.length > 0
+                  ? 'Dostupné akce platí pro celý výběr.'
+                  : 'Vybraní účastníci nemají společnou stavovou akci.'}
+            </span>
+            <div>
+              {canMutate && commonActions.includes('invite') ? (
+                <button
+                  className={styles.button}
+                  onClick={() => setBulkAction('invite')}
+                  type="button"
+                >
+                  Poslat pozvánku
+                </button>
+              ) : null}
+              {canMutate && commonActions.includes('block') ? (
+                <button
+                  className={styles.dangerButton}
+                  onClick={() => setBulkAction('block')}
+                  type="button"
+                >
+                  Zablokovat přístup
+                </button>
+              ) : null}
+              {canMutate && commonActions.includes('reactivate') ? (
+                <button
+                  className={styles.button}
+                  onClick={() => setBulkAction('reactivate')}
+                  type="button"
+                >
+                  Obnovit přístup
+                </button>
+              ) : null}
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setSelectedIds(new Set())}
+                type="button"
+              >
+                Zrušit výběr
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {error ? (
+          <section className={styles.errorSummary} role="alert">
+            <p>{error}</p>
+          </section>
+        ) : null}
+        {notice ? (
+          <section className={styles.success} role="status">
+            <p>{notice}</p>
+          </section>
+        ) : null}
+        {busy && items.length === 0 ? (
+          <p className={styles.participantLoading} role="status">
+            Načítám účastníky…
+          </p>
+        ) : null}
+        {!busy && !error && items.length === 0 ? (
+          <div className={styles.participantEmpty}>
+            <strong>Žádný účastník neodpovídá filtrům.</strong>
+            <span>Zkuste filtry zrušit nebo upravit hledaný výraz.</span>
+          </div>
+        ) : null}
+
+        {items.length > 0 ? (
+          <ParticipantDataView
+            allSelected={allSelected}
+            compact={compactDataView}
+            items={renderedItems}
+            onAllSelectionChange={changeAllParticipantSelection}
+            onScrollEnd={revealMoreParticipants}
+            onSelectionChange={changeParticipantSelection}
+            selectedCount={selected.length}
+            selectedIds={selectedIds}
+          />
+        ) : null}
+        {renderedItems.length < items.length ? (
+          <div className={styles.participantLoadMore}>
+            <p>
+              V seznamu je zobrazeno {renderedItems.length} z {items.length}{' '}
+              načtených účastníků.
+            </p>
+            <button
+              className={styles.secondaryButton}
+              onClick={revealMoreParticipants}
+              type="button"
+            >
+              Zobrazit další v seznamu
+            </button>
+          </div>
+        ) : null}
+        {hasMore ? (
+          <div className={styles.participantLoadMore}>
+            <p>
+              Zobrazeno {items.length} z {filteredTotal} odpovídajících
+              účastníků.
+            </p>
+            <button
+              className={styles.secondaryButton}
+              disabled={busy}
+              onClick={() => void load(true)}
+              type="button"
+            >
+              {busy ? 'Načítám…' : 'Načíst další účastníky'}
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      {bulkAction ? (
+        <AdminConfirmDialog
+          acknowledgement={
+            bulkAction === 'invite'
+              ? 'Potvrzuji odeslání jednorázových odkazů vybraným účastníkům.'
+              : 'Rozumím dopadu této změny na všechny vybrané účastníky.'
+          }
+          confirmLabel={
+            bulkAction === 'invite'
+              ? 'Odeslat pozvánky'
+              : supportActionLabels[bulkAction]
+          }
+          confirmDisabled={
+            bulkAction !== 'invite' && bulkReason.trim().length < 8
+          }
+          danger={bulkAction === 'block'}
+          description={
+            bulkAction === 'invite'
+              ? `${selected.length} vybraným účastníkům odešleme e-mail s jednorázovým odkazem do jejich účastnické části. Odkaz platí 5 minut.`
+              : `Změna se provede u ${selected.length} vybraných účastníků.`
+          }
+          impact={
+            bulkAction === 'invite' ? undefined : (
+              <label className={styles.field}>
+                <span>Důvod změny</span>
+                <textarea
+                  minLength={8}
+                  onChange={(event) => setBulkReason(event.target.value)}
+                  placeholder="Alespoň 8 znaků; důvod se uloží do historie změn."
+                  value={bulkReason}
+                />
+              </label>
+            )
+          }
+          onConfirm={() => void runBulkAction()}
+          onDismiss={() => {
+            setBulkAction(null);
+            setBulkReason('');
+          }}
+          title={
+            bulkAction === 'invite'
+              ? 'Odeslat vybraným účastníkům pozvánky?'
+              : bulkAction === 'block'
+                ? 'Zablokovat vybrané přístupy?'
+                : 'Obnovit vybrané přístupy?'
+          }
+        />
+      ) : null}
+
+      {createOpen ? (
+        <AdminModal
+          dismissDisabled={createBusy}
+          labelledBy="participant-create-title"
+          onDismiss={closeCreate}
+        >
+          <div className={styles.dialogHeader}>
+            <div>
+              <p className={styles.eyebrow}>Nový účastník</p>
+              <h2 id="participant-create-title" tabIndex={-1}>
+                Přidat účastníka ručně
+              </h2>
+            </div>
+            <button
+              className={styles.secondaryButton}
+              disabled={createBusy}
+              onClick={closeCreate}
+              type="button"
+            >
+              Zavřít
+            </button>
+          </div>
+          <form onSubmit={submitCreate}>
+            <div className={styles.dialogBody}>
+              <p className={styles.muted}>
+                Účastník dostane aktivní přístup do této akce stejně jako po
+                importu ze SimpleShopu. Pozvánku mu můžete poslat následně z
+                jeho detailu.
+              </p>
+              {createError ? (
+                <AdminFormErrorSummary
+                  descriptionId="participant-create-server-error"
+                  heading="Účastníka nelze vytvořit"
+                  message={createError}
+                />
+              ) : null}
+              {createAttempted && !createCandidate.success ? (
+                <AdminFormErrorSummary
+                  descriptionId="participant-create-validation-error"
+                  heading="Zkontrolujte zadané údaje"
+                  message="Vyplňte jméno, příjmení, platný e-mail a důvod vytvoření o alespoň 8 znacích. Telefon zadejte v mezinárodním formátu, například +420777123456."
+                />
+              ) : null}
+              <div className={styles.participantFormGrid}>
+                <label className={styles.field}>
+                  <span>Jméno</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.firstName')
+                    }
+                    autoComplete="given-name"
+                    data-modal-initial-focus="true"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={128}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        firstName: event.target.value,
+                      }))
+                    }
+                    required
+                    value={createForm.firstName}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Příjmení</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.lastName')
+                    }
+                    autoComplete="family-name"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={128}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        lastName: event.target.value,
+                      }))
+                    }
+                    required
+                    value={createForm.lastName}
+                  />
+                </label>
+                <label
+                  className={`${styles.field} ${styles.participantWideField}`}
+                >
+                  <span>E-mail</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.contactEmail')
+                    }
+                    autoComplete="email"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={320}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        contactEmail: event.target.value,
+                      }))
+                    }
+                    required
+                    type="email"
+                    value={createForm.contactEmail}
+                  />
+                  <span className={styles.helper}>
+                    E-mail je přihlašovací identita účastníka a musí být v akci
+                    jedinečný.
+                  </span>
+                </label>
+                <label className={styles.field}>
+                  <span>Telefon (nepovinný)</span>
+                  <input
+                    aria-invalid={
+                      createAttempted &&
+                      invalidCreateFields.has('profile.phone')
+                    }
+                    autoComplete="tel"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={16}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                    placeholder="+420777123456"
+                    type="tel"
+                    value={createForm.phone}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Firma (nepovinná)</span>
+                  <input
+                    autoComplete="organization"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={160}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        company: event.target.value,
+                      }))
+                    }
+                    value={createForm.company}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Pozice (nepovinná)</span>
+                  <input
+                    autoComplete="organization-title"
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={160}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        jobTitle: event.target.value,
+                      }))
+                    }
+                    value={createForm.jobTitle}
+                  />
+                </label>
+                <label
+                  className={`${styles.field} ${styles.participantWideField}`}
+                >
+                  <span>Důvod vytvoření</span>
+                  <textarea
+                    aria-invalid={
+                      createAttempted && invalidCreateFields.has('reason')
+                    }
+                    disabled={createBusy || pendingCreate !== null}
+                    maxLength={500}
+                    minLength={8}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        reason: event.target.value,
+                      }))
+                    }
+                    placeholder="Např. registrace hosta mimo SimpleShop"
+                    required
+                    value={createForm.reason}
+                  />
+                  <span className={styles.helper}>
+                    Důvod se uloží do historie změn.
+                  </span>
+                </label>
+              </div>
+              {pendingCreate && createError ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={createBusy}
+                  onClick={() => void executeCreate(pendingCreate)}
+                  type="button"
+                >
+                  Zopakovat přesně stejný pokus
+                </button>
+              ) : null}
+            </div>
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.secondaryButton}
+                disabled={createBusy}
+                onClick={closeCreate}
+                type="button"
+              >
+                Zrušit a zavřít
+              </button>
+              <button
+                className={styles.button}
+                disabled={createBusy || pendingCreate !== null}
+                type="submit"
+              >
+                {createBusy ? 'Vytvářím…' : 'Vytvořit účastníka'}
+              </button>
+            </div>
+          </form>
+        </AdminModal>
+      ) : null}
+    </div>
+  );
+};
+
+const detailToDraft = (detail: AdminParticipantDetail) => ({
+  firstName: detail.firstName,
+  lastName: detail.lastName,
+  contactEmail: detail.contactEmail,
+  phone: detail.phone ?? '',
+  company: detail.company,
+  jobTitle: detail.jobTitle,
+  introduction: detail.introduction,
+  linkedinUrl: detail.linkedinUrl ?? '',
+  todayHunting: [...detail.todayHunting],
+  networkingEnabled: detail.networkingEnabled,
+  moderationStatus: detail.moderationStatus,
+});
+
+export const AdminParticipantDetailWorkspace = ({
+  participantId,
+}: {
+  readonly participantId: string;
+}) => {
+  const { api, eventId, invalidateSensitive, permissions } =
+    useAdminWorkspace();
+  const canMutate = permissions.includes('ticket:any:manage');
+  const requestFence = useAdminRequestFence();
+  const [detail, setDetail] = useState<AdminParticipantDetail | null>(null);
+  const [draft, setDraft] = useState<ReturnType<typeof detailToDraft> | null>(
+    null,
+  );
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState<'load' | 'save' | 'action' | null>('load');
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [ticketAction, setTicketAction] = useState<
+    'block' | 'reactivate' | null
+  >(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+
+  const load = async (staleMessage?: string) => {
+    const request = requestFence.begin('participant-detail');
+    setBusy('load');
+    setError(null);
+    const result = await requestAdminParticipantDetail(
       api,
       eventId,
-      attempt.body,
-      attempt.idempotencyKey,
+      participantId,
       request.signal,
     );
     if (!request.isCurrent()) return;
@@ -277,396 +1277,645 @@ export const AdminSupportWorkspace = () => {
     setBusy(null);
     if (!result.ok) {
       if (isAdminSecurityFailure(result)) {
-        wipeSensitiveState();
+        setDetail(null);
+        setDraft(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      return;
+    }
+    if (result.kind !== 'success') return;
+    setDetail(result.data);
+    setDraft(detailToDraft(result.data));
+    if (staleMessage) setError(staleMessage);
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, participantId]);
+
+  useEffect(() => {
+    const protectDraft = (event: BeforeUnloadEvent) => {
+      if (
+        !detail ||
+        !draft ||
+        JSON.stringify(draft) === JSON.stringify(detailToDraft(detail))
+      )
+        return;
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', protectDraft);
+    return () => window.removeEventListener('beforeunload', protectDraft);
+  }, [detail, draft]);
+
+  const save = async () => {
+    if (!detail || !draft || !canMutate) return;
+    const parsed = adminParticipantUpdateRequestSchema.safeParse({
+      participantId,
+      expectedProfileVersion: detail.profileVersion,
+      reason,
+      profile: {
+        ...draft,
+        phone: draft.phone || null,
+        linkedinUrl: draft.linkedinUrl || null,
+      },
+    });
+    if (!parsed.success) {
+      setError(
+        'Zkontrolujte vyplněná pole. Důvod změny musí mít alespoň 8 znaků, telefon musí být v mezinárodním formátu.',
+      );
+      return;
+    }
+    const request = requestFence.begin('participant-update');
+    setBusy('save');
+    setError(null);
+    setSuccess(null);
+    const result = await requestAdminParticipantUpdate(
+      api,
+      eventId,
+      participantId,
+      parsed.data,
+      createAdminIdempotencyKey('participant-update'),
+      request.signal,
+    );
+    if (!request.isCurrent()) return;
+    request.finish();
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        setDetail(null);
+        setDraft(null);
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
         return;
       }
       if (isStaleAdminFailure(result.failure)) {
-        setPending(null);
-        setAmbiguous(false);
-        setReason('');
-        setSolving(false);
-        await search(
-          'Záznam se mezitím změnil. Načetli jsme aktuální stav; změnu připravte znovu.',
+        await load(
+          'Profil mezitím změnil někdo jiný. Načetli jsme aktuální údaje; změny zkontrolujte znovu.',
         );
         return;
       }
-      const retryable = isAmbiguousAdminMutationFailure(result);
-      setAmbiguous(retryable);
-      if (!retryable) setPending(null);
-      setMutationError(
-        adminFailureMessage(result.failure, result.metadata?.requestId),
-      );
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
       return;
     }
-    if (result.kind === 'success') {
-      setRecords((current) =>
-        current.map((record) =>
-          record.participantId === result.data.record.participantId
-            ? result.data.record
-            : record,
-        ),
-      );
-      setSelected(result.data.record);
-      setPending(null);
-      setAmbiguous(false);
-      setAttempted(false);
-      setReason('');
-      setSolving(false);
-      setSuccess({
-        message:
-          result.data.outcome === 'already_applied'
-            ? `Server potvrdil dříve dokončenou změnu. ${actionGuidance[attempt.body.action].success}`
-            : actionGuidance[attempt.body.action].success,
-        auditId: result.data.audit.auditId,
-      });
-    }
+    if (result.kind !== 'success') return;
+    setDetail(result.data.detail);
+    setDraft(detailToDraft(result.data.detail));
+    setReason('');
+    setSuccess('Změny účastníka byly uloženy.');
   };
 
+  const mutateTicket = async () => {
+    if (!detail || !ticketAction || reason.trim().length < 8) return;
+    const appliedAction = ticketAction;
+    setTicketAction(null);
+    setBusy('action');
+    const result = await requestAdminSupportMutation(
+      api,
+      eventId,
+      {
+        participantId,
+        ticketId: detail.ticketId,
+        action: appliedAction,
+        expectedVersion: detail.ticket.version,
+        reason: reason.trim(),
+        targetTicketId: null,
+      },
+      createAdminIdempotencyKey('participant-ticket'),
+    );
+    setBusy(null);
+    if (!result.ok) {
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      return;
+    }
+    setReason('');
+    setSuccess(
+      appliedAction === 'block'
+        ? 'Přístup byl zablokován.'
+        : 'Přístup byl obnoven.',
+    );
+    await load();
+  };
+
+  const sendInvitation = async () => {
+    if (!detail || !canMutate) return;
+    setInviteOpen(false);
+    setBusy('action');
+    setError(null);
+    setSuccess(null);
+    const result = await requestAdminParticipantInvite(
+      api,
+      eventId,
+      participantId,
+      { participantId },
+      createAdminIdempotencyKey('participant-invite'),
+    );
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        setDetail(null);
+        setDraft(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      return;
+    }
+    if (result.kind !== 'success') return;
+    setDetail({ ...detail, invitation: result.data.invitation });
+    setSuccess(`Pozvánka byla odeslána na ${detail.contactEmail}.`);
+  };
+
+  if (busy === 'load' && !detail)
+    return (
+      <p className={styles.participantLoading} role="status">
+        Načítám detail účastníka…
+      </p>
+    );
+  if (!detail || !draft)
+    return (
+      <div className={styles.stack}>
+        <Link className={styles.participantBackLink} href="/admin/ucastnici">
+          ← Zpět na účastníky
+        </Link>
+        <section className={styles.errorSummary} role="alert">
+          <h1>Detail nelze zobrazit</h1>
+          <p>{error ?? 'Účastník není dostupný.'}</p>
+        </section>
+      </div>
+    );
+
+  const displayName = `${detail.firstName} ${detail.lastName}`;
+  const isDirty =
+    JSON.stringify(draft) !== JSON.stringify(detailToDraft(detail));
   return (
-    <div className={styles.stack}>
-      <header className={styles.pageHeader}>
-        <h1>Účastníci</h1>
-        <p>
-          Najděte člověka a vyřešte jen problém, který jeho aktuální stav
-          dovoluje.
-        </p>
+    <div className={styles.participantDetailWorkspace}>
+      <Link className={styles.participantBackLink} href="/admin/ucastnici">
+        ← Zpět na účastníky
+      </Link>
+      <header className={styles.participantDetailHeader}>
+        <div className={styles.participantAvatar} aria-hidden="true">
+          {detail.firstName.slice(0, 1)}
+          {detail.lastName.slice(0, 1)}
+        </div>
+        <div>
+          <p className={styles.eyebrow}>Detail účastníka</p>
+          <h1>{displayName}</h1>
+          <p>
+            {detail.contactEmail}
+            {detail.company ? ` · ${detail.company}` : ''}
+          </p>
+        </div>
+        <StateBadge tone={ticketTone(detail.ticket.state)}>
+          {ticketStateLabels[detail.ticket.state]}
+        </StateBadge>
       </header>
 
-      <section className={styles.panel} aria-labelledby="support-search-title">
-        <h2 id="support-search-title">Najít účastníka</h2>
-        <form
-          className={styles.toolbar}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void search();
-          }}
-          role="search"
-        >
-          <label className={styles.field}>
-            <span>Jméno, e-mail nebo reference vstupenky</span>
-            <input
-              autoComplete="off"
-              aria-describedby={
-                searchInvalid
-                  ? 'admin-support-search-error'
-                  : 'admin-support-search-help'
-              }
-              aria-invalid={searchInvalid}
-              maxLength={80}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                if (searchInvalid) setSearchError(null);
-                setSearchInvalid(false);
-              }}
-              disabled={pending !== null}
-              type="search"
-              value={query}
-            />
-            <span className={styles.helper} id="admin-support-search-help">
-              Zadejte alespoň 2 znaky. Vyhledávání se neukládá do historie.
-            </span>
-          </label>
-          <button
-            className={styles.button}
-            disabled={busy !== null || !canReadSupport || pending !== null}
-            type="submit"
-          >
-            {busy === 'search' ? 'Vyhledávám…' : 'Vyhledat účastníka'}
-          </button>
-        </form>
-        {searchError ? (
-          <section
-            className={searchInvalid ? styles.errorSummary : styles.warning}
-            ref={searchInvalid ? searchErrorSummaryRef : undefined}
-            role="alert"
-            tabIndex={searchInvalid ? -1 : undefined}
-          >
-            <p id="admin-support-search-error">{searchError}</p>
-          </section>
-        ) : null}
-        {searchOutcome === 'no_match' && !searchError ? (
-          <p role="status">
-            Nikoho jsme nenašli. Zkontrolujte zápis nebo zkuste jiný údaj.
-          </p>
-        ) : null}
-        {searchOutcome === 'ambiguous' ? (
-          <p className={styles.callout} role="status">
-            Našli jsme více lidí. Vyberte správný záznam podle maskovaného
-            kontaktu nebo reference.
-          </p>
-        ) : null}
-
-        {records.length > 0 ? (
-          <>
-            <div className={styles.tableWrap} tabIndex={0}>
-              <table className={styles.table}>
-                <caption>Výsledky vyhledávání účastníků</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Účastník</th>
-                    <th scope="col">Kontakt</th>
-                    <th scope="col">Reference</th>
-                    <th scope="col">Vstupenka</th>
-                    <th scope="col">Přístup</th>
-                    <th scope="col">Akce</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((record) => (
-                    <tr key={record.participantId}>
-                      <td>
-                        <strong>{record.displayName}</strong>
-                      </td>
-                      <td>{record.maskedContact}</td>
-                      <td>••{record.referenceSuffix}</td>
-                      <td>{ticketStateLabels[record.ticketState]}</td>
-                      <td>{supportAccessStateLabels[record.accessState]}</td>
-                      <td>
-                        <button
-                          className={styles.secondaryButton}
-                          disabled={pending !== null}
-                          onClick={() => selectRecord(record)}
-                          type="button"
-                        >
-                          Zobrazit detail
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className={styles.cards}>
-              <ul className={styles.cardList}>
-                {records.map((record) => (
-                  <li className={styles.dataCard} key={record.participantId}>
-                    <div className={styles.panelHeader}>
-                      <strong>{record.displayName}</strong>
-                      <span className={styles.statusBadge}>
-                        {ticketStateLabels[record.ticketState]}
-                      </span>
-                    </div>
-                    <dl>
-                      <dt>Kontakt</dt>
-                      <dd>{record.maskedContact}</dd>
-                      <dt>Reference</dt>
-                      <dd>••{record.referenceSuffix}</dd>
-                      <dt>Přístup</dt>
-                      <dd>{supportAccessStateLabels[record.accessState]}</dd>
-                    </dl>
-                    <button
-                      className={styles.secondaryButton}
-                      disabled={pending !== null}
-                      onClick={() => selectRecord(record)}
-                      type="button"
-                    >
-                      Zobrazit detail
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        ) : null}
-      </section>
-
-      {selected ? (
-        <section
-          className={styles.panel}
-          aria-labelledby="support-detail-title"
-        >
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.eyebrow}>Detail účastníka</p>
-              <h2 id="support-detail-title">{selected.displayName}</h2>
-            </div>
-            <span className={styles.statusBadge}>
-              {ticketStateLabels[selected.ticketState]}
-            </span>
-          </div>
-          <div className={styles.supportRecordSummary}>
-            <span>{selected.maskedContact}</span>
-            <span>••{selected.referenceSuffix}</span>
-            <span>{ticketStateLabels[selected.ticketState]}</span>
-            <span>{supportAccessStateLabels[selected.accessState]}</span>
-          </div>
-
-          {success ? (
-            <section className={styles.success} role="status">
-              <p>
-                <strong>{success.message}</strong>
-              </p>
-              <p>
-                <Link href="/admin/audit">Zobrazit v historii změn</Link>
-              </p>
-              <AdminTechnicalDetails>
-                <dl className={styles.detailList}>
-                  <dt>ID auditu</dt>
-                  <dd>{success.auditId}</dd>
-                </dl>
-              </AdminTechnicalDetails>
-            </section>
-          ) : null}
-
-          {canMutateSupport && availableActions.length > 0 && !solving ? (
-            <button
-              className={styles.button}
-              onClick={openActions}
-              type="button"
-            >
-              Vyřešit problém
-            </button>
-          ) : null}
-          {canMutateSupport && availableActions.length === 0 ? (
-            <p className={styles.callout}>
-              Pro aktuální stav není dostupná žádná bezpečná akce.
-            </p>
-          ) : null}
-
-          {canMutateSupport && solving ? (
-            <div className={styles.stack}>
-              <fieldset className={styles.supportActionPicker}>
-                <legend>Co potřebujete vyřešit?</legend>
-                {availableActions.map((availableAction) => (
-                  <label key={availableAction}>
-                    <input
-                      checked={action === availableAction}
-                      disabled={pending !== null}
-                      name="support-action"
-                      onChange={() => {
-                        setAction(availableAction);
-                        setAttempted(false);
-                        setPending(null);
-                        setAmbiguous(false);
-                      }}
-                      type="radio"
-                      value={availableAction}
-                    />
-                    <span>
-                      <strong>{supportActionLabels[availableAction]}</strong>
-                      <small>
-                        <b>Kdy použít:</b>{' '}
-                        {actionGuidance[availableAction].when}
-                      </small>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-              {selectedGuidance ? (
-                <section
-                  className={
-                    selectedGuidance.danger ? styles.warning : styles.callout
-                  }
-                >
-                  <h3>Dopad změny</h3>
-                  <p>{selectedGuidance.impact}</p>
-                  <p>
-                    <strong>Co dělat potom:</strong> {selectedGuidance.recovery}
-                  </p>
-                </section>
-              ) : null}
-              {mutationValidationFailed || mutationError ? (
-                <section
-                  className={styles.errorSummary}
-                  ref={mutationErrorSummaryRef}
-                  role="alert"
-                  tabIndex={-1}
-                >
-                  <h2>Změnu zatím nelze potvrdit</h2>
-                  <p id="admin-support-mutation-error">
-                    {mutationError ??
-                      'Doplňte důvod změny o nejméně 8 viditelných znaků.'}
-                  </p>
-                </section>
-              ) : null}
-              <label className={styles.field}>
-                <span>Důvod změny</span>
-                <textarea
-                  aria-describedby={
-                    mutationInvalidPaths.has('reason')
-                      ? 'admin-support-reason-error'
-                      : 'admin-support-reason-help'
-                  }
-                  aria-invalid={mutationInvalidPaths.has('reason')}
-                  disabled={pending !== null}
-                  onChange={(event) => setReason(event.target.value)}
-                  value={reason}
-                />
-                <span className={styles.helper} id="admin-support-reason-help">
-                  Nejméně 8 znaků. Důvod se uloží do historie změn.
-                </span>
-                {mutationInvalidPaths.has('reason') ? (
-                  <span
-                    className={styles.helper}
-                    id="admin-support-reason-error"
-                  >
-                    Důvod změny musí mít nejméně 8 viditelných znaků.
-                  </span>
-                ) : null}
-              </label>
-              <div className={styles.actionRow}>
-                <button
-                  className={
-                    selectedGuidance?.danger
-                      ? styles.dangerButton
-                      : styles.button
-                  }
-                  disabled={busy !== null || pending !== null}
-                  onClick={prepare}
-                  type="button"
-                >
-                  Zkontrolovat změnu
-                </button>
-                <button
-                  className={styles.secondaryButton}
-                  disabled={busy !== null || pending !== null}
-                  onClick={() => {
-                    setSolving(false);
-                    setReason('');
-                    setAttempted(false);
-                    setMutationError(null);
-                  }}
-                  type="button"
-                >
-                  Zrušit
-                </button>
-                {ambiguous && pending ? (
-                  <button
-                    className={styles.secondaryButton}
-                    disabled={busy !== null}
-                    onClick={() => void mutate(pending)}
-                    type="button"
-                  >
-                    Zopakovat přesně stejný pokus
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+      {error ? (
+        <section className={styles.errorSummary} role="alert">
+          <p>{error}</p>
+        </section>
+      ) : null}
+      {success ? (
+        <section className={styles.success} role="status">
+          <p>{success}</p>
         </section>
       ) : null}
 
-      {confirming && pending && isVisibleSupportAction(pending.body.action) ? (
+      <div className={styles.participantDetailLayout}>
+        <main className={styles.participantDetailMain}>
+          <section
+            className={styles.participantDetailSection}
+            aria-labelledby="basic-data-title"
+          >
+            <div className={styles.participantSectionHeading}>
+              <div>
+                <h2 id="basic-data-title">Základní údaje</h2>
+                <p>Identita a kontaktní údaje používané v aplikaci.</p>
+              </div>
+            </div>
+            <div className={styles.participantFormGrid}>
+              <label className={styles.field}>
+                <span>Jméno</span>
+                <input
+                  disabled={!canMutate}
+                  maxLength={128}
+                  onChange={(event) =>
+                    setDraft({ ...draft, firstName: event.target.value })
+                  }
+                  value={draft.firstName}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Příjmení</span>
+                <input
+                  disabled={!canMutate}
+                  maxLength={128}
+                  onChange={(event) =>
+                    setDraft({ ...draft, lastName: event.target.value })
+                  }
+                  value={draft.lastName}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>E-mail</span>
+                <input
+                  autoComplete="email"
+                  disabled={!canMutate}
+                  onChange={(event) =>
+                    setDraft({ ...draft, contactEmail: event.target.value })
+                  }
+                  type="email"
+                  value={draft.contactEmail}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Telefon</span>
+                <input
+                  autoComplete="tel"
+                  disabled={!canMutate}
+                  onChange={(event) =>
+                    setDraft({ ...draft, phone: event.target.value })
+                  }
+                  placeholder="+420…"
+                  type="tel"
+                  value={draft.phone}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Firma</span>
+                <input
+                  disabled={!canMutate}
+                  maxLength={160}
+                  onChange={(event) =>
+                    setDraft({ ...draft, company: event.target.value })
+                  }
+                  value={draft.company}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Pozice</span>
+                <input
+                  disabled={!canMutate}
+                  maxLength={160}
+                  onChange={(event) =>
+                    setDraft({ ...draft, jobTitle: event.target.value })
+                  }
+                  value={draft.jobTitle}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section
+            className={styles.participantDetailSection}
+            aria-labelledby="networking-data-title"
+          >
+            <div className={styles.participantSectionHeading}>
+              <div>
+                <h2 id="networking-data-title">Networking</h2>
+                <p>Veřejný profil a jeho viditelnost v adresáři účastníků.</p>
+              </div>
+              <label className={styles.participantSwitch}>
+                <input
+                  checked={draft.networkingEnabled}
+                  disabled={!canMutate}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      networkingEnabled: event.target.checked,
+                    })
+                  }
+                  type="checkbox"
+                />
+                <span>{draft.networkingEnabled ? 'Zapnutý' : 'Vypnutý'}</span>
+              </label>
+            </div>
+            <div className={styles.participantFormGrid}>
+              <label
+                className={`${styles.field} ${styles.participantWideField}`}
+              >
+                <span>Představení</span>
+                <textarea
+                  disabled={!canMutate}
+                  maxLength={1000}
+                  onChange={(event) =>
+                    setDraft({ ...draft, introduction: event.target.value })
+                  }
+                  value={draft.introduction}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>LinkedIn</span>
+                <input
+                  disabled={!canMutate}
+                  onChange={(event) =>
+                    setDraft({ ...draft, linkedinUrl: event.target.value })
+                  }
+                  placeholder="https://www.linkedin.com/in/…"
+                  type="url"
+                  value={draft.linkedinUrl}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Moderování profilu</span>
+                <select
+                  disabled={!canMutate}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      moderationStatus: event.target.value as
+                        'visible' | 'hidden',
+                    })
+                  }
+                  value={draft.moderationStatus}
+                >
+                  <option value="visible">Profil je v pořádku</option>
+                  <option value="hidden">Skrýt profil správcem</option>
+                </select>
+              </label>
+              <fieldset
+                className={`${styles.fieldset} ${styles.participantWideField}`}
+              >
+                <legend>Co dnes hledá</legend>
+                <div className={styles.participantChoiceGrid}>
+                  {Object.entries(huntingLabels).map(([value, label]) => (
+                    <label key={value}>
+                      <input
+                        checked={draft.todayHunting.includes(
+                          value as keyof typeof huntingLabels,
+                        )}
+                        disabled={!canMutate}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            todayHunting: event.target.checked
+                              ? [
+                                  ...draft.todayHunting,
+                                  value as keyof typeof huntingLabels,
+                                ]
+                              : draft.todayHunting.filter(
+                                  (item) => item !== value,
+                                ),
+                          })
+                        }
+                        type="checkbox"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          </section>
+
+          <section
+            className={styles.participantDetailSection}
+            aria-labelledby="reservations-title"
+          >
+            <div className={styles.participantSectionHeading}>
+              <div>
+                <h2 id="reservations-title">Rezervace</h2>
+                <p>Aktivity spojené s tímto účastníkem.</p>
+              </div>
+              <strong>{detail.reservations.length}</strong>
+            </div>
+            {detail.reservations.length > 0 ? (
+              <ul className={styles.participantReservationList}>
+                {detail.reservations.map((reservation) => (
+                  <li key={reservation.reservationId}>
+                    <div>
+                      <strong>{reservation.title}</strong>
+                      <span>{formatDateTime(reservation.startsAt)}</span>
+                    </div>
+                    <StateBadge
+                      tone={
+                        reservation.status === 'confirmed'
+                          ? 'success'
+                          : 'neutral'
+                      }
+                    >
+                      {reservation.status === 'confirmed'
+                        ? 'Potvrzeno'
+                        : 'Zrušeno'}
+                    </StateBadge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.muted}>Účastník nemá žádné rezervace.</p>
+            )}
+          </section>
+        </main>
+
+        <aside
+          className={styles.participantDetailAside}
+          aria-label="Provozní údaje"
+        >
+          <section>
+            <h2>Vstupenka a přístup</h2>
+            <dl>
+              <div>
+                <dt>Stav</dt>
+                <dd>{ticketStateLabels[detail.ticket.state]}</dd>
+              </div>
+              <div>
+                <dt>Reference</dt>
+                <dd>••{detail.ticket.referenceSuffix}</dd>
+              </div>
+              <div>
+                <dt>Přístup</dt>
+                <dd>
+                  {detail.invitation.status === 'accepted'
+                    ? 'Přihlášení aktivováno'
+                    : detail.invitation.status === 'sent'
+                      ? 'Pozvánka odeslána'
+                      : 'Pozvánka neodeslána'}
+                </dd>
+              </div>
+              {detail.invitation.lastSentAt ? (
+                <div>
+                  <dt>Poslední pozvánka</dt>
+                  <dd>{formatDateTime(detail.invitation.lastSentAt)}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Onboarding</dt>
+                <dd>
+                  {detail.onboardingCompleted ? 'Dokončen' : 'Nedokončen'}
+                </dd>
+              </div>
+              <div>
+                <dt>Členství</dt>
+                <dd>
+                  {detail.membershipStatus === 'active'
+                    ? 'Aktivní'
+                    : detail.membershipStatus === 'suspended'
+                      ? 'Pozastavené'
+                      : 'Odebrané'}
+                </dd>
+              </div>
+            </dl>
+            {canMutate && detail.ticket.state === 'active' ? (
+              <button
+                className={styles.button}
+                disabled={busy !== null || isDirty}
+                onClick={() => setInviteOpen(true)}
+                title={
+                  isDirty
+                    ? 'Před odesláním pozvánky nejprve uložte změny profilu.'
+                    : undefined
+                }
+                type="button"
+              >
+                {busy === 'action'
+                  ? 'Odesílám…'
+                  : detail.invitation.status === 'not_sent'
+                    ? 'Poslat pozvánku'
+                    : detail.invitation.status === 'sent'
+                      ? 'Poslat pozvánku znovu'
+                      : 'Poslat přihlašovací odkaz'}
+              </button>
+            ) : null}
+            {canMutate && detail.ticket.availableActions.includes('block') ? (
+              <button
+                className={styles.dangerButton}
+                onClick={() => setTicketAction('block')}
+                type="button"
+              >
+                Zablokovat přístup
+              </button>
+            ) : null}
+            {canMutate &&
+            detail.ticket.availableActions.includes('reactivate') ? (
+              <button
+                className={styles.button}
+                onClick={() => setTicketAction('reactivate')}
+                type="button"
+              >
+                Obnovit přístup
+              </button>
+            ) : null}
+          </section>
+          <section>
+            <h2>Účast na místě</h2>
+            <dl>
+              <div>
+                <dt>Odbavení</dt>
+                <dd>{detail.checkIn ? 'Ano' : 'Ne'}</dd>
+              </div>
+              {detail.checkIn ? (
+                <div>
+                  <dt>Čas odbavení</dt>
+                  <dd>{formatDateTime(detail.checkIn.occurredAt)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+          <AdminTechnicalDetails>
+            <dl className={styles.detailList}>
+              <dt>ID účastníka</dt>
+              <dd>{detail.participantId}</dd>
+              <dt>
+                {detail.ticket.source === 'simpleshop'
+                  ? 'ID záznamu SimpleShop'
+                  : 'ID vstupenky'}
+              </dt>
+              <dd>{detail.ticketId}</dd>
+              <dt>Vytvořeno</dt>
+              <dd>{formatDateTime(detail.createdAt)}</dd>
+              <dt>Upraveno</dt>
+              <dd>{formatDateTime(detail.updatedAt)}</dd>
+            </dl>
+          </AdminTechnicalDetails>
+        </aside>
+      </div>
+
+      {canMutate ? (
+        <div className={styles.participantSaveBar}>
+          <div>
+            <strong>
+              {isDirty ? 'Máte neuložené změny' : 'Všechny změny jsou uložené'}
+            </strong>
+            <span>Důvod se uloží do historie změn.</span>
+          </div>
+          <label className={styles.field}>
+            <span>Důvod změny</span>
+            <input
+              minLength={8}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Např. oprava na žádost účastníka"
+              value={reason}
+            />
+          </label>
+          <button
+            className={styles.button}
+            disabled={!isDirty || busy !== null || reason.trim().length < 8}
+            onClick={() => void save()}
+            type="button"
+          >
+            {busy === 'save' ? 'Ukládám…' : 'Uložit změny'}
+          </button>
+        </div>
+      ) : (
+        <p className={styles.callout}>
+          Údaje můžete zobrazit, ale nemáte oprávnění je měnit.
+        </p>
+      )}
+
+      {ticketAction ? (
         <AdminConfirmDialog
-          acknowledgement="Ověřil/a jsem správného účastníka, dopad změny a uložený důvod."
-          confirmLabel={supportActionLabels[pending.body.action]}
-          danger={actionGuidance[pending.body.action].danger}
-          description={actionGuidance[pending.body.action].impact}
-          impact={
-            <p>
-              <strong>{selected?.displayName}</strong> · vstupenka ••
-              {selected?.referenceSuffix}
-            </p>
+          acknowledgement="Rozumím dopadu změny na přístup účastníka."
+          confirmLabel={
+            ticketAction === 'block' ? 'Zablokovat přístup' : 'Obnovit přístup'
           }
-          onConfirm={() => void mutate(pending)}
-          onDismiss={() => {
-            setConfirming(false);
-            setPending(null);
-          }}
-          title={`${supportActionLabels[pending.body.action]}?`}
+          confirmDisabled={reason.trim().length < 8}
+          danger={ticketAction === 'block'}
+          description={
+            ticketAction === 'block'
+              ? 'Účastník ztratí přístup a jeho aktivní rezervace budou zrušeny.'
+              : 'Účastník znovu získá přístup; zrušené rezervace se neobnoví.'
+          }
+          impact={
+            <label className={styles.field}>
+              <span>Důvod změny</span>
+              <textarea
+                minLength={8}
+                onChange={(event) => setReason(event.target.value)}
+                value={reason}
+              />
+            </label>
+          }
+          onConfirm={() => void mutateTicket()}
+          onDismiss={() => setTicketAction(null)}
+          title={
+            ticketAction === 'block'
+              ? 'Zablokovat přístup?'
+              : 'Obnovit přístup?'
+          }
+        />
+      ) : null}
+
+      {inviteOpen ? (
+        <AdminConfirmDialog
+          acknowledgement="Potvrzuji odeslání jednorázového odkazu tomuto účastníkovi."
+          confirmLabel="Odeslat pozvánku"
+          description={`Na ${detail.contactEmail} odešleme e-mail s jednorázovým odkazem do účastnické části. Odkaz platí 5 minut.`}
+          onConfirm={() => void sendInvitation()}
+          onDismiss={() => setInviteOpen(false)}
+          title={
+            detail.invitation.status === 'not_sent'
+              ? 'Poslat účastníkovi pozvánku?'
+              : 'Poslat nový přihlašovací odkaz?'
+          }
         />
       ) : null}
     </div>

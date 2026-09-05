@@ -124,6 +124,30 @@ describe('BYZON UI primitives', () => {
     ).toThrow(/at most five/i);
   });
 
+  it('renders a role context action outside the five primary destinations', () => {
+    const markup = renderToStaticMarkup(
+      <ParticipantNavigation
+        activeItemId="program"
+        contextAction={{
+          href: '/host/aktivity',
+          icon,
+          id: 'activity-management',
+          label: 'Správa aktivit',
+        }}
+        items={Array.from({ length: 5 }, (_, index) => ({
+          href: `/app/${index}`,
+          icon,
+          id: index === 0 ? 'program' : String(index),
+          label: `Položka ${index}`,
+        }))}
+      />,
+    );
+
+    expect(markup).toContain('href="/host/aktivity"');
+    expect(markup).toContain('Správa aktivit');
+    expect(markup.match(/<li/g)).toHaveLength(5);
+  });
+
   it('links error summary items to their invalid controls', () => {
     const markup = renderToStaticMarkup(
       <ErrorSummary

@@ -5,6 +5,7 @@ import { Card } from '@byzon/ui';
 import Link from 'next/link';
 
 import type { ApiPort } from '@/lib/api';
+import { ParticipantPartnersFooter } from './content-directory';
 import {
   participantAgendaItemStatus,
   selectNextParticipantAgendaItem,
@@ -314,54 +315,60 @@ const PracticalOverview = ({
   const venue = state.data.content.venues[0];
   const practical = state.data.content.practical.pages[0];
   return (
-    <section className="home-section" aria-labelledby="home-practical-heading">
-      <div className="home-section-heading">
-        <div>
-          <p className="home-section-kicker">
-            {event.phase === 'ended'
-              ? 'Zveřejněné informace'
-              : 'Před cestou a na místě'}
-          </p>
-          <h2 id="home-practical-heading">
-            {event.phase === 'ended'
-              ? 'Praktické informace'
-              : 'Praktické minimum'}
-          </h2>
-        </div>
-        <Link className="home-section-link" href="/app/informace">
-          Všechny informace
-        </Link>
-      </div>
-      <Card className="home-card home-practical-card">
-        {venue ? (
+    <>
+      <section
+        className="home-section"
+        aria-labelledby="home-practical-heading"
+      >
+        <div className="home-section-heading">
           <div>
-            <p className="home-card-kicker">Místo konání</p>
-            <h3>{venue.name}</h3>
-            <address>
-              {venue.addressLine1}
-              {venue.addressLine2 ? `, ${venue.addressLine2}` : null}
-              <br />
-              {venue.postalCode} {venue.city}
-            </address>
-          </div>
-        ) : null}
-        {practical ? (
-          <div>
-            <p className="home-card-kicker">
-              {event.phase === 'ended' ? 'Informace k akci' : 'Než vyrazíte'}
+            <p className="home-section-kicker">
+              {event.phase === 'ended'
+                ? 'Zveřejněné informace'
+                : 'Před cestou a na místě'}
             </p>
-            <h3>{practical.title}</h3>
-            {practical.summary ? <p>{practical.summary}</p> : null}
+            <h2 id="home-practical-heading">
+              {event.phase === 'ended'
+                ? 'Praktické informace'
+                : 'Praktické minimum'}
+            </h2>
           </div>
-        ) : null}
-        {!venue && !practical ? (
-          <div className="home-card-empty" role="status">
-            <h3>Praktické informace zatím nejsou zveřejněné</h3>
-            <p>Po publikaci se objeví na tomto místě.</p>
-          </div>
-        ) : null}
-      </Card>
-    </section>
+          <Link className="home-section-link" href="/app/informace">
+            Všechny informace
+          </Link>
+        </div>
+        <Card className="home-card home-practical-card">
+          {venue ? (
+            <div>
+              <p className="home-card-kicker">Místo konání</p>
+              <h3>{venue.name}</h3>
+              <address>
+                {venue.addressLine1}
+                {venue.addressLine2 ? `, ${venue.addressLine2}` : null}
+                <br />
+                {venue.postalCode} {venue.city}
+              </address>
+            </div>
+          ) : null}
+          {practical ? (
+            <div>
+              <p className="home-card-kicker">
+                {event.phase === 'ended' ? 'Informace k akci' : 'Než vyrazíte'}
+              </p>
+              <h3>{practical.title}</h3>
+              {practical.summary ? <p>{practical.summary}</p> : null}
+            </div>
+          ) : null}
+          {!venue && !practical ? (
+            <div className="home-card-empty" role="status">
+              <h3>Praktické informace zatím nejsou zveřejněné</h3>
+              <p>Po publikaci se objeví na tomto místě.</p>
+            </div>
+          ) : null}
+        </Card>
+      </section>
+      <ParticipantPartnersFooter partners={state.data.content.partners} />
+    </>
   );
 };
 
@@ -432,7 +439,7 @@ export const ParticipantHome = ({
   readonly now: string;
   readonly programApi?: ApiPort;
 }) => (
-  <section className="app-page home-page">
+  <div className="app-page home-page">
     <PhaseHeader event={event} />
     {event.phase === 'draft' || event.phase === 'archived' ? null : (
       <>
@@ -454,5 +461,5 @@ export const ParticipantHome = ({
         )}
       </>
     )}
-  </section>
+  </div>
 );

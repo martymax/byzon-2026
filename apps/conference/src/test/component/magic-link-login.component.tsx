@@ -94,6 +94,30 @@ describe('production magic-link login', () => {
     expect(document.body.textContent).not.toContain('neexistuje');
   });
 
+  it('offers a new link after an expired or already used link', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(Response.json({ status: true }, { status: 200 })),
+    );
+    const screen = await renderComponent(
+      <MagicLinkLogin fetch={fetch} invalidLink returnTo="/app" />,
+    );
+
+    await expect
+      .element(screen.getByText('Odkaz už není platný'))
+      .toBeVisible();
+    await screen.getByLabelText('E-mail').fill('participant@example.test');
+    await screen
+      .getByRole('button', { name: 'Poslat přihlašovací odkaz' })
+      .click();
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByText(/Aktivační odkaz platí 24 hodin/))
+      .toBeVisible();
+  });
+
   it('passes accessibility checks in the form and confirmation states', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Promise.resolve(Response.json({ status: true }, { status: 200 })),
@@ -113,5 +137,72 @@ describe('production magic-link login', () => {
       .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
       .toBeVisible();
     await expectComponentToPassAxe(document.body);
+  });
+});
+
+describe('staging e-mail login', () => {
+  it('creates the session without requesting an e-mail and continues to the safe destination', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(Response.json({ status: true }, { status: 200 })),
+    );
+    const navigate = vi.fn();
+    const screen = await renderComponent(
+      <MagicLinkLogin
+        directEmailLogin
+        fetch={fetch}
+        navigate={navigate}
+        returnTo="/app/networking"
+      />,
+    );
+
+    await expect
+      .element(
+        screen.getByText(
+          'Na stagingu stačí zadat e-mail existujícího účtu. Přihlašovací odkaz neposíláme.',
+        ),
+      )
+      .toBeVisible();
+    await screen.getByLabelText('E-mail').fill('Participant@Example.Test');
+    await screen.getByRole('button', { name: 'Přihlásit se' }).click();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [path, request] = fetch.mock.calls[0]!;
+    expect(path).toBe('/api/auth/sign-in/staging-email');
+    expect(JSON.parse(String(request?.body))).toEqual({
+      email: 'participant@example.test',
+    });
+    expect(navigate).toHaveBeenCalledWith('/app/networking');
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it('keeps the tester on the form when the account is not provisioned', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Promise.resolve(new Response(null, { status: 401 })),
+    );
+    const navigate = vi.fn();
+    const screen = await renderComponent(
+      <MagicLinkLogin directEmailLogin fetch={fetch} navigate={navigate} />,
+    );
+
+    await screen.getByLabelText('E-mail').fill('unknown@example.test');
+    await screen.getByRole('button', { name: 'Přihlásit se' }).click();
+
+    await expect.element(screen.getByText('E-mail nemá přístup')).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('unknown@example.test');
+  });
+
+  it('passes accessibility checks', async () => {
+    const screen = await renderComponent(
+      <main id="main" tabIndex={-1}>
+        <MagicLinkLogin directEmailLogin />
+      </main>,
+    );
+
+    await expectComponentToPassAxe(document.body);
+    await expect
+      .element(screen.getByRole('button', { name: 'Přihlásit se' }))
+      .toBeVisible();
   });
 });

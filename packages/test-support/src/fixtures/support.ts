@@ -25,7 +25,7 @@ const activeRecord = {
   participantId: supportFixtureIds.participant,
   ticketId: supportFixtureIds.ticket,
   displayName: 'Syntetický účastník',
-  maskedContact: 's•••@example.test',
+  contactEmail: 'synteticky.ucastnik@example.test',
   referenceSuffix: 'T001',
   ticketState: 'active' as const,
   accessState: 'claimed' as const,
@@ -38,7 +38,7 @@ const secondActiveRecord = {
   participantId: supportFixtureIds.participantTwo,
   ticketId: supportFixtureIds.ticketTwo,
   displayName: 'Testovací návštěvník',
-  maskedContact: 't•••@example.test',
+  contactEmail: 'testovaci.navstevnik@example.test',
   referenceSuffix: 'T002',
   version: 2,
 } satisfies SupportRecord;
@@ -78,7 +78,8 @@ export const supportSearchFixtures = defineFixtureSet({
 const targetCandidate = {
   eventId: supportFixtureIds.event,
   ticketId: supportFixtureIds.ticketTwo,
-  maskedContact: 't•••@example.test',
+  displayName: 'Testovací návštěvník',
+  contactEmail: 'testovaci.navstevnik@example.test',
   referenceSuffix: 'T002',
   ticketState: 'active' as const,
   accessState: 'claimed' as const,
@@ -114,7 +115,8 @@ export const supportTargetTicketSearchFixtures = defineFixtureSet({
         {
           ...targetCandidate,
           ticketId: '019fb100-0000-7000-8000-000000000007',
-          maskedContact: 'u•••@example.test',
+          displayName: 'Ukázkový účastník',
+          contactEmail: 'ukazkovy.ucastnik@example.test',
           referenceSuffix: 'T003',
           version: 1,
         },

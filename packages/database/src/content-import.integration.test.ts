@@ -54,6 +54,9 @@ integration('content import integration', () => {
       .delete(schema.contentPages)
       .where(eq(schema.contentPages.eventId, eventId));
     await client.db
+      .delete(schema.rooms)
+      .where(eq(schema.rooms.eventId, eventId));
+    await client.db
       .delete(schema.speakerProfiles)
       .where(eq(schema.speakerProfiles.eventId, eventId));
     await client.db
@@ -72,7 +75,7 @@ integration('content import integration', () => {
     await client.close();
   });
 
-  it('imports only drafts and repeats without duplicate domain records', async () => {
+  it('reconciles explicitly allowed published source records without duplicates', async () => {
     const legacyDayId = generateUuidV7();
     const legacyTimes = [
       '9:15 - 9:45',
@@ -149,6 +152,7 @@ integration('content import integration', () => {
         endsAt: schema.programSessions.endsAt,
         id: schema.programSessions.id,
         reservationClosesAt: schema.programSessions.reservationClosesAt,
+        reservationGroupId: schema.programSessions.reservationGroupId,
         slug: schema.programSessions.slug,
         startsAt: schema.programSessions.startsAt,
         title: schema.programSessions.title,
@@ -197,16 +201,30 @@ integration('content import integration', () => {
         }),
         expect.objectContaining({
           title: 'Mastermind část 1',
-          capacityMode: 'none',
-          capacity: null,
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
         expect.objectContaining({
           title: 'Mastermind část 2',
-          capacityMode: 'none',
-          capacity: null,
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
       ]),
     );
+    const firstMastermindParts = firstSessions.filter(({ title }) =>
+      title.startsWith('Mastermind část'),
+    );
+    expect(firstMastermindParts).toHaveLength(2);
+    expect(
+      firstMastermindParts.every(
+        ({ reservationGroupId }) =>
+          reservationGroupId === firstMastermindParts[0]!.id,
+      ),
+    ).toBe(true);
     const firstCoachingSessions = firstSessions.filter(
       ({ type }) => type === 'coaching',
     );
@@ -235,8 +253,12 @@ integration('content import integration', () => {
     const restoredWorkshopId = firstSessions.find(
       ({ title }) => title === 'Workshop: Blanka Mrázková',
     )?.id;
+    const openingSession = firstSessions.find(
+      ({ title }) => title === 'Zahájení konference',
+    );
     expect(preservedWorkshopId).toBeDefined();
     expect(restoredWorkshopId).toBeDefined();
+    expect(openingSession).toBeDefined();
     await client.db
       .update(schema.programSessions)
       .set({
@@ -268,20 +290,54 @@ integration('content import integration', () => {
       .update(schema.programSessions)
       .set({ capacityMode: 'none', capacity: null })
       .where(eq(schema.programSessions.id, restoredWorkshopId!));
+    await client.db
+      .update(schema.speakerProfiles)
+      .set({ status: 'published' })
+      .where(eq(schema.speakerProfiles.eventId, eventId));
+    await client.db
+      .update(schema.partners)
+      .set({ status: 'published' })
+      .where(eq(schema.partners.eventId, eventId));
+    await client.db
+      .update(schema.venues)
+      .set({ status: 'published' })
+      .where(eq(schema.venues.eventId, eventId));
+    await client.db
+      .update(schema.rooms)
+      .set({ status: 'published' })
+      .where(eq(schema.rooms.eventId, eventId));
+    await client.db
+      .update(schema.contentPages)
+      .set({ status: 'published' })
+      .where(eq(schema.contentPages.eventId, eventId));
+    await client.db
+      .update(schema.programSessions)
+      .set({ status: 'published' })
+      .where(
+        and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.status, 'draft'),
+        ),
+      );
 
     const changedSourceDirectory = await mkdtemp(
       join(tmpdir(), 'byzon-content-import-'),
     );
     const changedSourceFile = join(changedSourceDirectory, 'content.json');
-    await writeFile(
-      changedSourceFile,
-      `${await readFile(options.sourceFile, 'utf8')}\n `,
+    const changedSource = (await readFile(options.sourceFile, 'utf8')).replace(
+      '"title": "Zahájení konference"',
+      '"title": "Zahájení konference – aktualizováno"',
     );
+    expect(changedSource).toContain(
+      '"title": "Zahájení konference – aktualizováno"',
+    );
+    await writeFile(changedSourceFile, changedSource);
     let second: Awaited<ReturnType<typeof importContentJson>>;
     try {
       second = await importContentJson({
         ...options,
         sourceFile: changedSourceFile,
+        allowPublishedUpdate: true,
       });
     } finally {
       await rm(changedSourceDirectory, { recursive: true, force: true });
@@ -299,6 +355,7 @@ integration('content import integration', () => {
         capacityMode: schema.programSessions.capacityMode,
         capacity: schema.programSessions.capacity,
         reservationClosesAt: schema.programSessions.reservationClosesAt,
+        reservationGroupId: schema.programSessions.reservationGroupId,
         waitlistMode: schema.programSessions.waitlistMode,
         type: schema.programSessions.type,
       })
@@ -309,6 +366,10 @@ integration('content import integration', () => {
           ne(schema.programSessions.status, 'archived'),
         ),
       );
+    const importedRooms = await client.db
+      .select({ id: schema.rooms.id, name: schema.rooms.name })
+      .from(schema.rooms)
+      .where(eq(schema.rooms.eventId, eventId));
     const archivedCoaching = await client.db
       .select({ id: schema.programSessions.id })
       .from(schema.programSessions)
@@ -336,13 +397,28 @@ integration('content import integration', () => {
       firstSessions.map(({ id }) => id).sort(),
     );
     expect(secondSessions).toHaveLength(82);
+    expect(importedRooms).toHaveLength(9);
+    expect(importedRooms.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        'BYZON Stage',
+        'Leadership Stage',
+        'Koučovací zóna · Radim Roček',
+        'Koučovací zóna · Stanislava Maunová',
+      ]),
+    );
     expect(archivedCoaching).toHaveLength(11);
     expect(secondSessions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          status: 'draft',
-          roomId: null,
+          status: 'published',
+          roomId: expect.any(String),
           capacityMode: 'none',
+        }),
+        expect.objectContaining({
+          id: openingSession!.id,
+          slug: openingSession!.slug,
+          title: 'Zahájení konference – aktualizováno',
+          status: 'published',
         }),
         expect.objectContaining({
           title: 'Řízený networking',
@@ -373,12 +449,36 @@ integration('content import integration', () => {
           reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
         expect.objectContaining({
+          title: 'Mastermind část 1',
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+        }),
+        expect.objectContaining({
+          title: 'Mastermind část 2',
+          type: 'mastermind',
+          capacityMode: 'reservation',
+          capacity: 6,
+          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+        }),
+        expect.objectContaining({
           title: 'Volný program',
           startsAt: new Date('2026-09-19T11:00:00.000Z'),
           endsAt: new Date('2026-09-19T13:15:00.000Z'),
         }),
       ]),
     );
+    const secondMastermindParts = secondSessions.filter(({ title }) =>
+      title.startsWith('Mastermind část'),
+    );
+    expect(secondMastermindParts).toHaveLength(2);
+    expect(
+      secondMastermindParts.every(
+        ({ reservationGroupId }) =>
+          reservationGroupId === secondMastermindParts[0]!.id,
+      ),
+    ).toBe(true);
     const coachingSessions = secondSessions.filter(
       ({ type }) => type === 'coaching',
     );

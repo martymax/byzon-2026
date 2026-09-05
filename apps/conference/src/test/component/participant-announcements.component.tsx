@@ -14,8 +14,10 @@ import '../../app/styles.css';
 import { ParticipantLayoutShell as ParticipantLayout } from '../../components/participant-layout-shell';
 import { ParticipantAnnouncement } from '../../components/participant-announcement';
 import { ParticipantInbox } from '../../components/participant-inbox';
+import { ParticipantNotificationCenter } from '../../components/participant-notification-center';
 import type { ApiPort } from '../../lib/api';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
+import { publishParticipantAnnouncementRefresh } from '../../lib/participant-announcement-events';
 import { expectComponentToPassAxe } from './accessibility';
 import { renderComponent } from './render';
 
@@ -80,6 +82,101 @@ beforeEach(() => {
 });
 
 describe('F2-05 participant announcement inbox', () => {
+  it('shows a top-right unread bell and keeps a new announcement visible until dismissal', async () => {
+    window.history.replaceState({}, '', '/app/program');
+    const newAnnouncement = {
+      ...participantAnnouncementInboxFixtures.unread!.items[0]!,
+      id: '01920000-0000-7000-8000-000000000099',
+      title: 'Program se právě změnil',
+      summary: 'Nové oznámení z administrace zůstane viditelné.',
+      publishedAt: '2026-09-20T08:00:00.000Z',
+    };
+    let requestCount = 0;
+    let newAnnouncementAvailable = false;
+    const fetch = vi.fn(async () => {
+      requestCount += 1;
+      return jsonResponse(
+        newAnnouncementAvailable
+          ? {
+              ...participantAnnouncementInboxFixtures.empty_unread!,
+              items: [newAnnouncement],
+              unreadCount: 1,
+            }
+          : participantAnnouncementInboxFixtures.empty_unread,
+        `component-notification-center-${String(requestCount).padStart(4, '0')}`,
+      );
+    });
+    const api = createFetchApiClient({ fetch, maxRetries: 0 });
+    const screen = await renderComponent(
+      <ParticipantNotificationCenter
+        api={api}
+        eventId={announcementFixtureIds.event}
+        pollIntervalMs={5_000}
+      />,
+    );
+    const bell = screen.getByRole('link', { exact: true, name: 'Oznámení' });
+
+    await expect.element(bell).toBeVisible();
+    const bellElement = bell.element();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() => resolve()),
+    );
+    const baselineRequestCount = fetch.mock.calls.length;
+    expect(screen.getByText(newAnnouncement.title).elements()).toHaveLength(0);
+    bellElement.focus();
+
+    newAnnouncementAvailable = true;
+    publishParticipantAnnouncementRefresh();
+    await expect
+      .element(screen.getByRole('heading', { name: newAnnouncement.title }))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Oznámení, 1 nepřečtené oznámení',
+        }),
+      )
+      .toBeVisible();
+    expect(document.activeElement).toBe(bellElement);
+
+    publishParticipantAnnouncementRefresh();
+    await vi.waitFor(() =>
+      expect(fetch.mock.calls.length).toBeGreaterThanOrEqual(
+        baselineRequestCount + 2,
+      ),
+    );
+    expect(
+      screen.container.querySelectorAll('.announcement-toast'),
+    ).toHaveLength(1);
+
+    const close = screen.getByRole('button', {
+      name: `Zavřít oznámení „${newAnnouncement.title}“`,
+    });
+    const closeBounds = close.element().getBoundingClientRect();
+    expect(closeBounds.width).toBeGreaterThanOrEqual(44);
+    expect(closeBounds.height).toBeGreaterThanOrEqual(44);
+    const bellBounds = bellElement.getBoundingClientRect();
+    expect(bellBounds.width).toBeGreaterThanOrEqual(44);
+    expect(bellBounds.height).toBeGreaterThanOrEqual(44);
+    expect(bellBounds.top).toBeGreaterThanOrEqual(0);
+    expect(bellBounds.right).toBeLessThanOrEqual(window.innerWidth);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    await expectComponentToPassAxe(screen.container);
+
+    await close.click();
+    expect(screen.getByText(newAnnouncement.title).elements()).toHaveLength(0);
+    await expect
+      .element(
+        screen.getByRole('link', {
+          name: 'Oznámení, 1 nepřečtené oznámení',
+        }),
+      )
+      .toBeVisible();
+  });
+
   it('filters authoritatively, exposes non-color unread cues and passes the responsive axe baseline', async () => {
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input);

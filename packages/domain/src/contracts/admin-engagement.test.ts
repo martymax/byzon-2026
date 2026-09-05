@@ -13,7 +13,7 @@ const ids = {
 };
 
 describe('admin engagement contracts', () => {
-  it('accepts one canonical masked, event-scoped overview', () => {
+  it('accepts one canonical event-scoped overview with complete admin identities', () => {
     const overview = {
       eventId: ids.event,
       settingsVersion: 2,
@@ -36,7 +36,7 @@ describe('admin engagement contracts', () => {
               assignmentId: ids.assignment,
               userId: ids.user,
               displayName: 'Demo Moderátor',
-              maskedContact: 'd***@example.test',
+              contactEmail: 'demo.moderator@example.test',
             },
           ],
         },
@@ -45,7 +45,7 @@ describe('admin engagement contracts', () => {
         {
           userId: ids.user,
           displayName: 'Demo Moderátor',
-          maskedContact: 'd***@example.test',
+          contactEmail: 'demo.moderator@example.test',
         },
       ],
     };
@@ -53,7 +53,7 @@ describe('admin engagement contracts', () => {
     expect(adminEngagementOverviewSchema.parse(overview)).toEqual(overview);
   });
 
-  it('rejects raw candidate e-mail addresses and duplicate sessions', () => {
+  it('rejects invalid candidate e-mail addresses and duplicate sessions', () => {
     const result = adminEngagementOverviewSchema.safeParse({
       eventId: ids.event,
       settingsVersion: 1,
@@ -87,7 +87,7 @@ describe('admin engagement contracts', () => {
         {
           userId: ids.user,
           displayName: 'Demo Moderátor',
-          maskedContact: 'demo@example.test',
+          contactEmail: 'not-an-email',
         },
       ],
     });

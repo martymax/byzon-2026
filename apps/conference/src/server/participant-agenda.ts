@@ -16,6 +16,7 @@ import {
   problemTypeForCode,
   publishedAgendaReservationWindowsSchema,
   publishedProgramAgendaSnapshotSchema,
+  type AgendaReservationConflict,
   type AgendaSessionSnapshot,
   type ParticipantAgendaItem,
   type ParticipantAgendaMutationResponse,
@@ -31,9 +32,14 @@ import {
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { rateLimitHeaders, type RateLimitDecision } from './api/rate-limit';
+import {
+  issueAgendaCalendarTicket,
+  readAgendaCalendarTicket,
+} from './agenda-calendar-ticket';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import type { ParticipantAgendaRateLimiter } from './participant-agenda-rate-limit';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
+import { acquireCoachingReservationLock } from './reservation-policy';
 import { promoteAutomaticWaitlist } from './reservation-waitlist';
 
 const MAX_AGENDA_ITEMS = 512;
@@ -81,6 +87,10 @@ export interface ParticipantAgendaDependencies {
   rateLimit?: ParticipantAgendaRateLimiter;
 }
 
+export interface ParticipantAgendaCalendarDependencies extends ParticipantAgendaDependencies {
+  calendarTicketSecret: string;
+}
+
 type AgendaDatabase = Database | DatabaseTransaction;
 type AgendaEvent = Pick<
   typeof schema.events.$inferSelect,
@@ -114,10 +124,17 @@ class AgendaReservationClosedError extends Error {
   }
 }
 
-class AgendaTicketInactiveError extends Error {
-  constructor(readonly sessionId: string) {
-    super('An active ticket is required to reserve a place');
-    this.name = 'AgendaTicketInactiveError';
+class AgendaReservationConflictError extends Error {
+  constructor(
+    readonly sessionId: string,
+    readonly conflict: AgendaReservationConflict,
+    readonly reservationSessionIds: readonly string[],
+    readonly until: Date,
+    readonly allowed: boolean,
+    readonly agendaVersion: number,
+  ) {
+    super('Agenda reservation conflicts with an existing reservation');
+    this.name = 'AgendaReservationConflictError';
   }
 }
 
@@ -226,6 +243,22 @@ const calendarSuccessResponse = (
         'attachment; filename="byzon-2026-moje-agenda.ics"',
     }),
   });
+
+const calendarRedirectResponse = (
+  requestId: string,
+  allowedOrigin: string,
+  ticket: string,
+): Response => {
+  const location = new URL('/api/v1/me/agenda.ics', allowedOrigin);
+  location.searchParams.set('ticket', ticket);
+  return new Response(null, {
+    status: 303,
+    headers: privateHeaders(requestId, 'text/plain; charset=utf-8', {
+      location: location.toString(),
+      'referrer-policy': 'no-referrer',
+    }),
+  });
+};
 
 const withRateLimitHeaders = (
   response: Response,
@@ -646,15 +679,15 @@ const loadParticipantAgendaSnapshotUnlocked = async (
   if (requestedSessionIds.length > MAX_AGENDA_ITEMS) {
     throw new Error('Participant agenda item limit exceeded');
   }
-  const visibleSessionIds = requestedSessionIds;
   const operationalRows =
-    visibleSessionIds.length === 0
+    publishedSessionIds.length === 0
       ? []
       : await db
           .select({
             id: schema.programSessions.id,
             capacity: schema.programSessions.capacity,
             capacityMode: schema.programSessions.capacityMode,
+            reservationGroupId: schema.programSessions.reservationGroupId,
             reservationClosesAt: schema.programSessions.reservationClosesAt,
             reservationOpensAt: schema.programSessions.reservationOpensAt,
             startsAt: schema.programSessions.startsAt,
@@ -666,13 +699,38 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           .where(
             and(
               eq(schema.programSessions.eventId, context.event.id),
-              inArray(schema.programSessions.id, visibleSessionIds),
+              inArray(schema.programSessions.id, publishedSessionIds),
               ne(schema.programSessions.status, 'archived'),
             ),
           );
   const operationalById = new Map(operationalRows.map((row) => [row.id, row]));
+  const activeReservationTargets = new Set([
+    ...reservationBySession.keys(),
+    ...waitingBySession.keys(),
+  ]);
+  const visibleSessionIds = [
+    ...new Set([
+      ...requestedSessionIds,
+      ...operationalRows
+        .filter((row) =>
+          activeReservationTargets.has(row.reservationGroupId ?? row.id),
+        )
+        .map(({ id }) => id),
+    ]),
+  ];
+  if (visibleSessionIds.length > MAX_AGENDA_ITEMS) {
+    throw new Error('Participant agenda item limit exceeded');
+  }
+  const reservationTargetIds = [
+    ...new Set(
+      visibleSessionIds.map((sessionId) => {
+        const operational = operationalById.get(sessionId);
+        return operational?.reservationGroupId ?? sessionId;
+      }),
+    ),
+  ];
   const capacityRows =
-    visibleSessionIds.length === 0
+    reservationTargetIds.length === 0
       ? []
       : await db
           .select({
@@ -684,7 +742,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
             and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.status, 'confirmed'),
-              inArray(schema.reservations.sessionId, visibleSessionIds),
+              inArray(schema.reservations.sessionId, reservationTargetIds),
             ),
           )
           .groupBy(schema.reservations.sessionId);
@@ -699,10 +757,14 @@ const loadParticipantAgendaSnapshotUnlocked = async (
     if (!published || !operational) continue;
     const day = context.program.days.find(({ id }) => id === published.dayId);
     if (!day) continue;
-    const confirmed = confirmedBySession.get(sessionId) ?? 0;
+    const reservationTargetId =
+      operational.reservationGroupId ?? operational.id;
+    const reservationPublished =
+      publishedById.get(reservationTargetId) ?? published;
+    const confirmed = confirmedBySession.get(reservationTargetId) ?? 0;
     const operationalState = capacityProjection(
       operational,
-      published,
+      reservationPublished,
       confirmed,
       now,
     );
@@ -729,7 +791,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
       ),
       ...state,
     };
-    const reservation = reservationBySession.get(sessionId);
+    const reservation = reservationBySession.get(reservationTargetId);
     if (reservation) {
       if (state.capacity.mode !== 'reservation') {
         onOperationalDrift?.({
@@ -773,14 +835,14 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           confirmedAt: reservation.createdAt.toISOString(),
           cancellation:
             common.session.status === 'published' &&
-            now.getTime() < Date.parse(published.startsAt)
+            now.getTime() < Date.parse(reservationPublished.startsAt)
               ? { state: 'available' }
               : { state: 'unavailable', reason: 'closed' },
         },
       });
       continue;
     }
-    const waiting = waitingBySession.get(sessionId);
+    const waiting = waitingBySession.get(reservationTargetId);
     if (waiting) {
       if (state.capacity.mode !== 'reservation') {
         onOperationalDrift?.({
@@ -1052,6 +1114,161 @@ const conflictFor = (
       };
 };
 
+interface ReservationConflictState {
+  readonly conflict: AgendaReservationConflict;
+  readonly reservationSessionIds: readonly string[];
+  readonly until: Date;
+}
+
+const loadReservationConflict = async (
+  transaction: DatabaseTransaction,
+  context: AgendaContext,
+  userId: string,
+  sessionId: string,
+  reservationTargetId: string,
+  targetClosesAt: number,
+): Promise<ReservationConflictState | null> => {
+  const operationalRows = await transaction
+    .select({
+      id: schema.programSessions.id,
+      reservationGroupId: schema.programSessions.reservationGroupId,
+      status: schema.programSessions.status,
+      type: schema.programSessions.type,
+    })
+    .from(schema.programSessions)
+    .where(
+      and(
+        eq(schema.programSessions.eventId, context.event.id),
+        inArray(
+          schema.programSessions.id,
+          context.program.sessions.map(({ id }) => id),
+        ),
+        ne(schema.programSessions.status, 'archived'),
+      ),
+    );
+  const operationalById = new Map(operationalRows.map((row) => [row.id, row]));
+  const publishedById = new Map(
+    context.program.sessions.map((published) => [published.id, published]),
+  );
+  const targetSessions = operationalRows
+    .filter(
+      (row) =>
+        (row.reservationGroupId ?? row.id) === reservationTargetId &&
+        row.status !== 'cancelled',
+    )
+    .map(({ id }) => publishedById.get(id))
+    .filter(
+      (
+        published,
+      ): published is PublishedProgramAgendaSnapshot['sessions'][number] =>
+        published !== undefined && published.status !== 'cancelled',
+    );
+  if (targetSessions.length === 0) return null;
+  const targetIsCoaching = operationalRows.some(
+    (row) =>
+      (row.reservationGroupId ?? row.id) === reservationTargetId &&
+      row.status !== 'cancelled' &&
+      row.type === 'coaching',
+  );
+
+  const confirmedReservations = await transaction
+    .select({ sessionId: schema.reservations.sessionId })
+    .from(schema.reservations)
+    .where(
+      and(
+        eq(schema.reservations.eventId, context.event.id),
+        eq(schema.reservations.userId, userId),
+        eq(schema.reservations.status, 'confirmed'),
+        ne(schema.reservations.sessionId, reservationTargetId),
+      ),
+    );
+  const conflictingRootIds: string[] = [];
+  const conflictingPublished = new Map<
+    string,
+    PublishedProgramAgendaSnapshot['sessions'][number]
+  >();
+  let until = targetClosesAt;
+  let reason: AgendaReservationConflict['reason'] = 'time_overlap';
+  for (const reservation of confirmedReservations) {
+    const projections = operationalRows
+      .filter(
+        (row) =>
+          (row.reservationGroupId ?? row.id) === reservation.sessionId &&
+          row.status !== 'cancelled',
+      )
+      .map(({ id }) => publishedById.get(id))
+      .filter(
+        (
+          published,
+        ): published is PublishedProgramAgendaSnapshot['sessions'][number] =>
+          published !== undefined && published.status !== 'cancelled',
+      );
+    const overlapping = projections.filter((projection) =>
+      targetSessions.some(
+        (target) =>
+          Date.parse(projection.startsAt) < Date.parse(target.endsAt) &&
+          Date.parse(projection.endsAt) > Date.parse(target.startsAt),
+      ),
+    );
+    const coachingLimit =
+      targetIsCoaching &&
+      operationalRows.some(
+        (row) =>
+          (row.reservationGroupId ?? row.id) === reservation.sessionId &&
+          row.status !== 'cancelled' &&
+          row.type === 'coaching',
+      );
+    if (overlapping.length === 0 && !coachingLimit) continue;
+    if (coachingLimit) reason = 'coaching_limit';
+    conflictingRootIds.push(reservation.sessionId);
+    projections.forEach((projection) => {
+      until = Math.min(until, Date.parse(projection.startsAt));
+    });
+    (coachingLimit ? projections : overlapping).forEach((projection) =>
+      conflictingPublished.set(projection.id, projection),
+    );
+  }
+  const reservationSessionIds = [...new Set(conflictingRootIds)].sort();
+  if (reservationSessionIds.length === 0) return null;
+  if (
+    reservationSessionIds.length > 10 ||
+    targetSessions.length > 10 ||
+    conflictingPublished.size > 10 ||
+    !Number.isFinite(until)
+  ) {
+    throw new Error('Reservation conflict projection limit exceeded');
+  }
+  const snapshotFor = (
+    published: PublishedProgramAgendaSnapshot['sessions'][number],
+  ): AgendaSessionSnapshot => {
+    const operational = operationalById.get(published.id);
+    return sessionSnapshot(
+      context,
+      published,
+      operational?.status === 'cancelled' ? 'cancelled' : 'published',
+    );
+  };
+  const byStart = (
+    left: PublishedProgramAgendaSnapshot['sessions'][number],
+    right: PublishedProgramAgendaSnapshot['sessions'][number],
+  ): number =>
+    Date.parse(left.startsAt) - Date.parse(right.startsAt) ||
+    left.id.localeCompare(right.id);
+  return {
+    reservationSessionIds,
+    until: new Date(until),
+    conflict: {
+      eventId: context.event.id,
+      sessionId,
+      reason,
+      targetSessions: [...targetSessions].sort(byStart).map(snapshotFor),
+      conflictingSessions: [...conflictingPublished.values()]
+        .sort(byStart)
+        .map(snapshotFor),
+    },
+  };
+};
+
 const receiptPostconditionHolds = (
   snapshot: ParticipantAgendaResponse,
   receipt: AgendaMutationReceipt,
@@ -1083,14 +1300,24 @@ const canonicalProblemResponse = (
     | StaleAgendaVersionError
     | AgendaCapacityFullError
     | AgendaReservationClosedError
-    | AgendaTicketInactiveError,
+    | AgendaReservationConflictError,
   snapshot: ParticipantAgendaResponse,
   requestId: string,
 ): Response => {
   let classified = error;
-  if (!(error instanceof StaleAgendaVersionError)) {
+  if (
+    error instanceof AgendaReservationConflictError &&
+    snapshot.version !== error.agendaVersion
+  ) {
+    classified = new StaleAgendaVersionError();
+  }
+  if (
+    !(classified instanceof StaleAgendaVersionError) &&
+    !(classified instanceof AgendaReservationConflictError)
+  ) {
+    const classifiedSessionId = classified.sessionId;
     const item = snapshot.items.find(
-      ({ session }) => session.id === error.sessionId,
+      ({ session }) => session.id === classifiedSessionId,
     );
     if (
       !item ||
@@ -1100,13 +1327,10 @@ const canonicalProblemResponse = (
       return privateProblemResponse(sessionNotFound(), requestId);
     }
     if (item.action.state === 'capacity_full') {
-      classified = new AgendaCapacityFullError(error.sessionId);
+      classified = new AgendaCapacityFullError(classifiedSessionId);
     } else if (item.action.state === 'closed') {
-      classified = new AgendaReservationClosedError(error.sessionId);
-    } else if (
-      !(error instanceof AgendaTicketInactiveError) ||
-      item.state !== 'saved'
-    ) {
+      classified = new AgendaReservationClosedError(classifiedSessionId);
+    } else {
       classified = new StaleAgendaVersionError();
     }
   }
@@ -1122,16 +1346,28 @@ const canonicalProblemResponse = (
           currentVersion: snapshot.version,
           agenda: snapshot,
         }
-      : classified instanceof AgendaTicketInactiveError
+      : classified instanceof AgendaReservationConflictError
         ? {
-            type: problemTypeForCode('TICKET_INACTIVE'),
-            title: 'Active ticket required',
+            type: problemTypeForCode('RESERVATION_CONFLICT'),
+            title:
+              classified.conflict.reason === 'coaching_limit'
+                ? 'Only one coaching reservation is allowed'
+                : 'Reservation overlaps another reservation',
             status: 409,
-            code: 'TICKET_INACTIVE',
-            detail: 'An active ticket is required to reserve this session.',
+            code: 'RESERVATION_CONFLICT',
+            detail:
+              classified.conflict.reason === 'coaching_limit'
+                ? 'A participant may reserve only one coaching slot for the event. Choose whether to keep it or replace it with the new one.'
+                : 'Choose whether to keep the existing reservation or replace it with the new one.',
             requestId,
             sessionId: classified.sessionId,
             agenda: snapshot,
+            conflict: classified.conflict,
+            replacement: {
+              allowed: classified.allowed,
+              until: classified.until.toISOString(),
+              reservationSessionIds: classified.reservationSessionIds,
+            },
           }
         : classified instanceof AgendaCapacityFullError
           ? {
@@ -1210,13 +1446,118 @@ export const readParticipantAgenda = (
 
 export const readParticipantAgendaCalendar = (
   request: Request,
-  dependencies: ParticipantAgendaDependencies,
+  dependencies: ParticipantAgendaCalendarDependencies,
 ): Promise<Response> =>
-  readParticipantAgendaRepresentation(
-    request,
-    dependencies,
-    calendarSuccessResponse,
-  );
+  readParticipantAgendaCalendarWithTicket(request, dependencies);
+
+const calendarTicketFromRequest = (request: Request): string | null => {
+  if (
+    request.headers.has('idempotency-key') ||
+    request.headers.has('if-match')
+  ) {
+    throw validationFailed({
+      query: ['Calendar download parameters are invalid.'],
+    });
+  }
+  const parameters = [...new URL(request.url).searchParams.entries()];
+  if (parameters.length === 0) return null;
+  if (
+    parameters.length !== 1 ||
+    parameters[0]?.[0] !== 'ticket' ||
+    parameters[0][1].length === 0
+  ) {
+    throw validationFailed({
+      query: ['Calendar download parameters are invalid.'],
+    });
+  }
+  return parameters[0][1];
+};
+
+async function readParticipantAgendaCalendarWithTicket(
+  request: Request,
+  dependencies: ParticipantAgendaCalendarDependencies,
+): Promise<Response> {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    const getNow = dependencies.now ?? (() => new Date());
+    const ticket = calendarTicketFromRequest(request);
+    if (ticket === null) {
+      const session = await requireSession(request, dependencies);
+      rateLimitDecision =
+        (await dependencies.rateLimit?.('read', session.user.id)) ?? null;
+      const now = getNow();
+      const context = await loadAgendaContext(
+        dependencies,
+        session.user.id,
+        now,
+        false,
+      );
+      const body = await loadParticipantAgendaSnapshot(
+        dependencies.db,
+        context,
+        session.user.id,
+        getNow,
+        dependencies.onOperationalDrift,
+      );
+      const sealedTicket = issueAgendaCalendarTicket({
+        secret: dependencies.calendarTicketSecret,
+        now: getNow(),
+        userId: body.userId,
+        eventId: body.eventId,
+        agendaVersion: body.version,
+        publicationVersion: body.publicationVersion,
+      });
+      return withRateLimitHeaders(
+        calendarRedirectResponse(
+          requestId,
+          dependencies.allowedOrigin,
+          sealedTicket,
+        ),
+        rateLimitDecision,
+      );
+    }
+
+    const claims = readAgendaCalendarTicket({
+      secret: dependencies.calendarTicketSecret,
+      token: ticket,
+      now: getNow(),
+    });
+    if (!claims) throw authenticationRequired();
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('read', claims.userId)) ?? null;
+    const context = await loadAgendaContext(
+      dependencies,
+      claims.userId,
+      getNow(),
+      false,
+    );
+    const body = await loadParticipantAgendaSnapshot(
+      dependencies.db,
+      context,
+      claims.userId,
+      getNow,
+      dependencies.onOperationalDrift,
+    );
+    if (
+      body.userId !== claims.userId ||
+      body.eventId !== claims.eventId ||
+      body.version !== claims.agendaVersion ||
+      body.publicationVersion !== claims.publicationVersion
+    ) {
+      throw authenticationRequired();
+    }
+    return withRateLimitHeaders(
+      calendarSuccessResponse(body, requestId),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    return withRateLimitHeaders(
+      privateProblemResponse(error, requestId),
+      rateLimitDecision,
+    );
+  }
+}
 
 export const mutateParticipantAgenda = async (
   request: Request,
@@ -1326,24 +1667,24 @@ export const mutateParticipantAgenda = async (
         }
 
         const operationalTarget =
-          action === 'remove'
-            ? undefined
-            : await transaction.query.programSessions.findFirst({
-                columns: {
-                  capacity: true,
-                  capacityMode: true,
-                  reservationClosesAt: true,
-                  reservationOpensAt: true,
-                  startsAt: true,
-                  status: true,
-                  type: true,
-                  waitlistMode: true,
-                },
-                where: and(
-                  eq(schema.programSessions.eventId, context.event.id),
-                  eq(schema.programSessions.id, parsed.data.sessionId),
-                ),
-              });
+          await transaction.query.programSessions.findFirst({
+            columns: {
+              id: true,
+              capacity: true,
+              capacityMode: true,
+              reservationGroupId: true,
+              reservationClosesAt: true,
+              reservationOpensAt: true,
+              startsAt: true,
+              status: true,
+              type: true,
+              waitlistMode: true,
+            },
+            where: and(
+              eq(schema.programSessions.eventId, context.event.id),
+              eq(schema.programSessions.id, parsed.data.sessionId),
+            ),
+          });
         if (
           action !== 'remove' &&
           action !== 'leave_waitlist' &&
@@ -1353,8 +1694,63 @@ export const mutateParticipantAgenda = async (
         ) {
           throw sessionNotFound();
         }
+        const reservationTargetId =
+          operationalTarget?.reservationGroupId ?? parsed.data.sessionId;
+        if (reservationTargetId !== parsed.data.sessionId) {
+          await acquireTransactionLock(
+            transaction,
+            `participant-reservation:${context.event.id}:${reservationTargetId}`,
+          );
+        }
+        const reservationOperationalTarget =
+          reservationTargetId === parsed.data.sessionId
+            ? operationalTarget
+            : await transaction.query.programSessions.findFirst({
+                columns: {
+                  id: true,
+                  capacity: true,
+                  capacityMode: true,
+                  reservationGroupId: true,
+                  reservationClosesAt: true,
+                  reservationOpensAt: true,
+                  startsAt: true,
+                  status: true,
+                  type: true,
+                  waitlistMode: true,
+                },
+                where: and(
+                  eq(schema.programSessions.eventId, context.event.id),
+                  eq(schema.programSessions.id, reservationTargetId),
+                ),
+              });
+        if (
+          action !== 'remove' &&
+          action !== 'leave_waitlist' &&
+          (!reservationOperationalTarget ||
+            reservationOperationalTarget.status === 'archived' ||
+            reservationOperationalTarget.status === 'cancelled')
+        ) {
+          throw sessionNotFound();
+        }
+        const reservationPublishedTarget =
+          lockedContext.program.sessions.find(
+            ({ id }) => id === reservationTargetId,
+          ) ?? publishedTarget;
+
+        if (
+          (parsed.data.action === 'reserve' ||
+            parsed.data.action === 'join_waitlist') &&
+          reservationOperationalTarget?.type === 'coaching'
+        ) {
+          await acquireCoachingReservationLock(
+            transaction,
+            context.event.id,
+            session.user.id,
+          );
+        }
 
         let outcome: 'applied' | 'already_applied' = 'already_applied';
+        let replacedReservationSessionIds: readonly string[] = [];
         if (parsed.data.action === 'add') {
           const projectedSessionIds = await loadProjectedAgendaSessionIds(
             transaction,
@@ -1396,7 +1792,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.userId, session.user.id),
-              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.sessionId, reservationTargetId),
               eq(schema.reservations.status, 'confirmed'),
             ),
           });
@@ -1405,7 +1801,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.waitlistEntries.eventId, context.event.id),
               eq(schema.waitlistEntries.userId, session.user.id),
-              eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+              eq(schema.waitlistEntries.sessionId, reservationTargetId),
               eq(schema.waitlistEntries.status, 'waiting'),
             ),
           });
@@ -1428,8 +1824,13 @@ export const mutateParticipantAgenda = async (
             .returning({ sessionId: schema.agendaItems.sessionId });
           if (deleted.length === 1) outcome = 'applied';
         } else if (parsed.data.action === 'cancel') {
-          if (!operationalTarget || !publishedTarget) throw sessionNotFound();
-          if (mutationNow.getTime() >= Date.parse(publishedTarget.startsAt)) {
+          if (!reservationOperationalTarget || !reservationPublishedTarget) {
+            throw sessionNotFound();
+          }
+          if (
+            mutationNow.getTime() >=
+            Date.parse(reservationPublishedTarget.startsAt)
+          ) {
             throw new AgendaReservationClosedError(parsed.data.sessionId);
           }
           const existing = await transaction.query.reservations.findFirst({
@@ -1437,7 +1838,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.userId, session.user.id),
-              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.sessionId, reservationTargetId),
               eq(schema.reservations.status, 'confirmed'),
             ),
           });
@@ -1462,7 +1863,7 @@ export const mutateParticipantAgenda = async (
               await promoteAutomaticWaitlist({
                 transaction,
                 eventId: context.event.id,
-                sessionId: parsed.data.sessionId,
+                sessionId: reservationTargetId,
                 now: mutationNow,
                 requestId: uuidSchema.safeParse(requestId).success
                   ? requestId
@@ -1479,14 +1880,16 @@ export const mutateParticipantAgenda = async (
               and(
                 eq(schema.waitlistEntries.eventId, context.event.id),
                 eq(schema.waitlistEntries.userId, session.user.id),
-                eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                eq(schema.waitlistEntries.sessionId, reservationTargetId),
                 eq(schema.waitlistEntries.status, 'waiting'),
               ),
             )
             .returning({ id: schema.waitlistEntries.id });
           if (cancelled.length === 1) outcome = 'applied';
         } else {
-          if (!operationalTarget || !publishedTarget) throw sessionNotFound();
+          if (!reservationOperationalTarget || !reservationPublishedTarget) {
+            throw sessionNotFound();
+          }
           const saved = await transaction.query.agendaItems.findFirst({
             columns: { sessionId: true },
             where: and(
@@ -1500,39 +1903,31 @@ export const mutateParticipantAgenda = async (
               sessionId: ['Add the session to the agenda before reserving.'],
             });
           }
-          const activeTicket = await transaction.query.tickets.findFirst({
-            columns: { id: true },
-            where: and(
-              eq(schema.tickets.eventId, context.event.id),
-              eq(schema.tickets.holderUserId, session.user.id),
-              eq(schema.tickets.status, 'activated'),
-            ),
-          });
-          if (!activeTicket) {
-            throw new AgendaTicketInactiveError(parsed.data.sessionId);
-          }
+          // ADR-016 makes active event access authoritative for 2026. The
+          // post-lock permission check above already revalidates membership
+          // and an eligible event role; no ticket credential is issued.
           if (
-            operationalTarget.capacityMode !== 'reservation' ||
-            operationalTarget.capacity === null ||
+            reservationOperationalTarget.capacityMode !== 'reservation' ||
+            reservationOperationalTarget.capacity === null ||
             (parsed.data.action === 'join_waitlist' &&
-              operationalTarget.waitlistMode !== 'auto_confirm')
+              reservationOperationalTarget.waitlistMode !== 'auto_confirm')
           ) {
             throw sessionNotFound();
           }
           const opensAt =
-            publishedTarget.reservationOpensAt === undefined
-              ? (operationalTarget.reservationOpensAt?.getTime() ??
+            reservationPublishedTarget.reservationOpensAt === undefined
+              ? (reservationOperationalTarget.reservationOpensAt?.getTime() ??
                 Number.NEGATIVE_INFINITY)
-              : publishedTarget.reservationOpensAt === null
+              : reservationPublishedTarget.reservationOpensAt === null
                 ? Number.NEGATIVE_INFINITY
-                : Date.parse(publishedTarget.reservationOpensAt);
+                : Date.parse(reservationPublishedTarget.reservationOpensAt);
           const closesAt =
-            publishedTarget.reservationClosesAt === undefined
-              ? (operationalTarget.reservationClosesAt?.getTime() ??
-                operationalTarget.startsAt.getTime())
-              : publishedTarget.reservationClosesAt === null
-                ? Date.parse(publishedTarget.startsAt)
-                : Date.parse(publishedTarget.reservationClosesAt);
+            reservationPublishedTarget.reservationClosesAt === undefined
+              ? (reservationOperationalTarget.reservationClosesAt?.getTime() ??
+                reservationOperationalTarget.startsAt.getTime())
+              : reservationPublishedTarget.reservationClosesAt === null
+                ? Date.parse(reservationPublishedTarget.startsAt)
+                : Date.parse(reservationPublishedTarget.reservationClosesAt);
           if (
             mutationNow.getTime() < opensAt ||
             mutationNow.getTime() >= closesAt
@@ -1544,7 +1939,7 @@ export const mutateParticipantAgenda = async (
             where: and(
               eq(schema.reservations.eventId, context.event.id),
               eq(schema.reservations.userId, session.user.id),
-              eq(schema.reservations.sessionId, parsed.data.sessionId),
+              eq(schema.reservations.sessionId, reservationTargetId),
               eq(schema.reservations.status, 'confirmed'),
             ),
           });
@@ -1554,7 +1949,7 @@ export const mutateParticipantAgenda = async (
               where: and(
                 eq(schema.waitlistEntries.eventId, context.event.id),
                 eq(schema.waitlistEntries.userId, session.user.id),
-                eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                eq(schema.waitlistEntries.sessionId, reservationTargetId),
                 eq(schema.waitlistEntries.status, 'waiting'),
               ),
             });
@@ -1565,18 +1960,61 @@ export const mutateParticipantAgenda = async (
                 ],
               });
             }
+            if (parsed.data.action === 'reserve') {
+              const conflict = await loadReservationConflict(
+                transaction,
+                lockedContext,
+                session.user.id,
+                parsed.data.sessionId,
+                reservationTargetId,
+                closesAt,
+              );
+              const requestedReplacementIds = [
+                ...(parsed.data.replaceReservationSessionIds ?? []),
+              ].sort();
+              if (conflict) {
+                const replacementMatches =
+                  requestedReplacementIds.length ===
+                    conflict.reservationSessionIds.length &&
+                  requestedReplacementIds.every(
+                    (id, index) => id === conflict.reservationSessionIds[index],
+                  );
+                const replacementAllowed =
+                  mutationNow.getTime() < conflict.until.getTime();
+                if (!replacementMatches || !replacementAllowed) {
+                  throw new AgendaReservationConflictError(
+                    parsed.data.sessionId,
+                    conflict.conflict,
+                    conflict.reservationSessionIds,
+                    conflict.until,
+                    replacementAllowed,
+                    currentVersion,
+                  );
+                }
+                replacedReservationSessionIds = conflict.reservationSessionIds;
+                for (const conflictingSessionId of conflict.reservationSessionIds) {
+                  await acquireTransactionLock(
+                    transaction,
+                    `participant-reservation:${context.event.id}:${conflictingSessionId}`,
+                  );
+                }
+              } else if (requestedReplacementIds.length > 0) {
+                throw new StaleAgendaVersionError();
+              }
+            }
             const capacityRows = await transaction
               .select({ confirmed: count() })
               .from(schema.reservations)
               .where(
                 and(
                   eq(schema.reservations.eventId, context.event.id),
-                  eq(schema.reservations.sessionId, parsed.data.sessionId),
+                  eq(schema.reservations.sessionId, reservationTargetId),
                   eq(schema.reservations.status, 'confirmed'),
                 ),
               );
             const capacityIsFull =
-              (capacityRows[0]?.confirmed ?? 0) >= operationalTarget.capacity;
+              (capacityRows[0]?.confirmed ?? 0) >=
+              reservationOperationalTarget.capacity;
             if (capacityIsFull && parsed.data.action === 'reserve') {
               throw new AgendaCapacityFullError(parsed.data.sessionId);
             }
@@ -1593,25 +2031,64 @@ export const mutateParticipantAgenda = async (
                 .where(
                   and(
                     eq(schema.waitlistEntries.eventId, context.event.id),
-                    eq(schema.waitlistEntries.sessionId, parsed.data.sessionId),
+                    eq(schema.waitlistEntries.sessionId, reservationTargetId),
                   ),
                 );
               await transaction.insert(schema.waitlistEntries).values({
                 id: generateId(),
                 eventId: context.event.id,
                 userId: session.user.id,
-                sessionId: parsed.data.sessionId,
+                sessionId: reservationTargetId,
                 status: 'waiting',
                 positionSequence: (lastPosition?.value ?? 0) + 1,
                 createdAt: mutationNow,
               });
               outcome = 'applied';
             } else if (!capacityIsFull && !waiting) {
+              if (replacedReservationSessionIds.length > 0) {
+                const cancelled = await transaction
+                  .update(schema.reservations)
+                  .set({
+                    status: 'cancelled',
+                    cancelledAt: mutationNow,
+                    version: sql`${schema.reservations.version} + 1`,
+                  })
+                  .where(
+                    and(
+                      eq(schema.reservations.eventId, context.event.id),
+                      eq(schema.reservations.userId, session.user.id),
+                      eq(schema.reservations.status, 'confirmed'),
+                      inArray(
+                        schema.reservations.sessionId,
+                        replacedReservationSessionIds,
+                      ),
+                    ),
+                  )
+                  .returning({ sessionId: schema.reservations.sessionId });
+                if (
+                  new Set(cancelled.map(({ sessionId }) => sessionId)).size !==
+                  replacedReservationSessionIds.length
+                ) {
+                  throw new StaleAgendaVersionError();
+                }
+                for (const replacedSessionId of replacedReservationSessionIds) {
+                  await promoteAutomaticWaitlist({
+                    transaction,
+                    eventId: context.event.id,
+                    sessionId: replacedSessionId,
+                    now: mutationNow,
+                    requestId: uuidSchema.safeParse(requestId).success
+                      ? requestId
+                      : generateUuidV7(),
+                    generateId,
+                  });
+                }
+              }
               await transaction.insert(schema.reservations).values({
                 id: generateId(),
                 eventId: context.event.id,
                 userId: session.user.id,
-                sessionId: parsed.data.sessionId,
+                sessionId: reservationTargetId,
                 source:
                   parsed.data.action === 'join_waitlist'
                     ? 'waitlist_join'
@@ -1650,6 +2127,13 @@ export const mutateParticipantAgenda = async (
             requestId: uuidSchema.safeParse(requestId).success
               ? requestId
               : generateUuidV7(),
+            ...(replacedReservationSessionIds.length > 0
+              ? {
+                  before: {
+                    replacedReservationSessionIds,
+                  },
+                }
+              : {}),
             after: { agendaVersion: currentVersion + 1 },
           });
         }
@@ -1686,9 +2170,7 @@ export const mutateParticipantAgenda = async (
       },
       timeConflict:
         !responseSuperseded &&
-        (receipt.action === 'add' ||
-          receipt.action === 'reserve' ||
-          receipt.action === 'join_waitlist')
+        (receipt.action === 'add' || receipt.action === 'join_waitlist')
           ? conflictFor(snapshot, receipt.sessionId)
           : null,
     });
@@ -1704,7 +2186,7 @@ export const mutateParticipantAgenda = async (
       (error instanceof StaleAgendaVersionError ||
         error instanceof AgendaCapacityFullError ||
         error instanceof AgendaReservationClosedError ||
-        error instanceof AgendaTicketInactiveError)
+        error instanceof AgendaReservationConflictError)
     ) {
       try {
         const snapshot = await loadParticipantAgendaSnapshot(

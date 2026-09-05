@@ -30,6 +30,7 @@ import {
   useParticipantAccountResource,
 } from '../../components/participant-account-resource';
 import { ParticipantAccountSettings } from '../../components/participant-account-settings';
+import { ParticipantAccountBoundary } from '../../components/participant-account-state';
 import { ParticipantShellNavigation } from '../../components/participant-shell-navigation';
 import type { ApiPort, ApiRequestCommonOptions } from '../../lib/api';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
@@ -340,7 +341,7 @@ const AccountJourney = ({
                     Otevřít profil obyčejným interním odkazem
                   </a>
                 ) : null}
-                <ParticipantMoreHub />
+                <ParticipantMoreHub ticketAvailable />
               </>
             )}
           </div>
@@ -485,7 +486,7 @@ describe('F2-07 participant account, profile and privacy', () => {
     );
     await expect.element(screen.getByText('Alex Novák')).toBeVisible();
 
-    await screen.getByRole('link', { name: 'Profilové údaje' }).click();
+    await screen.getByRole('link', { name: 'Moje osobní údaje' }).click();
 
     await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
     expect(screen.container.textContent).not.toContain('alex@example.test');
@@ -495,10 +496,144 @@ describe('F2-07 participant account, profile and privacy', () => {
     ).toHaveLength(2);
   });
 
-  it('renders the responsive More hub with focus, 44px targets and an axe-clean hierarchy', async () => {
+  it.each([
+    [
+      'missing authentication',
+      identityBootstrapProblemFixtures.authentication!,
+      'recovery',
+    ],
+    [
+      'an expired session',
+      identityBootstrapProblemFixtures.session_expired!,
+      'recovery',
+    ],
+    [
+      'another account without participant access',
+      identityBootstrapProblemFixtures.permission!,
+      'switch',
+    ],
+  ] as const)(
+    'redirects a failed account retry to login after confirming %s',
+    async (_label, authenticationProblem, loginMode) => {
+      const api = accountApi({
+        bootstrapProblems: [
+          identityBootstrapProblemFixtures.internal_error!,
+          authenticationProblem,
+        ],
+      });
+      const screen = await renderComponent(
+        <AppMain>
+          <ParticipantAccountResourceProvider
+            api={api}
+            scope={activeAccountScope}
+          >
+            <div style={visualTestStyle}>
+              <ParticipantAccountBoundary loginReturnTo="/app/vice">
+                {() => <p>Načtený účet</p>}
+              </ParticipantAccountBoundary>
+            </div>
+          </ParticipantAccountResourceProvider>
+        </AppMain>,
+      );
+
+      await expect
+        .element(screen.getByText('Účet se nepodařilo načíst'))
+        .toBeVisible();
+      await screen.getByRole('button', { name: 'Načíst znovu' }).click();
+
+      await vi.waitFor(() => {
+        expect(window.location.pathname).toBe('/prihlaseni');
+        expect(window.location.search).toBe(
+          `?mode=${loginMode}&returnTo=%2Fapp%2Fvice`,
+        );
+      });
+      expect(screen.container.textContent).not.toContain('Načtený účet');
+    },
+  );
+
+  it('redirects a failed account retry after an unparseable HTTP 401', async () => {
+    const navigate = vi.fn();
+    let attempt = 0;
+    const api = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async () => {
+        attempt += 1;
+        return new Response(
+          attempt === 1 ? 'temporary upstream failure' : 'session is gone',
+          {
+            status: attempt === 1 ? 500 : 401,
+            headers: { 'content-type': 'text/plain' },
+          },
+        );
+      },
+    });
+    const screen = await renderComponent(
+      <main id="main" style={visualTestStyle} tabIndex={-1}>
+        <ParticipantAccountResourceProvider
+          api={api}
+          scope={activeAccountScope}
+        >
+          <ParticipantAccountBoundary
+            loginReturnTo="/app/profil"
+            navigate={navigate}
+          >
+            {() => <p>Načtený účet</p>}
+          </ParticipantAccountBoundary>
+        </ParticipantAccountResourceProvider>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByText('Účet se nepodařilo načíst'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst znovu' }).click();
+
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        '/prihlaseni?mode=recovery&returnTo=%2Fapp%2Fprofil',
+      ),
+    );
+    expect(attempt).toBe(2);
+  });
+
+  it('stays on the account page when retry revalidation succeeds', async () => {
+    const navigate = vi.fn();
+    const api = accountApi({
+      bootstrapProblems: [identityBootstrapProblemFixtures.internal_error!],
+    });
+    const screen = await renderComponent(
+      <main id="main" style={visualTestStyle} tabIndex={-1}>
+        <ParticipantAccountResourceProvider
+          api={api}
+          scope={activeAccountScope}
+        >
+          <ParticipantAccountBoundary
+            loginReturnTo="/app/vice"
+            navigate={navigate}
+          >
+            {() => <p>Načtený účet</p>}
+          </ParticipantAccountBoundary>
+        </ParticipantAccountResourceProvider>
+      </main>,
+    );
+
+    await expect
+      .element(screen.getByText('Účet se nepodařilo načíst'))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst znovu' }).click();
+
+    await expect.element(screen.getByText('Načtený účet')).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+
+    await invalidateParticipantPrivateResources('session_expired');
+    await expect.element(screen.getByText('Přihlášení vypršelo')).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('renders the responsive account hub with focus, 44px targets and an axe-clean hierarchy', async () => {
     const screen = await renderComponent(
       <AccountProbe api={accountApi()}>
-        <ParticipantMoreHub />
+        <ParticipantMoreHub ticketAvailable />
       </AccountProbe>,
     );
 
@@ -506,14 +641,17 @@ describe('F2-07 participant account, profile and privacy', () => {
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Účet a informace',
+          name: 'Můj účet',
         }),
       )
       .toHaveFocus();
     await expect.element(screen.getByText('Alex Novák')).toBeVisible();
     await expect
-      .element(screen.getByRole('link', { name: 'Profilové údaje' }))
+      .element(screen.getByRole('link', { name: 'Moje osobní údaje' }))
       .toHaveAttribute('href', '/app/profil');
+    await expect
+      .element(screen.getByRole('link', { name: 'Moje vstupenka' }))
+      .toHaveAttribute('href', '/app/vstupenka');
 
     for (const target of screen.container.querySelectorAll('a, button')) {
       const bounds = target.getBoundingClientRect();
@@ -523,6 +661,21 @@ describe('F2-07 participant account, profile and privacy', () => {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
+    await expectComponentToPassAxe(screen.container);
+  });
+
+  it('does not offer the preview-only ticket route in the production account hub', async () => {
+    const screen = await renderComponent(
+      <AccountProbe api={accountApi()}>
+        <ParticipantMoreHub />
+      </AccountProbe>,
+    );
+
+    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Moje vstupenka' }).elements(),
+    ).toHaveLength(0);
+    expect(screen.container.textContent).not.toContain('vstupenku');
     await expectComponentToPassAxe(screen.container);
   });
 
@@ -536,6 +689,12 @@ describe('F2-07 participant account, profile and privacy', () => {
     await expect
       .element(screen.getByText('K účtu nemáte přístup'))
       .toBeVisible();
+    await expect
+      .element(screen.getByRole('link', { name: 'Použít jiný účet' }))
+      .toHaveAttribute(
+        'href',
+        '/prihlaseni?mode=switch&returnTo=%2Fapp%2Fvice',
+      );
     expect(screen.container.textContent).not.toContain('BYZON 2026');
     expect(screen.container.textContent).not.toContain('alex@example.test');
     expect(screen.container.textContent).not.toContain('Alex Novák');
@@ -1082,6 +1241,18 @@ describe('F2-07 participant account, profile and privacy', () => {
     );
 
     await screen.getByRole('button', { name: 'Požádat o smazání' }).click();
+    const dialogBounds = screen
+      .getByRole('dialog')
+      .element()
+      .getBoundingClientRect();
+    expect(dialogBounds.left + dialogBounds.width / 2).toBeCloseTo(
+      window.innerWidth / 2,
+      0,
+    );
+    expect(dialogBounds.top + dialogBounds.height / 2).toBeCloseTo(
+      window.innerHeight / 2,
+      0,
+    );
     const confirm = screen.getByRole('button', {
       name: 'Potvrdit žádost o smazání',
     });
@@ -1200,11 +1371,11 @@ describe('F2-07 participant account, profile and privacy', () => {
         .element(
           screen.getByRole('heading', {
             level: 1,
-            name: 'Účet a informace',
+            name: 'Můj účet',
           }),
         )
         .toBeVisible();
-      await screen.getByRole('link', { name: 'Profilové údaje' }).click();
+      await screen.getByRole('link', { name: 'Moje osobní údaje' }).click();
       await expect
         .element(screen.getByRole('heading', { level: 1, name: 'Profil' }))
         .toBeVisible();
@@ -1229,7 +1400,7 @@ describe('F2-07 participant account, profile and privacy', () => {
         .element(
           screen.getByRole('heading', {
             level: 1,
-            name: 'Účet a informace',
+            name: 'Můj účet',
           }),
         )
         .toBeVisible();
@@ -1261,7 +1432,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Účet a informace',
+          name: 'Můj účet',
         }),
       )
       .toBeVisible();
@@ -1275,14 +1446,14 @@ describe('F2-07 participant account, profile and privacy', () => {
     }
   });
 
-  it('consumes the dirty sentinel before More navigation and preserves the account provider', async () => {
+  it('consumes the dirty sentinel before account navigation and preserves the account provider', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const providerMounted = vi.fn();
     const screen = await renderComponent(
       <AccountJourney api={accountApi()} onMount={providerMounted} />,
     );
 
-    await screen.getByRole('link', { name: 'Profilové údaje' }).click();
+    await screen.getByRole('link', { name: 'Moje osobní údaje' }).click();
     await expect
       .element(screen.getByRole('heading', { level: 1, name: 'Profil' }))
       .toBeVisible();
@@ -1291,13 +1462,13 @@ describe('F2-07 participant account, profile and privacy', () => {
     const providerMountEffectsBeforeNavigation =
       providerMounted.mock.calls.length;
 
-    await screen.getByRole('link', { name: 'Více', exact: true }).click();
+    await screen.getByRole('link', { name: 'Můj účet', exact: true }).click();
     await vi.waitFor(() => expect(window.location.pathname).toBe('/app/vice'));
     await expect
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Účet a informace',
+          name: 'Můj účet',
         }),
       )
       .toBeVisible();

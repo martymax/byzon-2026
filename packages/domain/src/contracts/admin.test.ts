@@ -22,6 +22,9 @@ import {
   adminRolePersonSearchRequestSchema,
   adminRolePersonSearchResponseSchema,
   adminRoleScopeOptionsResponseSchema,
+  adminTeamInvitationResponseSchema,
+  adminTeamMemberListResponseSchema,
+  adminTeamMemberMutationRequestSchema,
   problemTypeForCode,
 } from './index.js';
 
@@ -35,9 +38,55 @@ const ids = {
   networkingSession: '019fa200-0000-7000-8000-000000000007',
   assignment: '019fa200-0000-7000-8000-000000000008',
   station: '019fa200-0000-7000-8000-000000000009',
+  member: '019fa200-0000-7000-8000-000000000010',
+  room: '019fa200-0000-7000-8000-000000000011',
 } as const;
 
 describe('CS-ADMIN-01 contracts', () => {
+  it('validates complete team administration without exposing invitation URLs', () => {
+    const member = {
+      memberId: ids.member,
+      displayName: 'Jana Týmová',
+      email: 'jana@example.test',
+      emailVerified: false,
+      isCurrentActor: false,
+      roles: ['organizer_admin'] as const,
+      invitation: {
+        status: 'sent' as const,
+        lastSentAt: '2026-09-02T10:00:00Z',
+      },
+    };
+    expect(
+      adminTeamMemberListResponseSchema.parse({
+        eventId: ids.event,
+        teamVersion: 2,
+        generatedAt: '2026-09-02T10:00:00Z',
+        members: [member],
+        summary: { total: 1, administrators: 1, awaitingInvitation: 1 },
+      }).members[0],
+    ).toEqual(member);
+    expect(
+      adminTeamMemberMutationRequestSchema.safeParse({
+        action: 'add',
+        displayName: 'Jana Týmová',
+        email: 'JANA@EXAMPLE.TEST',
+        access: { role: 'organizer_admin' },
+        expectedVersion: 1,
+        reason: 'Přidání produkční administrátorky.',
+        invitationUrl: 'https://example.test/secret',
+      }).success,
+    ).toBe(false);
+    const invitation = adminTeamInvitationResponseSchema.parse({
+      eventId: ids.event,
+      memberId: ids.member,
+      outcome: 'sent',
+      sentAt: '2026-09-02T10:00:00Z',
+      invitation: { status: 'sent', lastSentAt: '2026-09-02T10:00:00Z' },
+      audit: { auditId: ids.auditNewest },
+    });
+    expect(JSON.stringify(invitation)).not.toContain('url');
+  });
+
   it('validates event-scoped role lists, person search and compatible named scopes', () => {
     const assignment = {
       assignmentId: ids.assignment,
@@ -77,17 +126,17 @@ describe('CS-ADMIN-01 contracts', () => {
       }).success,
     ).toBe(false);
     expect(
-      adminRolePersonSearchResponseSchema.safeParse({
+      adminRolePersonSearchResponseSchema.parse({
         eventId: ids.event,
         items: [
           {
             operatorId: ids.operator,
             displayName: 'Patrik Novák',
-            maskedVerifiedContact: 'patrik@example.test',
+            verifiedEmail: 'patrik@example.test',
           },
         ],
-      }).success,
-    ).toBe(false);
+      }).items[0]?.verifiedEmail,
+    ).toBe('patrik@example.test');
 
     expect(
       adminRoleScopeOptionsResponseSchema.parse({
@@ -107,6 +156,20 @@ describe('CS-ADMIN-01 contracts', () => {
         ],
       }).success,
     ).toBe(false);
+    expect(
+      adminRoleScopeOptionsResponseSchema.parse({
+        eventId: ids.event,
+        role: 'room_operator',
+        options: [
+          { kind: 'room', roomId: ids.room, label: 'Koučovací zóna' },
+          {
+            kind: 'session',
+            sessionId: ids.session,
+            label: 'Koučink – dopolední slot',
+          },
+        ],
+      }),
+    ).toBeTruthy();
   });
 
   it('returns server-derived actor permissions and scope as private data', () => {
@@ -350,7 +413,8 @@ describe('CS-ADMIN-01 contracts', () => {
       eventId: ids.event,
       sessionId: ids.session,
       sessionTitle: 'Růst bez zkratek',
-      participantReference: 'Účastník •001',
+      participantName: 'Alex Novák',
+      contactEmail: 'alex.novak@example.test',
       state: 'reserved' as const,
       capacity: 40,
       reservedCount: 38,
@@ -435,7 +499,7 @@ describe('CS-ADMIN-01 contracts', () => {
     ).toBe(false);
   });
 
-  it('validates session-first paginated reservation pages with masked references', () => {
+  it('validates session-first paginated reservation pages with transparent participant identities', () => {
     expect(adminReservationSessionQuerySchema.parse({})).toEqual({ limit: 25 });
     const page = {
       eventId: ids.event,
@@ -455,7 +519,8 @@ describe('CS-ADMIN-01 contracts', () => {
           reservations: [
             {
               reservationId: ids.reservation,
-              maskedParticipantReference: 'Účastník •001',
+              participantName: 'Alex Novák',
+              contactEmail: 'alex.novak@example.test',
               state: 'reserved' as const,
               version: 4,
               availableActions: ['cancel_reservation'] as const,
@@ -475,7 +540,7 @@ describe('CS-ADMIN-01 contracts', () => {
             reservations: [
               {
                 ...page.items[0]!.reservations[0],
-                maskedParticipantReference: 'person@example.test',
+                contactEmail: 'not-an-email',
               },
             ],
           },

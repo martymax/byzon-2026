@@ -32,11 +32,11 @@ import {
   adminReservationSessionFixtures,
   adminSessionCapacityFixtures,
   adminSessionCapacityMutationFixtures,
-  supportMutationFixtures,
-  supportMutationProblemFixtures,
+  supportFixtureIds,
   supportSearchFixtures,
   ticketImportApplyFixtures,
   ticketImportApplyProblemFixtures,
+  ticketImportFixtureIds,
   ticketImportPreviewFixtures,
   ticketImportPreviewProblemFixtures,
 } from '@byzon/test-support/fixtures';
@@ -61,8 +61,12 @@ import {
   AdminReservationWorkspace,
   AdminSettingsWorkspace,
 } from '../../components/admin-reservation-workspace';
-import { AdminSupportWorkspace } from '../../components/admin-support-workspace';
+import {
+  AdminParticipantDetailWorkspace,
+  AdminSupportWorkspace,
+} from '../../components/admin-support-workspace';
 import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
+import { AdminTeamMembers } from '../../components/admin-team-members';
 import {
   adminAnnouncementPreviewEndpoint,
   adminAnnouncementSendEndpoint,
@@ -76,6 +80,11 @@ import {
   adminExportEndpoint,
   adminExportJobListEndpoint,
   adminOperationsOverviewEndpoint,
+  adminParticipantCreateEndpoint,
+  adminParticipantListEndpoint,
+  adminParticipantDetailEndpoint,
+  adminParticipantInviteEndpoint,
+  adminParticipantUpdateEndpoint,
   adminRoleAssignmentEndpoint,
   adminRoleAssignmentListEndpoint,
   adminReservationsEndpoint,
@@ -83,8 +92,9 @@ import {
   adminReservationMutationEndpoint,
   adminSessionCapacitiesEndpoint,
   adminSessionCapacityMutationEndpoint,
-  adminSupportMutationEndpoint,
-  adminSupportSearchEndpoint,
+  adminTeamMemberListEndpoint,
+  adminTeamMemberMutationEndpoint,
+  adminTeamInvitationEndpoint,
   adminTicketImportApplyEndpoint,
   adminTicketImportPreviewEndpoint,
 } from '../../lib/admin-api';
@@ -166,7 +176,32 @@ const expectPlainAdminMainCopy = () => {
 const acknowledgeDialog = async (
   screen: Awaited<ReturnType<typeof renderComponent>>,
 ) => {
-  await screen.getByRole('checkbox').click();
+  await screen.getByRole('dialog').getByRole('checkbox').click();
+};
+
+const prepareRoleRevoke = async (
+  screen: Awaited<ReturnType<typeof renderComponent>>,
+  reason: string,
+) => {
+  await screen
+    .getByRole('button', { name: 'Odebrat oprávnění' })
+    .first()
+    .click();
+  await expect
+    .element(
+      screen
+        .getByRole('dialog')
+        .getByRole('heading', { name: 'Odebrat provozní roli' }),
+    )
+    .toBeVisible();
+  await screen
+    .getByRole('dialog')
+    .getByRole('textbox', { name: 'Důvod změny oprávnění' })
+    .fill(reason);
+  await screen
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Zkontrolovat odebrání' })
+    .click();
 };
 
 const organizerApi = (
@@ -184,6 +219,78 @@ const organizerApi = (
         : handler(endpoint, options),
   );
 
+const participantListResponse = () => ({
+  eventId: adminFixtureIds.event,
+  generatedAt: '2026-09-02T10:00:00.000Z',
+  items: supportSearchFixtures.ambiguous!.matches.map((record, index) => ({
+    eventId: adminFixtureIds.event,
+    participantId: record.participantId,
+    ticketId: record.ticketId,
+    displayName: record.displayName,
+    contactEmail:
+      index === 0 ? 'ucastnik@example.test' : 'navstevnik@example.test',
+    company: index === 0 ? 'Future Works' : 'Northstar Studio',
+    jobTitle: index === 0 ? 'CEO' : 'Product designer',
+    referenceSuffix: record.referenceSuffix,
+    ticketState: record.ticketState,
+    accessState: record.accessState,
+    networkingState: index === 0 ? ('enabled' as const) : ('disabled' as const),
+    invitation:
+      index === 0
+        ? {
+            status: 'accepted' as const,
+            lastSentAt: '2026-08-20T09:55:00.000Z',
+          }
+        : { status: 'not_sent' as const, lastSentAt: null },
+    checkedIn: index === 0,
+    reservationCount: index + 1,
+    profileVersion: 1,
+    ticketVersion: record.version,
+    updatedAt: '2026-09-02T10:00:00.000Z',
+    availableActions: record.availableActions,
+  })),
+  pageInfo: { total: 2, offset: 0, hasMore: false },
+  summary: { total: 2, active: 2, networkingEnabled: 1, checkedIn: 1 },
+});
+
+const participantDetailResponse = () => {
+  const record = supportSearchFixtures.single_match!.matches[0]!;
+  return {
+    eventId: adminFixtureIds.event,
+    participantId: record.participantId,
+    ticketId: record.ticketId,
+    firstName: 'Syntetický',
+    lastName: 'Účastník',
+    contactEmail: 'ucastnik@example.test',
+    phone: '+420777123456',
+    company: 'Future Works',
+    jobTitle: 'CEO',
+    introduction: 'Hledám nové obchodní partnery.',
+    linkedinUrl: 'https://www.linkedin.com/in/synthetic',
+    todayHunting: ['business_partners'] as const,
+    networkingEnabled: true,
+    moderationStatus: 'visible' as const,
+    onboardingCompleted: true,
+    membershipStatus: 'active' as const,
+    invitation: { status: 'not_sent' as const, lastSentAt: null },
+    ticket: {
+      source: 'ticket' as const,
+      referenceSuffix: record.referenceSuffix,
+      externalId: 'ticket-101',
+      orderExternalId: 'order-51',
+      state: record.ticketState,
+      claimedAt: '2026-08-20T10:00:00.000Z',
+      version: record.version,
+      availableActions: record.availableActions,
+    },
+    checkIn: { occurredAt: '2026-09-02T08:00:00.000Z' },
+    reservations: [],
+    profileVersion: 1,
+    createdAt: '2026-08-20T10:00:00.000Z',
+    updatedAt: '2026-09-02T10:00:00.000Z',
+  };
+};
+
 beforeEach(() => {
   window.history.replaceState({}, '', '/admin');
 });
@@ -194,7 +301,7 @@ describe('F4 contract-first admin journeys', () => {
       '/admin/role',
       'Tým a oprávnění',
       AdminTeamWorkspace,
-      [adminRoleAssignmentListEndpoint],
+      [adminRoleAssignmentListEndpoint, adminTeamMemberListEndpoint],
     ],
     [
       '/admin/reporty',
@@ -233,6 +340,29 @@ describe('F4 contract-first admin journeys', () => {
         if (endpoint === adminRoleAssignmentListEndpoint) {
           return success(adminRoleAssignmentListFixtures.list!);
         }
+        if (endpoint === adminTeamMemberListEndpoint) {
+          return success({
+            eventId: adminFixtureIds.event,
+            teamVersion: 3,
+            generatedAt: '2026-09-02T10:00:00Z',
+            members: [
+              {
+                memberId: adminFixtureIds.operator,
+                displayName: 'Patrik Provozní',
+                email: 'patrik@example.test',
+                emailVerified: true,
+                isCurrentActor: false,
+                roles: ['room_operator'],
+                invitation: { status: 'accepted', lastSentAt: null },
+              },
+            ],
+            summary: {
+              total: 1,
+              administrators: 0,
+              awaitingInvitation: 0,
+            },
+          });
+        }
         if (endpoint === adminExportJobListEndpoint) {
           return success(adminExportJobListFixtures.mixed!);
         }
@@ -264,6 +394,92 @@ describe('F4 contract-first admin journeys', () => {
       });
     },
   );
+
+  it('adds a team member in a modal and sends the selected invitation', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const newMember = {
+      memberId: adminFixtureIds.moderator,
+      displayName: 'Jana Týmová',
+      email: 'jana@example.test',
+      emailVerified: false,
+      isCurrentActor: false,
+      roles: ['organizer_admin'] as const,
+      invitation: { status: 'not_sent' as const, lastSentAt: null },
+    };
+    let added = false;
+    const endpoints: unknown[] = [];
+    const api = organizerApi((endpoint) => {
+      endpoints.push(endpoint);
+      if (endpoint === adminTeamMemberListEndpoint) {
+        const members = added ? [newMember] : [];
+        return success({
+          eventId: adminFixtureIds.event,
+          teamVersion: added ? 2 : 1,
+          generatedAt: '2026-09-02T10:00:00Z',
+          members,
+          summary: {
+            total: members.length,
+            administrators: members.length,
+            awaitingInvitation: members.length,
+          },
+        });
+      }
+      if (endpoint === adminTeamMemberMutationEndpoint) {
+        added = true;
+        return success({
+          eventId: adminFixtureIds.event,
+          outcome: 'added',
+          teamVersion: 2,
+          member: newMember,
+          changedAt: '2026-09-02T10:01:00Z',
+          audit: { auditId: adminFixtureIds.auditMutation },
+        });
+      }
+      if (endpoint === adminTeamInvitationEndpoint) {
+        return success({
+          eventId: adminFixtureIds.event,
+          memberId: newMember.memberId,
+          outcome: 'sent',
+          sentAt: '2026-09-02T10:02:00Z',
+          invitation: {
+            status: 'sent',
+            lastSentAt: '2026-09-02T10:02:00Z',
+          },
+          audit: { auditId: adminFixtureIds.auditMutation },
+        });
+      }
+      throw new Error('Unexpected team member endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminTeamMembers />
+      </AdminWorkspaceShell>,
+    );
+
+    await screen.getByRole('button', { name: 'Přidat člena' }).click();
+    await expect
+      .element(screen.getByRole('dialog', { name: 'Přidat člena týmu' }))
+      .toBeVisible();
+    await screen.getByRole('textbox', { name: 'Jméno' }).fill('Jana Týmová');
+    await screen
+      .getByRole('textbox', { name: 'E-mail' })
+      .fill('jana@example.test');
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny' })
+      .fill('Přidání Jany do organizačního týmu.');
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Přidat člena' })
+      .click();
+
+    await expect
+      .element(screen.getByText('Pozvánka byla odeslána na jana@example.test.'))
+      .toBeVisible();
+    expect(endpoints).toContain(adminTeamMemberMutationEndpoint);
+    expect(endpoints).toContain(adminTeamInvitationEndpoint);
+    await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
+    await expectComponentToPassAxe(adminRoot());
+  });
 
   it('keeps archived team assignments read-only while preserving the list', async () => {
     window.history.replaceState({}, '', '/admin/role');
@@ -342,10 +558,14 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByRole('textbox', { name: /ID operátora/i }))
       .not.toBeInTheDocument();
     await screen.getByRole('button', { name: 'Přiřadit roli' }).click();
+    await expect
+      .element(screen.getByRole('dialog', { name: 'Přiřadit provozní roli' }))
+      .toBeVisible();
     await screen
-      .getByRole('textbox', { name: 'Jméno nebo ověřený kontakt' })
+      .getByRole('textbox', { name: 'Jméno nebo ověřený e-mail' })
       .fill('Patrik');
     await screen.getByRole('button', { name: 'Vyhledat osobu' }).click();
+    expect(document.body.textContent).toContain('patrik@example.test');
     await screen.getByRole('radio', { name: /Patrik Novák/ }).click();
     await screen.getByRole('radio', { name: /Vedoucí aktivity/ }).click();
     await expect
@@ -410,14 +630,10 @@ describe('F4 contract-first admin journeys', () => {
       </AdminWorkspaceShell>,
     );
 
-    const reason = screen.getByRole('textbox', {
-      name: 'Důvod změny oprávnění',
-    });
-    await reason.fill('Odebrání již nepotřebného provozního přístupu.');
-    await screen
-      .getByRole('button', { name: 'Odebrat oprávnění' })
-      .first()
-      .click();
+    await prepareRoleRevoke(
+      screen,
+      'Odebrání již nepotřebného provozního přístupu.',
+    );
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
@@ -433,8 +649,8 @@ describe('F4 contract-first admin journeys', () => {
     await expect.element(screen.getByText(metadata.requestId)).toBeVisible();
 
     await screen
-      .getByRole('button', { name: 'Odebrat oprávnění' })
-      .first()
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Zkontrolovat odebrání' })
       .click();
     await acknowledgeDialog(screen);
     await screen
@@ -475,13 +691,10 @@ describe('F4 contract-first admin journeys', () => {
     );
     const initialListCalls = listCalls;
 
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
-      .fill('Odebrání zastaralého provozního oprávnění.');
-    await screen
-      .getByRole('button', { name: 'Odebrat oprávnění' })
-      .first()
-      .click();
+    await prepareRoleRevoke(
+      screen,
+      'Odebrání zastaralého provozního oprávnění.',
+    );
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
@@ -515,13 +728,10 @@ describe('F4 contract-first admin journeys', () => {
       </AdminWorkspaceShell>,
     );
 
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
-      .fill('Bezpečnostní ověření odebraného oprávnění.');
-    await screen
-      .getByRole('button', { name: 'Odebrat oprávnění' })
-      .first()
-      .click();
+    await prepareRoleRevoke(
+      screen,
+      'Bezpečnostní ověření odebraného oprávnění.',
+    );
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
@@ -568,13 +778,10 @@ describe('F4 contract-first admin journeys', () => {
       </AdminWorkspaceShell>,
     );
 
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny oprávnění' })
-      .fill('Odebrání již nepotřebného provozního oprávnění.');
-    await screen
-      .getByRole('button', { name: 'Odebrat oprávnění' })
-      .first()
-      .click();
+    await prepareRoleRevoke(
+      screen,
+      'Odebrání již nepotřebného provozního oprávnění.',
+    );
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
@@ -610,6 +817,30 @@ describe('F4 contract-first admin journeys', () => {
     expect(login.element().getAttribute('href')).toBe(
       '/prihlaseni?returnTo=%2Fadmin%2Finterakce',
     );
+  });
+
+  it('offers login instead of retrying when the current account is forbidden', async () => {
+    window.history.replaceState({}, '', '/admin/role');
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        return problemFailure(adminMutationProblemFixtures.permission!);
+      }
+      throw new Error('A forbidden shell requested a private resource.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminTeamWorkspace />
+      </AdminWorkspaceShell>,
+    );
+
+    const login = screen.getByRole('link', { name: 'Přihlásit se' });
+    await expect.element(login).toBeVisible();
+    expect(login.element().getAttribute('href')).toBe(
+      '/prihlaseni?returnTo=%2Fadmin%2Frole',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Ověřit přístup znovu' }),
+    ).not.toBeInTheDocument();
   });
 
   it('rejects a non-organizer context before a private resource is mounted', async () => {
@@ -689,6 +920,9 @@ describe('F4 contract-first admin journeys', () => {
     expect(
       document.querySelector('aside a[href="/admin/obsah"]')?.textContent,
     ).toContain('Program a obsah');
+    expect(
+      document.querySelector('aside a[href="/admin/recnici"]')?.textContent,
+    ).toContain('Řečníci');
     expect(
       document.querySelector('aside a[href="/admin/vstupenky"]')?.textContent,
     ).toContain('Aktualizace vstupenek');
@@ -815,26 +1049,63 @@ describe('F4 contract-first admin journeys', () => {
       ...ticketImportPreviewFixtures.simpleshop_readonly!,
       eventId: adminFixtureIds.event,
       rows: ticketImportPreviewFixtures.simpleshop_readonly!.rows.map(
-        (row, index) =>
-          index < 2
-            ? {
-                ...row,
-                sourceOrderId: '8100001',
-                orderTicketCount: 2,
-                orderTicketPosition: index + 1,
-              }
-            : row,
+        (row, index) => {
+          if (index === 0) {
+            return {
+              ...row,
+              sourceOrderId: '8100001',
+              orderTicketCount: 2,
+              orderTicketPosition: 1,
+            };
+          }
+          if (index === 1) {
+            return {
+              ...row,
+              sourceOrderId: '8100001',
+              orderTicketCount: 2,
+              orderTicketPosition: 2,
+              contactName: 'Barbora Participant',
+              identitySource: 'named_participant' as const,
+              sourceStatus: 'paid' as const,
+              status: 'new' as const,
+              incomingState: 'active' as const,
+              currentState: null,
+              issues: [],
+            };
+          }
+          return row;
+        },
       ),
+      source: {
+        ...ticketImportPreviewFixtures.simpleshop_readonly!.source,
+        observedStatuses: {
+          paid: 2,
+          unpaid: 0,
+          cancelled: 1,
+          refunded: 0,
+          unknown: 0,
+        },
+      },
+      summary: {
+        total: 3,
+        new: 2,
+        unchanged: 0,
+        statusChanged: 0,
+        excluded: 1,
+        conflict: 0,
+        unknown: 0,
+      },
     };
     const report = {
       ...ticketImportApplyFixtures.applied!,
       eventId: adminFixtureIds.event,
       previewId: preview.previewId,
       previewVersion: preview.previewVersion,
+      selectedRowIds: [ticketImportFixtureIds.rowNew],
       result: {
-        created: preview.summary.new,
-        statusChanged: preview.summary.statusChanged,
-        unchanged: preview.summary.unchanged,
+        created: 1,
+        statusChanged: 0,
+        unchanged: 0,
       },
     };
     const api = organizerApi((endpoint) => {
@@ -857,15 +1128,11 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByRole('heading', { name: 'Zkontrolovat změny' }))
       .toBeVisible();
     await expect
-      .element(screen.getByRole('textbox', { name: 'Důvod aktualizace' }))
+      .element(screen.getByRole('textbox', { name: 'Důvod importu' }))
       .toBeVisible();
     await expect
-      .element(screen.getByRole('button', { name: 'Použít změny' }))
+      .element(screen.getByRole('button', { name: 'Importovat vybrané (0)' }))
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('Alice Participant');
-    await screen
-      .getByRole('combobox', { name: 'Filtrovat záznamy' })
-      .selectOptions('all');
     expect(document.body.textContent).toContain('Alice Participant');
     expect(document.body.textContent).toContain('alice@example.test');
     expect(document.body.textContent).toContain('•A1B2C3');
@@ -891,19 +1158,33 @@ describe('F4 contract-first admin journeys', () => {
       cache: 'no-store',
     });
     await screen
-      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .getByRole('checkbox', {
+        name: 'Vybrat Alice Participant k importu',
+      })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod importu' })
       .fill('Potvrzený import účastníků ze SimpleShopu.');
-    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await screen
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
-      .getByRole('button', { name: 'Použít změny' })
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
       .click();
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Změny vstupenek byly použity',
+          name: 'Vybraní účastníci byli importováni',
         }),
+      )
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByText(
+          'Nevybraní noví účastníci zůstali beze změny a znovu se objeví při dalším načtení ze SimpleShopu.',
+        ),
       )
       .toBeVisible();
     const applyCall = vi
@@ -917,6 +1198,7 @@ describe('F4 contract-first admin journeys', () => {
         previewId: preview.previewId,
         previewVersion: preview.previewVersion,
         expectedImpact: preview.summary,
+        selectedRowIds: [ticketImportFixtureIds.rowNew],
         reason: 'Potvrzený import účastníků ze SimpleShopu.',
       },
       cache: 'no-store',
@@ -931,13 +1213,39 @@ describe('F4 contract-first admin journeys', () => {
 
   it('keeps Back read-only, confirms exact impact and reports a mocked apply', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
+    const previewRows = ticketImportPreviewFixtures.clean!.rows.map((row) =>
+      row.rowId === ticketImportFixtureIds.rowChanged
+        ? {
+            ...row,
+            sourceStatus: 'paid' as const,
+            status: 'new' as const,
+            incomingState: 'active' as const,
+            currentState: null,
+          }
+        : row,
+    );
     const preview = {
       ...ticketImportPreviewFixtures.clean!,
       eventId: adminFixtureIds.event,
+      rows: previewRows,
+      summary: {
+        total: 3,
+        new: 2,
+        unchanged: 1,
+        statusChanged: 0,
+        excluded: 0,
+        conflict: 0,
+        unknown: 0,
+      },
     };
     const report = {
       ...ticketImportApplyFixtures.applied!,
       eventId: adminFixtureIds.event,
+      selectedRowIds: [
+        ticketImportFixtureIds.rowNew,
+        ticketImportFixtureIds.rowChanged,
+      ],
+      result: { created: 2, statusChanged: 0, unchanged: 0 },
     };
     const apply = vi.fn(async () => success(report));
     const port = {
@@ -955,8 +1263,8 @@ describe('F4 contract-first admin journeys', () => {
     });
     for (const label of [
       'Načíst ze SimpleShopu',
-      'Zkontrolovat změny',
-      'Potvrdit změny',
+      'Vybrat účastníky',
+      'Potvrdit import',
       'Výsledek',
     ]) {
       await expect.element(stepper).toHaveTextContent(label);
@@ -970,21 +1278,28 @@ describe('F4 contract-first admin journeys', () => {
 
     await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
     await screen
-      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .getByRole('button', { name: 'Vybrat všechny k importu' })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod importu' })
       .fill('Pravidelná kontrola prodejů.');
-    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await screen
+      .getByRole('button', { name: 'Importovat vybrané (2)' })
+      .click();
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Použít tyto změny vstupenek?',
+          name: 'Importovat vybrané účastníky?',
         }),
       )
       .toBeVisible();
     const dialog = screen.getByRole('dialog', {
-      name: 'Použít tyto změny vstupenek?',
+      name: 'Importovat vybrané účastníky?',
     });
-    await expect.element(dialog).toHaveTextContent('Přidá 1 vstupenku');
-    const confirm = dialog.getByRole('button', { name: 'Použít změny' });
+    await expect.element(dialog).toHaveTextContent('Importuje 2 účastníci');
+    const confirm = dialog.getByRole('button', {
+      name: 'Importovat vybrané (2)',
+    });
     expect((await confirm.element()).className).not.toContain('danger');
     await acknowledgeDialog(screen);
     await confirm.click();
@@ -992,7 +1307,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Změny vstupenek byly použity',
+          name: 'Vybraní účastníci byli importováni',
         }),
       )
       .toBeVisible();
@@ -1000,6 +1315,18 @@ describe('F4 contract-first admin journeys', () => {
       .element(screen.getByRole('link', { name: 'Zobrazit účastníky' }))
       .toHaveAttribute('href', '/admin/ucastnici');
     expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(
+      expect.anything(),
+      adminFixtureIds.event,
+      expect.objectContaining({
+        selectedRowIds: [
+          ticketImportFixtureIds.rowNew,
+          ticketImportFixtureIds.rowChanged,
+        ],
+      }),
+      expect.any(String),
+      expect.any(AbortSignal),
+    );
   });
 
   it('shows a no-change result and retries a temporarily unavailable source', async () => {
@@ -1071,7 +1398,9 @@ describe('F4 contract-first admin journeys', () => {
     await screen.getByRole('button', { name: 'Zkusit načíst znovu' }).click();
     await expect
       .element(
-        screen.getByText('Od poslední kontroly nejsou žádné nové změny.'),
+        screen.getByText(
+          'V SimpleShopu nejsou žádní noví účastníci k importu.',
+        ),
       )
       .toBeVisible();
     expect(attempt).toBe(2);
@@ -1086,6 +1415,8 @@ describe('F4 contract-first admin journeys', () => {
     const report = {
       ...ticketImportApplyFixtures.idempotent_replay!,
       eventId: adminFixtureIds.event,
+      selectedRowIds: [ticketImportFixtureIds.rowNew],
+      result: { created: 1, statusChanged: 0, unchanged: 0 },
     };
     let attempt = 0;
     const idempotencyKeys: string[] = [];
@@ -1108,13 +1439,18 @@ describe('F4 contract-first admin journeys', () => {
 
     await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
     await screen
-      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .getByRole('checkbox', { name: 'Vybrat Syntetický účastník k importu' })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod importu' })
       .fill('Přesná opakovaná aktualizace.');
-    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await screen
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
-      .getByRole('button', { name: 'Použít změny' })
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
       .click();
     await screen
       .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
@@ -1123,7 +1459,7 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Server potvrdil dříve dokončenou aktualizaci',
+          name: 'Server potvrdil dříve dokončený import',
         }),
       )
       .toBeVisible();
@@ -1151,19 +1487,24 @@ describe('F4 contract-first admin journeys', () => {
 
     await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
     await screen
-      .getByRole('textbox', { name: 'Důvod aktualizace' })
+      .getByRole('checkbox', { name: 'Vybrat Syntetický účastník k importu' })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod importu' })
       .fill('Kontrola zastaralé dávky.');
-    await screen.getByRole('button', { name: 'Použít změny' }).click();
+    await screen
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
     await acknowledgeDialog(screen);
     await screen
       .getByRole('dialog')
-      .getByRole('button', { name: 'Použít změny' })
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
       .click();
 
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Změny zatím nelze potvrdit',
+          name: 'Import zatím nelze potvrdit',
         }),
       )
       .toBeVisible();
@@ -1174,7 +1515,7 @@ describe('F4 contract-first admin journeys', () => {
   });
 
   it.each(['conflict', 'unknown'] as const)(
-    'puts the %s source problem first and blocks confirmation',
+    'keeps the %s source problem visible but allows safe rows to be selected',
     async (fixtureName) => {
       window.history.replaceState({}, '', '/admin/vstupenky');
       const preview = {
@@ -1206,11 +1547,21 @@ describe('F4 contract-first admin journeys', () => {
         .click();
       await expect
         .element(screen.getByRole('combobox', { name: 'Filtrovat záznamy' }))
-        .toHaveValue('needs_attention');
+        .toHaveValue('all');
       expect(document.body.textContent).toContain(problemRow?.contactName);
+      expect(
+        screen.getByRole('checkbox', {
+          name: `Vybrat ${problemRow?.contactName} k importu`,
+        }),
+      ).not.toBeInTheDocument();
+      await screen
+        .getByRole('checkbox', {
+          name: 'Vybrat Syntetický účastník k importu',
+        })
+        .click();
       await expect
-        .element(screen.getByRole('button', { name: 'Použít změny' }))
-        .not.toBeInTheDocument();
+        .element(screen.getByRole('button', { name: 'Importovat vybrané (1)' }))
+        .toBeEnabled();
       expect(port.apply).not.toHaveBeenCalled();
     },
   );
@@ -1305,7 +1656,7 @@ describe('F4 contract-first admin journeys', () => {
                         assignmentId: adminFixtureIds.assignment,
                         userId: adminFixtureIds.operator,
                         displayName: 'Operátor #27',
-                        maskedContact: 'o***@example.test',
+                        contactEmail: 'operator27@example.test',
                       },
                     ],
                   }
@@ -1371,7 +1722,7 @@ describe('F4 contract-first admin journeys', () => {
         userId: adminFixtureIds.operator,
       }),
     ]);
-    expect(document.body.textContent).not.toContain('operator@example.test');
+    expect(document.body.textContent).toContain('operator27@example.test');
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -1408,153 +1759,13 @@ describe('F4 contract-first admin journeys', () => {
     expect(previewSignal?.aborted).toBe(true);
   });
 
-  it('wipes support P3 state and closes the workspace when an online-only read reports offline', async () => {
+  it('shows all participants immediately and filters without putting PII in the URL', async () => {
     window.history.replaceState({}, '', '/admin/ucastnici');
-    const api = organizerApi((endpoint) => {
-      if (endpoint === adminSupportSearchEndpoint) return failure('offline');
-      throw new Error('Unexpected admin endpoint.');
-    });
-    const screen = await renderComponent(
-      <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminSupportWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    const search = screen.getByRole('searchbox', {
-      name: 'Jméno, e-mail nebo reference vstupenky',
-    });
-    await search.fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Administraci nelze bezpečně zobrazit',
-        }),
-      )
-      .toBeVisible();
-    await expect.element(search).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toContain('single');
-  });
-
-  it('wipes support P3 and never offers retry for a malformed top-level 403 mutation', async () => {
-    window.history.replaceState({}, '', '/admin/ucastnici');
-    const searchResponse = {
-      ...supportSearchFixtures.single_match!,
-      eventId: adminFixtureIds.event,
-      matches: supportSearchFixtures.single_match!.matches.map((record) => ({
-        ...record,
-        eventId: adminFixtureIds.event,
-      })),
-    };
-    const api = organizerApi((endpoint) => {
-      if (endpoint === adminSupportSearchEndpoint) {
-        return success(searchResponse);
-      }
-      if (endpoint === adminSupportMutationEndpoint) {
-        return failure('invalid_response', 403);
-      }
-      throw new Error('Unexpected admin endpoint.');
-    });
-    const screen = await renderComponent(
-      <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminSupportWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await screen
-      .getByRole('searchbox', {
-        name: 'Jméno, e-mail nebo reference vstupenky',
-      })
-      .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
-    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny' })
-      .fill('Bezpečný test odebraného oprávnění.');
-    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
-    await acknowledgeDialog(screen);
-    await screen
-      .getByRole('button', { name: 'Znovu poslat aktivační výzvu' })
-      .click();
-
-    await expect
-      .element(
-        screen.getByRole('heading', {
-          name: 'Administraci nelze bezpečně zobrazit',
-        }),
-      )
-      .toBeVisible();
-    expect(document.body.textContent).not.toContain(
-      searchResponse.matches[0]!.displayName,
-    );
-    expect(
-      screen.getByRole('button', {
-        name: 'Zopakovat přesně stejný pokus',
-      }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows support records to a read-only actor without mounting mutation controls', async () => {
-    window.history.replaceState({}, '', '/admin/ucastnici');
-    const readOnlyContext = {
-      ...adminContextFixtures.organizer!,
-      actor: {
-        ...adminContextFixtures.organizer!.actor,
-        permissions: ['participant:operational:read'] as const,
-      },
-    };
-    const searchResponse = {
-      ...supportSearchFixtures.single_match!,
-      eventId: adminFixtureIds.event,
-      matches: supportSearchFixtures.single_match!.matches.map((record) => ({
-        ...record,
-        eventId: adminFixtureIds.event,
-      })),
-    };
-    const api = createApi((endpoint) => {
-      if (endpoint === adminContextEndpoint) return success(readOnlyContext);
-      if (endpoint === adminSupportSearchEndpoint) {
-        return success(searchResponse);
-      }
-      throw new Error('A read-only support actor attempted a mutation.');
-    });
-    const screen = await renderComponent(
-      <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminSupportWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await screen
-      .getByRole('searchbox', {
-        name: 'Jméno, e-mail nebo reference vstupenky',
-      })
-      .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    expect(document.body.textContent).toContain(
-      searchResponse.matches[0]!.displayName,
-    );
-    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
-    expect(
-      screen.getByRole('button', { name: 'Vyřešit problém' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('keeps participant search PII in a no-store POST body and localizes ambiguous results', async () => {
-    window.history.replaceState({}, '', '/admin/ucastnici');
-    const searchResponse = {
-      ...supportSearchFixtures.ambiguous!,
-      eventId: adminFixtureIds.event,
-      matches: supportSearchFixtures.ambiguous!.matches.map((record) => ({
-        ...record,
-        eventId: adminFixtureIds.event,
-      })),
-    };
-    let requestOptions: unknown;
+    const requests: unknown[] = [];
     const api = organizerApi((endpoint, options) => {
-      if (endpoint === adminSupportSearchEndpoint) {
-        requestOptions = options;
-        return success(searchResponse);
+      if (endpoint === adminParticipantListEndpoint) {
+        requests.push(options);
+        return success(participantListResponse());
       }
       throw new Error('Unexpected admin endpoint.');
     });
@@ -1564,66 +1775,103 @@ describe('F4 contract-first admin journeys', () => {
       </AdminWorkspaceShell>,
     );
 
-    await screen
-      .getByRole('searchbox', {
-        name: 'Jméno, e-mail nebo reference vstupenky',
-      })
-      .fill('citlivy@example.test');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-
-    expect(requestOptions).toMatchObject({
-      path: `/api/v1/admin/events/${adminFixtureIds.event}/support/search`,
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Syntetický účastník'),
+    );
+    expect(document.body.textContent).toContain('Testovací návštěvník');
+    expect(requests[0]).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/participants/list`,
       cache: 'no-store',
-      body: { query: 'citlivy@example.test', limit: 5 },
+      body: { query: '', limit: 100, offset: 0 },
+    });
+
+    await screen
+      .getByRole('searchbox', { name: 'Filtrovat účastníky' })
+      .fill('citlivy@example.test');
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[1]).toMatchObject({
+      body: { query: 'citlivy@example.test' },
     });
     expect(window.location.href).not.toContain('citlivy');
-    expect(window.location.pathname).toBe('/admin/ucastnici');
-    await expect
-      .element(
-        screen.getByText(
-          'Našli jsme více lidí. Vyberte správný záznam podle maskovaného kontaktu nebo reference.',
-        ),
-      )
-      .toBeVisible();
-    expect(document.body.textContent).toContain('Aktivní');
-    expect(document.body.textContent).not.toContain('claimed');
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-      document.documentElement.clientWidth,
-    );
-    expectPlainAdminMainCopy();
     await expectComponentToPassAxe(adminRoot());
   });
 
-  it('explains and confirms a safe support action while hiding unresolved target actions', async () => {
+  it('creates a participant in a modal and refreshes the list after saving', async () => {
     window.history.replaceState({}, '', '/admin/ucastnici');
-    const source = {
-      ...supportSearchFixtures.single_match!.matches[0]!,
-      eventId: adminFixtureIds.event,
-      availableActions: ['reassign', 'block', 'transfer'] as const,
-    };
-    const searchResponse = {
-      ...supportSearchFixtures.single_match!,
-      eventId: adminFixtureIds.event,
-      matches: [source] as const,
-    };
-    const mutationResponse = {
-      ...supportMutationFixtures.blocked!,
-      eventId: adminFixtureIds.event,
-      record: {
-        ...source,
-        ticketState: 'blocked' as const,
-        version: source.version + 1,
-        availableActions: ['reactivate'] as const,
+    const createdDetail = {
+      ...participantDetailResponse(),
+      participantId: '019fa100-0000-7000-8000-000000000091',
+      ticketId: '019fa100-0000-7000-8000-000000000092',
+      firstName: 'Ruční',
+      lastName: 'Host',
+      contactEmail: 'rucni.host@example.test',
+      phone: null,
+      company: 'Manual Labs',
+      jobTitle: '',
+      introduction: '',
+      linkedinUrl: null,
+      todayHunting: [] as const,
+      networkingEnabled: false,
+      onboardingCompleted: false,
+      invitation: { status: 'not_sent' as const, lastSentAt: null },
+      ticket: {
+        source: 'ticket' as const,
+        referenceSuffix: 'M0000092',
+        externalId: null,
+        orderExternalId: null,
+        state: 'active' as const,
+        claimedAt: '2026-09-03T10:00:00.000Z',
+        version: 1,
+        availableActions: ['block'] as const,
       },
+      checkIn: null,
+      profileVersion: 1,
+      createdAt: '2026-09-03T10:00:00.000Z',
+      updatedAt: '2026-09-03T10:00:00.000Z',
     };
-    let mutationOptions: unknown;
+    let createOptions: unknown;
+    let listRequests = 0;
     const api = organizerApi((endpoint, options) => {
-      if (endpoint === adminSupportSearchEndpoint) {
-        return success(searchResponse);
+      if (endpoint === adminParticipantListEndpoint) {
+        listRequests += 1;
+        const list = participantListResponse();
+        if (listRequests === 1) return success(list);
+        const createdItem = {
+          eventId: adminFixtureIds.event,
+          participantId: createdDetail.participantId,
+          ticketId: createdDetail.ticketId,
+          displayName: 'Ruční Host',
+          contactEmail: createdDetail.contactEmail,
+          company: createdDetail.company,
+          jobTitle: createdDetail.jobTitle,
+          referenceSuffix: createdDetail.ticket.referenceSuffix,
+          ticketState: 'active' as const,
+          accessState: 'not_claimed' as const,
+          networkingState: 'disabled' as const,
+          invitation: createdDetail.invitation,
+          checkedIn: false,
+          reservationCount: 0,
+          profileVersion: 1,
+          ticketVersion: 1,
+          updatedAt: createdDetail.updatedAt,
+          availableActions: ['block'] as const,
+        };
+        return success({
+          ...list,
+          items: [...list.items, createdItem],
+          pageInfo: { total: 3, offset: 0, hasMore: false },
+          summary: { ...list.summary, total: 3, active: 3 },
+        });
       }
-      if (endpoint === adminSupportMutationEndpoint) {
-        mutationOptions = options;
-        return success(mutationResponse);
+      if (endpoint === adminParticipantCreateEndpoint) {
+        createOptions = options;
+        return success({
+          eventId: adminFixtureIds.event,
+          outcome: 'created' as const,
+          detail: createdDetail,
+          createdAt: createdDetail.createdAt,
+          audit: { auditId: supportFixtureIds.audit },
+        });
       }
       throw new Error('Unexpected admin endpoint.');
     });
@@ -1633,245 +1881,233 @@ describe('F4 contract-first admin journeys', () => {
       </AdminWorkspaceShell>,
     );
 
-    await screen
-      .getByRole('searchbox', {
-        name: 'Jméno, e-mail nebo reference vstupenky',
-      })
-      .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
-    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
+    await expect
+      .element(screen.getByRole('button', { name: 'Přidat účastníka' }))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Přidat účastníka' }).click();
+    const dialog = screen.getByRole('dialog');
+    await expect
+      .element(dialog.getByRole('heading', { name: 'Přidat účastníka ručně' }))
+      .toBeVisible();
+    await dialog.getByRole('textbox', { name: 'Jméno' }).fill('Ruční');
+    await dialog.getByRole('textbox', { name: 'Příjmení' }).fill('Host');
+    await dialog
+      .getByRole('textbox', { name: 'E-mail' })
+      .fill('RUCNI.HOST@example.test');
+    await dialog
+      .getByRole('textbox', { name: 'Firma (nepovinná)' })
+      .fill('Manual Labs');
+    await dialog
+      .getByRole('textbox', { name: 'Důvod vytvoření' })
+      .fill('Registrace hosta mimo SimpleShop.');
+    await dialog.getByRole('button', { name: 'Vytvořit účastníka' }).click();
 
-    expect(
-      screen.getByText('Přiřadit přístup jiné osobě'),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Převést vstupenku')).not.toBeInTheDocument();
-    expect(screen.getByText(/ID cílové vstupenky/)).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(listRequests).toBeGreaterThanOrEqual(2));
+    await expect.element(screen.getByText('Ruční Host').first()).toBeVisible();
     await expect
       .element(
         screen.getByText(
-          'Zablokuje přístup a zruší potvrzené rezervace i čekání na uvolněná místa.',
+          'Účastník Ruční Host byl vytvořen. Může se přihlásit svým e-mailem nebo mu můžete poslat pozvánku.',
         ),
       )
       .toBeVisible();
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny' })
-      .fill('Vstupenka byla bezpečně ověřena u registrace.');
-    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
-    await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Zablokovat přístup' }).click();
-
-    expect(mutationOptions).toMatchObject({
-      path: `/api/v1/admin/events/${adminFixtureIds.event}/support/actions`,
+    expect(createOptions).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/participants`,
       cache: 'no-store',
       body: {
-        participantId: source.participantId,
-        ticketId: source.ticketId,
-        action: 'block',
-        expectedVersion: source.version,
-        targetTicketId: null,
+        reason: 'Registrace hosta mimo SimpleShop.',
+        profile: {
+          firstName: 'Ruční',
+          lastName: 'Host',
+          contactEmail: 'rucni.host@example.test',
+          phone: null,
+          company: 'Manual Labs',
+          jobTitle: '',
+        },
       },
     });
     expect(
-      (mutationOptions as { idempotencyKey?: string }).idempotencyKey,
+      (createOptions as { idempotencyKey?: string }).idempotencyKey,
     ).toBeTruthy();
-    await expect
-      .element(
-        screen.getByText(
-          'Přístup byl zablokován a související rezervace byly zrušeny.',
-        ),
-      )
-      .toBeVisible();
-    await expect
-      .element(screen.getByRole('link', { name: 'Zobrazit v historii změn' }))
-      .toHaveAttribute('href', '/admin/audit');
+    expect(screen.getByRole('dialog')).not.toBeInTheDocument();
+    await expectComponentToPassAxe(adminRoot());
   });
 
-  it('shows the human no-match state and wipes the query after session expiry', async () => {
+  it('offers only a common safe bulk action for the current selection', async () => {
     window.history.replaceState({}, '', '/admin/ucastnici');
-    let searches = 0;
     const api = organizerApi((endpoint) => {
-      if (endpoint !== adminSupportSearchEndpoint) {
-        throw new Error('Unexpected admin endpoint.');
+      if (endpoint === adminParticipantListEndpoint) {
+        return success(participantListResponse());
       }
-      searches += 1;
-      return searches === 1
-        ? success({
-            ...supportSearchFixtures.no_match!,
-            eventId: adminFixtureIds.event,
-          })
-        : failure('session_expired', 401);
+      throw new Error('Unexpected admin endpoint.');
     });
     const screen = await renderComponent(
       <AdminWorkspaceShell api={api} environment="mocked">
         <AdminSupportWorkspace />
       </AdminWorkspaceShell>,
     );
-    const searchbox = screen.getByRole('searchbox', {
-      name: 'Jméno, e-mail nebo reference vstupenky',
-    });
-    await searchbox.fill('nenalezeny-clovek');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    await expect
-      .element(
-        screen.getByText(
-          'Nikoho jsme nenašli. Zkontrolujte zápis nebo zkuste jiný údaj.',
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Syntetický účastník'),
+    );
+    const visibleCheckbox = (label: string) =>
+      Array.from(
+        document.querySelectorAll<HTMLInputElement>(
+          `input[aria-label="${label}"]`,
         ),
-      )
+      ).find((element) => element.getClientRects().length > 0)!;
+    await userEvent.click(visibleCheckbox('Vybrat Syntetický účastník'));
+    await userEvent.click(visibleCheckbox('Vybrat Testovací návštěvník'));
+
+    await expect
+      .element(screen.getByRole('button', { name: 'Poslat pozvánku' }))
       .toBeVisible();
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
+    await expect
+      .element(screen.getByRole('button', { name: 'Zablokovat přístup' }))
+      .toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Obnovit přístup' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens a complete participant detail and saves profile and networking data with a reason', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/admin/ucastnici/${supportFixtureIds.participant}`,
+    );
+    const detail = participantDetailResponse();
+    let updateOptions: unknown;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminParticipantDetailEndpoint) return success(detail);
+      if (endpoint === adminParticipantUpdateEndpoint) {
+        updateOptions = options;
+        const body = (options as { body: { profile: typeof detail } }).body;
+        return success({
+          eventId: adminFixtureIds.event,
+          outcome: 'updated' as const,
+          detail: {
+            ...detail,
+            ...body.profile,
+            profileVersion: detail.profileVersion + 1,
+          },
+          changedAt: '2026-09-02T10:01:00.000Z',
+          audit: { auditId: supportFixtureIds.audit },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminParticipantDetailWorkspace
+          participantId={supportFixtureIds.participant}
+        />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('heading', { name: 'Základní údaje' }))
+      .toBeVisible();
+    await screen.getByRole('textbox', { name: 'Firma' }).fill('Future Lab');
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny' })
+      .fill('Oprava na žádost účastníka.');
+    await screen.getByRole('button', { name: 'Uložit změny' }).click();
+
+    await expect
+      .element(screen.getByText('Změny účastníka byly uloženy.'))
+      .toBeVisible();
+    expect(updateOptions).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/participants/${supportFixtureIds.participant}`,
+      cache: 'no-store',
+      body: {
+        participantId: supportFixtureIds.participant,
+        expectedProfileVersion: 1,
+        reason: 'Oprava na žádost účastníka.',
+        profile: {
+          company: 'Future Lab',
+          networkingEnabled: true,
+          todayHunting: ['business_partners'],
+        },
+      },
+    });
+    expect(
+      (updateOptions as { idempotencyKey?: string }).idempotencyKey,
+    ).toBeTruthy();
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('confirms and sends a participant invitation to the current profile email', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/admin/ucastnici/${supportFixtureIds.participant}`,
+    );
+    const detail = participantDetailResponse();
+    let inviteOptions: unknown;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminParticipantDetailEndpoint) return success(detail);
+      if (endpoint === adminParticipantInviteEndpoint) {
+        inviteOptions = options;
+        return success({
+          eventId: adminFixtureIds.event,
+          participantId: supportFixtureIds.participant,
+          outcome: 'sent' as const,
+          sentAt: '2026-09-02T10:02:00.000Z',
+          invitation: {
+            status: 'sent' as const,
+            lastSentAt: '2026-09-02T10:02:00.000Z',
+          },
+          audit: { auditId: supportFixtureIds.audit },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminParticipantDetailWorkspace
+          participantId={supportFixtureIds.participant}
+        />
+      </AdminWorkspaceShell>,
+    );
+
+    await expect
+      .element(screen.getByRole('button', { name: 'Poslat pozvánku' }))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Poslat pozvánku' }).click();
     await expect
       .element(
         screen.getByRole('heading', {
-          name: 'Administraci nelze bezpečně zobrazit',
+          name: 'Poslat účastníkovi pozvánku?',
         }),
       )
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('nenalezeny-clovek');
-  });
-
-  it('retries an ambiguous support mutation with the exact same request', async () => {
-    window.history.replaceState({}, '', '/admin/ucastnici');
-    const source = {
-      ...supportSearchFixtures.single_match!.matches[0]!,
-      eventId: adminFixtureIds.event,
-      availableActions: ['block'] as const,
-    };
-    const response = {
-      ...supportMutationFixtures.blocked!,
-      eventId: adminFixtureIds.event,
-      record: {
-        ...source,
-        ticketState: 'blocked' as const,
-        version: source.version + 1,
-        availableActions: ['reactivate'] as const,
-      },
-    };
-    const attempts: unknown[] = [];
-    const api = organizerApi((endpoint, options) => {
-      if (endpoint === adminSupportSearchEndpoint) {
-        return success({
-          ...supportSearchFixtures.single_match!,
-          eventId: adminFixtureIds.event,
-          matches: [source] as const,
-        });
-      }
-      if (endpoint === adminSupportMutationEndpoint) {
-        const request = options as {
-          body: unknown;
-          cache: unknown;
-          idempotencyKey: unknown;
-          path: unknown;
-        };
-        attempts.push({
-          body: request.body,
-          cache: request.cache,
-          idempotencyKey: request.idempotencyKey,
-          path: request.path,
-        });
-        return attempts.length === 1 ? failure('timeout') : success(response);
-      }
-      throw new Error('Unexpected admin endpoint.');
-    });
-    const screen = await renderComponent(
-      <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminSupportWorkspace />
-      </AdminWorkspaceShell>,
+    expect(screen.getByRole('dialog').element().textContent).toContain(
+      'ucastnik@example.test',
     );
-
-    await screen
-      .getByRole('searchbox', {
-        name: 'Jméno, e-mail nebo reference vstupenky',
-      })
-      .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
-    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny' })
-      .fill('Ověřený důvod pro přesné opakování požadavku.');
-    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
+    expect(screen.getByRole('dialog').element().textContent).toContain(
+      'Odkaz platí 5 minut.',
+    );
     await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Zablokovat přístup' }).click();
     await screen
-      .getByRole('button', { name: 'Zopakovat přesně stejný pokus' })
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odeslat pozvánku' })
       .click();
 
-    expect(attempts).toHaveLength(2);
-    expect(attempts[1]).toEqual(attempts[0]);
     await expect
       .element(
-        screen.getByText(
-          'Přístup byl zablokován a související rezervace byly zrušeny.',
-        ),
+        screen.getByText('Pozvánka byla odeslána na ucastnik@example.test.'),
       )
       .toBeVisible();
-  });
-
-  it('drops the support draft and reloads current data after a stale response', async () => {
-    window.history.replaceState({}, '', '/admin/ucastnici');
-    const source = {
-      ...supportSearchFixtures.single_match!.matches[0]!,
-      eventId: adminFixtureIds.event,
-      availableActions: ['block'] as const,
-    };
-    let searches = 0;
-    const api = organizerApi((endpoint) => {
-      if (endpoint === adminSupportSearchEndpoint) {
-        searches += 1;
-        return success({
-          ...supportSearchFixtures.single_match!,
-          eventId: adminFixtureIds.event,
-          matches: [
-            searches === 1
-              ? source
-              : { ...source, version: source.version + 1 },
-          ] as const,
-        });
-      }
-      if (endpoint === adminSupportMutationEndpoint) {
-        return problemFailure({
-          ...supportMutationProblemFixtures.stale!,
-          currentVersion: source.version + 1,
-        });
-      }
-      throw new Error('Unexpected admin endpoint.');
+    expect(inviteOptions).toMatchObject({
+      path: `/api/v1/admin/events/${adminFixtureIds.event}/participants/${supportFixtureIds.participant}/invite`,
+      body: { participantId: supportFixtureIds.participant },
+      cache: 'no-store',
     });
-    const screen = await renderComponent(
-      <AdminWorkspaceShell api={api} environment="mocked">
-        <AdminSupportWorkspace />
-      </AdminWorkspaceShell>,
-    );
-
-    await screen
-      .getByRole('searchbox', {
-        name: 'Jméno, e-mail nebo reference vstupenky',
-      })
-      .fill('single');
-    await screen.getByRole('button', { name: 'Vyhledat účastníka' }).click();
-    await screen.getByRole('button', { name: 'Zobrazit detail' }).click();
-    await screen.getByRole('button', { name: 'Vyřešit problém' }).click();
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny' })
-      .fill('Tento důvod se po stale odpovědi musí zahodit.');
-    await screen.getByRole('button', { name: 'Zkontrolovat změnu' }).click();
-    await acknowledgeDialog(screen);
-    await screen.getByRole('button', { name: 'Zablokovat přístup' }).click();
-
-    expect(searches).toBe(2);
-    await expect
-      .element(
-        screen.getByText(
-          'Záznam se mezitím změnil. Načetli jsme aktuální stav; změnu připravte znovu.',
-        ),
-      )
-      .toBeVisible();
     expect(
-      screen.getByRole('textbox', { name: 'Důvod změny' }),
-    ).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toContain(
-      'Tento důvod se po stale odpovědi musí zahodit.',
-    );
+      (inviteOptions as { idempotencyKey?: string }).idempotencyKey,
+    ).toBeTruthy();
+    await expectComponentToPassAxe(adminRoot());
   });
 
   it('shows reservation records to a reader without capacity or attendance mutation controls', async () => {
@@ -1992,8 +2228,10 @@ describe('F4 contract-first admin journeys', () => {
   it('edits capacity from the activity detail with reserved count as the minimum', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     let mutationOptions: unknown;
+    let sessionReads = 0;
     const api = organizerApi((endpoint, options) => {
       if (endpoint === adminReservationSessionsEndpoint) {
+        sessionReads += 1;
         return success(adminReservationSessionFixtures.complete!);
       }
       if (endpoint === adminSessionCapacityMutationEndpoint) {
@@ -2015,6 +2253,9 @@ describe('F4 contract-first admin journeys', () => {
       .getByRole('button', { name: 'Zobrazit aktivitu' })
       .first()
       .click();
+    await expect
+      .element(screen.getByRole('dialog', { name: /Růst bez zkratek/i }))
+      .toBeVisible();
     const capacity = screen.getByRole('spinbutton', { name: 'Nová kapacita' });
     await expect.element(capacity).toHaveAttribute('min', '40');
     await capacity.fill('42');
@@ -2043,6 +2284,10 @@ describe('F4 contract-first admin journeys', () => {
     await expect
       .element(screen.getByText('Kapacita aktivity byla změněna.'))
       .toBeVisible();
+    await vi.waitFor(() => expect(sessionReads).toBeGreaterThan(1));
+    expect(
+      screen.getByRole('dialog', { name: /Růst bez zkratek/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('cancels a participant reservation separately and retries only the exact ambiguous request', async () => {
@@ -2079,6 +2324,16 @@ describe('F4 contract-first admin journeys', () => {
       .getByRole('button', { name: 'Zobrazit aktivitu' })
       .first()
       .click();
+    const participantSearch = screen.getByRole('searchbox', {
+      name: 'Jméno nebo e-mail účastníka',
+    });
+    await participantSearch.fill('Alex');
+    await expect
+      .element(screen.getByText('Alex Novák', { exact: true }))
+      .toBeVisible();
+    expect(
+      screen.getByText('alex.novak@example.test', { exact: true }),
+    ).toBeVisible();
     await screen
       .getByRole('button', { name: 'Zrušit rezervaci účastníka' })
       .click();
@@ -2184,7 +2439,7 @@ describe('F4 contract-first admin journeys', () => {
         }),
       )
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('Účastník •001');
+    expect(document.body.textContent).not.toContain('alex.novak@example.test');
     expect(
       screen.getByRole('heading', { name: 'Rezervace a kapacity' }),
     ).not.toBeInTheDocument();
@@ -2565,6 +2820,11 @@ describe('F4 contract-first admin journeys', () => {
       sessionId: targets[0]!.sessionId,
     });
     await expect.element(screen.getByText(/Oznámení uvidí/)).toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Ukázka příjemců' }))
+      .toBeVisible();
+    expect(document.body.textContent).toContain('Alex Novák');
+    expect(document.body.textContent).toContain('alex.novak@example.test');
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -2867,6 +3127,9 @@ describe('F4 contract-first admin journeys', () => {
     );
 
     await screen.getByRole('button', { name: 'Upravit nastavení' }).click();
+    await expect
+      .element(screen.getByRole('dialog', { name: 'Provozní pravidla' }))
+      .toBeVisible();
     await expect
       .element(screen.getByRole('radio', { name: /^Registrace je otevřená/ }))
       .toHaveFocus();

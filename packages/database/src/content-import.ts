@@ -43,7 +43,12 @@ interface SourceSpeaker {
   photo: string;
   role?: string;
   bio: string[];
-  links?: { linkedin?: string; web?: string; instagram?: string };
+  links?: {
+    linkedin?: string;
+    web?: string;
+    instagram?: string;
+    facebook?: string;
+  };
 }
 
 interface SourceEvent {
@@ -95,8 +100,19 @@ interface PreparedSession {
   type: 'break' | 'coaching' | 'mastermind' | 'meal' | 'other' | 'workshop';
   capacityMode: 'none' | 'reservation';
   capacity: number | null;
+  reservationGroupKey: string | null;
+  roomSlug: string;
   sortOrder: number;
   speakerSlugs: string[];
+}
+
+interface PreparedRoom {
+  sourceName: string;
+  sourceSha256: string;
+  sourcePath: string;
+  slug: string;
+  name: string;
+  sortOrder: number;
 }
 
 const SOURCE_NAME = 'static-site/data/content.json';
@@ -113,6 +129,7 @@ const confirmedReservationPolicies = new Map<
   string,
   {
     capacity: number;
+    reservationGroupKey?: string;
     time: string;
     title: string;
     type: 'mastermind' | 'workshop';
@@ -144,6 +161,26 @@ const confirmedReservationPolicies = new Map<
       time: '11:15 - 12:45',
       title: 'Workshop: Blanka Mrázková',
       type: 'workshop',
+    },
+  ],
+  [
+    'program.days[1].stages[1].events[1]',
+    {
+      capacity: 6,
+      reservationGroupKey: 'tomas-ryza-saturday-mastermind',
+      time: '9:30 - 11:00',
+      title: 'Mastermind část 1',
+      type: 'mastermind',
+    },
+  ],
+  [
+    'program.days[1].stages[1].events[3]',
+    {
+      capacity: 6,
+      reservationGroupKey: 'tomas-ryza-saturday-mastermind',
+      time: '11:15 - 12:45',
+      title: 'Mastermind část 2',
+      type: 'mastermind',
     },
   ],
 ]);
@@ -473,6 +510,7 @@ export async function importContentJson(options: {
   sourceFile: string;
   repositoryRoot: string;
   dryRun?: boolean;
+  allowPublishedUpdate?: boolean;
 }): Promise<ContentImportReport> {
   const bytes = await readFile(options.sourceFile);
   const sourceSha256 = sha256(bytes);
@@ -489,6 +527,7 @@ export async function importContentJson(options: {
     assetsByPath.set(path, await prepareAsset(options.repositoryRoot, path));
 
   const preparedSessions: PreparedSession[] = [];
+  const preparedRooms = new Map<string, PreparedRoom>();
   const replacedCoachingSourcePaths = new Set<string>();
   const matchedReservationPolicies = new Set<string>();
   const speakerSlugByName = new Map(
@@ -502,13 +541,18 @@ export async function importContentJson(options: {
         `unrecognized event date at program.days[${dayIndex}].date: ${day.date}`,
       );
     day.stages.forEach((stage, stageIndex) => {
-      addFinding(
-        findings,
-        'unmapped_field',
-        `program.days[${dayIndex}].stages[${stageIndex}].name`,
-        'Program section was preserved in provenance but not guessed to be a physical room.',
-        stage.name,
-      );
+      const stagePath = `program.days[${dayIndex}].stages[${stageIndex}]`;
+      const roomSlug = slugify(stage.name);
+      if (!preparedRooms.has(roomSlug)) {
+        preparedRooms.set(roomSlug, {
+          sourceName: SOURCE_NAME,
+          sourceSha256,
+          sourcePath: stagePath,
+          slug: roomSlug,
+          name: stage.name,
+          sortOrder: preparedRooms.size,
+        });
+      }
       stage.events.forEach((event, eventIndex) => {
         const path = `program.days[${dayIndex}].stages[${stageIndex}].events[${eventIndex}]`;
         if (
@@ -593,6 +637,8 @@ export async function importContentJson(options: {
           type,
           capacityMode: reservationPolicy ? 'reservation' : 'none',
           capacity: reservationPolicy?.capacity ?? null,
+          reservationGroupKey: reservationPolicy?.reservationGroupKey ?? null,
+          roomSlug,
           sortOrder: stageIndex * 100 + eventIndex,
           speakerSlugs: [...speakerSlugs],
         });
@@ -621,6 +667,17 @@ export async function importContentJson(options: {
     if (!range) {
       throw new Error(`invalid reconciled coaching slot: ${slot.time}`);
     }
+    const roomSlug = `koucovaci-zona-${slot.coachKey}`;
+    if (!preparedRooms.has(roomSlug)) {
+      preparedRooms.set(roomSlug, {
+        sourceName: coachingSchedule.sourceName,
+        sourceSha256: coachingSchedule.sourceSha256,
+        sourcePath: `${coachingSchedule.sourceName}#room-${slot.coachKey}`,
+        slug: roomSlug,
+        name: `Koučovací zóna · ${slot.coachName}`,
+        sortOrder: preparedRooms.size,
+      });
+    }
     preparedSessions.push({
       sourceName: coachingSchedule.sourceName,
       sourceSha256: coachingSchedule.sourceSha256,
@@ -634,6 +691,8 @@ export async function importContentJson(options: {
       type: 'coaching',
       capacityMode: 'reservation',
       capacity: coachingSchedule.capacity,
+      reservationGroupKey: null,
+      roomSlug,
       sortOrder: slot.sortOrder,
       speakerSlugs: [],
     });
@@ -671,14 +730,6 @@ export async function importContentJson(options: {
         `speakers.list[${index}].role`,
         'Speaker role is missing and remains null.',
       );
-    if (speaker.links?.instagram)
-      addFinding(
-        findings,
-        'unmapped_field',
-        `speakers.list[${index}].links.instagram`,
-        'Instagram is not represented by the current speaker schema.',
-        speaker.links.instagram,
-      );
   });
   source.partners.logos.forEach((partner, index) => {
     for (const field of ['description', 'websiteUrl', 'category', 'tier'])
@@ -703,6 +754,7 @@ export async function importContentJson(options: {
     speakers: source.speakers.list.length,
     partners: source.partners.logos.length,
     venues: 1,
+    rooms: preparedRooms.size,
     contentPages: 1,
     eventDays: source.program.days.length,
     sessions: preparedSessions.length,
@@ -752,7 +804,30 @@ export async function importContentJson(options: {
           ),
         ),
       });
-    if (unchangedImport && unchangedCoachingImport) return;
+    const roomProvenance =
+      await transaction.query.contentImportProvenance.findMany({
+        columns: {
+          sourceName: true,
+          sourcePath: true,
+          sourceSha256: true,
+        },
+        where: and(
+          eq(schema.contentImportProvenance.eventId, eventId),
+          eq(schema.contentImportProvenance.targetType, 'room'),
+        ),
+      });
+    const importedRooms = new Set(
+      roomProvenance.map(
+        ({ sourceName, sourcePath, sourceSha256 }) =>
+          `${sourceName}\u0000${sourcePath}\u0000${sourceSha256}`,
+      ),
+    );
+    const roomsUnchanged = [...preparedRooms.values()].every((room) =>
+      importedRooms.has(
+        `${room.sourceName}\u0000${room.sourcePath}\u0000${room.sourceSha256}`,
+      ),
+    );
+    if (unchangedImport && unchangedCoachingImport && roomsUnchanged) return;
     await acquireTransactionLock(transaction, `content-publish:${eventId}`);
 
     await archiveLegacyCoachingSessions(
@@ -786,7 +861,11 @@ export async function importContentJson(options: {
           eq(schema.speakerProfiles.slug, speaker.slug),
         ),
       });
-      if (existing && existing.status !== 'draft')
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      )
         throw new Error(
           `refusing to overwrite non-draft speaker: ${speaker.slug}`,
         );
@@ -802,6 +881,8 @@ export async function importContentJson(options: {
           jobTitle: speaker.role?.trim() || null,
           bioMarkdown: speaker.bio.join('\n\n'),
           linkedinUrl: speaker.links?.linkedin ?? null,
+          instagramUrl: speaker.links?.instagram ?? null,
+          facebookUrl: speaker.links?.facebook ?? null,
           websiteUrl: speaker.links?.web ?? null,
           photoAssetId: assetIds.get(speaker.photo),
           status: 'draft',
@@ -815,6 +896,8 @@ export async function importContentJson(options: {
             jobTitle: speaker.role?.trim() || null,
             bioMarkdown: speaker.bio.join('\n\n'),
             linkedinUrl: speaker.links?.linkedin ?? null,
+            instagramUrl: speaker.links?.instagram ?? null,
+            facebookUrl: speaker.links?.facebook ?? null,
             websiteUrl: speaker.links?.web ?? null,
             photoAssetId: assetIds.get(speaker.photo),
             sortOrder: index,
@@ -840,7 +923,11 @@ export async function importContentJson(options: {
           eq(schema.partners.slug, slug),
         ),
       });
-      if (existing && existing.status !== 'draft')
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      )
         throw new Error(`refusing to overwrite non-draft partner: ${slug}`);
       const id = existing?.id ?? generateUuidV7();
       await transaction
@@ -880,7 +967,11 @@ export async function importContentJson(options: {
         eq(schema.venues.slug, venueSlug),
       ),
     });
-    if (existingVenue && existingVenue.status !== 'draft')
+    if (
+      existingVenue &&
+      existingVenue.status !== 'draft' &&
+      !(options.allowPublishedUpdate && existingVenue.status === 'published')
+    )
       throw new Error(`refusing to overwrite non-draft venue: ${venueSlug}`);
     const venueId = existingVenue?.id ?? generateUuidV7();
     await transaction
@@ -915,6 +1006,56 @@ export async function importContentJson(options: {
       venueId,
     );
 
+    const roomIds = new Map<string, string>();
+    for (const room of preparedRooms.values()) {
+      const existing = await transaction.query.rooms.findFirst({
+        where: and(
+          eq(schema.rooms.eventId, eventId),
+          eq(schema.rooms.slug, room.slug),
+        ),
+      });
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      ) {
+        throw new Error(`refusing to overwrite non-draft room: ${room.slug}`);
+      }
+      const id = existing?.id ?? generateUuidV7();
+      await transaction
+        .insert(schema.rooms)
+        .values({
+          id,
+          eventId,
+          venueId,
+          slug: room.slug,
+          name: room.name,
+          description: 'Programová stage nebo sekce veřejného programu.',
+          status: 'draft',
+          sortOrder: room.sortOrder,
+        })
+        .onConflictDoUpdate({
+          target: [schema.rooms.eventId, schema.rooms.slug],
+          set: {
+            venueId,
+            name: room.name,
+            description: 'Programová stage nebo sekce veřejného programu.',
+            sortOrder: room.sortOrder,
+            updatedAt: new Date(),
+          },
+        });
+      await upsertProvenance(
+        transaction,
+        eventId,
+        room.sourcePath,
+        room.sourceSha256,
+        'room',
+        id,
+        room.sourceName,
+      );
+      roomIds.set(room.slug, id);
+    }
+
     const pageSlug = 'misto-a-doprava';
     const existingPage = await transaction.query.contentPages.findFirst({
       where: and(
@@ -922,7 +1063,11 @@ export async function importContentJson(options: {
         eq(schema.contentPages.slug, pageSlug),
       ),
     });
-    if (existingPage && existingPage.status !== 'draft')
+    if (
+      existingPage &&
+      existingPage.status !== 'draft' &&
+      !(options.allowPublishedUpdate && existingPage.status === 'published')
+    )
       throw new Error(
         `refusing to overwrite non-draft content page: ${pageSlug}`,
       );
@@ -986,18 +1131,53 @@ export async function importContentJson(options: {
       );
     }
 
+    const importedReservationGroups = new Map<
+      string,
+      Array<{ id: string; startsAt: Date }>
+    >();
     for (const session of preparedSessions) {
-      const existing = await transaction.query.programSessions.findFirst({
-        where: and(
-          eq(schema.programSessions.eventId, eventId),
-          eq(schema.programSessions.slug, session.slug),
-        ),
-      });
-      if (existing && existing.status !== 'draft')
+      const provenance =
+        await transaction.query.contentImportProvenance.findFirst({
+          columns: { targetId: true },
+          where: and(
+            eq(schema.contentImportProvenance.eventId, eventId),
+            eq(schema.contentImportProvenance.sourceName, session.sourceName),
+            eq(schema.contentImportProvenance.sourcePath, session.sourcePath),
+            eq(schema.contentImportProvenance.targetType, 'session'),
+          ),
+        });
+      const existingByProvenance = provenance
+        ? await transaction.query.programSessions.findFirst({
+            where: and(
+              eq(schema.programSessions.eventId, eventId),
+              eq(schema.programSessions.id, provenance.targetId),
+            ),
+          })
+        : null;
+      const existing =
+        existingByProvenance ??
+        (await transaction.query.programSessions.findFirst({
+          where: and(
+            eq(schema.programSessions.eventId, eventId),
+            eq(schema.programSessions.slug, session.slug),
+          ),
+        }));
+      if (
+        existing &&
+        existing.status !== 'draft' &&
+        !(options.allowPublishedUpdate && existing.status === 'published')
+      )
         throw new Error(
           `refusing to overwrite non-draft session: ${session.slug}`,
         );
       const id = existing?.id ?? generateUuidV7();
+      const stableSlug = existing?.slug ?? session.slug;
+      if (session.reservationGroupKey) {
+        const members =
+          importedReservationGroups.get(session.reservationGroupKey) ?? [];
+        members.push({ id, startsAt: session.startsAt });
+        importedReservationGroups.set(session.reservationGroupKey, members);
+      }
       let importedCapacity = session.capacity;
       if (session.capacityMode === 'reservation') {
         if (session.capacity === null) {
@@ -1029,14 +1209,15 @@ export async function importContentJson(options: {
           id,
           eventId,
           dayId: dayIds.get(session.dayPath)!,
-          roomId: null,
-          slug: session.slug,
+          roomId: roomIds.get(session.roomSlug)!,
+          slug: stableSlug,
           title: session.title,
           summary: session.summary,
           type: session.type,
           startsAt: session.startsAt,
           endsAt: session.endsAt,
           status: 'draft',
+          reservationGroupId: null,
           capacityMode: session.capacityMode,
           capacity: importedCapacity,
           reservationClosesAt:
@@ -1052,12 +1233,13 @@ export async function importContentJson(options: {
           // and a moved session cutoff are synchronized by repeat imports.
           set: {
             dayId: dayIds.get(session.dayPath)!,
-            roomId: null,
+            roomId: roomIds.get(session.roomSlug)!,
             title: session.title,
             summary: session.summary,
             type: session.type,
             startsAt: session.startsAt,
             endsAt: session.endsAt,
+            reservationGroupId: null,
             capacityMode: session.capacityMode,
             capacity: importedCapacity,
             reservationClosesAt:
@@ -1095,6 +1277,50 @@ export async function importContentJson(options: {
           })),
         );
       }
+    }
+
+    for (const [groupKey, unsortedMembers] of importedReservationGroups) {
+      const members = [...unsortedMembers].sort(
+        (left, right) =>
+          left.startsAt.getTime() - right.startsAt.getTime() ||
+          left.id.localeCompare(right.id),
+      );
+      if (members.length < 2) {
+        throw new Error(
+          `reservation group requires at least two sessions: ${groupKey}`,
+        );
+      }
+      const root = members[0]!;
+      const canonical = await transaction.query.programSessions.findFirst({
+        columns: { capacity: true },
+        where: and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.id, root.id),
+        ),
+      });
+      if (canonical?.capacity === null || canonical?.capacity === undefined) {
+        throw new Error(`reservation group is missing capacity: ${groupKey}`);
+      }
+      await transaction
+        .update(schema.programSessions)
+        .set({
+          reservationGroupId: root.id,
+          capacityMode: 'reservation',
+          capacity: canonical.capacity,
+          reservationClosesAt: root.startsAt,
+          waitlistMode: 'disabled',
+          waitlistOfferTtlMinutes: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.programSessions.eventId, eventId),
+            inArray(
+              schema.programSessions.id,
+              members.map(({ id }) => id),
+            ),
+          ),
+        );
     }
   });
   return {

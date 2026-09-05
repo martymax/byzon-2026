@@ -17,9 +17,9 @@
 - Jedna session položka obsahuje lidský název, datum, čas, místnost,
   kapacitu, potvrzený a čekající počet i `capacityVersion`. Rezervace jsou
   SQL window funkcí omezené na 100 na aktivitu.
-- Participant reference vzniká pouze z posledních znaků interního ID,
-  obsahuje maskovací znak a odpověď nečte jméno, e-mail ani telefon.
-  Strict kontrakt odmítá e-mail a klient navíc nečekanou raw hodnotu skryje.
+- Rezervace nese dostupné profilové jméno a kontaktní e-mail; při chybějícím
+  profilu použije jméno a e-mail účtu. Odpověď nevytváří maskovanou identitu
+  ani odvozený kód a zůstává autorizovaná, private/no-store a online-only.
 - Produkční `/admin/rezervace` používá pouze nový read endpoint, skládá
   další stránky bez duplicit a poskytuje filtr dne, aktivity a kapacitního
   stavu. Souhrn poctivě popisuje dosud načtené aktivity.
