@@ -179,7 +179,8 @@ integration('content import integration', () => {
           waitlistMode: 'disabled',
         }),
         expect.objectContaining({
-          title: 'Workshop: Leonid Kushnir',
+          title:
+            'Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.',
           type: 'workshop',
           capacityMode: 'reservation',
           capacity: 20,
@@ -248,13 +249,15 @@ integration('content import integration', () => {
     ).toBe(true);
 
     const preservedWorkshopId = firstSessions.find(
-      ({ title }) => title === 'Workshop: Leonid Kushnir',
+      ({ title }) =>
+        title ===
+        'Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.',
     )?.id;
     const restoredWorkshopId = firstSessions.find(
       ({ title }) => title === 'Workshop: Blanka Mrázková',
     )?.id;
     const openingSession = firstSessions.find(
-      ({ title }) => title === 'Zahájení konference',
+      ({ title }) => title === 'Zahájení a slovo primátorky',
     );
     expect(preservedWorkshopId).toBeDefined();
     expect(restoredWorkshopId).toBeDefined();
@@ -325,11 +328,11 @@ integration('content import integration', () => {
     );
     const changedSourceFile = join(changedSourceDirectory, 'content.json');
     const changedSource = (await readFile(options.sourceFile, 'utf8')).replace(
-      '"title": "Zahájení konference"',
-      '"title": "Zahájení konference – aktualizováno"',
+      '"title": "Zahájení a slovo primátorky"',
+      '"title": "Zahájení a slovo primátorky – aktualizováno"',
     );
     expect(changedSource).toContain(
-      '"title": "Zahájení konference – aktualizováno"',
+      '"title": "Zahájení a slovo primátorky – aktualizováno"',
     );
     await writeFile(changedSourceFile, changedSource);
     let second: Awaited<ReturnType<typeof importContentJson>>;
@@ -417,7 +420,7 @@ integration('content import integration', () => {
         expect.objectContaining({
           id: openingSession!.id,
           slug: openingSession!.slug,
-          title: 'Zahájení konference – aktualizováno',
+          title: 'Zahájení a slovo primátorky – aktualizováno',
           status: 'published',
         }),
         expect.objectContaining({
@@ -434,7 +437,8 @@ integration('content import integration', () => {
           reservationClosesAt: new Date('2026-09-18T13:15:00.000Z'),
         }),
         expect.objectContaining({
-          title: 'Workshop: Leonid Kushnir',
+          title:
+            'Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.',
           type: 'workshop',
           capacityMode: 'reservation',
           capacity: 24,

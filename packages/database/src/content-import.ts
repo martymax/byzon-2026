@@ -150,7 +150,8 @@ const confirmedReservationPolicies = new Map<
     {
       capacity: 20,
       time: '9:30 - 11:00',
-      title: 'Workshop: Leonid Kushnir',
+      title:
+        'Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.',
       type: 'workshop',
     },
   ],
