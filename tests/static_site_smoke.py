@@ -123,7 +123,10 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         "Pavel Janoušek program profile link": (program, '/speaker/pavel-janousek/'),
         "Expertní Board 21 partner": (home, '/assets/img/2026/08/eb21-logo.png'),
         "Wexia partner": (home, '/assets/img/2026/08/wexia.svg'),
-        "LIVEST partner": (home, '/assets/img/2026/08/livest.svg'),
+        "Frame Land partner": (home, '/assets/img/2026/09/frame-land.png'),
+        "Growy partner": (home, '/assets/img/2026/09/growy.svg'),
+        "Vojáček partner": (home, '/assets/img/2026/09/vojacek.jpg'),
+        "Panství Bzí partner": (home, '/assets/img/2026/09/panstvi-bzi.svg'),
     }
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
     if absent:
@@ -191,6 +194,12 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         for takeaway in takeaways:
             if takeaway not in detail:
                 fail(f"Session detail is missing takeaway for: {title}")
+        takeaways_title = session.get("takeaways_title")
+        if takeaways_title and takeaways_title not in detail:
+            fail(f"Session detail is missing takeaway title for: {title}")
+        closing = session.get("closing")
+        if closing and closing not in detail:
+            fail(f"Session detail is missing closing paragraph for: {title}")
         for speaker_slug in session.get("speakers", []):
             speaker_path = PUBLIC_ROOT / "speaker" / speaker_slug / "index.html"
             if not speaker_path.is_file():

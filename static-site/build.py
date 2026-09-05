@@ -953,7 +953,8 @@ def sec_partners():
     logos = ""
     for lg in d["logos"]:
         dark = " on-dark" if lg.get("on_dark") else ""
-        logos += f'<div class="partner-logo{dark}"><img src="{att(versioned_asset(lg["src"]))}" alt="{att(lg["name"])}" loading="lazy" data-fallback="{att(lg["name"])}"></div>'
+        image_class = ' class="partner-logo__image--tall"' if lg.get("tall") else ""
+        logos += f'<div class="partner-logo{dark}"><img{image_class} src="{att(versioned_asset(lg["src"]))}" alt="{att(lg["name"])}" loading="lazy" data-fallback="{att(lg["name"])}"></div>'
     return f"""<section class="section" id="partneri">
   <div class="container">
     <div class="section-head section-head--center reveal">
@@ -1244,8 +1245,18 @@ def session_annotation(session):
     takeaways = session.get("takeaways", [])
     if not takeaways:
         return paragraphs
+    takeaways_title = session.get("takeaways_title")
+    title = (
+        f'<h2 class="session-takeaways__title">{esc(takeaways_title)}</h2>'
+        if takeaways_title else ""
+    )
     items = "".join(f"<li>{esc(item)}</li>" for item in takeaways)
-    return paragraphs + f'<ul class="session-takeaways">{items}</ul>'
+    closing = session.get("closing")
+    closing_html = (
+        f'<p class="session-annotation__closing">{esc(closing)}</p>'
+        if closing else ""
+    )
+    return paragraphs + title + f'<ul class="session-takeaways">{items}</ul>' + closing_html
 
 
 def page_session(session):

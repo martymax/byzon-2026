@@ -495,6 +495,23 @@
         ]
       },
       {
+        "slug": "human-magic",
+        "title": "Human Magic - a co ta lidskost vlastně je?",
+        "kind": "Přednáška",
+        "speakers": ["leonid-kushnir"],
+        "annotation": [
+          "Ve světě automatizace, dat a umělé inteligence se stává největší konkurenční výhodou to, co nelze nasimulovat - čistá lidskost. Jenže co přesně to \"human magic\" znamená v každodenním byznysu i v životě? Existuje na to vůbec jediná správná odpověď?",
+          "Zapomeňte na pasivní poslech. Během tohoto dynamického 30minutového vstupu proměníme celý sál v jednu velkou inovační laboratoř. Využijeme světově uznávanou metodu LEGO® SERIOUS PLAY®, spojíme se do náhodných dvojic a prozkoumáme komplexní téma lidskosti přesně tam, kde vznikají ty nejlepší nápady: v našich rukách."
+        ],
+        "takeaways_title": "Co si z workshopu odnesete?",
+        "takeaways": [
+          "Osobitý zážitek: Během půl hodiny zažijete opravdovou Lidskost na vlastní kůži.",
+          "Hlubší propojení: Zažijete networking, který okamžitě boří bariéry a vytváří reálnou sounáležitost i mezi cizími lidmi v sále.",
+          "Novou perspektivu: Uvidíte, jak stejné slovo vnímají ostatní, a odejdete s plastičtějším pohledem na to, jak lidský faktor využít ve svém leadershipu."
+        ],
+        "closing": "Nenechte své myšlenky jen viset ve vzduchu. Přijďte si lidskost postavit, kostku po kostce!"
+      },
+      {
         "slug": "kdyz-lidskost-nekonci-u-bran-fabriky",
         "title": "Když lidskost nekončí u bran fabriky: Jak stavět byznys, komunitu a lepší společnost",
         "kind": "Přednáška",
@@ -616,6 +633,28 @@
         "annotation": [
           "Před třemi lety jsem přestal říkat lidem, co mají dělat, a začal jsem jim věřit. Dnes každý v našem týmu rozhoduje sám, bez mého souhlasu, bez schválení, bez strachu. Tohle je přednáška o tyrkysové firmě zevnitř. A neřeknu vám jen, jak to funguje, ukážu vám to."
         ]
+      },
+      {
+        "slug": "zmena-je-prilezitosti-leadership-je-cesta",
+        "title": "Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.",
+        "kind": "Workshop",
+        "speakers": ["leonid-kushnir"],
+        "annotation": [
+          "Ve světě plném každodenních změn je velice snadné ztratit směr. Pravdou je, že mnozí z nás často uvíznou na mrtvém bodě. Analyzujeme, plánujeme, optimalizujeme – a nenápadně upadáme do pasti „popisné představivosti“. Pouze popisujeme to, co už existuje, a pracujeme v mezích toho, co je, nikoli toho, co by mohlo být.",
+          "Tento 90minutový praktický workshop o strategickém leadershipu není jen další běžný seminář. Je to dynamický zážitek navržený pro ty z vás, kteří chtějí aktivně formovat a řídit svůj vlastní přístup k leadershipu.",
+          "Během strukturovaného, facilitovaného procesu prozkoumáte tři klíčové úrovně představivosti:",
+          "Popisná představivost: Začneme stavěním a sdílením fyzického modelu vaší současné situace. Získáte tak zcela novou, hmatatelnou perspektivu na to, co už víte.",
+          "Kreativní představivost: Poté vás vyzveme k budování nových možností – doslova si zkonstruujete budoucí stav, který zatím neexistuje. Obejdete analytickou část mozku a napojíte se na hlubší, intuitivnější zdroj inovativních nápadů.",
+          "Provokativní představivost: Nakonec vaše modely využijeme k identifikaci skrytých domněnek, překážek a možných rizik, která stojí v cestě vaší vizi. Abstraktní hrozby přeměníme na konkrétní výzvy, které lze okamžitě a strategicky řešit.",
+          "Tento workshop je pro odvážné. Pro ty, kteří odmítají být pouze reaktivní a namísto toho se rozhodnou být průkopníky. Nebudete si inovace a změny jen přát - osvojíte si nástroj, jak činit nepřetržitá, hmatatelná rozhodnutí k jejich uskutečnění. Tento workshop poskytuje nový způsob, jak získat výsledky, na které byste tradičními metodami dosáhli jen stěží."
+        ],
+        "takeaways_title": "Co si z workshopu odnesete:",
+        "takeaways": [
+          "Hlubší porozumění své vlastní strategické mysli.",
+          "Hmatatelný artefakt vašeho inovativního myšlení.",
+          "Hotové pracovní plátno (canvas) pro vaše každodenní strategické iniciativy."
+        ],
+        "closing": "Vykročte ze zajetých kolejí a postavte svou budoucnost, kostku po kostce. Zajistěte si své místo a buďte tvůrcem změn, kterého vaše odvětví potřebuje."
       }
     ]
   },
@@ -716,8 +755,25 @@
         "on_dark": false
       },
       {
-        "name": "LIVEST",
-        "src": "/assets/img/2026/08/livest.svg",
+        "name": "Frame Land",
+        "src": "/assets/img/2026/09/frame-land.png",
+        "tall": true,
+        "on_dark": false
+      },
+      {
+        "name": "Growy",
+        "src": "/assets/img/2026/09/growy.svg",
+        "on_dark": false
+      },
+      {
+        "name": "Vojáček",
+        "src": "/assets/img/2026/09/vojacek.jpg",
+        "tall": true,
+        "on_dark": false
+      },
+      {
+        "name": "Panství Bzí",
+        "src": "/assets/img/2026/09/panstvi-bzi.svg",
         "on_dark": false
       }
     ],
@@ -766,7 +822,7 @@
             "events": [
               { "time": "9:00 - 10:15", "title": "Společně na BYZON Stage", "type": "shared" },
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
-              { "time": "10:45 - 11:15", "title": "Leonid Kushnir" },
+              { "time": "10:45 - 11:15", "title": "Human Magic - a co ta lidskost vlastně je?", "meta": "Leonid Kushnir", "detail": "human-magic" },
               { "time": "11:15 - 11:45", "title": "Když lidskost nekončí u bran fabriky: Jak stavět byznys, komunitu a lepší společnost", "meta": "Jan Plojhar", "detail": "kdyz-lidskost-nekonci-u-bran-fabriky" },
               { "time": "11:45 - 12:15", "title": "Přestaňte lidi motivovat", "meta": "Blanka Mrázková", "detail": "prestante-lidi-motivovat" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
@@ -822,7 +878,7 @@
             "events": [
               { "time": "9:00 - 9:15", "title": "Registrace", "type": "shared" },
               { "time": "9:15 - 9:30", "title": "Úvod představení JCI", "type": "shared" },
-              { "time": "9:30 - 11:00", "title": "Workshop: Leonid Kushnir", "meta": "1,5 hod." },
+              { "time": "9:30 - 11:00", "title": "Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.", "meta": "Leonid Kushnir", "detail": "zmena-je-prilezitosti-leadership-je-cesta" },
               { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
               { "time": "11:15 - 12:45", "title": "Workshop: Blanka Mrázková", "meta": "1,5 hod." },
               { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" },
