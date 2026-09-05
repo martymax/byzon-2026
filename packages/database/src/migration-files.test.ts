@@ -62,6 +62,10 @@ const coachingReservationLimitMigration = readFileSync(
   resolve(packageRoot, 'drizzle/0026_one_coaching_reservation.sql'),
   'utf8',
 );
+const networkingParticipantNumberMigration = readFileSync(
+  resolve(packageRoot, 'drizzle/0027_public_newton_destine.sql'),
+  'utf8',
+);
 const journal = JSON.parse(
   readFileSync(resolve(packageRoot, 'drizzle/meta/_journal.json'), 'utf8'),
 ) as { entries?: Array<{ tag?: string }> };
@@ -113,6 +117,9 @@ describe('versioned database artifacts', () => {
     );
     expect(journal.entries?.map((entry) => entry.tag)).toContain(
       '0026_one_coaching_reservation',
+    );
+    expect(journal.entries?.map((entry) => entry.tag)).toContain(
+      '0027_public_newton_destine',
     );
     expect(migration).toContain('CREATE TABLE "events"');
     expect(migration).toContain('consent_records_legal_document_event_fk');
@@ -249,6 +256,15 @@ describe('versioned database artifacts', () => {
     expect(coachingReservationLimitMigration).toContain(
       "'coaching-reservation:'",
     );
+    expect(networkingParticipantNumberMigration).toContain(
+      'ADD COLUMN "participant_number" varchar(8)',
+    );
+    expect(networkingParticipantNumberMigration).toContain(
+      'participant_profiles_event_number_unique',
+    );
+    expect(networkingParticipantNumberMigration).toContain(
+      'participant_profiles_participant_number_check',
+    );
   });
 
   it('does not introduce UUIDv4 database defaults', () => {
@@ -266,6 +282,9 @@ describe('versioned database artifacts', () => {
     );
     expect(mastermindGroupMigration).not.toContain('gen_random_uuid()');
     expect(coachingReservationLimitMigration).not.toContain(
+      'gen_random_uuid()',
+    );
+    expect(networkingParticipantNumberMigration).not.toContain(
       'gen_random_uuid()',
     );
   });

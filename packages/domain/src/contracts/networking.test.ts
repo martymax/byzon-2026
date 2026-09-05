@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   networkingDirectoryProfileSchema,
+  networkingDirectoryQuerySchema,
   networkingSettingsUpdateRequestSchema,
   todayHuntingSchema,
 } from './networking.js';
@@ -12,6 +13,7 @@ const base = {
   introduction: 'Pomáhám firmám s produktem.',
   company: 'Synthetic s.r.o.',
   jobTitle: 'Product lead',
+  participantNumber: '042',
   todayHunting: ['know_how', 'clients'] as const,
   contactEmail: 'participant@example.test',
   phone: '+420777123456',
@@ -60,6 +62,7 @@ describe('networking contracts', () => {
       company: 'Synthetic s.r.o.',
       jobTitle: 'Product lead',
       introduction: '',
+      participantNumber: '042',
       todayHunting: ['team'],
       contacts: { email: null, phone: null, linkedinUrl: null },
     };
@@ -73,6 +76,36 @@ describe('networking contracts', () => {
         ...profile,
         userId: profile.profileId,
       }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a canonical participant number and preserves leading zeroes', () => {
+    expect(
+      networkingSettingsUpdateRequestSchema.parse(base).participantNumber,
+    ).toBe('042');
+    for (const participantNumber of ['', '12a', '123456789']) {
+      expect(
+        networkingSettingsUpdateRequestSchema.safeParse({
+          ...base,
+          participantNumber,
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      networkingSettingsUpdateRequestSchema.safeParse({
+        ...base,
+        participantNumber: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('validates exact participant-number directory filters', () => {
+    expect(
+      networkingDirectoryQuerySchema.parse({ participantNumber: '042' }),
+    ).toEqual({ participantNumber: '042' });
+    expect(
+      networkingDirectoryQuerySchema.safeParse({ participantNumber: '42a' })
+        .success,
     ).toBe(false);
   });
 });

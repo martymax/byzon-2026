@@ -3197,8 +3197,33 @@ main > .ui-participant-nav-spacer {
   outline: 3px solid var(--byzon-focus);
   outline-offset: 3px;
 }
+.networking-directory-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-2);
+}
+.networking-directory-name strong {
+  color: var(--byzon-ink);
+}
+.networking-participant-number {
+  width: fit-content;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: 999px;
+  background: var(--byzon-surface-soft);
+  color: var(--byzon-ink);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1.4;
+}
 .networking-directory-list span {
   color: var(--byzon-text-muted);
+}
+.networking-directory-list .networking-participant-number {
+  color: var(--byzon-ink);
 }
 .networking-profile-card {
   max-width: 48rem;
@@ -3209,6 +3234,9 @@ main > .ui-participant-nav-spacer {
   display: grid;
   gap: var(--byzon-space-2);
   font-style: normal;
+}
+.networking-profile-number {
+  margin: 0;
 }
 .participant-account-details {
   min-width: 0;
@@ -3339,6 +3367,12 @@ main > .ui-participant-nav-spacer {
   .speaker-detail-card {
     grid-template-columns: 18rem minmax(0, 1fr);
     align-items: start;
+  }
+}
+
+@media (min-width: 64rem) {
+  .networking-directory-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

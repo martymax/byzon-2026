@@ -10,6 +10,7 @@ import {
   uuid,
   varchar,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -48,6 +49,7 @@ export const participantProfiles = pgTable(
     jobTitle: varchar('job_title', { length: 160 }),
     bio: text('bio'),
     linkedinUrl: varchar('linkedin_url', { length: 2_048 }),
+    participantNumber: varchar('participant_number', { length: 8 }),
     todayHunting: todayHuntingValue('today_hunting')
       .array()
       .default([])
@@ -88,6 +90,13 @@ export const participantProfiles = pgTable(
     }),
     index('participant_profiles_event_id_idx').on(table.eventId),
     index('participant_profiles_user_id_idx').on(table.userId),
+    uniqueIndex('participant_profiles_event_number_unique')
+      .on(table.eventId, table.participantNumber)
+      .where(sql`${table.participantNumber} is not null`),
+    check(
+      'participant_profiles_participant_number_check',
+      sql`${table.participantNumber} is null or ${table.participantNumber} ~ '^[0-9]{1,8}$'`,
+    ),
     check('participant_profiles_version_check', sql`${table.version} >= 1`),
   ],
 );

@@ -60,7 +60,11 @@ export const networkingSettingsUpdateEndpoint = defineApiEndpoint({
   requestSchema: networkingSettingsUpdateRequestSchema,
   successSchema: networkingSettingsSchema,
   problemSchema: networkingProblemSchema,
-  problemCodes: [...networkingReadProblems, 'STALE_VERSION'],
+  problemCodes: [
+    ...networkingReadProblems,
+    'STALE_VERSION',
+    'PARTICIPANT_NUMBER_TAKEN',
+  ],
   responseKind: 'json',
   retry: 'never',
   idempotency: 'forbidden',

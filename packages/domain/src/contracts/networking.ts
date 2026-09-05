@@ -40,6 +40,9 @@ export const networkingLinkedinSchema = z
       url.protocol === 'https:' && /(^|\.)linkedin\.com$/i.test(url.hostname)
     );
   }, 'LinkedIn URL must use HTTPS on linkedin.com');
+export const networkingParticipantNumberSchema = z
+  .string()
+  .regex(/^[0-9]{1,8}$/, 'Participant number must contain 1 to 8 digits');
 
 export const networkingSettingsSchema = z.strictObject({
   eventId: uuidSchema,
@@ -49,6 +52,7 @@ export const networkingSettingsSchema = z.strictObject({
   introduction: cleanText(1_000),
   company: cleanText(160),
   jobTitle: cleanText(160),
+  participantNumber: networkingParticipantNumberSchema.nullable(),
   todayHunting: networkingTodayHuntingSchema,
   contactEmail: identityEmailSchema,
   phone: identityPhoneSchema.nullable(),
@@ -66,6 +70,7 @@ export const networkingSettingsUpdateRequestSchema = z
     introduction: cleanText(1_000),
     company: cleanText(160),
     jobTitle: cleanText(160),
+    participantNumber: networkingParticipantNumberSchema.nullable(),
     todayHunting: networkingTodayHuntingSchema,
     contactEmail: identityEmailSchema,
     phone: identityPhoneSchema.nullable(),
@@ -98,6 +103,7 @@ export const networkingDirectoryProfileSchema = z.strictObject({
   company: cleanText(160),
   jobTitle: cleanText(160),
   introduction: cleanText(1_000),
+  participantNumber: networkingParticipantNumberSchema.nullable(),
   todayHunting: networkingTodayHuntingSchema,
   contacts: z.strictObject({
     email: identityEmailSchema.nullable(),
@@ -108,6 +114,7 @@ export const networkingDirectoryProfileSchema = z.strictObject({
 
 export const networkingDirectoryQuerySchema = z.strictObject({
   q: cleanText(100).optional(),
+  participantNumber: networkingParticipantNumberSchema.optional(),
   todayHunting: todayHuntingSchema.optional(),
   cursor: uuidSchema.optional(),
   limit: z.number().int().min(1).max(50).optional(),
@@ -136,6 +143,8 @@ export const networkingStaleVersionProblemSchema = defineApiProblemSchema(
   'STALE_VERSION',
   409,
 );
+export const networkingParticipantNumberTakenProblemSchema =
+  defineApiProblemSchema('PARTICIPANT_NUMBER_TAKEN', 409);
 export const networkingNotFoundProblemSchema = defineApiProblemSchema(
   'PROFILE_NOT_FOUND',
   404,
@@ -154,6 +163,7 @@ export const networkingProblemSchema = z.discriminatedUnion('code', [
   networkingAccessDeniedProblemSchema,
   networkingDisabledProblemSchema,
   networkingStaleVersionProblemSchema,
+  networkingParticipantNumberTakenProblemSchema,
   networkingNotFoundProblemSchema,
   networkingValidationProblemSchema,
   networkingInternalErrorProblemSchema,

@@ -95,10 +95,29 @@ describe('stage 2 database schema', () => {
         'company',
         'contact_email',
         'networking_enabled',
+        'participant_number',
         'onboarding_completed_at',
         'version',
       ]),
     );
+  });
+
+  it('keeps participant networking numbers unique inside an event', () => {
+    const config = getTableConfig(participantProfiles);
+    expect(
+      config.indexes.some(
+        (index) =>
+          index.config.name === 'participant_profiles_event_number_unique' &&
+          index.config.unique &&
+          index.config.where,
+      ),
+    ).toBeTruthy();
+    expect(
+      config.checks.some(
+        (constraint) =>
+          constraint.name === 'participant_profiles_participant_number_check',
+      ),
+    ).toBe(true);
   });
 
   it('keeps active roster sources unique and event-scoped', () => {

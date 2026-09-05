@@ -55,6 +55,7 @@ type State =
 type EditableField =
   | 'company'
   | 'jobTitle'
+  | 'participantNumber'
   | 'introduction'
   | 'todayHunting'
   | 'contactEmail'
@@ -64,6 +65,7 @@ type EditableField =
 const fieldIds: Record<EditableField, string> = {
   company: 'networking-company',
   jobTitle: 'networking-job-title',
+  participantNumber: 'networking-participant-number',
   introduction: 'networking-introduction',
   todayHunting: 'networking-today-hunting',
   contactEmail: 'networking-email',
@@ -72,6 +74,9 @@ const fieldIds: Record<EditableField, string> = {
 };
 
 const validationMessage = (field: EditableField): string => {
+  if (field === 'participantNumber') {
+    return 'Zadejte 1 až 8 číslic bez mezer.';
+  }
   if (field === 'contactEmail') return 'Zadejte platný kontaktní e-mail.';
   if (field === 'phone') {
     return 'Zadejte telefon v mezinárodním formátu, například +420774835456.';
@@ -124,6 +129,7 @@ export const NetworkingDirectory = ({
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
   const [query, setQuery] = useState('');
+  const [participantNumberQuery, setParticipantNumberQuery] = useState('');
   const [filter, setFilter] = useState('');
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState<
@@ -162,6 +168,9 @@ export const NetworkingDirectory = ({
       setDirectoryStatus('loading');
       const parameters = new URLSearchParams();
       if (query.trim()) parameters.set('q', query.trim());
+      if (participantNumberQuery) {
+        parameters.set('participantNumber', participantNumberQuery);
+      }
       if (filter) parameters.set('todayHunting', filter);
       void requestNetworkingDirectory(parameters.toString(), api).then(
         (result) => {
@@ -180,7 +189,7 @@ export const NetworkingDirectory = ({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [api, filter, networkingEnabled, query]);
+  }, [api, filter, networkingEnabled, participantNumberQuery, query]);
 
   if (state.status === 'loading') {
     return <p role="status">Načítám nastavení networkingu…</p>;
@@ -237,6 +246,8 @@ export const NetworkingDirectory = ({
       introduction: String(data.get('introduction') ?? '').trim(),
       company: String(data.get('company') ?? '').trim(),
       jobTitle: String(data.get('jobTitle') ?? '').trim(),
+      participantNumber:
+        String(data.get('participantNumber') ?? '').trim() || null,
       todayHunting: selected,
       contactEmail: String(data.get('email') ?? '')
         .trim()
@@ -289,6 +300,22 @@ export const NetworkingDirectory = ({
         return;
       }
       const code = requestProblemCode(result);
+      if (code === 'PARTICIPANT_NUMBER_TAKEN') {
+        setErrors({
+          participantNumber:
+            'Toto číslo už používá jiný účastník. Zkontrolujte číslo, které jste dostali.',
+        });
+        setNotice({
+          tone: 'danger',
+          text: 'Číslo účastníka se nepodařilo uložit.',
+        });
+        requestAnimationFrame(() =>
+          errorContainer.current
+            ?.querySelector<HTMLElement>('.ui-error-summary')
+            ?.focus(),
+        );
+        return;
+      }
       setNotice({
         tone: code === 'STALE_VERSION' ? 'warning' : 'danger',
         text:
@@ -355,6 +382,26 @@ export const NetworkingDirectory = ({
             name="enabled"
             type="checkbox"
           />
+
+          <FormField
+            {...(errors.participantNumber
+              ? { error: errors.participantNumber }
+              : {})}
+            helperText="Volitelné. Opište číslo, které jste dostali na řízeném networkingu. Ostatní vás podle něj rychle najdou."
+            label="Číslo účastníka"
+          >
+            <Input
+              autoComplete="off"
+              defaultValue={settings.participantNumber ?? ''}
+              disabled={working}
+              id={fieldIds.participantNumber}
+              inputMode="numeric"
+              maxLength={8}
+              name="participantNumber"
+              pattern="[0-9]{1,8}"
+              type="text"
+            />
+          </FormField>
 
           <div className="onboarding-fields">
             <FormField
@@ -489,6 +536,25 @@ export const NetworkingDirectory = ({
             <h2>Najděte lidi pro dnešní setkání</h2>
           </header>
           <div className="networking-directory-filters">
+            <FormField
+              helperText="Zadejte celé číslo účastníka."
+              label="Hledat podle čísla"
+            >
+              <Input
+                autoComplete="off"
+                id="networking-number-search"
+                inputMode="numeric"
+                maxLength={8}
+                onChange={(event) =>
+                  setParticipantNumberQuery(
+                    event.target.value.replace(/\D/g, '').slice(0, 8),
+                  )
+                }
+                pattern="[0-9]{1,8}"
+                type="search"
+                value={participantNumberQuery}
+              />
+            </FormField>
             <FormField label="Hledat podle jména nebo firmy">
               <Input
                 id="networking-search"
@@ -521,7 +587,14 @@ export const NetworkingDirectory = ({
               {profiles.map((profile) => (
                 <li key={profile.profileId}>
                   <Link href={`/app/networking/${profile.profileId}`}>
-                    <strong>{profile.displayName}</strong>
+                    <span className="networking-directory-name">
+                      <strong>{profile.displayName}</strong>
+                      {profile.participantNumber ? (
+                        <span className="networking-participant-number">
+                          Číslo {profile.participantNumber}
+                        </span>
+                      ) : null}
+                    </span>
                     <span>
                       {[profile.jobTitle, profile.company]
                         .filter(Boolean)
@@ -559,6 +632,11 @@ export const NetworkingProfile = ({
     <Card className="networking-profile-card">
       <p className="eyebrow">Networking</p>
       <h1>{profile.displayName}</h1>
+      {profile.participantNumber ? (
+        <p className="networking-participant-number networking-profile-number">
+          Účastník č. {profile.participantNumber}
+        </p>
+      ) : null}
       <p>{[profile.jobTitle, profile.company].filter(Boolean).join(' · ')}</p>
       {profile.introduction ? <p>{profile.introduction}</p> : null}
       <ul>

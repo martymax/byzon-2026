@@ -81,6 +81,20 @@ const respondProblem = (error: unknown, requestId: string): Response => {
   return response;
 };
 
+const isParticipantNumberUniqueViolation = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const databaseError =
+    'cause' in error && error.cause && typeof error.cause === 'object'
+      ? error.cause
+      : error;
+  return (
+    'code' in databaseError &&
+    databaseError.code === '23505' &&
+    'constraint' in databaseError &&
+    databaseError.constraint === 'participant_profiles_event_number_unique'
+  );
+};
+
 const readJson = async (request: Request): Promise<unknown> => {
   if (
     request.headers.get('content-type')?.split(';', 1)[0]?.trim() !==
@@ -193,6 +207,7 @@ const projectSettings = (context: Awaited<ReturnType<typeof loadContext>>) =>
         introduction: context.profile.bio ?? '',
         company: context.profile.company ?? '',
         jobTitle: context.profile.jobTitle ?? '',
+        participantNumber: context.profile.participantNumber,
         todayHunting: context.profile.todayHunting,
         contactEmail: context.profile.contactEmail,
         phone: context.profile.phone,
@@ -308,6 +323,28 @@ export const handleNetworkingSettings = async (
           'Reload the profile before saving.',
         );
       }
+      if (parsed.data.participantNumber) {
+        const duplicate = await transaction.query.participantProfiles.findFirst(
+          {
+            columns: { userId: true },
+            where: and(
+              eq(schema.participantProfiles.eventId, context.eventId),
+              eq(
+                schema.participantProfiles.participantNumber,
+                parsed.data.participantNumber,
+              ),
+            ),
+          },
+        );
+        if (duplicate && duplicate.userId !== context.userId) {
+          throw apiProblem(
+            409,
+            'PARTICIPANT_NUMBER_TAKEN',
+            'Participant number already used',
+            'Use the number assigned to you at the event.',
+          );
+        }
+      }
       const version = current.version + 1;
       const visibility = networkingVisibilityForOptIn(
         parsed.data.networkingEnabled,
@@ -319,6 +356,7 @@ export const handleNetworkingSettings = async (
           bio: parsed.data.introduction || null,
           company: parsed.data.company || null,
           jobTitle: parsed.data.jobTitle || null,
+          participantNumber: parsed.data.participantNumber,
           todayHunting: parsed.data.todayHunting,
           contactEmail: parsed.data.contactEmail,
           phone: parsed.data.phone,
@@ -360,6 +398,7 @@ export const handleNetworkingSettings = async (
         introduction: parsed.data.introduction,
         company: parsed.data.company,
         jobTitle: parsed.data.jobTitle,
+        participantNumber: parsed.data.participantNumber,
         todayHunting: parsed.data.todayHunting,
         contactEmail: parsed.data.contactEmail,
         phone: parsed.data.phone,
@@ -372,6 +411,17 @@ export const handleNetworkingSettings = async (
     });
     return Response.json(body, { headers: privateHeaders(requestId) });
   } catch (error) {
+    if (isParticipantNumberUniqueViolation(error)) {
+      return respondProblem(
+        apiProblem(
+          409,
+          'PARTICIPANT_NUMBER_TAKEN',
+          'Participant number already used',
+          'Use the number assigned to you at the event.',
+        ),
+        requestId,
+      );
+    }
     if (error instanceof EventAccessDeniedError) {
       return respondProblem(
         apiProblem(
@@ -396,6 +446,7 @@ const projectDirectoryProfile = (
     company: row.company ?? '',
     jobTitle: row.jobTitle ?? '',
     introduction: row.bio ?? '',
+    participantNumber: row.participantNumber,
     todayHunting: row.todayHunting,
     contacts: projectNetworkingContacts(row),
   });
@@ -442,7 +493,13 @@ export const readNetworkingDirectory = async (
     const context = await loadContext(request, dependencies);
     await requireDirectoryReader(context, dependencies);
     const url = new URL(request.url);
-    const known = new Set(['q', 'todayHunting', 'cursor', 'limit']);
+    const known = new Set([
+      'q',
+      'participantNumber',
+      'todayHunting',
+      'cursor',
+      'limit',
+    ]);
     if ([...url.searchParams.keys()].some((key) => !known.has(key))) {
       throw apiProblem(
         422,
@@ -453,6 +510,9 @@ export const readNetworkingDirectory = async (
     }
     const query = networkingDirectoryQuerySchema.safeParse({
       ...(url.searchParams.get('q') ? { q: url.searchParams.get('q') } : {}),
+      ...(url.searchParams.get('participantNumber')
+        ? { participantNumber: url.searchParams.get('participantNumber') }
+        : {}),
       ...(url.searchParams.get('todayHunting')
         ? { todayHunting: url.searchParams.get('todayHunting') }
         : {}),
@@ -502,6 +562,12 @@ export const readNetworkingDirectory = async (
             ? arrayContains(schema.participantProfiles.todayHunting, [
                 query.data.todayHunting,
               ])
+            : undefined,
+          query.data.participantNumber
+            ? eq(
+                schema.participantProfiles.participantNumber,
+                query.data.participantNumber,
+              )
             : undefined,
           term
             ? or(

@@ -25,6 +25,7 @@ const settings = networkingSettingsSchema.parse({
   introduction: '',
   company: '',
   jobTitle: '',
+  participantNumber: null,
   todayHunting: [],
   contactEmail: 'alex@example.test',
   phone: null,
@@ -40,9 +41,13 @@ const success = <Value,>(data: Value) =>
 
 const networkingApi = (
   onUpdate: (body: NetworkingSettingsUpdateRequest) => void,
+  initialSettings = settings,
+  onDirectoryRequest?: (path: string) => void,
 ): ApiPort => ({
   request: vi.fn(async (endpoint, options) => {
-    if (endpoint === networkingSettingsReadEndpoint) return success(settings);
+    if (endpoint === networkingSettingsReadEndpoint) {
+      return success(initialSettings);
+    }
     if (endpoint === networkingSettingsUpdateEndpoint) {
       const body = options.body as NetworkingSettingsUpdateRequest;
       onUpdate(body);
@@ -50,7 +55,7 @@ const networkingApi = (
       void _expectedVersion;
       return success(
         networkingSettingsSchema.parse({
-          ...settings,
+          ...initialSettings,
           ...updatedSettings,
           version: 2,
           updatedAt: '2026-09-02T10:05:00.000Z',
@@ -58,9 +63,10 @@ const networkingApi = (
       );
     }
     if (endpoint === networkingDirectoryEndpoint) {
+      onDirectoryRequest?.(options.path);
       return success(
         networkingDirectoryResponseSchema.parse({
-          eventId: settings.eventId,
+          eventId: initialSettings.eventId,
           items: [],
           pageInfo: { hasMore: false, nextCursor: null },
         }),
@@ -89,6 +95,7 @@ describe('participant networking settings', () => {
       .click();
     await screen.getByLabelText('Firma').fill('BYZON Labs');
     await screen.getByLabelText('Pozice').fill('Zakladatelka');
+    await screen.getByLabelText('Číslo účastníka').fill('042');
     await screen.getByRole('checkbox', { name: 'Know-how' }).click();
     await screen
       .getByLabelText('LinkedIn')
@@ -103,6 +110,7 @@ describe('participant networking settings', () => {
         networkingEnabled: true,
         company: 'BYZON Labs',
         jobTitle: 'Zakladatelka',
+        participantNumber: '042',
         todayHunting: ['know_how'],
         linkedinUrl: 'https://www.linkedin.com/in/alex-novak',
         emailVisibility: 'directory',
@@ -126,5 +134,34 @@ describe('participant networking settings', () => {
       .element(summary)
       .toHaveTextContent('Použijte úplnou HTTPS adresu profilu');
     expect(updates).toEqual([]);
+  });
+
+  it('searches the opted-in directory by the complete participant number', async () => {
+    const requests: string[] = [];
+    const enabledSettings = networkingSettingsSchema.parse({
+      ...settings,
+      networkingEnabled: true,
+      participantNumber: '042',
+      emailVisibility: 'directory',
+      phoneVisibility: 'directory',
+      linkedinVisibility: 'directory',
+    });
+    const screen = await renderComponent(
+      <NetworkingDirectory
+        api={networkingApi(
+          () => undefined,
+          enabledSettings,
+          (path) => requests.push(path),
+        )}
+      />,
+    );
+
+    await screen.getByLabelText('Hledat podle čísla').fill('042');
+    await vi.waitFor(() =>
+      expect(requests).toContain(
+        '/api/v1/networking/directory?participantNumber=042',
+      ),
+    );
+    await expectComponentToPassAxe(screen.container);
   });
 });
