@@ -54,6 +54,7 @@ interface SourceSpeaker {
 interface SourceEvent {
   time: string;
   title: string;
+  detail?: string;
   type?: string;
   meta?: string;
   span?: string;
@@ -61,6 +62,9 @@ interface SourceEvent {
 }
 
 interface ContentSource {
+  sessions?: {
+    list: Array<{ slug: string; annotation?: string[] }>;
+  };
   location: {
     title: string;
     name: string;
@@ -103,6 +107,7 @@ interface PreparedSession {
   slug: string;
   title: string;
   summary: string | null;
+  description?: string | undefined;
   startsAt: Date;
   endsAt: Date;
   type: 'break' | 'coaching' | 'mastermind' | 'meal' | 'other' | 'workshop';
@@ -683,6 +688,9 @@ export async function importContentJson(options: {
           slug: `${slugify(stage.name)}-${slugify(event.title)}-${event.time.replace(/\D/g, '')}`,
           title: event.title,
           summary: event.meta ?? null,
+          description: source.sessions?.list
+            .find((session) => session.slug === event.detail)
+            ?.annotation?.join('\n\n'),
           startsAt: range.startsAt,
           endsAt: range.endsAt,
           type,
@@ -1330,6 +1338,7 @@ export async function importContentJson(options: {
           slug: stableSlug,
           title: session.title,
           summary: session.summary,
+          description: session.description,
           type: session.type,
           startsAt: session.startsAt,
           endsAt: session.endsAt,
@@ -1353,6 +1362,7 @@ export async function importContentJson(options: {
             roomId: roomIds.get(session.roomSlug)!,
             title: session.title,
             summary: session.summary,
+            description: session.description,
             type: session.type,
             startsAt: session.startsAt,
             endsAt: session.endsAt,

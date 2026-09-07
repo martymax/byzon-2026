@@ -485,6 +485,15 @@
         ]
       },
       {
+        "slug": "proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate",
+        "title": "Proč Vám lidé věří, i když jim nic neprodáváte",
+        "kind": "Přednáška",
+        "speakers": ["lukas-hejlik"],
+        "annotation": [
+          "Gastromapa začala jako osobní vášeň. Dnes je z ní značka, komunita a jeden z nejznámějších průvodců českou gastronomií. Lukáš Hejlík ukáže, co se za roky práce s lidmi naučil o důvěře, osobním doporučení a budování komunity. Proč lidé dají na doporučení člověka, kterému věří? Jak se buduje značka, která nepotřebuje lidi přesvědčovat? A proč může být právě důvěra v dnešní době jednou z největších konkurenčních výhod?"
+        ]
+      },
+      {
         "slug": "lide-duveruji-lidem",
         "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou",
         "kind": "Přednáška",
@@ -827,7 +836,7 @@
               { "time": "9:15 - 10:00", "title": "Lidskost jako konkurenční výhoda", "meta": "Margareta Křížová", "detail": "lidskost-jako-konkurencni-vyhoda" },
               { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček" },
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
-              { "time": "10:45 - 11:15", "title": "Lukáš Hejlík" },
+              { "time": "10:45 - 11:15", "title": "Proč Vám lidé věří, i když jim nic neprodáváte", "meta": "Lukáš Hejlík", "detail": "proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate" },
               { "time": "11:15 - 11:45", "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou", "meta": "Hana Slačálková", "detail": "lide-duveruji-lidem" },
               { "time": "11:45 - 12:15", "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu", "meta": "Vladimír Macoun, Konstancie Železná", "type": "discussion", "detail": "host-to-pozna" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
