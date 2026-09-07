@@ -104,6 +104,45 @@ suite('question-target QR export', () => {
         .where(eq(schema.programSessions.id, f.sessionId));
     }
   });
+  it('downloads PNG bytes with the correct dimensions and filename', async () => {
+    const deps = { ...f.dependencies(f.users.admin), appOrigin: f.origin };
+    const response = await handleSessionQr(
+      f.request('/qr?target=questions&format=png'),
+      f.eventId,
+      f.sessionId,
+      deps,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    expect(response.headers.get('content-disposition')).toContain('.png"');
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    expect([...bytes.subarray(0, 8)]).toEqual([
+      137, 80, 78, 71, 13, 10, 26, 10,
+    ]);
+    expect(bytes.readUInt32BE(16)).toBe(1024);
+    expect(bytes.readUInt32BE(20)).toBe(1024);
+    expect(
+      (
+        await handleSessionQr(
+          f.request('/qr?format=gif'),
+          f.eventId,
+          f.sessionId,
+          deps,
+        )
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await handleSessionQr(
+          f.request('/qr?format=png'),
+          f.eventId,
+          undefined,
+          deps,
+        )
+      ).status,
+    ).toBe(422);
+  });
   it('builds exact safe destinations without credentials or query parameters', () => {
     expect(
       buildSessionDeepLink(

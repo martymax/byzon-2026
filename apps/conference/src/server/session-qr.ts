@@ -188,7 +188,13 @@ export const handleSessionQr = async (
     await authorize(request, eventId, dependencies);
     const query = Object.fromEntries(new URL(request.url).searchParams);
     const parsed = z
-      .strictObject({ target: z.enum(['program', 'questions']).optional() })
+      .strictObject({
+        target: z.enum(['program', 'questions']).optional(),
+        format:
+          sessionId === undefined
+            ? z.never().optional()
+            : z.enum(['svg', 'png']).optional(),
+      })
       .safeParse(query);
     if (!parsed.success)
       throw new ApiProblemError({
@@ -222,14 +228,30 @@ export const handleSessionQr = async (
           detail: 'The published session is not available.',
         });
       }
-      const svg = await renderSessionQrSvg(
-        buildSessionDeepLink(dependencies.appOrigin, sessionId, target),
+      const format = parsed.data.format ?? 'svg';
+      const deepLink = buildSessionDeepLink(
+        dependencies.appOrigin,
+        sessionId,
+        target,
       );
-      return new Response(svg, {
+      const body =
+        format === 'png'
+          ? new Uint8Array(
+              await QRCode.toBuffer(deepLink, {
+                type: 'png',
+                errorCorrectionLevel: 'M',
+                margin: 4,
+                width: 1024,
+                color: { dark: '#101114', light: '#ffffff' },
+              }),
+            )
+          : await renderSessionQrSvg(deepLink);
+      return new Response(body, {
         headers: {
           ...privateHeaders(requestId),
-          'content-type': 'image/svg+xml; charset=utf-8',
-          'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}.svg"`,
+          'content-type':
+            format === 'png' ? 'image/png' : 'image/svg+xml; charset=utf-8',
+          'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}.${format}"`,
         },
       });
     }

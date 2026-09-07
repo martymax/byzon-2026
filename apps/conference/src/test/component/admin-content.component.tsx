@@ -164,7 +164,16 @@ describe('admin content user journeys', () => {
     await expect.element(qrDialog).toBeVisible();
     await expect
       .element(qrDialog.getByRole('link', { name: 'Stáhnout SVG' }))
-      .toHaveAttribute('href', expect.stringContaining('target=program'));
+      .toHaveAttribute(
+        'href',
+        expect.stringContaining('target=program&format=svg'),
+      );
+    await expect
+      .element(qrDialog.getByRole('link', { name: 'Stáhnout PNG' }))
+      .toHaveAttribute(
+        'href',
+        expect.stringContaining('target=program&format=png'),
+      );
     await expectComponentToPassAxe(contentRoot());
     await userEvent.keyboard('{Escape}');
     await expect.element(qrDialog).not.toBeInTheDocument();

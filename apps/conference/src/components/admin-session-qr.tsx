@@ -48,9 +48,6 @@ export function AdminSessionQr({
         {failed ? <span>Náhled není dostupný</span> : qrImage(false)}
         <span>{label}</span>
       </button>
-      <a aria-label={`Stáhnout ${label}: ${title}`} download href={href}>
-        Stáhnout SVG
-      </a>
       {open ? (
         <AdminModal labelledBy={headingId} onDismiss={() => setOpen(false)}>
           <h2 id={headingId} tabIndex={-1}>
@@ -82,9 +79,32 @@ export function AdminSessionQr({
             qrImage(true)
           )}
           <div className={styles.dialogActions}>
-            <a className={styles.button} download href={href}>
-              Stáhnout SVG
-            </a>
+            {(['svg', 'png'] as const).map((format) => (
+              <a
+                key={format}
+                aria-label={`Stáhnout ${format.toUpperCase()}`}
+                title={`Stáhnout ${format.toUpperCase()}`}
+                className={styles.sessionQrDownload}
+                download
+                href={`${href}&format=${format}`}
+              >
+                <svg
+                  aria-hidden="true"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6M12 11v7m-3-3 3 3 3-3" />
+                </svg>
+                <span>{format.toUpperCase()}</span>
+              </a>
+            ))}
             <button
               className={styles.secondaryButton}
               onClick={() => setOpen(false)}
