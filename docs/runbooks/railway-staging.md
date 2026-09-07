@@ -47,11 +47,12 @@ nesmí spustit.
 
 1. Každý dokončený funkční celek nejprve projde testy, dostane samostatný Git
    commit a odešle se do vzdáleného repozitáře. Staging se standardně nasazuje
-   pouze přes Git integraci z větve `main`; `railway up` se pro běžné nasazení
+   pouze přes Git integraci z větve `stage/participant-access-live-qa`;
+   `railway up` se pro běžné nasazení
    nepoužívá. CLI slouží k read-only diagnostice. Ruční deploy je výjimečný
    recovery krok, který musí být předem výslovně schválený a zdokumentovaný.
 2. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
-   sledují větev `main`.
+   sledují větev `stage/participant-access-live-qa`.
 3. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
    migraci spustí idempotentní seed a import kanonického obsahu z
    `static-site/data/content.json`. Worker migrace nespouští.
@@ -61,6 +62,12 @@ nesmí spustit.
    2026 neprovisionují.
 6. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
    restart loopu a aktuální release SHA.
+
+Dne 7. 9. 2026 byly pouze stagingové Git triggery webu a workeru odděleny
+do větve `stage/participant-access-live-qa`. Prostředí `production-2026`
+nadále sleduje `main`; push do `main` tedy může nasadit produkční klon a není
+stagingovým deploy postupem. Novou implementaci na staging odešlete příkazem
+`git push origin HEAD:refs/heads/stage/participant-access-live-qa`.
 
 Oznámení jsou pro event `byzon-2026` zapnutá migrací
 `0023_enable_byzon_announcements`. Seed stejnou hodnotu idempotentně zachovává

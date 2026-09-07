@@ -1,24 +1,24 @@
 # Přístup spolupracovníků a Q&A — evidence lokálního ověření
 
-Datum: 7. 9. 2026. Prostředí: Node 24.18, pnpm 11.15, PostgreSQL 17 v izolovaném lokálním clusteru, Chromium component browser runner. Nejde o důkaz staging ani produkčního nasazení. [Testovací a provozní návod](../runbooks/participant-access-live-qa.md).
+Datum: 7. 9. 2026. Prostředí: Node 24.18, pnpm 11.15, PostgreSQL 17 v izolovaném lokálním clusteru, Chromium component browser runner. Lokální ověření doplňuje níže uvedený záznam stagingového nasazení; nejde o produkční nasazení. [Testovací a provozní návod](../runbooks/participant-access-live-qa.md).
 
 ## Implementační commity
 
-| Balíček    | Commit                           | Výsledek                                                                              |
-| ---------- | -------------------------------- | ------------------------------------------------------------------------------------- |
-| AQ-00      | `9aabf0f`                        | ADR a potvrzený inventář 17 přednášek; EB21 a networking instruktáž vynechány.        |
-| AQ-01      | `4b76089`                        | Schéma, migrace 0028, DTO, soukromé odpovědi a permissions.                           |
-| DATA-02    | `b8801d4`                        | Stabilní source slugs, speaker vazby, kanonický networking, readiness CLI.            |
-| ACCESS-02  | `1e45ec9`                        | Serverový participant setup, preview, hash, verze, audit a idempotency.               |
-| ACCESS-03  | `4cff19e`                        | Admin průvodce, role-aware navigace, odstranění implicitního speaker rosteru.         |
-| QA-02      | `4fb6ebf`                        | Autoritativní čas a přepínače, submit, owner historie.                                |
-| QA-03      | `4e434b0`                        | Participant formulář a soukromá historie s bezpečným návratem a retry.                |
-| MOD-03     | `647028b`                        | Rozcestník a tablet feed, úplné stránkování, reconnect a security wipe.               |
-| SPEAKER-03 | `c2c4ace`                        | Soukromé speaker API po konci, první odpověď vítězí, optimistic edit.                 |
-| SPEAKER-04 | `c2a40d5`                        | Speaker UI, filtry, retry, soukromé odpovědi a řešení konfliktu.                      |
-| QR-02      | `c908720`                        | Q&A target, whitelist publikací, SVG a ZIP manifest.                                  |
-| ADMIN-03   | `e397c7f`                        | Coverage, samostatné vypínače, preflight, QR v Obsahu a Interakcích.                  |
-| QA-05      | Commit obsahující tento dokument | Finální regresní kontroly, upgrade rehearsal, privacy hardening, runbook a route map. |
+| Balíček    | Commit    | Výsledek                                                                              |
+| ---------- | --------- | ------------------------------------------------------------------------------------- |
+| AQ-00      | `9aabf0f` | ADR a potvrzený inventář 17 přednášek; EB21 a networking instruktáž vynechány.        |
+| AQ-01      | `4b76089` | Schéma, migrace 0028, DTO, soukromé odpovědi a permissions.                           |
+| DATA-02    | `b8801d4` | Stabilní source slugs, speaker vazby, kanonický networking, readiness CLI.            |
+| ACCESS-02  | `1e45ec9` | Serverový participant setup, preview, hash, verze, audit a idempotency.               |
+| ACCESS-03  | `4cff19e` | Admin průvodce, role-aware navigace, odstranění implicitního speaker rosteru.         |
+| QA-02      | `4fb6ebf` | Autoritativní čas a přepínače, submit, owner historie.                                |
+| QA-03      | `4e434b0` | Participant formulář a soukromá historie s bezpečným návratem a retry.                |
+| MOD-03     | `647028b` | Rozcestník a tablet feed, úplné stránkování, reconnect a security wipe.               |
+| SPEAKER-03 | `c2c4ace` | Soukromé speaker API po konci, první odpověď vítězí, optimistic edit.                 |
+| SPEAKER-04 | `c2a40d5` | Speaker UI, filtry, retry, soukromé odpovědi a řešení konfliktu.                      |
+| QR-02      | `c908720` | Q&A target, whitelist publikací, SVG a ZIP manifest.                                  |
+| ADMIN-03   | `e397c7f` | Coverage, samostatné vypínače, preflight, QR v Obsahu a Interakcích.                  |
+| QA-05      | `6d8eee6` | Finální regresní kontroly, upgrade rehearsal, privacy hardening, runbook a route map. |
 
 ## Provedené kontroly
 
@@ -49,9 +49,51 @@ První společný testovací běh používal DB s již importovaným konferenčn
 
 ## Co zůstává provozní podmínkou
 
-- Nebyl proveden push, deploy, změna produkčních přepínačů ani odeslání skutečných pozvánek.
+- Implementace byla pushnuta a nasazena pouze na staging (záznam níže). Produkční přepínače nebyly změněné a skutečné pozvánky nebyly odeslané.
 - Skutečné participant účty, speaker vazby a moderátory musí potvrdit pořadatel na cílové DB. Lokální [readiness inventář](program-readiness-local.json) správně hlásí nepropojené účty a dosud nenastavenou kapacitu networkingu.
 - Fyzický staging rehearsal telefon + dva tablety, email transport, QR v reálné projekci a rollback drill nejsou provedené. [Runbook](../runbooks/participant-access-live-qa.md) obsahuje přesnou matici i očekávané výsledky.
 - Před produkčním zapnutím musí release záznam jmenovat operátora a zálohu. Nový kód tuto volbu neprovádí a neaktivuje `speakerPortalEnabled` ani check-in.
 
 Automatická implementační část QA-05 je dokončená; úplné provozní Definition of Done plánu se uzavírá až doložením uvedených externích kontrol.
+
+## Staging deployment — 7. 9. 2026
+
+Na výslovný požadavek uživatele nasazen release
+`6d8eee6eaf8b468ec31ed5a84e8c99ac4d962b00` na
+<https://app.byzon.cz> přes Git integraci.
+
+Před nasazením staging i `production-2026` sledovaly `main`. Aby push nespustil
+produkční deployment, byly pouze stagingové triggery přepnuté na
+`stage/participant-access-live-qa`. Větev vznikla na dosavadním releasu
+`33ea2aa` a následný push implementace spustil standardní Git deployment.
+Vzdálená větev `main` se nezměnila.
+
+| Kontrola                    | Výsledek                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Web deployment              | `d85218c7-254f-4d7f-a072-77fd814f8c13` — SUCCESS                                                                             |
+| Worker deployment           | `cb29fc72-374b-451f-aa14-b7c6550d573f` — SUCCESS                                                                             |
+| Pre-deploy                  | Drizzle migrace úspěšné, seed a kanonický import dokončené                                                                   |
+| Web health                  | `/health/live` a `/health/ready`: HTTP 200; environment staging, očekávaný release, DB a Redis ready                         |
+| Soukromé API bez přihlášení | host-capabilities, moje dotazy, moderator sessions a speaker sessions: HTTP 401, `private, no-store`                         |
+| Worker                      | Start log se správným releasem, DB a Redis ready, žádné další chyby ani opakované starty během ověření                       |
+| DB inventář                 | 17 Q&A bloků, 26 coachingů, 1 networking                                                                                     |
+| Q&A přepínače               | `questions_enabled=false`, `question_followups_enabled=false`                                                                |
+| Provozní readiness          | `ready=false`: 21 nálezů nepropojených speaker účtů/vazeb a 1 chybějící kladná kapacita                                      |
+| Produkční klon              | Beze změny, web `d2174a18-d16a-4c6c-9a8a-f561c420c079`, worker `7b49caa0-b5a3-4933-935f-b16d97506685`, oba release `33ea2aa` |
+
+Worker je proces na pozadí bez HTTP serveru. Jeho historická veřejná Railway
+doména vrací HTTP 502; nejde o podporovaný health endpoint. Stav workeru byl
+ověřen přes Railway deployment a runtime log, nikoli přes tuto doménu.
+
+Readiness bylo spuštěno read-only přes Railway SSH:
+`pnpm --filter @byzon/database db:readiness byzon-2026`.
+Návratový kód 1 odpovídá uvedeným provozním nálezům, nikoli chybě migrace.
+Neproběhlo zapnutí Q&A, publikování programu, provisioning účtů ani rozesílání
+pozvánek. Přihlášený víceuživatelský a fyzický QR rehearsal zůstává podle
+[runbooku](../runbooks/participant-access-live-qa.md) navazujícím testem.
+
+GitHub CI pro nasazený commit:
+[run 34111322002](https://github.com/martymax/byzon-2026/actions/runs/34111322002).
+Při uzavření deploy ověření prošly static-site, format, lint, typecheck, unit/
+integration testy a build. Navazující browser/e2e/performance a audit kroky
+ještě běžely; tento záznam je neoznačuje za dokončené.
