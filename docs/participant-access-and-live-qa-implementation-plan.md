@@ -16,6 +16,8 @@ Primární aplikace: `apps/conference`
 
 - ACCESS-02: implementovány source-independent search/options/preview/apply a částečné revoke pro participant baseline. Role/scopes odvozuje server z presetu; preview hash, assignments version, transakce, audit a idempotency chrání změny. Žádný účet/membership/pozvánka nevzniká. Domain lint/typecheck + 208 testů; conference lint/typecheck + 829 testů včetně 4 provisioning integračních scénářů prošly.
 
+- ACCESS-03: admin průvodce vyhledání → náhled → potvrzení/revoke, stav účtu/pozvánky a serverové role-aware odkazy ve Více. Host stránky používají participant shell; speaker-only roster větev je odstraněná. Conference lint/typecheck, 18 cílených backend testů a 6 browser/axe scénářů na 375/768/1280 px prošly.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:

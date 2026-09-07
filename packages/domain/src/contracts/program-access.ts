@@ -103,3 +103,12 @@ export type ProgramAccessPreviewRequest = z.infer<
 export type ProgramAccessPreview = z.infer<typeof programAccessPreviewSchema>;
 export type ProgramAccessOptions = z.infer<typeof programAccessOptionsSchema>;
 export type ProgramAccessPerson = z.infer<typeof programAccessPersonSchema>;
+export const hostCapabilitiesSchema = z.strictObject({
+  eventId: id,
+  userId: id,
+  activities: z.boolean(),
+  moderation: z.boolean(),
+  followUps: z.boolean(),
+  pendingAnswerCount: z.number().int().nonnegative(),
+});
+export type HostCapabilities = z.infer<typeof hostCapabilitiesSchema>;

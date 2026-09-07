@@ -3,6 +3,7 @@
 import { ActionLink, Card } from '@byzon/ui';
 
 import { ParticipantAccountBoundary } from '@/components/participant-account-state';
+import { HostRoleLinks } from './host-role-links';
 import { SessionExitControls } from '@/components/session-exit-controls';
 import type { ApiPort } from '@/lib/api';
 
@@ -65,6 +66,16 @@ export const ParticipantMoreHub = ({
               Nastavení a přihlášení
             </ActionLink>
           </nav>
+
+          {identity.membership.roles.some((role) =>
+            ['speaker', 'room_operator', 'moderator'].includes(role),
+          ) ? (
+            <HostRoleLinks
+              key={`${identity.event.id}:${identity.user.id}`}
+              eventId={identity.event.id}
+              userId={identity.user.id}
+            />
+          ) : null}
 
           <Card className="participant-support-card">
             <p className="activation-kicker">Potřebujete pomoc?</p>

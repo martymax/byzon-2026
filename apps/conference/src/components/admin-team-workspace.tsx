@@ -32,6 +32,7 @@ import {
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
+import { AdminProgramAccess } from './admin-program-access';
 import { AdminTeamMembers } from './admin-team-members';
 import {
   adminFailureMessage,
@@ -523,6 +524,8 @@ export const AdminTeamRedesign = ({
           administrátorské i omezené provozní role.
         </p>
       </header>
+
+      <AdminProgramAccess />
 
       {error && !formOpen && !revokeTarget ? (
         <AdminFormErrorSummary

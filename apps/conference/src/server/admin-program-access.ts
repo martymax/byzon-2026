@@ -283,9 +283,13 @@ async function preview(
   const roles: ProgramAccessPreview['roles'] = requested.map((role) => {
     const current = currentRoles.find((item) => item.role === role);
     const addSessions =
-      role === 'speaker' || selection.preset === 'coach'
-        ? []
-        : sessions.map((session) => session.id);
+      role === 'speaker'
+        ? allSessions
+            .filter((session) => session.questionMode === 'moderated_follow_up')
+            .map((session) => session.id)
+        : selection.preset === 'coach'
+          ? []
+          : sessions.map((session) => session.id);
     const addRooms = role === 'room_operator' ? roomIds : [];
     const resultingSessions =
       input.operation === 'apply'
@@ -319,12 +323,30 @@ async function preview(
     columns: { id: true, name: true },
     where: eq(schema.rooms.eventId, eventId),
   });
+  const displayIds = sorted([
+    ...sessions.map((session) => session.id),
+    ...roles.flatMap((role) => role.sessionIds),
+  ]);
+  const displayRooms = sorted(roles.flatMap((role) => role.roomIds));
+  if (displayIds.length > 100 || displayRooms.length > 100)
+    fail('Rozsah je příliš velký. Rozdělte správu programu.');
+  const displaySessions = await db.query.programSessions.findMany({
+    where: and(
+      eq(schema.programSessions.eventId, eventId),
+      or(
+        inArray(schema.programSessions.id, displayIds),
+        displayRooms.length
+          ? inArray(schema.programSessions.roomId, displayRooms)
+          : undefined,
+      ),
+    ),
+  });
   const result = {
     eventId,
     participant,
     assignmentsVersion: version?.assignmentsVersion ?? 1,
     roles,
-    sessions: sessions
+    sessions: displaySessions
       .map((session) => ({
         id: session.id,
         title: session.title,
