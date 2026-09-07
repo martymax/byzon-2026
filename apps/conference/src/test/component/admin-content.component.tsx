@@ -126,7 +126,9 @@ describe('admin content user journeys', () => {
     await screen
       .getByRole('searchbox', { name: 'Filtrovat řečníky' })
       .fill('Example');
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByRole('dialog', { name: 'Alex Novák' }))
@@ -154,6 +156,16 @@ describe('admin content user journeys', () => {
     const screen = await renderContent();
 
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    await screen
+      .getByRole('searchbox', { name: 'Hledat podle názvu' })
+      .fill('nenalezitelný název');
+    await expect
+      .element(
+        screen.getByText('Žádný bod programu neodpovídá zvoleným filtrům.'),
+      )
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Vymazat filtry' }).click();
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
     const qrButton = screen.getByRole('button', {
       name: 'Zobrazit QR programu: Otevření konference',
     });
@@ -180,8 +192,12 @@ describe('admin content user journeys', () => {
     await expect.element(qrButton).toHaveFocus();
 
     await expect.element(screen.getByText('Pátek · 9:00–10:00')).toBeVisible();
-    await expect.element(screen.getByText('Main Stage')).toBeVisible();
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Main Stage'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     expect(
       screen.getByText('Ve zveřejněné verzi').elements().length,
     ).toBeGreaterThan(0);
@@ -326,7 +342,9 @@ describe('admin content user journeys', () => {
     const screen = await renderContent();
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
     selectArea('speakers');
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByRole('textbox', { name: 'Pozice nebo role' }))
@@ -562,7 +580,9 @@ describe('admin content user journeys', () => {
     });
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
     selectArea('speakers');
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByText('Fotografie řečníka zatím není dostupná'))

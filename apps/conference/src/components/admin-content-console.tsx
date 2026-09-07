@@ -24,6 +24,11 @@ import { ADMIN_CONTENT_SCOPE_CHANGE_EVENT } from '../lib/admin-content-dirty-gua
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminSessionQr } from './admin-session-qr';
+import { AdminProgramFilters } from './admin-program-filters';
+import {
+  emptyProgramFilters,
+  matchesProgramFilters,
+} from '../lib/admin-program-filters';
 import {
   AdminContentAssetField,
   type AdminContentAssetPort,
@@ -832,6 +837,9 @@ export const AdminContentConsole = ({
   const [editorFieldsReady, setEditorFieldsReady] = useState(false);
   const [listFilter, setListFilter] = useState<'active' | 'archived'>('active');
   const [speakerListQuery, setSpeakerListQuery] = useState('');
+  const [programFilters, setProgramFilters] = useState({
+    ...emptyProgramFilters,
+  });
   const [slugValue, setSlugValue] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [sortOrder, setSortOrder] = useState(0);
@@ -1310,7 +1318,15 @@ export const AdminContentConsole = ({
           listFilter === 'archived'
             ? item.status === 'archived'
             : item.status !== 'archived';
-        if (!statusMatches || resource !== 'speakers') return statusMatches;
+        if (!statusMatches) return false;
+        if (resource === 'sessions')
+          return matchesProgramFilters(
+            item,
+            programFilters,
+            references.rooms,
+            timezone,
+          );
+        if (resource !== 'speakers') return true;
         const query = speakerListQuery.trim().toLocaleLowerCase('cs-CZ');
         return (
           !query ||
@@ -1321,7 +1337,15 @@ export const AdminContentConsole = ({
             .includes(query)
         );
       }),
-    [items, listFilter, resource, speakerListQuery],
+    [
+      items,
+      listFilter,
+      resource,
+      speakerListQuery,
+      programFilters,
+      references.rooms,
+      timezone,
+    ],
   );
   const visibleSpeakers = references.speakers.filter((speaker) => {
     const query = speakerSearch.trim().toLocaleLowerCase('cs-CZ');
@@ -1588,6 +1612,22 @@ export const AdminContentConsole = ({
             Archiv
           </button>
         </div>
+        {resource === 'sessions' ? (
+          <AdminProgramFilters
+            value={programFilters}
+            onChange={setProgramFilters}
+            references={references}
+            count={visibleItems.length}
+            total={
+              items.filter((item) =>
+                listFilter === 'archived'
+                  ? item.status === 'archived'
+                  : item.status !== 'archived',
+              ).length
+            }
+            timezone={timezone}
+          />
+        ) : null}
         {resource === 'sessions' && !readOnly ? (
           <a
             className={styles.secondaryButton}
@@ -1604,9 +1644,12 @@ export const AdminContentConsole = ({
           </p>
         ) : visibleItems.length === 0 ? (
           <p className={styles.empty} role="status">
-            {listFilter === 'archived'
-              ? 'V archivu nejsou žádné položky.'
-              : 'V této oblasti zatím není žádná položka.'}
+            {resource === 'sessions' &&
+            Object.values(programFilters).some(Boolean)
+              ? 'Žádný bod programu neodpovídá zvoleným filtrům.'
+              : listFilter === 'archived'
+                ? 'V archivu nejsou žádné položky.'
+                : 'V této oblasti zatím není žádná položka.'}
           </p>
         ) : (
           <AdminContentItemList
