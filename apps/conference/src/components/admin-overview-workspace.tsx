@@ -286,7 +286,11 @@ export const AdminOverviewWorkspace = () => {
     <div className={styles.stack}>
       <AdminPageHeader
         action={
-          <Button onClick={reloadOverview} variant="secondary">
+          <Button
+            disabled={!overview && !error}
+            onClick={reloadOverview}
+            variant="secondary"
+          >
             Obnovit přehled
           </Button>
         }
@@ -299,6 +303,23 @@ export const AdminOverviewWorkspace = () => {
         title="Přehled akce"
       />
 
+      <nav className={styles.sectionLinks} aria-label="Rychlé akce">
+        {context.actor.permissions.includes('program:manage') ? (
+          <Link href="/admin/obsah" prefetch={false}>
+            Upravit program
+          </Link>
+        ) : null}
+        {context.actor.permissions.includes('participant:operational:read') ? (
+          <Link href="/admin/ucastnici" prefetch={false}>
+            Najít účastníka
+          </Link>
+        ) : null}
+        {context.actor.permissions.includes('reservation:any:read') ? (
+          <Link href="/admin/rezervace" prefetch={false}>
+            Zobrazit rezervace
+          </Link>
+        ) : null}
+      </nav>
       {error ? (
         <section className={styles.errorSummary} role="alert">
           <h2>Přehled se nepodařilo načíst</h2>
@@ -389,40 +410,45 @@ export const AdminOverviewWorkspace = () => {
           <section aria-labelledby="dashboard-status-title">
             <h2 id="dashboard-status-title">Stav akce</h2>
             <div className={styles.dashboardMetricGrid}>
-              {adminDashboardMetricOrder.map((id) => {
-                const metric = metricsById.get(id);
-                const definition = adminDashboardMetricRegistry[id];
-                return (
-                  <div
-                    className={styles.dashboardMetricCard}
-                    data-state={metric?.state ?? 'missing'}
-                    key={id}
-                  >
-                    <div className={styles.dashboardMetricIcon}>
-                      <DashboardIcon name={definition.icon} />
+              {adminDashboardMetricOrder
+                .filter(
+                  (id) =>
+                    id !== 'checkin' || context.capabilities.canEnterCheckin,
+                )
+                .map((id) => {
+                  const metric = metricsById.get(id);
+                  const definition = adminDashboardMetricRegistry[id];
+                  return (
+                    <div
+                      className={styles.dashboardMetricCard}
+                      data-state={metric?.state ?? 'missing'}
+                      key={id}
+                    >
+                      <div className={styles.dashboardMetricIcon}>
+                        <DashboardIcon name={definition.icon} />
+                      </div>
+                      <AdminMetricCard
+                        detail={
+                          metric ? (
+                            <>
+                              <AdminStatusBadge
+                                icon={metricStateIcon[metric.state]}
+                                tone={metricStateTone[metric.state]}
+                              >
+                                {adminMetricStateLabels[metric.state]}
+                              </AdminStatusBadge>
+                              <p>{metric.detail}</p>
+                            </>
+                          ) : (
+                            'Data zatím nejsou dostupná.'
+                          )
+                        }
+                        label={definition.label}
+                        value={metric?.value ?? '—'}
+                      />
                     </div>
-                    <AdminMetricCard
-                      detail={
-                        metric ? (
-                          <>
-                            <AdminStatusBadge
-                              icon={metricStateIcon[metric.state]}
-                              tone={metricStateTone[metric.state]}
-                            >
-                              {adminMetricStateLabels[metric.state]}
-                            </AdminStatusBadge>
-                            <p>{metric.detail}</p>
-                          </>
-                        ) : (
-                          'Data zatím nejsou dostupná.'
-                        )
-                      }
-                      label={definition.label}
-                      value={metric?.value ?? '—'}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </section>
 

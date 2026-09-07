@@ -409,7 +409,11 @@ export const AdminTeamMembers = ({
   };
 
   return (
-    <section className={styles.panel} aria-labelledby="team-members-title">
+    <section
+      id="team-members"
+      className={styles.panel}
+      aria-labelledby="team-members-title"
+    >
       <div className={styles.panelHeader}>
         <div>
           <h2 id="team-members-title">Členové týmu</h2>

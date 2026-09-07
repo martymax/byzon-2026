@@ -55,6 +55,14 @@ const capacityState = (record: AdminReservationSessionItem): CapacityState => {
   return 'healthy';
 };
 
+const formatProgramDay = (day: string): string =>
+  new Intl.DateTimeFormat('cs-CZ', {
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${day}T12:00:00Z`));
+
 const capacityStateLabels: Record<CapacityState, string> = {
   full: 'Plná kapacita',
   nearly_full: 'Téměř plná',
@@ -495,7 +503,7 @@ export const AdminReservationsRedesign = () => {
               <option value="all">Všechny načtené dny</option>
               {availableDays.map((day) => (
                 <option key={day} value={day}>
-                  {day}
+                  {formatProgramDay(day)}
                 </option>
               ))}
             </select>
@@ -538,13 +546,17 @@ export const AdminReservationsRedesign = () => {
             V programu nejsou žádné rezervovatelné aktivity.
           </p>
         ) : null}
-        <ul className={styles.cardList}>
+        <ul className={styles.reservationGrid}>
           {sortedSessions.map((session) => {
             const state = capacityState(session);
             const maximum = session.capacity ?? 1;
             const current = Math.min(session.confirmedCount, maximum);
             return (
-              <li className={styles.dataCard} key={session.sessionId}>
+              <li
+                className={`${styles.dataCard} ${styles.capacityCard}`}
+                data-capacity={state}
+                key={session.sessionId}
+              >
                 <div className={styles.panelHeader}>
                   <strong>{session.sessionTitle}</strong>
                   <span className={styles.statusBadge}>
@@ -559,7 +571,9 @@ export const AdminReservationsRedesign = () => {
                 {session.localDate || session.startsAt || session.roomLabel ? (
                   <p className={styles.muted}>
                     {[
-                      session.localDate,
+                      session.localDate
+                        ? formatProgramDay(session.localDate)
+                        : null,
                       session.startsAt?.slice(11, 16),
                       session.roomLabel,
                     ]

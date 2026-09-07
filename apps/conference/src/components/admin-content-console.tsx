@@ -1386,7 +1386,7 @@ export const AdminContentConsole = ({
           <p className={styles.eyebrow}>
             {resource === 'speakers'
               ? 'Profily, medailonky a vystoupení'
-              : 'Jediný editor obsahu'}
+              : 'Obsah pro účastníky'}
           </p>
           <h2 id="admin-content-editor-title">
             {resource === 'speakers'

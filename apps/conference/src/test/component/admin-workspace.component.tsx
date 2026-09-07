@@ -1,3 +1,4 @@
+import '../../app/styles.css';
 import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendResponseSchema,
@@ -976,6 +977,59 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.querySelectorAll('a[href="#admin-main"]')).toHaveLength(1);
   });
 
+  it('marks interactions as the active destination and enforces all of its permissions', async () => {
+    window.history.replaceState({}, '', '/admin/interakce');
+    const screen = await renderComponent(
+      <AdminWorkspaceShell
+        api={organizerApi(() => null)}
+        environment="production"
+      >
+        <h1>Interakce</h1>
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(screen.getByRole('heading', { name: 'Interakce', exact: true }))
+      .toBeVisible();
+    expect(
+      document
+        .querySelector('aside a[href="/admin/interakce"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      document.querySelector('aside a[href="/admin"][aria-current]'),
+    ).toBeNull();
+    await screen.unmount();
+    const api = createApi((endpoint) => {
+      if (endpoint === adminContextEndpoint) {
+        const context = adminContextFixtures.organizer!;
+        return success({
+          ...context,
+          actor: {
+            ...context.actor,
+            permissions: context.actor.permissions.filter(
+              (permission) => permission !== 'role:manage',
+            ),
+          },
+        });
+      }
+      throw new Error('A blocked workspace requested private data.');
+    });
+    const blocked = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <p>Soukromé interakce</p>
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(
+        blocked.getByRole('heading', { name: 'K této části nemáte přístup' }),
+      )
+      .toBeVisible();
+    expect(
+      document.querySelector('aside a[href="/admin/interakce"]'),
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain('Soukromé interakce');
+  });
+
   it('keeps a permitted feature-off destination visible and blocks its private workspace', async () => {
     window.history.replaceState({}, '', '/admin/oznameni');
     const api = createApi((endpoint) => {
@@ -1074,14 +1128,39 @@ describe('F4 contract-first admin journeys', () => {
       .toBeVisible();
     await expect
       .element(
-        screen.getByRole('menuitem', {
+        screen.getByRole('link', {
           name: 'Přejít do aplikace účastníka',
         }),
       )
       .toBeVisible();
     await expect
-      .element(screen.getByRole('menuitem', { name: 'Nastavení akce' }))
+      .element(
+        screen
+          .getByRole('link', { name: 'Nastavení akce', exact: true })
+          .last(),
+      )
       .toBeVisible();
+  });
+
+  it('closes account links when focus leaves the disclosure', async () => {
+    const screen = await renderComponent(
+      <AdminWorkspaceShell
+        api={organizerApi(() => null)}
+        environment="production"
+      >
+        <h1>Moje administrace</h1>
+      </AdminWorkspaceShell>,
+    );
+    const trigger = screen.getByRole('button', { name: /Demo administrátor/ });
+    await trigger.click();
+    await expect
+      .element(
+        screen.getByRole('link', { name: 'Přejít do aplikace účastníka' }),
+      )
+      .toBeVisible();
+    document.getElementById('admin-main')?.focus();
+    await expect.element(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('admin-account-links')).toBeNull();
   });
 
   it('loads a sanitized SimpleShop preview and applies the exact confirmed impact', async () => {

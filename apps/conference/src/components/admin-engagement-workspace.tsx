@@ -387,11 +387,17 @@ export const AdminEngagementWorkspace = () => {
         <p className={styles.eyebrow}>Interakce účastníků</p>
         <h1>Networking, otázky a hodnocení</h1>
         <p>
-          Všechny funkce jsou ve výchozím stavu vypnuté. Tato část vyžaduje
-          připojení; změny platí jen pro tuto akci a po potvrzení se zapíší do
-          historie změn.
+          Nastavte dostupnost networkingu, otázek a hodnocení. U přednášek
+          spravujte sběr dotazů a přiřazené moderátory.
         </p>
       </header>
+      {overview ? (
+        <nav className={styles.sectionLinks} aria-label="Sekce interakcí">
+          <a href="#engagement-features">Dostupnost funkcí</a>
+          <a href="#engagement-sessions">Otázky podle přednášky</a>
+          <a href="#engagement-moderators">Moderátoři</a>
+        </nav>
+      ) : null}
 
       {error ? (
         <>
@@ -445,12 +451,17 @@ export const AdminEngagementWorkspace = () => {
         </section>
       ) : (
         <>
-          <section className={styles.panel} aria-labelledby="reason-title">
-            <h2 id="reason-title">Důvod změny</h2>
-            <p className={styles.muted}>
-              Důvod se použije pro jednu následující operaci a po uložení se
-              vymaže.
-            </p>
+          <section
+            className={`${styles.panel} ${styles.engagementReason}`}
+            aria-labelledby="reason-title"
+          >
+            <div>
+              <h2 id="reason-title">Důvod změny</h2>
+              <p className={styles.muted}>
+                Důvod se použije pro jednu následující operaci a po uložení se
+                vymaže.
+              </p>
+            </div>
             {validationFailed ? (
               <AdminFormErrorSummary
                 descriptionId="admin-engagement-reason-error"
@@ -478,7 +489,11 @@ export const AdminEngagementWorkspace = () => {
             </label>
           </section>
 
-          <section className={styles.panel} aria-labelledby="features-title">
+          <section
+            id="engagement-features"
+            className={styles.panel}
+            aria-labelledby="features-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="features-title">Dostupnost pro celou akci</h2>
@@ -550,7 +565,11 @@ export const AdminEngagementWorkspace = () => {
             </div>
           </section>
 
-          <section className={styles.panel} aria-labelledby="sessions-title">
+          <section
+            id="engagement-sessions"
+            className={styles.panel}
+            aria-labelledby="sessions-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="sessions-title">Otázky podle přednášky</h2>
@@ -732,7 +751,11 @@ export const AdminEngagementWorkspace = () => {
             )}
           </section>
 
-          <section className={styles.panel} aria-labelledby="moderators-title">
+          <section
+            id="engagement-moderators"
+            className={styles.panel}
+            aria-labelledby="moderators-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="moderators-title">Moderátoři přednášek</h2>

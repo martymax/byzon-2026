@@ -16,6 +16,10 @@ export const summarizeAxeViolations = (violations: readonly Result[]) =>
     help,
     helpUrl,
     nodeCount: nodes.length,
+    nodes: nodes.map(({ target, failureSummary }) => ({
+      target,
+      failureSummary,
+    })),
   }));
 
 export const expectComponentToPassAxe = async (

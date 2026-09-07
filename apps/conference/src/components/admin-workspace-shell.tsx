@@ -46,6 +46,7 @@ type AdminWorkspaceSection =
 
 type AdminNavigationIcon =
   | 'overview'
+  | 'engagement'
   | 'content'
   | 'speakers'
   | 'participants'
@@ -140,6 +141,13 @@ const navigationGroups: readonly AdminNavigationGroup[] = [
         permission: 'announcement:send',
         section: 'announcements',
         feature: 'announcementsEnabled',
+      },
+      {
+        href: '/admin/interakce',
+        icon: 'engagement',
+        label: 'Interakce a otázky',
+        permission: 'event:settings:manage',
+        section: 'engagement',
       },
       {
         href: '/check-in',
@@ -281,6 +289,9 @@ const AdminNavigationIcon = ({
   readonly name: AdminNavigationIcon;
 }) => {
   const paths: Record<AdminNavigationIcon, ReactNode> = {
+    engagement: (
+      <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6A8.4 8.4 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5Z" />
+    ),
     overview: (
       <>
         <rect height="7" width="7" x="3" y="3" />
@@ -379,6 +390,8 @@ const visibleNavigationGroups = (
   navigationGroups.flatMap((group) => {
     const items = group.items.filter((item) => {
       if (item.capability) return context.capabilities[item.capability];
+      if (item.section === 'engagement')
+        return mayAccess(context, item.section);
       return item.permission
         ? context.actor.permissions.includes(item.permission)
         : false;
@@ -627,6 +640,7 @@ const AdminWorkspaceView = ({
   const drawerRef = useRef<HTMLDialogElement>(null);
   const bodyOverflowRef = useRef('');
   const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
   const section = sectionForPath(pathname);
   const activeNavigation = itemForPath(pathname) ?? navigation[0]!;
   const loginReturnTo = canonicalPathForNavigation(pathname);
@@ -689,7 +703,19 @@ const AdminWorkspaceView = ({
       accountButtonRef.current?.focus();
     };
     document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !accountRef.current?.contains(event.target)
+      ) {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOutside);
+    };
   }, [accountOpen]);
 
   const allowed =
@@ -737,7 +763,17 @@ const AdminWorkspaceView = ({
       ) : null}
       <div className={styles.shell}>
         <aside className={styles.sidebar} aria-label="Administrace akce">
-          <div className={styles.sidebarBrand}>BYZON</div>
+          <Link
+            className={styles.sidebarBrand}
+            href="/admin"
+            aria-label="BYZON — přehled administrace"
+            prefetch={false}
+          >
+            <span>
+              BYZON<span className={styles.brandDot}>.</span>
+            </span>
+            <small>Administrace</small>
+          </Link>
           {state.kind === 'ready' ? (
             <AdminNavigation
               activeHref={activeNavigation.href}
@@ -745,6 +781,11 @@ const AdminWorkspaceView = ({
               label="Hlavní administrace"
             />
           ) : null}
+          <div className={styles.sidebarFooter}>
+            <Link href="/app" prefetch={false}>
+              Otevřít účastnickou aplikaci <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
         </aside>
         <div className={styles.mainColumn}>
           <header className={styles.topbar}>
@@ -757,7 +798,17 @@ const AdminWorkspaceView = ({
               ref={menuButtonRef}
               type="button"
             >
-              <span aria-hidden="true">☰</span>
+              <svg
+                aria-hidden="true"
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
             {state.kind === 'ready' && primaryRole ? (
               <>
@@ -765,22 +816,40 @@ const AdminWorkspaceView = ({
                   <strong>{state.context.event.name}</strong>
                   <span>{adminPhaseLabels[state.context.event.phase]}</span>
                 </div>
-                <div className={styles.account}>
+                <div
+                  className={styles.account}
+                  ref={accountRef}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget))
+                      setAccountOpen(false);
+                  }}
+                >
                   <button
                     aria-expanded={accountOpen}
-                    aria-haspopup="menu"
+                    aria-controls="admin-account-links"
                     className={styles.accountButton}
                     onClick={() => setAccountOpen((current) => !current)}
                     ref={accountButtonRef}
                     type="button"
                   >
-                    <span>{state.context.actor.displayLabel}</span>
+                    <span className={styles.accountAvatar} aria-hidden="true">
+                      {state.context.actor.displayLabel
+                        .trim()
+                        .slice(0, 1)
+                        .toLocaleUpperCase('cs')}
+                    </span>
+                    <span className={styles.accountLabel}>
+                      {state.context.actor.displayLabel}
+                    </span>
                     <span aria-hidden="true">⌄</span>
                   </button>
                   {accountOpen ? (
-                    <div className={styles.accountMenu} role="menu">
-                      <p role="none">{adminActorRoleLabels[primaryRole]}</p>
-                      <Link href="/app" prefetch={false} role="menuitem">
+                    <div
+                      className={styles.accountMenu}
+                      id="admin-account-links"
+                    >
+                      <p>{adminActorRoleLabels[primaryRole]}</p>
+                      <Link href="/app" prefetch={false}>
                         Přejít do aplikace účastníka
                       </Link>
                       {state.context.actor.permissions.includes(
@@ -790,7 +859,6 @@ const AdminWorkspaceView = ({
                           href="/admin/nastaveni"
                           onClick={() => setAccountOpen(false)}
                           prefetch={false}
-                          role="menuitem"
                         >
                           Nastavení akce
                         </Link>
@@ -802,6 +870,24 @@ const AdminWorkspaceView = ({
             ) : null}
           </header>
           <main className={styles.content} id="admin-main" tabIndex={-1}>
+            {state.kind === 'ready' && allowed ? (
+              <nav
+                aria-label="Drobečková navigace"
+                className={styles.breadcrumbTrail}
+              >
+                <Link href="/admin" prefetch={false}>
+                  Administrace
+                </Link>
+                <span aria-hidden="true">/</span>
+                <span>{activeNavigation.label}</span>
+                {pathname.startsWith('/admin/ucastnici/') ? (
+                  <>
+                    <span aria-hidden="true">/</span>
+                    <span>Detail účastníka</span>
+                  </>
+                ) : null}
+              </nav>
+            ) : null}
             {state.kind === 'loading' ? (
               <section className={styles.panel} aria-busy="true">
                 <p className={styles.eyebrow}>Ověřuji přístup</p>

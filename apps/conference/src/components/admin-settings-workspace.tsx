@@ -319,8 +319,8 @@ export const AdminSettingsRedesign = () => {
             <div>
               <h2 id="core-settings-title">Provozní pravidla</h2>
               <p className={styles.muted}>
-                Nastavení zprávy při problému zůstává beze změny do potvrzení
-                jejího umístění a významu.
+                Pravidla určují, kdo může dokončit registraci a zda mohou
+                účastníci měnit rezervace.
               </p>
             </div>
             {!archived ? (

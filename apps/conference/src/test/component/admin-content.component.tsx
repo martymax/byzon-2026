@@ -156,6 +156,14 @@ describe('admin content user journeys', () => {
     const screen = await renderContent();
 
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    const selectedType = screen
+      .getByRole('button', { name: 'Body programu', exact: true })
+      .element();
+    expect(getComputedStyle(selectedType).minHeight).toBe('44px');
+    expect(getComputedStyle(selectedType).backgroundColor).not.toBe(
+      'rgba(0, 0, 0, 0)',
+    );
+
     await screen
       .getByRole('searchbox', { name: 'Hledat podle názvu' })
       .fill('nenalezitelný název');

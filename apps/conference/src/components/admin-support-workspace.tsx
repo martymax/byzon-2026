@@ -1840,7 +1840,7 @@ export const AdminParticipantDetailWorkspace = ({
       </div>
 
       {canMutate ? (
-        <div className={styles.participantSaveBar}>
+        <div className={styles.participantSaveBar} data-dirty={isDirty}>
           <div>
             <strong>
               {isDirty ? 'Máte neuložené změny' : 'Všechny změny jsou uložené'}

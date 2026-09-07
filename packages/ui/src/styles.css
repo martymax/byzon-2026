@@ -147,11 +147,19 @@
   line-height: 1.5;
 }
 
-[data-admin-root] :is(h1, h2, h3, h4, h5, .ui-action) {
-  font-family: var(--byzon-font-body);
+[data-admin-root] :is(h1, h2, h3, h4, h5) {
+  font-family: var(--byzon-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+[data-admin-root] h1 {
+  font-size: var(--admin-title-size, 2.75rem);
+  line-height: 1.15;
 }
 
 [data-admin-root] .ui-action {
+  font: 600 0.875rem/1.25 var(--byzon-font-body);
   border-radius: var(--admin-radius-control);
 }
 
@@ -832,7 +840,7 @@
 .ui-admin-page-header h1 {
   margin: 0;
   color: var(--admin-ink);
-  font: 700 2rem/2.375rem var(--byzon-font-body);
+  font: 600 var(--admin-title-size, 2.75rem)/1.15 var(--byzon-font-display);
   letter-spacing: -0.02em;
 }
 

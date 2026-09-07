@@ -36,7 +36,7 @@ export function AdminProgramAccess() {
   const { eventId, securityEpoch, invalidateSensitive } = useAdminWorkspace();
   const [open, setOpen] = useState(false);
   return (
-    <section className={styles.panel}>
+    <section id="program-access" className={styles.panel}>
       <h2>Programoví spolupracovníci</h2>
       <p>
         Kouči, vedoucí aktivit, řečníci a moderátoři používají běžný účastnický

@@ -524,6 +524,11 @@ export const AdminTeamRedesign = ({
           administrátorské i omezené provozní role.
         </p>
       </header>
+      <nav className={styles.sectionLinks} aria-label="Sekce týmu">
+        <a href="#team-members">Členové týmu</a>
+        <a href="#program-access">Programoví spolupracovníci</a>
+        <a href="#team-permissions">Provozní oprávnění</a>
+      </nav>
 
       <AdminProgramAccess />
 
@@ -561,7 +566,11 @@ export const AdminTeamRedesign = ({
               }}
             />
           ) : null}
-          <section className={styles.panel} aria-labelledby="team-list-title">
+          <section
+            id="team-permissions"
+            className={styles.panel}
+            aria-labelledby="team-list-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="team-list-title">Provozní oprávnění</h2>
