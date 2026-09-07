@@ -28,6 +28,8 @@ Primární aplikace: `apps/conference`
 
 - SPEAKER-04: rozcestník a soukromý feed ukončených přednášek, filtry, počty a publish/edit formulář s retry a konfliktem bez ztráty rozepsané odpovědi. 6 browser/axe scénářů na telefonu/tabletu/desktopu prošlo; typecheck prošel.
 
+- QR-02: explicitní `target=questions` exportuje pouze publikované podporované session, deep link vede na `/app/interakce/:id`; programový cíl je zachován. ZIP manifest obsahuje název, stage, časy, odkaz a unikátní bezpečný soubor. 5 QR testů prošlo včetně whitelist filtru a čistého odkazu bez credentials/query.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:
