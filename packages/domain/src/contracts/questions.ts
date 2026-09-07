@@ -293,3 +293,5 @@ export type OwnQuestions = z.infer<typeof ownQuestionsSchema>;
 export type QuestionSessionList = z.infer<typeof questionSessionListSchema>;
 export type SpeakerQuestionFeed = z.infer<typeof speakerQuestionFeedSchema>;
 export type QuestionAnswer = z.infer<typeof questionAnswerSchema>;
+
+export const questionAnswerMutationResponseSchema = z.strictObject({answerId: uuidSchema, version: z.number().int().positive()});

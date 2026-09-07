@@ -131,6 +131,8 @@ export const adminAuditActionLabels = {
   'settings.update': 'Upravil nastavení akce',
   'settings.engagement.update': 'Upravil interaktivní funkce',
   'settings.session-questions.update': 'Upravil otázky k aktivitě',
+  'question.answer.published': 'Zveřejnil soukromou odpověď',
+  'question.answer.edited': 'Upravil soukromou odpověď',
   'export.queued': 'Zařadil report ke zpracování',
   'export.download': 'Stáhl report',
 } satisfies Record<AdminAuditAction, string>;

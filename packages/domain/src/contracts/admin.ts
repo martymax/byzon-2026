@@ -1125,6 +1125,8 @@ export const adminAuditActionSchema = z.enum([
   'settings.update',
   'settings.engagement.update',
   'settings.session-questions.update',
+  'question.answer.published',
+  'question.answer.edited',
   'export.queued',
   'export.download',
 ]);

@@ -24,6 +24,8 @@ Primární aplikace: `apps/conference`
 
 - MOD-03: přiřazené session, nový host tablet feed a redirect původní URL. Feed načítá všechny stránky, deduplikuje, zachová pozici čtení, označí nové dotazy a maže obsah při ztrátě přístupu. 11 serverových a 3 browser/axe testy prošly včetně 125 dotazů.
 
+- SPEAKER-03: soukromé feed/list API a transakční publish/edit, aktivní participant baseline + speaker vazby, hranice konce, oddělený kill switch, first-wins a optimistic version. Audit a idempotency obsahují jen metadata. Typecheck a 7 integračních/audit testů prošly včetně souběhů panelistů a editací.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:

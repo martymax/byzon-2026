@@ -54,6 +54,8 @@ const actionCategories = {
   'settings.update': 'settings',
   'settings.engagement.update': 'settings',
   'settings.session-questions.update': 'settings',
+  'question.answer.published': 'settings',
+  'question.answer.edited': 'settings',
   'export.queued': 'export',
   'export.download': 'export',
 } satisfies Readonly<Record<AdminAuditAction, AdminAuditCategory>>;
