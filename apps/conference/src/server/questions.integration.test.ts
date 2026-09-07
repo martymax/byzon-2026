@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@byzon/database';
 import { and, eq } from 'drizzle-orm';
 import { createQuestionFixture } from '../test/server/question-fixture';
+import { readModeratorSessions } from './moderator-sessions';
 import { readOwnQuestions, readQuestionContext } from './own-questions';
 import { readModeratorQuestions, submitQuestion } from './questions';
 const suite = process.env.TEST_DATABASE_URL
@@ -37,6 +38,28 @@ suite('authoritative participant Q&A', () => {
       sessionId,
       f.dependencies(userId),
     );
+  it('lists only assigned supported sessions with collection switched off', async () => {
+    await f.client.db
+      .update(schema.eventFeatures)
+      .set({ questionsEnabled: false })
+      .where(eq(schema.eventFeatures.eventId, f.eventId));
+    const response = await readModeratorSessions(
+      f.request('/api/v1/moderator/sessions'),
+      f.dependencies(f.users.moderator),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      (await response.json()).sessions.map((s: { id: string }) => s.id),
+    ).toEqual([f.sessionId]);
+    expect(
+      (
+        await readModeratorSessions(
+          f.request('/list'),
+          f.dependencies(f.users.admin),
+        )
+      ).status,
+    ).toBe(403);
+  });
   it.each([
     ['2026-09-18T08:59:59.999Z', 409, 'QUESTIONS_NOT_OPEN'],
     ['2026-09-18T09:00:00Z', 201, null],
@@ -128,18 +151,16 @@ suite('authoritative participant Q&A', () => {
     ).toBe(403);
   });
   it('paginates more than 100 questions with identical timestamps without duplicates', async () => {
-    await f.client.db
-      .insert(schema.questions)
-      .values(
-        Array.from({ length: 125 }, () => ({
-          id: randomUUID(),
-          eventId: f.eventId,
-          sessionId: f.sessionId,
-          authorUserId: f.users.participant,
-          text: 'Dotaz',
-          createdAt: new Date('2026-09-18T09:15:00Z'),
-        })),
-      );
+    await f.client.db.insert(schema.questions).values(
+      Array.from({ length: 125 }, () => ({
+        id: randomUUID(),
+        eventId: f.eventId,
+        sessionId: f.sessionId,
+        authorUserId: f.users.participant,
+        text: 'Dotaz',
+        createdAt: new Date('2026-09-18T09:15:00Z'),
+      })),
+    );
     const first = await (
       await readOwnQuestions(
         f.request('/api/v1/me/questions'),

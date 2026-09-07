@@ -1,110 +1,11 @@
 'use client';
 
-import type { ModeratorQuestionFeed } from '@byzon/domain/contracts';
 import { Button, Card } from '@byzon/ui';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
-import {
-  requestModeratorQuestions,
-  requestRatingStatus,
-  submitRating,
-} from '@/lib/b-interactions-api';
+import { requestRatingStatus, submitRating } from '@/lib/b-interactions-api';
 
 export { QuestionForm } from './participant-questions';
-
-export const ModeratorQuestionList = ({ sessionId }: { sessionId: string }) => {
-  const [feed, setFeed] = useState<ModeratorQuestionFeed | null>(null);
-  const [error, setError] = useState('');
-  const latest = useRef<ModeratorQuestionFeed | null>(null);
-  const failures = useRef(0);
-  useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const load = (canonical = false) => {
-      const parameters = new URLSearchParams();
-      const last = canonical ? undefined : latest.current?.items.at(-1);
-      if (last) {
-        parameters.set('after', last.submittedAt);
-        parameters.set('cursor', last.questionId);
-      }
-      void requestModeratorQuestions(sessionId, parameters.toString()).then(
-        (result) => {
-          if (!active) return;
-          if (result.ok && result.kind === 'success') {
-            failures.current = 0;
-            setError('');
-            const next =
-              canonical || !latest.current
-                ? result.data
-                : {
-                    ...result.data,
-                    items: [...latest.current.items, ...result.data.items],
-                  };
-            latest.current = next;
-            setFeed(next);
-            timer = setTimeout(() => load(false), result.data.pollAfterMs);
-          } else {
-            failures.current += 1;
-            setError(
-              'Spojení s feedem bylo přerušeno. Obnovuji canonical seznam…',
-            );
-            timer = setTimeout(
-              () => load(true),
-              Math.min(30_000, 5_000 * 2 ** failures.current),
-            );
-          }
-        },
-      );
-    };
-    const reconnect = () => load(true);
-    window.addEventListener('online', reconnect);
-    load(true);
-    return () => {
-      active = false;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener('online', reconnect);
-    };
-  }, [sessionId]);
-  return (
-    <section className="app-page">
-      <header>
-        <p className="eyebrow">Moderátor · pouze pro čtení</p>
-        <h1 data-route-heading tabIndex={-1}>
-          Dotazy účastníků
-        </h1>
-        <p>
-          Seznam je chronologický. Nelze jej skrývat, řadit ani označovat jako
-          vyřízený.
-        </p>
-      </header>
-      {error ? <p role="status">{error}</p> : null}
-      {!feed ? (
-        <p role="status">Načítám dotazy…</p>
-      ) : feed.items.length === 0 ? (
-        <Card>
-          <p>Zatím nebyl odeslán žádný dotaz.</p>
-        </Card>
-      ) : (
-        <ol>
-          {feed.items.map((question) => (
-            <li key={question.questionId}>
-              <Card>
-                <strong>{question.authorName}</strong>
-                <time dateTime={question.submittedAt}>
-                  {new Intl.DateTimeFormat('cs-CZ', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }).format(new Date(question.submittedAt))}
-                </time>
-                <p>{question.text}</p>
-              </Card>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  );
-};
 
 export const SessionRating = ({
   sessionId,

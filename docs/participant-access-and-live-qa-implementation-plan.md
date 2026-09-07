@@ -22,6 +22,8 @@ Primární aplikace: `apps/conference`
 
 - QA-03: účastnický runtime formulář, bezpečný návrat po přihlášení a soukromá historie odpovědí. Ověřeno 59 navigačních testů a 6 browser/axe scénářů včetně ztracené odpovědi, stejného idempotency klíče a vymazání obsahu při 403.
 
+- MOD-03: přiřazené session, nový host tablet feed a redirect původní URL. Feed načítá všechny stránky, deduplikuje, zachová pozici čtení, označí nové dotazy a maže obsah při ztrátě přístupu. 11 serverových a 3 browser/axe testy prošly včetně 125 dotazů.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:
