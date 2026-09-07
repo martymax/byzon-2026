@@ -18,6 +18,8 @@ Primární aplikace: `apps/conference`
 
 - ACCESS-03: admin průvodce vyhledání → náhled → potvrzení/revoke, stav účtu/pozvánky a serverové role-aware odkazy ve Více. Host stránky používají participant shell; speaker-only roster větev je odstraněná. Conference lint/typecheck, 18 cílených backend testů a 6 browser/axe scénářů na 375/768/1280 px prošly.
 
+- QA-02: společný runtime context nad publikovanou session a živými přepínači; submit kontroluje capability a UTC interval pod DB zámky, exact retry přijme i po konci. Owner history je oddělená od vypínačů, moderator read zůstává po konci/OFF. Conference lint/typecheck a 16 integračních testů (10 Q&A) prošly, včetně hranic času, cizí historie, revokace a 125 dotazů se shodným časem.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:

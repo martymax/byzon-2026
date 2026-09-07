@@ -20,6 +20,12 @@ import {
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { rateLimitHeaders } from './api/rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
+import {
+  loadQuestionActor,
+  loadQuestionSession,
+  requireQuestionCollection,
+  lockQuestionAccess,
+} from './question-runtime';
 import type { QuestionsRateLimiter } from './questions-rate-limit';
 
 const MAX_BODY_BYTES = 8_192;
@@ -160,43 +166,6 @@ const loadEventActor = async (
   return { endsAt: event.endsAt, eventId: event.id, userId: identity.user.id };
 };
 
-const requireQuestionSession = async (
-  dependencies: QuestionsDependencies,
-  eventId: string,
-  sessionId: string,
-) => {
-  const [feature, session] = await Promise.all([
-    dependencies.db.query.eventFeatures.findFirst({
-      columns: { questionsEnabled: true },
-      where: eq(schema.eventFeatures.eventId, eventId),
-    }),
-    dependencies.db.query.programSessions.findFirst({
-      columns: { id: true, questionsEnabled: true, status: true },
-      where: and(
-        eq(schema.programSessions.eventId, eventId),
-        eq(schema.programSessions.id, sessionId),
-      ),
-    }),
-  ]);
-  if (!feature?.questionsEnabled) {
-    throw apiProblem(
-      409,
-      'QUESTIONS_DISABLED',
-      'Questions disabled',
-      'Questions are not enabled for this event.',
-    );
-  }
-  if (!session || session.status !== 'published' || !session.questionsEnabled) {
-    throw apiProblem(
-      404,
-      'SESSION_NOT_FOUND',
-      'Session not found',
-      'Questions are unavailable for this session.',
-    );
-  }
-  return session;
-};
-
 const requireParticipantRole = async (
   dependencies: QuestionsDependencies,
   eventId: string,
@@ -241,9 +210,7 @@ export const submitQuestion = async (
         'The question request is invalid.',
       );
     }
-    const actor = await loadEventActor(request, dependencies);
-    await requireParticipantRole(dependencies, actor.eventId, actor.userId);
-    await requireQuestionSession(dependencies, actor.eventId, sessionId);
+    const actor = await loadQuestionActor(request, dependencies);
     const decision = await dependencies.rateLimit?.(actor.userId, sessionId);
     const json = await readJson(request);
     const parsed = questionSubmitRequestSchema.safeParse(json.value);
@@ -275,6 +242,21 @@ export const submitQuestion = async (
         generateId,
       },
       async (transaction) => {
+        await lockQuestionAccess(
+          transaction,
+          actor.eventId,
+          actor.userId,
+          sessionId,
+        );
+        await loadQuestionActor(request, dependencies, transaction);
+        const submittedAt = dependencies.now?.() ?? new Date();
+        const session = await loadQuestionSession(
+          transaction,
+          actor.eventId,
+          sessionId,
+          submittedAt,
+        );
+        requireQuestionCollection(session.context);
         const questionId = generateId();
         await transaction.insert(schema.questions).values({
           id: questionId,
@@ -282,14 +264,14 @@ export const submitQuestion = async (
           sessionId,
           authorUserId: actor.userId,
           text: parsed.data.text,
-          createdAt: now,
+          createdAt: submittedAt,
         });
         return {
           status: 201,
           body: questionSubmitResponseSchema.parse({
             questionId,
             sessionId,
-            submittedAt: now.toISOString(),
+            submittedAt: submittedAt.toISOString(),
           }),
           resultReference: questionId,
         };
@@ -351,8 +333,20 @@ export const readModeratorQuestions = async (
         'The moderator request is invalid.',
       );
     }
-    const actor = await loadEventActor(request, dependencies);
-    await requireQuestionSession(dependencies, actor.eventId, sessionId);
+    const actor = await loadQuestionActor(request, dependencies);
+    const context = await loadQuestionSession(
+      dependencies.db,
+      actor.eventId,
+      sessionId,
+      dependencies.now?.() ?? new Date(),
+    );
+    if (context.record.questionMode !== 'moderated_follow_up')
+      throw apiProblem(
+        409,
+        'QUESTIONS_UNSUPPORTED',
+        'Unsupported session',
+        'Tento blok nepodporuje dotazy.',
+      );
     await requireAssignedModerator(
       dependencies,
       actor.eventId,

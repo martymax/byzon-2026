@@ -102,15 +102,13 @@ export async function createQuestionFixture() {
     title: 'Friday',
     sortOrder: 0,
   });
-  await client.db
-    .insert(schema.venues)
-    .values({
-      id: venueId,
-      eventId,
-      slug: venueId,
-      name: 'Test venue',
-      sortOrder: 0,
-    });
+  await client.db.insert(schema.venues).values({
+    id: venueId,
+    eventId,
+    slug: venueId,
+    name: 'Test venue',
+    sortOrder: 0,
+  });
   await client.db.insert(schema.rooms).values({
     id: roomId,
     eventId,
@@ -172,6 +170,49 @@ export async function createQuestionFixture() {
     { eventId, sessionId: part1, speakerProfileId, sortOrder: 0 },
     { eventId, sessionId: part2, speakerProfileId, sortOrder: 0 },
   ]);
+  const publishedSessions = await client.db.query.programSessions.findMany({
+    where: eq(schema.programSessions.eventId, eventId),
+  });
+  await client.db.insert(schema.contentPublications).values({
+    id: randomUUID(),
+    eventId,
+    version: 1,
+    publishedBy: users.admin,
+    checksumSha256: 'a'.repeat(64),
+    snapshot: {
+      program: {
+        days: [
+          {
+            id: dayId,
+            localDate: '2026-09-18',
+            title: 'Friday',
+            sortOrder: 0,
+          },
+        ],
+        rooms: [
+          {
+            id: roomId,
+            slug: 'coach-room',
+            name: 'Coach room',
+            sortOrder: 0,
+          },
+        ],
+        sessions: publishedSessions.map((session) => ({
+          id: session.id,
+          dayId,
+          roomId,
+          slug: session.slug,
+          title: session.title,
+          type: session.type,
+          status: 'published',
+          startsAt: session.startsAt.toISOString(),
+          endsAt: session.endsAt.toISOString(),
+          sortOrder: session.sortOrder,
+          questionsEnabled: false,
+        })),
+      },
+    },
+  });
   const origin = 'https://app.byzon.test';
   return {
     client,
@@ -202,37 +243,13 @@ export async function createQuestionFixture() {
         headers: {
           origin,
           'content-type': 'application/json',
-          'idempotency-key': key,
+          ...(body === undefined ? {} : { 'idempotency-key': key }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
+    // Publications are intentionally immutable. Keep synthetic fixtures in the
+    // disposable test database, as the existing publication integration suite does.
     cleanup: async () => {
-      for (const table of [
-        schema.questionAnswers,
-        schema.questions,
-        schema.ratings,
-        schema.idempotencyKeys,
-        schema.outboxEvents,
-        schema.auditLogs,
-        schema.reservations,
-        schema.waitlistEntries,
-        schema.agendaItems,
-        schema.sessionSpeakers,
-        schema.speakerProfiles,
-        schema.programSessions,
-        schema.rooms,
-        schema.venues,
-        schema.eventDays,
-        schema.participantProfiles,
-        schema.eventRoles,
-        schema.eventMemberships,
-      ])
-        await client.db.delete(table).where(eq(table.eventId, eventId));
-      await client.db
-        .delete(schema.events)
-        .where(eq(schema.events.id, eventId));
-      for (const id of Object.values(users))
-        await client.db.delete(schema.users).where(eq(schema.users.id, id));
       await client.close();
     },
   };
