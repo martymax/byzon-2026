@@ -11,6 +11,7 @@ import {
   ResourceStatus,
   useParticipantProgram,
 } from './content-state';
+import { QuestionSessionAction } from './participant-questions';
 import { SessionRating } from './live-interactions';
 import {
   ParticipantProgramSchedule,
@@ -496,12 +497,8 @@ export const SessionView = ({
       {!coachingSlot ? (
         <ParticipantSessionCalendarExport eventId={eventId} session={session} />
       ) : null}
-      {!coachingSlot &&
-      session.questionsEnabled &&
-      session.status !== 'cancelled' ? (
-        <Link className="ui-button" href={`/app/interakce/${session.id}`}>
-          Položit dotaz moderátorovi
-        </Link>
+      {!coachingSlot && session.status !== 'cancelled' ? (
+        <QuestionSessionAction eventId={eventId} sessionId={session.id} />
       ) : null}
       {!coachingSlot && session.status !== 'cancelled' ? (
         <SessionRating sessionId={session.id} endsAt={session.endsAt} />

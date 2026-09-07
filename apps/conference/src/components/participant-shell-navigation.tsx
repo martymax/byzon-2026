@@ -138,6 +138,8 @@ const archivedPreviewNavigationItems: NavigationItem[] = [
 
 const accountDestinations = [
   '/app/vice',
+  '/app/dotazy',
+  '/host',
   '/app/profil',
   '/app/soukromi',
   '/app/nastaveni',
@@ -149,7 +151,11 @@ const isDestination = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
 
 export const participantNavigationActiveId = (pathname: string): string => {
-  if (isDestination(pathname, '/app/program')) return 'program';
+  if (
+    isDestination(pathname, '/app/program') ||
+    isDestination(pathname, '/app/interakce')
+  )
+    return 'program';
   if (isDestination(pathname, '/app/agenda')) return 'agenda';
   if (isDestination(pathname, '/app/networking')) return 'networking';
   if (isDestination(pathname, '/app/recnici')) return 'speakers';

@@ -2,71 +2,15 @@
 
 import type { ModeratorQuestionFeed } from '@byzon/domain/contracts';
 import { Button, Card } from '@byzon/ui';
-import Link from 'next/link';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import {
   requestModeratorQuestions,
   requestRatingStatus,
-  sendQuestion,
   submitRating,
 } from '@/lib/b-interactions-api';
 
-export const QuestionForm = ({ sessionId }: { sessionId: string }) => {
-  const [working, setWorking] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState('');
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (working) return;
-    const form = event.currentTarget;
-    const text = String(new FormData(form).get('text') ?? '').trim();
-    setWorking(true);
-    setError('');
-    void sendQuestion(sessionId, { text }, globalThis.crypto.randomUUID()).then(
-      (result) => {
-        setWorking(false);
-        if (result.ok && result.kind === 'success') {
-          form.reset();
-          setSent(true);
-        } else if (!result.ok && result.failure.kind === 'offline') {
-          setError(
-            'Dotazy se neukládají offline. Zkuste to po obnovení připojení.',
-          );
-        } else {
-          setError(
-            'Dotaz se nepodařilo odeslat. Ověřte text a zkuste to znovu.',
-          );
-        }
-      },
-    );
-  };
-  return (
-    <Card>
-      <p className="eyebrow">Živá interakce</p>
-      <h1 data-route-heading tabIndex={-1}>
-        Položit dotaz
-      </h1>
-      <p>
-        Dotaz uvidí pouze moderátor této session. Ostatní účastníci jej neuvidí.
-      </p>
-      <form onSubmit={submit}>
-        <label>
-          Váš dotaz
-          <textarea maxLength={1000} minLength={1} name="text" required />
-        </label>
-        <Button disabled={working} type="submit">
-          {working ? 'Odesílám…' : 'Odeslat dotaz'}
-        </Button>
-      </form>
-      {sent ? <p role="status">Dotaz byl odeslán moderátorovi.</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-      <Link className="text-link" href={`/app/program/${sessionId}`}>
-        ← Zpět na detail programu
-      </Link>
-    </Card>
-  );
-};
+export { QuestionForm } from './participant-questions';
 
 export const ModeratorQuestionList = ({ sessionId }: { sessionId: string }) => {
   const [feed, setFeed] = useState<ModeratorQuestionFeed | null>(null);

@@ -136,7 +136,7 @@ const AccountFailure = ({
 };
 
 export type ParticipantAccountReturnTo =
-  '/app/vice' | '/app/profil' | '/app/soukromi' | '/app/nastaveni';
+  import('@byzon/domain/contracts').ParticipantActivationReturnTo;
 
 const defaultNavigate = requestClientNavigation;
 

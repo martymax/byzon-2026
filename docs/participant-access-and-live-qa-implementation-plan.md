@@ -20,6 +20,8 @@ Primární aplikace: `apps/conference`
 
 - QA-02: společný runtime context nad publikovanou session a živými přepínači; submit kontroluje capability a UTC interval pod DB zámky, exact retry přijme i po konci. Owner history je oddělená od vypínačů, moderator read zůstává po konci/OFF. Conference lint/typecheck a 16 integračních testů (10 Q&A) prošly, včetně hranic času, cizí historie, revokace a 125 dotazů se shodným časem.
 
+- QA-03: účastnický runtime formulář, bezpečný návrat po přihlášení a soukromá historie odpovědí. Ověřeno 59 navigačních testů a 6 browser/axe scénářů včetně ztracené odpovědi, stejného idempotency klíče a vymazání obsahu při 403.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:

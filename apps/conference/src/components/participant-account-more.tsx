@@ -51,6 +51,9 @@ export const ParticipantMoreHub = ({
             aria-label="Účet a další informace"
             className="participant-more-grid"
           >
+            <ActionLink block href="/app/dotazy" variant="secondary">
+              Moje dotazy a odpovědi
+            </ActionLink>
             <ActionLink block href="/app/profil">
               Moje osobní údaje
             </ActionLink>

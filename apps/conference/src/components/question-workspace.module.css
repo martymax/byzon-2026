@@ -1,0 +1,90 @@
+.workspace {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 64rem;
+  margin-inline: auto;
+  min-width: 0;
+}
+.workspace :is(input, textarea, select) {
+  font: inherit;
+  font-size: 1rem;
+  min-height: 2.75rem;
+}
+.workspace textarea {
+  width: 100%;
+  min-height: 10rem;
+  padding: 0.8rem;
+  border: 1px solid var(--byzon-border-strong);
+  border-radius: 0.65rem;
+  color: var(--byzon-ink);
+  background: var(--byzon-surface);
+  resize: vertical;
+}
+.workspace textarea:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.form {
+  display: grid;
+  gap: 0.75rem;
+}
+.label {
+  font-weight: 700;
+}
+.meta {
+  color: var(--byzon-text-muted);
+}
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.answer {
+  padding: 1rem;
+  margin-top: 1rem;
+  background: var(--byzon-brand-subtle);
+  border-inline-start: 0.25rem solid var(--byzon-brand-active);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.error {
+  color: var(--byzon-danger);
+}
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 1rem;
+  background: var(--byzon-surface);
+  border-bottom: 1px solid var(--byzon-border);
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.feed {
+  font-size: 1.125rem;
+  line-height: 1.65;
+}
+.workspace a {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 40rem) {
+  .actions > * {
+    flex: 1 1 auto;
+  }
+  .sticky {
+    position: static;
+  }
+}

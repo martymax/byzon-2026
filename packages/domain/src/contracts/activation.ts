@@ -65,6 +65,10 @@ export const activationEmailSchema = z
 const participantActivationStaticReturnToValues = [
   '/app',
   '/app/agenda',
+  '/app/dotazy',
+  '/host/aktivity',
+  '/host/moderace',
+  '/host/dotazy',
   '/app/informace',
   '/app/networking',
   '/app/nastaveni',
@@ -82,6 +86,9 @@ const participantActivationStaticReturnToValues = [
 export type ParticipantActivationReturnTo =
   | (typeof participantActivationStaticReturnToValues)[number]
   | `/app/program/${string}`
+  | `/app/interakce/${string}`
+  | `/host/moderace/${string}`
+  | `/host/dotazy/${string}`
   | `/app/oznameni/${string}`
   | `/app/recnici/${string}`;
 
@@ -91,7 +98,7 @@ const participantActivationStaticReturnToSet = new Set<string>(
   participantActivationStaticReturnToValues,
 );
 const participantActivationDetailReturnToPattern =
-  /^\/app\/(program|oznameni|networking)\/([^/?]+)(\?from=agenda)?$/;
+  /^\/app\/(program|oznameni|networking|interakce)\/([^/?]+)(\?from=agenda)?$/;
 const participantSpeakerReturnToPattern =
   /^\/app\/recnici\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
@@ -100,6 +107,8 @@ const isParticipantActivationReturnTo = (
 ): value is ParticipantActivationReturnTo => {
   if (participantActivationStaticReturnToSet.has(value)) return true;
 
+  const hostMatch = /^\/host\/(moderace|dotazy)\/([a-f0-9-]+)$/.exec(value);
+  if (hostMatch) return uuidSchema.safeParse(hostMatch[2]).success;
   const detailMatch = participantActivationDetailReturnToPattern.exec(value);
   if (detailMatch) {
     const detailKind = detailMatch[1];
