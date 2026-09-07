@@ -62,7 +62,7 @@ const actionCopy: Record<
     title: 'Přepnout na jiný účet?',
     confirm: 'Pokračovat k jinému účtu',
     description:
-      'Nejdřív je nutné ukončit vlastnický kontext a teprve potom zadat jiný e-mail.',
+      'Odhlásíme aktuální účet v tomto prohlížeči a otevřeme přihlášení jiným e-mailem. Změna se projeví i v ostatních kartách aplikace.',
   },
 };
 
@@ -132,6 +132,8 @@ export const SessionExitControls = ({
   clearPrivateData = clearPersistedPrivateData,
   createIdempotencyKey = createRuntimeKey,
   loginReturnTo = '/app',
+  showLogoutAll = true,
+  navigate = (href: string) => window.location.assign(href),
 }: {
   readonly api?: ApiPort;
   readonly clearPrivateData?: (
@@ -139,6 +141,8 @@ export const SessionExitControls = ({
   ) => Promise<'cleared' | 'none_present'>;
   readonly createIdempotencyKey?: () => string;
   readonly loginReturnTo?: '/app' | '/app/nastaveni';
+  readonly showLogoutAll?: boolean;
+  readonly navigate?: (href: string) => void;
 }) => {
   const previewAvailable = isFrontendPreviewAvailable();
   const [pendingAction, setPendingAction] = useState<IdentitySessionAction>();
@@ -206,6 +210,15 @@ export const SessionExitControls = ({
         attempt.current = undefined;
         setPendingAction(undefined);
         setOutcome({ response: result.data, localDisposition });
+        if (result.data.effect === 'completed') {
+          // Start a fresh document so server-derived roles and cached routes
+          // cannot survive a confirmed session change.
+          navigate(
+            action === 'switch_account'
+              ? result.data.continueTo
+              : '/prihlaseni',
+          );
+        }
         return;
       }
       if (!result.ok) {
@@ -297,10 +310,9 @@ export const SessionExitControls = ({
         <p className="activation-kicker">Přihlášení a účet</p>
         <h2 id="session-controls-title">Bezpečně změnit účet</h2>
         <p>
-          Žádná akce nehledá ani nepotvrzuje cizí účet.{' '}
           {previewAvailable
             ? 'V mock režimu pouze ověříte uživatelský průchod.'
-            : 'Zvolená akce změní pouze vaše ověřené přihlášení.'}
+            : 'Odhlaste se nebo pokračujte pod jiným účtem. Přihlášení je společné pro všechny karty tohoto prohlížeče.'}
         </p>
       </header>
 
@@ -343,19 +355,21 @@ export const SessionExitControls = ({
       ) : null}
 
       <div className="session-controls-actions">
-        {(Object.keys(actionCopy) as IdentitySessionAction[]).map((action) => (
-          <Button
-            disabled={working}
-            key={action}
-            onClick={() => {
-              setFailure(undefined);
-              setPendingAction(action);
-            }}
-            variant={action === 'logout_all' ? 'danger' : 'secondary'}
-          >
-            {actionCopy[action].button}
-          </Button>
-        ))}
+        {(Object.keys(actionCopy) as IdentitySessionAction[])
+          .filter((action) => showLogoutAll || action !== 'logout_all')
+          .map((action) => (
+            <Button
+              disabled={working}
+              key={action}
+              onClick={() => {
+                setFailure(undefined);
+                setPendingAction(action);
+              }}
+              variant={action === 'logout_all' ? 'danger' : 'secondary'}
+            >
+              {actionCopy[action].button}
+            </Button>
+          ))}
       </div>
 
       <DestructiveConfirmation

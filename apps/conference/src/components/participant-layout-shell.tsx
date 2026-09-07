@@ -3,6 +3,11 @@
 import type { ReactNode } from 'react';
 
 import type { ApiPort } from '@/lib/api';
+import type { ParticipantSessionContext } from '@/lib/participant-session-context';
+import {
+  ParticipantAdminNotice,
+  ParticipantSessionContextProvider,
+} from './participant-session-context';
 
 import {
   ParticipantAccountResourceProvider,
@@ -23,6 +28,7 @@ export const ParticipantLayoutShell = ({
   children,
   navigationMode = 'active',
   notificationsEnabled = false,
+  sessionContext = null,
 }: {
   readonly accountApi?: ApiPort;
   readonly accountScope: ParticipantAccountScope;
@@ -31,6 +37,7 @@ export const ParticipantLayoutShell = ({
   readonly children: ReactNode;
   readonly navigationMode?: ParticipantShellNavigationMode;
   readonly notificationsEnabled?: boolean;
+  readonly sessionContext?: ParticipantSessionContext | null;
 }) => {
   const accountScopeKey =
     accountScope.kind === 'active'
@@ -39,26 +46,31 @@ export const ParticipantLayoutShell = ({
         ? `archived:${accountScope.eventFingerprint}`
         : accountScope.kind;
   return (
-    <ParticipantAccountResourceProvider
-      key={accountScopeKey}
-      {...(accountApi ? { api: accountApi } : {})}
-      scope={accountScope}
-    >
-      <RouteFocus />
-      {notificationsEnabled &&
-      accountScope.kind === 'active' &&
-      (navigationMode === 'active' || navigationMode === 'active-preview') ? (
-        <ParticipantNotificationCenter
-          eventId={accountScope.eventId}
-          key={accountScope.eventId}
-          {...(announcementApi ? { api: announcementApi } : {})}
-          {...(announcementPollIntervalMs !== undefined
-            ? { pollIntervalMs: announcementPollIntervalMs }
-            : {})}
-        />
-      ) : null}
-      <ParticipantShellNavigation mode={navigationMode} />
-      <div className="participant-shell-content">{children}</div>
-    </ParticipantAccountResourceProvider>
+    <ParticipantSessionContextProvider value={sessionContext}>
+      <ParticipantAccountResourceProvider
+        key={accountScopeKey}
+        {...(accountApi ? { api: accountApi } : {})}
+        scope={accountScope}
+      >
+        <RouteFocus />
+        {notificationsEnabled &&
+        accountScope.kind === 'active' &&
+        (navigationMode === 'active' || navigationMode === 'active-preview') ? (
+          <ParticipantNotificationCenter
+            eventId={accountScope.eventId}
+            key={accountScope.eventId}
+            {...(announcementApi ? { api: announcementApi } : {})}
+            {...(announcementPollIntervalMs !== undefined
+              ? { pollIntervalMs: announcementPollIntervalMs }
+              : {})}
+          />
+        ) : null}
+        <ParticipantShellNavigation mode={navigationMode} />
+        <div className="participant-shell-content">
+          <ParticipantAdminNotice />
+          {children}
+        </div>
+      </ParticipantAccountResourceProvider>
+    </ParticipantSessionContextProvider>
   );
 };

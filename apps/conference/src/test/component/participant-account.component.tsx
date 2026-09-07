@@ -510,7 +510,7 @@ describe('F2-07 participant account, profile and privacy', () => {
     [
       'another account without participant access',
       identityBootstrapProblemFixtures.permission!,
-      'switch',
+      'settings',
     ],
   ] as const)(
     'redirects a failed account retry to login after confirming %s',
@@ -542,9 +542,13 @@ describe('F2-07 participant account, profile and privacy', () => {
       await screen.getByRole('button', { name: 'Načíst znovu' }).click();
 
       await vi.waitFor(() => {
-        expect(window.location.pathname).toBe('/prihlaseni');
+        expect(window.location.pathname).toBe(
+          loginMode === 'settings' ? '/app/nastaveni' : '/prihlaseni',
+        );
         expect(window.location.search).toBe(
-          `?mode=${loginMode}&returnTo=%2Fapp%2Fvice`,
+          loginMode === 'settings'
+            ? ''
+            : `?mode=${loginMode}&returnTo=%2Fapp%2Fvice`,
         );
       });
       expect(screen.container.textContent).not.toContain('Načtený účet');
@@ -654,6 +658,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       .toHaveAttribute('href', '/app/vstupenka');
 
     for (const target of screen.container.querySelectorAll('a, button')) {
+      if (target.closest('dialog:not([open])')) continue;
       const bounds = target.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);
       expect(bounds.height).toBeGreaterThanOrEqual(44);
@@ -691,10 +696,7 @@ describe('F2-07 participant account, profile and privacy', () => {
       .toBeVisible();
     await expect
       .element(screen.getByRole('link', { name: 'Použít jiný účet' }))
-      .toHaveAttribute(
-        'href',
-        '/prihlaseni?mode=switch&returnTo=%2Fapp%2Fvice',
-      );
+      .toHaveAttribute('href', '/app/nastaveni');
     expect(screen.container.textContent).not.toContain('BYZON 2026');
     expect(screen.container.textContent).not.toContain('alex@example.test');
     expect(screen.container.textContent).not.toContain('Alex Novák');
