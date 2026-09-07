@@ -74,7 +74,7 @@ const problem = (
   extra?: Record<string, unknown>,
 ) => new ApiProblemError({ status, code, title, detail, ...extra });
 
-const authorize = async (
+export const authorize = async (
   request: Request,
   eventId: string,
   permission: 'role:manage' | 'personal-data:operational:export',
@@ -204,7 +204,7 @@ const parseBody = async (request: Request): Promise<unknown> => {
   }
 };
 
-const requireSameOrigin = (
+export const requireSameOrigin = (
   request: Request,
   dependencies: AdminRoleExportDependencies,
 ): void => {

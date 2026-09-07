@@ -14,6 +14,8 @@ Primární aplikace: `apps/conference`
 
 - DATA-02: source obsahuje stabilní slugs, explicitní speaker vazby a Q&A capability. Reimport zachovává admin kapacitu Leadership networkingu; druhá projekce je informativní. `db:readiness` vrací metadata bez e-mailů; lokální report správně odmítá chybějící speaker účty a nezadanou kapacitu. Database lint/typecheck + 129 testů a static build/smoke prošly. Staging kontrola skutečných účtů zbývá.
 
+- ACCESS-02: implementovány source-independent search/options/preview/apply a částečné revoke pro participant baseline. Role/scopes odvozuje server z presetu; preview hash, assignments version, transakce, audit a idempotency chrání změny. Žádný účet/membership/pozvánka nevzniká. Domain lint/typecheck + 208 testů; conference lint/typecheck + 829 testů včetně 4 provisioning integračních scénářů prošly.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:
