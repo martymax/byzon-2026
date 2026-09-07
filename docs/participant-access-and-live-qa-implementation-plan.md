@@ -26,6 +26,8 @@ Primární aplikace: `apps/conference`
 
 - SPEAKER-03: soukromé feed/list API a transakční publish/edit, aktivní participant baseline + speaker vazby, hranice konce, oddělený kill switch, first-wins a optimistic version. Audit a idempotency obsahují jen metadata. Typecheck a 7 integračních/audit testů prošly včetně souběhů panelistů a editací.
 
+- SPEAKER-04: rozcestník a soukromý feed ukončených přednášek, filtry, počty a publish/edit formulář s retry a konfliktem bez ztráty rozepsané odpovědi. 6 browser/axe scénářů na telefonu/tabletu/desktopu prošlo; typecheck prošel.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:
