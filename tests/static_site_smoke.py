@@ -147,15 +147,27 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         unescape(name): unescape(url)
         for url, name in partner_link_pattern.findall(home)
     }
+    actual_partner_order = [
+        unescape(name) for _, name in partner_link_pattern.findall(home)
+    ]
     expected_partner_links = {
         partner["name"]: partner["websiteUrl"]
         for partner in content["partners"]["logos"]  # type: ignore[index]
     }
+    expected_partner_order = [
+        partner["name"] for partner in content["partners"]["logos"]  # type: ignore[index]
+    ]
     if actual_partner_links != expected_partner_links:
         fail(
             "Partner links differ from content data:\n"
             f"  expected: {expected_partner_links}\n"
             f"  actual: {actual_partner_links}"
+        )
+    if expected_partner_order[0] != "dm" or actual_partner_order != expected_partner_order:
+        fail(
+            "Partner order must follow content data with dm first:\n"
+            f"  expected: {expected_partner_order}\n"
+            f"  actual: {actual_partner_order}"
         )
 
     hidden_markers = {

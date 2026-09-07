@@ -719,6 +719,13 @@
     "title": "Naši partneři",
     "logos": [
       {
+        "name": "dm",
+        "src": "/assets/img/2026/09/dm.svg",
+        "websiteUrl": "https://www.dm.cz/",
+        "tall": true,
+        "on_dark": false
+      },
+      {
         "name": "JCI Czech Republic",
         "src": "/assets/img/2026/07/jci-czech-republic.png",
         "websiteUrl": "https://jcicr.cz/",
@@ -800,15 +807,33 @@
         "on_dark": false
       },
       {
+        "name": "AIWAY",
+        "src": "/assets/img/2026/09/aiway.png",
+        "websiteUrl": "https://www.aiwaycon.cz/",
+        "on_dark": false
+      },
+      {
+        "name": "JPF",
+        "src": "/assets/img/2026/09/jpf.svg",
+        "websiteUrl": "https://www.jpf.cz/",
+        "on_dark": false
+      },
+      {
+        "name": "MultiSport",
+        "src": "/assets/img/2026/09/multisport.png",
+        "websiteUrl": "https://multisport.cz/",
+        "on_dark": false
+      },
+      {
         "name": "LEGAL PLUS",
         "src": "/assets/img/2026/09/legal-plus.svg",
         "websiteUrl": "https://www.halaburt.cz/",
         "on_dark": false
       },
       {
-        "name": "dm",
-        "src": "/assets/img/2026/09/dm.svg",
-        "websiteUrl": "https://www.dm.cz/",
+        "name": "Coffee & more",
+        "src": "/assets/img/2026/09/coffee-and-more.svg",
+        "websiteUrl": "https://www.truecafe.cz/",
         "tall": true,
         "on_dark": false
       }
