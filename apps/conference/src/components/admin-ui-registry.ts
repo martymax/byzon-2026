@@ -259,6 +259,7 @@ export const adminEngagementSessionStatusLabels = {
 export const adminEngagementFeatureLabels = {
   networkingEnabled: 'Networking',
   questionsEnabled: 'Otázky pro řečníky',
+  questionFollowUpsEnabled: 'Písemné odpovědi po vystoupení',
   ratingsEnabled: 'Hodnocení programu',
 } satisfies Record<keyof AdminEngagementFeatures, string>;
 

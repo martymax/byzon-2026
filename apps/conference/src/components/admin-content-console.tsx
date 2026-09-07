@@ -408,6 +408,7 @@ const contentListRenderBatchSize = 20;
 
 const AdminContentItemList = memo(function AdminContentItemList({
   archiveBlocked,
+  eventId,
   items,
   onArchive,
   onEdit,
@@ -418,6 +419,7 @@ const AdminContentItemList = memo(function AdminContentItemList({
   writesBlocked,
 }: {
   readonly archiveBlocked: boolean;
+  readonly eventId: string;
   readonly items: readonly AdminContentItem[];
   readonly onArchive: (item: AdminContentItem) => void;
   readonly onEdit: (item: AdminContentItem) => void;
@@ -530,6 +532,16 @@ const AdminContentItemList = memo(function AdminContentItemList({
           </span>
           {!readOnly && item.status !== 'archived' ? (
             <span className={styles.contentActions}>
+              {resource === 'sessions' &&
+              item.status === 'published' &&
+              item.questionMode === 'moderated_follow_up' ? (
+                <a
+                  className={styles.secondaryButton}
+                  href={`/api/v1/admin/events/${eventId}/session-qr/${item.id}?target=questions`}
+                >
+                  Q&amp;A QR
+                </a>
+              ) : null}
               <button
                 aria-label={`Upravit: ${itemLabel(item)}`}
                 className={styles.secondaryButton}
@@ -1562,6 +1574,7 @@ export const AdminContentConsole = ({
             Archiv
           </button>
         </div>
+        {resource === 'sessions' && !readOnly ? <a className={styles.secondaryButton} href={`/api/v1/admin/events/${eventId}/session-qr?target=questions`}>Stáhnout Q&amp;A QR všech přednášek (ZIP)</a> : null}
         {busy === 'loading' ? (
           <p role="status">Načítám obsah…</p>
         ) : !snapshotReady ? (
@@ -1576,6 +1589,7 @@ export const AdminContentConsole = ({
           </p>
         ) : (
           <AdminContentItemList
+            eventId={eventId}
             archiveBlocked={writesBlocked || dirty}
             items={visibleItems}
             onArchive={setArchiveCandidate}

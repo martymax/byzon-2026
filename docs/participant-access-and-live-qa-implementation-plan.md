@@ -30,6 +30,8 @@ Primární aplikace: `apps/conference`
 
 - QR-02: explicitní `target=questions` exportuje pouze publikované podporované session, deep link vede na `/app/interakce/:id`; programový cíl je zachován. ZIP manifest obsahuje název, stage, časy, odkaz a unikátní bezpečný soubor. 5 QR testů prošlo včetně whitelist filtru a čistého odkazu bez credentials/query.
 
+- ADMIN-03: Q&A seznam jen podporovaných session, oddělené přepínače a readiness, příprava moderátora při OFF ve všech administračních cestách, QR v Interakcích i Obsahu. Obecný seznam rolí umí zobrazit kompletní programové scopes. Lint/typecheck, 31 cílených integračních testů a nové browser scénáře prošly; dva starší tabletové timeouty následně prošly v samostatném běhu (12 testů).
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:

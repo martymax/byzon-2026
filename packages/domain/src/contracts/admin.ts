@@ -250,7 +250,7 @@ export const adminRoleAssignmentSchema = z.strictObject({
   operatorId: uuidSchema,
   operatorLabel: safeInlineTextSchema(120),
   role: adminAssignmentRoleSchema,
-  scope: adminAssignmentScopeSchema,
+  scope: z.union([adminAssignmentScopeSchema,z.strictObject({kind:z.literal('program'),label:safeInlineTextSchema(160),sessions:z.array(z.strictObject({id:uuidSchema,label:safeInlineTextSchema(160)})).max(300),rooms:z.array(z.strictObject({id:uuidSchema,label:safeInlineTextSchema(160)})).max(300)})]),
   state: z.enum(['active', 'scheduled']),
   version: versionSchema,
 });

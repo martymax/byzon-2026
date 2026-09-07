@@ -678,7 +678,19 @@ export const AdminTeamRedesign = ({
                         <tr key={assignment.assignmentId}>
                           <th scope="row">{assignment.operatorLabel}</th>
                           <td>{roleLabels[assignment.role]}</td>
-                          <td>{assignment.scope.label}</td>
+                          <td>
+                            {assignment.scope.label}
+                            {assignment.scope.kind === 'program' ? (
+                              <ul>
+                                {[
+                                  ...assignment.scope.sessions,
+                                  ...assignment.scope.rooms,
+                                ].map((item) => (
+                                  <li key={item.id}>{item.label}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </td>
                           <td>{stateLabels[assignment.state]}</td>
                           <td>
                             {canRevoke ? (
@@ -709,6 +721,16 @@ export const AdminTeamRedesign = ({
                         <p>
                           {roleLabels[assignment.role]} ·{' '}
                           {assignment.scope.label}
+                          {assignment.scope.kind === 'program' ? (
+                            <ul>
+                              {[
+                                ...assignment.scope.sessions,
+                                ...assignment.scope.rooms,
+                              ].map((item) => (
+                                <li key={item.id}>{item.label}</li>
+                              ))}
+                            </ul>
+                          ) : null}
                         </p>
                         <span className={styles.statusBadge}>
                           {stateLabels[assignment.state]}

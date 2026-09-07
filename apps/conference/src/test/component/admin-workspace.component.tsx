@@ -798,6 +798,47 @@ describe('F4 contract-first admin journeys', () => {
       .toBeVisible();
   });
 
+  it('offers question QR and follow-ups while allowing moderator setup with collection OFF', async () => {
+    const overview = {
+      ...adminEngagementOverviewFixtures.default!,
+      features: {
+        ...adminEngagementOverviewFixtures.default!.features,
+        questionsEnabled: false,
+      },
+    };
+    const api = createApi((endpoint) =>
+      endpoint === adminContextEndpoint
+        ? success(adminContextFixtures.organizer!)
+        : success(overview),
+    );
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminEngagementWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(
+        screen.getByRole('link', { name: 'Stáhnout všechny Q&A QR (ZIP)' }),
+      )
+      .toHaveAttribute(
+        'href',
+        `/api/v1/admin/events/${overview.eventId}/session-qr?target=questions`,
+      );
+    await expect
+      .element(
+        screen.getByRole('checkbox', {
+          name: /Písemné odpovědi po vystoupení/,
+        }),
+      )
+      .not.toBeChecked();
+    await screen
+      .getByRole('combobox', { name: 'Přednáška' })
+      .selectOptions(adminFixtureIds.secondSession);
+    await expect
+      .element(screen.getByRole('combobox', { name: 'Účastník' }))
+      .toBeEnabled();
+  });
+
   it('offers the production login route and preserves the exact admin return', async () => {
     window.history.replaceState({}, '', '/admin/interakce');
     const api = createApi((endpoint) => {

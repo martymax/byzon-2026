@@ -1,3 +1,4 @@
+import { requireModeratorBaseline } from './question-readiness';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -137,7 +138,7 @@ export const authorize = async (
   return { actorId: identity.user.id, eventStatus: event.status };
 };
 
-const validateScope = async (
+export const validateProgramRoleScope = async (
   db: Database | DatabaseTransaction,
   eventId: string,
   role: 'checkin_operator' | 'moderator' | 'room_operator',
@@ -158,7 +159,7 @@ const validateScope = async (
     scope.kind === 'session'
   ) {
     const session = await db.query.programSessions.findFirst({
-      columns: { id: true, questionsEnabled: true },
+      columns: { id: true, questionMode: true, status: true },
       where: and(
         eq(schema.programSessions.eventId, eventId),
         eq(schema.programSessions.id, scope.sessionId),
@@ -167,15 +168,12 @@ const validateScope = async (
     if (session && role === 'room_operator') {
       return { sessionIds: [scope.sessionId] };
     }
-    if (session?.questionsEnabled && role === 'moderator') {
-      const feature = await db.query.eventFeatures.findFirst({
-        columns: { questionsEnabled: true },
-        where: eq(schema.eventFeatures.eventId, eventId),
-      });
-      if (feature?.questionsEnabled) {
-        return { sessionIds: [scope.sessionId] };
-      }
-    }
+    if (
+      role === 'moderator' &&
+      session?.questionMode === 'moderated_follow_up' &&
+      ['draft', 'published'].includes(session.status)
+    )
+      return { sessionIds: [scope.sessionId] };
   }
   if (role === 'room_operator' && scope.kind === 'room') {
     const room = await db.query.rooms.findFirst({
@@ -377,14 +375,12 @@ export const handleAdminRoleAssignmentList = async (
     );
     const sessionIds = pageRows.flatMap(({ role, scope }) =>
       (role === 'moderator' || role === 'room_operator') &&
-      scope.sessionIds?.length === 1
+      scope.sessionIds?.length
         ? scope.sessionIds
         : [],
     );
     const roomIds = pageRows.flatMap(({ role, scope }) =>
-      role === 'room_operator' && scope.roomIds?.length === 1
-        ? scope.roomIds
-        : [],
+      role === 'room_operator' && scope.roomIds?.length ? scope.roomIds : [],
     );
     const [stations, rooms, sessions] = await Promise.all([
       stationIds.length
@@ -431,6 +427,32 @@ export const handleAdminRoleAssignmentList = async (
     const roomLabels = new Map(rooms.map(({ id, name }) => [id, name]));
     const sessionLabels = new Map(sessions.map(({ id, title }) => [id, title]));
     const items = pageRows.map((row) => {
+      if (
+        (row.role === 'moderator' || row.role === 'room_operator') &&
+        (row.scope.sessionIds?.length ?? 0) + (row.scope.roomIds?.length ?? 0) >
+          1
+      )
+        return {
+          assignmentId: row.assignmentId,
+          eventId: row.eventId,
+          operatorId: row.operatorId,
+          operatorLabel: safeLabel(row.operatorName, 'Člen týmu'),
+          role: row.role,
+          scope: {
+            kind: 'program' as const,
+            label: 'Více programových přiřazení',
+            sessions: (row.scope.sessionIds ?? []).map((id) => ({
+              id,
+              label: safeLabel(sessionLabels.get(id) ?? id, 'Aktivita'),
+            })),
+            rooms: (row.scope.roomIds ?? []).map((id) => ({
+              id,
+              label: safeLabel(roomLabels.get(id) ?? id, 'Místnost'),
+            })),
+          },
+          state: 'active' as const,
+          version: assignmentsVersion,
+        };
       if (
         row.role === 'checkin_operator' &&
         row.scope.stationIds?.length === 1
@@ -642,30 +664,24 @@ export const handleAdminRoleScopeOptions = async (
         label: safeLabel(row.name, 'Stanoviště'),
       }));
     } else if (role === 'moderator') {
-      const features = await dependencies.db.query.eventFeatures.findFirst({
-        columns: { questionsEnabled: true },
-        where: eq(schema.eventFeatures.eventId, eventId),
-      });
-      const rows = !features?.questionsEnabled
-        ? []
-        : await dependencies.db
-            .select({
-              id: schema.programSessions.id,
-              title: schema.programSessions.title,
-            })
-            .from(schema.programSessions)
-            .where(
-              and(
-                eq(schema.programSessions.eventId, eventId),
-                inArray(schema.programSessions.status, ['draft', 'published']),
-                eq(schema.programSessions.questionsEnabled, true),
-              ),
-            )
-            .orderBy(
-              asc(schema.programSessions.startsAt),
-              asc(schema.programSessions.id),
-            )
-            .limit(200);
+      const rows = await dependencies.db
+        .select({
+          id: schema.programSessions.id,
+          title: schema.programSessions.title,
+        })
+        .from(schema.programSessions)
+        .where(
+          and(
+            eq(schema.programSessions.eventId, eventId),
+            inArray(schema.programSessions.status, ['draft', 'published']),
+            eq(schema.programSessions.questionMode, 'moderated_follow_up'),
+          ),
+        )
+        .orderBy(
+          asc(schema.programSessions.startsAt),
+          asc(schema.programSessions.id),
+        )
+        .limit(200);
       options = rows.map((row) => ({
         kind: 'session',
         sessionId: row.id,
@@ -866,7 +882,13 @@ export const handleAdminRoleAssignment = async (
               'Revoke the current role before assigning a new scope.',
             );
           }
-          const scopeJson = await validateScope(
+          if (parsed.data.role === 'moderator')
+            await requireModeratorBaseline(
+              transaction,
+              eventId,
+              parsed.data.operatorId,
+            );
+          const scopeJson = await validateProgramRoleScope(
             transaction,
             eventId,
             parsed.data.role,

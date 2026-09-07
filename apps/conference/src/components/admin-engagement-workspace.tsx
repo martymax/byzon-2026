@@ -58,6 +58,12 @@ const featureLabels: ReadonlyArray<{
       'Globální pojistka. Konkrétní přednášky se povolují samostatně níže.',
   },
   {
+    key: 'questionFollowUpsEnabled',
+    title: 'Písemné odpovědi po vystoupení',
+    description:
+      'Zpřístupní dotazy propojeným řečníkům po skončení přednášky. Vypnutí zachová odpovědi jejich autorům.',
+  },
+  {
     key: 'ratingsEnabled',
     title: 'Hodnocení programu',
     description:
@@ -191,8 +197,7 @@ export const AdminEngagementWorkspace = () => {
   const reasonValid = reason.trim().length >= 8;
   const validationFailed = attempted && !reasonValid;
   const moderatorAssignmentAllowed =
-    overview?.features.questionsEnabled === true &&
-    selectedSession?.questionsEnabled === true &&
+    selectedSession !== undefined &&
     selectedSession.status !== 'cancelled' &&
     selectedSession.status !== 'archived';
 
@@ -566,6 +571,20 @@ export const AdminEngagementWorkspace = () => {
                   : 'Globálně vypnuto'}
               </span>
             </div>
+            <p className={styles.callout}>
+              Připravení moderátoři:{' '}
+              {overview.sessions.filter((s) => s.moderatorReady).length}/
+              {overview.sessions.length}. Propojené účty řečníků:{' '}
+              {overview.sessions.filter((s) => s.speakerReady).length}/
+              {overview.sessions.length}. Zapnutí server odmítne, pokud chybí
+              potřebné přiřazení.
+            </p>
+            <a
+              className={styles.secondaryButton}
+              href={`/api/v1/admin/events/${overview.eventId}/session-qr?target=questions`}
+            >
+              Stáhnout všechny Q&amp;A QR (ZIP)
+            </a>
             {overview.sessions.length === 0 ? (
               <p className={styles.empty}>V programu nejsou žádné přednášky.</p>
             ) : (
@@ -596,7 +615,13 @@ export const AdminEngagementWorkspace = () => {
                               )}
                             </small>
                           </th>
-                          <td>{sessionStatusLabel(session.status)}</td>
+                          <td>
+                            {sessionStatusLabel(session.status)}
+                            <small>
+                              {session.roomName} · řečníci{' '}
+                              {session.readySpeakerCount}/{session.speakerCount}
+                            </small>
+                          </td>
                           <td>
                             {session.questionsEnabled ? 'Povoleny' : 'Zakázány'}
                           </td>
@@ -622,6 +647,14 @@ export const AdminEngagementWorkspace = () => {
                             >
                               {session.questionsEnabled ? 'Zakázat' : 'Povolit'}
                             </button>
+                            {session.status === 'published' ? (
+                              <a
+                                className={styles.secondaryButton}
+                                href={`/api/v1/admin/events/${overview.eventId}/session-qr/${session.sessionId}?target=questions`}
+                              >
+                                Q&amp;A QR
+                              </a>
+                            ) : null}
                           </td>
                         </tr>
                       ))}
@@ -652,7 +685,19 @@ export const AdminEngagementWorkspace = () => {
                                   .join(', ')
                               : 'Bez moderátora'}
                           </dd>
+                          <dt>Účty řečníků</dt>
+                          <dd>
+                            {session.readySpeakerCount}/{session.speakerCount}
+                          </dd>
                         </dl>
+                        {session.status === 'published' ? (
+                          <a
+                            className={styles.secondaryButton}
+                            href={`/api/v1/admin/events/${overview.eventId}/session-qr/${session.sessionId}?target=questions`}
+                          >
+                            Q&amp;A QR
+                          </a>
+                        ) : null}
                         <button
                           aria-label={`${session.questionsEnabled ? 'Zakázat' : 'Povolit'} otázky pro ${session.title}`}
                           className={styles.secondaryButton}
@@ -733,8 +778,8 @@ export const AdminEngagementWorkspace = () => {
             </div>
             {!moderatorAssignmentAllowed ? (
               <p className={styles.callout}>
-                Pro přiřazení moderátora nejprve zapněte otázky globálně a pro
-                vybranou přednášku.
+                Vyberte podporovanou přednášku. Moderátora lze přiřadit i při
+                vypnutém sběru.
               </p>
             ) : null}
             <button
