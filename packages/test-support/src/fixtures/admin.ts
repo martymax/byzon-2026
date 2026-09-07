@@ -129,6 +129,34 @@ export const adminOperationsOverviewFixtures = defineFixtureSet({
       eventId: adminFixtureIds.event,
       version: 3,
       generatedAt: '2026-07-25T12:00:00.000+02:00',
+      summary: {
+        activation: { activated: 412, total: 440 },
+        reservations: {
+          confirmed: 42,
+          capacity: 80,
+          sessionCount: 2,
+          fullSessions: 0,
+          overbookedSessions: 0,
+          sessions: [
+            {
+              sessionId: adminFixtureIds.session,
+              title: 'Růst bez zkratek',
+              startsAt: '2026-10-16T09:00:00.000+02:00',
+              status: 'published',
+              capacity: 40,
+              confirmed: 24,
+            },
+            {
+              sessionId: adminFixtureIds.secondSession,
+              title: 'Panel: firmy v pohybu',
+              startsAt: '2026-10-16T10:00:00.000+02:00',
+              status: 'published',
+              capacity: 40,
+              confirmed: 18,
+            },
+          ],
+        },
+      },
       metrics: [
         {
           id: 'activation',
@@ -183,6 +211,34 @@ export const adminOperationsOverviewFixtures = defineFixtureSet({
       eventId: adminFixtureIds.event,
       version: 4,
       generatedAt: '2026-07-25T12:05:00.000+02:00',
+      summary: {
+        activation: { activated: 410, total: 440 },
+        reservations: {
+          confirmed: 39,
+          capacity: 40,
+          sessionCount: 2,
+          fullSessions: 1,
+          overbookedSessions: 0,
+          sessions: [
+            {
+              sessionId: adminFixtureIds.session,
+              title: 'Růst bez zkratek',
+              startsAt: '2026-10-16T09:00:00.000+02:00',
+              status: 'published',
+              capacity: 20,
+              confirmed: 20,
+            },
+            {
+              sessionId: adminFixtureIds.secondSession,
+              title: 'Panel: firmy v pohybu',
+              startsAt: '2026-10-16T10:00:00.000+02:00',
+              status: 'published',
+              capacity: 20,
+              confirmed: 19,
+            },
+          ],
+        },
+      },
       metrics: [
         {
           id: 'activation',
@@ -217,7 +273,7 @@ export const adminOperationsOverviewFixtures = defineFixtureSet({
           label: 'Rezervace',
           value: '39 / 40',
           state: 'attention',
-          detail: 'Jedna syntetická aktivita se blíží kapacitě.',
+          detail: 'Jedna aktivita má naplněnou kapacitu.',
         },
         {
           id: 'notification',

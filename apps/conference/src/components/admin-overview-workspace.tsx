@@ -5,9 +5,7 @@ import type {
   AdminOperationsOverviewResponse,
 } from '@byzon/domain/contracts/admin';
 import {
-  AdminAttentionList,
   AdminEmptyState,
-  AdminMetricCard,
   AdminPageHeader,
   AdminStatusBadge,
   AdminTechnicalDetails,
@@ -19,16 +17,11 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { requestAdminOperationsOverview } from '@/lib/admin-api';
 
 import {
-  adminDashboardMetricOrder,
   adminDashboardMetricRegistry,
   type AdminDashboardMetricIcon,
 } from './admin-dashboard-registry';
 import { adminCountForms, formatCzechCount } from './admin-copy';
-import {
-  adminMetricStateLabels,
-  adminPhaseLabels,
-  adminQueueLabels,
-} from './admin-ui-registry';
+import { adminMetricStateLabels, adminQueueLabels } from './admin-ui-registry';
 import { adminFailureMessage } from './admin-workspace-runtime';
 import {
   isAdminSecurityFailure,
@@ -36,6 +29,12 @@ import {
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
+import dashboard from './admin-overview.module.css';
+import {
+  overviewAttention,
+  overviewCapacityLabel,
+  overviewPercent,
+} from './admin-overview-model';
 
 type Metric = AdminOperationsOverviewResponse['metrics'][number];
 type Phase = AdminContextResponse['event']['phase'];
@@ -184,6 +183,9 @@ const phaseTasks = {
 const formatCurrentTime = (value: string, timeZone: string): string => {
   try {
     return new Intl.DateTimeFormat('cs-CZ', {
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       timeZone,
@@ -193,6 +195,54 @@ const formatCurrentTime = (value: string, timeZone: string): string => {
   }
 };
 
+const number = (value: number) => new Intl.NumberFormat('cs-CZ').format(value);
+
+const Arrow = () => (
+  <svg
+    aria-hidden="true"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M5 12h14m-5-5 5 5-5 5" />
+  </svg>
+);
+
+const Progress = ({
+  value,
+  total,
+  label,
+  warning = false,
+}: {
+  value: number;
+  total: number;
+  label: string;
+  warning?: boolean;
+}) =>
+  total > 0 ? (
+    <progress
+      aria-label={label}
+      className={dashboard.progress}
+      data-warning={warning}
+      max={total}
+      value={Math.min(value, total)}
+    />
+  ) : null;
+
+const phaseDescription: Record<Phase, string> = {
+  draft: 'Připravte program a načtěte účastníky. Tady uvidíte, co ještě zbývá.',
+  activation_open:
+    'Sledujte aktivace přístupů a připravenost programu před akcí.',
+  live: 'Účastníci, obsazenost aktivit a vše, co právě potřebuje vaši pozornost.',
+  ended: 'Výsledný stav akce. Podrobné souhrny najdete v reportech.',
+  archived: 'Souhrn archivované akce. Údaje jsou dostupné pouze ke čtení.',
+};
+
 export const AdminOverviewWorkspace = () => {
   const { api, context, eventId, eventTimezone, invalidateSensitive } =
     useAdminWorkspace();
@@ -200,6 +250,7 @@ export const AdminOverviewWorkspace = () => {
   const [overview, setOverview] =
     useState<AdminOperationsOverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(true);
   const [reload, setReload] = useState(0);
   const archived = context.event.phase === 'archived';
 
@@ -209,16 +260,21 @@ export const AdminOverviewWorkspace = () => {
       (result) => {
         if (!request.isCurrent()) return;
         request.finish();
+        setRefreshing(false);
         if (!result.ok) {
-          setOverview(null);
           if (isAdminSecurityFailure(result)) {
+            setOverview(null);
             invalidateSensitive(
               adminFailureMessage(result.failure, result.metadata?.requestId),
             );
             return;
           }
           setError(
-            adminFailureMessage(result.failure, result.metadata?.requestId),
+            ['timeout', 'transport', 'invalid_response'].includes(
+              result.failure.kind,
+            )
+              ? 'Aktuální údaje nejsou dostupné. Zkuste přehled načíst znovu.'
+              : adminFailureMessage(result.failure, result.metadata?.requestId),
           );
           return;
         }
@@ -231,113 +287,123 @@ export const AdminOverviewWorkspace = () => {
     return () => requestFence.cancel('admin-overview');
   }, [api, eventId, invalidateSensitive, reload, requestFence]);
 
-  const metricsById = useMemo(
-    () => new Map(overview?.metrics.map((metric) => [metric.id, metric])),
-    [overview],
+  // Never render another event's response while a new request is in flight.
+  const data = overview?.eventId === eventId ? overview : null;
+  const metrics = useMemo(
+    () => new Map(data?.metrics.map((metric) => [metric.id, metric])),
+    [data],
   );
-  const attentionMetrics = useMemo(
-    () =>
-      adminDashboardMetricOrder.flatMap((id) => {
-        const metric = metricsById.get(id);
-        if (
-          !metric ||
-          metric.state === 'healthy' ||
-          !adminDashboardMetricRegistry[id].showInAttention(context)
-        ) {
-          return [];
-        }
-        return [metric];
-      }),
-    [context, metricsById],
+  const attention = useMemo(
+    () => (data ? overviewAttention(data, context) : []),
+    [context, data],
   );
-  const queueTotals = useMemo(
-    () =>
-      overview?.queues.reduce(
-        (totals, queue) => ({
-          failed: totals.failed + queue.failed,
-          processing: totals.processing + queue.processing,
-          ready: totals.ready + queue.ready,
-        }),
-        { failed: 0, processing: 0, ready: 0 },
-      ) ?? { failed: 0, processing: 0, ready: 0 },
-    [overview],
-  );
-  const hasTechnicalWork =
-    queueTotals.ready > 0 ||
-    queueTotals.processing > 0 ||
-    queueTotals.failed > 0;
-  const visiblePhaseTasks = phaseTasks[context.event.phase].filter(
+  const activation = data?.summary?.activation;
+  const reservations = data?.summary?.reservations;
+  const activationPercent = activation
+    ? overviewPercent(activation.activated, activation.total)
+    : null;
+  const reservationPercent = reservations
+    ? overviewPercent(reservations.confirmed, reservations.capacity)
+    : null;
+  const tasks = phaseTasks[context.event.phase].filter(
     (task) =>
-      !task.permission || context.actor.permissions.includes(task.permission),
+      (!task.permission ||
+        context.actor.permissions.includes(task.permission)) &&
+      (task.permission !== 'announcement:send' ||
+        context.features.announcementsEnabled),
   );
-  const firstActionableAttentionId = attentionMetrics.find((metric) =>
-    archived
-      ? false
-      : Boolean(adminDashboardMetricRegistry[metric.id].resolveAction(context)),
-  )?.id;
+  const primaryTask = tasks[0];
+  const issueCount = attention.length;
+  const hasMissingMetrics =
+    !data?.summary ||
+    !['activation', 'import', 'content', 'reservation'].every((id) =>
+      metrics.has(id as Metric['id']),
+    );
+  const statusMetrics = (['content', 'import', 'notification'] as const).map(
+    (id) => ({ id, metric: metrics.get(id) }),
+  );
 
   const reloadOverview = () => {
+    setRefreshing(true);
     setError(null);
-    setOverview(null);
     setReload((value) => value + 1);
   };
 
   return (
-    <div className={styles.stack}>
+    <div className={dashboard.overview}>
       <AdminPageHeader
+        title="Přehled akce"
+        description={phaseDescription[context.event.phase]}
+        meta={
+          <span className={dashboard.meta}>
+            {data
+              ? `Aktuální k ${formatCurrentTime(data.generatedAt, eventTimezone)}`
+              : 'Čekám na aktuální data'}
+            {error && data ? ' · aktualizace se nezdařila' : ''}
+            {issueCount > 0 ? (
+              <a className={dashboard.metaAlert} href="#attention-title">
+                Vyžaduje pozornost: {issueCount}
+                <Arrow />
+              </a>
+            ) : null}
+          </span>
+        }
         action={
+          <div className={dashboard.headerActions}>
+            <Button
+              disabled={refreshing}
+              onClick={reloadOverview}
+              variant="secondary"
+            >
+              {refreshing ? 'Obnovuji…' : 'Obnovit přehled'}
+            </Button>
+            {primaryTask?.href ? (
+              <Link
+                className="ui-action ui-action--primary ui-action--medium"
+                href={primaryTask.href}
+                prefetch={false}
+              >
+                {primaryTask.label}
+                <Arrow />
+              </Link>
+            ) : null}
+          </div>
+        }
+      />
+
+      {error ? (
+        <section className={styles.errorSummary} role="alert">
+          <h2>
+            {data
+              ? 'Zobrazuji poslední načtené údaje'
+              : 'Přehled se nepodařilo načíst'}
+          </h2>
+          <p>{error}</p>
           <Button
-            disabled={!overview && !error}
+            disabled={refreshing}
             onClick={reloadOverview}
             variant="secondary"
           >
-            Obnovit přehled
-          </Button>
-        }
-        description={`${context.event.name} · ${adminPhaseLabels[context.event.phase]}`}
-        meta={
-          overview
-            ? `Aktuální k ${formatCurrentTime(overview.generatedAt, eventTimezone)}`
-            : 'Čekám na aktuální data'
-        }
-        title="Přehled akce"
-      />
-
-      <nav className={styles.sectionLinks} aria-label="Rychlé akce">
-        {context.actor.permissions.includes('program:manage') ? (
-          <Link href="/admin/obsah" prefetch={false}>
-            Upravit program
-          </Link>
-        ) : null}
-        {context.actor.permissions.includes('participant:operational:read') ? (
-          <Link href="/admin/ucastnici" prefetch={false}>
-            Najít účastníka
-          </Link>
-        ) : null}
-        {context.actor.permissions.includes('reservation:any:read') ? (
-          <Link href="/admin/rezervace" prefetch={false}>
-            Zobrazit rezervace
-          </Link>
-        ) : null}
-      </nav>
-      {error ? (
-        <section className={styles.errorSummary} role="alert">
-          <h2>Přehled se nepodařilo načíst</h2>
-          <p>{error}</p>
-          <Button onClick={reloadOverview} variant="secondary">
             Zkusit znovu
           </Button>
         </section>
-      ) : !overview ? (
-        <section className={styles.panel} aria-busy="true">
+      ) : null}
+      {!data && !error ? (
+        <section className={dashboard.loading} aria-busy="true">
           <p role="status">Načítám aktuální stav akce…</p>
+          <div className={dashboard.skeletonGrid} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
         </section>
-      ) : overview.metrics.length === 0 ? (
+      ) : null}
+      {data?.metrics.length === 0 ? (
         <AdminEmptyState
+          title="Přehled zatím nemá data"
           action={
-            archived ? undefined : context.actor.permissions.includes(
-                'ticket:any:manage',
-              ) ? (
+            !archived &&
+            context.actor.permissions.includes('ticket:any:manage') ? (
               <Link
                 className="ui-action ui-action--secondary ui-action--medium"
                 href="/admin/vstupenky"
@@ -345,178 +411,432 @@ export const AdminOverviewWorkspace = () => {
               >
                 Načíst změny vstupenek
               </Link>
-            ) : context.actor.permissions.includes('program:manage') ? (
-              <Link
-                className="ui-action ui-action--secondary ui-action--medium"
-                href="/admin/obsah"
-                prefetch={false}
-              >
-                Připravit program
-              </Link>
             ) : undefined
           }
-          title="Přehled zatím nemá data"
         >
           Začněte načtením změn vstupenek nebo přípravou programu.
         </AdminEmptyState>
-      ) : (
+      ) : data ? (
         <>
-          {attentionMetrics.length > 0 ? (
-            <AdminAttentionList
-              items={attentionMetrics.map((metric) => {
-                const definition = adminDashboardMetricRegistry[metric.id];
-                const action = archived
-                  ? null
-                  : definition.resolveAction(context);
-                const fallback = definition.fallback(context);
-                return {
-                  action: action ? (
-                    <Link
-                      className={`ui-action ui-action--${
-                        metric.id === firstActionableAttentionId
-                          ? 'primary'
-                          : 'secondary'
-                      } ui-action--medium`}
-                      href={action.href}
-                      prefetch={false}
-                    >
-                      {action.label}
-                    </Link>
-                  ) : undefined,
-                  description: (
-                    <>
-                      <span>{metric.detail}</span>
-                      {!action && fallback ? (
-                        <small className={styles.dashboardFallback}>
-                          {fallback}
-                        </small>
-                      ) : null}
-                    </>
-                  ),
-                  id: metric.id,
-                  severity: metric.state === 'degraded' ? 'danger' : 'warning',
-                  title: definition.label,
-                };
-              })}
-              sortBySeverity={false}
-            />
-          ) : (
-            <section className={styles.dashboardHealthy} role="status">
-              <h2>Teď není potřeba žádný zásah</h2>
-              <p>Všechny dostupné oblasti jsou bez upozornění.</p>
-            </section>
-          )}
-
-          <section aria-labelledby="dashboard-status-title">
-            <h2 id="dashboard-status-title">Stav akce</h2>
-            <div className={styles.dashboardMetricGrid}>
-              {adminDashboardMetricOrder
-                .filter(
-                  (id) =>
-                    id !== 'checkin' || context.capabilities.canEnterCheckin,
-                )
-                .map((id) => {
-                  const metric = metricsById.get(id);
-                  const definition = adminDashboardMetricRegistry[id];
-                  return (
-                    <div
-                      className={styles.dashboardMetricCard}
-                      data-state={metric?.state ?? 'missing'}
-                      key={id}
-                    >
-                      <div className={styles.dashboardMetricIcon}>
-                        <DashboardIcon name={definition.icon} />
-                      </div>
-                      <AdminMetricCard
-                        detail={
-                          metric ? (
-                            <>
-                              <AdminStatusBadge
-                                icon={metricStateIcon[metric.state]}
-                                tone={metricStateTone[metric.state]}
-                              >
-                                {adminMetricStateLabels[metric.state]}
-                              </AdminStatusBadge>
-                              <p>{metric.detail}</p>
-                            </>
-                          ) : (
-                            'Data zatím nejsou dostupná.'
-                          )
-                        }
-                        label={definition.label}
-                        value={metric?.value ?? '—'}
-                      />
-                    </div>
-                  );
-                })}
-            </div>
-          </section>
-
-          <section className={styles.panel} aria-labelledby="next-tasks-title">
-            <div className={styles.panelHeader}>
-              <div>
-                <h2 id="next-tasks-title">Další úkoly</h2>
-                <p className={styles.muted}>
-                  Doporučení odpovídají fázi „
-                  {adminPhaseLabels[context.event.phase]}“.
-                </p>
+          <section
+            className={dashboard.stats}
+            aria-label="Účastníci a rezervace"
+          >
+            <article className={dashboard.stat}>
+              <div className={dashboard.statHeading}>
+                <h2>Importovaní účastníci</h2>
+                <span className={dashboard.icon}>
+                  <DashboardIcon name="tickets" />
+                </span>
               </div>
-            </div>
-            {visiblePhaseTasks.length > 0 ? (
-              <ul className={styles.dashboardTaskList}>
-                {visiblePhaseTasks.map((task) => (
-                  <li key={task.title}>
-                    <strong>{task.title}</strong>
-                    {task.href ? (
-                      <Link href={task.href} prefetch={false}>
-                        {task.label}
-                      </Link>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className={styles.empty}>
-                Pro tuto fázi a vaše oprávnění není připraven další úkol.
+              <strong className={dashboard.statValue}>
+                {activation ? number(activation.total) : '—'}
+              </strong>
+              <p>Lidé s přístupem vytvořeným z importu vstupenek.</p>
+              <div className={dashboard.statFooter}>
+                {!archived &&
+                context.actor.permissions.includes(
+                  'participant:operational:read',
+                ) ? (
+                  <Link href="/admin/ucastnici" prefetch={false}>
+                    Vyhledat účastníka
+                    <Arrow />
+                  </Link>
+                ) : (
+                  <span>Celkový počet účastníků v importu</span>
+                )}
+              </div>
+            </article>
+            <article className={dashboard.stat}>
+              <div className={dashboard.statHeading}>
+                <h2>Aktivované přístupy</h2>
+                <span className={dashboard.icon}>
+                  <DashboardIcon name="activation" />
+                </span>
+              </div>
+              <div className={dashboard.statNumber}>
+                <strong className={dashboard.statValue}>
+                  {activation
+                    ? number(activation.activated)
+                    : (metrics.get('activation')?.value ?? '—')}
+                </strong>
+                {activationPercent !== null ? (
+                  <span className={dashboard.percent}>
+                    {activationPercent} %
+                  </span>
+                ) : null}
+              </div>
+              <p>
+                {activation ? (
+                  activation.total === 0 ? (
+                    'Aktivace začne po načtení účastníků.'
+                  ) : activation.total === activation.activated ? (
+                    'Všichni účastníci už ověřili svůj e-mail.'
+                  ) : (
+                    <>
+                      Čeká na ověření e-mailu:{' '}
+                      <strong>
+                        {formatCzechCount(
+                          activation.total - activation.activated,
+                          {
+                            one: 'přístup',
+                            few: 'přístupy',
+                            other: 'přístupů',
+                          },
+                        )}
+                      </strong>
+                      .
+                    </>
+                  )
+                ) : (
+                  (metrics.get('activation')?.detail ??
+                  'Data zatím nejsou dostupná.')
+                )}
               </p>
-            )}
+              <div className={dashboard.statFooter}>
+                {activation ? (
+                  <Progress
+                    value={activation.activated}
+                    total={activation.total}
+                    label="Podíl aktivovaných přístupů"
+                  />
+                ) : null}
+              </div>
+            </article>
+            <article className={dashboard.stat}>
+              <div className={dashboard.statHeading}>
+                <h2>Rezervovaná místa</h2>
+                <span className={dashboard.icon}>
+                  <DashboardIcon name="reservations" />
+                </span>
+              </div>
+              <div className={dashboard.statNumber}>
+                <strong className={dashboard.statValue}>
+                  {reservations
+                    ? number(reservations.confirmed)
+                    : (metrics.get('reservation')?.value ?? '—')}
+                </strong>
+                {reservations ? (
+                  <span className={dashboard.denominator}>
+                    / {number(reservations.capacity)}
+                  </span>
+                ) : null}
+              </div>
+              <p>
+                {reservations ? (
+                  reservations.sessionCount === 0 ? (
+                    'Zatím nejsou připravené aktivity s rezervací.'
+                  ) : (
+                    <>
+                      Celkem{' '}
+                      {formatCzechCount(
+                        reservations.sessionCount,
+                        adminCountForms.activity,
+                      )}{' '}
+                      s rezervací
+                      {reservationPercent !== null
+                        ? ` · obsazeno ${reservationPercent} %`
+                        : ''}
+                      .
+                    </>
+                  )
+                ) : (
+                  (metrics.get('reservation')?.detail ??
+                  'Data zatím nejsou dostupná.')
+                )}
+              </p>
+              <div className={dashboard.statFooter}>
+                {reservations ? (
+                  <Progress
+                    value={reservations.confirmed}
+                    total={reservations.capacity}
+                    label="Obsazenost rezervačních míst"
+                    warning={reservations.overbookedSessions > 0}
+                  />
+                ) : null}
+              </div>
+            </article>
           </section>
 
-          {hasTechnicalWork ? (
-            <section className={styles.panel} aria-labelledby="technical-title">
-              <h2 id="technical-title">Technický provoz</h2>
-              <p className={styles.muted}>
-                Zobrazuje jen souhrnné počty bez obsahu úloh a osobních údajů.
-              </p>
-              <AdminTechnicalDetails>
-                <dl className={styles.dashboardQueueList}>
-                  {overview.queues.map((queue) => (
-                    <div key={queue.queue}>
-                      <dt>{adminQueueLabels[queue.queue]}</dt>
-                      <dd>
-                        {formatCzechCount(
-                          queue.ready,
-                          adminCountForms.waitingTask,
-                        )}{' '}
-                        ·{' '}
-                        {formatCzechCount(
-                          queue.processing,
-                          adminCountForms.processingTask,
-                        )}{' '}
-                        ·{' '}
-                        {formatCzechCount(
-                          queue.failed,
-                          adminCountForms.failedTask,
-                        )}
-                      </dd>
+          <div className={dashboard.mainGrid}>
+            <section
+              className={dashboard.panel}
+              aria-labelledby="attention-title"
+            >
+              <div className={dashboard.sectionHeader}>
+                <div>
+                  <span className={dashboard.eyebrow}>Priority</span>
+                  <h2 id="attention-title" tabIndex={-1}>
+                    {archived ? 'Zaznamenané stavy' : 'Co vyžaduje pozornost'}
+                  </h2>
+                </div>
+                <span className={dashboard.count} data-alert={issueCount > 0}>
+                  {issueCount}
+                </span>
+              </div>
+              {attention.length > 0 ? (
+                <ol className={dashboard.attentionList}>
+                  {attention.map((item, index) => (
+                    <li
+                      key={item.id}
+                      className={dashboard.attentionItem}
+                      data-severity={item.severity}
+                    >
+                      <span className={dashboard.issueIcon} aria-hidden="true">
+                        !
+                      </span>
+                      <div>
+                        <div className={dashboard.issueHeading}>
+                          <h3>{item.title}</h3>
+                          <span className={dashboard.severity}>
+                            {item.severity === 'degraded'
+                              ? 'Chyba'
+                              : 'Ke kontrole'}
+                          </span>
+                        </div>
+                        <p>{item.detail}</p>
+                        {item.action ? (
+                          <Link
+                            className={
+                              index === 0
+                                ? dashboard.priorityLink
+                                : dashboard.textLink
+                            }
+                            href={item.action.href}
+                            prefetch={false}
+                          >
+                            {item.action.label}
+                            <Arrow />
+                          </Link>
+                        ) : item.fallback ? (
+                          <p className={dashboard.fallback}>{item.fallback}</p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div className={dashboard.healthy} role="status">
+                  <span className={dashboard.healthyIcon} aria-hidden="true">
+                    ✓
+                  </span>
+                  <h3>
+                    {hasMissingMetrics
+                      ? 'Některé údaje zatím chybí'
+                      : 'Teď není potřeba žádný zásah'}
+                  </h3>
+                  <p>
+                    {hasMissingMetrics
+                      ? 'Úplný stav akce bude dostupný po načtení všech oblastí.'
+                      : 'Sledované oblasti nehlásí provozní problém. Průběh aktivací a rezervací vidíte v přehledu.'}
+                  </p>
+                </div>
+              )}
+              {tasks.slice(1).length > 0 ? (
+                <div className={dashboard.nextAction}>
+                  {tasks.slice(1).map((task) => (
+                    <div key={task.title}>
+                      <span>{task.title}</span>
+                      {task.href ? (
+                        <Link
+                          className={dashboard.textLink}
+                          href={task.href}
+                          prefetch={false}
+                        >
+                          {task.label}
+                          <Arrow />
+                        </Link>
+                      ) : null}
                     </div>
                   ))}
-                </dl>
-              </AdminTechnicalDetails>
+                </div>
+              ) : null}
             </section>
+
+            <section
+              className={dashboard.panel}
+              aria-labelledby="capacity-title"
+            >
+              <div className={dashboard.sectionHeader}>
+                <div>
+                  <span className={dashboard.eyebrow}>Rezervace</span>
+                  <h2 id="capacity-title">Obsazenost aktivit</h2>
+                </div>
+                <span className={dashboard.icon}>
+                  <DashboardIcon name="reservations" />
+                </span>
+              </div>
+              <p className={dashboard.sectionDescription}>
+                Nejvíce obsazené aktivity jsou nahoře. Počítají se potvrzené
+                rezervace.
+              </p>
+              {reservations?.sessions.length ? (
+                <ul className={dashboard.capacityList}>
+                  {reservations.sessions.map((session) => {
+                    const full =
+                      session.capacity !== null &&
+                      session.confirmed >= session.capacity &&
+                      session.capacity > 0;
+                    const over =
+                      session.capacity !== null &&
+                      session.confirmed > session.capacity;
+                    return (
+                      <li key={session.sessionId}>
+                        <div className={dashboard.capacityHeading}>
+                          <h3>{session.title}</h3>
+                          <strong>
+                            {number(session.confirmed)}
+                            <span>
+                              {' '}
+                              /{' '}
+                              {session.capacity === null
+                                ? '—'
+                                : number(session.capacity)}
+                            </span>
+                          </strong>
+                        </div>
+                        <div className={dashboard.capacityMeta}>
+                          <time dateTime={session.startsAt}>
+                            {new Intl.DateTimeFormat('cs-CZ', {
+                              day: 'numeric',
+                              month: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              timeZone: eventTimezone,
+                            }).format(new Date(session.startsAt))}
+                            {session.status === 'draft' ? ' · Koncept' : ''}
+                          </time>
+                          <span
+                            data-state={
+                              over ? 'danger' : full ? 'warning' : 'neutral'
+                            }
+                          >
+                            {overviewCapacityLabel(
+                              session.confirmed,
+                              session.capacity,
+                            )}
+                          </span>
+                        </div>
+                        <Progress
+                          label={`Obsazenost: ${session.title}`}
+                          value={session.confirmed}
+                          total={session.capacity ?? 0}
+                          warning={full || over}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className={dashboard.empty}>
+                  <h3>
+                    {reservations
+                      ? 'Zatím žádné aktivity s rezervací'
+                      : 'Detail kapacit zatím není dostupný'}
+                  </h3>
+                  <p>
+                    {reservations
+                      ? 'Aktivity se zde objeví, jakmile v programu nastavíte rezervace.'
+                      : 'Souhrnný stav rezervací najdete v horní části přehledu.'}
+                  </p>
+                </div>
+              )}
+              {!archived &&
+              context.actor.permissions.includes('reservation:any:read') ? (
+                <div className={dashboard.panelFooter}>
+                  <Link
+                    className={dashboard.textLink}
+                    href="/admin/rezervace"
+                    prefetch={false}
+                  >
+                    Všechny aktivity a rezervace
+                    <Arrow />
+                  </Link>
+                  {reservations && reservations.sessionCount > 5 ? (
+                    <span>
+                      {reservations.sessions.length} z{' '}
+                      {reservations.sessionCount}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          </div>
+
+          <section
+            className={dashboard.operations}
+            aria-labelledby="operations-title"
+          >
+            <div className={dashboard.operationsHeading}>
+              <h2 id="operations-title">Program a provoz</h2>
+              <p>Poslední známý stav jednotlivých oblastí.</p>
+            </div>
+            <div className={dashboard.statusGrid}>
+              {statusMetrics.map(({ id, metric }) => {
+                const definition = adminDashboardMetricRegistry[id];
+                const disabled =
+                  id === 'notification' &&
+                  !context.features.announcementsEnabled;
+                return (
+                  <article key={id} className={dashboard.statusCard}>
+                    <div className={dashboard.statusHeading}>
+                      <DashboardIcon name={definition.icon} />
+                      <h3>{definition.label}</h3>
+                    </div>
+                    <div className={dashboard.statusValue}>
+                      <strong>
+                        {disabled ? 'Vypnuto' : (metric?.value ?? '—')}
+                      </strong>
+                      {metric && !disabled ? (
+                        <AdminStatusBadge
+                          icon={metricStateIcon[metric.state]}
+                          tone={metricStateTone[metric.state]}
+                        >
+                          {adminMetricStateLabels[metric.state]}
+                        </AdminStatusBadge>
+                      ) : null}
+                    </div>
+                    <p>
+                      {disabled
+                        ? 'Oznámení jsou pro tuto akci vypnutá.'
+                        : (metric?.detail ?? 'Data zatím nejsou dostupná.')}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+          {data.queues.some(
+            (queue) => queue.ready + queue.processing + queue.failed > 0,
+          ) ? (
+            <AdminTechnicalDetails className={dashboard.technical}>
+              <dl className={styles.dashboardQueueList}>
+                {data.queues.map((queue) => (
+                  <div key={queue.queue}>
+                    <dt>{adminQueueLabels[queue.queue]}</dt>
+                    <dd>
+                      {formatCzechCount(
+                        queue.ready,
+                        adminCountForms.waitingTask,
+                      )}{' '}
+                      ·{' '}
+                      {formatCzechCount(
+                        queue.processing,
+                        adminCountForms.processingTask,
+                      )}{' '}
+                      ·{' '}
+                      {formatCzechCount(
+                        queue.failed,
+                        adminCountForms.failedTask,
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </AdminTechnicalDetails>
           ) : null}
         </>
-      )}
+      ) : null}
     </div>
   );
 };

@@ -17,6 +17,7 @@ const healthySnapshot = (): AdminOperationsSnapshot => ({
   publication: { syncStatus: 'synced', version: 3 },
   publicContentSyncEnabled: true,
   queue: { failed: 0, pending: 0, processing: 0 },
+  reservationSessions: [],
   reservations: {
     capacity: 40,
     confirmed: 25,
@@ -141,5 +142,34 @@ describe('admin operations overview', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(getSession).not.toHaveBeenCalled();
     expect(await response.json()).toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('returns numeric totals and the five busiest activities without truncating the total count', () => {
+    const snapshot = healthySnapshot();
+    snapshot.reservationSessions = [null, 0, 5, 20, 10, 15, 21].map(
+      (confirmed, index) => ({
+        sessionId: `019fb200-0000-7000-8000-00000000000${index + 2}`,
+        title: `Aktivita ${index + 1}`,
+        startsAt: '2026-10-16T09:00:00.000Z',
+        status: 'published',
+        capacity: confirmed === null ? null : 20,
+        confirmed: confirmed ?? 0,
+      }),
+    );
+    const original = [...snapshot.reservationSessions];
+    const overview = buildAdminOperationsOverview(
+      eventId,
+      1,
+      generatedAt,
+      snapshot,
+    );
+    expect(overview.summary?.activation).toEqual({ activated: 24, total: 24 });
+    expect(overview.summary?.reservations.sessionCount).toBe(7);
+    expect(
+      overview.summary?.reservations.sessions.map(
+        (session) => session.confirmed,
+      ),
+    ).toEqual([21, 20, 15, 10, 5]);
+    expect(snapshot.reservationSessions).toEqual(original);
   });
 });

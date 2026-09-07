@@ -35,6 +35,9 @@ export interface AdminOperationsSnapshot {
   publication: { syncStatus: SyncStatus; version: number } | null;
   publicContentSyncEnabled: boolean;
   queue: { failed: number; pending: number; processing: number };
+  reservationSessions: NonNullable<
+    AdminOperationsOverviewResponse['summary']
+  >['reservations']['sessions'];
   reservations: {
     capacity: number;
     confirmed: number;
@@ -92,6 +95,30 @@ export const buildAdminOperationsOverview = (
     eventId,
     version,
     generatedAt: generatedAt.toISOString(),
+    summary: {
+      activation: snapshot.activation,
+      reservations: {
+        ...snapshot.reservations,
+        sessionCount: snapshot.reservationSessions.length,
+        sessions: [...snapshot.reservationSessions]
+          .sort((left, right) => {
+            const priority = (session: typeof left) =>
+              session.capacity === null
+                ? -1
+                : session.capacity === 0
+                  ? session.confirmed > 0
+                    ? Infinity
+                    : -1
+                  : session.confirmed / session.capacity;
+            return (
+              priority(right) - priority(left) ||
+              left.startsAt.localeCompare(right.startsAt) ||
+              left.sessionId.localeCompare(right.sessionId)
+            );
+          })
+          .slice(0, 5),
+      },
+    },
     metrics: [
       {
         id: 'activation',
@@ -274,7 +301,11 @@ export const handleAdminOperations = async (
       }),
       dependencies.db
         .select({
-          capacity: sql<number>`coalesce(${schema.programSessions.capacity}, 0)`,
+          sessionId: schema.programSessions.id,
+          title: schema.programSessions.title,
+          startsAt: schema.programSessions.startsAt,
+          status: schema.programSessions.status,
+          capacity: schema.programSessions.capacity,
           confirmed: count(schema.reservations.id),
         })
         .from(schema.programSessions)
@@ -320,13 +351,18 @@ export const handleAdminOperations = async (
       AdminOperationsSnapshot['reservations']
     >(
       (summary, row) => ({
-        capacity: summary.capacity + row.capacity,
+        capacity: summary.capacity + (row.capacity ?? 0),
         confirmed: summary.confirmed + row.confirmed,
         fullSessions:
           summary.fullSessions +
-          (row.capacity > 0 && row.confirmed === row.capacity ? 1 : 0),
+          (row.capacity !== null &&
+          row.capacity > 0 &&
+          row.confirmed === row.capacity
+            ? 1
+            : 0),
         overbookedSessions:
-          summary.overbookedSessions + (row.confirmed > row.capacity ? 1 : 0),
+          summary.overbookedSessions +
+          (row.capacity !== null && row.confirmed > row.capacity ? 1 : 0),
       }),
       { capacity: 0, confirmed: 0, fullSessions: 0, overbookedSessions: 0 },
     );
@@ -349,6 +385,11 @@ export const handleAdminOperations = async (
         publicContentSyncEnabled: features?.publicContentSyncEnabled ?? false,
         queue: { failed, pending, processing },
         reservations: reservationSnapshot,
+        reservationSessions: reservationRows.map((row) => ({
+          ...row,
+          startsAt: row.startsAt.toISOString(),
+          status: row.status === 'draft' ? 'draft' : 'published',
+        })),
       },
     );
     return Response.json(body, { headers: privateHeaders(requestId) });
