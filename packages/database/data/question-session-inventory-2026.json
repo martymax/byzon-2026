@@ -1,0 +1,223 @@
+{
+  "eventSlug": "byzon-2026",
+  "reviewedAt": "2026-09-07",
+  "status": "scope_confirmed_runtime_disabled",
+  "expectedSessionCount": 17,
+  "sessions": [
+    {
+      "sessionSlug": "byzon-stage-lidskost-jako-konkurencni-vyhoda-9151000",
+      "sourcePath": "program.days[0].stages[0].events[2]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "9:15 - 10:00",
+      "title": "Lidskost jako konkurenční výhoda",
+      "speakerSlugs": [
+        "margareta-krizova"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate-10451115",
+      "sourcePath": "program.days[0].stages[0].events[5]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "10:45 - 11:15",
+      "title": "Proč Vám lidé věří, i když jim nic neprodáváte",
+      "speakerSlugs": [
+        "lukas-hejlik"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-lide-duveruji-lidem-konkurencni-vyhoda-kterou-nejde-koupit-reklamou-11151145",
+      "sourcePath": "program.days[0].stages[0].events[6]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "11:15 - 11:45",
+      "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou",
+      "speakerSlugs": [
+        "hana-slacalkova"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-host-to-pozna-lidskost-jako-nejdulezitejsi-ingredience-gastro-byznysu-11451215",
+      "sourcePath": "program.days[0].stages[0].events[7]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "11:45 - 12:15",
+      "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu",
+      "speakerSlugs": [
+        "vladimir-macoun",
+        "konstancie-zelezna"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-co-vas-dostalo-sem-vas-dal-nedostane-13151345",
+      "sourcePath": "program.days[0].stages[0].events[9]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "13:15 - 13:45",
+      "title": "Co vás dostalo sem, vás dál nedostane",
+      "speakerSlugs": [
+        "david-kolar"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-co-mi-nikdo-nerekl-o-tom-byt-ceo-13451415",
+      "sourcePath": "program.days[0].stages[0].events[10]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "13:45 - 14:15",
+      "title": "Co mi nikdo neřekl o tom být CEO",
+      "speakerSlugs": [
+        "andrea-bohacikova"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-simon-srp-14151445",
+      "sourcePath": "program.days[0].stages[0].events[11]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "14:15 - 14:45",
+      "title": "Šimon Srp",
+      "speakerSlugs": [
+        "simon-srp"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-lidskost-pod-tlakem-kolik-lidskosti-si-muze-firma-dovolit-15151545",
+      "sourcePath": "program.days[0].stages[0].events[13]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "15:15 - 15:45",
+      "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?",
+      "speakerSlugs": [
+        "barbora-tumova",
+        "petr-dvorak",
+        "michal-vesely"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-jak-vyjednavat-lidsky-a-ziskavat-zakazniky-jinak-nez-slevami-15451615",
+      "sourcePath": "program.days[0].stages[0].events[14]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "15:45 - 16:15",
+      "title": "Jak vyjednávat lidsky a získávat zákazníky jinak než slevami",
+      "speakerSlugs": [
+        "ondrej-vojacek"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-nejdrazsi-konkurencni-vyhoda-lidskost-16151645",
+      "sourcePath": "program.days[0].stages[0].events[15]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "16:15 - 16:45",
+      "title": "Nejdražší konkurenční výhoda? Lidskost.",
+      "speakerSlugs": [
+        "jiri-jemelka"
+      ]
+    },
+    {
+      "sessionSlug": "byzon-stage-zradci-lidskosti-moderovana-diskuze-17001745",
+      "sourcePath": "program.days[0].stages[0].events[17]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "17:00 - 17:45",
+      "title": "Zrádci lidskosti – moderovaná diskuze",
+      "speakerSlugs": [
+        "markus-krug"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-human-magic-a-co-ta-lidskost-vlastne-je-10451115",
+      "sourcePath": "program.days[0].stages[1].events[2]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "10:45 - 11:15",
+      "title": "Human Magic - a co ta lidskost vlastně je?",
+      "speakerSlugs": [
+        "leonid-kushnir"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-kdyz-lidskost-nekonci-u-bran-fabriky-jak-stavet-byznys-komunitu-a-lepsi-spolecnost-11151145",
+      "sourcePath": "program.days[0].stages[1].events[3]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "11:15 - 11:45",
+      "title": "Když lidskost nekončí u bran fabriky: Jak stavět byznys, komunitu a lepší společnost",
+      "speakerSlugs": [
+        "jan-plojhar"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-prestante-lidi-motivovat-11451215",
+      "sourcePath": "program.days[0].stages[1].events[4]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "11:45 - 12:15",
+      "title": "Přestaňte lidi motivovat",
+      "speakerSlugs": [
+        "blanka-mrazkova"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-tyrkysova-firma-co-se-stane-kdyz-svemu-tymu-opravdu-verite-13151345",
+      "sourcePath": "program.days[0].stages[1].events[6]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "13:15 - 13:45",
+      "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?",
+      "speakerSlugs": [
+        "patrik-cada"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-jak-lidsky-ziskat-genz-a-vest-s-energii-13451415",
+      "sourcePath": "program.days[0].stages[1].events[7]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "13:45 - 14:15",
+      "title": "Jak lidsky získat GenZ a vést s energií",
+      "speakerSlugs": [
+        "andrea-bila"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-jakub-zikmund-14151445",
+      "sourcePath": "program.days[0].stages[1].events[8]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "14:15 - 14:45",
+      "title": "Jakub Zikmund",
+      "speakerSlugs": [
+        "jakub-zikmund"
+      ]
+    }
+  ],
+  "excludedSessions": [
+    {
+      "sessionSlug": "byzon-stage-jak-na-networking-10001015",
+      "sourcePath": "program.days[0].stages[0].events[3]",
+      "localDate": "2026-09-18",
+      "roomSlug": "byzon-stage",
+      "time": "10:00 - 10:15",
+      "title": "Jak na networking",
+      "speakerSlugs": [
+        "tomas-reznicek"
+      ]
+    },
+    {
+      "sessionSlug": "leadership-stage-co-o-svych-lidech-skutecne-vite-merite-vykon-potencial-nebo-jen-dojmy-15151645",
+      "sourcePath": "program.days[0].stages[1].events[10]",
+      "localDate": "2026-09-18",
+      "roomSlug": "leadership-stage",
+      "time": "15:15 - 16:45",
+      "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
+      "speakerSlugs": [
+        "lucie-libovicka",
+        "pavel-janousek"
+      ]
+    }
+  ]
+}

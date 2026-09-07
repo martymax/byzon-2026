@@ -85,8 +85,9 @@
 Tato sekce je novější než všechny starší poznámky níže a má při
 konfliktu přednost.
 
-- Přístup účastníka vzniká SimpleShop API importem a následnou
-  e-mailovou pozvánkou spuštěnou administrátorem. Ticket claim/QR/credential
+- Přístup účastníka vzniká SimpleShop API importem nebo, u programových
+  spolupracovníků primárně, existujícím ručním participant flow podle ADR-017.
+  E-mailovou participant pozvánku spouští administrátor samostatně. Ticket claim/QR/credential
   ani volná registrace nejsou vstupní mechanismus 2026.
 - Kontrola vstupenek a check-in jsou mimo aplikační scope 2026. Starší
   check-in implementace je dormant kompatibilní vrstva, ne launch/UAT gate.
@@ -1706,3 +1707,12 @@ read-only discovery pak doplní field/status mapping a source-code test vectors.
   `acaa5cd` prošly. Lokální `main` odpovídá `origin/main`; post-merge
   `application` zahrnul migraci, seed, format, lint, typecheck, testy, build,
   Playwright E2E a audit, `static-site` smoke také prošel.
+
+## AQ-00 — zahájení přístupu spolupracovníků a Q&A (7. 9. 2026)
+
+- Přijat [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md); novější než historický zákaz speaker odpovědí.
+- [Source inventář](docs/evidence/participant-access-live-qa-inventory.md) a `packages/database/data/question-session-inventory-2026.json` zachycují 17 Q&A session včetně panelů. EB21 a „Jak na networking“ jsou výslovně mimo.
+- Uživatel určil Leadership Stage jako jedinou rezervovatelnou projekci pátečního networkingu; druhá je informativní. Kapacitu musí zadat admin.
+- Ruční baseline už existuje v `admin-support.ts`; znovu použít, nevytvářet paralelní flow. Speaker vazba sama nesmí otevírat roster; tuto existující větev odstraní ACCESS-03.
+- DATA-02 musí opravit importní speaker link Blanky k workshopu a networkingu na Leadership, explicitní slugs a reimport. Účty/UUID/role na stagingu tímto lokálním auditem nejsou ověřené.
+- Navázat AQ-01 (expand schema, kontrakty, permissions a přesný backfill). Nové runtime chování, staging migrace ani release rehearsal nejsou hotové.

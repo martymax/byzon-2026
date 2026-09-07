@@ -1,10 +1,16 @@
 # Přístup programových spolupracovníků a živé Q&A
 
-Stav: návrh připravený k rozdělení mezi implementační agenty
+Stav: implementace zahájena 7. 9. 2026; AQ-00 lokální scope a inventář zpracovány
 
 Datum: 5. 9. 2026
 
 Primární aplikace: `apps/conference`
+
+## Průběh realizace
+
+- 7. 9. 2026: AQ-00 – přijat [ADR-017](adr/017-participant-collaborators-and-private-question-follow-ups.md), vytvořen [source inventář](evidence/participant-access-live-qa-inventory.md) a strojový whitelist s kontrolou proti kanonickým datům.
+- Uživatel potvrdil vyloučení EB21 a „Jak na networking“ z Q&A: 17 přednáškových/panelových session. Kanonický rezervovatelný networking je Leadership Stage; druhá projekce je pouze informativní.
+- AQ-01 a navazující implementace zatím nejsou dokončené. Skutečné účty, publikace, provozní kapacita networkingu a staging rehearsal čekají na ověření; lokální inventář je nenahrazuje.
 
 ## 1. Cíl
 
@@ -214,7 +220,7 @@ Před přidělením rolí je nutný datový preflight:
 
 - koučovací sloty musí mít aktuálně přiřazené coach-specific rooms; starší data mohla mít `roomId = null`;
 - oba díly sobotního mastermindu musí zůstat v jedné reservation group a v jednom multi-session scope;
-- páteční řízený networking má ve zdroji dvě projekce a dnes může být importovaný jako `other` bez kapacity. Product owner musí určit jednu kanonickou session, nebo výslovně potvrdit jejich seskupení;
+- páteční řízený networking má ve zdroji dvě projekce a dnes může být importovaný jako `other` bez kapacity. potvrzená kanonická rezervovatelná session je Leadership Stage, druhá projekce je pouze informativní;
 - každá aktivita musí mít před provozem právě očekávaného vedoucího, kapacitu a validní roster scope.
 
 Aktuální kandidáti podle repozitáře, které je nutné před apply potvrdit proti finálním datům a e-mailům:
@@ -223,7 +229,7 @@ Aktuální kandidáti podle repozitáře, které je nutné před apply potvrdit 
 | ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
 | Páteční coaching          | Radim Roček, Stanislava Maunová | room scope každého kouče; speaker profil není potřeba                                         |
 | Páteční mastermind EB21   | Lucie Libovická, Pavel Janoušek | oba participant účty, speaker links a společný roster scope                                   |
-| Páteční řízený networking | Tomáš Řezníček                  | zvolit kanonickou projekci, typ a kladnou kapacitu                                            |
+| Páteční řízený networking | Tomáš Řezníček                  | Leadership je kanonická rezervace; doplnit typ, speaker link a kladnou kapacitu               |
 | Sobotní workshop          | Leonid Kushnir                  | ověřit explicitní speaker/session vazbu                                                       |
 | Sobotní workshop          | Blanka Mrázková                 | doplnit explicitní source speaker link; dnešní title/meta párování není dostatečně spolehlivé |
 | Sobotní mastermind        | Tomáš Ryza                      | link k oběma částem a jeden logický roster                                                    |
@@ -889,8 +895,8 @@ Přístup vedoucích a speakerů ručním participant flow je potvrzený a není
 2. **Otevření sběru.** Doporučeno: přesně od startu do konce session. Alternativa: explicitní `questionsOpensAt`, pokud se mají sbírat otázky už předem.
 3. **Editace odpovědi.** Doporučeno: speaker může editovat do archivace eventu, každá změna je verzovaná a auditovaná metadaty.
 4. **Panel s více speakery.** Doporučeno: právě jedna odpověď, první úspěšný publish vyhrává.
-5. **Přesný Q&A whitelist.** Potvrdit zejména, zda páteční mastermind a blok „Jak na networking“ na těchto stage patří mezi „přednášky“; registrace, pauzy, jídlo, společné bloky a večerní networking jsou doporučeně mimo.
-6. **Kanonický páteční networking.** Potvrdit, která ze dvou dnešních projekcí je rezervovatelná, případně že se mají explicitně seskupit.
+5. **Přesný Q&A whitelist – potvrzeno 7. 9. 2026.** 17 přednáškových/panelových session dle inventáře; EB21 a „Jak na networking“ mimo. Registrace, pauzy, jídlo, společné bloky a večerní networking jsou mimo.
+6. **Kanonický páteční networking – potvrzeno 7. 9. 2026.** Leadership Stage je rezervovatelná; projekce Networking a afterparty pouze informativní. Kladná kapacita zůstává provozní precondition.
 7. **Lidé a účty.** Dodat finální e-maily vedoucích, speakerů a moderátorů. Vedoucí a speakeři se standardně založí ručně; pokud už někdo existuje ze SimpleShopu, znovu se použije.
 8. **Invitation delivery.** Ověřit produkčního e-mail providera, sender doménu a SPF/DKIM/DMARC. Jde o blocker odeslání a přihlašovacího UAT, nikoli blocker ručního založení lidí a přípravy rolí.
 
