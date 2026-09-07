@@ -1,7 +1,8 @@
 .workspace {
   display: grid;
   gap: 1.25rem;
-  max-width: 64rem;
+  max-width: 72rem;
+  align-content: start;
   margin-inline: auto;
   min-width: 0;
 }
@@ -62,11 +63,14 @@
 }
 .sticky {
   position: sticky;
-  top: 0;
+  top: 5.5rem;
   z-index: 2;
   padding: 1rem;
   background: var(--byzon-surface);
-  border-bottom: 1px solid var(--byzon-border);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  display: grid;
+  gap: var(--byzon-space-3);
 }
 .tabs {
   display: flex;
@@ -74,7 +78,7 @@
   gap: 0.5rem;
 }
 .feed {
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1.65;
 }
 .workspace a {
@@ -84,7 +88,90 @@
   .actions > * {
     flex: 1 1 auto;
   }
+}
+
+.workspace h1 {
+  margin: 0;
+  font-size: var(--participant-title-size);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.workspace h2 {
+  color: var(--byzon-ink);
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-3);
+}
+.sessionCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--byzon-space-5);
+  padding: var(--byzon-space-5);
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-md);
+  background: var(--byzon-surface);
+  text-decoration: none;
+  transition:
+    border-color var(--byzon-motion-fast) var(--byzon-ease),
+    background-color var(--byzon-motion-fast) var(--byzon-ease);
+}
+.sessionCard:hover {
+  border-color: var(--byzon-brand-active);
+  background: var(--byzon-brand-subtle);
+}
+.sessionCard:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.sessionInfo {
+  flex: 1 1 20rem;
+  min-width: 0;
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.sessionSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--byzon-space-3);
+  font-size: 0.875rem;
+}
+.count {
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--byzon-radius-pill);
+  background: var(--byzon-brand-soft);
+  color: var(--byzon-brand-active);
+  font-weight: 600;
+}
+.openSession {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--byzon-space-3);
+  color: var(--byzon-brand-active);
+  font-weight: 600;
+}
+.empty {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.backLink {
+  justify-self: start;
+}
+@media (max-width: 48rem) {
   .sticky {
     position: static;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sessionCard {
+    transition: none;
   }
 }

@@ -5,10 +5,12 @@ export default async function SpeakersPage() {
   const eventId = await loadCurrentEventId();
   return (
     <section className="app-page">
-      <p className="eyebrow">Lidé na pódiu</p>
-      <h1 data-route-heading tabIndex={-1}>
-        Řečníci
-      </h1>
+      <header className="participant-page-heading">
+        <p className="eyebrow">Lidé na pódiu</p>
+        <h1 data-route-heading tabIndex={-1}>
+          Řečníci
+        </h1>
+      </header>
       {eventId ? (
         <SpeakerDirectory eventId={eventId} />
       ) : (

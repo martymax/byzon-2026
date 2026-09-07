@@ -71,23 +71,28 @@ export function HostRoleLinks({
   if (!data || (!data.activities && !data.moderation && !data.followUps))
     return null;
   return (
-    <nav aria-label="Moje role" className="participant-more-grid">
-      <h2>Moje role</h2>
-      {data.activities ? (
-        <ActionLink href="/host/aktivity" variant="secondary">
-          Vedoucí aktivity
-        </ActionLink>
-      ) : null}
-      {data.moderation ? (
-        <ActionLink href="/host/moderace" variant="secondary">
-          Moderování
-        </ActionLink>
-      ) : null}
-      {data.followUps ? (
-        <ActionLink href="/host/dotazy" variant="secondary">
-          Dotazy k doplnění ({data.pendingAnswerCount})
-        </ActionLink>
-      ) : null}
-    </nav>
+    <section className="participant-role-section">
+      <header>
+        <h2>Moje role</h2>
+        <p>Nástroje pro vaše zapojení do programu.</p>
+      </header>
+      <nav aria-label="Moje role" className="participant-more-grid">
+        {data.activities ? (
+          <ActionLink href="/host/aktivity" variant="secondary">
+            Vedoucí aktivity
+          </ActionLink>
+        ) : null}
+        {data.moderation ? (
+          <ActionLink href="/host/moderace" variant="secondary">
+            Moderování
+          </ActionLink>
+        ) : null}
+        {data.followUps ? (
+          <ActionLink href="/host/dotazy" variant="secondary">
+            Dotazy k doplnění ({data.pendingAnswerCount})
+          </ActionLink>
+        ) : null}
+      </nav>
+    </section>
   );
 }

@@ -1,5 +1,9 @@
+import type { CSSProperties } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ModeratorFeed } from '../../components/host-questions';
+import {
+  HostQuestionSessions,
+  ModeratorFeed,
+} from '../../components/host-questions';
 import { renderComponent } from './render';
 import { expectComponentToPassAxe } from './accessibility';
 import '../../app/styles.css';
@@ -69,4 +73,66 @@ it('drains multiple pages, keeps chronological questions and wipes on revoked ac
     .element(screen.getByRole('alert'))
     .toHaveTextContent('Soukromé dotazy byly odstraněny');
   expect(screen.getByRole('listitem').elements()).toHaveLength(0);
+});
+
+it('keeps assigned talks readable and fully linked at every viewport', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        eventId,
+        serverTime: now,
+        sessions: [
+          {
+            id: sessionId,
+            title:
+              'Jak vést tým a přitom neztratit motivaci ani v náročných situacích',
+            startsAt: now,
+            endsAt: '2026-09-18T10:00:00.000Z',
+            roomName: 'Leadership Stage',
+            state: 'open',
+            questionCount: 12,
+            unansweredCount: 0,
+          },
+        ],
+      }),
+    ),
+  );
+  const screen = await renderComponent(
+    <main
+      style={
+        {
+          '--byzon-font-body': 'Arial, sans-serif',
+          '--byzon-font-display': 'Arial, sans-serif',
+          fontFamily: 'Arial, sans-serif',
+        } as CSSProperties
+      }
+    >
+      <HostQuestionSessions eventId={eventId} kind="moderator" />
+    </main>,
+  );
+  const sessionLink = screen.getByRole('link', { name: /Jak vést tým/ });
+  await expect
+    .element(sessionLink)
+    .toHaveAttribute('href', `/host/moderace/${sessionId}`);
+  await expect.element(screen.getByText('Dotazy: 12')).toBeVisible();
+  const heading = screen
+    .getByRole('heading', { name: 'Moderování', exact: true })
+    .element();
+  expect(
+    Number.parseFloat(getComputedStyle(heading).fontSize),
+  ).toBeLessThanOrEqual(40);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+    window.innerWidth,
+  );
+  const cardBounds = sessionLink.element().getBoundingClientRect();
+  expect(cardBounds.width).toBeGreaterThanOrEqual(44);
+  expect(cardBounds.height).toBeGreaterThanOrEqual(44);
+  await expectComponentToPassAxe(screen.container);
+  await screen
+    .getByRole('heading', { name: 'Moderování', exact: true })
+    .hover();
+  await expect
+    .element(screen.getByRole('main'))
+    .toMatchScreenshot('moderation-sessions');
 });

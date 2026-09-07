@@ -219,6 +219,17 @@ describe('program collaborator setup', () => {
     expect(
       screen.getByRole('link', { name: 'Vedoucí aktivity' }).elements(),
     ).toHaveLength(0);
+    const heading = screen
+      .getByRole('heading', { name: 'Moje role' })
+      .element();
+    const link = screen.getByRole('link', { name: 'Moderování' }).element();
+    expect(heading.getBoundingClientRect().bottom).toBeLessThan(
+      link.getBoundingClientRect().top,
+    );
+    expect(link.getBoundingClientRect().left).toBeCloseTo(
+      heading.getBoundingClientRect().left,
+      0,
+    );
     await expectComponentToPassAxe(screen.container);
   });
 });

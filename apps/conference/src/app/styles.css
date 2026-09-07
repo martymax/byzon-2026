@@ -1,5 +1,10 @@
 @import '@byzon/ui/styles.css';
 
+:root {
+  --participant-title-size: clamp(2rem, 1.6rem + 1.5vw, 2.5rem);
+  --participant-section-title-size: 1.5rem;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -985,10 +990,40 @@ main > .ui-participant-nav-spacer {
   padding: 2.5rem 0 6rem;
 }
 .app-page > h1,
+.participant-page-heading h1,
+.agenda-heading h1,
+.participant-account-heading h1,
 .detail-card h1 {
+  margin: 0;
+  color: var(--byzon-ink);
+  font-size: var(--participant-title-size);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.app-page > h1 {
   margin: 0.25rem 0 1.5rem;
-  font-size: clamp(3rem, 10vw, 6rem);
-  line-height: 0.9;
+}
+.participant-page-heading,
+.agenda-heading,
+.participant-account-heading {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.participant-page-heading {
+  margin-bottom: var(--byzon-space-6);
+}
+.participant-page-heading .eyebrow,
+.agenda-heading .eyebrow,
+.participant-account-heading .eyebrow {
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+}
+.agenda-heading .lead,
+.participant-account-heading .lead {
+  max-width: 65ch;
+  font-size: 1rem;
+  line-height: 1.6;
 }
 [data-route-heading]:focus {
   outline: none;
@@ -1829,14 +1864,14 @@ main > .ui-participant-nav-spacer {
 }
 .agenda-page {
   display: grid;
-  gap: clamp(1.5rem, 4vw, 2.5rem);
+  gap: var(--byzon-space-6);
 }
 .agenda-heading {
   max-width: 54rem;
 }
 .agenda-heading h1 {
-  max-width: 11ch;
-  margin-block: 0.35rem 0.9rem;
+  max-width: none;
+  margin: 0;
 }
 .agenda-loading {
   max-width: 48rem;
@@ -1998,8 +2033,8 @@ main > .ui-participant-nav-spacer {
 }
 .agenda-calendar-export h2 {
   color: var(--byzon-ink);
-  font-size: clamp(1.5rem, 4vw, 2rem);
-  line-height: 1.1;
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
 }
 .session-calendar-export {
   display: grid;
@@ -2232,29 +2267,6 @@ main > .ui-participant-nav-spacer {
   .app-page {
     width: min(100% - 2.5rem, 72rem);
     padding-top: 1.25rem;
-  }
-  .app-page > h1,
-  .agenda-heading h1,
-  .participant-account-heading h1 {
-    font-size: clamp(2.75rem, 12vw, 3rem);
-    line-height: 0.88;
-  }
-  .app-page > h1 {
-    margin-block: 0.25rem 0.75rem;
-  }
-  .agenda-heading h1,
-  .participant-account-heading h1 {
-    margin: 0;
-  }
-  .agenda-heading .lead,
-  .participant-account-heading .lead {
-    font-size: 1.0625rem;
-    line-height: 1.45;
-  }
-  .agenda-heading,
-  .participant-account-heading {
-    display: grid;
-    gap: var(--byzon-space-2);
   }
   .agenda-item-topline {
     justify-content: flex-start;
@@ -3066,22 +3078,9 @@ main > .ui-participant-nav-spacer {
 
 .participant-account-page {
   display: grid;
-  gap: clamp(1.5rem, 5vw, 2.75rem);
-  max-width: 62rem;
+  gap: var(--byzon-space-6);
 }
-.participant-account-heading {
-  display: grid;
-  gap: var(--byzon-space-3);
-}
-.participant-account-heading h1 {
-  max-width: 12ch;
-  margin: 0;
-  font-size: clamp(3.5rem, 11vw, 7rem);
-  line-height: 0.85;
-}
-.participant-account-heading .lead {
-  max-width: 48rem;
-}
+
 .participant-account-stack,
 .participant-account-section,
 .participant-legal-list,
@@ -3094,14 +3093,15 @@ main > .ui-participant-nav-spacer {
   display: grid;
   gap: var(--byzon-space-2);
 }
+.participant-account-page .session-controls h2,
 .participant-account-section > header h2,
 .participant-account-card h2,
 .participant-account-summary h2,
 .participant-support-card h2,
 .participant-privacy-request-card h3 {
   color: var(--byzon-ink);
-  font-size: clamp(1.65rem, 5vw, 2.5rem);
-  line-height: 1.05;
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
 }
 .participant-account-card,
 .participant-account-summary,
@@ -3114,14 +3114,9 @@ main > .ui-participant-nav-spacer {
   overflow-wrap: anywhere;
 }
 .participant-account-summary {
-  border-inline-start: 0.35rem solid var(--byzon-brand);
-  background:
-    radial-gradient(
-      circle at 100% 0,
-      var(--byzon-brand-glow),
-      transparent 16rem
-    ),
-    var(--byzon-surface);
+  gap: var(--byzon-space-2);
+  border-inline-start: 0.25rem solid var(--byzon-brand);
+  background: var(--byzon-surface);
 }
 .participant-account-secondary {
   color: var(--byzon-text-muted);
@@ -3135,6 +3130,8 @@ main > .ui-participant-nav-spacer {
 .participant-more-grid .ui-action {
   min-width: 0;
   min-height: 3.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--byzon-radius-md);
   justify-content: space-between;
   text-align: start;
 }
@@ -3142,6 +3139,22 @@ main > .ui-participant-nav-spacer {
   content: '→';
   flex: none;
   margin-inline-start: var(--byzon-space-3);
+}
+.participant-role-section {
+  display: grid;
+  gap: var(--byzon-space-4);
+  padding-top: var(--byzon-space-6);
+  border-top: 1px solid var(--byzon-border);
+}
+.participant-role-section h2 {
+  color: var(--byzon-ink);
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
+}
+.participant-role-section header p {
+  margin-top: var(--byzon-space-1);
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
 }
 .participant-support-card {
   border-style: dashed;

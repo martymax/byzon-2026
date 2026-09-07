@@ -266,8 +266,7 @@ export const ParticipantAgenda = ({
           Osobní agenda
         </h1>
         <p className="lead">
-          Uložené body, potvrzené rezervace i čekací listina v jednom kanonickém
-          přehledu.
+          Uložené body, potvrzené rezervace i čekací listina na jednom místě.
         </p>
       </header>
       {resource.state.status === 'ready' ? (

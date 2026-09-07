@@ -117,62 +117,77 @@ export function HostQuestionSessions({
     };
   }, [eventId, kind]);
   return (
-    <section className={styles.workspace}>
-      <h1 data-route-heading tabIndex={-1}>
-        {kind === 'moderator' ? 'Moderování' : 'Dotazy po vystoupení'}
-      </h1>
-      {blocked ? (
-        <p role="alert">
-          Přístup není dostupný. Ověřte přihlášení nebo přiřazení u
-          organizátora.
+    <section className={`app-page ${styles.workspace}`}>
+      <header className="participant-account-heading">
+        <p className="eyebrow">Moje role</p>
+        <h1 data-route-heading tabIndex={-1}>
+          {kind === 'moderator' ? 'Moderování' : 'Dotazy po vystoupení'}
+        </h1>
+        <p className="lead">
+          {kind === 'moderator'
+            ? 'Vaše přiřazené přednášky. Dotazy zůstávají dostupné i po skončení sběru.'
+            : 'Vaše ukončené přednášky. Odpověď vidí pouze autor dotazu.'}
         </p>
-      ) : (
-        <>
-          <p>
-            {kind === 'moderator'
-              ? 'Vaše přiřazené přednášky. Dotazy zůstávají dostupné i po skončení sběru.'
-              : 'Vaše ukončené přednášky. Odpověď vidí pouze autor dotazu.'}
-          </p>
+      </header>
+      <div className={styles.toolbar}>
+        <ActionLink variant="quiet" href="/app/vice">
+          Zpět do mého účtu
+        </ActionLink>
+        {!blocked ? (
           <Button variant="secondary" onClick={() => refresh.current()}>
             Obnovit seznam
           </Button>
+        ) : null}
+      </div>
+      {blocked ? (
+        <Card role="alert">
+          Přístup není dostupný. Ověřte přihlášení nebo přiřazení u
+          organizátora.
+        </Card>
+      ) : (
+        <>
           {error ? <p role="alert">{error}</p> : null}
           {!data ? (
-            <p role="status">Načítám přednášky…</p>
+            <Card role="status">Načítám přednášky…</Card>
           ) : !data.sessions.length ? (
-            <p>Žádná dostupná přednáška.</p>
+            <Card className={styles.empty}>
+              <h2>Žádná dostupná přednáška</h2>
+              <p>Přiřazené přednášky se zobrazí v tomto přehledu.</p>
+            </Card>
           ) : (
             <ul className={styles.list}>
               {data.sessions.map((session) => (
                 <li key={session.id}>
-                  <Card>
-                    <h2>
-                      <ActionLink
-                        variant="quiet"
-                        href={`${kind === 'moderator' ? '/host/moderace' : '/host/dotazy'}/${session.id}`}
-                      >
-                        {session.title}
-                      </ActionLink>
-                    </h2>
-                    <p>
-                      {session.roomName} · {questionTime(session.startsAt)}
-                    </p>
-                    <p>
-                      {session.questionCount} dotazů
-                      {kind === 'speaker'
-                        ? ` · ${session.unansweredCount} bez odpovědi`
-                        : ''}
-                    </p>
-                  </Card>
+                  <a
+                    className={styles.sessionCard}
+                    href={`${kind === 'moderator' ? '/host/moderace' : '/host/dotazy'}/${session.id}`}
+                  >
+                    <div className={styles.sessionInfo}>
+                      <h2>{session.title}</h2>
+                      <p className={styles.meta}>
+                        {session.roomName} · {questionTime(session.startsAt)}
+                      </p>
+                    </div>
+                    <div className={styles.sessionSummary}>
+                      <span className={styles.count}>
+                        Dotazy: {session.questionCount}
+                      </span>
+                      {kind === 'speaker' ? (
+                        <span className={styles.meta}>
+                          Bez odpovědi: {session.unansweredCount}
+                        </span>
+                      ) : null}
+                      <span className={styles.openSession}>
+                        Otevřít dotazy <span aria-hidden="true">→</span>
+                      </span>
+                    </div>
+                  </a>
                 </li>
               ))}
             </ul>
           )}
         </>
       )}
-      <ActionLink variant="secondary" href="/app/vice">
-        Zpět do mého účtu
-      </ActionLink>
     </section>
   );
 }
@@ -302,7 +317,7 @@ export function ModeratorFeed({
     };
   }, [eventId, sessionId]);
   return (
-    <section className={`${styles.workspace} ${styles.feed}`}>
+    <section className={`app-page ${styles.workspace} ${styles.feed}`}>
       <header className={styles.sticky}>
         <p className="eyebrow">Moderátor · pouze pro čtení</p>
         <h1 data-route-heading tabIndex={-1}>
@@ -367,7 +382,11 @@ export function ModeratorFeed({
           )}
         </>
       )}
-      <ActionLink variant="secondary" href="/host/moderace">
+      <ActionLink
+        className={styles.backLink}
+        variant="secondary"
+        href="/host/moderace"
+      >
         Moje moderované přednášky
       </ActionLink>
     </section>
