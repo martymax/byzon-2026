@@ -390,6 +390,20 @@ describe('admin content user journeys', () => {
       .element(screen.getByText('Obsah má 8 změn ke kontrole.'))
       .toBeVisible();
     expect(document.body.textContent).not.toContain('019fc400');
+    const summary = Array.from(document.querySelectorAll('summary')).find(
+      (element) => element.textContent?.includes('Otevření konference'),
+    )!;
+    expect(summary.parentElement?.hasAttribute('open')).toBe(false);
+    summary.click();
+    expect(summary.parentElement?.hasAttribute('open')).toBe(true);
+    expect(summary.parentElement?.textContent).toContain('Nová verze');
+    expect(summary.parentElement?.textContent).toContain(
+      'Společné zahájení programu.',
+    );
+    expect(summary.parentElement?.textContent).toContain('Alex Novák');
+    expect(summary.parentElement?.textContent).not.toContain('019fc400');
+    summary.click();
+    expect(summary.parentElement?.hasAttribute('open')).toBe(false);
     await expect
       .element(screen.getByText('Kontrolní součet'))
       .not.toBeVisible();

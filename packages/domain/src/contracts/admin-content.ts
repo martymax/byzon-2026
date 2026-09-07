@@ -50,6 +50,16 @@ export const adminPublicationChangeSchema = z.strictObject({
   kind: z.enum(['added', 'updated', 'cancelled', 'archived']),
   resource: adminContentResourceSchema,
   title: safeText(512),
+  fields: z
+    .array(
+      z.strictObject({
+        field: z.string().max(128),
+        label: z.string().max(256),
+        before: z.string().nullable(),
+        after: z.string().nullable(),
+      }),
+    )
+    .optional(),
   impact: z
     .array(z.enum(['content', 'time', 'location', 'status', 'order']))
     .min(1)

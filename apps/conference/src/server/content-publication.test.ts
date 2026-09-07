@@ -109,6 +109,20 @@ describe('content publication projection', () => {
           resource: 'sessions',
           title: 'Růst bez zkratek',
           impact: ['time', 'location'],
+          fields: [
+            {
+              field: 'roomId',
+              label: 'Sál',
+              before: 'Nedostupná položka',
+              after: null,
+            },
+            {
+              field: 'startsAt',
+              label: 'Začátek',
+              before: '2026-09-18T08:00:00.000Z',
+              after: '2026-09-18T08:30:00.000Z',
+            },
+          ],
         },
       ],
       previousPublication: {

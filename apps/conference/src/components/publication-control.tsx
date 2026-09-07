@@ -371,20 +371,75 @@ export const PublicationControl = ({
               <ul className={styles.publicationChangeList}>
                 {visiblePreview.summary.changes.map((change, index) => (
                   <li key={`${change.resource}:${change.title}:${index}`}>
-                    <strong>{change.title}</strong>
-                    <span>
-                      {change.kind === 'added'
-                        ? 'Přidáno'
-                        : change.kind === 'updated'
-                          ? 'Upraveno'
-                          : change.kind === 'cancelled'
-                            ? 'Zrušeno'
-                            : 'Archivováno'}
-                      {' · '}
-                      {change.impact
-                        .map((impact) => changeImpactLabels[impact])
-                        .join(' · ')}
-                    </span>
+                    <details className={styles.publicationChangeDetails}>
+                      <summary>
+                        <strong>{change.title}</strong>
+                        <span>
+                          {change.kind === 'added'
+                            ? 'Přidáno'
+                            : change.kind === 'updated'
+                              ? 'Upraveno'
+                              : change.kind === 'cancelled'
+                                ? 'Zrušeno'
+                                : 'Archivováno'}
+                          {' · '}
+                          {change.impact
+                            .map((impact) => changeImpactLabels[impact])
+                            .join(' · ')}
+                        </span>
+                      </summary>
+                      {change.fields?.length ? (
+                        <div className={styles.publicationDiff}>
+                          {change.fields.map((field) => (
+                            <section
+                              key={field.field}
+                              className={styles.publicationDiffField}
+                              aria-label={field.label}
+                            >
+                              <h3>{field.label}</h3>
+                              <div className={styles.publicationDiffColumns}>
+                                {(['before', 'after'] as const).map((side) => (
+                                  <div
+                                    key={side}
+                                    className={
+                                      side === 'before'
+                                        ? styles.publicationDiffBefore
+                                        : styles.publicationDiffAfter
+                                    }
+                                  >
+                                    <h4>
+                                      {side === 'before'
+                                        ? 'Zveřejněno'
+                                        : 'Nová verze'}
+                                    </h4>
+                                    <p>
+                                      {field[side] === null
+                                        ? change.kind === 'added' &&
+                                          side === 'before'
+                                          ? 'Dosud nezveřejněno'
+                                          : change.kind === 'archived' &&
+                                              side === 'after'
+                                            ? 'Nebude zveřejněno'
+                                            : 'Není vyplněno'
+                                        : field[side] === ''
+                                          ? 'Prázdná hodnota'
+                                          : /At$/.test(field.field)
+                                            ? timestamp(field[side], timezone)
+                                            : field[side]}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className={styles.muted}>
+                          Podrobné porovnání není pro tento náhled dostupné.
+                          Načtěte nový přehled změn.
+                        </p>
+                      )}
+                    </details>
                   </li>
                 ))}
               </ul>
