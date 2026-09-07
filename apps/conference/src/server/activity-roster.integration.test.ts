@@ -122,6 +122,33 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         status: 'active',
       },
     ]);
+    await client.db.insert(schema.eventRoles).values(
+      allUserIds.map((userId) => ({
+        id: crypto.randomUUID(),
+        eventId: userId === isolationOperatorId ? isolationEventId : eventId,
+        userId,
+        role: 'participant' as const,
+      })),
+    );
+    await client.db.insert(schema.participantProfiles).values(
+      allUserIds
+        .filter(
+          (id) =>
+            ![
+              reservedUserId,
+              waitingUserId,
+              inactiveUserId,
+              speakerId,
+            ].includes(id),
+        )
+        .map((userId) => ({
+          eventId: userId === isolationOperatorId ? isolationEventId : eventId,
+          userId,
+          firstName: 'Demo',
+          lastName: 'Vedoucí',
+          contactEmail: `roster-${userId}@example.invalid`,
+        })),
+    );
     await client.db.insert(schema.eventRoles).values([
       {
         id: crypto.randomUUID(),

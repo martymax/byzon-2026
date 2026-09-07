@@ -61,7 +61,7 @@ describe('private participant questions', () => {
       </main>,
     );
     await screen.getByRole('textbox', { name: 'Váš dotaz' }).fill('Jak začít?');
-    await Promise.all(
+    await Promise.allSettled(
       screen.container.getAnimations({ subtree: true }).map((a) => a.finished),
     );
     await expectComponentToPassAxe(screen.container);

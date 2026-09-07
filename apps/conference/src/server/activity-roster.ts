@@ -1,3 +1,4 @@
+import { hasParticipantBaseline } from './question-readiness';
 import { schema, type Database } from '@byzon/database';
 import {
   activityRosterResponseSchema,
@@ -119,7 +120,11 @@ const loadAssignedSessionIds = async (
       ),
     }),
   ]);
-  if (!membership || assignments.length === 0) {
+  if (
+    !membership ||
+    assignments.length === 0 ||
+    !(await hasParticipantBaseline(dependencies.db, eventId, userId))
+  ) {
     throw eventAccessDenied();
   }
 

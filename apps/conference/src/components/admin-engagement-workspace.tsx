@@ -631,6 +631,11 @@ export const AdminEngagementWorkspace = () => {
                                   .map(({ displayName }) => displayName)
                                   .join(', ')
                               : 'Bez moderátora'}
+                            <small>
+                              {session.moderatorReady
+                                ? 'Přístup připraven'
+                                : 'Chybí aktivní účastnický přístup moderátora'}
+                            </small>
                           </td>
                           <td>
                             <button
@@ -684,6 +689,11 @@ export const AdminEngagementWorkspace = () => {
                                   .map(({ displayName }) => displayName)
                                   .join(', ')
                               : 'Bez moderátora'}
+                            <p>
+                              {session.moderatorReady
+                                ? 'Přístup připraven'
+                                : 'Chybí aktivní účastnický přístup moderátora'}
+                            </p>
                           </dd>
                           <dt>Účty řečníků</dt>
                           <dd>

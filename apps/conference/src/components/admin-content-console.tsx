@@ -1574,7 +1574,14 @@ export const AdminContentConsole = ({
             Archiv
           </button>
         </div>
-        {resource === 'sessions' && !readOnly ? <a className={styles.secondaryButton} href={`/api/v1/admin/events/${eventId}/session-qr?target=questions`}>Stáhnout Q&amp;A QR všech přednášek (ZIP)</a> : null}
+        {resource === 'sessions' && !readOnly ? (
+          <a
+            className={styles.secondaryButton}
+            href={`/api/v1/admin/events/${eventId}/session-qr?target=questions`}
+          >
+            Stáhnout Q&amp;A QR všech přednášek (ZIP)
+          </a>
+        ) : null}
         {busy === 'loading' ? (
           <p role="status">Načítám obsah…</p>
         ) : !snapshotReady ? (

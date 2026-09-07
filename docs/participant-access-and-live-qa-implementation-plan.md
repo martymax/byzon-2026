@@ -1,6 +1,6 @@
 # Přístup programových spolupracovníků a živé Q&A
 
-Stav: implementace zahájena 7. 9. 2026; AQ-00 lokální scope a inventář zpracovány
+Stav: implementace AQ-00 až ADMIN-03 a automatická část QA-05 dokončeny 7. 9. 2026; nasazení a fyzický staging rehearsal zbývají. [Přesný návod](runbooks/participant-access-live-qa.md) · [Ověření a commity](evidence/participant-access-live-qa-verification.md)
 
 Datum: 5. 9. 2026
 
@@ -31,6 +31,8 @@ Primární aplikace: `apps/conference`
 - QR-02: explicitní `target=questions` exportuje pouze publikované podporované session, deep link vede na `/app/interakce/:id`; programový cíl je zachován. ZIP manifest obsahuje název, stage, časy, odkaz a unikátní bezpečný soubor. 5 QR testů prošlo včetně whitelist filtru a čistého odkazu bez credentials/query.
 
 - ADMIN-03: Q&A seznam jen podporovaných session, oddělené přepínače a readiness, příprava moderátora při OFF ve všech administračních cestách, QR v Interakcích i Obsahu. Obecný seznam rolí umí zobrazit kompletní programové scopes. Lint/typecheck, 31 cílených integračních testů a nové browser scénáře prošly; dva starší tabletové timeouty následně prošly v samostatném běhu (12 testů).
+
+- QA-05: lokální integrační, security, browser/axe a upgrade rehearsal dokončeny. Doplněný timeout/retry, kontrola participant baseline i na přímém roster API, log redakce a zachování rozepsané odpovědi při souběhu. Kompletní conference sada 861 testů + navazující řetězec; database 129, domain 208; produkční build prošel. Fyzický staging rehearsal a produkční zapnutí nejsou touto evidencí tvrzeny; viz [runbook](runbooks/participant-access-live-qa.md).
 
 ## 1. Cíl
 

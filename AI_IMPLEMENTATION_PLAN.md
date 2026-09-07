@@ -699,7 +699,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-NETWORKING-01` | opt-in adresář, profil a fixed „Dnes lovím“ | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `integrated`; event-wide gate + explicitní participant opt-in, který atomicky zveřejní všechna vyplněná veřejná pole |
 | `CS-ADMIN-ENGAGEMENT-01` | event flags, session questions a session-scoped moderátoři | `packages/domain/src/contracts/admin-engagement.ts` | `P11-08`, `P12-10` | admin Priority B | `integrated`; private/no-store snapshot, masked candidates, optimistic/idempotentní auditované mutace a `/admin/interakce` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `integrated`; SVG + batch ZIP nad latest immutable publication |
-| `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` + AQ/QA/SPEAKER track | participant + moderator Priority B | základní submit/feed existuje; capability, lifecycle, owner history a speaker follow-up čekají na nový plán |
+| `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` + AQ/QA/SPEAKER track | participant + moderator Priority B | capability, lifecycle, owner history, moderator feed a speaker follow-up implementovány dle ADR-017; provozní ověření viz Q&A runbook |
 
 ---
 
@@ -720,7 +720,7 @@ Role se vážou k `event_id`. Globální superadmin se ve verzi 2026 nevytvář�
 Řečník používá aktivní participant baseline a doplňkovou roli `speaker`.
 ADR-017 povoluje anonymizované dotazy a soukromé odpovědi pouze po skončení
 vlastní linked session a pod samostatným follow-up flagem. Tato capability
-čeká na AQ-01/SPEAKER-03; roster vyžaduje explicitní `room_operator`.
+je implementována v AQ-01/SPEAKER-03/04; roster vyžaduje explicitní `room_operator`.
 Partner role neexistuje.
 
 ### 8.2 Matice minimálních oprávnění
@@ -2911,7 +2911,7 @@ Aktuální rozšíření řídí [plán přístupu a Q&A](docs/participant-acces
 a [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md).
 Staré `[x]` níže označuje existující základ, nikoli splnění nové testovací
 matice nebo staging rehearsal. AQ-00 má k 7. 9. 2026 inventář 17 session;
-AQ-01 a navazující balíčky zůstávají otevřené.
+AQ-01 až ADMIN-03 jsou implementované a lokálně ověřené. QA-05 automatickou evidenci a zbývající fyzický staging rehearsal zachycuje Q&A runbook.
 
 **Závislost:** finální seznam pátečních sessions na Byzon/Leadership stage a
 konkrétní session-scoped moderátoři v `BLOCKER-LIVE-01`.
@@ -2925,18 +2925,16 @@ konkrétní session-scoped moderátoři v `BLOCKER-LIVE-01`.
   admin read, hide/delete, approve/merge/reorder/answered workflow.
 - [x] `P12-04` Bounded REST polling s cursor/server time, backoffem a canonical
   reloadem po reconnectu; bez SSE/Redis pub-sub.
-- [~] `P12-05` Obecný programový QR existuje. Nově podle ADR-017 rozšířit
-  stejnou službu o target `questions` přímo do `/app/interakce/:sessionId`,
-  whitelist a admin download; vlastní `QR-02`/`ADMIN-03`.
+- [x] `P12-05` Programová QR služba rozšířena o target `questions` přímo do `/app/interakce/:sessionId`, whitelist, manifest a admin single/bulk download (`QR-02`/`ADMIN-03`).
 - [~] `P12-06` Rate-limit/XSS/IDOR testy a rehearsal na reálných tabletech
   moderátorů v obou pátečních scénách.
 - [x] `P12-07` Session/event ratings a completed suppression jako oddělený
   volitelný slice; komentáře hodnocení nijak nezrušily.
 - [–] `P12-08` Hlasování o dotazech, ankety, projection view a live výsledky –
   mimo rozsah 2026.
-- [ ] `P12-09` ADR-017 nově povoluje anonymizované dotazy po vlastní session
+- [x] `P12-09` ADR-017 implementuje anonymizované dotazy po vlastní session
   a jednu soukromou písemnou odpověď pro autora pod samostatným flagem.
-  Implementují `SPEAKER-03`/`04`; bez ručního předávání moderátorem.
+  Dokončeno v `SPEAKER-03`/`04`; bez ručního předávání moderátorem.
 - [x] `P12-10` Integrovat `/admin/interakce`: event-wide otázky a hodnocení,
   samostatný přepínač otázek u každé session a session-scoped přiřazení
   moderátora výběrem přednášky a aktivního účastníka. Vše je defaultně
@@ -3387,3 +3385,8 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.52 | 2. 9. 2026 | `AUX-13E` zpevnil lokální produkční `/admin/ucastnici`: legacy ticket search používá jen same-origin POST/no-store body, current-event slug, deduplikaci osoby, maskovaný kontakt a HMACovaný Redis limit 30/min; block/reactivate navíc vyžaduje `ticket:any:manage`, má limit 10/min, audit a kanonický `already_applied` replay. Server/unit sada má 609 PASS a PostgreSQL PII/origin/permission/audit regrese je připravená pro CI. Finální `[x]` zůstává blokované, protože scope-aligned SimpleShop import nevytváří ticket credential a resend/recovery importované identity vyžaduje invitation handshake `P4-06`–`P4-09`/`BLOCKER-AUTH-01`; reassign/transfer se nevytváří. |
 | 6.53 | 2. 9. 2026 | Závěrečný admin redesign gate audit potvrdil, že všechny lokálně implementovatelné AUX řezy jsou na `main`, root format/lint/typecheck/test/build a browser 1053/1053 jsou zelené. Veřejný Railway staging vrací ready pro DB/Redis a anonymní admin context korektně failuje private/no-store 401, ale běží starý release `bfead325…`; bez deploye aktuálního `main` a schváleného organizer UAT účtu nelze uzavřít `AUX-13A` ani navazující UAT. Otevřené jsou pouze explicitní externí/product gates: UAT aktéři a zařízení, invitation/recovery, support významy, supportMessage, privátní storage/DPA, finální obsah a personální obsazení. |
 | 6.54 | 2. 9. 2026 | Úplný status audit následně uzavřel poslední lokální `GAP-AUX-AUDIT-01`: produkční audit query filtruje PII-safe actor a odvozený outcome v SQL před keyset limitem, UI drží filtry i na dalších stránkách a exhaustive typovaný registr pokrývá všechny zapisované admin i podporované historické akce bez raw kódu. Server/unit sada má 609 PASS a browser 1053/1053; `AUX-13J` už čeká pouze na společný staging `AUX-13A`. |
+
+
+### AQ release evidence — 7. 9. 2026
+
+Balíčky AQ-00 až ADMIN-03 jsou implementované v samostatných commitech. QA-05 automatické ověření a provozní předání popisuje [runbook](docs/runbooks/participant-access-live-qa.md); [evidence](docs/evidence/participant-access-live-qa-verification.md) odděluje lokální výsledky od dosud neprovedeného staging/production zapnutí. Speaker portal/check-in zůstávají vypnuté, nové collection/follow-up flags nejsou tímto kódem provozně zapnuté.

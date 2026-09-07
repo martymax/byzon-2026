@@ -413,6 +413,8 @@ export function QuestionSessionAction({
     };
     load();
     const interval = setInterval(load, 10000);
+    document.addEventListener('visibilitychange', load);
+    window.addEventListener('online', load);
     const unsubscribe = subscribeToPrivateResourceInvalidation(() => {
       active = false;
       abort.abort();
@@ -422,6 +424,8 @@ export function QuestionSessionAction({
       active = false;
       abort.abort();
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', load);
+      window.removeEventListener('online', load);
       unsubscribe();
     };
   }, [eventId, sessionId]);

@@ -93,15 +93,13 @@ integration('admin engagement integration', () => {
         role: 'participant',
       },
     ]);
-    await client.db
-      .insert(schema.participantProfiles)
-      .values({
-        eventId,
-        userId: participantId,
-        firstName: 'Demo',
-        lastName: 'Moderátor',
-        contactEmail: `moderator-${participantId}@example.invalid`,
-      });
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: participantId,
+      firstName: 'Demo',
+      lastName: 'Moderátor',
+      contactEmail: `moderator-${participantId}@example.invalid`,
+    });
     await client.db.insert(schema.eventFeatures).values({ eventId });
     await client.db.insert(schema.eventDays).values({
       id: dayId,

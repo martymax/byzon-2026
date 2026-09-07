@@ -85,7 +85,7 @@ describe('program collaborator setup', () => {
     await screen
       .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Příprava programu');
-    await Promise.all(
+    await Promise.allSettled(
       screen.container
         .getAnimations({ subtree: true })
         .map((animation) => animation.finished),

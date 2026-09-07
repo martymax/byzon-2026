@@ -1,5 +1,9 @@
 # BYZON 2026 – handover
 
+## Přístup spolupracovníků a Q&A — 7. 9. 2026
+
+Implementované etapy a commity jsou v [plánu](docs/participant-access-and-live-qa-implementation-plan.md). Nový runtime zahrnuje source-independent participant role setup, scoped roster, 17 Q&A session, soukromou historii, moderator host feed, speaker odpovědi po konci, QR a admin preflight. [Přesný provozní a testovací návod](docs/runbooks/participant-access-live-qa.md) a [ověření](docs/evidence/participant-access-live-qa-verification.md) jsou výchozí body dalšího nasazení. Změny jsou lokálně commitnuté; fyzický staging rehearsal, skutečné účty a odeslání pozvánek se tím nepovažují za provedené.
+
 ## Aktivní navázání – redesign administrace (`AUX`, 2. 9. 2026)
 
 - Autoritativní specifikace i jediný tracker jsou v
@@ -1713,6 +1717,6 @@ read-only discovery pak doplní field/status mapping a source-code test vectors.
 - Přijat [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md); novější než historický zákaz speaker odpovědí.
 - [Source inventář](docs/evidence/participant-access-live-qa-inventory.md) a `packages/database/data/question-session-inventory-2026.json` zachycují 17 Q&A session včetně panelů. EB21 a „Jak na networking“ jsou výslovně mimo.
 - Uživatel určil Leadership Stage jako jedinou rezervovatelnou projekci pátečního networkingu; druhá je informativní. Kapacitu musí zadat admin.
-- Ruční baseline už existuje v `admin-support.ts`; znovu použít, nevytvářet paralelní flow. Speaker vazba sama nesmí otevírat roster; tuto existující větev odstraní ACCESS-03.
-- DATA-02 musí opravit importní speaker link Blanky k workshopu a networkingu na Leadership, explicitní slugs a reimport. Účty/UUID/role na stagingu tímto lokálním auditem nejsou ověřené.
-- Navázat AQ-01 (expand schema, kontrakty, permissions a přesný backfill). Nové runtime chování, staging migrace ani release rehearsal nejsou hotové.
+- Ruční baseline už existuje v `admin-support.ts`; znovu použít, nevytvářet paralelní flow. Speaker vazba sama nesmí otevírat roster; ACCESS-03 tuto původní větev odstranil.
+- DATA-02 opravil importní speaker link Blanky k workshopu, networking na Leadership, explicitní slugs a reimport. Účty/UUID/role na stagingu tímto lokálním auditem nejsou ověřené.
+- AQ-01 a navazující runtime jsou dokončené. Nyní navázat staging migrací a fyzickým release rehearsal podle nového runbooku.

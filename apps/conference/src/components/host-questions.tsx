@@ -195,6 +195,7 @@ export function ModeratorFeed({
     let active = true,
       busy = false,
       initialized = false;
+    let displayedIds = new Set<string>();
     const all = new Map<string, ModeratorQuestionFeed['items'][number]>();
     const abort = new AbortController();
     const wipe = () => {
@@ -210,7 +211,6 @@ export function ModeratorFeed({
       if (!active || busy || document.hidden) return;
       busy = true;
       try {
-        const additions: string[] = [];
         let last = [...all.values()].at(-1);
         let more = true;
         while (more && active) {
@@ -231,7 +231,6 @@ export function ModeratorFeed({
               'Účet se změnil.',
             );
           for (const item of data.items) {
-            if (!all.has(item.questionId)) additions.push(item.questionId);
             all.set(item.questionId, item);
           }
           const next = data.items.at(-1);
@@ -246,6 +245,10 @@ export function ModeratorFeed({
           { signal: abort.signal },
         );
         if (active) {
+          const additions = [...all.keys()].filter(
+            (id) => !displayedIds.has(id),
+          );
+          displayedIds = new Set(all.keys());
           setItems(
             [...all.values()].sort(
               (a, b) =>

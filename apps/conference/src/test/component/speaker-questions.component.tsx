@@ -36,7 +36,7 @@ it('retains answer and key after network loss and retries the same write', async
   await screen
     .getByRole('textbox', { name: 'Vaše písemná odpověď' })
     .fill('Začněte rozhovorem.');
-  await Promise.all(
+  await Promise.allSettled(
     screen.container.getAnimations({ subtree: true }).map((a) => a.finished),
   );
   await expectComponentToPassAxe(screen.container);

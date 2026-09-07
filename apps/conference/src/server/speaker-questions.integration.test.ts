@@ -77,6 +77,100 @@ suite('private speaker follow-ups', () => {
       expect((await write(user)).status).toBe(403);
     expect((await write(f.users.speaker)).status).toBe(201);
   });
+  it('rejects cross-event questions, revoked baseline, missing session link and a foreign origin', async () => {
+    const foreign = await createQuestionFixture();
+    try {
+      foreign.setNow('2026-09-18T09:30:00Z');
+      const submitted = await submitQuestion(
+        foreign.request('/submit', { text: 'Other event private text' }),
+        foreign.sessionId,
+        foreign.dependencies(),
+      );
+      const foreignId = (await submitted.json()).questionId;
+      const request = new Request(`${f.origin}/answer`, {
+        method: 'PUT',
+        headers: {
+          origin: f.origin,
+          'content-type': 'application/json',
+          'idempotency-key': randomUUID(),
+        },
+        body: JSON.stringify({ text: 'No access', expectedVersion: 0 }),
+      });
+      expect(
+        (
+          await writeQuestionAnswer(
+            request,
+            foreignId,
+            f.dependencies(f.users.speaker),
+          )
+        ).status,
+      ).toBe(404);
+      expect(
+        (
+          await readSpeakerQuestions(
+            f.request('/feed'),
+            foreign.sessionId,
+            f.dependencies(f.users.speaker),
+          )
+        ).status,
+      ).toBe(403);
+    } finally {
+      await foreign.cleanup();
+    }
+    await f.client.db
+      .update(schema.eventMemberships)
+      .set({ status: 'suspended' })
+      .where(
+        and(
+          eq(schema.eventMemberships.eventId, f.eventId),
+          eq(schema.eventMemberships.userId, f.users.speaker),
+        ),
+      );
+    expect((await write(f.users.speaker)).status).toBe(403);
+    await f.client.db
+      .update(schema.eventMemberships)
+      .set({ status: 'active' })
+      .where(
+        and(
+          eq(schema.eventMemberships.eventId, f.eventId),
+          eq(schema.eventMemberships.userId, f.users.speaker),
+        ),
+      );
+    await f.client.db
+      .delete(schema.sessionSpeakers)
+      .where(
+        and(
+          eq(schema.sessionSpeakers.sessionId, f.sessionId),
+          eq(schema.sessionSpeakers.speakerProfileId, f.speakerProfileId),
+        ),
+      );
+    expect((await write(f.users.speaker)).status).toBe(403);
+    await f.client.db.insert(schema.sessionSpeakers).values({
+      eventId: f.eventId,
+      sessionId: f.sessionId,
+      speakerProfileId: f.speakerProfileId,
+      sortOrder: 0,
+    });
+    const badOrigin = new Request(`${f.origin}/answer`, {
+      method: 'PUT',
+      headers: {
+        origin: 'https://other.test',
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      body: JSON.stringify({ text: 'No access', expectedVersion: 0 }),
+    });
+    expect(
+      (
+        await writeQuestionAnswer(
+          badOrigin,
+          questionId,
+          f.dependencies(f.users.speaker),
+        )
+      ).status,
+    ).toBe(422);
+  });
+
   it('exposes no author fields, and only the question owner reads the answer', async () => {
     expect((await write(f.users.speaker)).status).toBe(201);
     const feed = await (

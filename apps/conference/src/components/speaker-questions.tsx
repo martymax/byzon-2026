@@ -45,14 +45,20 @@ export function SpeakerAnswerEditor({
     expectedVersion: number;
     key: string;
   } | null>(null);
-  if (item.answer && !item.canEdit && !conflict)
+  if (
+    item.answer &&
+    !item.canEdit &&
+    !conflict &&
+    (!text.trim() || text === item.answer.text)
+  )
     return <p>Na tento dotaz již odpověděl jiný řečník.</p>;
   return (
     <form
       className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
-        if (busy || conflict || !text.trim()) return;
+        if (busy || conflict || (item.answer && !item.canEdit) || !text.trim())
+          return;
         if (
           !pending.current ||
           pending.current.text !== text.trim() ||
@@ -128,7 +134,7 @@ export function SpeakerAnswerEditor({
         {text.length} / 4000 znaků · Odpověď uvidí pouze autor dotazu.
       </p>
       {error ? <p role="alert">{error}</p> : null}
-      {conflict ? (
+      {conflict || (item.answer && !item.canEdit) ? (
         <>
           <p>
             Rozepsaný text zůstal zachován. Porovnejte jej s aktuální odpovědí
