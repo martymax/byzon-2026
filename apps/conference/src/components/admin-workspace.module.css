@@ -2905,3 +2905,42 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.sessionQr {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+}
+
+.sessionQrButton {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  max-width: 8rem;
+  padding: 0.3rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.5rem;
+  background: white;
+  color: var(--admin-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.sessionQrThumbnail {
+  display: block;
+  width: 72px;
+  height: 72px;
+}
+
+.sessionQrPreview {
+  display: block;
+  width: min(100%, 320px);
+  height: auto;
+  margin: 1rem auto;
+}
+
+.sessionQr a {
+  padding: 0.5rem;
+}

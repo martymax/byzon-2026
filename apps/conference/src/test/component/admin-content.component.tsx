@@ -154,6 +154,22 @@ describe('admin content user journeys', () => {
     const screen = await renderContent();
 
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    const qrButton = screen.getByRole('button', {
+      name: 'Zobrazit QR programu: Otevření konference',
+    });
+    await qrButton.click();
+    const qrDialog = screen.getByRole('dialog', {
+      name: 'Otevření konference',
+    });
+    await expect.element(qrDialog).toBeVisible();
+    await expect
+      .element(qrDialog.getByRole('link', { name: 'Stáhnout SVG' }))
+      .toHaveAttribute('href', expect.stringContaining('target=program'));
+    await expectComponentToPassAxe(contentRoot());
+    await userEvent.keyboard('{Escape}');
+    await expect.element(qrDialog).not.toBeInTheDocument();
+    await expect.element(qrButton).toHaveFocus();
+
     await expect.element(screen.getByText('Pátek · 9:00–10:00')).toBeVisible();
     await expect.element(screen.getByText('Main Stage')).toBeVisible();
     await expect.element(screen.getByText('Alex Novák')).toBeVisible();

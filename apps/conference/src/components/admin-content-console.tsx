@@ -23,6 +23,7 @@ import {
 import { ADMIN_CONTENT_SCOPE_CHANGE_EVENT } from '../lib/admin-content-dirty-guard';
 
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { AdminSessionQr } from './admin-session-qr';
 import {
   AdminContentAssetField,
   type AdminContentAssetPort,
@@ -530,18 +531,32 @@ const AdminContentItemList = memo(function AdminContentItemList({
               {contentPublicationStateLabel(item)}
             </small>
           </span>
+          {resource === 'sessions' && !readOnly ? (
+            item.status !== 'archived' &&
+            item.status !== 'cancelled' &&
+            (item.publicationState === 'published' ||
+              item.status === 'published') ? (
+              <AdminSessionQr
+                eventId={eventId}
+                sessionId={item.id}
+                title={itemLabel(item)}
+                target={
+                  item.status === 'published' &&
+                  item.questionMode === 'moderated_follow_up'
+                    ? 'questions'
+                    : 'program'
+                }
+              />
+            ) : (
+              <small className={styles.muted}>
+                {item.status === 'archived' || item.status === 'cancelled'
+                  ? 'QR není dostupné'
+                  : 'QR po zveřejnění'}
+              </small>
+            )
+          ) : null}
           {!readOnly && item.status !== 'archived' ? (
             <span className={styles.contentActions}>
-              {resource === 'sessions' &&
-              item.status === 'published' &&
-              item.questionMode === 'moderated_follow_up' ? (
-                <a
-                  className={styles.secondaryButton}
-                  href={`/api/v1/admin/events/${eventId}/session-qr/${item.id}?target=questions`}
-                >
-                  Q&amp;A QR
-                </a>
-              ) : null}
               <button
                 aria-label={`Upravit: ${itemLabel(item)}`}
                 className={styles.secondaryButton}
