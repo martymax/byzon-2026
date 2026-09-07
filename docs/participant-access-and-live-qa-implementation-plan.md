@@ -150,7 +150,7 @@ MVP neposílá e-mailové notifikace o novém dotazu ani odpovědi. Participant 
 
 ### 3.6 Časová pravidla
 
-- Formulář může zobrazit stav předem, ale přijímá dotazy pouze v intervalu `startsAt <= now < endsAt`.
+- Dotazy lze posílat i před začátkem přednášky; časová podmínka je `now < endsAt + 30 minut`.
 - Čas vyhodnocuje výhradně server v UTC; lokalizace se používá jen pro zobrazení.
 - Po konci je nový submit odmítnut stabilním problem kódem, ale autor stále může číst svůj dotaz a pozdější odpověď.
 - Speaker může číst a publikovat písemné odpovědi od `endsAt` do archivace eventu nebo odebrání přístupu.
@@ -351,7 +351,7 @@ event.questionsEnabled
 AND session.questionMode = moderated_follow_up
 AND session.questionsEnabled
 AND session.status = published
-AND startsAt <= now < endsAt
+AND now < endsAt + INTERVAL '30 minutes'
 ```
 
 Backfill smí nastavit `moderated_follow_up` jen na explicitní whitelist session z pátku na BYZON Stage a Leadership Stage. Whitelist musí být dohledatelný v content seed/import datech a pokrytý testem; migrace ani request-time autorizace nesmí hádat podle názvu.

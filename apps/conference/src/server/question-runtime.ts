@@ -12,6 +12,8 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ApiProblemError } from './api/problem';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import type { QuestionsDependencies } from './questions';
+const QUESTION_GRACE_PERIOD_MS = 30 * 60 * 1000;
+
 export type QuestionDb = Database | DatabaseTransaction;
 export function questionFailure(
   code: string,
@@ -132,11 +134,9 @@ export async function loadQuestionSession(
       ? 'unsupported'
       : !feature?.questionsEnabled || !record.questionsEnabled
         ? 'disabled'
-        : now < record.startsAt
-          ? 'scheduled'
-          : now >= record.endsAt
-            ? 'closed'
-            : 'open';
+        : now.getTime() >= record.endsAt.getTime() + QUESTION_GRACE_PERIOD_MS
+          ? 'closed'
+          : 'open';
   const roomName = snapshot.success
     ? (snapshot.data.program.rooms.find((room) => room.id === published.roomId)
         ?.name ?? null)
@@ -173,13 +173,13 @@ export function requireQuestionCollection(context: QuestionContext) {
     questionFailure(
       'QUESTIONS_NOT_OPEN',
       409,
-      'Dotazy se otevřou na začátku přednášky.',
+      'Sběr dotazů zatím není otevřený.',
     );
   if (context.state === 'closed')
     questionFailure(
       'QUESTIONS_CLOSED',
       409,
-      'Přednáška skončila. Nové dotazy už nelze odeslat.',
+      'Uplynulo 30 minut od konce přednášky. Nové dotazy už nelze odeslat.',
     );
 }
 export async function lockQuestionAccess(

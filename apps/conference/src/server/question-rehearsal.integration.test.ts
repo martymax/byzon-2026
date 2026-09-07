@@ -72,7 +72,7 @@ suite('complete Q&A handler rehearsal', () => {
       );
       expect(feed.status).toBe(200);
       expect((await feed.json()).items).toHaveLength(1);
-      f.setNow('2026-09-18T10:00:00Z');
+      f.setNow('2026-09-18T10:30:00Z');
       expect(
         (
           await submitQuestion(

@@ -26,9 +26,9 @@ export const questionTime = (value: string) =>
 const stateLabels = {
   unsupported: 'Tento blok nepodporuje dotazy.',
   disabled: 'Sběr dotazů je nyní vypnutý.',
-  scheduled: 'Dotazy se otevřou na začátku přednášky.',
-  open: 'Právě přijímáme dotazy.',
-  closed: 'Přednáška skončila. Nové dotazy už nepřijímáme.',
+  scheduled: 'Sběr dotazů zatím není otevřený.',
+  open: 'Dotazy přijímáme před přednáškou, během ní a ještě 30 minut po skončení.',
+  closed: 'Uplynulo 30 minut od konce přednášky. Nové dotazy už nepřijímáme.',
 };
 export const questionError = (error: unknown) =>
   error instanceof PrivateApiError

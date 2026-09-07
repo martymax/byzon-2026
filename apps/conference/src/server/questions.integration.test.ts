@@ -61,12 +61,31 @@ suite('authoritative participant Q&A', () => {
     ).toBe(403);
   });
   it.each([
-    ['2026-09-18T08:59:59.999Z', 409, 'QUESTIONS_NOT_OPEN'],
+    ['2026-09-07T08:00:00Z', 201, null],
+    ['2026-09-18T08:59:59.999Z', 201, null],
     ['2026-09-18T09:00:00Z', 201, null],
     ['2026-09-18T09:59:59.999Z', 201, null],
-    ['2026-09-18T10:00:00Z', 409, 'QUESTIONS_CLOSED'],
+    ['2026-09-18T10:00:00Z', 201, null],
+    ['2026-09-18T10:29:59.999Z', 201, null],
+    ['2026-09-18T10:30:00Z', 409, 'QUESTIONS_CLOSED'],
+    ['2026-09-18T10:30:00.001Z', 409, 'QUESTIONS_CLOSED'],
   ] as const)('enforces server time at %s', async (time, status, code) => {
     f.setNow(time);
+    if (time < '2026-09-18T09:00:00Z') {
+      await f.client.db
+        .update(schema.events)
+        .set({ status: 'activation_open' })
+        .where(eq(schema.events.id, f.eventId));
+    }
+    const context = await readQuestionContext(
+      f.request('/context'),
+      f.sessionId,
+      f.dependencies(),
+    );
+    expect(await context.json()).toMatchObject({
+      state: code ? 'closed' : 'open',
+      canSubmit: status === 201,
+    });
     const response = await submit();
     expect(response.status).toBe(status);
     if (code) expect(await response.json()).toMatchObject({ code });
@@ -93,7 +112,7 @@ suite('authoritative participant Q&A', () => {
     const key = randomUUID();
     const first = await submit(undefined, undefined, undefined, key);
     expect(first.status).toBe(201);
-    f.setNow('2026-09-18T10:00:00Z');
+    f.setNow('2026-09-18T10:30:00Z');
     const second = await submit(undefined, undefined, undefined, key);
     expect(second.status).toBe(201);
     expect(await second.json()).toEqual(await first.json());

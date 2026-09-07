@@ -32,7 +32,7 @@ portál, materiály, veřejná registrace a check-in zůstávají mimo rozsah.
    EB21 a „Jak na networking“ jsou výslovně vyloučené. Za běhu se capability
    nikdy neodvozuje z názvu, dne či obecného typu session.
 4. Živý sběr vyžaduje oba provozní přepínače, publikovanou podporovanou session
-   a serverové UTC okno `startsAt <= now < endsAt`. Autoritativní runtime
+   a serverové UTC okno `now < endsAt + 30 minut`. Autoritativní runtime
    context musí promítnout admin změnu bez nové publikace programu.
    Moderátory i session toggles lze připravit při globálním OFF; přechod na
    ON vyžaduje coverage preflight.
