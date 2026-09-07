@@ -669,7 +669,7 @@
   font-weight: 750;
 }
 
-.field input,
+.field input:not([type='checkbox']):not([type='radio']),
 .field select,
 .field textarea {
   width: 100%;
@@ -2970,4 +2970,99 @@
 .sessionQrDownload:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 3px;
+}
+
+/* Shared form primitives: choice cards are not metric cards or text fields. */
+.summaryGrid:has(> label.dataCard) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  align-items: stretch;
+  margin: 0;
+}
+
+.summaryGrid:empty {
+  display: none;
+}
+
+label.dataCard:has(> input:is([type='radio'], [type='checkbox'])) {
+  display: grid;
+  grid-template-columns: 1.125rem minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  gap: 0.4rem 0.75rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+label.dataCard > input:is([type='radio'], [type='checkbox']) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+label.dataCard:has(> input) > :is(strong, span) {
+  grid-column: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+label.dataCard:has(> input) > strong {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+label.dataCard:has(> input) > span {
+  font-size: 0.875rem;
+  color: var(--admin-text-muted);
+}
+
+label.dataCard:has(> input:checked) {
+  border-color: var(--admin-primary);
+  background: var(--admin-surface-brand);
+}
+
+label.dataCard:has(> input:focus-visible) {
+  outline: 3px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+
+label.dataCard:has(> input:disabled) {
+  cursor: default;
+}
+
+.field input:is([type='checkbox'], [type='radio']),
+label.dataCard > input:is([type='checkbox'], [type='radio']) {
+  appearance: auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  min-height: 0;
+  flex: 0 0 1.125rem;
+  padding: 0;
+  margin: 0.15rem 0 0;
+  accent-color: var(--admin-primary);
+}
+
+.field:has(> input:is([type='checkbox'], [type='radio'])),
+.field > span:has(> input:is([type='checkbox'], [type='radio'])) {
+  display: flex;
+  align-items: start;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.field select:not([multiple]):not([size]) {
+  height: 2.75rem;
+}
+
+.actionRow:has(> .field) {
+  justify-content: flex-start;
+  align-items: flex-end;
+}
+
+.actionRow > .field {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 32rem;
 }
