@@ -126,3 +126,22 @@ describe('AQ-00 reviewed Q&A inventory', () => {
     }
   });
 });
+
+it('backfills exactly the approved inventory with event, time and room guards', async () => {
+  const sql = await readFile(
+    new URL('../drizzle/0028_private_question_follow_ups.sql', import.meta.url),
+    'utf8',
+  );
+  const rows = [...sql.matchAll(/^    \('([^']+)', 'program\.days/gm)].map(
+    (match) => match[1],
+  );
+  expect(rows).toEqual(inventory.sessions.map((row) => row.sessionSlug));
+  expect(sql).toContain("e.slug = 'byzon-2026'");
+  expect(sql).toContain('s.starts_at = a.starts_at AND s.ends_at = a.ends_at');
+  expect(sql).toContain('r.slug = a.room_slug');
+  expect(
+    sql.indexOf('CREATE UNIQUE INDEX "questions_event_session_id_unique"'),
+  ).toBeLessThan(
+    sql.indexOf('ADD CONSTRAINT "question_answers_question_event_session_fk"'),
+  );
+});

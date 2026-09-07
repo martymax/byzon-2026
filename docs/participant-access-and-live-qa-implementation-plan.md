@@ -10,7 +10,7 @@ Primární aplikace: `apps/conference`
 
 - 7. 9. 2026: AQ-00 – přijat [ADR-017](adr/017-participant-collaborators-and-private-question-follow-ups.md), vytvořen [source inventář](evidence/participant-access-live-qa-inventory.md) a strojový whitelist s kontrolou proti kanonickým datům.
 - Uživatel potvrdil vyloučení EB21 a „Jak na networking“ z Q&A: 17 přednáškových/panelových session. Kanonický rezervovatelný networking je Leadership Stage; druhá projekce je pouze informativní.
-- AQ-01 a navazující implementace zatím nejsou dokončené. Skutečné účty, publikace, provozní kapacita networkingu a staging rehearsal čekají na ověření; lokální inventář je nenahrazuje.
+- AQ-01: expand schéma, migrace `0028`, sdílené Q&A DTO a scoped speaker permission implementovány. Čistá lokální PostgreSQL 17 migrace/seed prošly; database lint/typecheck + 128 testů a domain lint/typecheck + 208 testů prošly. Navazující balíčky jsou rozpracované. Skutečné účty, publikace, provozní kapacita networkingu a staging rehearsal čekají na ověření; lokální inventář je nenahrazuje.
 
 ## 1. Cíl
 

@@ -295,6 +295,11 @@ export const rooms = pgTable(
   ],
 );
 
+export const questionMode = pgEnum('question_mode', [
+  'disabled',
+  'moderated_follow_up',
+]);
+
 export const programSessions = pgTable(
   'sessions',
   {
@@ -326,6 +331,7 @@ export const programSessions = pgTable(
     allowReleaseAfterDeadline: boolean('allow_release_after_deadline')
       .default(false)
       .notNull(),
+    questionMode: questionMode('question_mode').default('disabled').notNull(),
     questionsEnabled: boolean('questions_enabled').default(false).notNull(),
     sortOrder: integer('sort_order').notNull(),
     version: integer('version').default(1).notNull(),
