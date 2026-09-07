@@ -14,6 +14,19 @@ import {
 import { PrivateApiError, requestPrivateJson } from '@/lib/private-json';
 import { useAdminWorkspace } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
+import accessStyles from './program-access.module.css';
+const sessionTime = new Intl.DateTimeFormat('cs-CZ', {
+  day: 'numeric',
+  month: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Europe/Prague',
+});
+const normalizeSearch = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('cs-CZ');
 const roleNames = {
   speaker: 'Řečník',
   room_operator: 'Vedoucí aktivity',
@@ -58,6 +71,13 @@ export function ProgramAccessForm({
   const [speakerId, setSpeakerId] = useState('');
   const [roomId, setRoomId] = useState('');
   const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const [sessionQuery, setSessionQuery] = useState('');
+  const visibleSessions =
+    options?.sessions.filter((session) =>
+      normalizeSearch(`${session.title} ${session.roomName ?? ''}`).includes(
+        normalizeSearch(sessionQuery.trim()),
+      ),
+    ) ?? [];
   const [operation, setOperation] = useState<'apply' | 'revoke'>('apply');
   const [review, setReview] = useState<ProgramAccessPreview | null>(null);
   const [reason, setReason] = useState('');
@@ -115,8 +135,9 @@ export function ProgramAccessForm({
     }
   };
   return (
-    <div className={styles.stack} aria-busy={busy}>
+    <div className={`${styles.stack} ${accessStyles.form}`} aria-busy={busy}>
       <form
+        className={accessStyles.search}
         onSubmit={(event) => {
           event.preventDefault();
           void run(async () => {
@@ -153,7 +174,7 @@ export function ProgramAccessForm({
         nebo importujte ze SimpleShopu. Tady účet nevzniká.
       </p>
       {people.length ? (
-        <ul>
+        <ul className={accessStyles.people}>
           {people.map((item) => (
             <li key={item.participantId}>
               <Button
@@ -172,19 +193,31 @@ export function ProgramAccessForm({
       ) : null}
       {person ? (
         <>
-          <p>
-            <strong>{person.displayName}</strong> ·{' '}
-            {person.source === 'manual' ? 'Ručně přidaný' : 'SimpleShop'} ·{' '}
-            {person.membershipStatus === 'active'
-              ? 'Aktivní účast'
-              : 'Neaktivní účast'}{' '}
-            ·{' '}
-            {person.invitationStatus === 'not_sent'
-              ? 'Pozvánka neodeslána'
-              : person.invitationStatus === 'sent'
-                ? 'Pozvánka odeslána'
-                : 'Přihlášení ověřeno'}
-          </p>
+          <div className={accessStyles.person}>
+            <span className={accessStyles.avatar} aria-hidden="true">
+              {person.displayName
+                .trim()
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part[0])
+                .join('')}
+            </span>
+            <div>
+              <strong>{person.displayName}</strong>
+              <p>
+                {person.source === 'manual' ? 'Ručně přidaný' : 'SimpleShop'} ·{' '}
+                {person.membershipStatus === 'active'
+                  ? 'Aktivní účast'
+                  : 'Neaktivní účast'}{' '}
+                ·{' '}
+                {person.invitationStatus === 'not_sent'
+                  ? 'Pozvánka neodeslána'
+                  : person.invitationStatus === 'sent'
+                    ? 'Pozvánka odeslána'
+                    : 'Přihlášení ověřeno'}
+              </p>
+            </div>
+          </div>
           {!person.baselineReady ? (
             <p role="alert">
               Účet nemá připravený participant přístup. Opravte jej ve správě
@@ -192,6 +225,7 @@ export function ProgramAccessForm({
             </p>
           ) : null}
           <form
+            className={accessStyles.assignment}
             onSubmit={(event) => {
               event.preventDefault();
               void run(async () => {
@@ -252,13 +286,34 @@ export function ProgramAccessForm({
                 </select>
               </label>
             ) : preset === 'moderator' ? (
-              <fieldset className={styles.fieldset}>
+              <fieldset className={accessStyles.sessions}>
                 <legend>Přiřazené přednášky</legend>
-                {options?.sessions.map((session) => (
-                  <label className={styles.field} key={session.id}>
-                    <span>
+                <div className={accessStyles.toolbar}>
+                  <label className={styles.field}>
+                    <span>Vyhledat přednášku</span>
+                    <input
+                      type="search"
+                      placeholder="Název nebo stage"
+                      value={sessionQuery}
+                      onChange={(event) => setSessionQuery(event.target.value)}
+                    />
+                  </label>
+                  <span className={accessStyles.count} role="status">
+                    Vybráno {sessionIds.length} z{' '}
+                    {options?.sessions.length ?? 0}
+                  </span>
+                </div>
+                <div className={accessStyles.sessionList}>
+                  {visibleSessions.map((session) => (
+                    <label
+                      className={accessStyles.sessionChoice}
+                      data-selected={sessionIds.includes(session.id)}
+                      key={session.id}
+                    >
                       <input
                         type="checkbox"
+                        aria-label={session.title}
+                        disabled={busy}
                         checked={sessionIds.includes(session.id)}
                         onChange={(event) => {
                           reset();
@@ -268,11 +323,33 @@ export function ProgramAccessForm({
                               : ids.filter((id) => id !== session.id),
                           );
                         }}
-                      />{' '}
-                      {session.title}
-                    </span>
-                  </label>
-                ))}
+                      />
+                      <span className={accessStyles.sessionText}>
+                        <span className={accessStyles.sessionTitle}>
+                          {session.title}
+                        </span>
+                        <span className={accessStyles.sessionDetails}>
+                          <span>
+                            {sessionTime.format(new Date(session.startsAt))}–
+                            {new Intl.DateTimeFormat('cs-CZ', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              timeZone: 'Europe/Prague',
+                            }).format(new Date(session.endsAt))}
+                          </span>
+                          <span>{session.roomName ?? 'Stage neurčena'}</span>
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                  {!visibleSessions.length ? (
+                    <p className={accessStyles.empty}>
+                      {options
+                        ? 'Žádná přednáška neodpovídá hledání.'
+                        : 'Načítám přednášky…'}
+                    </p>
+                  ) : null}
+                </div>
               </fieldset>
             ) : (
               <label className={styles.field}>

@@ -111,6 +111,88 @@ describe('program collaborator setup', () => {
     expect(bodies[0]).toBe(bodies[1]);
     expect(keys[0]).toBe(keys[1]);
   });
+  it('keeps moderator choices while filtering and renders compact accessible rows', async () => {
+    const person = {
+      participantId: userId,
+      displayName: 'Max Martynenko',
+      maskedEmail: 'm…@example.test',
+      membershipStatus: 'active',
+      invitationStatus: 'accepted',
+      source: 'manual',
+      baselineReady: true,
+    };
+    const titles = [
+      'Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu',
+      'Co vás dostalo sem, vás dál nedostane',
+      'Co mi nikdo neřekl o tom být CEO',
+      'Šimon Srp',
+      'Zrádci lidskosti – moderovaná diskuze',
+      'Jak vyjednávat lidsky a získávat zákazníky jinak než slevami',
+    ];
+    const sessions = titles.map((title, i) => ({
+      id: `019fa200-0000-7000-8000-${String(i + 10).padStart(12, '0')}`,
+      title,
+      startsAt: '2026-09-18T08:00:00.000Z',
+      endsAt: '2026-09-18T08:45:00.000Z',
+      roomName: i % 2 ? 'Leadership Stage' : 'BYZON Stage',
+    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).endsWith('/options')
+          ? Response.json({ eventId, speakers: [], rooms: [], sessions })
+          : Response.json({ eventId, items: [person] }),
+      ),
+    );
+    const screen = await renderComponent(
+      <main
+        data-admin-root
+        className={styles.workspace}
+        style={{ padding: '24px', fontFamily: 'Arial, sans-serif' }}
+      >
+        <section className={styles.panel}>
+          <h1 style={{ fontSize: '24px', lineHeight: 1.3 }}>
+            Programoví spolupracovníci
+          </h1>
+          <ProgramAccessForm eventId={eventId} invalidate={vi.fn()} />
+        </section>
+      </main>,
+    );
+    await screen
+      .getByRole('textbox', { name: '1. Vyhledat existujícího účastníka' })
+      .fill('Max');
+    await screen.getByRole('button', { name: 'Vyhledat', exact: true }).click();
+    await screen
+      .getByRole('button', { name: 'Max Martynenko · m…@example.test' })
+      .click();
+    await screen
+      .getByRole('combobox', { name: '2. Spolupráce' })
+      .selectOptions('moderator');
+    const first = screen.getByRole('checkbox', {
+      name: titles[0]!,
+      exact: true,
+    });
+    await first.click();
+    await screen
+      .getByRole('searchbox', { name: 'Vyhledat přednášku' })
+      .fill('simon');
+    await expect
+      .element(screen.getByRole('checkbox', { name: 'Šimon Srp' }))
+      .toBeVisible();
+    expect(screen.getByRole('checkbox').elements()).toHaveLength(1);
+    await expect.element(screen.getByText('Vybráno 1 z 6')).toBeVisible();
+    await screen
+      .getByRole('searchbox', { name: 'Vyhledat přednášku' })
+      .fill('');
+    await expect.element(first).toBeChecked();
+    const bounds = first.element().getBoundingClientRect();
+    expect(bounds.width).toBeLessThanOrEqual(24);
+    expect(bounds.height).toBeLessThanOrEqual(24);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
+    await expectComponentToPassAxe(screen.container);
+  });
   it('shows only server-granted host capabilities', async () => {
     vi.stubGlobal(
       'fetch',
