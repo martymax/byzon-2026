@@ -2,7 +2,14 @@
 
 import { ActionLink, Button, Skeleton, StatePanel } from '@byzon/ui';
 import type { IdentityBootstrapResponse } from '@byzon/domain/contracts';
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
+import { useParticipantSessionContext } from './participant-session-context';
 
 import {
   useParticipantAccountResource,
@@ -10,11 +17,8 @@ import {
 } from '@/components/participant-account-resource';
 import { requestClientNavigation } from '@/lib/client-navigation-events';
 
-const accountLoginHref = (
-  mode: 'recovery' | 'switch',
-  returnTo: ParticipantAccountReturnTo,
-): string =>
-  `/prihlaseni?mode=${mode}&returnTo=${encodeURIComponent(returnTo)}`;
+const accountLoginHref = (returnTo: ParticipantAccountReturnTo): string =>
+  `/prihlaseni?mode=recovery&returnTo=${encodeURIComponent(returnTo)}`;
 
 const AccountFailure = ({
   loginReturnTo,
@@ -46,7 +50,7 @@ const AccountFailure = ({
     return (
       <StatePanel
         action={
-          <ActionLink href={accountLoginHref('recovery', loginReturnTo)}>
+          <ActionLink href={accountLoginHref(loginReturnTo)}>
             Obnovit přihlášení
           </ActionLink>
         }
@@ -98,10 +102,7 @@ const AccountFailure = ({
     return (
       <StatePanel
         action={
-          <ActionLink
-            href={accountLoginHref('switch', loginReturnTo)}
-            variant="secondary"
-          >
+          <ActionLink href="/app/nastaveni" variant="secondary">
             Použít jiný účet
           </ActionLink>
         }
@@ -139,7 +140,7 @@ export type ParticipantAccountReturnTo =
 
 const defaultNavigate = requestClientNavigation;
 
-export const ParticipantAccountBoundary = ({
+const ParticipantAccountDataBoundary = ({
   children,
   loginReturnTo,
   navigate = defaultNavigate,
@@ -154,8 +155,7 @@ export const ParticipantAccountBoundary = ({
   const resource = useParticipantAccountResource();
   const retryResource = resource.retry;
   const recoverAfterRetry = useRef(false);
-  const recoveryLoginHref = accountLoginHref('recovery', loginReturnTo);
-  const switchLoginHref = accountLoginHref('switch', loginReturnTo);
+  const recoveryLoginHref = accountLoginHref(loginReturnTo);
   const retry = useCallback(() => {
     recoverAfterRetry.current = true;
     retryResource();
@@ -173,9 +173,9 @@ export const ParticipantAccountBoundary = ({
     if (resource.state.status === 'session_expired') {
       navigate(recoveryLoginHref);
     } else if (resource.state.status === 'permission') {
-      navigate(switchLoginHref);
+      navigate('/app/nastaveni');
     }
-  }, [navigate, recoveryLoginHref, resource.state.status, switchLoginHref]);
+  }, [navigate, recoveryLoginHref, resource.state.status]);
 
   if (resource.state.status === 'idle' || resource.state.status === 'loading') {
     return (
@@ -196,4 +196,25 @@ export const ParticipantAccountBoundary = ({
     );
   }
   return children(resource.state.data, resource);
+};
+
+export const ParticipantAccountBoundary = (
+  props: ComponentProps<typeof ParticipantAccountDataBoundary>,
+) => {
+  const session = useParticipantSessionContext();
+  if (session?.isAdmin && !session.isParticipant) {
+    return (
+      <StatePanel
+        kind="empty"
+        title="Používáte administrátorský účet"
+        action={<ActionLink href="/admin">Otevřít administraci</ActionLink>}
+      >
+        <p>
+          Tento účet má přístup do administrace, ale nemá účastnickou roli. Pro
+          správu vlastní účasti se přihlaste účastnickým účtem.
+        </p>
+      </StatePanel>
+    );
+  }
+  return <ParticipantAccountDataBoundary {...props} />;
 };

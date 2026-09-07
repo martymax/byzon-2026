@@ -4,6 +4,8 @@ import {
   type AdminPublicationChange,
 } from '@byzon/domain/contracts';
 
+import { publicationFieldDiff } from './publication-field-diff';
+
 import {
   adminContentResources,
   parseAdminContentItems,
@@ -442,6 +444,7 @@ export const createAdminContentPreviewPort = ({
   readonly eventId: string;
 }): AdminContentPreviewPort => {
   const content = initialContent(eventId);
+  let publishedContent: typeof content | null = null;
   let mode: AdminContentPreviewMode = 'ready';
   let serial = 20;
   let contentRevision = 1;
@@ -755,9 +758,27 @@ export const createAdminContentPreviewPort = ({
                   resource,
                   title: previewItemTitle(item),
                   impact: ['content'],
+                  fields: publicationFieldDiff(undefined, item, {}, content),
                 })),
             )
-          : [...pendingChanges.values()];
+          : [...pendingChanges.entries()].map(([key, change]) => {
+              const id = key.slice(key.indexOf(':') + 1);
+              const before = publishedContent?.[change.resource].find(
+                (item) => item.id === id,
+              );
+              const after = content[change.resource].find(
+                (item) => item.id === id && item.status !== 'archived',
+              );
+              return {
+                ...change,
+                fields: publicationFieldDiff(
+                  before,
+                  after,
+                  publishedContent ?? {},
+                  content,
+                ),
+              };
+            });
       preview = {
         checksumSha256,
         createdAt: '2026-07-26T08:00:00.000+02:00',
@@ -816,6 +837,7 @@ export const createAdminContentPreviewPort = ({
       preview = null;
       significantSessionIds.clear();
       pendingChanges.clear();
+      publishedContent = structuredClone(content);
       return success(result);
     },
   };

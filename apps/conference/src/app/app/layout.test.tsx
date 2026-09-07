@@ -7,6 +7,18 @@ const layoutMocks = vi.hoisted(() => ({
   loadParticipantLayoutEventContext: vi.fn(),
   navigation: vi.fn(),
   notifications: vi.fn(),
+  sessionContext: vi.fn(),
+  resolveSessionContext: vi.fn(),
+  getSession: vi.fn(),
+}));
+
+vi.mock('next/headers', () => ({ headers: async () => new Headers() }));
+vi.mock('@/server/auth', () => ({
+  auth: { api: { getSession: layoutMocks.getSession } },
+}));
+vi.mock('@/server/database', () => ({ database: { db: {} } }));
+vi.mock('@/server/participant-session-context', () => ({
+  resolveParticipantSessionContext: layoutMocks.resolveSessionContext,
 }));
 
 vi.mock('@/server/current-event', () => ({
@@ -24,6 +36,7 @@ vi.mock('@/components/participant-layout-shell', () => ({
     children,
     navigationMode,
     notificationsEnabled,
+    sessionContext,
   }: {
     readonly accountScope:
       | { readonly kind: 'active'; readonly eventId: string }
@@ -37,10 +50,12 @@ vi.mock('@/components/participant-layout-shell', () => ({
       | 'archived-preview'
       | 'unavailable';
     readonly notificationsEnabled?: boolean;
+    readonly sessionContext?: unknown;
   }) => {
     layoutMocks.accountScope(accountScope);
     layoutMocks.navigation(navigationMode);
     layoutMocks.notifications(notificationsEnabled);
+    layoutMocks.sessionContext(sessionContext);
     return <div data-mode={navigationMode}>{children}</div>;
   },
 }));
@@ -59,10 +74,50 @@ describe('participant layout event-phase gate', () => {
     layoutMocks.loadParticipantLayoutEventContext.mockReset();
     layoutMocks.navigation.mockReset();
     layoutMocks.notifications.mockReset();
+    layoutMocks.sessionContext.mockReset();
+    layoutMocks.getSession.mockReset().mockResolvedValue(null);
+    layoutMocks.resolveSessionContext.mockReset().mockResolvedValue(null);
+  });
+
+  it('passes independently verified admin roles to every participant page', async () => {
+    layoutMocks.loadParticipantLayoutEventContext.mockResolvedValue({
+      currentEvent: { kind: 'unavailable' },
+    });
+    layoutMocks.getSession.mockResolvedValue({ user: { id: 'admin-id' } });
+    const context = { isAdmin: true, isParticipant: false };
+    layoutMocks.resolveSessionContext.mockResolvedValue(context);
+    renderToStaticMarkup(await ParticipantLayout({ children: <p>Účet</p> }));
+    expect(layoutMocks.resolveSessionContext).toHaveBeenCalledWith(
+      {},
+      'admin-id',
+    );
+    expect(layoutMocks.sessionContext).toHaveBeenCalledWith(context);
   });
 
   it('forces a fresh server-derived scope for every participant request', () => {
     expect(dynamic).toBe('force-dynamic');
+  });
+
+  it('keeps account recovery reachable if session navigation cannot be loaded', async () => {
+    layoutMocks.loadParticipantLayoutEventContext.mockResolvedValue({
+      currentEvent: { kind: 'available', event: { id: 'event-id' } },
+    });
+    layoutMocks.resolveSessionContext.mockRejectedValue(
+      new Error('role lookup unavailable'),
+    );
+    const report = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      const markup = renderToStaticMarkup(
+        await ParticipantLayout({ children: <p>Správa přihlášení</p> }),
+      );
+      expect(markup).toContain('Správa přihlášení');
+      expect(layoutMocks.sessionContext).toHaveBeenCalledWith(null);
+      expect(report).toHaveBeenCalledOnce();
+    } finally {
+      report.mockRestore();
+    }
   });
 
   it.each([

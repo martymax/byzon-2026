@@ -19,6 +19,8 @@ import {
   publishedProgramAgendaSnapshotSchema,
 } from '@byzon/domain/contracts';
 
+import { publicationFieldDiff } from '../lib/publication-field-diff';
+
 import { requireWritableAdminEvent } from './admin-event-writability';
 
 export class ContentPublicationError extends Error {
@@ -453,6 +455,12 @@ export const summarizePublicationChanges = (
       if (!prior) {
         changes.push({
           kind: 'added',
+          fields: publicationFieldDiff(
+            undefined,
+            item,
+            previousCollections ?? {},
+            currentCollections,
+          ),
           resource,
           title: publicationItemTitle(resource, item),
           impact: ['content'],
@@ -470,12 +478,24 @@ export const summarizePublicationChanges = (
         resource,
         title: publicationItemTitle(resource, item),
         impact: publicationImpact(resource, prior, item),
+        fields: publicationFieldDiff(
+          prior,
+          item,
+          previousCollections ?? {},
+          currentCollections,
+        ),
       });
     }
     for (const [id, item] of before) {
       if (after.has(id)) continue;
       changes.push({
         kind: 'archived',
+        fields: publicationFieldDiff(
+          item,
+          undefined,
+          previousCollections ?? {},
+          currentCollections,
+        ),
         resource,
         title: publicationItemTitle(resource, item),
         impact: ['status'],

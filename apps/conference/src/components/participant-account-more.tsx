@@ -3,6 +3,8 @@
 import { ActionLink, Card } from '@byzon/ui';
 
 import { ParticipantAccountBoundary } from '@/components/participant-account-state';
+import { SessionExitControls } from '@/components/session-exit-controls';
+import type { ApiPort } from '@/lib/api';
 
 const SupportLink = ({ email }: { readonly email: string }) => (
   <a className="text-link" href={`mailto:${email}`}>
@@ -11,8 +13,10 @@ const SupportLink = ({ email }: { readonly email: string }) => (
 );
 
 export const ParticipantMoreHub = ({
+  api,
   ticketAvailable = false,
 }: {
+  readonly api?: ApiPort;
   readonly ticketAvailable?: boolean;
 }) => (
   <section className="app-page participant-account-page participant-more-page">
@@ -75,5 +79,7 @@ export const ParticipantMoreHub = ({
         </div>
       )}
     </ParticipantAccountBoundary>
+
+    <SessionExitControls {...(api ? { api } : {})} showLogoutAll={false} />
   </section>
 );

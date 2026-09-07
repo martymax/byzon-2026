@@ -432,6 +432,61 @@ describe('F1-06 recovery and safe session exit', () => {
       .toBeVisible();
   });
 
+  it.each(['switch_account', 'logout_current'] as const)(
+    'navigates after a live %s only once server confirmation and private cleanup finish',
+    async (action) => {
+      let finishCleanup: (() => void) | undefined;
+      const cleanup = new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      });
+      const navigate = vi.fn();
+      const clearPrivateData = vi.fn(async () => {
+        await cleanup;
+        return 'cleared' as const;
+      });
+      const screen = await renderComponent(
+        <main id="main" tabIndex={-1}>
+          <SessionExitControls
+            api={successApi({
+              ...identitySessionActionFixtures[action],
+              effect: 'completed',
+            })}
+            clearPrivateData={clearPrivateData}
+            navigate={navigate}
+          />
+        </main>,
+      );
+      await screen
+        .getByRole('button', {
+          name:
+            action === 'switch_account'
+              ? 'Použít jiný účet'
+              : 'Odhlásit tento účet',
+        })
+        .click();
+      expect(navigate).not.toHaveBeenCalled();
+      await screen
+        .getByRole('button', {
+          name:
+            action === 'switch_account'
+              ? 'Pokračovat k jinému účtu'
+              : 'Odhlásit',
+          exact: true,
+        })
+        .click();
+      await vi.waitFor(() => expect(clearPrivateData).toHaveBeenCalledOnce());
+      expect(navigate).not.toHaveBeenCalled();
+      finishCleanup?.();
+      await vi.waitFor(() =>
+        expect(navigate).toHaveBeenCalledExactlyOnceWith(
+          action === 'switch_account'
+            ? '/prihlaseni?mode=switch&returnTo=%2Fapp'
+            : '/prihlaseni',
+        ),
+      );
+    },
+  );
+
   it('rejects a mismatched session response after wiping private data', async () => {
     const clearPrivateData = vi.fn(async () => 'none_present' as const);
     const screen = await renderComponent(

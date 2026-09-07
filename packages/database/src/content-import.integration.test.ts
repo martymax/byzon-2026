@@ -156,6 +156,7 @@ integration('content import integration', () => {
         slug: schema.programSessions.slug,
         startsAt: schema.programSessions.startsAt,
         title: schema.programSessions.title,
+        description: schema.programSessions.description,
         type: schema.programSessions.type,
         waitlistMode: schema.programSessions.waitlistMode,
       })
@@ -169,6 +170,12 @@ integration('content import integration', () => {
 
     expect(firstSessions).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Proč Vám lidé věří, i když jim nic neprodáváte',
+          description: expect.stringContaining(
+            'Gastromapa začala jako osobní vášeň.',
+          ),
+        }),
         expect.objectContaining({
           title:
             'Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?',
@@ -340,7 +347,11 @@ integration('content import integration', () => {
         '"title": "Zahájení a slovo primátorky"',
         '"title": "Zahájení a slovo primátorky – aktualizováno"',
       )
-      .replace('"name": "Bude Hub"', '"name": "Bude Hub – aktualizováno"');
+      .replace('"name": "Bude Hub"', '"name": "Bude Hub – aktualizováno"')
+      .replace(
+        'Gastromapa začala jako osobní vášeň.',
+        'Aktualizovaná anotace.',
+      );
     expect(changedSource).toContain(
       '"title": "Zahájení a slovo primátorky – aktualizováno"',
     );
@@ -361,6 +372,7 @@ integration('content import integration', () => {
         slug: schema.programSessions.slug,
         title: schema.programSessions.title,
         summary: schema.programSessions.summary,
+        description: schema.programSessions.description,
         startsAt: schema.programSessions.startsAt,
         endsAt: schema.programSessions.endsAt,
         status: schema.programSessions.status,
@@ -436,6 +448,15 @@ integration('content import integration', () => {
       firstSessions.map(({ id }) => id).sort(),
     );
     expect(secondSessions).toHaveLength(82);
+    expect(secondSessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Proč Vám lidé věří, i když jim nic neprodáváte',
+          description: expect.stringContaining('Aktualizovaná anotace.'),
+          status: 'published',
+        }),
+      ]),
+    );
     expect(importedRooms).toHaveLength(9);
     expect(importedRooms.map(({ name }) => name)).toEqual(
       expect.arrayContaining([
