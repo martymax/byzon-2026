@@ -1,6 +1,6 @@
 import { schema, type Database } from '@byzon/database';
 import { publishedProgramSnapshotSchema } from '@byzon/domain/contracts';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, notInArray } from 'drizzle-orm';
 import { strToU8, zipSync } from 'fflate';
 import QRCode from 'qrcode';
 import { z } from 'zod';
@@ -103,7 +103,10 @@ const loadPublishedSessions = async (
               where: and(
                 eq(schema.programSessions.eventId, eventId),
                 eq(schema.programSessions.questionMode, 'moderated_follow_up'),
-                eq(schema.programSessions.status, 'published'),
+                notInArray(schema.programSessions.status, [
+                  'archived',
+                  'cancelled',
+                ]),
               ),
             })
           ).map((s) => s.id),
@@ -228,6 +231,16 @@ export const handleSessionQr = async (
           'content-type': 'image/svg+xml; charset=utf-8',
           'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}.svg"`,
         },
+      });
+    }
+
+    if (sessions.length === 0) {
+      throw new ApiProblemError({
+        status: 404,
+        code: 'NO_QR_SESSIONS',
+        title: 'Žádné QR kódy ke stažení',
+        detail:
+          'Zveřejněný program neobsahuje žádné dostupné body pro tento QR export.',
       });
     }
 

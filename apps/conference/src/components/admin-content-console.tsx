@@ -541,7 +541,6 @@ const AdminContentItemList = memo(function AdminContentItemList({
                 sessionId={item.id}
                 title={itemLabel(item)}
                 target={
-                  item.status === 'published' &&
                   item.questionMode === 'moderated_follow_up'
                     ? 'questions'
                     : 'program'

@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
+import { schema } from '@byzon/database';
+import { eq } from 'drizzle-orm';
 import { createQuestionFixture } from '../test/server/question-fixture';
 import { buildSessionDeepLink, handleSessionQr } from './session-qr';
 const suite = process.env.TEST_DATABASE_URL ? describe : describe.skip;
@@ -61,6 +63,46 @@ suite('question-target QR export', () => {
         )
       ).status,
     ).toBe(422);
+  });
+  it('uses published snapshot membership even when the editable row is draft, and never returns an empty ZIP', async () => {
+    const deps = { ...f.dependencies(f.users.admin), appOrigin: f.origin };
+    try {
+      await f.client.db
+        .update(schema.programSessions)
+        .set({ status: 'draft' })
+        .where(eq(schema.programSessions.id, f.sessionId));
+      const response = await handleSessionQr(
+        f.request('/qr?target=questions'),
+        f.eventId,
+        undefined,
+        deps,
+      );
+      expect(response.status).toBe(200);
+      const zip = unzipSync(new Uint8Array(await response.arrayBuffer()));
+      const manifest = JSON.parse(strFromU8(zip['manifest.json']!));
+      expect(manifest.sessions).toHaveLength(1);
+      expect(strFromU8(zip[manifest.sessions[0].filename]!)).toMatch(/^<svg/);
+      for (const status of ['archived', 'cancelled'] as const) {
+        await f.client.db
+          .update(schema.programSessions)
+          .set({ status })
+          .where(eq(schema.programSessions.id, f.sessionId));
+        const empty = await handleSessionQr(
+          f.request('/qr?target=questions'),
+          f.eventId,
+          undefined,
+          deps,
+        );
+        expect(empty.status).toBe(404);
+        expect(empty.headers.get('content-disposition')).toBeNull();
+        expect(await empty.json()).toMatchObject({ code: 'NO_QR_SESSIONS' });
+      }
+    } finally {
+      await f.client.db
+        .update(schema.programSessions)
+        .set({ status: 'published' })
+        .where(eq(schema.programSessions.id, f.sessionId));
+    }
   });
   it('builds exact safe destinations without credentials or query parameters', () => {
     expect(
