@@ -12,6 +12,8 @@ Primární aplikace: `apps/conference`
 - Uživatel potvrdil vyloučení EB21 a „Jak na networking“ z Q&A: 17 přednáškových/panelových session. Kanonický rezervovatelný networking je Leadership Stage; druhá projekce je pouze informativní.
 - AQ-01: expand schéma, migrace `0028`, sdílené Q&A DTO a scoped speaker permission implementovány. Čistá lokální PostgreSQL 17 migrace/seed prošly; database lint/typecheck + 128 testů a domain lint/typecheck + 208 testů prošly. Navazující balíčky jsou rozpracované. Skutečné účty, publikace, provozní kapacita networkingu a staging rehearsal čekají na ověření; lokální inventář je nenahrazuje.
 
+- DATA-02: source obsahuje stabilní slugs, explicitní speaker vazby a Q&A capability. Reimport zachovává admin kapacitu Leadership networkingu; druhá projekce je informativní. `db:readiness` vrací metadata bez e-mailů; lokální report správně odmítá chybějící speaker účty a nezadanou kapacitu. Database lint/typecheck + 129 testů a static build/smoke prošly. Staging kontrola skutečných účtů zbývá.
+
 ## 1. Cíl
 
 Tento plán řeší dva související, ale technicky oddělené okruhy:

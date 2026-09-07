@@ -52,6 +52,9 @@ interface SourceSpeaker {
 }
 
 interface SourceEvent {
+  slug?: string;
+  speakerSlugs?: string[];
+  questionMode?: 'disabled' | 'moderated_follow_up';
   time: string;
   title: string;
   detail?: string;
@@ -110,7 +113,15 @@ interface PreparedSession {
   description?: string | undefined;
   startsAt: Date;
   endsAt: Date;
-  type: 'break' | 'coaching' | 'mastermind' | 'meal' | 'other' | 'workshop';
+  type:
+    | 'break'
+    | 'coaching'
+    | 'mastermind'
+    | 'meal'
+    | 'other'
+    | 'workshop'
+    | 'networking';
+  questionMode: 'disabled' | 'moderated_follow_up';
   capacityMode: 'none' | 'reservation';
   capacity: number | null;
   reservationGroupKey: string | null;
@@ -570,6 +581,27 @@ export async function importContentJson(options: {
   const bytes = await readFile(options.sourceFile);
   const sourceSha256 = sha256(bytes);
   const source = requireSource(JSON.parse(bytes.toString('utf8')));
+  const questionInventory = JSON.parse(
+    await readFile(
+      resolve(
+        options.repositoryRoot,
+        'packages/database/data/question-session-inventory-2026.json',
+      ),
+      'utf8',
+    ),
+  ) as {
+    sessions: Array<{
+      sessionSlug: string;
+      sourcePath: string;
+      roomSlug: string;
+      time: string;
+      speakerSlugs: string[];
+    }>;
+  };
+  const expectedQuestions = new Map(
+    questionInventory.sessions.map((row) => [row.sessionSlug, row]),
+  );
+  const matchedQuestions = new Set<string>();
   const coachingSchedule = await loadCoachingSchedule(options.repositoryRoot);
   const findings: ContentImportFinding[] = [];
   const assetsByPath = new Map<string, PreparedAsset>();
@@ -632,7 +664,12 @@ export async function importContentJson(options: {
           return;
         }
         let type: PreparedSession['type'] = 'other';
-        if (event.type === 'break' || event.type === 'meal') type = event.type;
+        if (
+          event.type === 'break' ||
+          event.type === 'meal' ||
+          event.type === 'networking'
+        )
+          type = event.type;
         else if (event.type)
           addFinding(
             findings,
@@ -671,21 +708,60 @@ export async function importContentJson(options: {
             'Presentation-only compact flag was not imported.',
             event.compact,
           );
-        const speakerSlugs = new Set<string>();
-        const directSpeaker = speakerSlugByName.get(event.title);
-        if (directSpeaker) speakerSlugs.add(directSpeaker);
-        for (const name of event.meta
-          ?.split(',')
-          .map((value) => value.trim()) ?? []) {
-          const slug = speakerSlugByName.get(name);
-          if (slug) speakerSlugs.add(slug);
+        const speakerSlugs = new Set<string>(event.speakerSlugs ?? []);
+        for (const speakerSlug of speakerSlugs) {
+          if (
+            !source.speakers.list.some(
+              (speaker) => speaker.slug === speakerSlug,
+            )
+          )
+            throw new Error(`unknown explicit speaker: ${path}`);
+        }
+        if (!event.speakerSlugs) {
+          const directSpeaker = speakerSlugByName.get(event.title);
+          if (directSpeaker) speakerSlugs.add(directSpeaker);
+          for (const name of event.meta
+            ?.split(',')
+            .map((value) => value.trim()) ?? []) {
+            const speakerSlug = speakerSlugByName.get(name);
+            if (speakerSlug) speakerSlugs.add(speakerSlug);
+          }
+        }
+        const sessionSlug =
+          event.slug ??
+          `${slugify(stage.name)}-${slugify(event.title)}-${event.time.replace(/\D/g, '')}`;
+        const questionMode = event.questionMode ?? 'disabled';
+        const expectedQuestion = expectedQuestions.get(sessionSlug);
+        if (
+          questionMode !== 'disabled' &&
+          questionMode !== 'moderated_follow_up'
+        )
+          throw new Error(`invalid question mode: ${path}`);
+        if (
+          (questionMode === 'moderated_follow_up') !==
+          Boolean(expectedQuestion)
+        )
+          throw new Error(
+            `question whitelist requires reconciliation: ${path}`,
+          );
+        if (expectedQuestion) {
+          if (
+            localDate !== '2026-09-18' ||
+            roomSlug !== expectedQuestion.roomSlug ||
+            event.time !== expectedQuestion.time ||
+            JSON.stringify([...speakerSlugs].sort()) !==
+              JSON.stringify([...expectedQuestion.speakerSlugs].sort())
+          )
+            throw new Error(`question source requires reconciliation: ${path}`);
+          matchedQuestions.add(sessionSlug);
         }
         preparedSessions.push({
           sourceName: SOURCE_NAME,
           sourceSha256,
           sourcePath: path,
           dayPath: `program.days[${dayIndex}]`,
-          slug: `${slugify(stage.name)}-${slugify(event.title)}-${event.time.replace(/\D/g, '')}`,
+          slug: sessionSlug,
+          questionMode,
           title: event.title,
           summary: event.meta ?? null,
           description: source.sessions?.list
@@ -704,6 +780,8 @@ export async function importContentJson(options: {
       });
     });
   });
+  if (matchedQuestions.size !== 17)
+    throw new Error('question whitelist must contain exactly 17 sessions');
   if (replacedCoachingSourcePaths.size !== EXPECTED_LEGACY_COACHING_SESSIONS) {
     throw new Error(
       'legacy coaching source requires reconciliation before replacement',
@@ -744,6 +822,7 @@ export async function importContentJson(options: {
       sourcePath: slot.sourcePath,
       dayPath: `program.days[${coachingDayIndex}]`,
       slug: slot.slug,
+      questionMode: 'disabled',
       title: slot.title,
       summary: 'Koučovací zóna · Individuální 30minutový koučink',
       startsAt: range.startsAt,
@@ -1304,6 +1383,45 @@ export async function importContentJson(options: {
         importedReservationGroups.set(session.reservationGroupKey, members);
       }
       let importedCapacity = session.capacity;
+      let importedCapacityMode = session.capacityMode;
+      if (
+        session.type === 'networking' &&
+        existing?.capacityMode === 'reservation' &&
+        existing.capacity &&
+        existing.capacity > 0
+      ) {
+        importedCapacity = existing.capacity;
+        importedCapacityMode = 'reservation';
+      }
+      if (
+        session.slug === 'networking-a-afterparty-rizeny-networking-19002100' &&
+        existing?.capacityMode === 'reservation'
+      ) {
+        const [active] = await transaction
+          .select({ value: count() })
+          .from(schema.reservations)
+          .where(
+            and(
+              eq(schema.reservations.eventId, eventId),
+              eq(schema.reservations.sessionId, existing.id),
+              eq(schema.reservations.status, 'confirmed'),
+            ),
+          );
+        const [waiting] = await transaction
+          .select({ value: count() })
+          .from(schema.waitlistEntries)
+          .where(
+            and(
+              eq(schema.waitlistEntries.eventId, eventId),
+              eq(schema.waitlistEntries.sessionId, existing.id),
+              eq(schema.waitlistEntries.status, 'waiting'),
+            ),
+          );
+        if (active?.value || waiting?.value)
+          throw new Error(
+            'informational networking has active reservations; reconcile before import',
+          );
+      }
       if (session.capacityMode === 'reservation') {
         if (session.capacity === null) {
           throw new Error(
@@ -1340,14 +1458,15 @@ export async function importContentJson(options: {
           summary: session.summary,
           description: session.description,
           type: session.type,
+          questionMode: session.questionMode,
           startsAt: session.startsAt,
           endsAt: session.endsAt,
           status: 'draft',
           reservationGroupId: null,
-          capacityMode: session.capacityMode,
+          capacityMode: importedCapacityMode,
           capacity: importedCapacity,
           reservationClosesAt:
-            session.capacityMode === 'reservation' ? session.startsAt : null,
+            importedCapacityMode === 'reservation' ? session.startsAt : null,
           waitlistMode: 'disabled',
           sortOrder: session.sortOrder,
         })
@@ -1364,13 +1483,14 @@ export async function importContentJson(options: {
             summary: session.summary,
             description: session.description,
             type: session.type,
+            questionMode: session.questionMode,
             startsAt: session.startsAt,
             endsAt: session.endsAt,
             reservationGroupId: null,
-            capacityMode: session.capacityMode,
+            capacityMode: importedCapacityMode,
             capacity: importedCapacity,
             reservationClosesAt:
-              session.capacityMode === 'reservation' ? session.startsAt : null,
+              importedCapacityMode === 'reservation' ? session.startsAt : null,
             waitlistMode: 'disabled',
             waitlistOfferTtlMinutes: null,
             sortOrder: session.sortOrder,

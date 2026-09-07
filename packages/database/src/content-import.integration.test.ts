@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createDatabaseClient } from './client.js';
 import { importContentJson } from './content-import.js';
+import { inspectProgramReadiness } from './program-readiness.js';
 import { generateUuidV7 } from './ids.js';
 import * as schema from './schema/index.js';
 
@@ -646,4 +647,82 @@ integration('content import integration', () => {
       );
     expect(invalid[0]!.value).toBe(0);
   }, 60_000);
+  it('preserves explicit Q&A/host links and configured canonical networking capacity on reimport', async () => {
+    const options = {
+      db: client.db,
+      eventSlug,
+      sourceFile: resolve(repositoryRoot, 'static-site/data/content.json'),
+      repositoryRoot,
+      allowPublishedUpdate: true,
+    };
+    await importContentJson(options);
+    const networking = await client.db.query.programSessions.findFirst({
+      where: and(
+        eq(schema.programSessions.eventId, eventId),
+        eq(schema.programSessions.type, 'networking'),
+      ),
+    });
+    expect(networking).toBeDefined();
+    await client.db
+      .update(schema.programSessions)
+      .set({ capacityMode: 'reservation', capacity: 30 })
+      .where(eq(schema.programSessions.id, networking!.id));
+    await importContentJson(options);
+    const sessions = await client.db.query.programSessions.findMany({
+      where: eq(schema.programSessions.eventId, eventId),
+    });
+    expect(
+      sessions.filter((s) => s.questionMode === 'moderated_follow_up'),
+    ).toHaveLength(17);
+    expect(sessions.find((s) => s.id === networking!.id)).toMatchObject({
+      capacityMode: 'reservation',
+      capacity: 30,
+    });
+    expect(
+      sessions.find(
+        (s) => s.slug === 'networking-a-afterparty-rizeny-networking-19002100',
+      ),
+    ).toMatchObject({ capacityMode: 'none', questionMode: 'disabled' });
+    const links = await client.db
+      .select({
+        sessionId: schema.sessionSpeakers.sessionId,
+        speaker: schema.speakerProfiles.slug,
+      })
+      .from(schema.sessionSpeakers)
+      .innerJoin(
+        schema.speakerProfiles,
+        and(
+          eq(schema.speakerProfiles.eventId, schema.sessionSpeakers.eventId),
+          eq(
+            schema.speakerProfiles.id,
+            schema.sessionSpeakers.speakerProfileId,
+          ),
+        ),
+      )
+      .where(eq(schema.sessionSpeakers.eventId, eventId));
+    const blanka = sessions.find(
+      (s) => s.slug === 'in-loco-clarion-workshop-blanka-mrazkova-11151245',
+    );
+    expect(links).toContainEqual({
+      sessionId: blanka!.id,
+      speaker: 'blanka-mrazkova',
+    });
+    expect(links).toContainEqual({
+      sessionId: networking!.id,
+      speaker: 'tomas-reznicek',
+    });
+    const report = await inspectProgramReadiness(client.db, eventId);
+    expect(report.counts).toEqual({
+      questions: 17,
+      coaching: 26,
+      networking: 1,
+    });
+    expect(
+      report.findings.every(
+        (finding) => finding.code === 'speaker_account_unlinked',
+      ),
+    ).toBe(true);
+    expect(report.ready).toBe(false);
+    expect(JSON.stringify(report)).not.toContain('@');
+  });
 });

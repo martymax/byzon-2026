@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { slugify } from './content-import.js';
 
 interface SourceEvent {
+  slug: string;
+  questionMode: string;
+  speakerSlugs: string[];
   title: string;
   time: string;
   meta?: string;
@@ -86,6 +89,9 @@ describe('AQ-00 reviewed Q&A inventory', () => {
       expect(row.localDate).toBe('2026-09-18');
       expect(['BYZON Stage', 'Leadership Stage']).toContain(stage.name);
       expect(row.roomSlug).toBe(slugify(stage.name));
+      expect(event.slug).toBe(row.sessionSlug);
+      expect(event.questionMode).toBe('moderated_follow_up');
+      expect(event.speakerSlugs).toEqual(row.speakerSlugs);
       expect(row.title).toBe(event.title);
       expect(row.time).toBe(event.time);
       expect(row.sessionSlug).toBe(
