@@ -61,9 +61,17 @@ interface SourceEvent {
   compact?: boolean;
 }
 
+interface SourceSession {
+  slug: string;
+  annotation?: string[];
+  takeaways_title?: string;
+  takeaways?: string[];
+  closing?: string;
+}
+
 interface ContentSource {
   sessions?: {
-    list: Array<{ slug: string; annotation?: string[] }>;
+    list: SourceSession[];
   };
   location: {
     title: string;
@@ -175,7 +183,8 @@ const confirmedReservationPolicies = new Map<
     {
       capacity: 20,
       time: '11:15 - 12:45',
-      title: 'Workshop: Blanka Mrázková',
+      title:
+        'Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky',
       type: 'workshop',
     },
   ],
@@ -200,6 +209,24 @@ const confirmedReservationPolicies = new Map<
     },
   ],
 ]);
+
+export function sessionDescription(
+  session?: SourceSession,
+): string | undefined {
+  if (!session) return undefined;
+  return (
+    [
+      ...(session.annotation ?? []),
+      ...(session.takeaways?.length
+        ? [
+            ...(session.takeaways_title ? [session.takeaways_title] : []),
+            ...session.takeaways.map((item) => `• ${item}`),
+          ]
+        : []),
+      ...(session.closing ? [session.closing] : []),
+    ].join('\n\n') || undefined
+  );
+}
 
 function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -688,9 +715,11 @@ export async function importContentJson(options: {
           slug: `${slugify(stage.name)}-${slugify(event.title)}-${event.time.replace(/\D/g, '')}`,
           title: event.title,
           summary: event.meta ?? null,
-          description: source.sessions?.list
-            .find((session) => session.slug === event.detail)
-            ?.annotation?.join('\n\n'),
+          description: sessionDescription(
+            source.sessions?.list.find(
+              (session) => session.slug === event.detail,
+            ),
+          ),
           startsAt: range.startsAt,
           endsAt: range.endsAt,
           type,
