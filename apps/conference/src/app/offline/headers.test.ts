@@ -42,8 +42,14 @@ describe('public offline shell response policy', () => {
       await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
     ) as { readonly scripts?: { readonly build?: string } };
 
-    expect(packageJson.scripts?.build).toContain(
-      'next build && node scripts/offline-shell-manifest.mjs',
+    const steps =
+      packageJson.scripts?.build?.split('&&').map((step) => step.trim()) ?? [];
+    const buildIndex = steps.indexOf('next build');
+    const manifestIndex = steps.indexOf(
+      'node scripts/offline-shell-manifest.mjs',
     );
+
+    expect(buildIndex).toBeGreaterThanOrEqual(0);
+    expect(manifestIndex).toBeGreaterThan(buildIndex);
   });
 });
