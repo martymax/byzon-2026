@@ -92,6 +92,7 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     checkout = (PUBLIC_ROOT / "simpleshop/index.html").read_text(encoding="utf-8")
     petr_profile = (PUBLIC_ROOT / "speaker/petr-dvorak/index.html").read_text(encoding="utf-8")
     tomas_profile = (PUBLIC_ROOT / "speaker/tomas-reznicek/index.html").read_text(encoding="utf-8")
+    mastermind_detail = (PUBLIC_ROOT / "program/co-o-svych-lidech-skutecne-vite/index.html").read_text(encoding="utf-8")
 
     required_markers = {
         "homepage skip link": (home, 'href="#main"'),
@@ -120,8 +121,9 @@ def validate_critical_contract(content: dict[str, object]) -> None:
             "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
         ),
         "mastermind badge": (program, ">Mastermind</span>"),
-        "Lucie Libovická program profile link": (program, '/speaker/lucie-libovicka/'),
-        "Pavel Janoušek program profile link": (program, '/speaker/pavel-janousek/'),
+        "mastermind program detail link": (program, '/program/co-o-svych-lidech-skutecne-vite/'),
+        "Lucie Libovická detail profile link": (mastermind_detail, '/speaker/lucie-libovicka/'),
+        "Pavel Janoušek detail profile link": (mastermind_detail, '/speaker/pavel-janousek/'),
         "Expertní Board 21 partner": (home, '/assets/img/2026/08/eb21-logo.png'),
         "Wexia partner": (home, '/assets/img/2026/08/wexia.svg'),
         "Frame Land partner": (home, '/assets/img/2026/09/frame-land.png'),
@@ -137,6 +139,19 @@ def validate_critical_contract(content: dict[str, object]) -> None:
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
     if absent:
         fail("Missing critical output markers: " + ", ".join(absent))
+
+    if 'class="program-speaker-link"' in program:
+        fail("Program must use event links instead of separate speaker-name links")
+    for slug in (
+        "jak-lidsky-ziskat-genz-a-vest-s-energii",
+        "jak-na-networking",
+        "rizeny-networking",
+    ):
+        if program.count(f'href="/program/{slug}/"') != 2:
+            fail(f"Desktop and mobile program must both link to: {slug}")
+        detail = (PUBLIC_ROOT / "program" / slug / "index.html").read_text(encoding="utf-8")
+        if 'class="session-annotation"' in detail:
+            fail(f"Title-only session must not render an annotation section: {slug}")
 
     partner_link_pattern = re.compile(
         r'<a class="partner-logo(?: on-dark)?" href="([^"]+)" '

@@ -470,6 +470,33 @@
   "sessions": {
     "list": [
       {
+        "slug": "jak-lidsky-ziskat-genz-a-vest-s-energii",
+        "title": "Jak lidsky získat GenZ a vést s energií",
+        "kind": "Přednáška",
+        "speakers": [
+          "andrea-bila"
+        ],
+        "annotation": []
+      },
+      {
+        "slug": "jak-na-networking",
+        "title": "Jak na networking",
+        "kind": "Networking",
+        "speakers": [
+          "tomas-reznicek"
+        ],
+        "annotation": []
+      },
+      {
+        "slug": "rizeny-networking",
+        "title": "Řízený networking",
+        "kind": "Networking",
+        "speakers": [
+          "tomas-reznicek"
+        ],
+        "annotation": []
+      },
+      {
         "slug": "lidskost-jako-konkurencni-vyhoda",
         "title": "Lidskost jako konkurenční výhoda",
         "kind": "Přednáška",
@@ -632,6 +659,22 @@
         "presenter_title": "Mastermind vedou",
         "annotation": [
           "Jste majitel nebo ředitel firmy? Přijďte ochutnat profesionálně vedený mastermind. V uzavřené skupině maximálně 12 účastníků pod vedením facilitátora a mentora zažijete sdílení zkušeností, získáte inspiraci od majitelů firem z různých oborů, nové úhly pohledu a tipy přímo pro Váš byznys. Počet míst je omezený, registrace bude probíhat prostřednictvím konferenční aplikace. Vedete firmu? Nezapomeňte si rezervovat své místo."
+        ]
+      },
+      {
+        "slug": "chci-mluvit-s-clovekem",
+        "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou?",
+        "kind": "Mastermind",
+        "speakers": [
+          "tomas-ryza"
+        ],
+        "presenter_title": "Mastermind vede",
+        "annotation": [
+          "Spoustu věcí si jako klienti rádi vyřídíme sami. Bez telefonování, bez čekání, klidně o půlnoci. Jenže pak přijde nevyřešená reklamace, zamítnutá žádost nebo problém, na který automat nestačí. V tu chvíli chceme mluvit s někým, kdo nás vyslechne, pochopí situaci a může s ní něco udělat. Právě taková zkušenost může rozhodnout, jestli u firmy zůstaneme.",
+          "Firmy roky hledaly způsoby, jak obsluhu klientů zrychlit a zlevnit. Chatboty, samoobsluha i automatické rozhodování v tom mají své místo. Kde ale klientům usnadňujeme život a kde už jen přesouváme práci na ně? A když se konečně dostanou k člověku, dokáže jim pomoci, nebo jen zopakuje, co napsal systém?",
+          "Evropská pravidla pro umělou inteligenci a automatizované rozhodování navíc v určitých situacích vyžadují vysvětlení rozhodnutí, lidský zásah či dohled. Splněním povinnosti ale otázka lidského přístupu nekončí. Konkurenční výhoda může vzniknout tam, kde klient najde někoho, kdo má čas, informace a pravomoc jeho problém skutečně vyřešit.",
+          "V mastermindu budeme vycházet z konkrétních zkušeností vašich firem. Společně probereme, kde lidský přístup pomáhá získat důvěru a udržet klienta, kde stačí dobře fungující samoobsluha a kde člověk jen zbytečně potvrzuje rozhodnutí systému. Podíváme se také na to, co vaši lidé potřebují, aby mohli převzít odpovědnost a nabídnout řešení.",
+          "Odnesete si přehled situací, ve kterých má lidský přístup pro vaše klienty největší hodnotu, a jednu konkrétní změnu, kterou během příštího čtvrtletí vyzkoušíte. Včetně toho, podle čeho poznáte, že se vyplatila."
         ]
       },
       {
@@ -886,7 +929,7 @@
               { "time": "8:00 - 9:00", "title": "Registrace", "type": "shared", "span": "all" },
               { "time": "9:00 - 9:15", "title": "Zahájení a slovo primátorky", "type": "shared" },
               { "time": "9:15 - 10:00", "title": "Lidskost jako konkurenční výhoda", "meta": "Margareta Křížová", "detail": "lidskost-jako-konkurencni-vyhoda" },
-              { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček" },
+              { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček", "detail": "jak-na-networking" },
               { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
               { "time": "10:45 - 11:15", "title": "Proč Vám lidé věří, i když jim nic neprodáváte", "meta": "Lukáš Hejlík", "detail": "proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate" },
               { "time": "11:15 - 11:45", "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou", "meta": "Hana Slačálková", "detail": "lide-duveruji-lidem" },
@@ -915,10 +958,10 @@
               { "time": "11:45 - 12:15", "title": "Přestaňte lidi motivovat", "meta": "Blanka Mrázková", "detail": "prestante-lidi-motivovat" },
               { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
               { "time": "13:15 - 13:45", "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?", "meta": "Patrik Čada", "detail": "tyrkysova-firma" },
-              { "time": "13:45 - 14:15", "title": "Jak lidsky získat GenZ a vést s energií", "meta": "Andrea Bílá" },
+              { "time": "13:45 - 14:15", "title": "Jak lidsky získat GenZ a vést s energií", "meta": "Andrea Bílá", "detail": "jak-lidsky-ziskat-genz-a-vest-s-energii" },
               { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
               { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 16:45", "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?", "meta": "Lucie Libovická, Pavel Janoušek", "badge": "Mastermind", "detail": "co-o-svych-lidech-skutecne-vite", "link_speakers": true },
+              { "time": "15:15 - 16:45", "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?", "meta": "Lucie Libovická, Pavel Janoušek", "badge": "Mastermind", "detail": "co-o-svych-lidech-skutecne-vite" },
               { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
               { "time": "17:00 - 18:15", "title": "Společně na BYZON Stage", "type": "shared" },
               { "time": "18:15 - 19:00", "title": "Volný program", "type": "shared" },
@@ -950,7 +993,7 @@
             "name": "Networking a afterparty",
             "events": [
               { "time": "18:15 - 19:00", "title": "Volný program" },
-              { "time": "19:00 - 21:00", "title": "Řízený networking", "meta": "Tomáš Řezníček" },
+              { "time": "19:00 - 21:00", "title": "Řízený networking", "meta": "Tomáš Řezníček", "detail": "rizeny-networking" },
               { "time": "21:00 - 24:00", "title": "DJ & afterparty", "type": "social" },
               { "time": "24:00 - ?", "title": "Ukončení na Clarionu", "meta": "přesun na after-afterparty", "type": "social" }
             ]
@@ -977,9 +1020,9 @@
             "name": "Předsálí Clarion",
             "events": [
               { "time": "9:15 - 9:30", "title": "Společně v sálu IN LOCO", "type": "shared" },
-              { "time": "9:30 - 11:00", "title": "Mastermind část 1", "meta": "Tomáš Ryza" },
+              { "time": "9:30 - 11:00", "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1", "meta": "Tomáš Ryza", "detail": "chci-mluvit-s-clovekem" },
               { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
-              { "time": "11:15 - 12:45", "title": "Mastermind část 2", "meta": "Tomáš Ryza" },
+              { "time": "11:15 - 12:45", "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2", "meta": "Tomáš Ryza", "detail": "chci-mluvit-s-clovekem" },
               { "time": "12:45 - 13:00", "title": "Společně v sálu IN LOCO", "type": "shared" }
             ]
           },

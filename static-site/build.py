@@ -1167,13 +1167,16 @@ def session_schedule(session_slug):
     """Return the canonical schedule metadata for a session detail."""
     for day in C.get("program", {}).get("days", []):
         for stage in day.get("stages", []):
-            for event in stage.get("events", []):
-                if event.get("detail") == session_slug:
-                    return {
-                        "day": day.get("name"),
-                        "time": event.get("time"),
-                        "stage": stage.get("name"),
-                    }
+            matching_events = [
+                event for event in stage.get("events", [])
+                if event.get("detail") == session_slug
+            ]
+            if matching_events:
+                return {
+                    "day": day.get("name"),
+                    "time": ", ".join(event.get("time", "") for event in matching_events),
+                    "stage": stage.get("name"),
+                }
     return None
 
 
@@ -1198,14 +1201,13 @@ def speaker_program(sp):
         schedule_html = f"<span>{esc(schedule_text)}</span>" if schedule_text else ""
         annotation = session.get("annotation", [])
         annotation_html = (
-            f'<p class="speaker-session-card__annotation">{esc(annotation[0])}</p>'
+            f'\n            <p class="speaker-session-card__annotation">{esc(annotation[0])}</p>'
             if annotation else ""
         )
         cards.append(f"""<li>
           <a class="speaker-session-card" href="/program/{att(session['slug'])}/" aria-label="Detail přednášky: {att(session['title'])}">
             <p class="speaker-session-card__meta"><span class="speaker-session-card__kind">{esc(session.get('kind', 'Přednáška'))}</span>{schedule_html}</p>
-            <h3>{esc(session['title'])}</h3>
-            {annotation_html}
+            <h3>{esc(session['title'])}</h3>{annotation_html}
             <span class="speaker-session-card__action">Detail přednášky {ICONS['arrow']}</span>
           </a>
         </li>""")
@@ -1267,6 +1269,7 @@ def session_annotation(session):
 
 def page_session(session):
     annotation = session_annotation(session)
+    annotation_html = f'\n      <div class="session-annotation">{annotation}</div>' if annotation else ""
     presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
     presenter_count = len(session.get("speakers", []))
     presenter_title = session.get(
@@ -1281,8 +1284,7 @@ def page_session(session):
     <nav class="breadcrumb speaker-back" aria-label="Návrat do programu" style="justify-content:flex-start"><a href="/program/">‹ Zpět na program</a></nav>
     <article class="session-intro">
       <span class="eyebrow">{esc(session.get('kind', 'Přednáška'))}</span>
-      <h1>{esc(session['title'])}</h1>
-      <div class="session-annotation">{annotation}</div>
+      <h1>{esc(session['title'])}</h1>{annotation_html}
     </article>
     <section class="session-speakers" aria-labelledby="session-speakers-title">
       <h2 id="session-speakers-title">{presenter_title}</h2>
@@ -1292,7 +1294,7 @@ def page_session(session):
 </section>"""
         + "</main>"
     )
-    description = session.get("annotation", [session["title"]])[0]
+    description = (session.get("annotation") or [session["title"]])[0]
     first_speaker = next(
         (SPEAKERS_BY_SLUG.get(value) for value in session.get("speakers", []) if SPEAKERS_BY_SLUG.get(value)),
         None,
