@@ -602,6 +602,19 @@
         ]
       },
       {
+        "slug": "nekompetentni-lidskost-jako-cesta-do-pekel",
+        "title": "Nekompetentní lidskost jako cesta do pekel",
+        "kind": "Přednáška",
+        "speakers": [
+          "simon-srp"
+        ],
+        "annotation": [
+          "Přednáška neaspiruje na to, aby si z ní účastnici odnesli konkrétní hard dovednosti, něco, co si následně přenesou do praxe.",
+          "Naší ambicí je předat vám námi interpretovaná reálná tržní data, na jejichž základě chceme změřit přínos a hodnotu lidskosti v kombinaci s kvalitním nebo nekvalitním managementem. Jaký má dopad na angažovanost či rezistenci? Jak se projevuje na reálných výsledcích firmy?",
+          "Věci, co se z učebnice aplikovaného managementu nedozvíte. Reálná praxe evropských firem."
+        ]
+      },
+      {
         "slug": "lidskost-pod-tlakem",
         "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?",
         "kind": "Panelová diskuze",
@@ -980,12 +993,14 @@
               },
               {
                 "time": "14:15 - 14:45",
-                "title": "Šimon Srp",
+                "title": "Nekompetentní lidskost jako cesta do pekel",
                 "slug": "byzon-stage-simon-srp-14151445",
                 "speakerSlugs": [
                   "simon-srp"
                 ],
-                "questionMode": "moderated_follow_up"
+                "questionMode": "moderated_follow_up",
+                "meta": "Šimon Srp",
+                "detail": "nekompetentni-lidskost-jako-cesta-do-pekel"
               },
               {
                 "time": "14:45 - 15:15",

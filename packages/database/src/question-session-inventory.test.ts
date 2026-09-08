@@ -89,14 +89,12 @@ describe('AQ-00 reviewed Q&A inventory', () => {
       expect(row.localDate).toBe('2026-09-18');
       expect(['BYZON Stage', 'Leadership Stage']).toContain(stage.name);
       expect(row.roomSlug).toBe(slugify(stage.name));
+      // Session identity stays stable when an announced title changes.
       expect(event.slug).toBe(row.sessionSlug);
       expect(event.questionMode).toBe('moderated_follow_up');
       expect(event.speakerSlugs).toEqual(row.speakerSlugs);
       expect(row.title).toBe(event.title);
       expect(row.time).toBe(event.time);
-      expect(row.sessionSlug).toBe(
-        `${slugify(stage.name)}-${slugify(event.title)}-${event.time.replace(/\D/g, '')}`,
-      );
       const detail = source.sessions.list.find(
         (item) => item.slug === event.detail,
       );
