@@ -753,5 +753,26 @@ integration('content import integration', () => {
     ).toBe(true);
     expect(report.ready).toBe(false);
     expect(JSON.stringify(report)).not.toContain('@');
+
+    const mastermindGroups = sessions.filter((session) =>
+      session.slug.startsWith('predsali-clarion-mastermind-cast-'),
+    );
+    expect(mastermindGroups).toHaveLength(2);
+    await client.db
+      .update(schema.programSessions)
+      .set({ reservationGroupId: mastermindGroups[0]!.id })
+      .where(
+        inArray(
+          schema.programSessions.id,
+          mastermindGroups.map(({ id }) => id),
+        ),
+      );
+    const linkedGroupsReport = await inspectProgramReadiness(
+      client.db,
+      eventId,
+    );
+    expect(linkedGroupsReport.findings).toContainEqual({
+      code: 'saturday_mastermind_group_invalid',
+    });
   });
 });

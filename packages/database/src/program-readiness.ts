@@ -106,8 +106,11 @@ export async function inspectProgramReadiness(
   );
   if (
     mastermind.length !== 2 ||
-    !mastermind[0]?.reservationGroupId ||
-    mastermind[0].reservationGroupId !== mastermind[1]?.reservationGroupId
+    mastermind.some(
+      (session) =>
+        session.reservationGroupId !== null ||
+        session.reservationClosesAt?.getTime() !== session.startsAt.getTime(),
+    )
   )
     findings.push({ code: 'saturday_mastermind_group_invalid' });
   for (const session of networking) {
