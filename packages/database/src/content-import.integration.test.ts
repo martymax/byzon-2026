@@ -210,31 +210,50 @@ integration('content import integration', () => {
           capacity: null,
         }),
         expect.objectContaining({
-          title: 'Mastermind část 1',
+          title:
+            '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1',
           type: 'mastermind',
           capacityMode: 'reservation',
           capacity: 6,
           reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
         expect.objectContaining({
-          title: 'Mastermind část 2',
+          title:
+            '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2',
           type: 'mastermind',
           capacityMode: 'reservation',
           capacity: 6,
-          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+          reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
       ]),
     );
-    const firstMastermindParts = firstSessions.filter(({ title }) =>
-      title.startsWith('Mastermind část'),
+    const firstMastermindGroups = firstSessions.filter(({ title }) =>
+      title.startsWith(
+        '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou?',
+      ),
     );
-    expect(firstMastermindParts).toHaveLength(2);
+    expect(firstMastermindGroups).toHaveLength(2);
     expect(
-      firstMastermindParts.every(
-        ({ reservationGroupId }) =>
-          reservationGroupId === firstMastermindParts[0]!.id,
+      firstMastermindGroups.every(
+        ({ reservationGroupId }) => reservationGroupId === null,
       ),
     ).toBe(true);
+    // Re-import must also split the legacy shared reservation into independent slots.
+    const legacyMastermindRoot = firstMastermindGroups.find(({ title }) =>
+      title.endsWith('skupina 1'),
+    )!;
+    await client.db
+      .update(schema.programSessions)
+      .set({
+        reservationGroupId: legacyMastermindRoot.id,
+        reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+      })
+      .where(
+        inArray(
+          schema.programSessions.id,
+          firstMastermindGroups.map(({ id }) => id),
+        ),
+      );
     const firstCoachingSessions = firstSessions.filter(
       ({ type }) => type === 'coaching',
     );
@@ -567,18 +586,20 @@ integration('content import integration', () => {
           reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
         expect.objectContaining({
-          title: 'Mastermind část 1',
+          title:
+            '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1',
           type: 'mastermind',
           capacityMode: 'reservation',
           capacity: 6,
           reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
         }),
         expect.objectContaining({
-          title: 'Mastermind část 2',
+          title:
+            '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2',
           type: 'mastermind',
           capacityMode: 'reservation',
           capacity: 6,
-          reservationClosesAt: new Date('2026-09-19T07:30:00.000Z'),
+          reservationClosesAt: new Date('2026-09-19T09:15:00.000Z'),
         }),
         expect.objectContaining({
           summary: 'Andrea Bílá',
@@ -591,14 +612,18 @@ integration('content import integration', () => {
         }),
       ]),
     );
-    const secondMastermindParts = secondSessions.filter(({ title }) =>
-      title.startsWith('Mastermind část'),
+    const secondMastermindGroups = secondSessions.filter(({ title }) =>
+      title.startsWith(
+        '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou?',
+      ),
     );
-    expect(secondMastermindParts).toHaveLength(2);
+    expect(secondMastermindGroups).toHaveLength(2);
+    expect(secondMastermindGroups.map(({ id }) => id).sort()).toEqual(
+      firstMastermindGroups.map(({ id }) => id).sort(),
+    );
     expect(
-      secondMastermindParts.every(
-        ({ reservationGroupId }) =>
-          reservationGroupId === secondMastermindParts[0]!.id,
+      secondMastermindGroups.every(
+        ({ reservationGroupId }) => reservationGroupId === null,
       ),
     ).toBe(true);
     const coachingSessions = secondSessions.filter(

@@ -203,9 +203,9 @@ const confirmedReservationPolicies = new Map<
     'program.days[1].stages[1].events[1]',
     {
       capacity: 6,
-      reservationGroupKey: 'tomas-ryza-saturday-mastermind',
       time: '9:30 - 11:00',
-      title: 'Mastermind část 1',
+      title:
+        '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1',
       type: 'mastermind',
     },
   ],
@@ -213,9 +213,9 @@ const confirmedReservationPolicies = new Map<
     'program.days[1].stages[1].events[3]',
     {
       capacity: 6,
-      reservationGroupKey: 'tomas-ryza-saturday-mastermind',
       time: '11:15 - 12:45',
-      title: 'Mastermind část 2',
+      title:
+        '„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2',
       type: 'mastermind',
     },
   ],

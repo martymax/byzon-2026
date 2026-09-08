@@ -470,6 +470,33 @@
   "sessions": {
     "list": [
       {
+        "slug": "jak-lidsky-ziskat-genz-a-vest-s-energii",
+        "title": "Jak lidsky získat GenZ a vést s energií",
+        "kind": "Přednáška",
+        "speakers": [
+          "andrea-bila"
+        ],
+        "annotation": []
+      },
+      {
+        "slug": "jak-na-networking",
+        "title": "Jak na networking",
+        "kind": "Networking",
+        "speakers": [
+          "tomas-reznicek"
+        ],
+        "annotation": []
+      },
+      {
+        "slug": "rizeny-networking",
+        "title": "Řízený networking",
+        "kind": "Networking",
+        "speakers": [
+          "tomas-reznicek"
+        ],
+        "annotation": []
+      },
+      {
         "slug": "lidskost-jako-konkurencni-vyhoda",
         "title": "Lidskost jako konkurenční výhoda",
         "kind": "Přednáška",
@@ -677,6 +704,22 @@
         "presenter_title": "Mastermind vedou",
         "annotation": [
           "Jste majitel nebo ředitel firmy? Přijďte ochutnat profesionálně vedený mastermind. V uzavřené skupině maximálně 12 účastníků pod vedením facilitátora a mentora zažijete sdílení zkušeností, získáte inspiraci od majitelů firem z různých oborů, nové úhly pohledu a tipy přímo pro Váš byznys. Počet míst je omezený, registrace bude probíhat prostřednictvím konferenční aplikace. Vedete firmu? Nezapomeňte si rezervovat své místo."
+        ]
+      },
+      {
+        "slug": "chci-mluvit-s-clovekem",
+        "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou?",
+        "kind": "Mastermind",
+        "speakers": [
+          "tomas-ryza"
+        ],
+        "presenter_title": "Mastermind vede",
+        "annotation": [
+          "Spoustu věcí si jako klienti rádi vyřídíme sami. Bez telefonování, bez čekání, klidně o půlnoci. Jenže pak přijde nevyřešená reklamace, zamítnutá žádost nebo problém, na který automat nestačí. V tu chvíli chceme mluvit s někým, kdo nás vyslechne, pochopí situaci a může s ní něco udělat. Právě taková zkušenost může rozhodnout, jestli u firmy zůstaneme.",
+          "Firmy roky hledaly způsoby, jak obsluhu klientů zrychlit a zlevnit. Chatboty, samoobsluha i automatické rozhodování v tom mají své místo. Kde ale klientům usnadňujeme život a kde už jen přesouváme práci na ně? A když se konečně dostanou k člověku, dokáže jim pomoci, nebo jen zopakuje, co napsal systém?",
+          "Evropská pravidla pro umělou inteligenci a automatizované rozhodování navíc v určitých situacích vyžadují vysvětlení rozhodnutí, lidský zásah či dohled. Splněním povinnosti ale otázka lidského přístupu nekončí. Konkurenční výhoda může vzniknout tam, kde klient najde někoho, kdo má čas, informace a pravomoc jeho problém skutečně vyřešit.",
+          "V mastermindu budeme vycházet z konkrétních zkušeností vašich firem. Společně probereme, kde lidský přístup pomáhá získat důvěru a udržet klienta, kde stačí dobře fungující samoobsluha a kde člověk jen zbytečně potvrzuje rozhodnutí systému. Podíváme se také na to, co vaši lidé potřebují, aby mohli převzít odpovědnost a nabídnout řešení.",
+          "Odnesete si přehled situací, ve kterých má lidský přístup pro vaše klienty největší hodnotu, a jednu konkrétní změnu, kterou během příštího čtvrtletí vyzkoušíte. Včetně toho, podle čeho poznáte, že se vyplatila."
         ]
       },
       {
@@ -943,7 +986,8 @@
                 "speakerSlugs": [
                   "tomas-reznicek"
                 ],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "jak-na-networking"
               },
               {
                 "time": "10:15 - 10:45",
@@ -1190,7 +1234,8 @@
                 "speakerSlugs": [
                   "andrea-bila"
                 ],
-                "questionMode": "moderated_follow_up"
+                "questionMode": "moderated_follow_up",
+                "detail": "jak-lidsky-ziskat-genz-a-vest-s-energii"
               },
               {
                 "time": "14:15 - 14:45",
@@ -1215,7 +1260,6 @@
                 "meta": "Lucie Libovická, Pavel Janoušek",
                 "badge": "Mastermind",
                 "detail": "co-o-svych-lidech-skutecne-vite",
-                "link_speakers": true,
                 "slug": "leadership-stage-co-o-svych-lidech-skutecne-vite-merite-vykon-potencial-nebo-jen-dojmy-15151645",
                 "speakerSlugs": [
                   "lucie-libovicka",
@@ -1392,7 +1436,8 @@
                 "speakerSlugs": [
                   "tomas-reznicek"
                 ],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "rizeny-networking"
               },
               {
                 "time": "21:00 - 24:00",
@@ -1501,13 +1546,14 @@
               },
               {
                 "time": "9:30 - 11:00",
-                "title": "Mastermind část 1",
+                "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1",
                 "meta": "Tomáš Ryza",
                 "slug": "predsali-clarion-mastermind-cast-1-9301100",
                 "speakerSlugs": [
                   "tomas-ryza"
                 ],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "chci-mluvit-s-clovekem"
               },
               {
                 "time": "11:00 - 11:15",
@@ -1519,13 +1565,14 @@
               },
               {
                 "time": "11:15 - 12:45",
-                "title": "Mastermind část 2",
+                "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2",
                 "meta": "Tomáš Ryza",
                 "slug": "predsali-clarion-mastermind-cast-2-11151245",
                 "speakerSlugs": [
                   "tomas-ryza"
                 ],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "chci-mluvit-s-clovekem"
               },
               {
                 "time": "12:45 - 13:00",
