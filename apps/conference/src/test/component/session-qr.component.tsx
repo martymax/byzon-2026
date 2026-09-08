@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../app/styles.css';
+import { AdminContentWorkspace } from '../../components/admin-content-workspace';
+import { createFetchAdminContentPort } from '../../lib/admin-content-api';
+import { createAdminContentPreviewPort } from '../../lib/admin-content-preview-port';
 import { AdminSessionQr } from '../../components/admin-session-qr';
 import { createFetchApiClient } from '../../lib/api/fetch-client';
 import { SessionRating } from '../../components/live-interactions';
@@ -135,3 +138,63 @@ it.each(['program', 'questions', 'rating'] as const)(
     }
   },
 );
+
+it('shows Q&A QR only for supported sessions after the real API response parser', async () => {
+  const base = createAdminContentPreviewPort({ eventId });
+  const live = createFetchAdminContentPort(async () => {
+    const result = await base.list(eventId, 'sessions');
+    if (!result.ok) throw new Error('Missing session fixture');
+    return Response.json(
+      {
+        resource: 'sessions',
+        requestId: 'session-qr-test',
+        items: [
+          { ...result.data.items[0], questionMode: 'moderated_follow_up' },
+          {
+            ...result.data.items[0],
+            id: sessionId,
+            title: 'Registrace',
+            questionMode: 'disabled',
+          },
+        ],
+      },
+      { headers: { 'x-request-id': 'session-qr-test' } },
+    );
+  });
+  const screen = await renderComponent(
+    <AdminContentWorkspace
+      eventId={eventId}
+      timezone="Europe/Prague"
+      port={{
+        ...base,
+        list: (id, resource, signal) =>
+          resource === 'sessions'
+            ? live.list(id, resource, signal)
+            : base.list(id, resource, signal),
+      }}
+    />,
+  );
+  const qa = screen.getByRole('button', {
+    name: 'Zobrazit Q&A QR: Otevření konference',
+  });
+  await expect.element(qa).toBeVisible();
+  await expect
+    .element(
+      screen.getByRole('button', { name: 'Zobrazit QR programu: Registrace' }),
+    )
+    .toBeVisible();
+  await expect
+    .element(
+      screen.getByRole('button', { name: 'Zobrazit Q&A QR: Registrace' }),
+    )
+    .not.toBeInTheDocument();
+  await qa.click();
+  await expect
+    .element(
+      screen.getByRole('dialog').getByRole('link', { name: 'Stáhnout PNG' }),
+    )
+    .toHaveAttribute(
+      'href',
+      expect.stringContaining('target=questions&format=png'),
+    );
+});
