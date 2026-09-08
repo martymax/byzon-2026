@@ -1061,6 +1061,24 @@ export async function importContentJson(options: {
         ),
       );
 
+    // A CMS image replacement/removal survives future source imports and deploys.
+    const managedImageOwners = new Set(
+      (
+        await transaction
+          .selectDistinct({ id: schema.auditLogs.targetId })
+          .from(schema.auditLogs)
+          .where(
+            and(
+              eq(schema.auditLogs.eventId, eventId),
+              inArray(schema.auditLogs.action, [
+                'content.asset.replace',
+                'content.asset.remove',
+              ]),
+            ),
+          )
+      ).map((row) => row.id),
+    );
+
     for (const [index, speaker] of source.speakers.list.entries()) {
       const names = splitName(speaker.name);
       if (!names)
@@ -1109,7 +1127,9 @@ export async function importContentJson(options: {
             instagramUrl: speaker.links?.instagram ?? null,
             facebookUrl: speaker.links?.facebook ?? null,
             websiteUrl: speaker.links?.web ?? null,
-            photoAssetId: assetIds.get(speaker.photo),
+            ...(managedImageOwners.has(id)
+              ? {}
+              : { photoAssetId: assetIds.get(speaker.photo) }),
             sortOrder: index,
             updatedAt: new Date(),
           },
@@ -1157,7 +1177,9 @@ export async function importContentJson(options: {
           set: {
             name: partner.name,
             websiteUrl: partner.websiteUrl?.trim() || null,
-            logoAssetId: assetIds.get(partner.src),
+            ...(managedImageOwners.has(id)
+              ? {}
+              : { logoAssetId: assetIds.get(partner.src) }),
             sortOrder: index,
             updatedAt: new Date(),
           },

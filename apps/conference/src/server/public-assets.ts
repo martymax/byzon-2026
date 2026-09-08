@@ -6,6 +6,7 @@ const LOCAL_CONTENT_ASSET_PREFIX = '/content-assets';
 export interface PublicAssetRecord {
   readonly bucketKey: string;
   readonly eventId: string;
+  readonly sniffedMimeType?: string | null;
 }
 
 export const publicAssetLocation = (
@@ -38,10 +39,30 @@ const notFound = () =>
 export const readPublicAsset = async (
   assetId: string,
   findAsset: (id: string) => Promise<PublicAssetRecord | null>,
+  readImage?: (key: string, eventId: string) => Promise<Buffer>,
 ): Promise<Response> => {
   if (!assetIdSchema.safeParse(assetId).success) return notFound();
   const asset = await findAsset(assetId);
   if (!asset) return notFound();
+  if (
+    asset.bucketKey.startsWith(`content-images/${asset.eventId}/`) &&
+    readImage &&
+    asset.sniffedMimeType === 'image/webp'
+  ) {
+    try {
+      const bytes = await readImage(asset.bucketKey, asset.eventId);
+      return new Response(new Uint8Array(bytes), {
+        headers: {
+          'content-type': 'image/webp',
+          'content-length': String(bytes.length),
+          'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    } catch {
+      return notFound();
+    }
+  }
   const location = publicAssetLocation(asset);
   if (!location) return notFound();
   return new Response(null, {

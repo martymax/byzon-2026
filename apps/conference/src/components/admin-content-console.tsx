@@ -887,6 +887,8 @@ export const AdminContentConsole = ({
   const [archiveCandidate, setArchiveCandidate] =
     useState<AdminContentItem | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [assetBusy, setAssetBusy] = useState(false);
+  const [assetPending, setAssetPending] = useState(false);
   const [busy, setBusy] = useState<'loading' | 'saving' | 'archiving' | null>(
     'loading',
   );
@@ -899,8 +901,8 @@ export const AdminContentConsole = ({
   const [reconciliationRequired, setReconciliationRequired] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [localFormAvailable, setLocalFormAvailable] = useState(false);
-  const working = busy !== null;
-  const mutating = busy === 'saving' || busy === 'archiving';
+  const working = busy !== null || assetBusy;
+  const mutating = busy === 'saving' || busy === 'archiving' || assetBusy;
   const operationLocked = useRef(false);
   const activeMutation = useRef<AbortController | null>(null);
   const activeResource = useRef<AdminContentResource>(initialResource);
@@ -911,7 +913,25 @@ export const AdminContentConsole = ({
   const listTitleRef = useRef<HTMLHeadingElement>(null);
   const listScrollPosition = useRef(0);
 
-  useUnsavedContentGuard(dirty || mutating);
+  const handleAssetMutation = useCallback(
+    (version: number) => {
+      setEditing((current) =>
+        current
+          ? { ...current, version, publicationState: 'unpublished' }
+          : current,
+      );
+      setItems((current) =>
+        current.map((item) =>
+          item.id === editing?.id
+            ? { ...item, version, publicationState: 'unpublished' }
+            : item,
+        ),
+      );
+      onContentChanged?.();
+    },
+    [editing?.id, onContentChanged],
+  );
+  useUnsavedContentGuard(dirty || mutating || assetPending);
 
   useEffect(() => {
     const closeFromHistory = () => {
@@ -949,8 +969,8 @@ export const AdminContentConsole = ({
   }, [editorOpen]);
 
   useEffect(() => {
-    onDirtyChange?.(dirty || mutating);
-  }, [dirty, mutating, onDirtyChange]);
+    onDirtyChange?.(dirty || mutating || assetPending);
+  }, [dirty, mutating, assetPending, onDirtyChange]);
 
   useEffect(
     () => () => {
@@ -1159,11 +1179,14 @@ export const AdminContentConsole = ({
 
   const requestEditorClose = useCallback(() => {
     if (working) return;
-    if (dirty && !window.confirm('Zahodit neuložené změny formuláře?')) {
+    if (
+      (dirty || assetPending) &&
+      !window.confirm('Zahodit neuložené změny formuláře?')
+    ) {
       return;
     }
     closeEditor();
-  }, [closeEditor, dirty, working]);
+  }, [closeEditor, dirty, assetPending, working]);
 
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
@@ -1195,7 +1218,20 @@ export const AdminContentConsole = ({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (operationLocked.current || readOnly || reconciliationRequired) return;
+    if (
+      operationLocked.current ||
+      readOnly ||
+      reconciliationRequired ||
+      assetBusy
+    )
+      return;
+    if (assetPending) {
+      setError({
+        kind: 'validation',
+        message: 'Nejprve nahrajte vybraný obrázek, nebo zrušte jeho výběr.',
+      });
+      return;
+    }
     const formElement = event.currentTarget;
     setMessage('');
     setError(null);
@@ -2230,9 +2266,13 @@ export const AdminContentConsole = ({
                         eventId={eventId}
                         owner={{ kind: 'speaker', id: editing.id }}
                         ownerVersion={Number(editing.version ?? 1)}
+                        onMutation={handleAssetMutation}
+                        onBusyChange={setAssetBusy}
+                        onPendingChange={setAssetPending}
+                        {...(onSecurityFailure ? { onSecurityFailure } : {})}
                         {...(assetPort ? { port: assetPort } : {})}
                         purpose="speaker_photo"
-                        readOnly={readOnly}
+                        readOnly={readOnly || editing.status === 'archived'}
                       />
                     ) : (
                       <section
@@ -2381,9 +2421,13 @@ export const AdminContentConsole = ({
                         eventId={eventId}
                         owner={{ kind: 'partner', id: editing.id }}
                         ownerVersion={Number(editing.version ?? 1)}
+                        onMutation={handleAssetMutation}
+                        onBusyChange={setAssetBusy}
+                        onPendingChange={setAssetPending}
+                        {...(onSecurityFailure ? { onSecurityFailure } : {})}
                         {...(assetPort ? { port: assetPort } : {})}
                         purpose="partner_logo"
-                        readOnly={readOnly}
+                        readOnly={readOnly || editing.status === 'archived'}
                       />
                     ) : (
                       <section

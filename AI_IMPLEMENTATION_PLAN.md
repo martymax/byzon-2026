@@ -1942,6 +1942,11 @@ fixtures.
   kontrakt, syntetické fixtures a mockované preview/replace/remove UI včetně
   read-only varianty. Produkční endpoint, audit, storage/auth integrace a E2E
   zůstávají otevřené a smí je uzavřít až `AUX-13L`.
+  Aktualizace 8. 9. 2026: na explicitní rozhodnutí zadavatele je implementován
+  Railway Volume adaptér pro loga/fotografie, autorizované API, audit, stažení,
+  publikování a produkční UI. Původní bucket gate se pro tyto obrázky nahrazuje
+  dodatkem ADR-007. Lokální testy jsou v implementaci; skutečné připojení volume,
+  nasazení a ověření po restartu eviduje `docs/partner-logo-storage.md`.
 
 **Akceptace:** participant nikdy nevidí draft; publish je atomický; stejná
 version vrací deterministický JSON; významná změna vytváří cílitelnou událost;

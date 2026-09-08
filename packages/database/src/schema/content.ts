@@ -127,6 +127,9 @@ export const assets = pgTable(
     sniffedMimeType: varchar('sniffed_mime_type', { length: 255 }),
     sizeBytes: integer('size_bytes'),
     checksumSha256: varchar('checksum_sha256', { length: 64 }),
+    altText: varchar('alt_text', { length: 300 }),
+    width: integer('width'),
+    height: integer('height'),
     status: assetStatus('status').default('uploading').notNull(),
     isPublic: boolean('is_public').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })

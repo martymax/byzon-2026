@@ -29,3 +29,4 @@ overrides:
 
 patchedDependencies:
   minimatch@3.1.5: patches/minimatch@3.1.5.patch
+  sharp@0.35.0: patches/sharp@0.35.0.patch

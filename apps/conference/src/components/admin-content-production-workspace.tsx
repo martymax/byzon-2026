@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdminContentResource } from '@/lib/admin-content-api';
+import { browserAdminContentAssetPort } from '../lib/admin-content-asset-api';
 
 import { AdminContentWorkspace } from './admin-content-workspace';
 import { useAdminWorkspace } from './admin-workspace-shell';
@@ -31,6 +32,7 @@ export const AdminContentProductionWorkspace = ({
         </p>
       </header>
       <AdminContentWorkspace
+        assetPort={browserAdminContentAssetPort}
         eventId={eventId}
         initialResource={initialResource}
         showAreaNavigation={!speakerFocused}

@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { database } from '@/server/database';
 import { readPublicAsset } from '@/server/public-assets';
+import { createContentAssetStorage } from '@/server/content-asset-storage';
 
 export const GET = (
   _request: Request,
@@ -17,8 +18,8 @@ export const GET = (
           eq(schema.assets.status, 'ready'),
           isNull(schema.assets.deletedAt),
         ),
-        columns: { bucketKey: true, eventId: true },
+        columns: { bucketKey: true, eventId: true, sniffedMimeType: true },
       });
       return asset ?? null;
-    }),
+    }, createContentAssetStorage().read),
   );
