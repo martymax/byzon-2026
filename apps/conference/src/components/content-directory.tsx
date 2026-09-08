@@ -378,9 +378,13 @@ export const PartnerLogoGrid = ({
   const partnerSlugs = new Set(partners.map(({ slug }) => slug));
   // Keep older published snapshots clean until the source import archives
   // the partner that Frame Land replaced.
-  const visiblePartners = partners.filter(
-    ({ slug }) => !(slug === 'livest' && partnerSlugs.has('frame-land')),
-  );
+  const visiblePartners = partners
+    .filter(
+      ({ slug }) => !(slug === 'livest' && partnerSlugs.has('frame-land')),
+    )
+    .sort(
+      (left, right) => Number(right.slug === 'dm') - Number(left.slug === 'dm'),
+    );
   return (
     <ul className="participant-partners-grid">
       {visiblePartners.map((partner) => (

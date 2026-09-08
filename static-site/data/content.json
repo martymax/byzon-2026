@@ -836,6 +836,13 @@
         "websiteUrl": "https://www.truecafe.cz/",
         "tall": true,
         "on_dark": false
+      },
+      {
+        "name": "IGY",
+        "src": "/assets/img/2026/09/igy.svg",
+        "websiteUrl": "https://www.igycentrum.cz/",
+        "tall": true,
+        "on_dark": false
       }
     ],
     "organizer": {
