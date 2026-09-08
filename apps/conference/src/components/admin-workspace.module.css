@@ -3522,3 +3522,51 @@ label.dataCard > input:is([type='checkbox'], [type='radio']) {
   border-color: var(--admin-primary);
   box-shadow: var(--byzon-shadow-md);
 }
+
+.bulkPanel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 0.75rem;
+  background: var(--admin-surface);
+}
+
+.bulkPanel > summary {
+  min-height: 2.75rem;
+  cursor: pointer;
+  font-weight: 700;
+  padding-block: 0.5rem;
+}
+
+.bulkPanel > summary:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 3px;
+}
+
+.bulkFields {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.bulkSelection {
+  max-height: 18rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 0.5rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.5rem;
+}
+
+.bulkSelection label {
+  min-height: 2.75rem;
+  padding: 0.5rem;
+}
+
+.bulkSelection ul,
+ul.bulkSelection {
+  padding-inline-start: 1.75rem;
+}

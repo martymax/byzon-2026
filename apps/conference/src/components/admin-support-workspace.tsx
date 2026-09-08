@@ -33,6 +33,9 @@ import {
   requestAdminSupportMutation,
 } from '@/lib/admin-api';
 
+import { runAdminBulk, type AdminBulkOutcome } from './admin-bulk';
+import { adminBulkApiResult } from './admin-bulk-api';
+import { AdminParticipantBulk } from './admin-participant-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
@@ -411,9 +414,11 @@ const useCompactDataView = (): boolean => {
 };
 
 export const AdminSupportWorkspace = () => {
-  const { api, eventId, invalidateSensitive, permissions } =
+  const { api, context, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
-  const canMutate = permissions.includes('ticket:any:manage');
+  const canMutate =
+    permissions.includes('ticket:any:manage') &&
+    context.event.phase !== 'archived';
   const requestFence = useAdminRequestFence();
   const [query, setQuery] = useState('');
   const [ticketState, setTicketState] = useState<SupportTicketState | ''>('');
@@ -447,6 +452,9 @@ export const AdminSupportWorkspace = () => {
     null,
   );
   const [bulkReason, setBulkReason] = useState('');
+  const [bulkOutcomes, setBulkOutcomes] = useState<readonly AdminBulkOutcome[]>(
+    [],
+  );
   const compactDataView = useCompactDataView();
   const [renderedItemCount, setRenderedItemCount] = useState(
     participantRenderChunkSize,
@@ -664,32 +672,50 @@ export const AdminSupportWorkspace = () => {
     setBulkAction(null);
     setBusy(true);
     setError(null);
-    const results = await Promise.all(
-      selected.map((participant) =>
-        appliedAction === 'invite'
-          ? requestAdminParticipantInvite(
-              api,
-              eventId,
-              participant.participantId,
-              { participantId: participant.participantId },
-              createAdminIdempotencyKey('participant-invite'),
-            )
-          : requestAdminSupportMutation(
-              api,
-              eventId,
-              {
-                participantId: participant.participantId,
-                ticketId: participant.ticketId,
-                action: appliedAction,
-                expectedVersion: participant.ticketVersion,
-                reason: bulkReason.trim(),
-                targetTicketId: null,
-              },
-              createAdminIdempotencyKey('participant-bulk'),
-            ),
-      ),
+    const request = requestFence.begin('participant-bulk');
+    setBulkOutcomes([]);
+    const results = await runAdminBulk(
+      selected,
+      (participant) => ({
+        id: participant.participantId,
+        label: participant.displayName,
+      }),
+      async (participant) =>
+        adminBulkApiResult(
+          appliedAction === 'invite'
+            ? await requestAdminParticipantInvite(
+                api,
+                eventId,
+                participant.participantId,
+                { participantId: participant.participantId },
+                createAdminIdempotencyKey('participant-invite'),
+                request.signal,
+              )
+            : await requestAdminSupportMutation(
+                api,
+                eventId,
+                {
+                  participantId: participant.participantId,
+                  ticketId: participant.ticketId,
+                  action: appliedAction,
+                  expectedVersion: participant.ticketVersion,
+                  reason: bulkReason.trim(),
+                  targetTicketId: null,
+                },
+                createAdminIdempotencyKey('participant-bulk'),
+                request.signal,
+              ),
+          invalidateSensitive,
+        ),
+      request.signal,
+      () => undefined,
     );
-    const succeeded = results.filter((result) => result.ok).length;
+    if (!request.isCurrent()) return;
+    request.finish();
+    setBulkOutcomes(results);
+    const succeeded = results.filter(
+      (result) => result.status === 'succeeded',
+    ).length;
     setBusy(false);
     setBulkReason('');
     setSelectedIds(new Set());
@@ -833,6 +859,22 @@ export const AdminSupportWorkspace = () => {
           ) : null}
         </div>
 
+        {canMutate ? (
+          <AdminParticipantBulk
+            items={items}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            disabled={
+              busy ||
+              createBusy ||
+              createOpen ||
+              bulkAction !== null ||
+              error !== null
+            }
+            onBusyChange={setBusy}
+            onCompleted={() => void load()}
+          />
+        ) : null}
         {selected.length > 0 ? (
           <div
             className={styles.participantBulkBar}
@@ -851,6 +893,7 @@ export const AdminSupportWorkspace = () => {
               {canMutate && commonActions.includes('invite') ? (
                 <button
                   className={styles.button}
+                  disabled={busy}
                   onClick={() => setBulkAction('invite')}
                   type="button"
                 >
@@ -860,6 +903,7 @@ export const AdminSupportWorkspace = () => {
               {canMutate && commonActions.includes('block') ? (
                 <button
                   className={styles.dangerButton}
+                  disabled={busy}
                   onClick={() => setBulkAction('block')}
                   type="button"
                 >
@@ -869,6 +913,7 @@ export const AdminSupportWorkspace = () => {
               {canMutate && commonActions.includes('reactivate') ? (
                 <button
                   className={styles.button}
+                  disabled={busy}
                   onClick={() => setBulkAction('reactivate')}
                   type="button"
                 >
@@ -895,6 +940,20 @@ export const AdminSupportWorkspace = () => {
           <section className={styles.success} role="status">
             <p>{notice}</p>
           </section>
+        ) : null}
+        {bulkOutcomes.some((outcome) => outcome.status !== 'succeeded') ? (
+          <ul aria-label="Výsledky hromadných akcí účastníků">
+            {bulkOutcomes
+              .filter((outcome) => outcome.status !== 'succeeded')
+              .map((outcome) => (
+                <li key={outcome.id}>
+                  {outcome.label}:{' '}
+                  {outcome.status === 'skipped'
+                    ? 'Neprovedeno'
+                    : outcome.message}
+                </li>
+              ))}
+          </ul>
         ) : null}
         {busy && items.length === 0 ? (
           <p className={styles.participantLoading} role="status">

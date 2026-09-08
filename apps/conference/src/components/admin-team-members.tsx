@@ -20,6 +20,7 @@ import {
   requestAdminTeamMembers,
 } from '@/lib/admin-api';
 
+import { AdminTeamBulk } from './admin-team-bulk';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
 import {
@@ -425,7 +426,12 @@ export const AdminTeamMembers = ({
           </p>
         </div>
         {canAdd ? (
-          <button className={styles.button} onClick={openAdd} type="button">
+          <button
+            className={styles.button}
+            disabled={busy !== null}
+            onClick={openAdd}
+            type="button"
+          >
             Přidat člena
           </button>
         ) : null}
@@ -485,6 +491,19 @@ export const AdminTeamMembers = ({
               </select>
             </label>
           </div>
+          {editable ? (
+            <AdminTeamBulk
+              members={filteredMembers}
+              teamVersion={data.teamVersion}
+              disabled={busy !== null || editor !== null || error !== null}
+              onBusyChange={(running) => setBusy(running ? 'mutation' : null)}
+              onCompleted={() => {
+                setBusy('list');
+                setReload((value) => value + 1);
+                onChanged?.();
+              }}
+            />
+          ) : null}
           {filteredMembers.length === 0 ? (
             <p className={styles.empty}>
               {data.members.length === 0
@@ -527,6 +546,7 @@ export const AdminTeamMembers = ({
                             {editable ? (
                               <button
                                 className={styles.secondaryButton}
+                                disabled={busy !== null}
                                 onClick={() => openEdit(member)}
                                 type="button"
                               >
@@ -550,6 +570,7 @@ export const AdminTeamMembers = ({
                             {editable && !member.isCurrentActor ? (
                               <button
                                 className={styles.dangerButton}
+                                disabled={busy !== null}
                                 onClick={() => openRemove(member)}
                                 type="button"
                               >
@@ -581,6 +602,7 @@ export const AdminTeamMembers = ({
                         {editable ? (
                           <button
                             className={styles.secondaryButton}
+                            disabled={busy !== null}
                             onClick={() => openEdit(member)}
                             type="button"
                           >
@@ -604,6 +626,7 @@ export const AdminTeamMembers = ({
                         {editable && !member.isCurrentActor ? (
                           <button
                             className={styles.dangerButton}
+                            disabled={busy !== null}
                             onClick={() => openRemove(member)}
                             type="button"
                           >

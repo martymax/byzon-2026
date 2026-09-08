@@ -16,6 +16,7 @@ import {
   requestAdminSessionCapacityMutation,
 } from '@/lib/admin-api';
 
+import { AdminReservationsBulk } from './admin-reservations-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { adminCountForms, formatCzechCount } from './admin-copy';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
@@ -83,11 +84,13 @@ const reservationStateLabels: Record<ReservationItem['state'], string> = {
 };
 
 export const AdminReservationsRedesign = () => {
-  const { api, eventId, invalidateSensitive, permissions } =
+  const { api, context, eventId, invalidateSensitive, permissions } =
     useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const canRead = permissions.includes('reservation:any:read');
-  const canManage = permissions.includes('agenda:any:override');
+  const canManage =
+    permissions.includes('agenda:any:override') &&
+    context.event.phase !== 'archived';
   const [sessions, setSessions] = useState<
     readonly AdminReservationSessionItem[]
   >([]);
@@ -588,6 +591,7 @@ export const AdminReservationsRedesign = () => {
                 />
                 <button
                   className={styles.secondaryButton}
+                  disabled={busy}
                   onClick={() => chooseSession(session)}
                   type="button"
                 >
@@ -600,7 +604,7 @@ export const AdminReservationsRedesign = () => {
         {nextCursor ? (
           <button
             className={styles.secondaryButton}
-            disabled={loadingMore}
+            disabled={busy || loadingMore}
             onClick={() => void loadMore()}
             type="button"
           >
@@ -612,6 +616,24 @@ export const AdminReservationsRedesign = () => {
           </p>
         ) : null}
       </section>
+
+      {canManage ? (
+        <AdminReservationsBulk
+          sessions={sortedSessions}
+          disabled={
+            busy ||
+            loadingMore ||
+            selectedSession !== null ||
+            pending !== null ||
+            error !== null
+          }
+          onBusyChange={setBusy}
+          onCompleted={() => {
+            setBusy(true);
+            setReload((value) => value + 1);
+          }}
+        />
+      ) : null}
 
       {selectedSession && !confirming ? (
         <AdminModal

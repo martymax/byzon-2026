@@ -33,6 +33,7 @@ import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
 import { AdminProgramAccess } from './admin-program-access';
+import { AdminRoleBulk } from './admin-role-bulk';
 import { AdminTeamMembers } from './admin-team-members';
 import {
   adminFailureMessage,
@@ -561,6 +562,19 @@ export const AdminTeamRedesign = ({
           {dataPort === undefined ? (
             <AdminTeamMembers
               onChanged={() => {
+                setBusy('list');
+                setReload((value) => value + 1);
+              }}
+            />
+          ) : null}
+          {canRevoke && assignments ? (
+            <AdminRoleBulk
+              assignments={assignments}
+              disabled={
+                busy !== null || formOpen || pending !== null || error !== null
+              }
+              onBusyChange={(running) => setBusy(running ? 'mutation' : null)}
+              onCompleted={() => {
                 setBusy('list');
                 setReload((value) => value + 1);
               }}

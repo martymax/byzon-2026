@@ -22,6 +22,7 @@ import {
 } from '../lib/admin-content-api';
 import { ADMIN_CONTENT_SCOPE_CHANGE_EVENT } from '../lib/admin-content-dirty-guard';
 
+import { AdminContentBulk } from './admin-content-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminSessionQr } from './admin-session-qr';
 import { AdminProgramFilters } from './admin-program-filters';
@@ -863,6 +864,7 @@ export const AdminContentConsole = ({
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [localFormAvailable, setLocalFormAvailable] = useState(false);
   const working = busy !== null;
+  const mutating = busy === 'saving' || busy === 'archiving';
   const operationLocked = useRef(false);
   const activeMutation = useRef<AbortController | null>(null);
   const activeResource = useRef<AdminContentResource>(initialResource);
@@ -873,7 +875,7 @@ export const AdminContentConsole = ({
   const listTitleRef = useRef<HTMLHeadingElement>(null);
   const listScrollPosition = useRef(0);
 
-  useUnsavedContentGuard(dirty);
+  useUnsavedContentGuard(dirty || mutating);
 
   useEffect(() => {
     const closeFromHistory = () => {
@@ -911,8 +913,8 @@ export const AdminContentConsole = ({
   }, [editorOpen]);
 
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange?.(dirty || mutating);
+  }, [dirty, mutating, onDirtyChange]);
 
   useEffect(
     () => () => {
@@ -1540,6 +1542,32 @@ export const AdminContentConsole = ({
         </section>
       ) : null}
 
+      {!readOnly ? (
+        <AdminContentBulk
+          key={`${eventId}:${resource}:${listFilter}:${speakerListQuery}`}
+          items={visibleItems}
+          resource={resource}
+          references={references}
+          port={port}
+          eventId={eventId}
+          disabled={writesBlocked || dirty || editorOpen}
+          onSecurityFailure={acceptFailure}
+          onBusyChange={(running) => {
+            operationLocked.current = running;
+            setBusy(running ? 'saving' : null);
+          }}
+          onCompleted={() => {
+            onContentChanged?.();
+            setBusy('loading');
+            setSnapshotReady(false);
+            setLoadRequest(({ sequence }) => ({
+              resource,
+              sequence: sequence + 1,
+            }));
+          }}
+        />
+      ) : null}
+
       <section
         aria-busy={busy === 'loading'}
         aria-labelledby="content-list-title"
@@ -1580,6 +1608,7 @@ export const AdminContentConsole = ({
             <label className={styles.contentListSearch}>
               <span>Filtrovat řečníky</span>
               <input
+                disabled={working}
                 onChange={(event) => setSpeakerListQuery(event.target.value)}
                 placeholder="Jméno, firma nebo role"
                 type="search"
@@ -1594,6 +1623,7 @@ export const AdminContentConsole = ({
                 ? styles.filterActive
                 : styles.filterButton
             }
+            disabled={working}
             onClick={() => setListFilter('active')}
             type="button"
           >
@@ -1606,6 +1636,7 @@ export const AdminContentConsole = ({
                 ? styles.filterActive
                 : styles.filterButton
             }
+            disabled={working}
             onClick={() => setListFilter('archived')}
             type="button"
           >

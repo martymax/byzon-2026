@@ -15,6 +15,7 @@ import {
   requestAdminEngagementOverview,
 } from '@/lib/admin-api';
 
+import { AdminEngagementBulk } from './admin-engagement-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
@@ -100,8 +101,14 @@ const sessionStatusLabel = (status: AdminEngagementSession['status']) =>
         : 'Archivováno';
 
 export const AdminEngagementWorkspace = () => {
-  const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
-    useAdminWorkspace();
+  const {
+    api,
+    context,
+    eventId,
+    eventTimezone,
+    invalidateSensitive,
+    permissions,
+  } = useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const [overview, setOverview] = useState<AdminEngagementOverview | null>(
     null,
@@ -451,6 +458,22 @@ export const AdminEngagementWorkspace = () => {
         </section>
       ) : (
         <>
+          {context.event.phase !== 'archived' ? (
+            <AdminEngagementBulk
+              overview={overview}
+              disabled={
+                busy !== null ||
+                pending !== null ||
+                featuresDirty ||
+                error !== null
+              }
+              onBusyChange={(running) => setBusy(running ? 'mutation' : null)}
+              onCompleted={() => {
+                setBusy('read');
+                setReload((value) => value + 1);
+              }}
+            />
+          ) : null}
           <section
             className={`${styles.panel} ${styles.engagementReason}`}
             aria-labelledby="reason-title"
