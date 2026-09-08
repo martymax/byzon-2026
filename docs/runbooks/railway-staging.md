@@ -7,60 +7,50 @@ Projekt `Byzon 2026` používá prostředí `staging` a existující služby
 `@byzon/conference`, `@byzon/worker`, `Postgres` a `Redis`. Nevytvářejte jejich
 duplicitní kopie.
 
-Cílová produkční doména zůstává `https://app.byzon.cz`, ale do explicitně
-schváleného produkčního cutoveru je custom doména v Railway připojená ke
-stagingovému webu a stagingové `APP_BASE_URL` je nastavené na tuto adresu.
-Prostředí `production-2026` mezitím používá svou generickou Railway doménu.
-Railway je produkční platforma, nikoli dočasný hosting.
+## Pouze staging během testování
 
-## Produkční klon 2026
+Od 8. 9. 2026 existuje v projektu pouze prostředí `staging`. Aplikace je stále
+v testovací fázi a účastníci do ní zatím nemají přístup. Doména
+`https://app.byzon.cz` zůstává připojená ke stagingovému webu a stagingové
+`APP_BASE_URL` je nastavené na tuto adresu; ostrá doména sama o sobě neznamená
+produkční provoz.
 
-Dne 31. 8. 2026 vzniklo nové Railway prostředí `production-2026` jako nativní
-duplikát `staging`. Původní prostředí `production` už v projektu existovalo a
-nebylo změněno ani odstraněno. Do rozhodnutí o jeho archivaci používejte
-výhradně explicitní název prostředí, ne nejednoznačné označení „production“.
+Na výslovný pokyn vlastníka bylo 8. 9. 2026 odstraněno prostředí
+`production-2026` včetně jeho instancí služeb a datových volumes. Starší
+prostředí `production` už při této kontrole neexistovalo. Následný readback
+Railway potvrdil pouze `staging`, zachovanou custom doménu a stagingové
+Postgres, Redis a Mailpit volumes. `/health/ready` potvrdilo prostředí
+`staging` a dostupnost databáze i Redis.
 
-- web: `https://byzonconference-production-2026.up.railway.app`
-- worker: `https://byzonworker-production-2026.up.railway.app`
-- služby: `@byzon/conference`, `@byzon/worker`, vlastní `Postgres` a vlastní
-  `Redis`
-- runtime: `APP_ENV=production`, `PUBLIC_SITE_URL=https://byzon.cz` a
-  `APP_BASE_URL` nastavené na generickou produkční Railway doménu
-- release webu i workeru: `9ddeec7d4adeb351fc3e77ac595468f630e883b3`
-
-Duplikace prostředí nekopíruje obsah databázového volume. Produkční databáze
-proto dostala idempotentní baseline seed a kanonický import repozitářového
-obsahu: 82 sessions, 24 řečníků, 10 partnerů, 35 assetů a 1 praktickou stránku.
-Nevznikl žádný uživatel a ze stagingu se nekopírovaly osobní údaje. Importovaný
-obsah zůstává draftem; publikaci musí po přidání prvního produkčního organizer
-admina provést oprávněný uživatel přes auditovaný publish flow.
-
-Klon dočasně převzal také stagingové aplikační secrets. Dne 31. 8. 2026 byly ve
-webové službě `production-2026` před prvním skutečným uživatelem atomicky
-nahrazené samostatnými náhodnými `BETTER_AUTH_SECRET` a
-`RATE_LIMIT_SUBJECT_SECRET`; kontrola potvrdila, že už se stagingem nejsou
-shodné. E-mailové proměnné zůstávají na inertním sentinelu
-`__FILL_IN_RAILWAY__`; invitation batch se do jejich nahrazení a ověření domény
-nesmí spustit.
+Produkční prostředí ani jeho klon znovu nevytvářejte bez nového výslovného
+pokynu. Přechod do ostrého provozu a zpřístupnění aplikace účastníkům jsou
+budoucí samostatné kroky. Historické ověření zrušeného klonu z 31. 8. 2026
+je níže zachované pouze jako provozní záznam.
 
 ## Služby a deployment
 
 1. Každý dokončený funkční celek nejprve projde testy, dostane samostatný Git
    commit a odešle se do vzdáleného repozitáře. Staging se standardně nasazuje
-   pouze přes Git integraci z větve `main`; `railway up` se pro běžné nasazení
+   pouze přes Git integraci z větve `stage/participant-access-live-qa`; `railway up` se pro běžné nasazení
    nepoužívá. CLI slouží k read-only diagnostice. Ruční deploy je výjimečný
    recovery krok, který musí být předem výslovně schválený a zdokumentovaný.
 2. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
-   sledují větev `main`.
+   sledují větev `stage/participant-access-live-qa`.
 3. Web jako jediný spouští pre-deploy migrace. Ve staging prostředí po
    migraci spustí idempotentní seed a import kanonického obsahu z
    `static-site/data/content.json`. Worker migrace nespouští.
 4. Web a worker sdílejí privátní reference na stejné staging PostgreSQL a
-   Redis. Produkční a staging data ani credentials se nesmí sdílet.
+   Redis. Zachovejte stávající stagingová data a credentials.
 5. Check-in služba, zařízení, manifest ani `CHECKIN_DEVICE_ID` se pro rok
    2026 neprovisionují.
 6. Po deployi ověřte `GET /health/live`, `GET /health/ready`, start workeru bez
    restart loopu a aktuální release SHA.
+
+Dne 7. 9. 2026 byly stagingové Git triggery webu a workeru odděleny
+do větve `stage/participant-access-live-qa`. Od 8. 9. 2026 produkční prostředí
+neexistuje; samotný push do `main` při tomto nastavení staging nenasadí.
+Novou implementaci na staging odešlete příkazem
+`git push origin HEAD:refs/heads/stage/participant-access-live-qa`.
 
 Oznámení jsou pro event `byzon-2026` zapnutá migrací
 `0023_enable_byzon_announcements`. Seed stejnou hodnotu idempotentně zachovává
@@ -208,7 +198,9 @@ opakované spuštění je no-op a role grant se auditovaně zapisuje bez e-mailu
    syntetickými staging identitami. Skutečné pozvánky se nesmí před dokončením
    `P4-06` spustit.
 
-## První provozní ověření 31. 8. 2026
+## Historické provozní ověření 31. 8. 2026
+
+Následující záznam popisuje již odstraněné prostředí.
 
 Na `production-2026` proběhly po importu obsahu tyto nedestruktivní kontroly:
 
