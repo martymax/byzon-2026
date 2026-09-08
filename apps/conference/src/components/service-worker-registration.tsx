@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { OFFLINE_AGENDA_SYNC_EVENT } from '../lib/offline/offline-policy';
+import { activateServiceWorker } from '../lib/offline/service-worker-update';
 
 import styles from './service-worker-registration.module.css';
 
@@ -68,6 +69,53 @@ interface DeferredInstallPromptEvent extends Event {
   }>;
   prompt(): Promise<void>;
 }
+
+export const manualInstallInstructions = (
+  userAgent: string,
+  maxTouchPoints: number,
+): string | null => {
+  if (
+    /iPad|iPhone|iPod/.test(userAgent) ||
+    (/Macintosh/.test(userAgent) && maxTouchPoints > 1)
+  ) {
+    return 'V Safari otevřete nabídku Sdílet (případně nejprve Více), zvolte Přidat na plochu a potvrďte Přidat. Pokud se zobrazí volba Otevřít jako webovou aplikaci, zapněte ji.';
+  }
+  if (
+    /Macintosh/.test(userAgent) &&
+    /Version\/.*Safari\//.test(userAgent) &&
+    !/Chrome|Chromium|Edg|OPR/.test(userAgent)
+  ) {
+    return 'V Safari zvolte Soubor → Přidat do Docku a potvrďte Přidat. Tato možnost je dostupná v macOS Sonoma nebo novějším.';
+  }
+  return null;
+};
+
+const subscribeToInstallEnvironment = (onChange: () => void): (() => void) => {
+  const displayMode = window.matchMedia('(display-mode: standalone)');
+  displayMode.addEventListener('change', onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    displayMode.removeEventListener('change', onChange);
+    window.removeEventListener('storage', onChange);
+  };
+};
+
+const getManualInstallSnapshot = (): string | null => {
+  if (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+    return null;
+  try {
+    if (isInstallPromptDismissed(window.localStorage)) return null;
+  } catch {
+    // Installation instructions also work when storage access is blocked.
+  }
+  return manualInstallInstructions(
+    navigator.userAgent,
+    navigator.maxTouchPoints,
+  );
+};
 
 type WorkerNotice = 'error' | 'install' | 'none' | 'offline' | 'update';
 
@@ -186,6 +234,18 @@ export function ServiceWorkerRegistration() {
   const [failed, setFailed] = useState(false);
   const [installPrompt, setInstallPrompt] =
     useState<DeferredInstallPromptEvent | null>(null);
+  const manualInstallSnapshot = useSyncExternalStore(
+    subscribeToInstallEnvironment,
+    getManualInstallSnapshot,
+    () => null,
+  );
+  const [manualInstallHidden, setManualInstallHidden] = useState(false);
+  const manualInstall = manualInstallHidden ? null : manualInstallSnapshot;
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
+  const [installFailed, setInstallFailed] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<
+    'idle' | 'applying' | 'error'
+  >('idle');
   const online = useSyncExternalStore(
     subscribeToConnectivity,
     () => navigator.onLine,
@@ -194,22 +254,44 @@ export function ServiceWorkerRegistration() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const waitingWorker = useRef<WaitingWorker | null>(null);
-  const applyingUpdate = useRef(false);
+  const applyingUpdate = useRef<AbortController | null>(null);
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const reloading = useRef(false);
 
   useEffect(() => {
+    const displayMode = window.matchMedia('(display-mode: standalone)');
+    let installed =
+      displayMode.matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const dismissed = () => {
+      try {
+        return isInstallPromptDismissed(window.localStorage);
+      } catch {
+        return false;
+      }
+    };
     const onBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as DeferredInstallPromptEvent;
       promptEvent.preventDefault();
-      if (isInstallPromptDismissed(window.localStorage)) return;
+      if (installed || dismissed()) return;
       setInstallPrompt(promptEvent);
     };
-    const onAppInstalled = () => setInstallPrompt(null);
+    const onAppInstalled = () => {
+      installed = true;
+      setInstallPrompt(null);
+      setManualInstallHidden(true);
+    };
+    const onDisplayModeChange = () => {
+      if (displayMode.matches) onAppInstalled();
+    };
+    displayMode.addEventListener('change', onDisplayModeChange);
 
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     window.addEventListener('appinstalled', onAppInstalled);
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       window.removeEventListener('appinstalled', onAppInstalled);
+      displayMode.removeEventListener('change', onDisplayModeChange);
     };
   }, []);
 
@@ -238,7 +320,13 @@ export function ServiceWorkerRegistration() {
       const probe = ++waitingProbe;
       void requestServiceWorkerVersion(worker)
         .then((version) => {
-          if (disposed || probe !== waitingProbe) return;
+          if (
+            disposed ||
+            probe !== waitingProbe ||
+            worker.state !== 'installed'
+          )
+            return;
+          if (waitingWorker.current?.worker === worker) return;
           waitingWorker.current = { version, worker };
           setUpdateDismissed(false);
           setUpdateAvailable(true);
@@ -281,21 +369,14 @@ export function ServiceWorkerRegistration() {
         },
       );
       if (disposed) return;
+      registrationRef.current = registration;
       setFailed(false);
       exposeWaitingWorker(registration.waiting);
       observeWorker(registration.installing);
-      registration.addEventListener('updatefound', () => {
-        observeWorker(registration?.installing ?? null);
-      });
+      registration.addEventListener('updatefound', onUpdateFound);
     };
 
-    const onControllerChange = () => {
-      if (!applyingUpdate.current) return;
-      const reloadKey = `byzon:worker-reload:${APP_SERVICE_WORKER_VERSION}`;
-      if (sessionStorage.getItem(reloadKey) === 'done') return;
-      sessionStorage.setItem(reloadKey, 'done');
-      window.location.reload();
-    };
+    const onUpdateFound = () => observeWorker(registration?.installing ?? null);
     const onWorkerMessage = (event: MessageEvent<unknown>) => {
       const controller = navigator.serviceWorker.controller;
       if (!controller || event.source !== controller) {
@@ -313,10 +394,6 @@ export function ServiceWorkerRegistration() {
       }
     };
 
-    navigator.serviceWorker.addEventListener(
-      'controllerchange',
-      onControllerChange,
-    );
     navigator.serviceWorker.addEventListener('message', onWorkerMessage);
     document.addEventListener('visibilitychange', checkForUpdate);
     const interval = window.setInterval(
@@ -331,10 +408,9 @@ export function ServiceWorkerRegistration() {
       disposed = true;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', checkForUpdate);
-      navigator.serviceWorker.removeEventListener(
-        'controllerchange',
-        onControllerChange,
-      );
+      registration?.removeEventListener('updatefound', onUpdateFound);
+      registrationRef.current = null;
+      applyingUpdate.current?.abort();
       navigator.serviceWorker.removeEventListener('message', onWorkerMessage);
       for (const [worker, listener] of workerStateListeners) {
         worker.removeEventListener('statechange', listener);
@@ -342,35 +418,71 @@ export function ServiceWorkerRegistration() {
     };
   }, []);
 
-  const applyUpdate = useCallback(() => {
-    const waiting = waitingWorker.current;
-    if (!waiting) return;
-    applyingUpdate.current = true;
-    waiting.worker.postMessage({
-      type: 'BYZON_SKIP_WAITING',
-      version: waiting.version,
-    });
+  const applyUpdate = useCallback(async () => {
+    if (applyingUpdate.current || reloading.current) return;
+    const attempt = new AbortController();
+    applyingUpdate.current = attempt;
+    setUpdateStatus('applying');
+    try {
+      // Another deployment may have replaced the worker since the notice opened.
+      const worker =
+        registrationRef.current?.waiting ?? waitingWorker.current?.worker;
+      if (!worker) throw new Error('No update worker available.');
+      const version =
+        waitingWorker.current?.worker === worker
+          ? waitingWorker.current.version
+          : await requestServiceWorkerVersion(worker);
+      await activateServiceWorker(
+        navigator.serviceWorker,
+        worker,
+        version,
+        attempt.signal,
+      );
+      if (attempt.signal.aborted || reloading.current) return;
+      reloading.current = true;
+      window.location.reload();
+    } catch {
+      if (!attempt.signal.aborted) setUpdateStatus('error');
+    } finally {
+      if (applyingUpdate.current === attempt) applyingUpdate.current = null;
+    }
   }, []);
+
+  const rememberDismissal = () => {
+    try {
+      rememberInstallPromptDismissal(window.localStorage);
+    } catch {
+      // Some browsers block access to the storage property itself.
+    }
+  };
 
   const installApplication = useCallback(async () => {
     const prompt = installPrompt;
     if (!prompt) return;
     setInstallPrompt(null);
-    await prompt.prompt();
-    const choice = await prompt.userChoice;
-    if (choice.outcome === 'dismissed') {
-      rememberInstallPromptDismissal(window.localStorage);
+    setInstallFailed(false);
+    try {
+      await prompt.prompt();
+      const choice = await prompt.userChoice;
+      if (choice.outcome === 'dismissed') rememberDismissal();
+      setManualInstallHidden(true);
+    } catch {
+      setInstallFailed(true);
     }
   }, [installPrompt]);
 
   const dismissInstallPrompt = useCallback(() => {
-    rememberInstallPromptDismissal(window.localStorage);
+    rememberDismissal();
     setInstallPrompt(null);
+    setManualInstallHidden(true);
+    setInstallFailed(false);
+    setShowInstallInstructions(false);
   }, []);
 
   const notice = serviceWorkerNotice({
     failed,
-    installAvailable: installPrompt !== null,
+    installAvailable:
+      installPrompt !== null || manualInstall !== null || installFailed,
     online,
     updateAvailable: updateAvailable && !updateDismissed,
   });
@@ -388,7 +500,11 @@ export function ServiceWorkerRegistration() {
           {notice === 'offline'
             ? 'Jste offline'
             : notice === 'update'
-              ? 'Je dostupná nová verze'
+              ? updateStatus === 'applying'
+                ? 'Aktualizuji aplikaci'
+                : updateStatus === 'error'
+                  ? 'Aktualizace se nezdařila'
+                  : 'Je dostupná nová verze'
               : notice === 'install'
                 ? 'Mějte program po ruce'
                 : 'Offline podpora není dostupná'}
@@ -397,9 +513,17 @@ export function ServiceWorkerRegistration() {
           {notice === 'offline'
             ? 'Dostupný zůstává dříve načtený veřejný program a praktické informace.'
             : notice === 'update'
-              ? 'Aktualizaci spustíte vědomě; do té doby zůstává aktivní ověřená verze.'
+              ? updateStatus === 'applying'
+                ? 'Po dokončení se stránka automaticky obnoví.'
+                : updateStatus === 'error'
+                  ? 'Zkuste aktualizaci znovu. Pokud potíže trvají, zavřete všechny panely aplikace a znovu ji otevřete.'
+                  : 'Aktualizaci spustíte vědomě; do té doby zůstává aktivní ověřená verze.'
               : notice === 'install'
-                ? 'Nainstalujte si aplikaci na plochu tohoto zařízení.'
+                ? installFailed
+                  ? 'Instalaci se nepodařilo otevřít. Použijte nabídku instalace v prohlížeči nebo obnovte stránku a zkuste to znovu.'
+                  : showInstallInstructions && manualInstall
+                    ? manualInstall
+                    : 'Přidejte si aplikaci na plochu nebo do Docku tohoto zařízení.'
                 : 'Aplikace funguje online, ale obsah se teď do zařízení neuloží.'}
         </span>
       </div>
@@ -412,13 +536,19 @@ export function ServiceWorkerRegistration() {
           <>
             <button
               className={styles.action}
-              onClick={applyUpdate}
+              disabled={updateStatus === 'applying'}
+              onClick={() => void applyUpdate()}
               type="button"
             >
-              Aktualizovat
+              {updateStatus === 'applying'
+                ? 'Aktualizuji…'
+                : updateStatus === 'error'
+                  ? 'Zkusit znovu'
+                  : 'Aktualizovat'}
             </button>
             <button
               className={styles.quietAction}
+              disabled={updateStatus === 'applying'}
               onClick={() => setUpdateDismissed(true)}
               type="button"
             >
@@ -427,13 +557,23 @@ export function ServiceWorkerRegistration() {
           </>
         ) : notice === 'install' ? (
           <>
-            <button
-              className={styles.action}
-              onClick={() => void installApplication()}
-              type="button"
-            >
-              Nainstalovat
-            </button>
+            {installPrompt ? (
+              <button
+                className={styles.action}
+                onClick={() => void installApplication()}
+                type="button"
+              >
+                Nainstalovat
+              </button>
+            ) : manualInstall && !showInstallInstructions ? (
+              <button
+                className={styles.action}
+                onClick={() => setShowInstallInstructions(true)}
+                type="button"
+              >
+                Jak nainstalovat
+              </button>
+            ) : null}
             <button
               className={styles.quietAction}
               onClick={dismissInstallPrompt}
