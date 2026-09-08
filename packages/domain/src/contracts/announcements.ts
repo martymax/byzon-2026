@@ -550,3 +550,33 @@ export type AdminAnnouncementTargetProblem = z.infer<
 export type AdminAnnouncementSendProblem = z.infer<
   typeof adminAnnouncementSendProblemSchema
 >;
+
+export const adminAnnouncementListItemSchema = z
+  .strictObject(participantAnnouncementSummaryShape)
+  .omit({ readAt: true })
+  .extend({
+    recipientCount: z.number().int().nonnegative(),
+    bodyText: adminAnnouncementBodySchema,
+  });
+export type AdminAnnouncementListItem = z.infer<
+  typeof adminAnnouncementListItemSchema
+>;
+export const adminAnnouncementListResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  items: z.array(adminAnnouncementListItemSchema).max(20),
+  nextCursor: uuidSchema.nullable(),
+});
+export const adminAnnouncementDeleteResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  announcementId: uuidSchema,
+  outcome: z.literal('deleted'),
+});
+export const adminAnnouncementDeleteProblemSchema = z.discriminatedUnion(
+  'code',
+  [
+    ...adminAnnouncementReadProblems,
+    announcementNotFoundProblemSchema,
+    idempotencyKeyReusedProblemSchema,
+    idempotencyInProgressProblemSchema,
+  ],
+);

@@ -106,6 +106,7 @@ const useAnnouncementResource = <Data, Problem extends ApiProblem>(
 ): AnnouncementResourceState<Data> & {
   readonly discard: (status: AnnouncementAuthoritativeFailureStatus) => void;
   readonly retry: () => void;
+  readonly replace: (data: Data) => void;
 } => {
   const [attempt, setAttempt] = useState(0);
   const [resultState, setResultState] = useState<
@@ -174,13 +175,19 @@ const useAnnouncementResource = <Data, Problem extends ApiProblem>(
     },
     [attempt, load],
   );
+  const replace = useCallback(
+    (data: Data) => {
+      setResultState({ status: 'ready', data, attempt, load });
+    },
+    [attempt, load],
+  );
   const state: AnnouncementResourceState<Data> =
     localFailureStatus !== undefined
       ? { status: localFailureStatus }
       : resultState.attempt === attempt && resultState.load === load
         ? resultState
         : { status: 'loading' };
-  return { ...state, discard, retry };
+  return { ...state, discard, retry, replace };
 };
 
 const rejectMismatchedAnnouncementScope = <Data, Problem extends ApiProblem>(
@@ -269,10 +276,46 @@ export const useParticipantAnnouncementDetail = (
       ),
     [announcementId, api, expectedEventId],
   );
-  return useAnnouncementResource<
+  const resource = useAnnouncementResource<
     ParticipantAnnouncementDetailResponse,
     ParticipantAnnouncementDetailProblem
   >(load, validAnnouncementId ? undefined : 'permission');
+  const ready = resource.status === 'ready';
+  const discard = resource.discard;
+  useEffect(() => {
+    if (!ready) return;
+    let active: AbortController | null = null;
+    const refresh = async () => {
+      if (active || document.visibilityState === 'hidden') return;
+      const controller = new AbortController();
+      active = controller;
+      try {
+        const result = await load(controller.signal);
+        if (controller.signal.aborted || result.ok) return;
+        const status = announcementAuthoritativeFailureStatus(result.failure);
+        if (status) discard(status);
+      } finally {
+        active = null;
+      }
+    };
+    const run = () => {
+      void refresh().catch(() => undefined);
+    };
+    const unsubscribe = subscribeToPrivateResourceInvalidation(() =>
+      active?.abort(),
+    );
+    const interval = window.setInterval(run, 15_000);
+    window.addEventListener('focus', run);
+    document.addEventListener('visibilitychange', run);
+    return () => {
+      unsubscribe();
+      active?.abort();
+      window.clearInterval(interval);
+      window.removeEventListener('focus', run);
+      document.removeEventListener('visibilitychange', run);
+    };
+  }, [ready, load, discard]);
+  return resource;
 };
 
 const stateCopy: Record<

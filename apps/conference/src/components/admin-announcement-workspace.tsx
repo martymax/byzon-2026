@@ -20,6 +20,7 @@ import {
   requestAdminAnnouncementTargets,
 } from '@/lib/admin-api';
 
+import { AdminAnnouncementHistory } from './admin-announcement-history';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { adminCountForms, formatCzechCount } from './admin-copy';
 import {
@@ -683,6 +684,8 @@ export const AdminAnnouncementWorkspace = ({
           </AdminTechnicalDetails>
         </section>
       ) : null}
+
+      <AdminAnnouncementHistory revision={sent?.announcementId} />
 
       {confirming && pending && preview ? (
         <AdminConfirmDialog

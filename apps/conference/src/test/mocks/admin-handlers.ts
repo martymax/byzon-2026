@@ -5,6 +5,11 @@ import {
   type AdminEngagementOverview,
 } from '@byzon/domain/contracts/admin-engagement';
 import {
+  adminAnnouncementListResponseSchema,
+  adminAnnouncementDeleteResponseSchema,
+  adminAnnouncementDeleteProblemSchema,
+  type AdminAnnouncementListItem,
+  type AdminAnnouncementDraft,
   adminAnnouncementPreviewProblemSchema,
   adminAnnouncementPreviewRequestSchema,
   adminAnnouncementPreviewResponseSchema,
@@ -174,6 +179,8 @@ interface AdminMockState {
   teamMembers: AdminTeamMember[];
   teamVersion: number;
   settings: AdminEventSettings;
+  announcementHistory: AdminAnnouncementListItem[];
+  announcementDraft: AdminAnnouncementDraft | null;
   announcementPreviewId: string | null;
   announcementPreviewVersion: number;
   announcementRecipientCount: number;
@@ -270,6 +277,8 @@ const initialState = (): AdminMockState => {
     ],
     teamVersion: 1,
     settings: clone(adminEventSettingsFixtures.open!),
+    announcementHistory: [],
+    announcementDraft: null,
     announcementPreviewId: null,
     announcementPreviewVersion: 1,
     announcementRecipientCount: 0,
@@ -1938,6 +1947,76 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
 
+  http.get('*/api/v1/admin/events/:eventId/announcements', ({ params }) => {
+    const denied = authorize(
+      adminAnnouncementTargetProblemSchema,
+      ['announcement:send'],
+      'admin.mock.announcement-list',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId))
+      return mockProblemResponse(
+        adminAnnouncementTargetProblemSchema,
+        adminAnnouncementPreviewProblemFixtures.permission,
+        { fixtureName: 'admin.mock.announcement-list-event' },
+      );
+    return mockJsonResponse(
+      adminAnnouncementListResponseSchema,
+      {
+        eventId: adminFixtureIds.event,
+        items: state.announcementHistory.slice(0, 20),
+        nextCursor: null,
+      },
+      successOptions('admin.mock.announcement-list'),
+    );
+  }),
+  http.delete(
+    '*/api/v1/admin/events/:eventId/announcements/:announcementId',
+    ({ params, request }) => {
+      const denied = authorize(
+        adminAnnouncementDeleteProblemSchema,
+        ['announcement:send'],
+        'admin.mock.announcement-delete',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId))
+        return mockProblemResponse(
+          adminAnnouncementDeleteProblemSchema,
+          adminAnnouncementPreviewProblemFixtures.permission,
+          { fixtureName: 'admin.mock.announcement-delete-event' },
+        );
+      const attempt = mutationResult(request, 'announcement-delete', {
+        announcementId: params.announcementId,
+      });
+      if (!attempt || attempt.kind === 'collision')
+        return mockProblemResponse(
+          adminAnnouncementDeleteProblemSchema,
+          adminAnnouncementSendProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.announcement-delete-collision' },
+        );
+      if (attempt.kind === 'replay')
+        return mockJsonResponse(
+          adminAnnouncementDeleteResponseSchema,
+          attempt.response,
+          successOptions('admin.mock.announcement-delete-replay'),
+        );
+      state.announcementHistory = state.announcementHistory.filter(
+        (item) => item.id !== params.announcementId,
+      );
+      const response = adminAnnouncementDeleteResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        announcementId: params.announcementId,
+        outcome: 'deleted',
+      });
+      storeMutation(attempt, 'announcement-delete', response);
+      return mockJsonResponse(
+        adminAnnouncementDeleteResponseSchema,
+        response,
+        successOptions('admin.mock.announcement-delete'),
+      );
+    },
+  ),
+
   http.get(
     '*/api/v1/admin/events/:eventId/announcements/targets',
     ({ params }) => {
@@ -2005,6 +2084,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           ? { recipientCount: 0, excludedCount: 440, sample: [] }
           : base.audience,
       });
+      state.announcementDraft = response.draft;
       state.announcementPreviewId = response.previewId;
       state.announcementRecipientCount = response.audience.recipientCount;
       return mockJsonResponse(
@@ -2102,6 +2182,40 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         response,
       );
       if (transient) return transient;
+      if (state.announcementDraft) {
+        const draft = state.announcementDraft;
+        state.announcementHistory = [
+          {
+            id: response.announcementId,
+            title: draft.title,
+            bodyText: draft.bodyText,
+            summary: draft.bodyText.replace(/\s+/g, ' ').trim().slice(0, 512),
+            severity: draft.severity,
+            publishedAt: response.sentAt,
+            recipientCount: response.recipientCount,
+            context:
+              draft.audience.kind === 'event'
+                ? { kind: 'event' }
+                : {
+                    kind: 'session',
+                    session: {
+                      id: draft.audience.sessionId,
+                      title:
+                        adminAnnouncementTargetFixtures.available!.options.find(
+                          (option) =>
+                            option.sessionId ===
+                            (draft.audience.kind === 'session'
+                              ? draft.audience.sessionId
+                              : ''),
+                        )?.title ?? 'Vybraná aktivita',
+                    },
+                  },
+          },
+          ...state.announcementHistory.filter(
+            (item) => item.id !== response.announcementId,
+          ),
+        ];
+      }
       storeMutation(attempt, 'announcement-send', response);
       return mockJsonResponse(
         adminAnnouncementSendResponseSchema,

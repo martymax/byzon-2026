@@ -72,6 +72,7 @@ import {
   adminAnnouncementPreviewEndpoint,
   adminAnnouncementSendEndpoint,
   adminAnnouncementTargetsEndpoint,
+  adminAnnouncementListEndpoint,
   adminAuditEndpoint,
   adminContextEndpoint,
   adminEngagementMutationEndpoint,
@@ -212,12 +213,18 @@ const organizerApi = (
   createApi((endpoint, options) =>
     endpoint === adminContextEndpoint
       ? success(context)
-      : endpoint === adminAnnouncementTargetsEndpoint
+      : endpoint === adminAnnouncementListEndpoint
         ? success({
-            ...adminAnnouncementTargetFixtures.available!,
             eventId: adminFixtureIds.event,
+            items: [],
+            nextCursor: null,
           })
-        : handler(endpoint, options),
+        : endpoint === adminAnnouncementTargetsEndpoint
+          ? success({
+              ...adminAnnouncementTargetFixtures.available!,
+              eventId: adminFixtureIds.event,
+            })
+          : handler(endpoint, options),
   );
 
 const participantListResponse = () => ({
@@ -3022,7 +3029,10 @@ describe('F4 contract-first admin journeys', () => {
       if (endpoint === adminContextEndpoint) {
         return success(adminContextFixtures.organizer!);
       }
-      if (endpoint === adminAnnouncementTargetsEndpoint) {
+      if (
+        endpoint === adminAnnouncementTargetsEndpoint ||
+        endpoint === adminAnnouncementListEndpoint
+      ) {
         return failure('session_expired', 401);
       }
       throw new Error('Unexpected admin endpoint.');

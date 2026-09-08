@@ -21,6 +21,7 @@ import {
 import {
   invalidateParticipantPrivateResources,
   privateResourceInvalidationReason,
+  subscribeToPrivateResourceInvalidation,
 } from '@/lib/private-resource-events';
 import {
   AnnouncementReadLabel,
@@ -148,6 +149,96 @@ export const ParticipantInbox = ({
     restoreIdentity !== null && validatedRestore?.identity === restoreIdentity
       ? validatedRestore
       : null;
+
+  const baseData = state.status === 'ready' ? state.data : null;
+  const replaceAnnouncementData = state.replace;
+  useEffect(() => {
+    if (!baseData || activeRevocation) return;
+    let active: AbortController | null = null;
+    const refresh = async () => {
+      if (
+        active ||
+        pageRequest.current ||
+        document.visibilityState === 'hidden'
+      )
+        return;
+      const controller = new AbortController();
+      active = controller;
+      try {
+        const pages: ParticipantAnnouncementInboxResponse[] = [];
+        let cursor: string | undefined;
+        for (let index = 0; index < activePageCount; index += 1) {
+          const result = await loadParticipantAnnouncementInboxPage(
+            api,
+            filter,
+            eventId,
+            cursor,
+            controller.signal,
+          );
+          if (controller.signal.aborted || pageRequest.current) return;
+          if (!result.ok) {
+            const status = announcementAuthoritativeFailureStatus(
+              result.failure,
+            );
+            if (status) {
+              discardAnnouncementData(status);
+              setPagination(null);
+            }
+            return;
+          }
+          if (result.kind !== 'success') return;
+          pages.push(result.data);
+          if (!result.data.pageInfo.hasMore || !result.data.pageInfo.nextCursor)
+            break;
+          cursor = result.data.pageInfo.nextCursor;
+        }
+        const first = pages[0];
+        const last = pages.at(-1);
+        if (!first || !last) return;
+        const appendedItems = pages.slice(1).flatMap((page) => page.items);
+        // Keep loaded pages and scroll position while replacing their authoritative contents.
+        replaceAnnouncementData(first);
+        setPagination({
+          baseData: first,
+          appendedItems,
+          hasMore: last.pageInfo.hasMore,
+          nextCursor: last.pageInfo.nextCursor,
+          pageCount: pages.length,
+          unreadCount: first.unreadCount,
+          loading: false,
+          failed: false,
+          revocationStatus: null,
+        });
+      } finally {
+        active = null;
+      }
+    };
+    const run = () => {
+      void refresh().catch(() => undefined);
+    };
+    const unsubscribe = subscribeToPrivateResourceInvalidation(() =>
+      active?.abort(),
+    );
+    const interval = window.setInterval(run, 15_000);
+    window.addEventListener('focus', run);
+    document.addEventListener('visibilitychange', run);
+    return () => {
+      unsubscribe();
+      active?.abort();
+      window.clearInterval(interval);
+      window.removeEventListener('focus', run);
+      document.removeEventListener('visibilitychange', run);
+    };
+  }, [
+    api,
+    eventId,
+    filter,
+    baseData,
+    activePageCount,
+    activeRevocation,
+    discardAnnouncementData,
+    replaceAnnouncementData,
+  ]);
 
   const clearRestoreContext = useCallback(() => {
     clearAnnouncementReturnContext();
