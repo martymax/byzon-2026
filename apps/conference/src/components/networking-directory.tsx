@@ -38,11 +38,11 @@ import {
 
 const hunting = {
   know_how: 'Know-how',
-  team: 'Lidé do týmu',
-  investors: 'Investoři',
-  business_partners: 'Obchodní partneři',
-  suppliers: 'Dodavatelé',
-  clients: 'Klienti',
+  team: 'Lidi do týmu',
+  investors: 'Investory',
+  business_partners: 'Obchodní partnery',
+  suppliers: 'Dodavatele',
+  clients: 'Klienty',
 } as const;
 
 type State =
