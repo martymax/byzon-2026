@@ -476,7 +476,7 @@ integration('content import integration', () => {
         }),
       ]),
     );
-    expect(importedPartners).toHaveLength(second.counts.partners);
+    expect(importedPartners.length).toBe(second.counts.partners);
     expect(archivedLegacyPartner).toEqual({
       name: 'LIVEST',
       status: 'archived',
