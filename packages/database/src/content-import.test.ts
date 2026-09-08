@@ -2,11 +2,34 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { importContentJson, slugify } from './content-import.js';
+import {
+  importContentJson,
+  sessionDescription,
+  slugify,
+} from './content-import.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 
 describe('content import preparation', () => {
+  it('includes the full annotation, takeaways and closing in the app description', () => {
+    expect(
+      sessionDescription({
+        slug: 'workshop',
+        annotation: ['První odstavec.', 'Druhý odstavec.'],
+        takeaways_title: 'Co si z workshopu odnesete',
+        takeaways: ['Strukturu 1:1.', 'Vlastní plán.'],
+        closing: 'Závěrečný odstavec.',
+      }),
+    ).toBe(
+      'První odstavec.\n\nDruhý odstavec.\n\nCo si z workshopu odnesete\n\n• Strukturu 1:1.\n\n• Vlastní plán.\n\nZávěrečný odstavec.',
+    );
+    expect(sessionDescription({ slug: 'talk', annotation: ['Anotace.'] })).toBe(
+      'Anotace.',
+    );
+    expect(sessionDescription()).toBeUndefined();
+    expect(sessionDescription({ slug: 'placeholder' })).toBeUndefined();
+  });
+
   it('normalizes stable Czech slugs', () => {
     expect(slugify('Předsálí Clarion')).toBe('predsali-clarion');
   });

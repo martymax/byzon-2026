@@ -196,7 +196,8 @@ integration('content import integration', () => {
           waitlistMode: 'disabled',
         }),
         expect.objectContaining({
-          title: 'Workshop: Blanka Mrázková',
+          title:
+            'Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky',
           type: 'workshop',
           capacityMode: 'reservation',
           capacity: 20,
@@ -262,7 +263,9 @@ integration('content import integration', () => {
         'Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.',
     )?.id;
     const restoredWorkshopId = firstSessions.find(
-      ({ title }) => title === 'Workshop: Blanka Mrázková',
+      ({ title }) =>
+        title ===
+        'Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky',
     )?.id;
     const openingSession = firstSessions.find(
       ({ title }) => title === 'Zahájení a slovo primátorky',
@@ -556,7 +559,8 @@ integration('content import integration', () => {
           waitlistMode: 'disabled',
         }),
         expect.objectContaining({
-          title: 'Workshop: Blanka Mrázková',
+          title:
+            'Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky',
           type: 'workshop',
           capacityMode: 'reservation',
           capacity: 21,

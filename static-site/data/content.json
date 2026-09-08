@@ -691,6 +691,26 @@
         ]
       },
       {
+        "slug": "jak-vest-1-1-ktere-nejsou-ztratou-casu",
+        "title": "Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky",
+        "kind": "Workshop",
+        "speakers": [
+          "blanka-mrazkova"
+        ],
+        "annotation": [
+          "Pravidelné 1:1 mohou být jedním z nejsilnějších nástrojů leadershipu. Nebo jen další schůzkou v kalendáři, kde se projdou úkoly a operativa.",
+          "Na workshopu si prakticky ukážeme, jak 1:1 nastavit a vést tak, aby podporovaly otevřenou komunikaci, rozvoj lidí a jejich větší odpovědnost. Budeme pracovat s konkrétními situacemi, ukázkami rozhovorů a roleplays."
+        ],
+        "takeaways_title": "Co si z workshopu odnesete",
+        "takeaways": [
+          "jednoduchou strukturu funkčního 1:1,",
+          "způsob, jak oddělit rozvojový rozhovor od operativy,",
+          "otázky, které pomáhají lidem přemýšlet a převzít odpovědnost,",
+          "základy aktivního naslouchání, přímé komunikace a zpětné vazby v 1:1,",
+          "vlastní plán, jak zavést nebo upravit 1:1 ve vašem týmu"
+        ]
+      },
+      {
         "slug": "zmena-je-prilezitosti-leadership-je-cesta",
         "title": "Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.",
         "kind": "Workshop",
@@ -1439,8 +1459,9 @@
               },
               {
                 "time": "11:15 - 12:45",
-                "title": "Workshop: Blanka Mrázková",
-                "meta": "1,5 hod.",
+                "title": "Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky",
+                "meta": "Blanka Mrázková",
+                "detail": "jak-vest-1-1-ktere-nejsou-ztratou-casu",
                 "slug": "in-loco-clarion-workshop-blanka-mrazkova-11151245",
                 "speakerSlugs": [
                   "blanka-mrazkova"
