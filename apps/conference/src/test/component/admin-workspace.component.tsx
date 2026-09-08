@@ -1828,7 +1828,10 @@ describe('F4 contract-first admin journeys', () => {
     await screen
       .getByRole('checkbox', { name: /Ověřil\/a jsem osobu i přednášku/ })
       .click();
-    await screen.getByRole('button', { name: 'Přiřadit moderátora' }).click();
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Přiřadit moderátora', exact: true })
+      .click();
 
     expect(mutationBodies).toEqual([
       expect.objectContaining({

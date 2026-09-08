@@ -55,6 +55,7 @@ export const AdminBulkPanel = <Item,>({
   selectedIds,
   onSelectionChange,
   onOpen,
+  selectionMode = 'list',
 }: {
   readonly items: readonly Item[];
   readonly identify: (item: Item) => {
@@ -66,13 +67,14 @@ export const AdminBulkPanel = <Item,>({
   readonly disabled?: boolean;
   readonly title?: string;
   readonly onOpen?: () => void;
+  readonly selectionMode?: 'list' | 'external';
   readonly selectedIds?: ReadonlySet<string>;
   readonly onSelectionChange?: (ids: ReadonlySet<string>) => void;
   readonly onBusyChange?: (busy: boolean) => void;
   readonly onCompleted: () => void;
 }) => {
   const id = useId();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(selectionMode === 'external');
   const [localSelected, setLocalSelected] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -140,6 +142,7 @@ export const AdminBulkPanel = <Item,>({
   return (
     <details
       className={styles.bulkPanel}
+      open={expanded}
       onToggle={(event) => {
         setExpanded(event.currentTarget.open);
         if (event.currentTarget.open) onOpen?.();
@@ -149,72 +152,77 @@ export const AdminBulkPanel = <Item,>({
       {expanded ? (
         <div className={styles.stack}>
           <p className={styles.muted}>
-            Vyberte položky a společnou změnu. Výběr platí pouze pro zobrazené,
-            již načtené položky.
+            {selectionMode === 'external'
+              ? 'Zaškrtněte přednášky v přehledu níže a zvolte společnou změnu.'
+              : 'Vyberte položky a společnou změnu. Výběr platí pouze pro zobrazené, již načtené položky.'}
           </p>
           <fieldset
             disabled={disabled || running || pending !== null}
             className={styles.bulkFields}
           >
-            <label className={styles.field}>
-              <span>Vyhledat ve výběru</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setSelected(new Set());
-                }}
-              />
-            </label>
-            <label className={styles.checkRow}>
-              <input
-                ref={allRef}
-                type="checkbox"
-                checked={allSelected}
-                disabled={visible.length === 0}
-                onChange={(event) =>
-                  setSelected(
-                    new Set(
-                      event.target.checked
-                        ? visible.map((item) => identify(item).id)
-                        : [],
-                    ),
-                  )
-                }
-              />
-              <span>Vybrat všechny zobrazené ({visible.length})</span>
-            </label>
-            <div
-              className={styles.bulkSelection}
-              role="group"
-              aria-label="Položky pro hromadnou úpravu"
-            >
-              {visible.map((item) => {
-                const { id: itemId, label, detail } = identify(item);
-                return (
-                  <label className={styles.checkRow} key={itemId}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(itemId)}
-                      onChange={(event) => {
-                        const next = new Set(selected);
-                        if (event.target.checked) next.add(itemId);
-                        else next.delete(itemId);
-                        setSelected(next);
-                      }}
-                    />
-                    <span>
-                      {label}
-                      {detail ? (
-                        <small className={styles.muted}> · {detail}</small>
-                      ) : null}
-                    </span>
-                  </label>
-                );
-              })}
-              {visible.length === 0 ? <p>Žádné položky k výběru.</p> : null}
-            </div>
+            {selectionMode === 'list' ? (
+              <>
+                <label className={styles.field}>
+                  <span>Vyhledat ve výběru</span>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setSelected(new Set());
+                    }}
+                  />
+                </label>
+                <label className={styles.checkRow}>
+                  <input
+                    ref={allRef}
+                    type="checkbox"
+                    checked={allSelected}
+                    disabled={visible.length === 0}
+                    onChange={(event) =>
+                      setSelected(
+                        new Set(
+                          event.target.checked
+                            ? visible.map((item) => identify(item).id)
+                            : [],
+                        ),
+                      )
+                    }
+                  />
+                  <span>Vybrat všechny zobrazené ({visible.length})</span>
+                </label>
+                <div
+                  className={styles.bulkSelection}
+                  role="group"
+                  aria-label="Položky pro hromadnou úpravu"
+                >
+                  {visible.map((item) => {
+                    const { id: itemId, label, detail } = identify(item);
+                    return (
+                      <label className={styles.checkRow} key={itemId}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(itemId)}
+                          onChange={(event) => {
+                            const next = new Set(selected);
+                            if (event.target.checked) next.add(itemId);
+                            else next.delete(itemId);
+                            setSelected(next);
+                          }}
+                        />
+                        <span>
+                          {label}
+                          {detail ? (
+                            <small className={styles.muted}> · {detail}</small>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {visible.length === 0 ? <p>Žádné položky k výběru.</p> : null}
+                </div>
+              </>
+            ) : null}
             <label className={styles.field}>
               <span>Hromadná akce</span>
               <select

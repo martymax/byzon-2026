@@ -18,6 +18,14 @@ V příslušných přehledech otevřete **Hromadné úpravy**, vyberte položky 
 
 Import vstupenek, publikace obsahu a cílená oznámení nadále používají vlastní existující hromadné postupy. Jedinečné údaje, například jména, e-maily, názvy a adresy stránek, se upravují jednotlivě. Networking se hromadně nezapíná; zrušení moderátorského skrytí zachovává volbu účastníka.
 
+## Otázky a moderátoři na stránce Interakce
+
+V přehledu **Otázky podle přednášky** lze zaškrtnout jednotlivé body programu nebo vybrat všechny dostupné přednášky. Panel **Hromadné úpravy otázek a moderátorů** nad tabulkou pracuje se stejným výběrem. Umožňuje povolit či zakázat otázky a přiřadit či odebrat stejného moderátora. Zrušené a archivované přednášky nelze vybrat.
+
+Tlačítko **Přiřadit moderátora** přímo u přednášky otevře dialog s touto přednáškou. Vyberte člověka, doplňte důvod a potvrďte přiřazení. Již přiřazení moderátoři zůstávají zachováni a znovu se nenabízejí.
+
+Moderátory lze jednotlivě i hromadně připravit při globálně vypnutém Q&A i při vypnutých otázkách konkrétní přednášky. Nabízejí se pouze účty připravené pro účastnický přístup. Globální sběr se zapíná samostatně po přípravě publikovaných přednášek a moderátorů; hromadné povolení otázek samo nezapíná globální přepínač.
+
 ## Rozsah a ověření
 
 - Výběr zahrnuje jen zobrazené a načtené položky. U stránkovaných přehledů nejprve načtěte další položky. Vyhledávání uvnitř hromadného výběru předchozí výběr vymaže.

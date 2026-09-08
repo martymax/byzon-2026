@@ -18,11 +18,15 @@ export const AdminEngagementBulk = ({
   disabled,
   onBusyChange,
   onCompleted,
+  selectedIds,
+  onSelectionChange,
 }: {
   readonly overview: AdminEngagementOverview;
   readonly disabled: boolean;
   readonly onBusyChange: (busy: boolean) => void;
   readonly onCompleted: () => void;
+  readonly selectedIds?: ReadonlySet<string>;
+  readonly onSelectionChange?: (ids: ReadonlySet<string>) => void;
 }) => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const assignmentsVersion = createAdminBulkVersion(
@@ -81,7 +85,7 @@ export const AdminEngagementBulk = ({
       id: assign ? 'assign' : 'remove',
       label: assign ? 'Přiřadit moderátora' : 'Odebrat moderátora',
       description: assign
-        ? 'Přidá zvoleného moderátora k vybraným přednáškám s povolenými otázkami. Ostatní moderátoři zůstanou zachováni.'
+        ? 'Přidá stejného moderátora k vybraným přednáškám, i když je Q&A vypnuté. Ostatní moderátoři zůstanou zachováni.'
         : 'Odebere zvoleného moderátora z vybraných přednášek.',
       danger: !assign,
       reasonRequired: true,
@@ -121,8 +125,9 @@ export const AdminEngagementBulk = ({
       ],
       eligible: (session, values) =>
         assign
-          ? overview.features.questionsEnabled &&
-            session.questionsEnabled &&
+          ? overview.moderatorCandidates.some(
+              (candidate) => candidate.userId === values.userId,
+            ) &&
             !['cancelled', 'archived'].includes(session.status) &&
             !session.moderators.some(
               (moderator) => moderator.userId === values.userId,
@@ -146,6 +151,9 @@ export const AdminEngagementBulk = ({
   return (
     <AdminBulkPanel
       title="Hromadné úpravy otázek a moderátorů"
+      selectionMode={selectedIds ? 'external' : 'list'}
+      {...(selectedIds ? { selectedIds } : {})}
+      {...(onSelectionChange ? { onSelectionChange } : {})}
       items={overview.sessions}
       identify={(session) => ({ id: session.sessionId, label: session.title })}
       actions={actions}
