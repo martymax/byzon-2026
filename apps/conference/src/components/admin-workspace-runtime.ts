@@ -60,6 +60,8 @@ const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
     return 'Přihlášení vypršelo. Citlivá rozpracovaná data jsme skryli. Přihlaste se znovu a změnu znovu připravte a zkontrolujte.';
   }
   switch (failure.problem.code) {
+    case 'ADMIN_INVALID_TRANSITION':
+      return failure.problem.detail;
     case 'IDEMPOTENCY_IN_PROGRESS':
       return 'Stejná operace se ještě zpracovává. Po chvíli zopakujte stejný pokus.';
     case 'IDEMPOTENCY_KEY_REUSED':
