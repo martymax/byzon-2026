@@ -57,6 +57,9 @@ se tiše neukládají do dočasného filesystému kontejneru.
   odebrané v administraci. Audit identifikuje tato přiřazení.
 - Typový export připnuté knihovny Sharp 0.35.0 doplňuje lokální pnpm patch;
   runtime knihovny se nemění.
+- Standalone sestavení výslovně zahrnuje nativní knihovny Sharp/libvips.
+  Build ověřuje skutečné kódování a dekódování WebP z výsledného balíčku,
+  aby chybějící nativní knihovna nezpůsobila chybu až po nasazení.
 
 Lokální ověření zahrnuje PostgreSQL migraci, fyzický zápis/čtení souborů,
 stažení, izolaci oprávnění, souběžné uploady, publikování a browser component
