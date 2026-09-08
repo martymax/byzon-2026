@@ -2039,27 +2039,6 @@
   outline-offset: 2px;
 }
 
-.participantBulkBar {
-  display: grid;
-  grid-template-columns: auto minmax(12rem, 1fr) auto;
-  gap: 0.75rem 1rem;
-  align-items: center;
-  padding: 0.85rem 1.5rem;
-  border-block: 1px solid var(--admin-border);
-  background: var(--admin-surface-brand);
-}
-
-.participantBulkBar > span {
-  color: var(--admin-muted);
-  font-size: 0.875rem;
-}
-
-.participantBulkBar > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
 .participantTableWrap {
   max-width: 100%;
   height: clamp(16rem, 45vh, 36rem);
@@ -3523,50 +3502,29 @@ label.dataCard > input:is([type='checkbox'], [type='radio']) {
   box-shadow: var(--byzon-shadow-md);
 }
 
-.bulkPanel {
+/* Selection belongs to the existing row, including compact card layouts. */
+.bulkContentIdentity,
+.bulkCardHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   min-width: 0;
-  padding: 1rem;
-  border: 1px solid var(--admin-border-strong);
-  border-radius: 0.75rem;
-  background: var(--admin-surface);
 }
-
-.bulkPanel > summary {
-  min-height: 2.75rem;
-  cursor: pointer;
-  font-weight: 700;
-  padding-block: 0.5rem;
-}
-
-.bulkPanel > summary:focus-visible {
-  outline: 2px solid var(--admin-primary);
-  outline-offset: 3px;
-}
-
-.bulkFields {
-  display: grid;
-  gap: 1rem;
+.bulkContentIdentity > span,
+.bulkCardHeading > :last-child {
+  flex: 1;
   min-width: 0;
-  padding: 0;
-  margin: 0;
-  border: 0;
 }
-
-.bulkSelection {
-  max-height: 18rem;
-  overflow: auto;
-  overflow-wrap: anywhere;
-  padding: 0.5rem;
-  border: 1px solid var(--admin-border);
-  border-radius: 0.5rem;
+.participantTable tr[data-bulk-selected='true'],
+.participantCards > li[data-bulk-selected='true'],
+.table tr[data-bulk-selected='true'],
+.dataCard[data-bulk-selected='true'],
+.contentList > li[data-bulk-selected='true'] {
+  background: var(--admin-surface-brand);
+  box-shadow: inset 3px 0 var(--admin-primary);
 }
-
-.bulkSelection label {
-  min-height: 2.75rem;
-  padding: 0.5rem;
-}
-
-.bulkSelection ul,
-ul.bulkSelection {
-  padding-inline-start: 1.75rem;
+@media (max-width: 48rem) {
+  .contentList li > .bulkContentIdentity {
+    width: 100%;
+  }
 }

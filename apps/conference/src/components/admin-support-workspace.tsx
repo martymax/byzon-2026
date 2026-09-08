@@ -33,13 +33,11 @@ import {
   requestAdminSupportMutation,
 } from '@/lib/admin-api';
 
-import { runAdminBulk, type AdminBulkOutcome } from './admin-bulk';
-import { adminBulkApiResult } from './admin-bulk-api';
 import { AdminParticipantBulk } from './admin-participant-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
-import { supportActionLabels, ticketStateLabels } from './admin-ui-registry';
+import { ticketStateLabels } from './admin-ui-registry';
 import {
   adminFailureMessage,
   createAdminIdempotencyKey,
@@ -54,16 +52,8 @@ import {
 import styles from './admin-workspace.module.css';
 
 const participantPageSize = 100;
-const participantBulkInvitationLimit = 25;
 const participantRenderChunkSize = 20;
 const participantCompactDataViewQuery = '(max-width: 48rem)';
-type ParticipantBulkAction = 'invite' | 'block' | 'reactivate';
-const bulkActions = [
-  'invite',
-  'block',
-  'reactivate',
-] as const satisfies readonly ParticipantBulkAction[];
-
 const emptyParticipantCreateForm = {
   firstName: '',
   lastName: '',
@@ -142,11 +132,13 @@ const ticketTone = (
 
 const SelectionCheckbox = ({
   checked,
+  disabled = false,
   indeterminate = false,
   label,
   onChange,
 }: {
   readonly checked: boolean;
+  readonly disabled?: boolean;
   readonly indeterminate?: boolean;
   readonly label: string;
   readonly onChange: (checked: boolean) => void;
@@ -158,6 +150,7 @@ const SelectionCheckbox = ({
   return (
     <input
       aria-label={label}
+      disabled={disabled}
       checked={checked}
       className={styles.participantCheckbox}
       onChange={(event) => onChange(event.target.checked)}
@@ -172,17 +165,20 @@ const ParticipantTableRow = memo(
     participant,
     selected,
     onSelectionChange,
+    selectionDisabled = false,
   }: {
     readonly participant: AdminParticipantListItem;
     readonly selected: boolean;
+    readonly selectionDisabled?: boolean;
     readonly onSelectionChange: (
       participantId: string,
       checked: boolean,
     ) => void;
   }) => (
-    <tr>
+    <tr data-bulk-selected={selected}>
       <td>
         <SelectionCheckbox
+          disabled={selectionDisabled}
           checked={selected}
           label={`Vybrat ${participant.displayName}`}
           onChange={(checked) =>
@@ -251,17 +247,20 @@ const ParticipantCard = memo(
     participant,
     selected,
     onSelectionChange,
+    selectionDisabled = false,
   }: {
     readonly participant: AdminParticipantListItem;
     readonly selected: boolean;
+    readonly selectionDisabled?: boolean;
     readonly onSelectionChange: (
       participantId: string,
       checked: boolean,
     ) => void;
   }) => (
-    <li>
+    <li data-bulk-selected={selected}>
       <div className={styles.participantCardHeader}>
         <SelectionCheckbox
+          disabled={selectionDisabled}
           checked={selected}
           label={`Vybrat ${participant.displayName}`}
           onChange={(checked) =>
@@ -317,6 +316,7 @@ const ParticipantDataView = memo(
     onAllSelectionChange,
     onScrollEnd,
     onSelectionChange,
+    selectionDisabled = false,
     selectedCount,
     selectedIds,
   }: {
@@ -325,6 +325,7 @@ const ParticipantDataView = memo(
     readonly items: readonly AdminParticipantListItem[];
     readonly onAllSelectionChange: (checked: boolean) => void;
     readonly onScrollEnd: () => void;
+    readonly selectionDisabled?: boolean;
     readonly onSelectionChange: (
       participantId: string,
       checked: boolean,
@@ -337,6 +338,7 @@ const ParticipantDataView = memo(
         <ul className={styles.participantCards}>
           {items.map((participant) => (
             <ParticipantCard
+              selectionDisabled={selectionDisabled}
               key={participant.participantId}
               onSelectionChange={onSelectionChange}
               participant={participant}
@@ -366,6 +368,7 @@ const ParticipantDataView = memo(
             <tr>
               <th scope="col">
                 <SelectionCheckbox
+                  disabled={selectionDisabled}
                   checked={allSelected}
                   indeterminate={selectedCount > 0 && !allSelected}
                   label="Vybrat všechny zobrazené účastníky"
@@ -385,6 +388,7 @@ const ParticipantDataView = memo(
           <tbody>
             {items.map((participant) => (
               <ParticipantTableRow
+                selectionDisabled={selectionDisabled}
                 key={participant.participantId}
                 onSelectionChange={onSelectionChange}
                 participant={participant}
@@ -448,13 +452,6 @@ export const AdminSupportWorkspace = () => {
   const [pendingCreate, setPendingCreate] =
     useState<PendingParticipantCreate | null>(null);
   const [reload, setReload] = useState(0);
-  const [bulkAction, setBulkAction] = useState<ParticipantBulkAction | null>(
-    null,
-  );
-  const [bulkReason, setBulkReason] = useState('');
-  const [bulkOutcomes, setBulkOutcomes] = useState<readonly AdminBulkOutcome[]>(
-    [],
-  );
   const compactDataView = useCompactDataView();
   const [renderedItemCount, setRenderedItemCount] = useState(
     participantRenderChunkSize,
@@ -652,82 +649,6 @@ export const AdminSupportWorkspace = () => {
       ),
     [items.length],
   );
-  const commonActions = bulkActions.filter((action) =>
-    selected.every((participant) =>
-      action === 'invite'
-        ? selected.length <= participantBulkInvitationLimit &&
-          participant.ticketState === 'active'
-        : participant.availableActions.includes(action),
-    ),
-  );
-
-  const runBulkAction = async () => {
-    if (
-      !bulkAction ||
-      selected.length === 0 ||
-      (bulkAction !== 'invite' && bulkReason.trim().length < 8)
-    )
-      return;
-    const appliedAction = bulkAction;
-    setBulkAction(null);
-    setBusy(true);
-    setError(null);
-    const request = requestFence.begin('participant-bulk');
-    setBulkOutcomes([]);
-    const results = await runAdminBulk(
-      selected,
-      (participant) => ({
-        id: participant.participantId,
-        label: participant.displayName,
-      }),
-      async (participant) =>
-        adminBulkApiResult(
-          appliedAction === 'invite'
-            ? await requestAdminParticipantInvite(
-                api,
-                eventId,
-                participant.participantId,
-                { participantId: participant.participantId },
-                createAdminIdempotencyKey('participant-invite'),
-                request.signal,
-              )
-            : await requestAdminSupportMutation(
-                api,
-                eventId,
-                {
-                  participantId: participant.participantId,
-                  ticketId: participant.ticketId,
-                  action: appliedAction,
-                  expectedVersion: participant.ticketVersion,
-                  reason: bulkReason.trim(),
-                  targetTicketId: null,
-                },
-                createAdminIdempotencyKey('participant-bulk'),
-                request.signal,
-              ),
-          invalidateSensitive,
-        ),
-      request.signal,
-      () => undefined,
-    );
-    if (!request.isCurrent()) return;
-    request.finish();
-    setBulkOutcomes(results);
-    const succeeded = results.filter(
-      (result) => result.status === 'succeeded',
-    ).length;
-    setBusy(false);
-    setBulkReason('');
-    setSelectedIds(new Set());
-    setNotice(
-      succeeded === selected.length
-        ? appliedAction === 'invite'
-          ? `Pozvánka byla odeslána ${succeeded} účastníkům.`
-          : `Hromadná změna byla provedena u ${succeeded} účastníků.`
-        : `${appliedAction === 'invite' ? 'Pozvánka byla odeslána' : 'Změna proběhla'} u ${succeeded} z ${selected.length} účastníků. Zkontrolujte aktuální stav seznamu.`,
-    );
-    await load();
-  };
 
   return (
     <div className={styles.participantWorkspace}>
@@ -807,7 +728,10 @@ export const AdminSupportWorkspace = () => {
             <input
               autoComplete="off"
               maxLength={80}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setSelectedIds(new Set());
+                setQuery(event.target.value);
+              }}
               placeholder="Jméno, e-mail, firma nebo vstupenka…"
               type="search"
               value={query}
@@ -864,71 +788,10 @@ export const AdminSupportWorkspace = () => {
             items={items}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            disabled={
-              busy ||
-              createBusy ||
-              createOpen ||
-              bulkAction !== null ||
-              error !== null
-            }
+            disabled={busy || createBusy || createOpen || error !== null}
             onBusyChange={setBusy}
             onCompleted={() => void load()}
           />
-        ) : null}
-        {selected.length > 0 ? (
-          <div
-            className={styles.participantBulkBar}
-            role="region"
-            aria-label="Hromadné akce"
-          >
-            <strong>Vybráno: {selected.length}</strong>
-            <span>
-              {selected.length > participantBulkInvitationLimit
-                ? `Pozvánky lze odeslat nejvýše ${participantBulkInvitationLimit} účastníkům najednou; ostatní společné akce zůstávají dostupné.`
-                : commonActions.length > 0
-                  ? 'Dostupné akce platí pro celý výběr.'
-                  : 'Vybraní účastníci nemají společnou stavovou akci.'}
-            </span>
-            <div>
-              {canMutate && commonActions.includes('invite') ? (
-                <button
-                  className={styles.button}
-                  disabled={busy}
-                  onClick={() => setBulkAction('invite')}
-                  type="button"
-                >
-                  Poslat pozvánku
-                </button>
-              ) : null}
-              {canMutate && commonActions.includes('block') ? (
-                <button
-                  className={styles.dangerButton}
-                  disabled={busy}
-                  onClick={() => setBulkAction('block')}
-                  type="button"
-                >
-                  Zablokovat přístup
-                </button>
-              ) : null}
-              {canMutate && commonActions.includes('reactivate') ? (
-                <button
-                  className={styles.button}
-                  disabled={busy}
-                  onClick={() => setBulkAction('reactivate')}
-                  type="button"
-                >
-                  Obnovit přístup
-                </button>
-              ) : null}
-              <button
-                className={styles.secondaryButton}
-                onClick={() => setSelectedIds(new Set())}
-                type="button"
-              >
-                Zrušit výběr
-              </button>
-            </div>
-          </div>
         ) : null}
 
         {error ? (
@@ -940,20 +803,6 @@ export const AdminSupportWorkspace = () => {
           <section className={styles.success} role="status">
             <p>{notice}</p>
           </section>
-        ) : null}
-        {bulkOutcomes.some((outcome) => outcome.status !== 'succeeded') ? (
-          <ul aria-label="Výsledky hromadných akcí účastníků">
-            {bulkOutcomes
-              .filter((outcome) => outcome.status !== 'succeeded')
-              .map((outcome) => (
-                <li key={outcome.id}>
-                  {outcome.label}:{' '}
-                  {outcome.status === 'skipped'
-                    ? 'Neprovedeno'
-                    : outcome.message}
-                </li>
-              ))}
-          </ul>
         ) : null}
         {busy && items.length === 0 ? (
           <p className={styles.participantLoading} role="status">
@@ -969,6 +818,9 @@ export const AdminSupportWorkspace = () => {
 
         {items.length > 0 ? (
           <ParticipantDataView
+            selectionDisabled={
+              !canMutate || busy || createBusy || createOpen || error !== null
+            }
             allSelected={allSelected}
             compact={compactDataView}
             items={renderedItems}
@@ -1011,55 +863,6 @@ export const AdminSupportWorkspace = () => {
           </div>
         ) : null}
       </section>
-
-      {bulkAction ? (
-        <AdminConfirmDialog
-          acknowledgement={
-            bulkAction === 'invite'
-              ? 'Potvrzuji odeslání jednorázových odkazů vybraným účastníkům.'
-              : 'Rozumím dopadu této změny na všechny vybrané účastníky.'
-          }
-          confirmLabel={
-            bulkAction === 'invite'
-              ? 'Odeslat pozvánky'
-              : supportActionLabels[bulkAction]
-          }
-          confirmDisabled={
-            bulkAction !== 'invite' && bulkReason.trim().length < 8
-          }
-          danger={bulkAction === 'block'}
-          description={
-            bulkAction === 'invite'
-              ? `${selected.length} vybraným účastníkům odešleme e-mail s jednorázovým odkazem do jejich účastnické části. Odkaz platí 5 minut.`
-              : `Změna se provede u ${selected.length} vybraných účastníků.`
-          }
-          impact={
-            bulkAction === 'invite' ? undefined : (
-              <label className={styles.field}>
-                <span>Důvod změny</span>
-                <textarea
-                  minLength={8}
-                  onChange={(event) => setBulkReason(event.target.value)}
-                  placeholder="Alespoň 8 znaků; důvod se uloží do historie změn."
-                  value={bulkReason}
-                />
-              </label>
-            )
-          }
-          onConfirm={() => void runBulkAction()}
-          onDismiss={() => {
-            setBulkAction(null);
-            setBulkReason('');
-          }}
-          title={
-            bulkAction === 'invite'
-              ? 'Odeslat vybraným účastníkům pozvánky?'
-              : bulkAction === 'block'
-                ? 'Zablokovat vybrané přístupy?'
-                : 'Obnovit vybrané přístupy?'
-          }
-        />
-      ) : null}
 
       {createOpen ? (
         <AdminModal

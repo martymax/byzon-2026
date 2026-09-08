@@ -2056,7 +2056,7 @@ describe('F4 contract-first admin journeys', () => {
     await expectComponentToPassAxe(adminRoot());
   });
 
-  it('offers only a common safe bulk action for the current selection', async () => {
+  it('offers eligible access actions in the shared bulk menu', async () => {
     window.history.replaceState({}, '', '/admin/ucastnici');
     const api = organizerApi((endpoint) => {
       if (endpoint === adminParticipantListEndpoint) {
@@ -2081,16 +2081,20 @@ describe('F4 contract-first admin journeys', () => {
       ).find((element) => element.getClientRects().length > 0)!;
     await userEvent.click(visibleCheckbox('Vybrat Syntetický účastník'));
     await userEvent.click(visibleCheckbox('Vybrat Testovací návštěvník'));
-
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
     await expect
-      .element(screen.getByRole('button', { name: 'Poslat pozvánku' }))
-      .toBeVisible();
+      .element(screen.getByRole('menuitem', { name: 'Poslat pozvánku' }))
+      .toBeEnabled();
     await expect
-      .element(screen.getByRole('button', { name: 'Zablokovat přístup' }))
+      .element(screen.getByRole('menuitem', { name: 'Zablokovat přístup' }))
+      .toBeEnabled();
+    await expect
+      .element(screen.getByRole('menuitem', { name: /Obnovit přístup/ }))
+      .toBeDisabled();
+    await expect
+      .element(screen.getByRole('menuitem', { name: 'Změnit firmu' }))
       .toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Obnovit přístup' }),
-    ).not.toBeInTheDocument();
+    await expectComponentToPassAxe(adminRoot());
   });
 
   it('opens a complete participant detail and saves profile and networking data with a reason', async () => {
@@ -2311,6 +2315,67 @@ describe('F4 contract-first admin journeys', () => {
     );
     expectPlainAdminMainCopy();
     await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('selects individual reservations across activities and cancels them in one form', async () => {
+    window.history.replaceState({}, '', '/admin/rezervace');
+    const sessions = structuredClone(adminReservationSessionFixtures.complete!);
+    const second = sessions.items[1]!.reservations[0]!;
+    second.state = 'reserved';
+    second.availableActions = ['cancel_reservation'];
+    const writes: Record<string, unknown>[] = [];
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminReservationSessionsEndpoint)
+        return success(sessions);
+      if (endpoint === adminReservationMutationEndpoint) {
+        const { body } = options as { body: Record<string, unknown> };
+        writes.push(body);
+        const record = sessions.items
+          .flatMap((session) => session.reservations)
+          .find((item) => item.reservationId === body.reservationId)!;
+        record.state = 'cancelled';
+        record.version = Number(body.expectedVersion) + 1;
+        record.availableActions = [];
+        return success({
+          ...adminReservationMutationFixtures.cancelled!,
+          record: {
+            ...adminReservationMutationFixtures.cancelled!.record,
+            ...record,
+          },
+        });
+      }
+      throw new Error('Unexpected reservation endpoint');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="production">
+        <AdminReservationsWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await screen
+      .getByRole('button', { name: 'Rezervace účastníků', exact: true })
+      .click();
+    await screen
+      .getByRole('checkbox', { name: 'Vybrat aktivní rezervace', exact: true })
+      .click();
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await screen
+      .getByRole('menuitem', { name: 'Zrušit rezervace', exact: true })
+      .click();
+    expect(screen.getByRole('dialog').elements()).toHaveLength(1);
+    await screen
+      .getByRole('textbox', { name: 'Důvod změny', exact: true })
+      .fill('Změna účasti po domluvě s účastníky');
+    expect(writes).toHaveLength(0);
+    await screen.getByRole('dialog').getByRole('checkbox').click();
+    await expectComponentToPassAxe(adminRoot());
+    await screen.getByRole('button', { name: 'Provést změnu (2)' }).click();
+    await expect
+      .element(screen.getByText('Hotovo. Změna provedena u 2 položek.'))
+      .toBeVisible();
+    expect(writes.map((body) => body.reservationId)).toEqual([
+      sessions.items[0]!.reservations[0]!.reservationId,
+      second.reservationId,
+    ]);
   });
 
   it('loads the next reservation-session page without exposing participant PII', async () => {

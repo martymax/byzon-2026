@@ -9,6 +9,7 @@ import {
   requestAdminReservationMutation,
   requestAdminSessionCapacityMutation,
 } from '@/lib/admin-api';
+import type { AdminBulkSelection } from './admin-bulk-selection';
 import { AdminBulkPanel, type AdminBulkAction } from './admin-bulk-panel';
 import { adminBulkApiResult } from './admin-bulk-api';
 import { createAdminIdempotencyKey } from './admin-workspace-runtime';
@@ -19,12 +20,14 @@ export const AdminReservationsBulk = ({
   disabled,
   onBusyChange,
   onCompleted,
+  selectedIds,
+  onSelectionChange,
 }: {
   readonly sessions: readonly AdminReservationSessionItem[];
   readonly disabled: boolean;
   readonly onBusyChange: (busy: boolean) => void;
   readonly onCompleted: () => void;
-}) => {
+} & AdminBulkSelection) => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const capacityActions: AdminBulkAction<AdminReservationSessionItem>[] = [
     'set',
@@ -92,80 +95,99 @@ export const AdminReservationsBulk = ({
         invalidateSensitive,
       ),
   }));
-  const reservations = sessions.flatMap((session) =>
-    session.reservations.map((reservation) => ({
-      ...reservation,
-      sessionTitle: session.sessionTitle,
-    })),
-  );
   return (
-    <>
-      <AdminBulkPanel
-        title="Hromadné úpravy kapacit"
-        items={sessions}
-        identify={(item) => ({
-          id: item.sessionId,
-          label: item.sessionTitle,
-          detail: `Kapacita ${item.capacity ?? 'neuvedena'}, rezervováno ${item.confirmedCount}`,
-        })}
-        actions={capacityActions}
-        disabled={disabled}
-        onBusyChange={onBusyChange}
-        onCompleted={onCompleted}
-      />
-      <AdminBulkPanel
-        title="Hromadné rušení rezervací"
-        items={reservations}
-        identify={(item) => ({
-          id: item.reservationId,
-          label: item.participantName,
-          detail: `${item.sessionTitle} · ${item.contactEmail}`,
-        })}
-        actions={[
-          {
-            id: 'cancel',
-            label: 'Zrušit rezervace',
-            description:
-              'Zruší vybrané aktivní rezervace a uvolní místa ostatním účastníkům.',
-            danger: true,
-            reasonRequired: true,
-            eligible: (item) =>
-              item.state === 'reserved' &&
-              item.availableActions.includes('cancel_reservation'),
-            validate: (items, values) =>
-              items.every(
-                (item) =>
-                  adminReservationMutationRequestSchema.safeParse({
-                    action: 'cancel_reservation',
-                    reservationId: item.reservationId,
-                    expectedVersion: item.version,
-                    reason: values.reason?.trim(),
-                  }).success,
-              )
-                ? null
-                : 'Zkontrolujte důvod změny.',
-            execute: async (item, values, signal) =>
-              adminBulkApiResult(
-                await requestAdminReservationMutation(
-                  api,
-                  eventId,
-                  {
-                    action: 'cancel_reservation',
-                    reservationId: item.reservationId,
-                    expectedVersion: item.version,
-                    reason: values.reason!.trim(),
-                  },
-                  createAdminIdempotencyKey('bulk-reservation'),
-                  signal,
-                ),
-                invalidateSensitive,
+    <AdminBulkPanel
+      selectedIds={selectedIds}
+      onSelectionChange={onSelectionChange}
+      title="Hromadné úpravy kapacit"
+      items={sessions}
+      identify={(item) => ({
+        id: item.sessionId,
+        label: item.sessionTitle,
+        detail: `Kapacita ${item.capacity ?? 'neuvedena'}, rezervováno ${item.confirmedCount}`,
+      })}
+      actions={capacityActions}
+      disabled={disabled}
+      onBusyChange={onBusyChange}
+      onCompleted={onCompleted}
+    />
+  );
+};
+
+export const AdminReservationCancellationBulk = ({
+  reservations,
+  inlineEditor = true,
+  disabled,
+  onBusyChange,
+  onCompleted,
+  ...selection
+}: {
+  readonly reservations: readonly (AdminReservationSessionItem['reservations'][number] & {
+    readonly sessionTitle?: string;
+  })[];
+  readonly inlineEditor?: boolean;
+  readonly disabled: boolean;
+  readonly onBusyChange: (busy: boolean) => void;
+  readonly onCompleted: () => void;
+} & AdminBulkSelection) => {
+  const { api, eventId, invalidateSensitive } = useAdminWorkspace();
+  return (
+    <AdminBulkPanel
+      {...selection}
+      inlineEditor={inlineEditor}
+      title="Hromadné rušení rezervací"
+      items={reservations}
+      identify={(item) => ({
+        id: item.reservationId,
+        label: item.participantName,
+        detail: [item.contactEmail, item.sessionTitle]
+          .filter(Boolean)
+          .join(' · '),
+      })}
+      actions={[
+        {
+          id: 'cancel',
+          label: 'Zrušit rezervace',
+          description:
+            'Zruší vybrané aktivní rezervace a uvolní místa ostatním účastníkům.',
+          danger: true,
+          reasonRequired: true,
+          eligible: (item) =>
+            item.state === 'reserved' &&
+            item.availableActions.includes('cancel_reservation'),
+          validate: (items, values) =>
+            items.every(
+              (item) =>
+                adminReservationMutationRequestSchema.safeParse({
+                  action: 'cancel_reservation',
+                  reservationId: item.reservationId,
+                  expectedVersion: item.version,
+                  reason: values.reason?.trim(),
+                }).success,
+            )
+              ? null
+              : 'Zkontrolujte důvod změny.',
+          execute: async (item, values, signal) =>
+            adminBulkApiResult(
+              await requestAdminReservationMutation(
+                api,
+                eventId,
+                {
+                  action: 'cancel_reservation',
+                  reservationId: item.reservationId,
+                  expectedVersion: item.version,
+                  reason: values.reason!.trim(),
+                },
+                createAdminIdempotencyKey('bulk-reservation'),
+                signal,
               ),
-          },
-        ]}
-        disabled={disabled}
-        onBusyChange={onBusyChange}
-        onCompleted={onCompleted}
-      />
-    </>
+              invalidateSensitive,
+            ),
+        },
+      ]}
+      disabled={disabled}
+      onBusyChange={onBusyChange}
+      onCompleted={onCompleted}
+    />
   );
 };

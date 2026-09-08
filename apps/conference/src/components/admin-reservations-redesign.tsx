@@ -16,9 +16,18 @@ import {
   requestAdminSessionCapacityMutation,
 } from '@/lib/admin-api';
 
-import { AdminReservationsBulk } from './admin-reservations-bulk';
+import {
+  AdminBulkCheckbox,
+  AdminBulkSelectAll,
+  useAdminBulkSelection,
+} from './admin-bulk-selection';
+import {
+  AdminReservationsBulk,
+  AdminReservationCancellationBulk,
+} from './admin-reservations-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { adminCountForms, formatCzechCount } from './admin-copy';
+import { AdminReservationBulkList } from './admin-reservation-bulk-list';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
 import {
@@ -124,6 +133,9 @@ export const AdminReservationsRedesign = () => {
     auditId: string;
   } | null>(null);
   const [reload, setReload] = useState(0);
+  const [listView, setListView] = useState<'activities' | 'reservations'>(
+    'activities',
+  );
 
   const wipe = () => {
     setSessions([]);
@@ -138,6 +150,19 @@ export const AdminReservationsRedesign = () => {
     setSuccess(null);
     setRecoveryMessage(null);
   };
+
+  const bulkSelection = useAdminBulkSelection(
+    JSON.stringify([
+      eventId,
+      dayFilter,
+      activityFilter,
+      capacityFilter,
+      reload,
+    ]),
+  );
+  const reservationSelection = useAdminBulkSelection(
+    JSON.stringify([eventId, selectedSessionId, participantFilter, reload]),
+  );
 
   useEffect(() => {
     if (!canRead) return;
@@ -496,6 +521,45 @@ export const AdminReservationsRedesign = () => {
             {formatCzechCount(sessions.length, adminCountForms.activity)}
           </span>
         </div>
+        {canManage ? (
+          <div
+            className={styles.contentFilters}
+            aria-label="Zobrazení rezervací"
+          >
+            <button
+              type="button"
+              className={
+                listView === 'activities'
+                  ? styles.filterActive
+                  : styles.filterButton
+              }
+              aria-pressed={listView === 'activities'}
+              disabled={busy}
+              onClick={() => {
+                setListView('activities');
+                bulkSelection.onSelectionChange(new Set());
+              }}
+            >
+              Aktivity a kapacity
+            </button>
+            <button
+              type="button"
+              className={
+                listView === 'reservations'
+                  ? styles.filterActive
+                  : styles.filterButton
+              }
+              aria-pressed={listView === 'reservations'}
+              disabled={busy}
+              onClick={() => {
+                setListView('reservations');
+                bulkSelection.onSelectionChange(new Set());
+              }}
+            >
+              Rezervace účastníků
+            </button>
+          </div>
+        ) : null}
         <div className={styles.threeColumn}>
           <label className={styles.field}>
             <span>Den</span>
@@ -549,58 +613,130 @@ export const AdminReservationsRedesign = () => {
             V programu nejsou žádné rezervovatelné aktivity.
           </p>
         ) : null}
-        <ul className={styles.reservationGrid}>
-          {sortedSessions.map((session) => {
-            const state = capacityState(session);
-            const maximum = session.capacity ?? 1;
-            const current = Math.min(session.confirmedCount, maximum);
-            return (
-              <li
-                className={`${styles.dataCard} ${styles.capacityCard}`}
-                data-capacity={state}
-                key={session.sessionId}
-              >
-                <div className={styles.panelHeader}>
-                  <strong>{session.sessionTitle}</strong>
-                  <span className={styles.statusBadge}>
-                    {capacityStateLabels[state]}
-                  </span>
-                </div>
-                <p>
-                  {session.capacity === null
-                    ? 'Kapacita není nastavená'
-                    : `${session.confirmedCount} z ${session.capacity} míst`}
-                </p>
-                {session.localDate || session.startsAt || session.roomLabel ? (
-                  <p className={styles.muted}>
-                    {[
-                      session.localDate
-                        ? formatProgramDay(session.localDate)
-                        : null,
-                      session.startsAt?.slice(11, 16),
-                      session.roomLabel,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                ) : null}
-                <progress
-                  aria-label={`${session.sessionTitle}: ${session.confirmedCount} z ${session.capacity ?? 0} míst`}
-                  max={maximum}
-                  value={current}
-                />
-                <button
-                  className={styles.secondaryButton}
-                  disabled={busy}
-                  onClick={() => chooseSession(session)}
-                  type="button"
-                >
-                  Zobrazit aktivitu
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {listView === 'reservations' && canManage ? (
+          <AdminReservationBulkList
+            sessions={sortedSessions}
+            scope={JSON.stringify([
+              eventId,
+              dayFilter,
+              activityFilter,
+              capacityFilter,
+              reload,
+            ])}
+            disabled={busy || loadingMore || pending !== null || error !== null}
+            onBusyChange={setBusy}
+            onCompleted={() => {
+              setBusy(true);
+              setReload((value) => value + 1);
+            }}
+          />
+        ) : (
+          <>
+            {canManage && sortedSessions.length > 0 ? (
+              <AdminBulkSelectAll
+                selection={bulkSelection}
+                ids={sortedSessions.map((session) => session.sessionId)}
+                disabled={
+                  busy ||
+                  loadingMore ||
+                  selectedSession !== null ||
+                  error !== null
+                }
+              />
+            ) : null}
+            {canManage ? (
+              <AdminReservationsBulk
+                {...bulkSelection}
+                sessions={sortedSessions}
+                disabled={
+                  busy ||
+                  loadingMore ||
+                  selectedSession !== null ||
+                  pending !== null ||
+                  error !== null
+                }
+                onBusyChange={setBusy}
+                onCompleted={() => {
+                  setBusy(true);
+                  setReload((value) => value + 1);
+                }}
+              />
+            ) : null}
+
+            <ul className={styles.reservationGrid}>
+              {sortedSessions.map((session) => {
+                const state = capacityState(session);
+                const maximum = session.capacity ?? 1;
+                const current = Math.min(session.confirmedCount, maximum);
+                return (
+                  <li
+                    className={`${styles.dataCard} ${styles.capacityCard}`}
+                    data-capacity={state}
+                    data-bulk-selected={bulkSelection.selectedIds.has(
+                      session.sessionId,
+                    )}
+                    key={session.sessionId}
+                  >
+                    <div className={styles.panelHeader}>
+                      <div className={styles.bulkCardHeading}>
+                        {canManage ? (
+                          <AdminBulkCheckbox
+                            selection={bulkSelection}
+                            id={session.sessionId}
+                            label={session.sessionTitle}
+                            disabled={
+                              busy ||
+                              loadingMore ||
+                              selectedSession !== null ||
+                              error !== null
+                            }
+                          />
+                        ) : null}
+                        <strong>{session.sessionTitle}</strong>
+                      </div>
+                      <span className={styles.statusBadge}>
+                        {capacityStateLabels[state]}
+                      </span>
+                    </div>
+                    <p>
+                      {session.capacity === null
+                        ? 'Kapacita není nastavená'
+                        : `${session.confirmedCount} z ${session.capacity} míst`}
+                    </p>
+                    {session.localDate ||
+                    session.startsAt ||
+                    session.roomLabel ? (
+                      <p className={styles.muted}>
+                        {[
+                          session.localDate
+                            ? formatProgramDay(session.localDate)
+                            : null,
+                          session.startsAt?.slice(11, 16),
+                          session.roomLabel,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    ) : null}
+                    <progress
+                      aria-label={`${session.sessionTitle}: ${session.confirmedCount} z ${session.capacity ?? 0} míst`}
+                      max={maximum}
+                      value={current}
+                    />
+                    <button
+                      className={styles.secondaryButton}
+                      disabled={busy}
+                      onClick={() => chooseSession(session)}
+                      type="button"
+                    >
+                      Zobrazit aktivitu
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
         {nextCursor ? (
           <button
             className={styles.secondaryButton}
@@ -616,24 +752,6 @@ export const AdminReservationsRedesign = () => {
           </p>
         ) : null}
       </section>
-
-      {canManage ? (
-        <AdminReservationsBulk
-          sessions={sortedSessions}
-          disabled={
-            busy ||
-            loadingMore ||
-            selectedSession !== null ||
-            pending !== null ||
-            error !== null
-          }
-          onBusyChange={setBusy}
-          onCompleted={() => {
-            setBusy(true);
-            setReload((value) => value + 1);
-          }}
-        />
-      ) : null}
 
       {selectedSession && !confirming ? (
         <AdminModal
@@ -745,13 +863,76 @@ export const AdminReservationsRedesign = () => {
                     Hledání zůstává jen v této stránce a neukládá se do URL.
                   </span>
                 </label>
+                {canManage ? (
+                  <>
+                    <AdminBulkSelectAll
+                      selection={reservationSelection}
+                      ids={selectedReservations
+                        .filter(
+                          (record) =>
+                            record.state === 'reserved' &&
+                            record.availableActions.includes(
+                              'cancel_reservation',
+                            ),
+                        )
+                        .map((record) => record.reservationId)}
+                      disabled={
+                        busy ||
+                        pending !== null ||
+                        selectedReservation !== null ||
+                        error !== null
+                      }
+                      label="Vybrat aktivní rezervace"
+                    />
+                    <AdminReservationCancellationBulk
+                      {...reservationSelection}
+                      reservations={selectedReservations}
+                      disabled={
+                        busy ||
+                        pending !== null ||
+                        selectedReservation !== null ||
+                        error !== null
+                      }
+                      onBusyChange={setBusy}
+                      onCompleted={() => {
+                        setBusy(true);
+                        setReload((value) => value + 1);
+                      }}
+                    />
+                  </>
+                ) : null}
                 <ul className={styles.cardList}>
                   {selectedReservations.map((record) => (
-                    <li className={styles.dataCard} key={record.reservationId}>
+                    <li
+                      className={styles.dataCard}
+                      key={record.reservationId}
+                      data-bulk-selected={reservationSelection.selectedIds.has(
+                        record.reservationId,
+                      )}
+                    >
                       <div className={styles.panelHeader}>
-                        <div className={styles.identityCell}>
-                          <strong>{record.participantName}</strong>
-                          <small>{record.contactEmail}</small>
+                        <div className={styles.bulkCardHeading}>
+                          {canManage ? (
+                            <AdminBulkCheckbox
+                              selection={reservationSelection}
+                              id={record.reservationId}
+                              label={record.participantName}
+                              disabled={
+                                busy ||
+                                pending !== null ||
+                                selectedReservation !== null ||
+                                error !== null ||
+                                record.state !== 'reserved' ||
+                                !record.availableActions.includes(
+                                  'cancel_reservation',
+                                )
+                              }
+                            />
+                          ) : null}
+                          <div className={styles.identityCell}>
+                            <strong>{record.participantName}</strong>
+                            <small>{record.contactEmail}</small>
+                          </div>
                         </div>
                         <span className={styles.statusBadge}>
                           {reservationStateLabels[record.state]}
@@ -777,7 +958,7 @@ export const AdminReservationsRedesign = () => {
                 </ul>
                 {selectedReservations.length === 0 ? (
                   <p className={styles.empty}>
-                    Žádná rezervace neodpovídá bezpečnému filtru.
+                    Žádná rezervace neodpovídá hledání.
                   </p>
                 ) : null}
               </section>

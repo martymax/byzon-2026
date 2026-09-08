@@ -3,6 +3,7 @@
 import { type AdminRoleAssignmentListResponse } from '@byzon/domain/contracts/admin';
 import { requestAdminRoleAssignment } from '@/lib/admin-api';
 import { createAdminBulkVersion } from './admin-bulk';
+import type { AdminBulkSelection } from './admin-bulk-selection';
 import { AdminBulkPanel } from './admin-bulk-panel';
 import { adminBulkApiResult } from './admin-bulk-api';
 import { createAdminIdempotencyKey } from './admin-workspace-runtime';
@@ -13,16 +14,20 @@ export const AdminRoleBulk = ({
   disabled,
   onBusyChange,
   onCompleted,
+  selectedIds,
+  onSelectionChange,
 }: {
   readonly assignments: AdminRoleAssignmentListResponse;
   readonly disabled: boolean;
   readonly onBusyChange: (busy: boolean) => void;
   readonly onCompleted: () => void;
-}) => {
+} & AdminBulkSelection) => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const version = createAdminBulkVersion(assignments.assignmentsVersion);
   return (
     <AdminBulkPanel
+      selectedIds={selectedIds}
+      onSelectionChange={onSelectionChange}
       title="Hromadné odebrání provozních rolí"
       items={assignments.items}
       identify={(item) => ({

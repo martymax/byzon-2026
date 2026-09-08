@@ -118,18 +118,10 @@ const confirmBatch = async (
   count: number,
 ) => {
   await screen
-    .getByRole('button', { name: `Zkontrolovat změnu (${count})` })
-    .click();
-  await screen.getByRole('dialog').getByRole('checkbox').click();
-  await screen
     .getByRole('button', { name: `Provést změnu (${count})` })
     .click();
   await expect
-    .element(
-      screen.getByText(
-        `Dokončeno: ${count} z ${count}. Chyby: 0. Neprovedeno: 0.`,
-      ),
-    )
+    .element(screen.getByText(`Hotovo. Změna provedena u ${count} položek.`))
     .toBeVisible();
 };
 
@@ -205,13 +197,12 @@ describe('Q&A actions in the program overview', () => {
       )
       .toBeDisabled();
     await screen
-      .getByRole('checkbox', { name: 'Vybrat všechny přednášky (2)' })
+      .getByRole('checkbox', { name: 'Vybrat všechny přednášky' })
       .click();
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await screen.getByRole('menuitem', { name: 'Povolit otázky' }).click();
     await screen
-      .getByRole('combobox', { name: 'Hromadná akce' })
-      .selectOptions('enable');
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny (8–500 znaků)' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Příprava otázek pro páteční program.');
     expect(writes).toHaveLength(0);
     await expectComponentToPassAxe(document.querySelector('#admin-main')!);
@@ -241,8 +232,8 @@ describe('Q&A actions in the program overview', () => {
     expect(overview.features.questionsEnabled).toBe(false);
     expect(overview.sessions[2]!.questionsEnabled).toBe(false);
     await expect
-      .element(screen.getByText('Vybráno: 0', { exact: true }))
-      .toBeVisible();
+      .element(screen.getByRole('button', { name: 'Upravit vybrané' }))
+      .not.toBeInTheDocument();
   });
 
   it('assigns the same moderator to selected sessions with both Q&A switches off and advances versions', async () => {
@@ -252,14 +243,13 @@ describe('Q&A actions in the program overview', () => {
         .getByRole('checkbox', { name: `Vybrat přednášku ${session.title}` })
         .click();
     }
-    await screen
-      .getByRole('combobox', { name: 'Hromadná akce' })
-      .selectOptions('assign');
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await screen.getByRole('menuitem', { name: 'Přiřadit moderátora' }).click();
     await screen
       .getByRole('combobox', { name: 'Moderátor', exact: true })
       .selectOptions(adminFixtureIds.operator);
     await screen
-      .getByRole('textbox', { name: 'Důvod změny (8–500 znaků)' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Společný moderátor pátečních přednášek.');
     await confirmBatch(screen, 2);
     expect(writes.map(({ body }) => body)).toEqual([

@@ -7,7 +7,15 @@ import {
 import type { AdminTeamMember } from '@byzon/domain/contracts/admin';
 import { useState } from 'react';
 import '../../app/styles.css';
-import { AdminBulkPanel } from '../../components/admin-bulk-panel';
+import {
+  AdminBulkCheckbox,
+  AdminBulkSelectAll,
+  useAdminBulkSelection,
+} from '../../components/admin-bulk-selection';
+import {
+  AdminBulkPanel,
+  type AdminBulkAction,
+} from '../../components/admin-bulk-panel';
 import { AdminTeamBulk } from '../../components/admin-team-bulk';
 import { AdminReservationsBulk } from '../../components/admin-reservations-bulk';
 import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
@@ -18,7 +26,7 @@ import {
 } from '../../lib/admin-api';
 import type { ApiPort } from '../../lib/api/endpoint';
 import styles from '../../components/admin-workspace.module.css';
-import { renderComponent } from './render';
+import { renderComponent, userEvent } from './render';
 import { expectComponentToPassAxe } from './accessibility';
 
 const items = [
@@ -27,8 +35,69 @@ const items = [
   { id: 'c', label: 'Archivovaná aktivita' },
 ];
 
+const TestList = ({
+  actions,
+  disabled = false,
+  onCompleted = () => undefined,
+}: {
+  actions: readonly AdminBulkAction<(typeof items)[number]>[];
+  disabled?: boolean;
+  onCompleted?: () => void;
+}) => {
+  const [query, setQuery] = useState('');
+  const selection = useAdminBulkSelection(query);
+  const visible = items.filter((item) => item.label.includes(query));
+  return (
+    <main className={styles.workspace} style={{ padding: '1.25rem' }}>
+      <section className={styles.panel}>
+        <h1>Aktivity</h1>
+        <label className={styles.field}>
+          Hledat aktivity
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <AdminBulkSelectAll
+          selection={selection}
+          ids={visible.map((item) => item.id)}
+          disabled={disabled}
+        />
+        <AdminBulkPanel
+          {...selection}
+          items={visible}
+          identify={(item) => item}
+          actions={actions}
+          disabled={disabled}
+          onCompleted={onCompleted}
+        />
+        <ul className={styles.cardList}>
+          {visible.map((item) => (
+            <li
+              className={styles.dataCard}
+              data-bulk-selected={selection.selectedIds.has(item.id)}
+              key={item.id}
+            >
+              <div className={styles.bulkCardHeading}>
+                <AdminBulkCheckbox
+                  selection={selection}
+                  id={item.id}
+                  label={item.label}
+                  disabled={disabled}
+                />
+                <strong>{item.label}</strong>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </main>
+  );
+};
+
 describe('admin bulk action panel', () => {
-  it('confirms the exact eligible selection and reports per-item failures', async () => {
+  it('opens one focused form from row selection and reports partial failures', async () => {
     const execute = vi.fn(async (item: (typeof items)[number]) =>
       item.id === 'b'
         ? { ok: false, message: 'Obsazená kapacita.' }
@@ -36,123 +105,132 @@ describe('admin bulk action panel', () => {
     );
     const onCompleted = vi.fn();
     const screen = await renderComponent(
-      <main className={styles.workspace}>
-        <AdminBulkPanel
-          items={items}
-          identify={(item) => item}
-          actions={[
-            {
-              id: 'capacity',
-              label: 'Změnit kapacity',
-              description: 'Upraví kapacity vybraných aktivit.',
-              reasonRequired: true,
-              fields: [
-                {
-                  name: 'value',
-                  label: 'Nová kapacita',
-                  type: 'number',
-                  min: 1,
-                },
-              ],
-              eligible: (item) => item.id !== 'c',
-              execute,
-            },
-          ]}
-          onCompleted={onCompleted}
-        />
-      </main>,
+      <TestList
+        onCompleted={onCompleted}
+        actions={[
+          {
+            id: 'capacity',
+            label: 'Změnit kapacity',
+            description: 'Upraví kapacity vybraných aktivit.',
+            reasonRequired: true,
+            fields: [
+              { name: 'value', label: 'Nová kapacita', type: 'number', min: 1 },
+            ],
+            eligible: (item) => item.id !== 'c',
+            execute,
+          },
+        ]}
+      />,
     );
-    await screen.getByText('Hromadné úpravy', { exact: true }).click();
+    expect(
+      screen.getByRole('button', { name: 'Upravit vybrané' }),
+    ).not.toBeInTheDocument();
     await screen
-      .getByRole('checkbox', { name: 'Vybrat všechny zobrazené (3)' })
+      .getByRole('checkbox', { name: 'Vybrat vše', exact: true })
       .click();
-    await screen
-      .getByRole('combobox', { name: 'Hromadná akce' })
-      .selectOptions('capacity');
+    expect(
+      screen.getByText('První aktivita', { exact: true }).elements(),
+    ).toHaveLength(1);
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await expectComponentToPassAxe(document.querySelector('main')!);
+    await screen.getByRole('menuitem', { name: 'Změnit kapacity' }).click();
+    expect(screen.getByRole('dialog').elements()).toHaveLength(1);
     await screen.getByRole('spinbutton', { name: 'Nová kapacita' }).fill('40');
     await screen
-      .getByRole('textbox', { name: 'Důvod změny (8–500 znaků)' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Změna organizace akce');
     await expect
-      .element(screen.getByText(/Změna se provede u 2 položek/))
+      .element(screen.getByText(/Mimo podmínky akce: 1/))
       .toBeVisible();
     await expectComponentToPassAxe(document.querySelector('main')!);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth,
     );
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat změnu (2)' })
-      .click();
-    const dialog = screen.getByRole('dialog');
-    await expect
-      .element(dialog.getByText('První aktivita', { exact: true }))
-      .toBeVisible();
-    await expect
-      .element(dialog.getByText('Archivovaná aktivita', { exact: true }))
-      .not.toBeInTheDocument();
-    await expect
-      .element(screen.getByRole('button', { name: 'Provést změnu (2)' }))
-      .toBeDisabled();
     expect(execute).not.toHaveBeenCalled();
-    await dialog.getByRole('checkbox').click();
     await screen.getByRole('button', { name: 'Provést změnu (2)' }).click();
     await expect
-      .element(screen.getByText('Dokončeno: 1 z 2. Chyby: 1. Neprovedeno: 0.'))
+      .element(screen.getByText('Uloženo 1 z 2 položek.'))
       .toBeVisible();
-    await expect
-      .element(screen.getByText('Druhá aktivita: Obsazená kapacita.'))
-      .toBeVisible();
+    await screen.getByText('Neprovedené změny (1)').click();
+    await expect.element(screen.getByText('Obsazená kapacita.')).toBeVisible();
     expect(execute.mock.calls.map(([item]) => item.id)).toEqual(['a', 'b']);
     expect(onCompleted).toHaveBeenCalledTimes(1);
   });
 
-  it('clears selection on search and dismisses without writing', async () => {
+  it('supports keyboard actions, cancels without writing and clears selection after changing filters', async () => {
     const execute = vi.fn(async () => ({ ok: true }));
     const screen = await renderComponent(
-      <AdminBulkPanel
-        items={items}
-        identify={(item) => item}
+      <TestList
         actions={[
-          { id: 'edit', label: 'Upravit', description: 'Úprava.', execute },
+          {
+            id: 'edit',
+            label: 'Změnit název',
+            description: 'Úprava názvu.',
+            execute,
+          },
+          {
+            id: 'archive',
+            label: 'Archivovat',
+            description: 'Archivace.',
+            danger: true,
+            execute,
+          },
         ]}
-        onCompleted={vi.fn()}
       />,
     );
-    await screen.getByText('Hromadné úpravy', { exact: true }).click();
     await screen
-      .getByRole('checkbox', { name: 'Vybrat všechny zobrazené (3)' })
+      .getByRole('checkbox', { name: 'Vybrat: První aktivita', exact: true })
       .click();
-    await screen.getByRole('searchbox').fill('První');
-    await screen.getByRole('combobox').selectOptions('edit');
+    expect(
+      (
+        screen
+          .getByRole('checkbox', { name: 'Vybrat vše', exact: true })
+          .element() as HTMLInputElement
+      ).indeterminate,
+    ).toBe(true);
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await userEvent.keyboard('{End}');
+    expect(document.activeElement?.textContent).toBe('Archivovat');
+    await userEvent.keyboard('{Escape}');
+    expect(document.activeElement?.textContent).toContain('Upravit vybrané');
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await screen.getByRole('menuitem', { name: 'Archivovat' }).click();
     await expect
-      .element(screen.getByRole('button', { name: 'Zkontrolovat změnu (0)' }))
+      .element(screen.getByRole('button', { name: 'Provést změnu (1)' }))
       .toBeDisabled();
-    await screen.getByRole('checkbox', { name: 'První aktivita' }).click();
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat změnu (1)' })
-      .click();
     await screen.getByRole('button', { name: 'Zrušit', exact: true }).click();
+    await screen.getByRole('searchbox').fill('Druhá');
+    expect(
+      screen.getByRole('button', { name: 'Upravit vybrané' }),
+    ).not.toBeInTheDocument();
+    await screen.getByRole('searchbox').fill('');
+    await expect
+      .element(screen.getByRole('checkbox', { name: 'Vybrat: První aktivita' }))
+      .not.toBeChecked();
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('disables all selection and mutation controls for a read-only snapshot', async () => {
+  it('disables row selection for a read-only snapshot', async () => {
     const execute = vi.fn(async () => ({ ok: true }));
     const screen = await renderComponent(
-      <AdminBulkPanel
-        items={items}
-        identify={(item) => item}
+      <TestList
+        disabled
         actions={[
           { id: 'edit', label: 'Upravit', description: 'Úprava.', execute },
         ]}
-        disabled
-        onCompleted={vi.fn()}
       />,
     );
-    await screen.getByText('Hromadné úpravy', { exact: true }).click();
     await expect
-      .element(screen.getByRole('checkbox', { name: 'První aktivita' }))
+      .element(screen.getByRole('checkbox', { name: 'Vybrat: První aktivita' }))
       .toBeDisabled();
-    await expect.element(screen.getByRole('combobox')).toBeDisabled();
+    await expect
+      .element(
+        screen.getByRole('checkbox', { name: 'Vybrat vše', exact: true }),
+      )
+      .toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Upravit vybrané' }),
+    ).not.toBeInTheDocument();
     expect(execute).not.toHaveBeenCalled();
   });
 });
@@ -229,8 +307,13 @@ describe('bulk operations through admin contracts', () => {
     });
     const TestTeam = () => {
       const [busy, setBusy] = useState(false);
+      const [selectedIds, onSelectionChange] = useState<ReadonlySet<string>>(
+        new Set(members.map((member) => member.memberId)),
+      );
       return (
         <AdminTeamBulk
+          selectedIds={selectedIds}
+          onSelectionChange={onSelectionChange}
           members={members}
           teamVersion={4}
           disabled={busy}
@@ -244,23 +327,17 @@ describe('bulk operations through admin contracts', () => {
         <TestTeam />
       </AdminWorkspaceShell>,
     );
-    await screen.getByText('Hromadné úpravy týmu', { exact: true }).click();
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
     await screen
-      .getByRole('checkbox', { name: 'Vybrat všechny zobrazené (3)' })
+      .getByRole('menuitem', { name: 'Přidat administrátorský přístup' })
       .click();
     await screen
-      .getByRole('combobox', { name: 'Hromadná akce' })
-      .selectOptions('grant_admin');
-    await screen
-      .getByRole('textbox', { name: 'Důvod změny (8–500 znaků)' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Rozšíření organizačního týmu');
-    await screen
-      .getByRole('button', { name: 'Zkontrolovat změnu (2)' })
-      .click();
     await screen.getByRole('dialog').getByRole('checkbox').click();
     await screen.getByRole('button', { name: 'Provést změnu (2)' }).click();
     await expect
-      .element(screen.getByText('Dokončeno: 2 z 2. Chyby: 0. Neprovedeno: 0.'))
+      .element(screen.getByText('Hotovo. Změna provedena u 2 položek.'))
       .toBeVisible();
     expect(writes.map(({ version }) => version)).toEqual([4, 5]);
     expect(new Set(writes.map(({ key }) => key)).size).toBe(2);
@@ -273,6 +350,14 @@ describe('bulk operations through admin contracts', () => {
     const screen = await renderComponent(
       <AdminWorkspaceShell api={apiFor(handler)} environment="mocked">
         <AdminReservationsBulk
+          selectedIds={
+            new Set(
+              adminReservationSessionFixtures.complete!.items.map(
+                (item) => item.sessionId,
+              ),
+            )
+          }
+          onSelectionChange={() => undefined}
           sessions={adminReservationSessionFixtures.complete!.items}
           disabled={false}
           onBusyChange={() => undefined}
@@ -280,18 +365,13 @@ describe('bulk operations through admin contracts', () => {
         />
       </AdminWorkspaceShell>,
     );
-    await screen.getByText('Hromadné úpravy kapacit', { exact: true }).click();
-    await screen
-      .getByRole('checkbox', { name: /Vybrat všechny zobrazené/ })
-      .click();
-    await screen
-      .getByRole('combobox', { name: 'Hromadná akce' })
-      .selectOptions('set');
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await screen.getByRole('menuitem', { name: 'Nastavit kapacitu' }).click();
     await screen.getByRole('spinbutton', { name: 'Nová kapacita' }).fill('1');
     await screen
-      .getByRole('textbox', { name: 'Důvod změny (8–500 znaků)' })
+      .getByRole('textbox', { name: 'Důvod změny' })
       .fill('Kontrola nedostatečné kapacity');
-    await screen.getByRole('button', { name: /Zkontrolovat změnu/ }).click();
+    await screen.getByRole('button', { name: /Provést změnu/ }).click();
     await expect
       .element(screen.getByText(/kapacita musí být alespoň/))
       .toBeVisible();

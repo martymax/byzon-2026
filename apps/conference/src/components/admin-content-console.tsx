@@ -22,6 +22,12 @@ import {
 } from '../lib/admin-content-api';
 import { ADMIN_CONTENT_SCOPE_CHANGE_EVENT } from '../lib/admin-content-dirty-guard';
 
+import {
+  AdminBulkCheckbox,
+  AdminBulkSelectAll,
+  useAdminBulkSelection,
+  type AdminBulkSelection,
+} from './admin-bulk-selection';
 import { AdminContentBulk } from './admin-content-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminSessionQr } from './admin-session-qr';
@@ -414,6 +420,7 @@ const itemLabel = (item: AdminContentItem): string =>
 const contentListRenderBatchSize = 20;
 
 const AdminContentItemList = memo(function AdminContentItemList({
+  selection,
   archiveBlocked,
   eventId,
   items,
@@ -425,6 +432,7 @@ const AdminContentItemList = memo(function AdminContentItemList({
   timezone,
   writesBlocked,
 }: {
+  readonly selection: AdminBulkSelection;
   readonly archiveBlocked: boolean;
   readonly eventId: string;
   readonly items: readonly AdminContentItem[];
@@ -482,60 +490,74 @@ const AdminContentItemList = memo(function AdminContentItemList({
       className={styles.contentList}
     >
       {renderedItems.map((item) => (
-        <li data-archived={item.status === 'archived'} key={item.id}>
-          <span>
-            <strong>{itemLabel(item)}</strong>
-            {resource === 'sessions' ? (
-              <dl className={styles.sessionMetadata}>
-                <div>
-                  <dt>Čas</dt>
-                  <dd>
-                    {daysById.get(String(item.dayId))
-                      ? `${daysById.get(String(item.dayId))} · `
-                      : ''}
-                    {formatProgramTimeRange(
-                      item.startsAt,
-                      item.endsAt,
-                      timeFormatter,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Stage</dt>
-                  <dd>
-                    {roomsById.get(String(item.roomId)) ?? 'Stage neurčena'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Řečníci</dt>
-                  <dd>
-                    {Array.isArray(item.speakerIds) &&
-                    item.speakerIds.length > 0
-                      ? item.speakerIds
-                          .map((id) => speakersById.get(String(id)))
-                          .filter(Boolean)
-                          .join(', ') || 'Řečník neurčen'
-                      : 'Bez řečníka'}
-                  </dd>
-                </div>
-              </dl>
+        <li
+          data-archived={item.status === 'archived'}
+          data-bulk-selected={selection.selectedIds.has(item.id)}
+          key={item.id}
+        >
+          <span className={styles.bulkContentIdentity}>
+            {!readOnly ? (
+              <AdminBulkCheckbox
+                selection={selection}
+                id={item.id}
+                label={itemLabel(item)}
+                disabled={archiveBlocked}
+              />
             ) : null}
-            <small>
-              {resource === 'speakers' ? (
-                <>
-                  {[item.jobTitle, item.company]
-                    .filter(Boolean)
-                    .map(String)
-                    .join(' · ') || 'Bez uvedené role'}
-                  {' · '}
-                  {Array.isArray(item.sessionIds)
-                    ? `${item.sessionIds.length} vystoupení`
-                    : '0 vystoupení'}
-                  {' · '}
-                </>
+            <span>
+              <strong>{itemLabel(item)}</strong>
+              {resource === 'sessions' ? (
+                <dl className={styles.sessionMetadata}>
+                  <div>
+                    <dt>Čas</dt>
+                    <dd>
+                      {daysById.get(String(item.dayId))
+                        ? `${daysById.get(String(item.dayId))} · `
+                        : ''}
+                      {formatProgramTimeRange(
+                        item.startsAt,
+                        item.endsAt,
+                        timeFormatter,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Stage</dt>
+                    <dd>
+                      {roomsById.get(String(item.roomId)) ?? 'Stage neurčena'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Řečníci</dt>
+                    <dd>
+                      {Array.isArray(item.speakerIds) &&
+                      item.speakerIds.length > 0
+                        ? item.speakerIds
+                            .map((id) => speakersById.get(String(id)))
+                            .filter(Boolean)
+                            .join(', ') || 'Řečník neurčen'
+                        : 'Bez řečníka'}
+                    </dd>
+                  </div>
+                </dl>
               ) : null}
-              {contentPublicationStateLabel(item)}
-            </small>
+              <small>
+                {resource === 'speakers' ? (
+                  <>
+                    {[item.jobTitle, item.company]
+                      .filter(Boolean)
+                      .map(String)
+                      .join(' · ') || 'Bez uvedené role'}
+                    {' · '}
+                    {Array.isArray(item.sessionIds)
+                      ? `${item.sessionIds.length} vystoupení`
+                      : '0 vystoupení'}
+                    {' · '}
+                  </>
+                ) : null}
+                {contentPublicationStateLabel(item)}
+              </small>
+            </span>
           </span>
           {resource === 'sessions' && !readOnly ? (
             item.status !== 'archived' &&
@@ -1327,6 +1349,15 @@ export const AdminContentConsole = ({
   const bodyFieldName = bodyFieldNames[resource];
   const area = resourceArea[selectedResource];
   const areaResources = contentAreaResources[area];
+  const bulkSelection = useAdminBulkSelection(
+    JSON.stringify([
+      eventId,
+      resource,
+      listFilter,
+      speakerListQuery,
+      programFilters,
+    ]),
+  );
   const visibleItems = useMemo(
     () =>
       items.filter((item) => {
@@ -1556,32 +1587,6 @@ export const AdminContentConsole = ({
         </section>
       ) : null}
 
-      {!readOnly ? (
-        <AdminContentBulk
-          key={`${eventId}:${resource}:${listFilter}:${speakerListQuery}`}
-          items={visibleItems}
-          resource={resource}
-          references={references}
-          port={port}
-          eventId={eventId}
-          disabled={writesBlocked || dirty || editorOpen}
-          onSecurityFailure={acceptFailure}
-          onBusyChange={(running) => {
-            operationLocked.current = running;
-            setBusy(running ? 'saving' : null);
-          }}
-          onCompleted={() => {
-            onContentChanged?.();
-            setBusy('loading');
-            setSnapshotReady(false);
-            setLoadRequest(({ sequence }) => ({
-              resource,
-              sequence: sequence + 1,
-            }));
-          }}
-        />
-      ) : null}
-
       <section
         aria-busy={busy === 'loading'}
         aria-labelledby="content-list-title"
@@ -1692,6 +1697,38 @@ export const AdminContentConsole = ({
             ))}
           </div>
         ) : null}
+        {!readOnly && snapshotReady && visibleItems.length > 0 ? (
+          <AdminBulkSelectAll
+            selection={bulkSelection}
+            ids={visibleItems.map((item) => item.id)}
+            disabled={writesBlocked || dirty || editorOpen}
+          />
+        ) : null}
+        {!readOnly ? (
+          <AdminContentBulk
+            {...bulkSelection}
+            items={visibleItems}
+            resource={resource}
+            references={references}
+            port={port}
+            eventId={eventId}
+            disabled={writesBlocked || dirty || editorOpen}
+            onSecurityFailure={acceptFailure}
+            onBusyChange={(running) => {
+              operationLocked.current = running;
+              setBusy(running ? 'saving' : null);
+            }}
+            onCompleted={() => {
+              onContentChanged?.();
+              setBusy('loading');
+              setSnapshotReady(false);
+              setLoadRequest(({ sequence }) => ({
+                resource,
+                sequence: sequence + 1,
+              }));
+            }}
+          />
+        ) : null}
         {busy === 'loading' ? (
           <p role="status">Načítám obsah…</p>
         ) : !snapshotReady ? (
@@ -1709,6 +1746,7 @@ export const AdminContentConsole = ({
           </p>
         ) : (
           <AdminContentItemList
+            selection={bulkSelection}
             eventId={eventId}
             archiveBlocked={writesBlocked || dirty}
             items={visibleItems}

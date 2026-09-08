@@ -25,8 +25,8 @@ export const AdminEngagementBulk = ({
   readonly disabled: boolean;
   readonly onBusyChange: (busy: boolean) => void;
   readonly onCompleted: () => void;
-  readonly selectedIds?: ReadonlySet<string>;
-  readonly onSelectionChange?: (ids: ReadonlySet<string>) => void;
+  readonly selectedIds: ReadonlySet<string>;
+  readonly onSelectionChange: (ids: ReadonlySet<string>) => void;
 }) => {
   const { api, eventId, invalidateSensitive } = useAdminWorkspace();
   const assignmentsVersion = createAdminBulkVersion(
@@ -151,9 +151,8 @@ export const AdminEngagementBulk = ({
   return (
     <AdminBulkPanel
       title="Hromadné úpravy otázek a moderátorů"
-      selectionMode={selectedIds ? 'external' : 'list'}
-      {...(selectedIds ? { selectedIds } : {})}
-      {...(onSelectionChange ? { onSelectionChange } : {})}
+      selectedIds={selectedIds}
+      onSelectionChange={onSelectionChange}
       items={overview.sessions}
       identify={(session) => ({ id: session.sessionId, label: session.title })}
       actions={actions}

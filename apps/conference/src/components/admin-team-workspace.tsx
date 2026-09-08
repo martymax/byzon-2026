@@ -33,6 +33,11 @@ import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
 import { AdminProgramAccess } from './admin-program-access';
+import {
+  AdminBulkCheckbox,
+  AdminBulkSelectAll,
+  useAdminBulkSelection,
+} from './admin-bulk-selection';
 import { AdminRoleBulk } from './admin-role-bulk';
 import { AdminTeamMembers } from './admin-team-members';
 import {
@@ -223,6 +228,10 @@ export const AdminTeamRedesign = ({
       ...(scopeFilter === 'all' ? {} : { scopeKind: scopeFilter }),
     }),
     [roleFilter, scopeFilter, stateFilter],
+  );
+
+  const bulkSelection = useAdminBulkSelection(
+    JSON.stringify([eventId, roleFilter, stateFilter, scopeFilter, reload]),
   );
 
   useEffect(() => {
@@ -567,19 +576,7 @@ export const AdminTeamRedesign = ({
               }}
             />
           ) : null}
-          {canRevoke && assignments ? (
-            <AdminRoleBulk
-              assignments={assignments}
-              disabled={
-                busy !== null || formOpen || pending !== null || error !== null
-              }
-              onBusyChange={(running) => setBusy(running ? 'mutation' : null)}
-              onCompleted={() => {
-                setBusy('list');
-                setReload((value) => value + 1);
-              }}
-            />
-          ) : null}
+
           <section
             id="team-permissions"
             className={styles.panel}
@@ -677,6 +674,35 @@ export const AdminTeamRedesign = ({
                 </select>
               </label>
             </div>
+            {canRevoke && assignments && assignments.items.length > 0 ? (
+              <AdminBulkSelectAll
+                selection={bulkSelection}
+                ids={assignments.items.map((item) => item.assignmentId)}
+                disabled={
+                  busy !== null ||
+                  formOpen ||
+                  pending !== null ||
+                  error !== null
+                }
+              />
+            ) : null}
+            {canRevoke && assignments ? (
+              <AdminRoleBulk
+                {...bulkSelection}
+                assignments={assignments}
+                disabled={
+                  busy !== null ||
+                  formOpen ||
+                  pending !== null ||
+                  error !== null
+                }
+                onBusyChange={(running) => setBusy(running ? 'mutation' : null)}
+                onCompleted={() => {
+                  setBusy('list');
+                  setReload((value) => value + 1);
+                }}
+              />
+            ) : null}{' '}
             {busy === 'list' ? (
               <p role="status">Načítám týmová oprávnění…</p>
             ) : assignments?.items.length === 0 ? (
@@ -689,6 +715,7 @@ export const AdminTeamRedesign = ({
                   <table className={styles.table}>
                     <thead>
                       <tr>
+                        {canRevoke ? <th scope="col">Výběr</th> : null}
                         <th scope="col">Člen týmu</th>
                         <th scope="col">Role</th>
                         <th scope="col">Oblast</th>
@@ -698,7 +725,27 @@ export const AdminTeamRedesign = ({
                     </thead>
                     <tbody>
                       {assignments.items.map((assignment) => (
-                        <tr key={assignment.assignmentId}>
+                        <tr
+                          key={assignment.assignmentId}
+                          data-bulk-selected={bulkSelection.selectedIds.has(
+                            assignment.assignmentId,
+                          )}
+                        >
+                          {canRevoke ? (
+                            <td>
+                              <AdminBulkCheckbox
+                                selection={bulkSelection}
+                                id={assignment.assignmentId}
+                                label={assignment.operatorLabel}
+                                disabled={
+                                  busy !== null ||
+                                  formOpen ||
+                                  pending !== null ||
+                                  error !== null
+                                }
+                              />
+                            </td>
+                          ) : null}
                           <th scope="row">{assignment.operatorLabel}</th>
                           <td>{roleLabels[assignment.role]}</td>
                           <td>
@@ -739,8 +786,26 @@ export const AdminTeamRedesign = ({
                       <li
                         className={styles.dataCard}
                         key={assignment.assignmentId}
+                        data-bulk-selected={bulkSelection.selectedIds.has(
+                          assignment.assignmentId,
+                        )}
                       >
-                        <strong>{assignment.operatorLabel}</strong>
+                        <div className={styles.bulkCardHeading}>
+                          {canRevoke ? (
+                            <AdminBulkCheckbox
+                              selection={bulkSelection}
+                              id={assignment.assignmentId}
+                              label={assignment.operatorLabel}
+                              disabled={
+                                busy !== null ||
+                                formOpen ||
+                                pending !== null ||
+                                error !== null
+                              }
+                            />
+                          ) : null}
+                          <strong>{assignment.operatorLabel}</strong>
+                        </div>
                         <p>
                           {roleLabels[assignment.role]} ·{' '}
                           {assignment.scope.label}

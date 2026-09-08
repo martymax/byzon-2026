@@ -16,6 +16,7 @@ import {
 } from '@/lib/admin-api';
 
 import { AdminSessionModeratorDialog } from './admin-session-moderator-dialog';
+import { AdminBulkSelectAll } from './admin-bulk-selection';
 import { AdminEngagementBulk } from './admin-engagement-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
@@ -654,49 +655,17 @@ export const AdminEngagementWorkspace = () => {
               {overview.sessions.length}. Zapnutí server odmítne, pokud chybí
               potřebné přiřazení.
             </p>
-            <div className={styles.actionRow}>
-              <label className={styles.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={
-                    selectableSessions.length > 0 &&
-                    selectedSessions.size === selectableSessions.length
-                  }
-                  ref={(node) => {
-                    if (node)
-                      node.indeterminate =
-                        selectedSessions.size > 0 &&
-                        selectedSessions.size < selectableSessions.length;
-                  }}
-                  disabled={
-                    sessionActionsDisabled || selectableSessions.length === 0
-                  }
-                  onChange={(event) =>
-                    setSelectedSessions(
-                      new Set(
-                        event.target.checked
-                          ? selectableSessions.map((s) => s.sessionId)
-                          : [],
-                      ),
-                    )
-                  }
-                />
-                <span>
-                  Vybrat všechny přednášky ({selectableSessions.length})
-                </span>
-              </label>
-              <span role="status">Vybráno: {selectedSessions.size}</span>
-              {selectedSessions.size > 0 ? (
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  disabled={sessionActionsDisabled}
-                  onClick={() => setSelectedSessions(new Set())}
-                >
-                  Zrušit výběr
-                </button>
-              ) : null}
-            </div>
+            {context.event.phase !== 'archived' ? (
+              <AdminBulkSelectAll
+                selection={{
+                  selectedIds: selectedSessions,
+                  onSelectionChange: setSelectedSessions,
+                }}
+                ids={selectableSessions.map((session) => session.sessionId)}
+                disabled={sessionActionsDisabled}
+                label="Vybrat všechny přednášky"
+              />
+            ) : null}
             {context.event.phase !== 'archived' ? (
               <AdminEngagementBulk
                 overview={overview}
@@ -742,7 +711,12 @@ export const AdminEngagementWorkspace = () => {
                     </thead>
                     <tbody>
                       {overview.sessions.map((session) => (
-                        <tr key={session.sessionId}>
+                        <tr
+                          key={session.sessionId}
+                          data-bulk-selected={selectedSessions.has(
+                            session.sessionId,
+                          )}
+                        >
                           <th scope="row">
                             {sessionChoice(session)}
                             <small className={styles.sessionMeta}>
@@ -807,7 +781,13 @@ export const AdminEngagementWorkspace = () => {
                 <div className={styles.cards}>
                   <ul className={styles.cardList}>
                     {overview.sessions.map((session) => (
-                      <li className={styles.dataCard} key={session.sessionId}>
+                      <li
+                        className={styles.dataCard}
+                        key={session.sessionId}
+                        data-bulk-selected={selectedSessions.has(
+                          session.sessionId,
+                        )}
+                      >
                         {sessionChoice(session)}
                         <dl>
                           <dt>Začátek</dt>

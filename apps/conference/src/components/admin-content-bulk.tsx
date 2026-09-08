@@ -8,6 +8,7 @@ import {
   type AdminContentResource,
 } from '../lib/admin-content-api';
 
+import type { AdminBulkSelection } from './admin-bulk-selection';
 import { contentBulkPatch } from './admin-content-bulk-model';
 import {
   AdminBulkPanel,
@@ -40,6 +41,8 @@ export const AdminContentBulk = ({
   disabled,
   onBusyChange,
   onCompleted,
+  selectedIds,
+  onSelectionChange,
   onSecurityFailure,
 }: {
   readonly items: readonly AdminContentItem[];
@@ -51,7 +54,7 @@ export const AdminContentBulk = ({
   readonly onBusyChange: (busy: boolean) => void;
   readonly onCompleted: () => void;
   readonly onSecurityFailure: (failure: AdminContentFailure) => void;
-}) => {
+} & AdminBulkSelection) => {
   const save = async (
     item: AdminContentItem,
     patch: Record<string, unknown> | null,
@@ -299,6 +302,8 @@ export const AdminContentBulk = ({
     );
   return (
     <AdminBulkPanel
+      selectedIds={selectedIds}
+      onSelectionChange={onSelectionChange}
       items={items}
       identify={(item) => ({ id: item.id, label: label(item) })}
       actions={actions}

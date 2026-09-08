@@ -20,6 +20,11 @@ import {
   requestAdminTeamMembers,
 } from '@/lib/admin-api';
 
+import {
+  AdminBulkCheckbox,
+  AdminBulkSelectAll,
+  useAdminBulkSelection,
+} from './admin-bulk-selection';
 import { AdminTeamBulk } from './admin-team-bulk';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import { AdminModal } from './admin-modal';
@@ -113,6 +118,10 @@ export const AdminTeamMembers = ({
   const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const bulkSelection = useAdminBulkSelection(
+    JSON.stringify([eventId, query, statusFilter, reload]),
+  );
 
   useEffect(() => {
     const request = requestFence.begin('team-members-list');
@@ -491,8 +500,16 @@ export const AdminTeamMembers = ({
               </select>
             </label>
           </div>
+          {editable && filteredMembers.length > 0 ? (
+            <AdminBulkSelectAll
+              selection={bulkSelection}
+              ids={filteredMembers.map((member) => member.memberId)}
+              disabled={busy !== null || editor !== null || error !== null}
+            />
+          ) : null}
           {editable ? (
             <AdminTeamBulk
+              {...bulkSelection}
               members={filteredMembers}
               teamVersion={data.teamVersion}
               disabled={busy !== null || editor !== null || error !== null}
@@ -517,6 +534,7 @@ export const AdminTeamMembers = ({
                   <caption>Aktivní členové organizačního týmu</caption>
                   <thead>
                     <tr>
+                      {editable ? <th scope="col">Výběr</th> : null}
                       <th>Člen</th>
                       <th>Přístup</th>
                       <th>Stav</th>
@@ -525,7 +543,26 @@ export const AdminTeamMembers = ({
                   </thead>
                   <tbody>
                     {filteredMembers.map((member) => (
-                      <tr key={member.memberId}>
+                      <tr
+                        key={member.memberId}
+                        data-bulk-selected={bulkSelection.selectedIds.has(
+                          member.memberId,
+                        )}
+                      >
+                        {editable ? (
+                          <td>
+                            <AdminBulkCheckbox
+                              selection={bulkSelection}
+                              id={member.memberId}
+                              label={member.displayName}
+                              disabled={
+                                busy !== null ||
+                                editor !== null ||
+                                error !== null
+                              }
+                            />
+                          </td>
+                        ) : null}
                         <td className={styles.identityCell}>
                           <strong>{member.displayName}</strong>
                           <span>{member.email}</span>
@@ -587,8 +624,26 @@ export const AdminTeamMembers = ({
               <div className={styles.cards}>
                 <ul className={styles.cardList}>
                   {filteredMembers.map((member) => (
-                    <li className={styles.dataCard} key={member.memberId}>
-                      <strong>{member.displayName}</strong>
+                    <li
+                      className={styles.dataCard}
+                      key={member.memberId}
+                      data-bulk-selected={bulkSelection.selectedIds.has(
+                        member.memberId,
+                      )}
+                    >
+                      <div className={styles.bulkCardHeading}>
+                        {editable ? (
+                          <AdminBulkCheckbox
+                            selection={bulkSelection}
+                            id={member.memberId}
+                            label={member.displayName}
+                            disabled={
+                              busy !== null || editor !== null || error !== null
+                            }
+                          />
+                        ) : null}
+                        <strong>{member.displayName}</strong>
+                      </div>
                       <p>{member.email}</p>
                       <p>
                         {member.roles

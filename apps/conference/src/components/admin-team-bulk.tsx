@@ -14,6 +14,7 @@ import {
   requestAdminRoleAssignment,
 } from '@/lib/admin-api';
 import { createAdminBulkVersion } from './admin-bulk';
+import type { AdminBulkSelection } from './admin-bulk-selection';
 import { AdminBulkPanel, type AdminBulkAction } from './admin-bulk-panel';
 import { adminBulkApiResult } from './admin-bulk-api';
 import { createAdminIdempotencyKey } from './admin-workspace-runtime';
@@ -25,13 +26,15 @@ export const AdminTeamBulk = ({
   disabled,
   onBusyChange,
   onCompleted,
+  selectedIds,
+  onSelectionChange,
 }: {
   readonly members: readonly AdminTeamMember[];
   readonly teamVersion: number;
   readonly disabled: boolean;
   readonly onBusyChange: (busy: boolean) => void;
   readonly onCompleted: () => void;
-}) => {
+} & AdminBulkSelection) => {
   const { api, context, eventId, invalidateSensitive } = useAdminWorkspace();
   const [opened, setOpened] = useState(false);
   const [roleOptions, setRoleOptions] = useState<
@@ -210,6 +213,8 @@ export const AdminTeamBulk = ({
     <>
       {scopeError ? <p role="alert">{scopeError}</p> : null}
       <AdminBulkPanel
+        selectedIds={selectedIds}
+        onSelectionChange={onSelectionChange}
         title="Hromadné úpravy týmu"
         onOpen={() => setOpened(true)}
         items={members}

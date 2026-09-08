@@ -5,6 +5,8 @@ import {
   type AdminParticipantListItem,
 } from '@byzon/domain/contracts/support';
 import {
+  requestAdminParticipantInvite,
+  requestAdminSupportMutation,
   requestAdminParticipantDetail,
   requestAdminParticipantUpdate,
 } from '@/lib/admin-api';
@@ -151,9 +153,63 @@ export const AdminParticipantBulk = ({
       );
     },
   }));
+  actions.unshift({
+    id: 'invite',
+    label: 'Poslat pozvánku',
+    description:
+      'Odešle vybraným účastníkům e-mail s jednorázovým odkazem do aplikace. Pozvat lze účastníky s aktivní vstupenkou, nejvýše 25 najednou.',
+    eligible: (item) => item.ticketState === 'active',
+    validate: (items) =>
+      items.length > 25
+        ? 'Najednou lze odeslat nejvýše 25 pozvánek. Zmenšete výběr.'
+        : null,
+    execute: async (item, _values, signal) =>
+      adminBulkApiResult(
+        await requestAdminParticipantInvite(
+          api,
+          eventId,
+          item.participantId,
+          { participantId: item.participantId },
+          createAdminIdempotencyKey('bulk-participant-invite'),
+          signal,
+        ),
+        invalidateSensitive,
+      ),
+  });
+  for (const action of ['reactivate', 'block'] as const) {
+    actions.push({
+      id: action,
+      label: action === 'block' ? 'Zablokovat přístup' : 'Obnovit přístup',
+      description:
+        action === 'block'
+          ? 'Zablokuje účastnický přístup u vybraných vstupenek. Účastníci s nedostupnou akcí budou přeskočeni.'
+          : 'Obnoví přístup u vybraných vstupenek, které lze znovu aktivovat.',
+      danger: action === 'block',
+      reasonRequired: true,
+      eligible: (item) => item.availableActions.includes(action),
+      execute: async (item, values, signal) =>
+        adminBulkApiResult(
+          await requestAdminSupportMutation(
+            api,
+            eventId,
+            {
+              participantId: item.participantId,
+              ticketId: item.ticketId,
+              action,
+              expectedVersion: item.ticketVersion,
+              reason: values.reason!.trim(),
+              targetTicketId: null,
+            },
+            createAdminIdempotencyKey('bulk-participant-access'),
+            signal,
+          ),
+          invalidateSensitive,
+        ),
+    });
+  }
   return (
     <AdminBulkPanel
-      title="Hromadné úpravy profilů"
+      title="Hromadné úpravy účastníků"
       items={items}
       identify={(item) => ({
         id: item.participantId,
