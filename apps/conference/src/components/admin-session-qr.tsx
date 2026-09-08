@@ -14,14 +14,19 @@ export function AdminSessionQr({
   readonly eventId: string;
   readonly sessionId: string;
   readonly title: string;
-  readonly target: 'program' | 'questions';
+  readonly target: 'program' | 'questions' | 'rating';
 }) {
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const headingId = useId();
   const href = `/api/v1/admin/events/${eventId}/session-qr/${sessionId}?target=${target}`;
-  const label = target === 'questions' ? 'Q&A QR' : 'QR programu';
+  const label =
+    target === 'questions'
+      ? 'Q&A QR'
+      : target === 'rating'
+        ? 'QR hodnocení'
+        : 'QR programu';
   const qrImage = (large: boolean) => (
     // The authenticated SVG endpoint must bypass the public image optimizer.
     // eslint-disable-next-line @next/next/no-img-element
@@ -56,7 +61,9 @@ export function AdminSessionQr({
           <p>
             {target === 'questions'
               ? 'QR pro položení dotazu k přednášce.'
-              : 'QR pro otevření detailu programu.'}
+              : target === 'rating'
+                ? 'QR pro hodnocení přednášky. Hodnocení se otevře po jejím skončení. PNG můžete vložit na poslední slide prezentace.'
+                : 'QR pro otevření detailu programu.'}
           </p>
           {failed ? (
             <div role="status">

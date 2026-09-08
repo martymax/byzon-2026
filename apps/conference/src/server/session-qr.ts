@@ -50,7 +50,7 @@ const safeFilename = (value: string): string => {
 export const buildSessionDeepLink = (
   appOrigin: string,
   sessionId: string,
-  target: 'program' | 'questions' = 'program',
+  target: 'program' | 'questions' | 'rating' = 'program',
 ): string => {
   const origin = new URL(appOrigin);
   if (origin.protocol !== 'https:' && origin.hostname !== 'localhost') {
@@ -58,7 +58,7 @@ export const buildSessionDeepLink = (
   }
   origin.username = '';
   origin.password = '';
-  origin.pathname = `/app/${target === 'questions' ? 'interakce' : 'program'}/${uuidSchema.parse(sessionId)}`;
+  origin.pathname = `/app/${target === 'questions' ? 'interakce' : target === 'rating' ? 'hodnoceni' : 'program'}/${uuidSchema.parse(sessionId)}`;
   origin.search = '';
   origin.hash = '';
   return origin.toString();
@@ -76,7 +76,7 @@ export const renderSessionQrSvg = async (deepLink: string): Promise<string> =>
 const loadPublishedSessions = async (
   db: Database,
   eventId: string,
-  target: 'program' | 'questions',
+  target: 'program' | 'questions' | 'rating',
 ): Promise<readonly PublishedQrSession[]> => {
   const publication = await db.query.contentPublications.findFirst({
     columns: { snapshot: true },
@@ -114,8 +114,10 @@ const loadPublishedSessions = async (
       : null;
   return snapshot.data.program.sessions
     .filter(
-      ({ status, id }) =>
-        status !== 'cancelled' && (!supported || supported.has(id)),
+      ({ status, id, type }) =>
+        (target !== 'rating' || type !== 'coaching') &&
+        status !== 'cancelled' &&
+        (!supported || supported.has(id)),
     )
     .map(({ id, slug, title, startsAt, endsAt, roomId }) => ({
       id,
@@ -189,11 +191,8 @@ export const handleSessionQr = async (
     const query = Object.fromEntries(new URL(request.url).searchParams);
     const parsed = z
       .strictObject({
-        target: z.enum(['program', 'questions']).optional(),
-        format:
-          sessionId === undefined
-            ? z.never().optional()
-            : z.enum(['svg', 'png']).optional(),
+        target: z.enum(['program', 'questions', 'rating']).optional(),
+        format: z.enum(['svg', 'png']).optional(),
       })
       .safeParse(query);
     if (!parsed.success)
@@ -204,6 +203,7 @@ export const handleSessionQr = async (
         detail: 'Neplatný cíl QR kódu.',
       });
     const target = parsed.data.target ?? 'program';
+    const format = parsed.data.format ?? 'svg';
     const sessions = await loadPublishedSessions(
       dependencies.db,
       eventId,
@@ -228,7 +228,6 @@ export const handleSessionQr = async (
           detail: 'The published session is not available.',
         });
       }
-      const format = parsed.data.format ?? 'svg';
       const deepLink = buildSessionDeepLink(
         dependencies.appOrigin,
         sessionId,
@@ -251,7 +250,7 @@ export const handleSessionQr = async (
           ...privateHeaders(requestId),
           'content-type':
             format === 'png' ? 'image/png' : 'image/svg+xml; charset=utf-8',
-          'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}.${format}"`,
+          'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}${target === 'program' ? '' : `-${target}`}.${format}"`,
         },
       });
     }
@@ -282,8 +281,19 @@ export const handleSessionQr = async (
         publishedSession.id,
         target,
       );
-      const filename = `${safeFilename(publishedSession.slug)}-${publishedSession.id}.svg`;
-      files[filename] = strToU8(await renderSessionQrSvg(deepLink));
+      const filename = `${safeFilename(publishedSession.slug)}-${publishedSession.id}${target === 'program' ? '' : `-${target}`}.${format}`;
+      files[filename] =
+        format === 'png'
+          ? new Uint8Array(
+              await QRCode.toBuffer(deepLink, {
+                type: 'png',
+                errorCorrectionLevel: 'M',
+                margin: 4,
+                width: 1024,
+                color: { dark: '#101114', light: '#ffffff' },
+              }),
+            )
+          : strToU8(await renderSessionQrSvg(deepLink));
       manifest.push({
         id: publishedSession.id,
         title: publishedSession.title,
@@ -295,7 +305,7 @@ export const handleSessionQr = async (
       });
     }
     files['manifest.json'] = strToU8(
-      `${JSON.stringify({ eventId, target, generatedAt: new Date().toISOString(), sessions: manifest }, null, 2)}\n`,
+      `${JSON.stringify({ eventId, target, format, generatedAt: new Date().toISOString(), sessions: manifest }, null, 2)}\n`,
     );
     const archive = zipSync(files, { level: 6 });
     return new Response(new Uint8Array(archive), {

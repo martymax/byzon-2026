@@ -141,7 +141,7 @@ suite('question-target QR export', () => {
           deps,
         )
       ).status,
-    ).toBe(422);
+    ).toBe(200);
   });
   it('builds exact safe destinations without credentials or query parameters', () => {
     expect(

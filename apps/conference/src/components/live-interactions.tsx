@@ -1,7 +1,9 @@
 'use client';
 
 import { Button, Card } from '@byzon/ui';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+
+import type { ApiPort } from '@/lib/api/endpoint';
 
 import { requestRatingStatus, submitRating } from '@/lib/b-interactions-api';
 
@@ -10,25 +12,78 @@ export { QuestionForm } from './participant-questions';
 export const SessionRating = ({
   sessionId,
   endsAt,
+  explicit = false,
+  api,
 }: {
   sessionId: string;
   endsAt: string;
+  explicit?: boolean;
+  api?: ApiPort;
 }) => {
-  const [available, setAvailable] = useState(false);
-  const [completed, setCompleted] = useState(false);
+  const [status, setStatus] = useState<
+    'waiting' | 'loading' | 'ready' | 'completed' | 'error'
+  >(() => (Date.parse(endsAt) > Date.now() ? 'waiting' : 'loading'));
+  const [retry, setRetry] = useState(0);
+  const [working, setWorking] = useState(false);
+  const locked = useRef(false);
   const [message, setMessage] = useState('');
   useEffect(() => {
-    if (Date.parse(endsAt) > Date.now()) return;
-    void requestRatingStatus('session', sessionId).then((result) => {
-      if (result.ok && result.kind === 'success') {
-        setAvailable(true);
-        setCompleted(result.data.completed);
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => {
+      const remaining = Date.parse(endsAt) - Date.now();
+      if (remaining > 0) {
+        timer = setTimeout(load, Math.min(remaining + 100, 60_000));
+        return;
       }
-    });
-  }, [endsAt, sessionId]);
-  if (!available || completed) return null;
+      void requestRatingStatus('session', sessionId, api).then((result) => {
+        if (!active) return;
+        if (result.ok && result.kind === 'success') {
+          setStatus(result.data.completed ? 'completed' : 'ready');
+        } else {
+          setStatus('error');
+        }
+      });
+    };
+    load();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [endsAt, sessionId, retry, api]);
+  if (status !== 'ready') {
+    if (!explicit) return null;
+    return (
+      <Card>
+        <h2>Hodnocení přednášky</h2>
+        <p role="status">
+          {status === 'waiting'
+            ? 'Hodnocení se otevře po skončení přednášky. Tuto stránku můžete nechat otevřenou.'
+            : status === 'completed'
+              ? 'Děkujeme, vaše hodnocení už je uložené.'
+              : status === 'error'
+                ? 'Hodnocení nyní není dostupné. Ověřte připojení a zkuste to znovu.'
+                : 'Načítám hodnocení…'}
+        </p>
+        {status === 'error' ? (
+          <Button
+            onClick={() => {
+              setStatus('loading');
+              setRetry((value) => value + 1);
+            }}
+          >
+            Zkusit znovu
+          </Button>
+        ) : null}
+      </Card>
+    );
+  }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (locked.current) return;
+    locked.current = true;
+    setWorking(true);
+    setMessage('');
     const data = new FormData(event.currentTarget);
     void submitRating(
       {
@@ -38,18 +93,27 @@ export const SessionRating = ({
         comment: String(data.get('comment') ?? '').trim() || null,
       },
       globalThis.crypto.randomUUID(),
+      api,
     ).then((result) => {
-      if (result.ok) setCompleted(true);
-      else setMessage('Hodnocení se nepodařilo uložit.');
+      locked.current = false;
+      setWorking(false);
+      if (
+        (result.ok && result.kind === 'success') ||
+        (!result.ok &&
+          'problem' in result.failure &&
+          result.failure.problem?.code === 'RATING_ALREADY_COMPLETED')
+      )
+        setStatus('completed');
+      else setMessage('Hodnocení se nepodařilo uložit. Zkuste to znovu.');
     });
   };
   return (
     <Card>
-      <h2>Ohodnotit session</h2>
+      <h2>Ohodnotit přednášku</h2>
       <form onSubmit={submit}>
         <label>
           Hodnocení
-          <select defaultValue="5" name="score">
+          <select defaultValue="5" name="score" disabled={working}>
             <option value="5">5 – výborné</option>
             <option value="4">4</option>
             <option value="3">3</option>
@@ -59,9 +123,11 @@ export const SessionRating = ({
         </label>
         <label>
           Volitelný komentář
-          <textarea maxLength={2000} name="comment" />
+          <textarea maxLength={2000} name="comment" disabled={working} />
         </label>
-        <Button type="submit">Odeslat hodnocení</Button>
+        <Button type="submit" disabled={working}>
+          {working ? 'Odesílám…' : 'Odeslat hodnocení'}
+        </Button>
       </form>
       {message ? <p role="alert">{message}</p> : null}
     </Card>

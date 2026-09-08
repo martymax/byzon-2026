@@ -87,6 +87,7 @@ export type ParticipantActivationReturnTo =
   | (typeof participantActivationStaticReturnToValues)[number]
   | `/app/program/${string}`
   | `/app/interakce/${string}`
+  | `/app/hodnoceni/${string}`
   | `/host/moderace/${string}`
   | `/host/dotazy/${string}`
   | `/app/oznameni/${string}`
@@ -98,7 +99,7 @@ const participantActivationStaticReturnToSet = new Set<string>(
   participantActivationStaticReturnToValues,
 );
 const participantActivationDetailReturnToPattern =
-  /^\/app\/(program|oznameni|networking|interakce)\/([^/?]+)(\?from=agenda)?$/;
+  /^\/app\/(program|oznameni|networking|interakce|hodnoceni)\/([^/?]+)(\?from=agenda)?$/;
 const participantSpeakerReturnToPattern =
   /^\/app\/recnici\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 

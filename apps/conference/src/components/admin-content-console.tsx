@@ -542,16 +542,30 @@ const AdminContentItemList = memo(function AdminContentItemList({
             item.status !== 'cancelled' &&
             (item.publicationState === 'published' ||
               item.status === 'published') ? (
-              <AdminSessionQr
-                eventId={eventId}
-                sessionId={item.id}
-                title={itemLabel(item)}
-                target={
-                  item.questionMode === 'moderated_follow_up'
-                    ? 'questions'
-                    : 'program'
-                }
-              />
+              <div className={styles.actionRow}>
+                <AdminSessionQr
+                  eventId={eventId}
+                  sessionId={item.id}
+                  title={itemLabel(item)}
+                  target="program"
+                />
+                {item.questionMode === 'moderated_follow_up' ? (
+                  <AdminSessionQr
+                    eventId={eventId}
+                    sessionId={item.id}
+                    title={itemLabel(item)}
+                    target="questions"
+                  />
+                ) : null}
+                {item.type !== 'coaching' ? (
+                  <AdminSessionQr
+                    eventId={eventId}
+                    sessionId={item.id}
+                    title={itemLabel(item)}
+                    target="rating"
+                  />
+                ) : null}
+              </div>
             ) : (
               <small className={styles.muted}>
                 {item.status === 'archived' || item.status === 'cancelled'
@@ -1660,12 +1674,23 @@ export const AdminContentConsole = ({
           />
         ) : null}
         {resource === 'sessions' && !readOnly ? (
-          <a
-            className={styles.secondaryButton}
-            href={`/api/v1/admin/events/${eventId}/session-qr?target=questions`}
-          >
-            Stáhnout Q&amp;A QR všech přednášek (ZIP)
-          </a>
+          <div className={styles.actionRow}>
+            {(
+              [
+                ['program', 'programu'],
+                ['questions', 'Q&A'],
+                ['rating', 'hodnocení'],
+              ] as const
+            ).map(([target, label]) => (
+              <a
+                key={target}
+                className={styles.secondaryButton}
+                href={`/api/v1/admin/events/${eventId}/session-qr?target=${target}&format=png`}
+              >
+                Stáhnout všechna QR {label} (ZIP · PNG)
+              </a>
+            ))}
+          </div>
         ) : null}
         {busy === 'loading' ? (
           <p role="status">Načítám obsah…</p>

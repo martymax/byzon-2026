@@ -393,6 +393,7 @@ export const SessionView = ({
   showAgendaAction = false,
   returnQuery = '',
   returnOrigin = 'program',
+  ratingOnly = false,
   api,
 }: {
   agendaApi?: ApiPort;
@@ -402,6 +403,7 @@ export const SessionView = ({
   showAgendaAction?: boolean;
   returnQuery?: string;
   returnOrigin?: 'agenda' | 'program';
+  ratingOnly?: boolean;
   api?: ApiPort;
 }) => {
   const state = useParticipantProgram(eventId, api);
@@ -409,7 +411,7 @@ export const SessionView = ({
     const loginQuery = new URLSearchParams();
     if (returnOrigin === 'agenda') loginQuery.set('from', 'agenda');
     if (chooseCoach) loginQuery.set('coaching', 'choose');
-    const loginReturnTo = `/app/program/${encodeURIComponent(sessionId)}${
+    const loginReturnTo = `/app/${ratingOnly ? 'hodnoceni' : 'program'}/${encodeURIComponent(sessionId)}${
       loginQuery.size > 0 ? `?${loginQuery.toString()}` : ''
     }`;
     return (
@@ -429,6 +431,29 @@ export const SessionView = ({
         title="Bod programu nebyl nalezen"
         detail="Mohl být odebraný v novější publikaci programu."
       />
+    );
+  }
+  if (ratingOnly) {
+    return (
+      <article className="detail-card">
+        <p className="eyebrow">Hodnocení přednášky</p>
+        <h1 data-route-heading tabIndex={-1}>
+          {session.title}
+        </h1>
+        {session.status === 'cancelled' || session.type === 'coaching' ? (
+          <p role="status">Hodnocení tohoto bodu programu není dostupné.</p>
+        ) : (
+          <SessionRating
+            key={session.id}
+            sessionId={session.id}
+            endsAt={session.endsAt}
+            explicit
+          />
+        )}
+        <Link className="text-link" href={`/app/program/${session.id}`}>
+          ← Zpět na detail programu
+        </Link>
+      </article>
     );
   }
   const room = state.data.program.rooms.find(({ id }) => id === session.roomId);
