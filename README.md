@@ -109,8 +109,9 @@ Railway staging postup je v `docs/runbooks/railway-staging.md`.
 Aktuální staging je pro testování dostupný na <https://app.byzon.cz>;
 generická Railway adresa
 <https://byzonconference-staging.up.railway.app> zůstává pouze jako technický
-alias. Do produkčního cutoveru obsluhuje `app.byzon.cz` prostředí `staging`, ne
-`production-2026`.
+alias. Od 8. 9. 2026 existuje v Railway pouze `staging`; produkční prostředí
+je odstraněné. Aplikace je stále v testovací fázi a účastníci do ní zatím
+nemají přístup. Ostrá doména `app.byzon.cz` obsluhuje staging.
 
 Stagingový deploy po migracích a seedu idempotentně importuje program a
 řečníky z `static-site/data/content.json`. Změna zdrojového JSONu nebo jeho
