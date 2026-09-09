@@ -6,7 +6,7 @@ import { renderComponent } from './render';
 import { expectComponentToPassAxe } from './accessibility';
 
 describe('participant welcome and help', () => {
-  it('offers a skippable keyboard accessible guide with reservation practice', async () => {
+  it('offers a skippable keyboard accessible guide', async () => {
     const screen = await renderComponent(
       <main>
         <ParticipantGuide initiallyOpen />
@@ -23,16 +23,6 @@ describe('participant welcome and help', () => {
         }),
       )
       .toHaveFocus();
-    await screen.getByRole('button', { name: 'Po uložení do agendy' }).click();
-    await expect
-      .element(screen.getByRole('status'))
-      .toHaveTextContent('Uložení slouží k plánování');
-    await screen
-      .getByRole('button', { name: 'Po potvrzení rezervace' })
-      .click();
-    await expect
-      .element(screen.getByRole('status'))
-      .toHaveTextContent('Přesně tak');
     await expectComponentToPassAxe(screen.container);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth,

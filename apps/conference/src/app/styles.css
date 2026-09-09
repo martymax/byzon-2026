@@ -3514,22 +3514,6 @@ main > .ui-participant-nav-spacer {
   background: var(--soft);
   border-radius: 0 0.75rem 0.75rem 0;
 }
-.participant-guide-quiz {
-  padding: 1rem;
-  border: 1px solid var(--line);
-  border-radius: 0.75rem;
-  display: grid;
-  gap: 1rem;
-  min-width: 0;
-}
-.participant-guide-quiz legend {
-  font-weight: 700;
-  padding: 0 0.5rem;
-}
-.participant-guide-quiz button[aria-pressed='true'] {
-  outline: 2px solid var(--pink-dark);
-  outline-offset: 2px;
-}
 .participant-help-search {
   display: grid;
   gap: 0.5rem;

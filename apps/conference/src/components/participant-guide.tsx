@@ -50,12 +50,10 @@ export function ParticipantGuide({
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [step, setStep] = useState(0);
-  const [answer, setAnswer] = useState<'saved' | 'confirmed' | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const current = steps[step]!;
   const move = (next: number) => {
     setStep(next);
-    setAnswer(null);
     requestAnimationFrame(() => heading.current?.focus());
   };
   if (!open)
@@ -112,34 +110,6 @@ export function ParticipantGuide({
           <strong>Dobré vědět</strong>
           <p>{current.tip}</p>
         </aside>
-        {step === 1 ? (
-          <fieldset className="participant-guide-quiz">
-            <legend>Vyzkoušejte si: kdy máte na workshopu jisté místo?</legend>
-            <div className="activation-form-actions">
-              <Button
-                variant="secondary"
-                aria-pressed={answer === 'saved'}
-                onClick={() => setAnswer('saved')}
-              >
-                Po uložení do agendy
-              </Button>
-              <Button
-                variant="secondary"
-                aria-pressed={answer === 'confirmed'}
-                onClick={() => setAnswer('confirmed')}
-              >
-                Po potvrzení rezervace
-              </Button>
-            </div>
-            <p role="status">
-              {answer === 'confirmed'
-                ? 'Přesně tak. Potvrzená rezervace vám drží místo.'
-                : answer === 'saved'
-                  ? 'Uložení slouží k plánování. Místo vám zajistí až potvrzená rezervace.'
-                  : 'Jde jen o ukázku, žádnou rezervaci tím nevytváříte.'}
-            </p>
-          </fieldset>
-        ) : null}
       </div>
       <div className="participant-guide-footer">
         <Button
