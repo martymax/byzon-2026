@@ -6,9 +6,10 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl)
   throw new Error('DATABASE_URL is required to seed the database');
 
-const seedSql = await readFile(
-  resolve(import.meta.dirname, '../drizzle/seed/events.sql'),
-  'utf8',
+const seedStatements = await Promise.all(
+  ['events.sql', 'legal-documents.sql'].map((filename) =>
+    readFile(resolve(import.meta.dirname, '../drizzle/seed', filename), 'utf8'),
+  ),
 );
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -17,7 +18,7 @@ const pool = new Pool({
 });
 
 try {
-  await pool.query(seedSql);
+  for (const statement of seedStatements) await pool.query(statement);
   process.stdout.write('Database seed completed.\n');
 } finally {
   await pool.end();

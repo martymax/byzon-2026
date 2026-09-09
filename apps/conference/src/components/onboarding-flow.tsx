@@ -40,6 +40,7 @@ import {
   type IdentityBootstrapState,
 } from '@/components/identity-bootstrap';
 import { useTransitionFocus } from '@/components/use-transition-focus';
+import { LegalDocumentContent } from '@/components/legal-document-content';
 import type { ApiPort } from '@/lib/api';
 import {
   browserIdentityApi,
@@ -347,10 +348,22 @@ const LegalDocumentCard = ({
       <h3>{document.title}</h3>
       <p>Verze {document.version}</p>
     </div>
-    <details>
-      <summary>Zobrazit náhled dokumentu</summary>
-      <p>{document.previewText}</p>
-    </details>
+    <p>{document.previewText}</p>
+    {document.content.kind === 'inline' ? (
+      <details>
+        <summary>Zobrazit celý dokument</summary>
+        <LegalDocumentContent text={document.content.text} />
+      </details>
+    ) : (
+      <a
+        className="text-link"
+        href={document.content.url}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        Otevřít celý dokument v novém panelu
+      </a>
+    )}
   </Card>
 );
 

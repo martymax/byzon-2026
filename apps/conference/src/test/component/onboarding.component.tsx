@@ -135,6 +135,50 @@ beforeEach(() => {
 });
 
 describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
+  it('makes the full document and retention table readable before confirmation', async () => {
+    const bootstrap = identityBootstrapFixtures.legal_required!;
+    const screen = await renderComponent(
+      <OnboardingProbe
+        api={apiForOnboarding({
+          bootstrap: {
+            ...bootstrap,
+            legalDocuments: bootstrap.legalDocuments.map((document) => ({
+              ...document,
+              content: {
+                kind: 'inline',
+                text: '# **8\\. Uchování údajů**\n\n| Kategorie údajů | Doba uchování |\n| :---- | :---- |\n| Profil | do 90 dnů |\n\nÚplné znění za hranicí náhledu.',
+              },
+            })),
+          },
+        })}
+      />,
+    );
+    await screen
+      .getByText('Zobrazit celý dokument', { exact: true })
+      .first()
+      .click();
+    await expect
+      .element(
+        screen.getByRole('heading', { name: '8. Uchování údajů' }).first(),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('cell', { name: 'do 90 dnů' }).first())
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('Úplné znění za hranicí náhledu.').first())
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByLabelText('Souhlasím s podmínkami, verze synthetic-v1'),
+      )
+      .not.toBeChecked();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    await expectComponentToPassAxe(screen.container);
+  });
+
   it('completes once with canonical profile and legal minimum only', async () => {
     const calls: RecordedRequest[] = [];
     const screen = await renderComponent(

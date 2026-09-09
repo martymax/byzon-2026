@@ -24,7 +24,7 @@ import { useRef, useState } from 'react';
 
 import type { ParticipantAccountResourceValue } from '@/components/participant-account-resource';
 import { ParticipantAccountBoundary } from '@/components/participant-account-state';
-import { ParticipantPrivacyDocuments } from '@/components/participant-privacy-documents';
+import { LegalDocumentContent } from '@/components/legal-document-content';
 import type { ApiPort } from '@/lib/api';
 import {
   browserIdentityApi,
@@ -87,15 +87,7 @@ const LegalDocumentCard = ({
     {document.content.kind === 'inline' ? (
       <details>
         <summary>Zobrazit celý dokument</summary>
-        <div className="participant-legal-content">
-          {document.content.text
-            .split(/\n{2,}/)
-            .map((paragraph) => paragraph.trim())
-            .filter(Boolean)
-            .map((paragraph, index) => (
-              <p key={`${document.id}-${index}`}>{paragraph}</p>
-            ))}
-        </div>
+        <LegalDocumentContent text={document.content.text} />
       </details>
     ) : (
       <a
@@ -471,18 +463,13 @@ export const ParticipantPrivacy = ({
     <ParticipantAccountBoundary loginReturnTo="/app/soukromi">
       {(identity, resource) => (
         <div className="participant-account-stack">
-          <ParticipantPrivacyDocuments />
           <section
             aria-labelledby="participant-legal-title"
             className="participant-account-section"
           >
             <header>
-              <p className="activation-kicker">Dokumenty pouze pro čtení</p>
               <h2 id="participant-legal-title">Právní dokumenty a potvrzení</h2>
-              <p>
-                Tato obrazovka nemění souhlasy. Případné povinné nové potvrzení
-                proběhne odděleně v bezpečném průvodci.
-              </p>
+              <p>Zde najdete celé znění dokumentů a přehled svých potvrzení.</p>
             </header>
             {identity.legalDocuments.length === 0 ? (
               <StatePanel
@@ -497,7 +484,9 @@ export const ParticipantPrivacy = ({
                 kind="error"
                 title="Právní dokumenty nejsou dostupné"
               >
-                <p>Dokud nejsou publikované, žádné potvrzení nepožadujeme.</p>
+                <p>
+                  Dokumenty připravuje pořadatel. Zatím nemusíte nic potvrzovat.
+                </p>
               </StatePanel>
             ) : (
               <div className="participant-legal-list">
@@ -519,18 +508,20 @@ export const ParticipantPrivacy = ({
                 ))}
               </div>
             )}
-            {identity.onboarding.status === 'legal_acknowledgement_required' ||
-            identity.onboarding.status === 'blocked_missing_legal_documents' ? (
+            {identity.onboarding.status === 'legal_acknowledgement_required' ? (
               <Alert
                 action={
                   <ActionLink href="/onboarding" variant="secondary">
-                    Pokračovat bezpečným průvodcem
+                    Přečíst a potvrdit dokumenty
                   </ActionLink>
                 }
-                title="Aktuální potvrzení je potřeba doplnit"
+                title="Potvrďte aktuální dokumenty"
                 tone="warning"
               >
-                <p>Na této read-only obrazovce souhlas nepředvyplňujeme.</p>
+                <p>
+                  Přečtěte si pravidla používání a zásady zpracování osobních
+                  údajů. Potvrzení provedete v následujícím kroku.
+                </p>
               </Alert>
             ) : null}
           </section>

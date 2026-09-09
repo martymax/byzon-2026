@@ -317,8 +317,17 @@ const successResponse = (
   return new Response(JSON.stringify(body), { status, headers });
 };
 
-const legalPreview = (value: string): string =>
-  value.replace(/\s+/g, ' ').trim().slice(0, 2_048);
+const legalPreview = (value: string): string => {
+  const introduction = value.split(/\n\s*\n/).find((block) => {
+    const trimmed = block.trim();
+    return trimmed && !/^(#|\*\*|\|)/.test(trimmed);
+  });
+  return (introduction ?? value)
+    .replace(/\\\./g, '.')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 2_048);
+};
 
 const projectLegalDocument = (
   document: typeof schema.legalDocuments.$inferSelect,

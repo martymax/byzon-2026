@@ -1185,6 +1185,66 @@ describe('F2-07 participant account, profile and privacy', () => {
     expect(screen.container.textContent).not.toContain('Alex Novák');
   });
 
+  it('does not ask for confirmation while documents are missing', async () => {
+    const api = accountApi({
+      bootstrap: [
+        {
+          ...activeIdentity,
+          legalDocuments: [],
+          legalAcknowledgements: [],
+          onboarding: {
+            status: 'blocked_missing_legal_documents',
+            missingTypes: ['terms', 'privacy_notice'],
+          },
+        },
+      ],
+    });
+    const screen = await renderComponent(
+      <AccountProbe api={api}>
+        <ParticipantPrivacy api={api} />
+      </AccountProbe>,
+    );
+    await expect
+      .element(screen.getByText('Právní dokumenty nejsou dostupné'))
+      .toBeVisible();
+    expect(
+      screen
+        .getByRole('link', { name: 'Přečíst a potvrdit dokumenty' })
+        .elements(),
+    ).toHaveLength(0);
+    expect(screen.container.textContent).not.toContain(
+      'Potvrďte aktuální dokumenty',
+    );
+  });
+
+  it('offers confirmation for published documents without inventing acceptance', async () => {
+    const api = accountApi({
+      bootstrap: [
+        {
+          ...activeIdentity,
+          legalAcknowledgements: [],
+          onboarding: {
+            status: 'legal_acknowledgement_required',
+            documentTypes: ['terms', 'privacy_notice'],
+          },
+        },
+      ],
+    });
+    const screen = await renderComponent(
+      <AccountProbe api={api}>
+        <ParticipantPrivacy api={api} />
+      </AccountProbe>,
+    );
+    await expect
+      .element(
+        screen.getByRole('link', { name: 'Přečíst a potvrdit dokumenty' }),
+      )
+      .toHaveAttribute('href', '/onboarding');
+    expect(
+      screen.getByText('Souhlas potvrzen', { exact: true }).elements(),
+    ).toHaveLength(0);
+  });
+
   it('shows legal acknowledgements and routes access requests to published support', async () => {
     window.history.replaceState({}, '', '/app/soukromi');
     const requests: RecordedRequest[] = [];
