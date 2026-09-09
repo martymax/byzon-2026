@@ -15,14 +15,12 @@ import {
   StatusBadge,
 } from '@byzon/ui';
 import {
-  identityOnboardingRequestSchema,
   identityProfileSchema,
   type ApiFailure,
   type IdentityBootstrapResponse,
   type IdentityLegalDocument,
   type IdentityLegalDocumentType,
   type IdentityOnboardingProblem,
-  type IdentityOnboardingRequest,
   type RequestId,
 } from '@byzon/domain/contracts';
 import {
@@ -47,6 +45,10 @@ import {
   submitIdentityOnboarding,
 } from '@/lib/identity-api';
 import { shouldRetainMutationKey } from '@/lib/mutation-retry';
+import {
+  createOnboardingRequest,
+  type OnboardingDraft as Draft,
+} from '@/lib/onboarding-request';
 
 type Step = 'profile' | 'legal';
 type FieldErrors = Partial<
@@ -60,16 +62,12 @@ type SubmitFailure =
   | { readonly kind: 'session_expired' }
   | { readonly kind: 'stale_legal' }
   | { readonly kind: 'permission' }
-  | { readonly kind: 'validation' }
+  | {
+      readonly kind: 'validation';
+      readonly profileChanged: boolean;
+      readonly requestId: RequestId;
+    }
   | { readonly kind: 'error'; readonly requestId?: RequestId };
-
-interface Draft {
-  readonly firstName: string;
-  readonly lastName: string;
-  readonly contactEmail: string;
-  readonly termsAccepted: boolean;
-  readonly privacyAcknowledged: boolean;
-}
 
 const emptyDraft: Draft = {
   firstName: '',
@@ -177,7 +175,11 @@ const mapSubmitFailure = (
         case 'STALE_LEGAL_DOCUMENT':
           return { kind: 'stale_legal' };
         case 'VALIDATION_FAILED':
-          return { kind: 'validation' };
+          return {
+            kind: 'validation',
+            profileChanged: Boolean(failure.problem.fieldErrors?.profile),
+            requestId: failure.problem.requestId,
+          };
         case 'REQUEST_ID_REUSED':
         case 'IDEMPOTENCY_KEY_REUSED':
         case 'IDEMPOTENCY_IN_PROGRESS':
@@ -750,31 +752,9 @@ export const OnboardingFlow = ({
     void submitOnboarding();
   };
 
-  const createRequest = (): IdentityOnboardingRequest | null => {
-    if (!draft.termsAccepted || !draft.privacyAcknowledged) {
-      return null;
-    }
-    const candidate = {
-      profile: {
-        firstName: draft.firstName.trim(),
-        lastName: draft.lastName.trim(),
-        contactEmail: draft.contactEmail.trim().toLowerCase(),
-        phone: null,
-      },
-      legal: {
-        termsDocumentId: terms.id,
-        termsAccepted: true,
-        privacyNoticeDocumentId: privacy.id,
-        privacyAcknowledged: true,
-      },
-    };
-    const parsed = identityOnboardingRequestSchema.safeParse(candidate);
-    return parsed.success ? parsed.data : null;
-  };
-
   const submitOnboarding = async () => {
     if (submitLocked.current) return;
-    const request = createRequest();
+    const request = createOnboardingRequest(data, draft);
     const nextErrors: FieldErrors = {};
     if (Object.keys(nextErrors).length > 0 || !request) {
       if (Object.keys(nextErrors).length === 0) {
@@ -913,7 +893,9 @@ export const OnboardingFlow = ({
                   : failure.kind === 'permission'
                     ? 'Přístup už není dostupný'
                     : failure.kind === 'validation'
-                      ? 'Server údaje odmítl'
+                      ? failure.profileChanged
+                        ? 'Profil se liší od uložených údajů'
+                        : 'Potvrzení se nepodařilo uložit'
                       : 'Dokončení se nepodařilo'
             }
             tone={failure.kind === 'error' ? 'danger' : 'warning'}
@@ -926,11 +908,29 @@ export const OnboardingFlow = ({
                   : failure.kind === 'permission'
                     ? 'K této události už nemáte oprávnění.'
                     : failure.kind === 'validation'
-                      ? 'Zkontrolujte formulář a zkuste jej odeslat znovu.'
+                      ? failure.profileChanged
+                        ? 'Načtěte aktuální profil a potom dokumenty znovu potvrďte. Uložené údaje zůstanou zachované.'
+                        : 'Načtěte aktuální údaje a zkuste potvrzení znovu. Pokud problém přetrvá, předejte podpoře referenci níže.'
                       : failure.requestId
                         ? `Server vrátil nekonzistentní výsledek. Nic nepředstíráme. Podpoře předejte pouze referenci ${failure.requestId}.`
                         : 'Zopakujte bezpečně stejný požadavek.'}
             </p>
+            {failure.kind === 'validation' ? (
+              <>
+                <p>
+                  Reference pro podporu: <code>{failure.requestId}</code>
+                </p>
+                <Button
+                  onClick={() => {
+                    setDirty(false);
+                    bootstrap.retry();
+                  }}
+                  variant="secondary"
+                >
+                  Načíst aktuální údaje
+                </Button>
+              </>
+            ) : null}
             {failure.kind === 'session_expired' ? (
               <ActionLink href="/prihlaseni?mode=recovery&returnTo=%2Fonboarding">
                 Obnovit přihlášení
@@ -948,7 +948,9 @@ export const OnboardingFlow = ({
               Základní profil
             </h2>
             <p>
-              Vyplňte pouze údaje potřebné pro účast. Nic se průběžně neukládá.
+              {data.profile
+                ? 'Profil už máte uložený. Zde potvrzujete pouze dokumenty; své údaje můžete upravit v sekci Profil.'
+                : 'Vyplňte pouze údaje potřebné pro účast. Nic se průběžně neukládá.'}
             </p>
           </header>
           {errorSummary}
@@ -963,6 +965,7 @@ export const OnboardingFlow = ({
                 id="onboarding-first-name"
                 maxLength={128}
                 name="firstName"
+                readOnly={Boolean(data.profile)}
                 onChange={(event) =>
                   updateDraft('firstName', event.currentTarget.value)
                 }
@@ -979,6 +982,7 @@ export const OnboardingFlow = ({
                 id="onboarding-last-name"
                 maxLength={128}
                 name="lastName"
+                readOnly={Boolean(data.profile)}
                 onChange={(event) =>
                   updateDraft('lastName', event.currentTarget.value)
                 }
@@ -987,7 +991,7 @@ export const OnboardingFlow = ({
             </FormField>
             <FormField
               {...(errors.contactEmail ? { error: errors.contactEmail } : {})}
-              helperText="Na tento e-mail se váže pouze váš syntetický náhled účasti."
+              helperText="Kontaktní e-mail pro vaši účast na konferenci."
               label="Kontaktní e-mail"
               required
             >
@@ -997,6 +1001,7 @@ export const OnboardingFlow = ({
                 inputMode="email"
                 maxLength={320}
                 name="contactEmail"
+                readOnly={Boolean(data.profile)}
                 onChange={(event) =>
                   updateDraft('contactEmail', event.currentTarget.value)
                 }

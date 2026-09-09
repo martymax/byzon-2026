@@ -24,6 +24,7 @@ import {
   updateIdentityProfile,
   type IdentityDependencies,
 } from './identity';
+import { createOnboardingRequest } from '../lib/onboarding-request';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe.sequential : describe.skip;
@@ -268,6 +269,75 @@ integration('CS-BOOT-01 identity HTTP integration', () => {
       .delete(schema.events)
       .where(inArray(schema.events.id, [eventId, isolationEventId]));
     await client.close();
+  });
+
+  it('accepts the browser legal-review request for an existing profile with a phone', async () => {
+    const stored = onboardingBody().profile;
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId,
+      ...stored,
+    });
+    const bootstrap = identityBootstrapResponseSchema.parse(
+      await (
+        await readIdentityBootstrap(
+          new Request(`${appOrigin}/api/v1/me/bootstrap`),
+          dependencies(),
+        )
+      ).json(),
+    );
+    expect(bootstrap.onboarding.status).toBe('legal_acknowledgement_required');
+
+    // Reproduce the previous browser payload and retain the server's protection
+    // against silently clearing an existing profile field during legal review.
+    const rejected = await completeIdentityOnboarding(
+      jsonRequest(
+        '/api/v1/me/onboarding',
+        'POST',
+        onboardingBody({ profile: { ...stored, phone: null } }),
+        'identity-legal-phone-regression',
+      ),
+      dependencies(),
+    );
+    expect(rejected.status).toBe(422);
+    expect(await rejected.json()).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      fieldErrors: { profile: expect.any(Array) },
+    });
+
+    const body = createOnboardingRequest(bootstrap, {
+      firstName: 'Unsubmitted edit',
+      lastName: 'Unsubmitted edit',
+      contactEmail: 'unsubmitted@example.invalid',
+      termsAccepted: true,
+      privacyAcknowledged: true,
+    });
+    expect(body?.profile).toEqual(stored);
+    const response = await completeIdentityOnboarding(
+      jsonRequest(
+        '/api/v1/me/onboarding',
+        'POST',
+        body,
+        'identity-legal-phone-preserved',
+      ),
+      dependencies(),
+    );
+    expect(response.status).toBe(200);
+    const result = identityOnboardingResponseSchema.parse(
+      await response.json(),
+    );
+    expect(result.profile).toEqual(stored);
+    expect(result.acknowledgements).toHaveLength(2);
+    const after = identityBootstrapResponseSchema.parse(
+      await (
+        await readIdentityBootstrap(
+          new Request(`${appOrigin}/api/v1/me/bootstrap`),
+          dependencies(),
+        )
+      ).json(),
+    );
+    expect(after.onboarding.status).toBe('complete');
+    expect(after.profile).toEqual(stored);
   });
 
   it('returns a private live bootstrap and completes idempotent onboarding', async () => {

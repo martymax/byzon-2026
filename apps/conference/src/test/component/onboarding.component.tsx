@@ -135,6 +135,86 @@ beforeEach(() => {
 });
 
 describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
+  it('preserves the saved phone when submitting legal confirmations', async () => {
+    const calls: RecordedRequest[] = [];
+    const profile = {
+      ...identityBootstrapFixtures.legal_required!.profile!,
+      phone: '+420777123456',
+    };
+    const screen = await renderComponent(
+      <OnboardingProbe
+        api={apiForOnboarding({
+          bootstrap: { ...identityBootstrapFixtures.legal_required!, profile },
+          outcome: { ...identityOnboardingFixtures.complete!, profile },
+          onSubmit: (options) => calls.push(options),
+        })}
+      />,
+    );
+    await screen.getByRole('button', { name: 'Zpět', exact: true }).click();
+    await expect
+      .element(screen.getByLabelText('Jméno'))
+      .toHaveAttribute('readonly');
+    await expect
+      .element(screen.getByLabelText('Kontaktní e-mail'))
+      .toHaveAttribute('readonly');
+    await screen
+      .getByRole('button', { name: 'Pokračovat', exact: true })
+      .click();
+    await completeLegalStep(screen);
+    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await expect
+      .element(screen.getByText('Nastavení je dokončené'))
+      .toBeVisible();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({ profile });
+  });
+
+  it('explains a profile conflict and reloads before requesting fresh confirmation', async () => {
+    const base = apiForOnboarding({
+      bootstrap: identityBootstrapFixtures.legal_required!,
+    });
+    let loads = 0;
+    const api: ApiPort = {
+      request: async (endpoint, options) => {
+        if (options.path === '/api/v1/me/bootstrap') {
+          loads += 1;
+          return base.request(endpoint, options);
+        }
+        return {
+          ok: false,
+          kind: 'failure',
+          status: 422,
+          failure: {
+            kind: 'problem',
+            problem: endpoint.problemSchema.parse({
+              ...identityOnboardingProblemFixtures.validation!,
+              fieldErrors: {
+                profile: [
+                  'Use the versioned profile endpoint to change the profile.',
+                ],
+              },
+            }),
+          },
+          metadata,
+        };
+      },
+    };
+    const screen = await renderComponent(<OnboardingProbe api={api} />);
+    await completeLegalStep(screen);
+    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await expect
+      .element(screen.getByText('Profil se liší od uložených údajů'))
+      .toBeVisible();
+    const loadsBeforeReload = loads;
+    await screen.getByRole('button', { name: 'Načíst aktuální údaje' }).click();
+    await expect
+      .element(
+        screen.getByLabelText('Souhlasím s podmínkami, verze synthetic-v1'),
+      )
+      .not.toBeChecked();
+    expect(loads).toBe(loadsBeforeReload + 1);
+  });
+
   it('makes the full document and retention table readable before confirmation', async () => {
     const bootstrap = identityBootstrapFixtures.legal_required!;
     const screen = await renderComponent(
