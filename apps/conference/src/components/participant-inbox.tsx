@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { preserveParticipantTourNavigation } from '@/lib/participant-tour';
 import type { ApiPort } from '@/lib/api';
 import { browserAnnouncementApi } from '@/lib/announcement-api';
 import {
@@ -242,9 +243,13 @@ export const ParticipantInbox = ({
 
   const clearRestoreContext = useCallback(() => {
     clearAnnouncementReturnContext();
-    router.replace(filter === 'unread' ? `${pathname}?view=unread` : pathname, {
-      scroll: false,
-    });
+    router.replace(
+      preserveParticipantTourNavigation(
+        filter === 'unread' ? `${pathname}?view=unread` : pathname,
+        window.location.href,
+      ),
+      { scroll: false },
+    );
   }, [filter, pathname, router]);
 
   useEffect(() => {
@@ -313,7 +318,10 @@ export const ParticipantInbox = ({
     pageRequest.current = null;
     setPagination(null);
     router.replace(
-      nextFilter === 'unread' ? `${pathname}?view=unread` : pathname,
+      preserveParticipantTourNavigation(
+        nextFilter === 'unread' ? `${pathname}?view=unread` : pathname,
+        window.location.href,
+      ),
       { scroll: false },
     );
   };
@@ -571,7 +579,7 @@ export const ParticipantInbox = ({
   ]);
 
   const heading = (
-    <header className="announcement-heading">
+    <header className="announcement-heading" data-tour="announcements">
       <p className="eyebrow">Důležité změny na jednom místě</p>
       <h1 data-route-heading ref={routeHeading} tabIndex={-1}>
         Oznámení

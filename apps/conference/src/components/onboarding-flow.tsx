@@ -689,7 +689,7 @@ export const OnboardingFlow = ({
             skutečné přihlášení, účast na akci ani právní záznam.
           </p>
         ) : null}
-        <ParticipantGuide initiallyOpen={completed} />
+        <ParticipantGuide showSkip={completed} />
         <div className="activation-form-actions">
           {!completed ? (
             <ActionLink href="/po-prihlaseni" variant="secondary">

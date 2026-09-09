@@ -200,6 +200,7 @@ const CoachingSlotChoice = ({
   return (
     <section
       className="coaching-slot-choice"
+      data-tour="coaching-choices"
       aria-labelledby="coach-choice-title"
     >
       <div className="coaching-slot-choice__intro">

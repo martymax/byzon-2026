@@ -421,7 +421,9 @@ const AnnouncementDetail = ({
           </time>
         </div>
         <AnnouncementSeverity severity={announcement.severity} />
-        <h2 id="announcement-title">{announcement.title}</h2>
+        <h2 id="announcement-title" data-tour="announcement-message">
+          {announcement.title}
+        </h2>
         <div className="announcement-detail-body">
           <p>{announcement.bodyText}</p>
         </div>

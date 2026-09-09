@@ -1,0 +1,200 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import '../../app/styles.css';
+import { ParticipantTour } from '../../components/participant-tour';
+import { renderComponent, userEvent } from './render';
+import { expectComponentToPassAxe } from './accessibility';
+
+const sessionId = 'a02d41a0-c21e-4308-80da-2ff4e1da04bc';
+const goto = (path: string) => {
+  window.history.replaceState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+function TourApp({
+  onSave = () => {},
+  initialTarget = true,
+}: {
+  readonly onSave?: () => void;
+  readonly initialTarget?: boolean;
+}) {
+  const path = usePathname();
+  const [loaded, setLoaded] = useState(initialTarget);
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <main
+      id="main"
+      style={{ minHeight: '140vh', padding: 24, paddingBottom: '60vh' }}
+    >
+      <h1 data-route-heading tabIndex={-1}>
+        Konferenční aplikace
+      </h1>
+      {path === '/app/program' ? (
+        <div style={{ marginTop: 140 }}>
+          <button onClick={() => setLoaded(true)}>Načíst aktivity</button>
+          {loaded ? (
+            <>
+              <a
+                data-tour="program-session"
+                href={`/app/program/${sessionId}`}
+                style={{ display: 'none' }}
+              >
+                Skrytá varianta aktivity
+              </a>
+              <a
+                data-tour="program-session"
+                data-tour-recommended="true"
+                href={`/app/program/${sessionId}`}
+                style={{ display: 'block', padding: 24, maxWidth: 300 }}
+              >
+                Workshop leadershipu
+              </a>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      {path === `/app/program/${sessionId}` ? (
+        <section
+          data-tour="agenda-action"
+          style={{ marginTop: 140, padding: 16, maxWidth: 320 }}
+        >
+          <h2>Osobní agenda</h2>
+          <button onClick={onSave}>Přidat do agendy</button>
+          <button onClick={() => setConfirm(true)}>Rezervovat místo</button>
+        </section>
+      ) : null}
+      {path === '/app/agenda' ? (
+        <header data-tour="agenda-heading">
+          <h2>Osobní agenda</h2>
+          <p>Zde je váš plán</p>
+        </header>
+      ) : null}
+      {path === '/app/networking' ? (
+        <label data-tour="networking-visibility">
+          <input type="checkbox" onChange={onSave} />
+          Zobrazit můj profil v adresáři
+        </label>
+      ) : null}
+      {path === '/app/oznameni' ? (
+        <header data-tour="announcements">
+          <h2>Oznámení</h2>
+        </header>
+      ) : null}
+      {path === '/app/napoveda' ? (
+        <label data-tour="help-search">
+          Najít odpověď
+          <input type="search" />
+        </label>
+      ) : null}
+      {confirm ? (
+        <div role="dialog" aria-modal="true" aria-label="Potvrdit rezervaci">
+          <button onClick={() => setConfirm(false)}>Ponechat beze změny</button>
+        </div>
+      ) : null}
+      <ParticipantTour />
+    </main>
+  );
+}
+
+beforeEach(() => goto('/app/program?pruvodce=program'));
+describe('contextual participant tour', () => {
+  it('follows a real chosen activity and lets the user perform the action themselves', async () => {
+    const save = vi.fn();
+    const screen = await renderComponent(<TourApp onSave={save} />);
+    await expect
+      .element(screen.getByRole('link', { name: 'Workshop leadershipu' }))
+      .toHaveAttribute('data-tour-highlight', 'true');
+    await screen.getByRole('link', { name: 'Workshop leadershipu' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Vaše účast u aktivity',
+        }),
+      )
+      .toBeVisible();
+    expect(window.location.search).toContain('pruvodce=detail');
+    expect(save).not.toHaveBeenCalled();
+    await screen
+      .getByRole('button', { name: 'Přejít na zvýrazněné místo' })
+      .click();
+    await expect
+      .element(screen.getByRole('button', { name: 'Přidat do agendy' }))
+      .toHaveFocus();
+    await screen.getByRole('button', { name: 'Přidat do agendy' }).click();
+    expect(save).toHaveBeenCalledTimes(1);
+    await screen.getByRole('button', { name: 'Rozbalit', exact: true }).click();
+    await screen.getByRole('button', { name: 'Pokračovat do agendy' }).click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Zkontrolujte svůj osobní program',
+        }),
+      )
+      .toBeVisible();
+    expect(window.location.search).toContain(`aktivita=${sessionId}`);
+    await screen.getByRole('button', { name: 'Zpět', exact: true }).click();
+    expect(window.location.pathname).toBe(`/app/program/${sessionId}`);
+    await expectComponentToPassAxe(screen.container);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
+  });
+  it('finds asynchronously loaded targets and supports skipping unavailable content', async () => {
+    const screen = await renderComponent(<TourApp initialTarget={false} />);
+    await expect
+      .element(screen.getByText(/Aktivity zatím nejsou dostupné/))
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Načíst aktivity' }).click();
+    await expect
+      .element(screen.getByRole('link', { name: 'Workshop leadershipu' }))
+      .toHaveAttribute('data-tour-highlight', 'true');
+    await screen
+      .getByRole('button', { name: 'Přeskočit výběr aktivity' })
+      .click();
+    expect(window.location.pathname).toBe('/app/agenda');
+    await screen.getByRole('button', { name: 'Zpět', exact: true }).click();
+    expect(window.location.pathname).toBe('/app/program');
+  });
+  it('resumes from the URL, yields to confirmation dialogs and exits with Escape', async () => {
+    goto(`/app/program/${sessionId}?pruvodce=detail&day=friday`);
+    const save = vi.fn();
+    const screen = await renderComponent(<TourApp onSave={save} />);
+    await screen
+      .getByRole('button', { name: 'Přejít na zvýrazněné místo' })
+      .click();
+    await screen.getByRole('button', { name: 'Rezervovat místo' }).click();
+    await expect
+      .poll(
+        () =>
+          getComputedStyle(
+            screen.container.querySelector('#participant-tour-heading')!,
+          ).visibility,
+      )
+      .toBe('hidden');
+    expect(save).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(window.location.search).toContain('pruvodce=detail');
+    await screen.getByRole('button', { name: 'Ponechat beze změny' }).click();
+    await expect
+      .element(screen.getByRole('button', { name: 'Rozbalit', exact: true }))
+      .toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await expect
+      .element(screen.getByRole('heading', { name: 'Konferenční aplikace' }))
+      .toHaveFocus();
+    expect(window.location.search).toBe('?day=friday');
+    expect(document.querySelector('[data-tour-highlight]')).toBeNull();
+  });
+  it('finishes in the application without changing visibility or other user data', async () => {
+    goto('/app/networking?pruvodce=networking');
+    const save = vi.fn();
+    const screen = await renderComponent(<TourApp onSave={save} />);
+    await expect.element(screen.getByRole('checkbox')).not.toBeChecked();
+    await screen.getByRole('button', { name: 'Zobrazit oznámení' }).click();
+    await screen.getByRole('button', { name: 'Kde najdu pomoc' }).click();
+    await screen.getByRole('button', { name: 'Dokončit průvodce' }).click();
+    expect(window.location.pathname).toBe('/app/napoveda');
+    expect(window.location.search).toBe('');
+    expect(save).not.toHaveBeenCalled();
+  });
+});

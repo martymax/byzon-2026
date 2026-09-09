@@ -6,37 +6,21 @@ import { renderComponent } from './render';
 import { expectComponentToPassAxe } from './accessibility';
 
 describe('participant welcome and help', () => {
-  it('offers a skippable keyboard accessible guide', async () => {
+  it('offers a real application tour with an optional skip', async () => {
     const screen = await renderComponent(
       <main>
-        <ParticipantGuide initiallyOpen />
+        <ParticipantGuide showSkip />
       </main>,
     );
     await expect
-      .element(screen.getByRole('link', { name: 'Přeskočit průvodce' }))
-      .toHaveAttribute('href', '/po-prihlaseni');
-    await screen.getByRole('button', { name: 'Další', exact: true }).click();
-    await expect
       .element(
-        screen.getByRole('heading', {
-          name: 'Uloženo ještě neznamená rezervováno',
-        }),
+        screen.getByRole('link', { name: 'Spustit průvodce v aplikaci' }),
       )
-      .toHaveFocus();
+      .toHaveAttribute('href', '/app/program?pruvodce=program');
+    await expect
+      .element(screen.getByRole('link', { name: 'Vstoupit bez průvodce' }))
+      .toHaveAttribute('href', '/po-prihlaseni');
     await expectComponentToPassAxe(screen.container);
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-      window.innerWidth,
-    );
-    await screen.getByRole('button', { name: 'Pomoc na dosah' }).click();
-    await expect
-      .element(screen.getByRole('link', { name: 'Otevřít aplikaci' }))
-      .toHaveAttribute('href', '/po-prihlaseni');
-    await screen.getByRole('button', { name: 'Zpět', exact: true }).click();
-    await expect
-      .element(
-        screen.getByRole('heading', { name: 'Buďte v obraze a zapojte se' }),
-      )
-      .toBeVisible();
   });
   it('searches without diacritics, opens answers, recovers empty results and restarts guide', async () => {
     const screen = await renderComponent(
@@ -63,12 +47,11 @@ describe('participant welcome and help', () => {
       .click();
     await expect.element(search).toHaveValue('');
     await expectComponentToPassAxe(screen.container);
-    await screen.getByRole('button', { name: 'Spustit průvodce' }).click();
     await expect
       .element(
-        screen.getByRole('heading', { name: 'Vyberte si, co vás zajímá' }),
+        screen.getByRole('link', { name: 'Spustit průvodce v aplikaci' }),
       )
-      .toHaveFocus();
+      .toHaveAttribute('href', '/app/program?pruvodce=program');
     await expect
       .element(screen.getByRole('link', { name: 'Napsat podpoře' }))
       .toHaveAttribute('href', 'mailto:help@example.test');

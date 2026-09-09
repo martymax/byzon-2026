@@ -545,6 +545,12 @@ const Calendar = ({
                     aria-label={`Detail programu: ${session.title}`}
                     className="program-cal-event__inner program-cal-event__inner--link"
                     href={sessionHref(session)}
+                    data-tour="program-session"
+                    data-tour-recommended={
+                      session.type === 'talk' || session.type === 'workshop'
+                        ? 'true'
+                        : undefined
+                    }
                     onClick={onOpenSession}
                   >
                     <time
@@ -712,6 +718,12 @@ const MobileAgenda = ({
                         aria-label={`Detail programu: ${session.title}`}
                         className="program-mobile-event__inner program-mobile-event__inner--link"
                         href={sessionHref(session)}
+                        data-tour="program-session"
+                        data-tour-recommended={
+                          session.type === 'talk' || session.type === 'workshop'
+                            ? 'true'
+                            : undefined
+                        }
                         onClick={onOpenSession}
                       >
                         <div className="program-mobile-event__top">

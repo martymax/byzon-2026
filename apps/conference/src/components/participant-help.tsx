@@ -112,7 +112,7 @@ export function ParticipantHelpContent({
           <p className="eyebrow">Odpovědi bez hledání</p>
           <h2 id="faq-heading">Časté otázky</h2>
         </div>
-        <label className="participant-help-search">
+        <label className="participant-help-search" data-tour="help-search">
           Co potřebujete vyřešit?
           <Input
             type="search"

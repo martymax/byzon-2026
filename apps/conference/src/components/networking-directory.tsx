@@ -373,15 +373,17 @@ export const NetworkingDirectory = ({
           noValidate
           onSubmit={submit}
         >
-          <ChoiceField
-            defaultChecked={settings.networkingEnabled}
-            description="Po uložení se profil objeví v adresáři; vypnutím jej ihned skryjete."
-            disabled={working}
-            id="networking-enabled"
-            label="Zobrazit můj profil v adresáři"
-            name="enabled"
-            type="checkbox"
-          />
+          <div data-tour="networking-visibility">
+            <ChoiceField
+              defaultChecked={settings.networkingEnabled}
+              description="Po uložení se profil objeví v adresáři; vypnutím jej ihned skryjete."
+              disabled={working}
+              id="networking-enabled"
+              label="Zobrazit můj profil v adresáři"
+              name="enabled"
+              type="checkbox"
+            />
+          </div>
 
           <FormField
             {...(errors.participantNumber

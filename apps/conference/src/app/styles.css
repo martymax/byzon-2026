@@ -3442,77 +3442,21 @@ main > .ui-participant-nav-spacer {
 .participant-help-page {
   max-width: 68rem;
 }
-.participant-guide,
 .participant-guide-intro,
 .participant-help-faq {
   display: grid;
   gap: 1.5rem;
 }
-.participant-guide-top,
-.participant-guide-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 .participant-guide-intro {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
 }
-.participant-guide-intro p,
-.participant-guide-content > p {
+.participant-guide-intro p {
   max-width: 65ch;
 }
-.participant-guide-progress {
-  list-style: none;
+.participant-guide-launch-actions {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 0;
   gap: 0.5rem;
-}
-.participant-guide-progress button {
-  width: 100%;
-  min-height: 4rem;
-  height: 100%;
-  border: 1px solid var(--line);
-  border-radius: 0.75rem;
-  background: var(--byzon-surface);
-  color: var(--slate);
-  padding: 0.75rem;
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
-  text-align: left;
-}
-.participant-guide-progress button span {
-  display: block;
-  font-weight: 700;
-}
-.participant-guide-progress button[aria-current='step'] {
-  border: 2px solid var(--pink-dark);
-  background: var(--soft);
-  color: var(--pink-dark);
-  padding: calc(0.75rem - 1px);
-  font-weight: 700;
-}
-.participant-guide-progress button:hover {
-  background: var(--soft);
-}
-.participant-guide-content {
-  display: grid;
-  gap: 1rem;
-}
-.participant-guide-content h2 {
-  font-size: clamp(1.75rem, 3vw, 2.25rem);
-  line-height: 1.2;
-  text-wrap: balance;
-}
-.participant-guide-tip {
-  border-left: 3px solid var(--pink-dark);
-  padding: 1rem 1.25rem;
-  background: var(--soft);
-  border-radius: 0 0.75rem 0.75rem 0;
 }
 .participant-help-search {
   display: grid;
@@ -3553,26 +3497,105 @@ main > .ui-participant-nav-spacer {
   .participant-guide-intro {
     grid-template-columns: minmax(0, 1fr);
   }
-  .participant-guide-progress {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.25rem;
-  }
-  .participant-guide-progress button {
-    padding: 0.5rem 0.25rem;
-    min-height: 2.75rem;
-    text-align: center;
-  }
-  .participant-guide-step-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .participant-guide-progress button[aria-current='step'] {
-    padding: calc(0.5rem - 1px) calc(0.25rem - 1px);
-  }
-  .participant-guide-top {
-    align-items: flex-start;
+}
+
+[data-tour-highlight='true'] {
+  outline: 3px solid var(--pink-dark);
+  outline-offset: 5px;
+  border-radius: 0.5rem;
+  scroll-margin-block: 6rem;
+}
+a[data-tour-highlight='true'] {
+  outline-offset: -3px;
+}
+body:has(.participant-tour) .participant-shell-content {
+  padding-bottom: min(60vh, 30rem);
+}
+.participant-tour {
+  position: fixed;
+  z-index: 100;
+  width: min(368px, calc(100vw - 32px));
+  max-height: calc(100dvh - 120px - var(--byzon-safe-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem;
+  color: var(--slate);
+  background: var(--byzon-surface);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--pink-dark);
+  border-radius: 1rem;
+  box-shadow: var(--byzon-shadow-overlay);
+  line-height: 1.5;
+}
+.participant-tour-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+.participant-tour-top > div {
+  display: flex;
+}
+.participant-tour-top button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+}
+.participant-tour-top button:hover {
+  background: var(--soft);
+}
+.participant-tour-top button:last-child {
+  font-size: 1.5rem;
+}
+.participant-tour h2 {
+  font-size: 1.625rem;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0.5rem 0 0.75rem;
+  text-wrap: balance;
+}
+.participant-tour [hidden] {
+  display: none;
+}
+.participant-tour-target-action,
+.participant-tour-skip {
+  background: transparent;
+  border: 0;
+  padding: 0.5rem 0;
+  min-height: 2.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+}
+.participant-tour-target-action {
+  margin-top: 0.5rem;
+}
+.participant-tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.participant-tour-actions > :last-child {
+  flex: 1;
+}
+.participant-tour--collapsed {
+  padding: 0.5rem 0.75rem;
+}
+.participant-tour--collapsed h2 {
+  font-size: 1.125rem;
+  margin: 0 0 0.25rem;
+}
+@media (max-width: 899px) {
+  .participant-tour {
+    margin-bottom: var(--byzon-safe-bottom);
   }
 }
