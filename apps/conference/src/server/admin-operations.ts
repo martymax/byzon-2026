@@ -273,6 +273,7 @@ export const handleAdminOperations = async (
       announcementCount,
       features,
       outbox,
+      emails,
     ] = await Promise.all([
       dependencies.db.query.eventAdminVersions.findFirst({
         columns: { assignmentsVersion: true },
@@ -341,12 +342,21 @@ export const handleAdminOperations = async (
         .from(schema.outboxEvents)
         .where(eq(schema.outboxEvents.eventId, eventId))
         .groupBy(schema.outboxEvents.status),
+      dependencies.db
+        .select({ status: schema.emailDeliveries.status, count: count() })
+        .from(schema.emailDeliveries)
+        .where(eq(schema.emailDeliveries.eventId, eventId))
+        .groupBy(schema.emailDeliveries.status),
     ]);
     const pending =
-      outbox.find(({ status }) => status === 'pending')?.count ?? 0;
+      (outbox.find(({ status }) => status === 'pending')?.count ?? 0) +
+      (emails.find(({ status }) => status === 'pending')?.count ?? 0);
     const processing =
-      outbox.find(({ status }) => status === 'processing')?.count ?? 0;
-    const failed = outbox.find(({ status }) => status === 'failed')?.count ?? 0;
+      (outbox.find(({ status }) => status === 'processing')?.count ?? 0) +
+      (emails.find(({ status }) => status === 'processing')?.count ?? 0);
+    const failed =
+      (outbox.find(({ status }) => status === 'failed')?.count ?? 0) +
+      (emails.find(({ status }) => status === 'failed')?.count ?? 0);
     const reservationSnapshot = reservationRows.reduce<
       AdminOperationsSnapshot['reservations']
     >(

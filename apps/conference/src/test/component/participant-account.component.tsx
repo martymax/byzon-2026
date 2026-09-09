@@ -885,6 +885,61 @@ describe('F2-07 participant account, profile and privacy', () => {
     releaseWrongScope?.();
   });
 
+  it('previews dictionary, custom and neutral greetings and saves email preferences', async () => {
+    const requests: RecordedRequest[] = [];
+    const api = accountApi({
+      onRequest: (request) => requests.push(request),
+      profileResponse: {
+        ...identityProfileUpdateFixtures.updated!,
+        profile: {
+          ...activeIdentity.profile!,
+          firstName: 'Martin',
+          emailSalutation: 'Máro',
+          ratingEmailsEnabled: false,
+        },
+      },
+    });
+    const screen = await renderComponent(
+      <AccountProbe api={api}>
+        <ParticipantProfile api={api} />
+      </AccountProbe>,
+    );
+    await screen.getByLabelText('Jméno').fill('Martin');
+    await expect
+      .element(screen.getByText('Ukázka: Dobrý den, Martine,'))
+      .toBeVisible();
+    const mode = screen.getByLabelText('Jak vás máme oslovovat?');
+    await mode.selectOptions('none');
+    await expect
+      .element(screen.getByText('Ukázka: Dobrý den,', { exact: true }))
+      .toBeVisible();
+    await mode.selectOptions('custom');
+    await screen.getByLabelText('Vlastní oslovení').fill('Máro');
+    await expect
+      .element(screen.getByText('Ukázka: Dobrý den, Máro,'))
+      .toBeVisible();
+    await screen
+      .getByRole('checkbox', {
+        name: 'Připomenout hodnocení konference e-mailem',
+      })
+      .click();
+    await Promise.all(
+      screen.container
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    );
+    await expectComponentToPassAxe(screen.container);
+    await screen.getByRole('button', { name: 'Uložit profil' }).click();
+    await expect.element(screen.getByText('Profil je uložený')).toBeVisible();
+    expect(
+      requests.find(({ path }) => path === '/api/v1/me/profile')?.body,
+    ).toMatchObject({
+      profile: { emailSalutation: 'Máro', ratingEmailsEnabled: false },
+    });
+    await expect.element(mode).toHaveValue('custom');
+    expect(window.localStorage.length).toBe(0);
+  });
+
   it('guards an edited profile and accepts only its correlated canonical version', async () => {
     window.history.replaceState({}, '', '/app/profil');
     const requests: RecordedRequest[] = [];
@@ -926,6 +981,8 @@ describe('F2-07 participant account, profile and privacy', () => {
         lastName: 'Novák',
         contactEmail: 'alex@example.test',
         phone: null,
+        emailSalutation: null,
+        ratingEmailsEnabled: true,
       },
     });
     expect(window.localStorage.length).toBe(0);
@@ -973,7 +1030,12 @@ describe('F2-07 participant account, profile and privacy', () => {
       requests.find(({ path }) => path === '/api/v1/me/profile')?.body,
     ).toEqual({
       expectedVersion: 1,
-      profile: { ...activeIdentity.profile, phone: canonicalPhone },
+      profile: {
+        ...activeIdentity.profile,
+        phone: canonicalPhone,
+        emailSalutation: null,
+        ratingEmailsEnabled: true,
+      },
     });
   });
 

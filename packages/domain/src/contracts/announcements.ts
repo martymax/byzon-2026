@@ -312,7 +312,7 @@ export const adminAnnouncementCachePolicy = Object.freeze({
   previewMutation: 'online-only',
   sendMutation: 'online-only',
   sendIdempotency: 'required',
-  deliveryChannels: 'in-app-only',
+  deliveryChannels: 'in-app-and-email',
 } as const);
 
 const adminAnnouncementBodySchema = z

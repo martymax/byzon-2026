@@ -334,6 +334,18 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         claimedAt: fixedNow,
       })),
     );
+    await client.db.insert(schema.participantProfiles).values(
+      [primaryUserId, waitlistOwnerId, waitlistFirstId, waitlistSecondId].map(
+        (userId) => ({
+          eventId,
+          userId,
+          firstName: 'Martin',
+          lastName: 'Test',
+          contactEmail: `${userId}@example.invalid`,
+          onboardingCompletedAt: fixedNow,
+        }),
+      ),
+    );
     await client.db.insert(schema.eventDays).values({
       id: dayId,
       eventId,
@@ -862,6 +874,27 @@ integration('CS-AGENDA-01 HTTP integration', () => {
       source: 'waitlist_auto',
       userId: waitlistFirstId,
     });
+    const emails = await client.db.query.emailDeliveries.findMany({
+      where: eq(schema.emailDeliveries.eventId, eventId),
+    });
+    expect(
+      emails
+        .filter((email) => email.userId === waitlistOwnerId)
+        .map((email) => email.payload.kind)
+        .sort(),
+    ).toEqual(['reservation_cancelled', 'reservation_confirmed']);
+    expect(
+      emails
+        .filter((email) => email.userId === waitlistFirstId)
+        .map((email) => email.payload.kind)
+        .sort(),
+    ).toEqual(['waitlist_joined', 'waitlist_promoted']);
+    expect(
+      emails
+        .filter((email) => email.userId === waitlistSecondId)
+        .map((email) => email.payload.kind)
+        .sort(),
+    ).toEqual(['waitlist_joined', 'waitlist_left']);
   });
 
   it('enforces authentication, event scope, private caching and a bounded empty snapshot', async () => {
@@ -1943,6 +1976,19 @@ integration('CS-AGENDA-01 HTTP integration', () => {
         ),
       );
     expect(reservationAudits[0]?.value).toBe(1);
+    const reservationEmails = await client.db.query.emailDeliveries.findMany({
+      where: and(
+        eq(schema.emailDeliveries.eventId, eventId),
+        eq(schema.emailDeliveries.userId, primaryUserId),
+      ),
+    });
+    expect(
+      reservationEmails.filter(
+        (email) =>
+          email.payload.kind === 'reservation_confirmed' &&
+          email.payload.sessionId === reservedSessionId,
+      ),
+    ).toHaveLength(1);
     const storedReceipts = await client.db.query.idempotencyKeys.findMany({
       columns: { responseBody: true },
       where: and(

@@ -121,6 +121,19 @@ export const identityProfileSchema = z.strictObject({
   lastName: canonicalNameSchema,
   contactEmail: canonicalEmailSchema,
   phone: identityPhoneSchema.nullable().optional(),
+  emailSalutation: z
+    .string()
+    .max(128)
+    .refine(
+      (value) =>
+        value === '' ||
+        (value === value.trim() &&
+          /^[\p{L}\p{M}]+(?:[ '’\-][\p{L}\p{M}]+)*$/u.test(value)),
+      'Use a name in the vocative case without punctuation',
+    )
+    .nullable()
+    .optional(),
+  ratingEmailsEnabled: z.boolean().optional(),
 });
 
 export type IdentityProfile = z.infer<typeof identityProfileSchema>;

@@ -1,3 +1,4 @@
+import { queueProgramChangeEmails } from './email-notifications';
 import { createHash } from 'node:crypto';
 
 import { and, asc, desc, eq, ne, inArray } from 'drizzle-orm';
@@ -627,6 +628,14 @@ export const publishContent = async (
       checksumSha256: result.checksumSha256,
       publishedBy: input.actorId,
       publishedAt,
+    });
+    await queueProgramChangeEmails(transaction, {
+      eventId: input.eventId,
+      publicationId,
+      previous: previous?.snapshot ?? null,
+      current: snapshot,
+      sessionIds: result.significantSessionIds,
+      now: publishedAt,
     });
     await transaction.insert(schema.outboxEvents).values({
       id: generateUuidV7(),

@@ -1,3 +1,4 @@
+import { queueBookingEmail } from './email-notifications';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -1860,6 +1861,14 @@ export const mutateParticipantAgenda = async (
               .returning({ id: schema.reservations.id });
             if (cancelled.length === 1) outcome = 'applied';
             if (cancelled.length === 1) {
+              await queueBookingEmail(transaction, {
+                eventId: context.event.id,
+                userId: session.user.id,
+                sessionId: reservationTargetId,
+                kind: 'reservation_cancelled',
+                reservationId: existing.id,
+                now: mutationNow,
+              });
               await promoteAutomaticWaitlist({
                 transaction,
                 eventId: context.event.id,
@@ -1885,7 +1894,17 @@ export const mutateParticipantAgenda = async (
               ),
             )
             .returning({ id: schema.waitlistEntries.id });
-          if (cancelled.length === 1) outcome = 'applied';
+          if (cancelled.length === 1) {
+            outcome = 'applied';
+            await queueBookingEmail(transaction, {
+              eventId: context.event.id,
+              userId: session.user.id,
+              sessionId: reservationTargetId,
+              kind: 'waitlist_left',
+              waitlistEntryId: cancelled[0]!.id,
+              now: mutationNow,
+            });
+          }
         } else {
           if (!reservationOperationalTarget || !reservationPublishedTarget) {
             throw sessionNotFound();
@@ -2034,14 +2053,23 @@ export const mutateParticipantAgenda = async (
                     eq(schema.waitlistEntries.sessionId, reservationTargetId),
                   ),
                 );
+              const waitlistEntryId = generateId();
               await transaction.insert(schema.waitlistEntries).values({
-                id: generateId(),
+                id: waitlistEntryId,
                 eventId: context.event.id,
                 userId: session.user.id,
                 sessionId: reservationTargetId,
                 status: 'waiting',
                 positionSequence: (lastPosition?.value ?? 0) + 1,
                 createdAt: mutationNow,
+              });
+              await queueBookingEmail(transaction, {
+                eventId: context.event.id,
+                userId: session.user.id,
+                sessionId: reservationTargetId,
+                kind: 'waitlist_joined',
+                waitlistEntryId,
+                now: mutationNow,
               });
               outcome = 'applied';
             } else if (!capacityIsFull && !waiting) {
@@ -2064,12 +2092,25 @@ export const mutateParticipantAgenda = async (
                       ),
                     ),
                   )
-                  .returning({ sessionId: schema.reservations.sessionId });
+                  .returning({
+                    id: schema.reservations.id,
+                    sessionId: schema.reservations.sessionId,
+                  });
                 if (
                   new Set(cancelled.map(({ sessionId }) => sessionId)).size !==
                   replacedReservationSessionIds.length
                 ) {
                   throw new StaleAgendaVersionError();
+                }
+                for (const cancelledReservation of cancelled) {
+                  await queueBookingEmail(transaction, {
+                    eventId: context.event.id,
+                    userId: session.user.id,
+                    sessionId: cancelledReservation.sessionId,
+                    kind: 'reservation_cancelled',
+                    reservationId: cancelledReservation.id,
+                    now: mutationNow,
+                  });
                 }
                 for (const replacedSessionId of replacedReservationSessionIds) {
                   await promoteAutomaticWaitlist({
@@ -2084,8 +2125,9 @@ export const mutateParticipantAgenda = async (
                   });
                 }
               }
+              const reservationId = generateId();
               await transaction.insert(schema.reservations).values({
-                id: generateId(),
+                id: reservationId,
                 eventId: context.event.id,
                 userId: session.user.id,
                 sessionId: reservationTargetId,
@@ -2096,6 +2138,14 @@ export const mutateParticipantAgenda = async (
                 status: 'confirmed',
                 version: 1,
                 createdAt: mutationNow,
+              });
+              await queueBookingEmail(transaction, {
+                eventId: context.event.id,
+                userId: session.user.id,
+                sessionId: reservationTargetId,
+                kind: 'reservation_confirmed',
+                reservationId,
+                now: mutationNow,
               });
               outcome = 'applied';
             }

@@ -9,12 +9,12 @@
   "scripts": {
     "build": "pnpm build:web && pnpm build:worker",
     "build:static": "python3 static-site/build.py",
-    "build:web": "pnpm --filter @byzon/database build && pnpm --filter @byzon/domain build && pnpm --filter @byzon/redis build && pnpm --filter @byzon/conference build",
-    "build:worker": "pnpm --filter @byzon/redis build && pnpm --filter @byzon/worker build",
-    "dev": "pnpm --filter @byzon/redis build && pnpm --parallel --filter @byzon/conference --filter @byzon/worker dev",
+    "build:web": "pnpm --filter @byzon/mail build && pnpm --filter @byzon/database build && pnpm --filter @byzon/domain build && pnpm --filter @byzon/redis build && pnpm --filter @byzon/conference build",
+    "build:worker": "pnpm --filter @byzon/domain build && pnpm --filter @byzon/mail build && pnpm --filter @byzon/redis build && pnpm --filter @byzon/worker build",
+    "dev": "pnpm --filter @byzon/mail build && pnpm --filter @byzon/database build && pnpm --filter @byzon/domain build && pnpm --filter @byzon/redis build && pnpm --parallel --filter @byzon/conference --filter @byzon/worker dev",
     "dev:infra": "docker compose up -d --wait postgres redis",
     "dev:infra:down": "docker compose down",
-    "dev:mock": "BYZON_FRONTEND_PREVIEW=enabled NEXT_PUBLIC_BYZON_API_MOCKS=enabled pnpm --filter @byzon/conference dev",
+    "dev:mock": "pnpm --filter @byzon/mail build && BYZON_FRONTEND_PREVIEW=enabled NEXT_PUBLIC_BYZON_API_MOCKS=enabled pnpm --filter @byzon/conference dev",
     "preview:static": "python3 -m http.server --directory static-site/public 8000",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -27,7 +27,8 @@
     "test:static": "python3 tests/static_site_smoke.py",
     "test:e2e": "playwright test",
     "report:admin-bundles": "node apps/conference/scripts/admin-ux-bundle-report.mjs --baseline docs/evidence/admin-ux-bundle-baseline.json",
-    "ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:static"
+    "ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:static",
+    "preview:emails": "pnpm --filter @byzon/mail build && node scripts/generate-email-preview.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",

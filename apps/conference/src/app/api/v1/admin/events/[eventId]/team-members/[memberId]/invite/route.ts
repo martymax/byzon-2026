@@ -37,6 +37,7 @@ export const POST = (request: Request, context: Context) =>
             errorCallbackURL: '/prihlaseni?returnTo=%2Fadmin',
             metadata: {
               purpose: 'team-invitation',
+              eventId,
               recipientName,
             },
           },

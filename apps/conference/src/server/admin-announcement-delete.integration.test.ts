@@ -102,6 +102,15 @@ integration('announcement deletion across admin and participant APIs', () => {
         announcementsEnabled: true,
       })),
     );
+    await client.db.insert(schema.participantProfiles).values(
+      users.map((userId) => ({
+        eventId,
+        userId,
+        firstName: 'Jana',
+        lastName: 'Test',
+        contactEmail: `${userId}@example.invalid`,
+      })),
+    );
     for (let i = 0; i < 22; i += 1) {
       const preview = await handleAdminAnnouncementPreview(
         mutation(`${path}/preview`, 'POST', `preview-${i}`, {
@@ -154,6 +163,24 @@ integration('announcement deletion across admin and participant APIs', () => {
       .delete(schema.users)
       .where(inArray(schema.users.id, [adminId, ...users]));
     await client.close();
+  });
+
+  it('queues exactly one email per announcement and intended participant', async () => {
+    const deliveries = await client.db.query.emailDeliveries.findMany({
+      where: eq(schema.emailDeliveries.eventId, eventId),
+    });
+    expect(deliveries).toHaveLength(44);
+    expect(new Set(deliveries.map((row) => row.userId))).toEqual(
+      new Set(users),
+    );
+    expect(deliveries.every((row) => row.payload.kind === 'announcement')).toBe(
+      true,
+    );
+    expect(
+      deliveries.filter(
+        (row) => row.payload.announcementId === announcements[0]!.id,
+      ),
+    ).toHaveLength(2);
   });
 
   it('rejects participants, foreign origins, missing sessions, and cross-event deletes', async () => {

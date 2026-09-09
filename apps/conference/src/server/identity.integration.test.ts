@@ -403,7 +403,11 @@ integration('CS-BOOT-01 identity HTTP integration', () => {
   );
 
   it('accepts the browser legal-review request for an existing profile with a phone', async () => {
-    const stored = onboardingBody().profile;
+    const stored = {
+      ...onboardingBody().profile,
+      emailSalutation: null,
+      ratingEmailsEnabled: true,
+    };
     await client.db.insert(schema.participantProfiles).values({
       eventId,
       userId,
@@ -694,6 +698,8 @@ integration('CS-BOOT-01 identity HTTP integration', () => {
       expectedVersion: 1,
       profile: {
         firstName: 'Anna Marie',
+        emailSalutation: 'Anno Marie',
+        ratingEmailsEnabled: false,
         lastName: 'Nováková',
         contactEmail: 'anna@example.invalid',
         phone: null,
@@ -709,7 +715,12 @@ integration('CS-BOOT-01 identity HTTP integration', () => {
     ).toMatchObject({
       eventId,
       userId,
-      profile: { firstName: 'Anna Marie', phone: null },
+      profile: {
+        firstName: 'Anna Marie',
+        phone: null,
+        emailSalutation: 'Anno Marie',
+        ratingEmailsEnabled: false,
+      },
       profileManagement: { state: 'editable', version: 2 },
     });
 

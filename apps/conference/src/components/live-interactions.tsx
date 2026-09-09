@@ -9,13 +9,15 @@ import { requestRatingStatus, submitRating } from '@/lib/b-interactions-api';
 
 export { QuestionForm } from './participant-questions';
 
-export const SessionRating = ({
+const RatingForm = ({
   sessionId,
+  targetType,
   endsAt,
   explicit = false,
   api,
 }: {
-  sessionId: string;
+  sessionId?: string;
+  targetType: 'event' | 'session';
   endsAt: string;
   explicit?: boolean;
   api?: ApiPort;
@@ -36,7 +38,7 @@ export const SessionRating = ({
         timer = setTimeout(load, Math.min(remaining + 100, 60_000));
         return;
       }
-      void requestRatingStatus('session', sessionId, api).then((result) => {
+      void requestRatingStatus(targetType, sessionId, api).then((result) => {
         if (!active) return;
         if (result.ok && result.kind === 'success') {
           setStatus(result.data.completed ? 'completed' : 'ready');
@@ -50,15 +52,19 @@ export const SessionRating = ({
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [endsAt, sessionId, retry, api]);
+  }, [endsAt, sessionId, targetType, retry, api]);
   if (status !== 'ready') {
     if (!explicit) return null;
     return (
       <Card>
-        <h2>Hodnocení přednášky</h2>
+        <h2>
+          {targetType === 'event'
+            ? 'Hodnocení konference'
+            : 'Hodnocení přednášky'}
+        </h2>
         <p role="status">
           {status === 'waiting'
-            ? 'Hodnocení se otevře po skončení přednášky. Tuto stránku můžete nechat otevřenou.'
+            ? `Hodnocení se otevře po skončení ${targetType === 'event' ? 'konference' : 'přednášky'}. Tuto stránku můžete nechat otevřenou.`
             : status === 'completed'
               ? 'Děkujeme, vaše hodnocení už je uložené.'
               : status === 'error'
@@ -87,8 +93,9 @@ export const SessionRating = ({
     const data = new FormData(event.currentTarget);
     void submitRating(
       {
-        targetType: 'session',
-        sessionId,
+        ...(targetType === 'event'
+          ? { targetType: 'event' as const }
+          : { targetType: 'session' as const, sessionId: sessionId! }),
         score: Number(data.get('score')),
         comment: String(data.get('comment') ?? '').trim() || null,
       },
@@ -109,7 +116,11 @@ export const SessionRating = ({
   };
   return (
     <Card>
-      <h2>Ohodnotit přednášku</h2>
+      <h2>
+        {targetType === 'event'
+          ? 'Ohodnotit konferenci'
+          : 'Ohodnotit přednášku'}
+      </h2>
       <form onSubmit={submit}>
         <label>
           Hodnocení
@@ -133,3 +144,13 @@ export const SessionRating = ({
     </Card>
   );
 };
+
+export const SessionRating = (props: {
+  sessionId: string;
+  endsAt: string;
+  explicit?: boolean;
+  api?: ApiPort;
+}) => <RatingForm {...props} targetType="session" />;
+export const EventRating = (props: { endsAt: string; api?: ApiPort }) => (
+  <RatingForm {...props} targetType="event" explicit />
+);

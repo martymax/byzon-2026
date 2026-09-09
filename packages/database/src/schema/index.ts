@@ -1,4 +1,5 @@
 export * from './auth.js';
+export * from './email.js';
 export * from './agenda.js';
 export * from './administration.js';
 export * from './announcements.js';

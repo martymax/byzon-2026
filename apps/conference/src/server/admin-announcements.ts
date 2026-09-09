@@ -1,3 +1,4 @@
+import { queueAnnouncementEmails } from './email-notifications';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -585,6 +586,14 @@ export const handleAdminAnnouncementSend = async (
             createdAt: now,
           })),
         );
+        await queueAnnouncementEmails(transaction, {
+          eventId,
+          announcementId,
+          userIds: preview.recipientUserIds,
+          title: draft.title,
+          body: draft.bodyText,
+          now,
+        });
         await transaction
           .update(schema.announcementPreviews)
           .set({ sentAnnouncementId: announcementId })

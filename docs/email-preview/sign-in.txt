@@ -1,0 +1,18 @@
+BYZON 2026: váš přihlašovací odkaz
+
+Dobrý den, Martine,
+
+tady je váš jednorázový odkaz do aplikace BYZON 2026. Kliknutím se přihlásíte bez hesla.
+
+Přihlásit se:
+https://app.example.test/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=%2Fapp
+
+Odkaz platí 30 minut od odeslání a funguje jen jednou.
+
+Odkaz je určený jen vám. Nepřeposílejte ho.
+Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.
+
+Odkaz už neplatí? Vyžádejte si nový: https://app.example.test/prihlaseni?mode=recovery&returnTo=%2Fapp
+
+Tým BYZON
+Potřebujete pomoc? Odpovězte na tento e-mail.

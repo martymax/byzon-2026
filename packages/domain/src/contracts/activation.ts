@@ -65,6 +65,7 @@ export const activationEmailSchema = z
 const participantActivationStaticReturnToValues = [
   '/app',
   '/app/agenda',
+  '/app/hodnoceni',
   '/app/dotazy',
   '/host/aktivity',
   '/host/moderace',

@@ -553,6 +553,8 @@ export const loadIdentityBootstrap = async (
           lastName: profile.lastName,
           contactEmail: profile.contactEmail,
           phone: profile.phone,
+          emailSalutation: profile.emailSalutation,
+          ratingEmailsEnabled: profile.ratingEmailsEnabled,
         }
       : null,
     profileManagement,
@@ -733,6 +735,8 @@ export const completeIdentityOnboarding = async (
               lastName: profile.lastName,
               contactEmail: profile.contactEmail,
               phone: profile.phone,
+              emailSalutation: profile.emailSalutation,
+              ratingEmailsEnabled: profile.ratingEmailsEnabled,
             },
             acknowledgements: records
               .map((record) => {
@@ -852,7 +856,16 @@ export const updateIdentityProfile = async (
       return identityProfileUpdateResponseSchema.parse({
         eventId: context.event.id,
         userId: session.user.id,
-        profile: parsed.data.profile,
+        profile: {
+          ...parsed.data.profile,
+          emailSalutation:
+            parsed.data.profile.emailSalutation === undefined
+              ? current.emailSalutation
+              : parsed.data.profile.emailSalutation,
+          ratingEmailsEnabled:
+            parsed.data.profile.ratingEmailsEnabled ??
+            current.ratingEmailsEnabled,
+        },
         profileManagement: { state: 'editable', version: nextVersion },
         updatedAt: now.toISOString(),
       });

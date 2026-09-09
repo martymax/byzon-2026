@@ -7,6 +7,7 @@ import type {
   RequestId,
 } from '@byzon/domain/contracts';
 import { identityProfileSchema } from '@byzon/domain/contracts';
+import { czechGreeting } from '@byzon/mail/salutation';
 import {
   ActionLink,
   Alert,
@@ -15,6 +16,8 @@ import {
   ErrorSummary,
   FormField,
   Input,
+  Select,
+  ChoiceField,
   StatePanel,
 } from '@byzon/ui';
 import { useRef, useState, type FormEvent } from 'react';
@@ -40,6 +43,8 @@ const fieldLabels: Record<ProfileField, string> = {
   lastName: 'Příjmení',
   contactEmail: 'Kontaktní e-mail',
   phone: 'Telefon',
+  emailSalutation: 'Vlastní oslovení',
+  ratingEmailsEnabled: 'Připomenutí hodnocení',
 };
 
 const canonicalProfile = (profile: IdentityProfile): IdentityProfile => ({
@@ -47,6 +52,8 @@ const canonicalProfile = (profile: IdentityProfile): IdentityProfile => ({
   lastName: profile.lastName.trim(),
   contactEmail: profile.contactEmail.trim().toLowerCase(),
   phone: profile.phone?.trim() || null,
+  emailSalutation: profile.emailSalutation?.normalize('NFC').trim() ?? null,
+  ratingEmailsEnabled: profile.ratingEmailsEnabled ?? true,
 });
 
 const validateProfile = (
@@ -62,7 +69,9 @@ const validateProfile = (
       (field === 'firstName' ||
         field === 'lastName' ||
         field === 'contactEmail' ||
-        field === 'phone') &&
+        field === 'phone' ||
+        field === 'emailSalutation' ||
+        field === 'ratingEmailsEnabled') &&
       !errors[field]
     ) {
       errors[field] =
@@ -174,6 +183,15 @@ const EditableProfile = ({
     canonicalProfile(profile),
   );
   const [draft, setDraft] = useState(() => canonicalProfile(profile));
+  const salutationModeOf = (value: IdentityProfile['emailSalutation']) =>
+    value === null || value === undefined
+      ? 'auto'
+      : value === ''
+        ? 'none'
+        : 'custom';
+  const [salutationMode, setSalutationMode] = useState(() =>
+    salutationModeOf(profile.emailSalutation),
+  );
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [failure, setFailure] = useState<ProfileFailure>();
   const [saved, setSaved] = useState(false);
@@ -186,7 +204,9 @@ const EditableProfile = ({
     draft.firstName !== savedProfile.firstName ||
     draft.lastName !== savedProfile.lastName ||
     draft.contactEmail !== savedProfile.contactEmail ||
-    draft.phone !== savedProfile.phone;
+    draft.phone !== savedProfile.phone ||
+    draft.emailSalutation !== savedProfile.emailSalutation ||
+    draft.ratingEmailsEnabled !== savedProfile.ratingEmailsEnabled;
 
   useParticipantAccountUnsavedGuard(dirty);
 
@@ -215,6 +235,7 @@ const EditableProfile = ({
   };
   const discardAndReload = () => {
     setDraft(savedProfile);
+    setSalutationMode(salutationModeOf(savedProfile.emailSalutation));
     setErrors({});
     setFailure(undefined);
     resource.retry();
@@ -222,6 +243,14 @@ const EditableProfile = ({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (locked.current || !dirty) return;
+    if (salutationMode === 'custom' && !draft.emailSalutation?.trim()) {
+      setErrors({
+        emailSalutation:
+          'Vyplňte oslovení, například Martine, nebo zvolte pozdrav bez jména.',
+      });
+      focusErrors();
+      return;
+    }
     const validated = validateProfile(draft);
     if (!validated.profile) {
       setErrors(validated.errors);
@@ -247,8 +276,11 @@ const EditableProfile = ({
           focusFailure();
           return;
         }
-        setSavedProfile(result.data.profile);
-        setDraft(result.data.profile);
+        setSavedProfile(canonicalProfile(result.data.profile));
+        setDraft(canonicalProfile(result.data.profile));
+        setSalutationMode(
+          salutationModeOf(result.data.profile.emailSalutation),
+        );
         setErrors({});
         setSaved(true);
         return;
@@ -298,8 +330,8 @@ const EditableProfile = ({
         <p className="activation-kicker">Profilové minimum</p>
         <h2>Kontaktní údaje k akci</h2>
         <p>
-          Spravujeme pouze jméno, příjmení, kontaktní e-mail a dobrovolný
-          telefon. Networkingová a marketingová pole sem nepatří.
+          Upravte své kontaktní údaje, oslovení v e-mailech a připomenutí
+          hodnocení konference.
         </p>
       </header>
 
@@ -424,6 +456,71 @@ const EditableProfile = ({
             />
           </FormField>
         </div>
+        <fieldset
+          style={{ border: 0, padding: 0, margin: '24px 0', minWidth: 0 }}
+        >
+          <legend style={{ fontWeight: 600, marginBottom: 16 }}>
+            E-maily a oslovení
+          </legend>
+          <FormField label="Jak vás máme oslovovat?">
+            <Select
+              id="participant-profile-salutationMode"
+              disabled={working}
+              value={salutationMode}
+              onChange={(event) => {
+                const mode = event.target.value as 'auto' | 'none' | 'custom';
+                setSalutationMode(mode);
+                updateField(
+                  'emailSalutation',
+                  mode === 'auto'
+                    ? null
+                    : mode === 'none'
+                      ? ''
+                      : (czechGreeting(draft.firstName).match(
+                          /^Dobrý den, (.+),$/,
+                        )?.[1] ?? draft.firstName),
+                );
+              }}
+            >
+              <option value="auto">Automaticky podle jména</option>
+              <option value="custom">Vlastní oslovení</option>
+              <option value="none">Bez jména</option>
+            </Select>
+          </FormField>
+          {salutationMode === 'custom' ? (
+            <FormField
+              label="Vlastní oslovení"
+              helperText="Například Martine nebo Jano. Vyplňte jen jméno v oslovení, bez čárky."
+              {...(errors.emailSalutation
+                ? { error: errors.emailSalutation }
+                : {})}
+            >
+              <Input
+                id="participant-profile-emailSalutation"
+                maxLength={128}
+                disabled={working}
+                value={draft.emailSalutation ?? ''}
+                onChange={(event) =>
+                  updateField('emailSalutation', event.target.value)
+                }
+              />
+            </FormField>
+          ) : null}
+          <p aria-live="polite" style={{ margin: '12px 0 20px' }}>
+            Ukázka: {czechGreeting(draft.firstName, draft.emailSalutation)}
+          </p>
+          <ChoiceField
+            type="checkbox"
+            id="participant-profile-ratingEmailsEnabled"
+            label="Připomenout hodnocení konference e-mailem"
+            description="Po konferenci vám jednou připomeneme hodnocení, pokud ho ještě nemáte vyplněné. Důležité zprávy o rezervacích a programu posíláme i bez tohoto připomenutí."
+            disabled={working}
+            checked={draft.ratingEmailsEnabled ?? true}
+            onChange={(event) =>
+              updateField('ratingEmailsEnabled', event.target.checked)
+            }
+          />
+        </fieldset>
         <div className="participant-account-actions">
           <Button
             disabled={!dirty}
@@ -437,6 +534,7 @@ const EditableProfile = ({
             disabled={!dirty || working}
             onClick={() => {
               setDraft(savedProfile);
+              setSalutationMode(salutationModeOf(savedProfile.emailSalutation));
               setErrors({});
               setFailure(undefined);
             }}

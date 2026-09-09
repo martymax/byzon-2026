@@ -39,6 +39,7 @@ export const POST = (request: Request, context: Context) =>
             errorCallbackURL: '/prihlaseni?mode=recovery&returnTo=%2Fapp',
             metadata: {
               purpose: 'participant-invitation',
+              eventId,
               recipientName,
             },
           },

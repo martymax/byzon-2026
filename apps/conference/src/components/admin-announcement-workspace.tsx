@@ -689,10 +689,10 @@ export const AdminAnnouncementWorkspace = ({
 
       {confirming && pending && preview ? (
         <AdminConfirmDialog
-          acknowledgement="Ověřil/a jsem text, publikum a počet příjemců."
+          acknowledgement="Text, publikum a počet příjemců jsou zkontrolované."
           confirmLabel="Odeslat oznámení"
           danger
-          description="Po odeslání už oznámení nelze upravit. Server znovu ověří kontrolu i vaše oprávnění."
+          description="Oznámení se zobrazí v aplikaci a příjemcům s aktivním účtem odešleme také e-mail. Po odeslání už text nelze upravit. Smazání z aplikace neodvolá doručený e-mail."
           impact={
             <p>
               {formatCzechCount(
@@ -707,7 +707,7 @@ export const AdminAnnouncementWorkspace = ({
             setConfirming(false);
             setPending(null);
           }}
-          title="Odeslat kritické oznámení do aplikace?"
+          title="Odeslat oznámení do aplikace a e-mailem?"
         />
       ) : null}
     </div>

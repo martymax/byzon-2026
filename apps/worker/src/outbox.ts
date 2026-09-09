@@ -216,9 +216,9 @@ export const dispatchSupportedOutboxOnce = async (
   try {
     await db.transaction(async (transaction) => {
       if (event.type === 'program.changed') {
-        // Publication diffs are informational by default. They are consumed
-        // without creating a draft; only an organizer's explicit critical
-        // announcement preview/send action may materialize recipients.
+        // Targeted program emails are enqueued atomically with the publication
+        // in email_deliveries. This legacy event remains informational and
+        // must not create a second delivery or an organizer announcement.
         await transaction
           .update(schema.outboxEvents)
           .set({

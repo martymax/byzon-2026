@@ -95,6 +95,19 @@ Better Auth ve stagingu a produkci čte klientskou IP pouze z `X-Real-IP`, kter�
 Railway edge nastavuje a přepisuje. Bez tohoto explicitního headeru by se za
 proxy všechny auth požadavky propadly do jednoho sdíleného rate-limit bucketu.
 
+## E-mailové notifikace od 9. 9. 2026
+
+Web i worker používají ve stagingu stejný Mailpit a stejné `MAILPIT_API_*`,
+`MAIL_FROM`, `MAIL_REPLY_TO` a `APP_BASE_URL`. Zprávy zůstávají zachycené
+v Mailpitu. Konfigurace workeru už neobsahuje placeholder pro aktivního
+poskytovatele; nevyužitý `MAIL_API_KEY` může zůstat inertní.
+
+Migrace `0030_email_notifications` přidává doručovací frontu a preference
+oslovení/hodnocení v profilu. Spouští ji webový pre-deploy krok. Worker
+zpracovává nové rezervace, čekací listinu, publikované změny programu,
+oznámení a jednorázové připomenutí hodnocení. Podrobnosti a náhledy:
+[e-mailové notifikace](../email-notifications.md).
+
 ## E-mailové placeholders a magic link
 
 Web má připravený skutečný Resend adapter pro Better Auth magic link. Jeho
