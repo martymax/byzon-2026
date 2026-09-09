@@ -179,7 +179,7 @@ export function ParticipantHelp({
   return (
     <section className="app-page participant-account-page participant-help-page">
       <header className="participant-account-heading">
-        <p className="eyebrow">Můj účet · Nápověda</p>
+        <p className="eyebrow">Nápověda a FAQ</p>
         <h1 data-route-heading tabIndex={-1}>
           Jak na BYZON aplikaci
         </h1>

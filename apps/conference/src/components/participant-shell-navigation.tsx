@@ -143,7 +143,6 @@ const accountDestinations = [
   '/app/profil',
   '/app/soukromi',
   '/app/nastaveni',
-  '/app/napoveda',
   '/app/vstupenka',
   '/app/informace',
 ] as const;

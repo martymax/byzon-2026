@@ -62,7 +62,7 @@ export const participantTourSteps = [
     id: 'help',
     path: '/app/napoveda',
     title: 'Nápověda je kdykoliv po ruce',
-    text: 'Zkuste vyhledat téma, které potřebujete vyřešit. Tuto stránku i opětovné spuštění průvodce najdete v Můj účet → Nápověda a FAQ.',
+    text: 'Zkuste vyhledat téma, které potřebujete vyřešit. Nápovědu, časté otázky i opětovné spuštění průvodce najdete vždy pod tlačítkem Nápověda v horní liště.',
     selectors: ['[data-tour="help-search"]'],
     missing: 'Nápovědu najdete v nabídce Můj účet.',
     next: 'Dokončit průvodce',

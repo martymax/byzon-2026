@@ -150,6 +150,16 @@ function ActiveParticipantTour({
       const height = panel.current.getBoundingClientRect().height;
       const rect = next?.getBoundingClientRect();
       const gap = 20;
+      const contentTop = Math.max(
+        64,
+        ...Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.app-header--application, .ui-participant-nav',
+          ),
+        )
+          .filter((element) => getComputedStyle(element).position === 'sticky')
+          .map((element) => element.getBoundingClientRect().bottom + 16),
+      );
       let position: Placement = {
         width,
         left: window.innerWidth - width - 16,
@@ -167,7 +177,7 @@ function ActiveParticipantTour({
             width,
             left: side,
             top: Math.max(
-              24,
+              contentTop,
               Math.min(rect.top, window.innerHeight - height - 24),
             ),
           };
@@ -180,7 +190,7 @@ function ActiveParticipantTour({
             ),
             top: rect.bottom + gap,
           };
-        else if (rect.top - height - gap > 24)
+        else if (rect.top - height - gap > contentTop)
           position = {
             width,
             left: Math.max(
@@ -200,8 +210,8 @@ function ActiveParticipantTour({
         const panelTop = window.innerHeight - position.bottom - height;
         // Reserve the area above the callout on compact screens. Do this once
         // for a new target so subsequent user scrolling remains under their control.
-        if (rect.bottom > panelTop - 16 && rect.top > 64) {
-          window.scrollBy({ top: rect.top - 64, behavior: 'instant' });
+        if (rect.bottom > panelTop - 16 && rect.top > contentTop) {
+          window.scrollBy({ top: rect.top - contentTop, behavior: 'instant' });
         }
       }
       setPlacement((previous) =>

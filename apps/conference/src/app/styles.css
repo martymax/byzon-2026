@@ -48,7 +48,7 @@ h5,
 .skip-link:focus {
   left: 1rem;
   top: 1rem;
-  z-index: 10;
+  z-index: 110;
   padding: 0.7rem 1rem;
   border-radius: 999px;
   background: var(--pink-dark);
@@ -62,6 +62,81 @@ h5,
   max-width: 76rem;
   margin: auto;
   padding: 0 clamp(1.25rem, 5vw, 3rem);
+}
+.app-header--application {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  max-width: none;
+  height: calc(5rem + env(safe-area-inset-top, 0px));
+  gap: var(--byzon-space-2);
+  padding-inline: max(
+    clamp(1.25rem, 5vw, 3rem),
+    calc((100vw - 76rem) / 2 + 3rem)
+  );
+  padding-block-start: env(safe-area-inset-top, 0px);
+  background: var(--byzon-surface-translucent);
+  backdrop-filter: blur(14px);
+}
+.app-header-help {
+  flex: none;
+}
+.app-header-help--with-notifications {
+  padding-inline-end: calc(var(--byzon-touch-target) + var(--byzon-space-2));
+}
+.app-help-link {
+  min-height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--byzon-space-2);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-ink);
+  background: var(--byzon-surface);
+  font-size: 0.875rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+.app-help-link svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.app-help-link:hover,
+.app-help-link:active,
+.app-help-link[aria-current='page'] {
+  border-color: var(--byzon-brand);
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+}
+.app-help-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+html:has(.app-header--application) {
+  scroll-padding-top: calc(6rem + env(safe-area-inset-top, 0px));
+}
+body:has(.app-header--application) .participant-tour {
+  max-height: calc(
+    100dvh - 12rem - var(--byzon-safe-bottom) - env(safe-area-inset-top, 0px)
+  );
+}
+@media (max-width: 23rem) {
+  .app-header--application .brand-logo {
+    width: 6rem;
+  }
+}
+@media (min-width: 48rem) {
+  .app-header--application ~ main .ui-participant-nav {
+    top: calc(5rem + env(safe-area-inset-top, 0px));
+  }
+  html:has(.app-header--application) {
+    scroll-padding-top: calc(10rem + env(safe-area-inset-top, 0px));
+  }
 }
 .brand {
   display: flex;
@@ -283,8 +358,8 @@ h1 span {
 }
 .participant-notification-link {
   position: fixed;
-  z-index: 40;
-  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  z-index: 41;
+  top: calc(1.125rem + env(safe-area-inset-top, 0px));
   right: max(clamp(1.25rem, 5vw, 3rem), calc((100vw - 76rem) / 2 + 3rem));
   width: var(--byzon-touch-target);
   height: var(--byzon-touch-target);
