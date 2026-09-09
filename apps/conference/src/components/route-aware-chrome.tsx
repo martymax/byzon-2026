@@ -57,8 +57,10 @@ export const RouteAwareChrome = ({
           >
             <Link
               aria-current={pathname === '/app/napoveda' ? 'page' : undefined}
+              aria-label="Nápověda"
               className="app-help-link"
               href="/app/napoveda"
+              title="Nápověda"
             >
               <svg
                 aria-hidden="true"
@@ -73,7 +75,6 @@ export const RouteAwareChrome = ({
                 <circle cx="12" cy="12" r="9" />
                 <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5M12 16h.01" />
               </svg>
-              <span>Nápověda</span>
             </Link>
           </nav>
         ) : null}
