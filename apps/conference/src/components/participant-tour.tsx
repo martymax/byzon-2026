@@ -36,6 +36,18 @@ const visibleTarget = (selectors: readonly string[]): HTMLElement | null => {
   return null;
 };
 
+const contentTop = (): number =>
+  Math.max(
+    64,
+    ...Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '.app-header--application, .ui-participant-nav',
+      ),
+    )
+      .filter((element) => getComputedStyle(element).position === 'sticky')
+      .map((element) => element.getBoundingClientRect().bottom + 16),
+  );
+
 function ActiveParticipantTour({
   step,
   sessionId,
@@ -52,6 +64,10 @@ function ActiveParticipantTour({
   const heading = useRef<HTMLHeadingElement>(null);
   const target = useRef<HTMLElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const collapsedRef = useRef(false);
+  useEffect(() => {
+    collapsedRef.current = collapsed;
+  }, [collapsed]);
   const [available, setAvailable] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement | null>(null);
@@ -150,22 +166,19 @@ function ActiveParticipantTour({
       const height = panel.current.getBoundingClientRect().height;
       const rect = next?.getBoundingClientRect();
       const gap = 20;
-      const contentTop = Math.max(
-        64,
-        ...Array.from(
-          document.querySelectorAll<HTMLElement>(
-            '.app-header--application, .ui-participant-nav',
-          ),
-        )
-          .filter((element) => getComputedStyle(element).position === 'sticky')
-          .map((element) => element.getBoundingClientRect().bottom + 16),
-      );
+      const topInset = contentTop();
       let position: Placement = {
         width,
         left: window.innerWidth - width - 16,
         bottom: window.innerWidth < 900 ? 88 : 24,
       };
-      if (rect && window.innerWidth >= 900 && !collapsed) {
+      if (
+        rect &&
+        rect.bottom > topInset &&
+        rect.top < window.innerHeight - 24 &&
+        window.innerWidth >= 900 &&
+        !collapsedRef.current
+      ) {
         const side =
           rect.right + gap + width <= window.innerWidth - 16
             ? rect.right + gap
@@ -177,7 +190,7 @@ function ActiveParticipantTour({
             width,
             left: side,
             top: Math.max(
-              contentTop,
+              topInset,
               Math.min(rect.top, window.innerHeight - height - 24),
             ),
           };
@@ -190,7 +203,7 @@ function ActiveParticipantTour({
             ),
             top: rect.bottom + gap,
           };
-        else if (rect.top - height - gap > contentTop)
+        else if (rect.top - height - gap > topInset)
           position = {
             width,
             left: Math.max(
@@ -200,18 +213,23 @@ function ActiveParticipantTour({
             top: rect.top - height - gap,
           };
       }
-      if (
-        rect &&
-        next &&
-        positioned !== next &&
-        position.bottom !== undefined
-      ) {
+      // A target can scroll behind the sticky header or completely off-screen.
+      // Keep the entire callout, including its close button, in the viewport.
+      if (position.top !== undefined) {
+        position.top = Math.min(
+          Math.max(topInset, position.top),
+          Math.max(16, window.innerHeight - height - 24),
+        );
+      }
+      if (rect && next && positioned !== next) {
         positioned = next;
-        const panelTop = window.innerHeight - position.bottom - height;
         // Reserve the area above the callout on compact screens. Do this once
         // for a new target so subsequent user scrolling remains under their control.
-        if (rect.bottom > panelTop - 16 && rect.top > contentTop) {
-          window.scrollBy({ top: rect.top - contentTop, behavior: 'instant' });
+        if (position.bottom !== undefined) {
+          const panelTop = window.innerHeight - position.bottom - height;
+          if (rect.bottom > panelTop - 16 && rect.top > topInset) {
+            window.scrollBy({ top: rect.top - topInset, behavior: 'instant' });
+          }
         }
       }
       setPlacement((previous) =>
@@ -246,14 +264,22 @@ function ActiveParticipantTour({
       highlighted?.removeAttribute('data-tour-highlight');
       target.current = null;
     };
-  }, [step, collapsed]);
+  }, [step]);
 
-  // Keep editable application controls usable: collapse the callout when keyboard
-  // focus would be covered by it. Native confirmation dialogs take precedence.
+  // Make room for real form interactions and covered keyboard controls.
+  // Safari may focus the main landmark on pointerdown inside the callout:
+  // collapsing for that ancestor focus would remove a button before click fires.
   useEffect(() => {
     let lastUserInput = -Infinity;
     const input = () => {
       lastUserInput = performance.now();
+    };
+    const interact = (event: MouseEvent) => {
+      const control =
+        event.target instanceof Element
+          ? event.target.closest('input,select,textarea,button')
+          : null;
+      if (control && target.current?.contains(control)) setCollapsed(true);
     };
     const focus = (event: FocusEvent) => {
       if (performance.now() - lastUserInput > 300) return;
@@ -261,9 +287,20 @@ function ActiveParticipantTour({
       if (
         !(element instanceof HTMLElement) ||
         !panel.current ||
-        panel.current.contains(element)
+        panel.current.contains(element) ||
+        element.contains(panel.current) ||
+        !element.matches(
+          'a[href],button,input,select,textarea,summary,[contenteditable="true"],[tabindex]:not([tabindex="-1"])',
+        )
       )
         return;
+      if (
+        target.current?.contains(element) &&
+        element.matches('input,select,textarea,button')
+      ) {
+        setCollapsed(true);
+        return;
+      }
       const rect = element.getBoundingClientRect();
       const box = panel.current.getBoundingClientRect();
       if (
@@ -279,10 +316,12 @@ function ActiveParticipantTour({
       }
     };
     document.addEventListener('focusin', focus);
+    document.addEventListener('click', interact, true);
     document.addEventListener('keydown', input);
     document.addEventListener('pointerdown', input);
     return () => {
       document.removeEventListener('focusin', focus);
+      document.removeEventListener('click', interact, true);
       document.removeEventListener('keydown', input);
       document.removeEventListener('pointerdown', input);
     };
@@ -325,8 +364,16 @@ function ActiveParticipantTour({
         : element.querySelector<HTMLElement>(
             'button:not(:disabled),a[href],input:not(:disabled),select,textarea',
           );
-      (control ?? element).focus({ preventScroll: true });
-      element.scrollIntoView({ block: 'center', behavior: 'instant' });
+      const focus = control ?? element;
+      focus.focus({ preventScroll: true });
+      const rect = focus.getBoundingClientRect();
+      const bottomInset = window.innerWidth < 768 ? 88 : 24;
+      if (
+        rect.top < contentTop() ||
+        rect.bottom > window.innerHeight - bottomInset
+      ) {
+        focus.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      }
     });
   };
 

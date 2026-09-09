@@ -3,6 +3,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import '../../app/styles.css';
 import { ParticipantTour } from '../../components/participant-tour';
+import { AppMain } from '../../components/app-main';
 import { renderComponent, userEvent } from './render';
 import { expectComponentToPassAxe } from './accessibility';
 
@@ -98,6 +99,111 @@ function TourApp({
 
 beforeEach(() => goto('/app/program?pruvodce=program'));
 describe('contextual participant tour', () => {
+  it.each(['Dokončit průvodce', 'Ukončit průvodce'])(
+    'handles the first pointer click on %s when Safari focuses the main landmark',
+    async (name) => {
+      goto('/app/napoveda?pruvodce=help');
+      const screen = await renderComponent(
+        <AppMain>
+          <section style={{ minHeight: '200vh', padding: 24 }}>
+            <h1 data-route-heading tabIndex={-1}>
+              Nápověda
+            </h1>
+            <label
+              data-tour="help-search"
+              style={{ display: 'block', marginTop: 160 }}
+            >
+              Najít odpověď
+              <input type="search" />
+            </label>
+          </section>
+          <ParticipantTour />
+        </AppMain>,
+      );
+      await screen.getByRole('button', { name, exact: true }).click();
+      await expect.poll(() => window.location.search).toBe('');
+    },
+  );
+
+  it('preserves the active guide when the application shell handles a real link', async () => {
+    const screen = await renderComponent(
+      <AppMain>
+        <a href={`/app/program/${sessionId}`}>Otevřít skutečnou aktivitu</a>
+      </AppMain>,
+    );
+    await screen
+      .getByRole('link', { name: 'Otevřít skutečnou aktivitu' })
+      .click();
+    expect(window.location.pathname).toBe(`/app/program/${sessionId}`);
+    expect(new URLSearchParams(window.location.search).get('pruvodce')).toBe(
+      'detail',
+    );
+  });
+
+  it('keeps the guide controls inside the viewport when scrolling past a wide target', async () => {
+    goto('/app/networking?pruvodce=networking');
+    const screen = await renderComponent(
+      <main style={{ minHeight: '300vh', padding: 24 }}>
+        <h1>Networking</h1>
+        <label
+          data-tour="networking-visibility"
+          style={{ display: 'block', marginTop: 260, padding: 16 }}
+        >
+          <input type="checkbox" /> Zobrazit můj profil v adresáři
+        </label>
+        <ParticipantTour />
+      </main>,
+    );
+    const close = screen.getByRole('button', { name: 'Ukončit průvodce' });
+    await expect.element(close).toBeVisible();
+    window.scrollTo({ top: 1100, behavior: 'instant' });
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const panel = screen.container.querySelector('.participant-tour')!;
+    expect(panel.getBoundingClientRect().top).toBeGreaterThanOrEqual(16);
+    expect(panel.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      window.innerHeight - 16,
+    );
+    await close.click();
+    expect(window.location.search).toBe('');
+  });
+
+  it('does not scroll the page again when collapsing or expanding the same step', async () => {
+    const screen = await renderComponent(<TourApp />);
+    await expect
+      .element(screen.getByRole('link', { name: 'Workshop leadershipu' }))
+      .toHaveAttribute('data-tour-highlight', 'true');
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    try {
+      for (const name of ['Sbalit', 'Rozbalit']) {
+        scroll.mockClear();
+        await screen.getByRole('button', { name, exact: true }).click();
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        expect(scroll).not.toHaveBeenCalled();
+      }
+    } finally {
+      scroll.mockRestore();
+    }
+  });
+
+  it('gets out of the way when the user starts changing a highlighted setting', async () => {
+    goto('/app/networking?pruvodce=networking');
+    const save = vi.fn();
+    const screen = await renderComponent(<TourApp onSave={save} />);
+    await expect.element(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(save).not.toHaveBeenCalled();
+    await screen.getByRole('checkbox').click();
+    await expect.element(screen.getByRole('checkbox')).toBeChecked();
+    expect(save).toHaveBeenCalledTimes(1);
+    await expect
+      .element(screen.getByRole('button', { name: 'Rozbalit', exact: true }))
+      .toBeVisible();
+    expect(window.location.search).toBe('?pruvodce=networking');
+  });
+
   it('follows a real chosen activity and lets the user perform the action themselves', async () => {
     const save = vi.fn();
     const screen = await renderComponent(<TourApp onSave={save} />);

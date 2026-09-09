@@ -14,6 +14,7 @@
     "start": "node .next/standalone/apps/conference/server.js",
     "test": "vitest run",
     "test:components": "vitest run --config vitest.browser.config.ts",
+    "test:tour": "pnpm pretest:components && vitest run --config vitest.tour.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
