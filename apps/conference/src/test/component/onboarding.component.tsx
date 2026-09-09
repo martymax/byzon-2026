@@ -109,10 +109,11 @@ const OnboardingProbe = ({
 const completeProfileStep = async (
   screen: Awaited<ReturnType<typeof renderComponent>>,
 ) => {
+  await completeLegalStep(screen);
+  await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
   await screen.getByLabelText('Jméno').fill('  Alex  ');
   await screen.getByLabelText('Příjmení').fill('  Novák  ');
   await screen.getByLabelText('Kontaktní e-mail').fill('ALEX@EXAMPLE.TEST');
-  await screen.getByRole('button', { name: 'Pokračovat' }).click();
 };
 
 const completeLegalStep = async (
@@ -150,18 +151,9 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
         })}
       />,
     );
-    await screen.getByRole('button', { name: 'Zpět', exact: true }).click();
-    await expect
-      .element(screen.getByLabelText('Jméno'))
-      .toHaveAttribute('readonly');
-    await expect
-      .element(screen.getByLabelText('Kontaktní e-mail'))
-      .toHaveAttribute('readonly');
-    await screen
-      .getByRole('button', { name: 'Pokračovat', exact: true })
-      .click();
+    expect(screen.getByLabelText('Jméno').elements()).toHaveLength(0);
     await completeLegalStep(screen);
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await screen.getByRole('button', { name: 'Potvrdit a vstoupit' }).click();
     await expect
       .element(screen.getByText('Nastavení je dokončené'))
       .toBeVisible();
@@ -201,7 +193,7 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
     };
     const screen = await renderComponent(<OnboardingProbe api={api} />);
     await completeLegalStep(screen);
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await screen.getByRole('button', { name: 'Potvrdit a vstoupit' }).click();
     await expect
       .element(screen.getByText('Profil se liší od uložených údajů'))
       .toBeVisible();
@@ -269,13 +261,13 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
       />,
     );
 
-    await completeProfileStep(screen);
     await expect
       .element(screen.getByText('Podmínky používání – syntetický náhled'))
       .toBeVisible();
-    await completeLegalStep(screen);
+    expect(screen.getByLabelText('Jméno').elements()).toHaveLength(0);
+    await completeProfileStep(screen);
     const submit = screen
-      .getByRole('button', { name: 'Dokončit onboarding' })
+      .getByRole('button', { name: 'Dokončit nastavení' })
       .element();
     if (!(submit instanceof HTMLButtonElement)) {
       throw new TypeError('Onboarding submit must be a button.');
@@ -290,7 +282,7 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
       .element(
         screen.getByRole('heading', {
           level: 1,
-          name: 'Připravte si aplikaci',
+          name: 'Nastavení je dokončené',
         }),
       )
       .toHaveFocus();
@@ -320,16 +312,19 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
   it('focuses validation summary and preserves in-memory values when going back', async () => {
     const screen = await renderComponent(<OnboardingProbe />);
 
-    await screen.getByRole('button', { name: 'Pokračovat' }).click();
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
     const summary = screen
       .getByRole('heading', { name: 'Zkontrolujte zadané údaje' })
       .element();
     expect(summary.closest('section')).toHaveFocus();
-
+    expect(screen.getByLabelText('Jméno').elements()).toHaveLength(0);
+    await completeLegalStep(screen);
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
+    await screen.getByRole('button', { name: 'Dokončit nastavení' }).click();
     await screen.getByLabelText('Jméno').fill('Alex');
     await screen.getByLabelText('Příjmení').fill('Novák');
-    await screen.getByRole('button', { name: 'Pokračovat' }).click();
-    await screen.getByRole('button', { name: 'Zpět' }).click();
+    await screen.getByRole('button', { name: 'Zpět k dokumentům' }).click();
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
 
     await expect.element(screen.getByLabelText('Jméno')).toHaveValue('Alex');
     await expect
@@ -350,6 +345,8 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
       </main>,
     );
 
+    await completeLegalStep(screen);
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
     await screen.getByLabelText('Jméno').fill('Alex');
     await screen.getByRole('link', { name: 'Opustit onboarding' }).click();
 
@@ -375,6 +372,8 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
       </main>,
     );
 
+    await completeLegalStep(screen);
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
     await screen.getByLabelText('Jméno').fill('Alex');
     await screen.getByRole('link', { name: 'Opustit onboarding' }).click();
 
@@ -406,14 +405,14 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
     );
 
     await completeLegalStep(screen);
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await screen.getByRole('button', { name: 'Potvrdit a vstoupit' }).click();
     await expect
       .element(
         screen.getByText('Připojte se a odešlete stejný požadavek znovu.'),
       )
       .toBeVisible();
     expect(document.querySelector('[data-form-failure]')).toHaveFocus();
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await screen.getByRole('button', { name: 'Potvrdit a vstoupit' }).click();
 
     await expect
       .element(screen.getByText('Nastavení je dokončené'))
@@ -444,7 +443,7 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
     );
 
     await completeLegalStep(screen);
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await screen.getByRole('button', { name: 'Potvrdit a vstoupit' }).click();
 
     await expect
       .element(
@@ -497,12 +496,12 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
     };
     const screen = await renderComponent(<OnboardingProbe api={api} />);
 
+    await completeLegalStep(screen);
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
     await screen.getByLabelText('Jméno').fill('Mila');
     await screen.getByLabelText('Příjmení').fill('Testová');
     await screen.getByLabelText('Kontaktní e-mail').fill('mila@example.test');
-    await screen.getByRole('button', { name: 'Pokračovat' }).click();
-    await completeLegalStep(screen);
-    await screen.getByRole('button', { name: 'Dokončit onboarding' }).click();
+    await screen.getByRole('button', { name: 'Dokončit nastavení' }).click();
 
     await expect
       .element(screen.getByText('Právní verze se změnila'))
@@ -521,7 +520,15 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
         .element(),
     ).not.toBeChecked();
 
-    await screen.getByRole('button', { name: 'Zpět' }).click();
+    await screen
+      .getByLabelText('Souhlasím s podmínkami, verze synthetic-v2')
+      .click();
+    await screen
+      .getByLabelText(
+        'Potvrzuji seznámení s informacemi o soukromí, verze synthetic-v2',
+      )
+      .click();
+    await screen.getByRole('button', { name: 'Pokračovat k profilu' }).click();
     await expect.element(screen.getByLabelText('Jméno')).toHaveValue('Mila');
     await expect
       .element(screen.getByLabelText('Příjmení'))
@@ -543,7 +550,7 @@ describe('F1-07 scope-aligned onboarding and legal acknowledgement', () => {
     await expect
       .element(blocked.getByText('Aktuální právní verze není publikovaná'))
       .toBeVisible();
-    expect(document.body.textContent).not.toContain('Dokončit onboarding');
+    expect(document.body.textContent).not.toContain('Potvrdit a vstoupit');
 
     await blocked.unmount();
     const suspended = await renderComponent(

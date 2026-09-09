@@ -645,12 +645,9 @@ export const completeIdentityOnboarding = async (
       session.user.id,
       dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
     );
-    await requireOwnPermission(
-      dependencies,
-      context,
-      session.user.id,
-      'profile:own:write',
-    );
+    // Every active member must be able to complete their own mandatory setup,
+    // including team members who do not also hold the participant role.
+    if (context.membership.status !== 'active') throw eventAccessDenied();
     if (context.event.status === 'archived') throw eventAccessDenied();
     const key = requireCleanMutationTransport(request, 'required')!;
     const json = await readBoundedJson(request);

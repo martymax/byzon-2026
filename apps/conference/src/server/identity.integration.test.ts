@@ -25,6 +25,7 @@ import {
   type IdentityDependencies,
 } from './identity';
 import { createOnboardingRequest } from '../lib/onboarding-request';
+import { enforceOnboardingAccess } from './onboarding-access';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe.sequential : describe.skip;
@@ -216,6 +217,10 @@ integration('CS-BOOT-01 identity HTTP integration', () => {
 
   beforeEach(async () => {
     await client.db
+      .update(schema.eventRoles)
+      .set({ role: 'participant' })
+      .where(eq(schema.eventRoles.userId, userId));
+    await client.db
       .delete(schema.idempotencyKeys)
       .where(eq(schema.idempotencyKeys.eventId, eventId));
     await client.db
@@ -270,6 +275,132 @@ integration('CS-BOOT-01 identity HTTP integration', () => {
       .where(inArray(schema.events.id, [eventId, isolationEventId]));
     await client.close();
   });
+
+  it('blocks deep links and API operations until confirmation, and locks again for a new legal version', async () => {
+    const accessDependencies = {
+      db: client.db,
+      currentEventSlug: eventSlug,
+      getSession: async () => session,
+    };
+    for (const path of ['/app', '/app/program', '/admin', '/host/dotazy']) {
+      const blocked = await enforceOnboardingAccess(
+        new Request(`${appOrigin}${path}`),
+        accessDependencies,
+      );
+      expect(blocked?.status).toBe(303);
+      expect(blocked?.headers.get('location')).toBe(`${appOrigin}/onboarding`);
+      expect(blocked?.headers.get('cache-control')).toBe('private, no-store');
+    }
+    for (const path of [
+      '/api/v1/me/agenda/actions',
+      '/api/v1/me/offline-lease',
+      '/api/v1/admin/context',
+    ]) {
+      const blocked = await enforceOnboardingAccess(
+        new Request(`${appOrigin}${path}`, { method: 'POST' }),
+        accessDependencies,
+      );
+      expect(blocked?.status).toBe(403);
+      expect(blocked?.headers.get('x-byzon-onboarding-required')).toBe('true');
+    }
+    for (const path of [
+      '/app/soukromi',
+      '/app/nastaveni',
+      '/onboarding',
+      '/api/v1/me/onboarding',
+      '/api/v1/me/session-action',
+    ]) {
+      expect(
+        await enforceOnboardingAccess(
+          new Request(`${appOrigin}${path}`),
+          accessDependencies,
+        ),
+      ).toBeNull();
+    }
+    await onboard('identity-onboarding-access-gate');
+    expect(
+      await enforceOnboardingAccess(
+        new Request(`${appOrigin}/app/program`),
+        accessDependencies,
+      ),
+    ).toBeNull();
+    expect(
+      await enforceOnboardingAccess(
+        new Request(`${appOrigin}/api/v1/me/agenda`),
+        accessDependencies,
+      ),
+    ).toBeNull();
+    const replacement = crypto.randomUUID();
+    try {
+      await client.db
+        .update(schema.legalDocuments)
+        .set({ isCurrent: false })
+        .where(eq(schema.legalDocuments.id, termsId));
+      await client.db.insert(schema.legalDocuments).values({
+        id: replacement,
+        eventId,
+        type: 'terms',
+        version: '2.0',
+        title: 'Updated terms',
+        content: 'Updated terms for this test.',
+        publishedAt: new Date(),
+        isCurrent: true,
+      });
+      expect(
+        (
+          await enforceOnboardingAccess(
+            new Request(`${appOrigin}/app`),
+            accessDependencies,
+          )
+        )?.status,
+      ).toBe(303);
+      expect(
+        (
+          await enforceOnboardingAccess(
+            new Request(`${appOrigin}/api/v1/me/agenda`),
+            accessDependencies,
+          )
+        )?.status,
+      ).toBe(403);
+    } finally {
+      await client.db
+        .delete(schema.legalDocuments)
+        .where(eq(schema.legalDocuments.id, replacement));
+      await client.db
+        .update(schema.legalDocuments)
+        .set({ isCurrent: true })
+        .where(eq(schema.legalDocuments.id, termsId));
+    }
+  });
+
+  it.each([
+    'organizer_admin',
+    'speaker',
+    'moderator',
+    'room_operator',
+  ] as const)(
+    'allows mandatory onboarding for an active %s without participant permissions',
+    async (role) => {
+      await client.db
+        .update(schema.eventRoles)
+        .set({ role })
+        .where(eq(schema.eventRoles.userId, userId));
+      const response = await completeIdentityOnboarding(
+        jsonRequest(
+          '/api/v1/me/onboarding',
+          'POST',
+          onboardingBody(),
+          `team-onboarding-${role}`,
+        ),
+        dependencies(),
+      );
+      expect(response.status).toBe(200);
+      expect(
+        identityOnboardingResponseSchema.parse(await response.json())
+          .acknowledgements,
+      ).toHaveLength(2);
+    },
+  );
 
   it('accepts the browser legal-review request for an existing profile with a phone', async () => {
     const stored = onboardingBody().profile;

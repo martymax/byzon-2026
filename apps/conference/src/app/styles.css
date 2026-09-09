@@ -3438,3 +3438,157 @@ main > .ui-participant-nav-spacer {
     transition: none;
   }
 }
+
+.participant-help-page {
+  max-width: 68rem;
+}
+.participant-guide,
+.participant-guide-intro,
+.participant-help-faq {
+  display: grid;
+  gap: 1.5rem;
+}
+.participant-guide-top,
+.participant-guide-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.participant-guide-intro {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.participant-guide-intro p,
+.participant-guide-content > p {
+  max-width: 65ch;
+}
+.participant-guide-progress {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 0;
+  gap: 0.5rem;
+}
+.participant-guide-progress button {
+  width: 100%;
+  min-height: 4rem;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--byzon-surface);
+  color: var(--slate);
+  padding: 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+}
+.participant-guide-progress button span {
+  display: block;
+  font-weight: 700;
+}
+.participant-guide-progress button[aria-current='step'] {
+  border: 2px solid var(--pink-dark);
+  background: var(--soft);
+  color: var(--pink-dark);
+  padding: calc(0.75rem - 1px);
+  font-weight: 700;
+}
+.participant-guide-progress button:hover {
+  background: var(--soft);
+}
+.participant-guide-content {
+  display: grid;
+  gap: 1rem;
+}
+.participant-guide-content h2 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  line-height: 1.2;
+  text-wrap: balance;
+}
+.participant-guide-tip {
+  border-left: 3px solid var(--pink-dark);
+  padding: 1rem 1.25rem;
+  background: var(--soft);
+  border-radius: 0 0.75rem 0.75rem 0;
+}
+.participant-guide-quiz {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.participant-guide-quiz legend {
+  font-weight: 700;
+  padding: 0 0.5rem;
+}
+.participant-guide-quiz button[aria-pressed='true'] {
+  outline: 2px solid var(--pink-dark);
+  outline-offset: 2px;
+}
+.participant-help-search {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.participant-help-answers {
+  display: grid;
+  gap: 0.75rem;
+}
+.participant-help-answers details {
+  background: var(--byzon-surface);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+.participant-help-answers summary {
+  padding: 1.25rem;
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 3rem;
+}
+.participant-help-answers summary:hover {
+  color: var(--pink-dark);
+}
+.participant-help-answers details > div {
+  display: grid;
+  gap: 1rem;
+  padding: 0 1.25rem 1.25rem;
+  max-width: 72ch;
+}
+.participant-help-answers .text-link {
+  width: fit-content;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .participant-guide-intro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .participant-guide-progress {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+  .participant-guide-progress button {
+    padding: 0.5rem 0.25rem;
+    min-height: 2.75rem;
+    text-align: center;
+  }
+  .participant-guide-step-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .participant-guide-progress button[aria-current='step'] {
+    padding: calc(0.5rem - 1px) calc(0.25rem - 1px);
+  }
+  .participant-guide-top {
+    align-items: flex-start;
+  }
+}

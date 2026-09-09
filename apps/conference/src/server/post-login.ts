@@ -3,8 +3,9 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { schema, type Database } from '@byzon/database';
 
 import { CURRENT_EVENT_SLUG } from './current-event';
+import { loadOnboardingState } from './onboarding';
 
-export type PostLoginDestination = '/admin' | '/app';
+export type PostLoginDestination = '/admin' | '/app' | '/onboarding';
 
 export const resolvePostLoginDestination = async (
   db: Database,
@@ -36,5 +37,9 @@ export const resolvePostLoginDestination = async (
     }),
   ]);
 
+  if (membership) {
+    const onboarding = await loadOnboardingState(db, event.id, userId);
+    if (onboarding && onboarding.status !== 'complete') return '/onboarding';
+  }
   return membership && organizerRole ? '/admin' : '/app';
 };

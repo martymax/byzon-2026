@@ -38,6 +38,7 @@ import {
   type IdentityBootstrapState,
 } from '@/components/identity-bootstrap';
 import { useTransitionFocus } from '@/components/use-transition-focus';
+import { ParticipantGuide } from '@/components/participant-guide';
 import { LegalDocumentContent } from '@/components/legal-document-content';
 import type { ApiPort } from '@/lib/api';
 import {
@@ -78,13 +79,13 @@ const emptyDraft: Draft = {
 };
 
 const stepNumber: Record<Step, number> = {
-  profile: 1,
-  legal: 2,
+  legal: 1,
+  profile: 2,
 };
 
 const stepLabel: Record<Step, string> = {
   profile: 'Profil',
-  legal: 'Právní minimum',
+  legal: 'Dokumenty',
 };
 
 const runtimeKey = (): string => {
@@ -100,19 +101,6 @@ const documentByType = (
   type: IdentityLegalDocumentType,
 ): IdentityLegalDocument | undefined =>
   bootstrap.legalDocuments.find((document) => document.type === type);
-
-const initialStep = (bootstrap: IdentityBootstrapResponse): Step => {
-  switch (bootstrap.onboarding.status) {
-    case 'profile_required':
-      return 'profile';
-    case 'legal_acknowledgement_required':
-      return 'legal';
-    case 'complete':
-      return 'legal';
-    case 'blocked_missing_legal_documents':
-      return 'legal';
-  }
-};
 
 const profileErrors = (draft: Draft): FieldErrors => {
   const errors: FieldErrors = {};
@@ -217,13 +205,22 @@ const BootstrapFrame = ({
         Připravte si aplikaci
       </h1>
       <p className="lead">
-        Dva krátké kroky. Údaje zůstávají pouze v paměti formuláře, dokud
-        onboarding výslovně nedokončíte.
+        Před vstupem do aplikace si přečtěte a potvrďte pravidla používání a
+        zásady zpracování osobních údajů.
+        {!bootstrap.profile ? ' Potom doplníte základní profil.' : ''}
       </p>
     </header>
     <div className="onboarding-context">
       <strong>{bootstrap.event.name}</strong>
       <span>{bootstrap.user.email}</span>
+    </div>
+    <div className="activation-form-actions">
+      <a className="text-link" href={`mailto:${bootstrap.supportEmail}`}>
+        Kontaktovat podporu
+      </a>
+      <ActionLink href="/app/nastaveni" variant="quiet">
+        Odhlášení a změna účtu
+      </ActionLink>
     </div>
     {bootstrap.dataMode === 'synthetic_preview' ? (
       <Alert title="Syntetický náhled – bez skutečného zápisu" tone="warning">
@@ -235,26 +232,28 @@ const BootstrapFrame = ({
     ) : null}
     <nav aria-label="Průběh onboardingu" className="onboarding-progress">
       <ol>
-        {(Object.keys(stepNumber) as Step[]).map((item) => {
-          const current = item === step;
-          const complete = stepNumber[item] < stepNumber[step];
-          return (
-            <li
-              aria-current={current ? 'step' : undefined}
-              className={
-                current
-                  ? 'onboarding-progress-current'
-                  : complete
-                    ? 'onboarding-progress-complete'
-                    : undefined
-              }
-              key={item}
-            >
-              <span>{complete ? '✓' : stepNumber[item]}</span>
-              {stepLabel[item]}
-            </li>
-          );
-        })}
+        {(Object.keys(stepNumber) as Step[])
+          .filter((item) => !bootstrap.profile || item === 'legal')
+          .map((item) => {
+            const current = item === step;
+            const complete = stepNumber[item] < stepNumber[step];
+            return (
+              <li
+                aria-current={current ? 'step' : undefined}
+                className={
+                  current
+                    ? 'onboarding-progress-current'
+                    : complete
+                      ? 'onboarding-progress-complete'
+                      : undefined
+                }
+                key={item}
+              >
+                <span>{complete ? '✓' : stepNumber[item]}</span>
+                {stepLabel[item]}
+              </li>
+            );
+          })}
       </ol>
     </nav>
     {children}
@@ -380,7 +379,7 @@ export const OnboardingFlow = ({
 }) => {
   const bootstrap = useIdentityBootstrap(api);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [step, setStep] = useState<Step>('profile');
+  const [step, setStep] = useState<Step>('legal');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<SubmitFailure>();
   const [dirty, setDirty] = useState(false);
@@ -573,7 +572,7 @@ export const OnboardingFlow = ({
       termsAccepted: alreadyAcknowledged,
       privacyAcknowledged: alreadyAcknowledged,
     });
-    setStep(initialStep(data));
+    setStep('legal');
     setErrors({});
     setFailure(undefined);
     setDirty(false);
@@ -673,29 +672,35 @@ export const OnboardingFlow = ({
 
   if (completed || data.onboarding.status === 'complete') {
     return (
-      <BootstrapFrame
-        bootstrap={data}
-        headingRef={completionHeading}
-        step="legal"
-      >
-        <StatePanel
-          action={<ActionLink href="/app">Otevřít aplikaci</ActionLink>}
-          kind="empty"
-          title="Nastavení je dokončené"
-        >
-          {data.dataMode === 'synthetic_preview' ? (
-            <p>
-              V syntetickém režimu byl pouze nasimulován výsledek. Nevzniklo
-              skutečné přihlášení, účast na akci ani právní záznam.
-            </p>
-          ) : (
-            <p>
-              Profil i potvrzení aktuálních právních dokumentů jsou uložené.
-              Můžete pokračovat do aplikace.
-            </p>
-          )}
-        </StatePanel>
-      </BootstrapFrame>
+      <section className="onboarding-page">
+        <header className="onboarding-heading">
+          <p className="eyebrow">Vítejte na BYZONu</p>
+          <h1 ref={completionHeading} tabIndex={-1}>
+            Nastavení je dokončené
+          </h1>
+          <p className="lead">
+            Profil i potvrzení dokumentů jsou uložené. Teď můžete poznat
+            aplikaci v krátkém průvodci, nebo rovnou vstoupit.
+          </p>
+        </header>
+        {data.dataMode === 'synthetic_preview' ? (
+          <p>
+            V syntetickém režimu byl pouze nasimulován výsledek. Nevzniklo
+            skutečné přihlášení, účast na akci ani právní záznam.
+          </p>
+        ) : null}
+        <ParticipantGuide initiallyOpen={completed} />
+        <div className="activation-form-actions">
+          {!completed ? (
+            <ActionLink href="/po-prihlaseni" variant="secondary">
+              Otevřít aplikaci
+            </ActionLink>
+          ) : null}
+          <ActionLink href="/app/napoveda" variant="quiet">
+            Nápověda a FAQ
+          </ActionLink>
+        </div>
+      </section>
     );
   }
 
@@ -732,7 +737,7 @@ export const OnboardingFlow = ({
       contactEmail: current.contactEmail.trim().toLowerCase(),
     }));
     setErrors({});
-    setStep('legal');
+    void submitOnboarding();
   };
 
   const goFromLegal = (event: FormEvent<HTMLFormElement>) => {
@@ -747,6 +752,11 @@ export const OnboardingFlow = ({
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       focusErrors();
+      return;
+    }
+    if (!data.profile) {
+      setErrors({});
+      setStep('profile');
       return;
     }
     void submitOnboarding();
@@ -870,7 +880,7 @@ export const OnboardingFlow = ({
   return (
     <BootstrapFrame bootstrap={data} step={step}>
       <LiveRegion>
-        Krok {stepNumber[step]} ze 2: {stepLabel[step]}
+        Krok {stepNumber[step]} z {data.profile ? 1 : 2}: {stepLabel[step]}
       </LiveRegion>
       {failure?.kind === 'stale_legal' ? (
         <div data-form-failure ref={failureAlert} tabIndex={-1}>
@@ -943,7 +953,7 @@ export const OnboardingFlow = ({
       {step === 'profile' ? (
         <form className="onboarding-card" noValidate onSubmit={goFromProfile}>
           <header>
-            <p className="activation-kicker">Krok 1 ze 2</p>
+            <p className="activation-kicker">Krok 2 ze 2</p>
             <h2 ref={stepHeading} tabIndex={-1}>
               Základní profil
             </h2>
@@ -1011,10 +1021,21 @@ export const OnboardingFlow = ({
             </FormField>
           </div>
           <div className="activation-form-actions">
-            <Button onClick={confirmExit} type="button" variant="quiet">
-              Ukončit
+            <Button
+              onClick={() => setStep('legal')}
+              type="button"
+              variant="secondary"
+            >
+              Zpět k dokumentům
             </Button>
-            <Button type="submit">Pokračovat</Button>
+            <Button
+              id="onboarding-submit"
+              type="submit"
+              loading={submitting}
+              loadingLabel="Dokončuji…"
+            >
+              Dokončit nastavení
+            </Button>
           </div>
         </form>
       ) : null}
@@ -1022,11 +1043,11 @@ export const OnboardingFlow = ({
       {step === 'legal' ? (
         <form className="onboarding-card" noValidate onSubmit={goFromLegal}>
           <header>
-            <p className="activation-kicker">Krok 2 ze 2</p>
+            <p className="activation-kicker">Krok 1 z {data.profile ? 1 : 2}</p>
             <h2 ref={stepHeading} tabIndex={-1}>
-              Právní minimum
+              Pravidla a soukromí
             </h2>
-            <p>Každá volba odkazuje na přesnou verzi.</p>
+            <p>Pro používání aplikace je potřeba potvrdit oba dokumenty.</p>
           </header>
           {errorSummary}
           <div className="onboarding-legal-list">
@@ -1054,12 +1075,8 @@ export const OnboardingFlow = ({
             />
           </div>
           <div className="activation-form-actions">
-            <Button
-              onClick={() => setStep('profile')}
-              type="button"
-              variant="secondary"
-            >
-              Zpět
+            <Button onClick={confirmExit} type="button" variant="secondary">
+              Ukončit
             </Button>
             <Button
               id="onboarding-submit"
@@ -1067,12 +1084,11 @@ export const OnboardingFlow = ({
               loadingLabel="Dokončuji…"
               type="submit"
             >
-              Dokončit onboarding
+              {data.profile ? 'Potvrdit a vstoupit' : 'Pokračovat k profilu'}
             </Button>
           </div>
           <p className="onboarding-submit-note">
-            Odeslání je online-only. Při neurčitém výpadku můžete bezpečně
-            zopakovat stejný požadavek.
+            Potvrzení vyžaduje připojení k internetu.
           </p>
         </form>
       ) : null}

@@ -72,6 +72,7 @@ const participantActivationStaticReturnToValues = [
   '/app/informace',
   '/app/networking',
   '/app/nastaveni',
+  '/app/napoveda',
   '/app/oznameni',
   '/app/oznameni?view=unread',
   '/app/partneri',

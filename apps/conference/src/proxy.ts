@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getRequestId } from './server/api/problem';
+import { requiresOnboardingAccess } from './lib/onboarding-access-policy';
 
 export const isRetired2026Path = (pathname: string): boolean =>
   pathname === '/check-in' ||
@@ -8,7 +9,7 @@ export const isRetired2026Path = (pathname: string): boolean =>
   pathname === '/api/v1/check-in' ||
   pathname.startsWith('/api/v1/check-in/');
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const requestId = getRequestId(request.headers);
   if (
     process.env.NODE_ENV === 'production' &&
@@ -23,6 +24,15 @@ export function proxy(request: NextRequest) {
         'x-request-id': requestId,
       },
     });
+  }
+  if (
+    requiresOnboardingAccess(request.nextUrl.pathname) &&
+    (request.headers.has('cookie') || request.headers.has('authorization'))
+  ) {
+    const { enforceRequestOnboarding } =
+      await import('./server/onboarding-access-runtime');
+    const blocked = await enforceRequestOnboarding(request);
+    if (blocked) return blocked;
   }
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-request-id', requestId);
