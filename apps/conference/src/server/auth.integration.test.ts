@@ -280,6 +280,74 @@ integration('magic-link authentication integration', () => {
     expect(secondUse.headers.get('location')).toContain('INVALID_TOKEN');
   });
 
+  it.each(['participant-invitation', 'account-activation'] as const)(
+    'issues a fresh 24-hour token on repeated %s delivery and recovers an expired link',
+    async (purpose) => {
+      const requestLink = () =>
+        activationAuth.api.signInMagicLink({
+          headers: new Headers({ origin: 'http://localhost:3000' }),
+          body: {
+            email,
+            callbackURL: '/app',
+            errorCallbackURL: '/prihlaseni?mode=recovery&returnTo=%2Fapp',
+            metadata: { purpose },
+          },
+        });
+      await requestLink();
+      const original = new URL(mail.messages.at(-1)!.url);
+      await client.pool.query(
+        `update "verification" set expires_at = now() - interval '1 second'
+         where "value"::jsonb ->> 'email' = $1`,
+        [email],
+      );
+      const expired = await auth.handler(new Request(original));
+      expect(expired.headers.get('set-cookie')).toBeNull();
+      const recovery = new URL(expired.headers.get('location')!);
+      expect(recovery.pathname).toBe('/prihlaseni');
+      expect(recovery.searchParams.get('mode')).toBe('recovery');
+      expect(recovery.searchParams.get('error')).toBe('INVALID_TOKEN');
+      expect(recovery.searchParams.get('returnTo')).toBe('/app');
+
+      const startedAt = Date.now();
+      await requestLink();
+      const renewed = new URL(mail.messages.at(-1)!.url);
+      expect(renewed.searchParams.get('token')).not.toBe(
+        original.searchParams.get('token'),
+      );
+      const stored = await client.pool.query<{ expires_at: Date }>(
+        `select expires_at from "verification" where "value"::jsonb ->> 'email' = $1`,
+        [email],
+      );
+      expect(stored.rows).toHaveLength(1);
+      expect(stored.rows[0]!.expires_at.getTime()).toBeGreaterThanOrEqual(
+        startedAt + 24 * 60 * 60 * 1000,
+      );
+      expect(stored.rows[0]!.expires_at.getTime()).toBeLessThanOrEqual(
+        Date.now() + 24 * 60 * 60 * 1000,
+      );
+      await requestLink();
+      const resent = new URL(mail.messages.at(-1)!.url);
+      expect(resent.searchParams.get('token')).not.toBe(
+        renewed.searchParams.get('token'),
+      );
+      const activated = await auth.handler(new Request(resent));
+      expect(activated.headers.get('location')).toBe(
+        'http://localhost:3000/app',
+      );
+      expect(activated.headers.get('set-cookie')).toContain(
+        'better-auth.session_token',
+      );
+      expect(
+        (
+          await client.db.query.users.findFirst({
+            where: eq(schema.users.email, email),
+          })
+        )?.emailVerified,
+      ).toBe(true);
+      expect(mail.messages).toHaveLength(3);
+    },
+  );
+
   it('does not create an identity that was not imported or provisioned', async () => {
     const unknownEmail = `unknown-${crypto.randomUUID()}@example.com`;
     const requested = await auth.handler(

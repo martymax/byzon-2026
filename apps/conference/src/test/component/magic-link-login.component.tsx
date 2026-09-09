@@ -106,9 +106,7 @@ describe('production magic-link login', () => {
       .element(screen.getByText('Odkaz už není platný'))
       .toBeVisible();
     await screen.getByLabelText('E-mail').fill('participant@example.test');
-    await screen
-      .getByRole('button', { name: 'Poslat přihlašovací odkaz' })
-      .click();
+    await screen.getByRole('button', { name: 'Poslat nový odkaz' }).click();
 
     await expect
       .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
@@ -116,6 +114,43 @@ describe('production magic-link login', () => {
     await expect
       .element(screen.getByText(/Aktivační odkaz platí 24 hodin/))
       .toBeVisible();
+    expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body))).toMatchObject({
+      email: 'participant@example.test',
+      callbackURL: '/app',
+      errorCallbackURL: '/prihlaseni?mode=recovery&returnTo=%2Fapp',
+    });
+    await screen.getByRole('button', { name: 'Vyžádat další odkaz' }).click();
+    await expect.element(screen.getByLabelText('E-mail')).toHaveValue('');
+    await screen.getByLabelText('E-mail').fill('participant@example.test');
+    await screen.getByRole('button', { name: 'Poslat nový odkaz' }).click();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toBeVisible();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers recovery without an error code and retains the form after rate limiting', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () => new Response(null, { status: 429 }),
+    );
+    const screen = await renderComponent(
+      <main>
+        <MagicLinkLogin fetch={fetch} recovery returnTo="/app" />
+      </main>,
+    );
+    await expect
+      .element(screen.getByRole('heading', { name: 'Vyžádejte si nový odkaz' }))
+      .toBeVisible();
+    await screen.getByLabelText('E-mail').fill('participant@example.test');
+    await screen.getByRole('button', { name: 'Poslat nový odkaz' }).click();
+    await expect.element(screen.getByText('Příliš mnoho pokusů')).toBeVisible();
+    await expect
+      .element(screen.getByLabelText('E-mail'))
+      .toHaveValue('participant@example.test');
+    await expect
+      .element(screen.getByRole('button', { name: 'Poslat nový odkaz' }))
+      .toBeEnabled();
+    await expectComponentToPassAxe(document.body);
   });
 
   it('passes accessibility checks in the form and confirmation states', async () => {

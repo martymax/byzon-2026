@@ -2104,6 +2104,160 @@ describe('F4 contract-first admin journeys', () => {
     await expectComponentToPassAxe(adminRoot());
   });
 
+  it('sends and resends an invitation directly from a participant row with a new request key', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const list = participantListResponse();
+    const participant = list.items[0]!;
+    list.items[0] = {
+      ...participant,
+      invitation: { status: 'not_sent', lastSentAt: null },
+    };
+    const requests: { idempotencyKey: string; body: unknown }[] = [];
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminParticipantListEndpoint) return success(list);
+      if (endpoint === adminParticipantInviteEndpoint) {
+        requests.push(options as (typeof requests)[number]);
+        return success({
+          eventId: adminFixtureIds.event,
+          participantId: participant.participantId,
+          outcome: 'sent',
+          sentAt: '2026-09-09T10:00:00.000Z',
+          invitation: {
+            status: 'sent',
+            lastSentAt: '2026-09-09T10:00:00.000Z',
+          },
+          audit: { auditId: adminFixtureIds.auditMutation },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await screen
+      .getByRole('button', {
+        name: `Odeslat pozvánku: ${participant.displayName}`,
+        exact: true,
+      })
+      .click();
+    const resend = screen.getByRole('button', {
+      name: `Odeslat pozvánku znovu: ${participant.displayName}`,
+      exact: true,
+    });
+    await expect.element(resend).toBeEnabled();
+    await expect
+      .element(
+        screen.getByText(
+          `Pozvánka pro ${participant.displayName} byla odeslána. Nový odkaz platí 24 hodin od odeslání.`,
+        ),
+      )
+      .toBeVisible();
+    expect(screen.getByRole('dialog')).not.toBeInTheDocument();
+    await resend.click();
+    await expect.element(resend).toBeEnabled();
+    expect(requests).toHaveLength(2);
+    expect(requests[0]!.body).toEqual({
+      participantId: participant.participantId,
+    });
+    expect(requests[0]!.idempotencyKey).toBeTruthy();
+    expect(requests[1]!.idempotencyKey).not.toBe(requests[0]!.idempotencyKey);
+    await expectComponentToPassAxe(adminRoot());
+  });
+
+  it('locks a pending row invitation and safely retries an uncertain delivery with the same key', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const list = participantListResponse();
+    const participant = list.items[0]!;
+    const requests: { idempotencyKey: string }[] = [];
+    let complete!: (value: unknown) => void;
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminParticipantListEndpoint) return success(list);
+      if (endpoint === adminParticipantInviteEndpoint) {
+        requests.push(options as (typeof requests)[number]);
+        if (requests.length === 1)
+          return new Promise((resolve) => {
+            complete = resolve;
+          });
+        return success({
+          eventId: adminFixtureIds.event,
+          participantId: participant.participantId,
+          outcome: 'already_sent',
+          sentAt: '2026-09-09T10:00:00.000Z',
+          invitation: {
+            status: 'accepted',
+            lastSentAt: '2026-09-09T10:00:00.000Z',
+          },
+          audit: { auditId: adminFixtureIds.auditMutation },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    const button = screen.getByRole('button', {
+      name: `Odeslat pozvánku znovu: ${participant.displayName}`,
+      exact: true,
+    });
+    await button.click();
+    await expect.element(button).toBeDisabled();
+    await expect.element(button).toHaveTextContent('Odesílám…');
+    expect(requests).toHaveLength(1);
+    complete(failure('timeout'));
+    await expect.element(button).toBeEnabled();
+    await button.click();
+    await expect.element(button).toBeEnabled();
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.idempotencyKey).toBe(requests[0]!.idempotencyKey);
+  });
+
+  it('disables row invitations for blocked participants and hides them without manage permission', async () => {
+    window.history.replaceState({}, '', '/admin/ucastnici');
+    const list = participantListResponse();
+    const participant = list.items[0]!;
+    list.items[0] = { ...participant, ticketState: 'blocked' };
+    const api = (context = adminContextFixtures.organizer!) =>
+      organizerApi((endpoint) => {
+        if (endpoint === adminParticipantListEndpoint) return success(list);
+        throw new Error('No invitation should be requested.');
+      }, context);
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api()} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(
+        screen.getByRole('button', {
+          name: `Odeslat pozvánku znovu: ${participant.displayName}`,
+          exact: true,
+        }),
+      )
+      .toBeDisabled();
+    await screen.unmount();
+    const context = structuredClone(adminContextFixtures.organizer!);
+    context.actor.permissions = context.actor.permissions.filter(
+      (permission) => permission !== 'ticket:any:manage',
+    );
+    const readonlyScreen = await renderComponent(
+      <AdminWorkspaceShell api={api(context)} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(
+        readonlyScreen.getByText(participant.displayName, { exact: true }),
+      )
+      .toBeVisible();
+    expect(
+      readonlyScreen.getByRole('button', { name: /^Odeslat pozvánku/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('opens a complete participant detail and saves profile and networking data with a reason', async () => {
     window.history.replaceState(
       {},
@@ -2220,7 +2374,7 @@ describe('F4 contract-first admin journeys', () => {
       'ucastnik@example.test',
     );
     expect(screen.getByRole('dialog').element().textContent).toContain(
-      'Odkaz platí 5 minut.',
+      'Každý nový odkaz platí 24 hodin od odeslání.',
     );
     await acknowledgeDialog(screen);
     await screen

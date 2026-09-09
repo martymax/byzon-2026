@@ -81,6 +81,63 @@ const invitationStatusLabels = {
   accepted: 'Přihlášení aktivováno',
 } as const;
 
+type ParticipantInvitationAction = {
+  readonly disabled: boolean;
+  readonly pendingParticipantId: string | null;
+  readonly onInvite: (participant: AdminParticipantListItem) => void;
+};
+
+const ParticipantInviteButton = ({
+  participant,
+  action,
+  compact = false,
+}: {
+  readonly participant: AdminParticipantListItem;
+  readonly action: ParticipantInvitationAction;
+  readonly compact?: boolean;
+}) => {
+  const pending = action.pendingParticipantId === participant.participantId;
+  const label =
+    participant.invitation.status === 'not_sent'
+      ? 'Odeslat pozvánku'
+      : 'Odeslat pozvánku znovu';
+  return (
+    <button
+      aria-busy={pending}
+      aria-label={`${label}: ${participant.displayName}`}
+      className={`${styles.secondaryButton} ${compact ? styles.participantInviteIconButton : ''}`}
+      disabled={action.disabled || participant.ticketState !== 'active'}
+      onClick={() => action.onInvite(participant)}
+      title={
+        participant.ticketState !== 'active'
+          ? 'Pozvánku lze poslat pouze účastníkovi s aktivním přístupem.'
+          : `${label}. Nový odkaz platí 24 hodin od odeslání.`
+      }
+      type="button"
+    >
+      {compact ? (
+        <ParticipantIcon>
+          {pending ? (
+            <>
+              <circle cx="5" cy="12" r="1" />
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+            </>
+          ) : (
+            <>
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="m3 7 9 6 9-6" />
+            </>
+          )}
+        </ParticipantIcon>
+      ) : null}
+      <span className={compact ? styles.visuallyHidden : undefined}>
+        {pending ? 'Odesílám…' : label}
+      </span>
+    </button>
+  );
+};
+
 const huntingLabels = {
   know_how: 'Know-how',
   team: 'Lidé do týmu',
@@ -163,11 +220,13 @@ const SelectionCheckbox = ({
 const ParticipantTableRow = memo(
   ({
     participant,
+    invitationAction,
     selected,
     onSelectionChange,
     selectionDisabled = false,
   }: {
     readonly participant: AdminParticipantListItem;
+    readonly invitationAction: ParticipantInvitationAction | null;
     readonly selected: boolean;
     readonly selectionDisabled?: boolean;
     readonly onSelectionChange: (
@@ -227,15 +286,24 @@ const ParticipantTableRow = memo(
         </span>
       </td>
       <td>
-        <Link
-          aria-label={`Zobrazit detail: ${participant.displayName}`}
-          className={styles.participantDetailLink}
-          href={`/admin/ucastnici/${participant.participantId}`}
-        >
-          <ParticipantIcon>
-            <path d="m9 18 6-6-6-6" />
-          </ParticipantIcon>
-        </Link>
+        <div className={styles.participantRowActions}>
+          {invitationAction ? (
+            <ParticipantInviteButton
+              participant={participant}
+              action={invitationAction}
+              compact
+            />
+          ) : null}
+          <Link
+            aria-label={`Zobrazit detail: ${participant.displayName}`}
+            className={styles.participantDetailLink}
+            href={`/admin/ucastnici/${participant.participantId}`}
+          >
+            <ParticipantIcon>
+              <path d="m9 18 6-6-6-6" />
+            </ParticipantIcon>
+          </Link>
+        </div>
       </td>
     </tr>
   ),
@@ -245,11 +313,13 @@ ParticipantTableRow.displayName = 'ParticipantTableRow';
 const ParticipantCard = memo(
   ({
     participant,
+    invitationAction,
     selected,
     onSelectionChange,
     selectionDisabled = false,
   }: {
     readonly participant: AdminParticipantListItem;
+    readonly invitationAction: ParticipantInvitationAction | null;
     readonly selected: boolean;
     readonly selectionDisabled?: boolean;
     readonly onSelectionChange: (
@@ -303,6 +373,12 @@ const ParticipantCard = memo(
           <strong>{participant.reservationCount}</strong>
         </p>
       </div>
+      {invitationAction ? (
+        <ParticipantInviteButton
+          participant={participant}
+          action={invitationAction}
+        />
+      ) : null}
     </li>
   ),
 );
@@ -313,6 +389,7 @@ const ParticipantDataView = memo(
     allSelected,
     compact,
     items,
+    invitationAction,
     onAllSelectionChange,
     onScrollEnd,
     onSelectionChange,
@@ -323,6 +400,7 @@ const ParticipantDataView = memo(
     readonly allSelected: boolean;
     readonly compact: boolean;
     readonly items: readonly AdminParticipantListItem[];
+    readonly invitationAction: ParticipantInvitationAction | null;
     readonly onAllSelectionChange: (checked: boolean) => void;
     readonly onScrollEnd: () => void;
     readonly selectionDisabled?: boolean;
@@ -340,6 +418,7 @@ const ParticipantDataView = memo(
             <ParticipantCard
               selectionDisabled={selectionDisabled}
               key={participant.participantId}
+              invitationAction={invitationAction}
               onSelectionChange={onSelectionChange}
               participant={participant}
               selected={selectedIds.has(participant.participantId)}
@@ -380,9 +459,7 @@ const ParticipantDataView = memo(
               <th scope="col">Vstupenka</th>
               <th scope="col">Networking</th>
               <th scope="col">Aktivita</th>
-              <th scope="col">
-                <span className={styles.visuallyHidden}>Detail</span>
-              </th>
+              <th scope="col">Akce</th>
             </tr>
           </thead>
           <tbody>
@@ -390,6 +467,7 @@ const ParticipantDataView = memo(
               <ParticipantTableRow
                 selectionDisabled={selectionDisabled}
                 key={participant.participantId}
+                invitationAction={invitationAction}
                 onSelectionChange={onSelectionChange}
                 participant={participant}
                 selected={selectedIds.has(participant.participantId)}
@@ -444,6 +522,11 @@ export const AdminSupportWorkspace = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [invitingParticipantId, setInvitingParticipantId] = useState<
+    string | null
+  >(null);
+  const invitationLocked = useRef(false);
+  const invitationKeys = useRef(new Map<string, string>());
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyParticipantCreateForm);
   const [createAttempted, setCreateAttempted] = useState(false);
@@ -649,6 +732,89 @@ export const AdminSupportWorkspace = () => {
       ),
     [items.length],
   );
+  const sendRowInvitation = useCallback(
+    async (participant: AdminParticipantListItem) => {
+      if (
+        !canMutate ||
+        busy ||
+        invitationLocked.current ||
+        participant.ticketState !== 'active'
+      )
+        return;
+      invitationLocked.current = true;
+      setInvitingParticipantId(participant.participantId);
+      setError(null);
+      setNotice(null);
+      const request = requestFence.begin('participant-row-invite');
+      const keyId = `${eventId}:${participant.participantId}`;
+      const idempotencyKey =
+        invitationKeys.current.get(keyId) ??
+        createAdminIdempotencyKey('participant-invite');
+      invitationKeys.current.set(keyId, idempotencyKey);
+      try {
+        const result = await requestAdminParticipantInvite(
+          api,
+          eventId,
+          participant.participantId,
+          { participantId: participant.participantId },
+          idempotencyKey,
+          request.signal,
+        );
+        if (!request.isCurrent()) return;
+        if (!result.ok) {
+          if (!isAmbiguousAdminMutationFailure(result))
+            invitationKeys.current.delete(keyId);
+          if (isAdminSecurityFailure(result)) {
+            invalidateSensitive(
+              adminFailureMessage(result.failure, result.metadata?.requestId),
+            );
+            return;
+          }
+          setError(
+            adminFailureMessage(result.failure, result.metadata?.requestId),
+          );
+          return;
+        }
+        if (result.kind !== 'success') {
+          setError(
+            'Server nepotvrdil odeslání pozvánky. Zopakujte stejnou akci.',
+          );
+          return;
+        }
+        invitationKeys.current.delete(keyId);
+        setItems((current) =>
+          current.map((item) =>
+            item.participantId === participant.participantId
+              ? { ...item, invitation: result.data.invitation }
+              : item,
+          ),
+        );
+        setNotice(
+          `Pozvánka pro ${participant.displayName} byla odeslána. Nový odkaz platí 24 hodin od odeslání.`,
+        );
+      } catch {
+        if (request.isCurrent())
+          setError('Odeslání se nepodařilo ověřit. Zopakujte stejnou akci.');
+      } finally {
+        if (request.isCurrent()) setInvitingParticipantId(null);
+        request.finish();
+        invitationLocked.current = false;
+      }
+    },
+    [api, busy, canMutate, eventId, invalidateSensitive, requestFence],
+  );
+
+  const invitationAction = useMemo<ParticipantInvitationAction | null>(
+    () =>
+      canMutate
+        ? {
+            disabled: busy || createOpen || invitingParticipantId !== null,
+            pendingParticipantId: invitingParticipantId,
+            onInvite: (participant) => void sendRowInvitation(participant),
+          }
+        : null,
+    [busy, canMutate, createOpen, invitingParticipantId, sendRowInvitation],
+  );
 
   return (
     <div className={styles.participantWorkspace}>
@@ -788,7 +954,13 @@ export const AdminSupportWorkspace = () => {
             items={items}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
-            disabled={busy || createBusy || createOpen || error !== null}
+            disabled={
+              busy ||
+              invitingParticipantId !== null ||
+              createBusy ||
+              createOpen ||
+              error !== null
+            }
             onBusyChange={setBusy}
             onCompleted={() => void load()}
           />
@@ -824,6 +996,7 @@ export const AdminSupportWorkspace = () => {
             allSelected={allSelected}
             compact={compactDataView}
             items={renderedItems}
+            invitationAction={invitationAction}
             onAllSelectionChange={changeAllParticipantSelection}
             onScrollEnd={revealMoreParticipants}
             onSelectionChange={changeParticipantSelection}
@@ -1770,7 +1943,7 @@ export const AdminParticipantDetailWorkspace = ({
         <AdminConfirmDialog
           acknowledgement="Potvrzuji odeslání jednorázového odkazu tomuto účastníkovi."
           confirmLabel="Odeslat pozvánku"
-          description={`Na ${detail.contactEmail} odešleme e-mail s jednorázovým odkazem do účastnické části. Odkaz platí 5 minut.`}
+          description={`Na ${detail.contactEmail} odešleme e-mail s novým jednorázovým odkazem do účastnické části. Každý nový odkaz platí 24 hodin od odeslání.`}
           onConfirm={() => void sendInvitation()}
           onDismiss={() => setInviteOpen(false)}
           title={

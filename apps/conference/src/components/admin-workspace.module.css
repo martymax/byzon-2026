@@ -2086,8 +2086,17 @@
 
 .participantTable th:last-child,
 .participantTable td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
   width: 3.5rem;
   padding-right: 1.5rem;
+  background: var(--admin-surface);
+}
+
+.participantTable th:last-child {
+  z-index: 2;
+  background: var(--admin-canvas);
 }
 
 .participantTable tbody tr:hover {
@@ -2166,6 +2175,27 @@
   place-items: center;
   border-radius: 0.5rem;
   color: var(--admin-primary);
+}
+
+.participantRowActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.participantRowActions button {
+  white-space: nowrap;
+}
+
+.participantRowActions a {
+  flex-shrink: 0;
+}
+
+.participantInviteIconButton {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
 }
 
 .participantDetailLink:hover {

@@ -36,7 +36,7 @@ export const POST = (request: Request, context: Context) =>
           body: {
             email,
             callbackURL: '/app',
-            errorCallbackURL: '/prihlaseni?returnTo=%2Fapp',
+            errorCallbackURL: '/prihlaseni?mode=recovery&returnTo=%2Fapp',
             metadata: {
               purpose: 'participant-invitation',
               recipientName,
