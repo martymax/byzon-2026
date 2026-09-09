@@ -113,6 +113,7 @@ export const adminAuditActionLabels = {
   'support.resend': 'Znovu odeslal pozvánku',
   'participant.invitation_sent': 'Odeslal pozvánku účastníkovi',
   'participant.profile_updated': 'Upravil profil účastníka',
+  'participant.deleted': 'Trvale smazal účastníka',
   'ticket_import.preview_created': 'Načetl změny vstupenek',
   'ticket_import.applied': 'Použil změny vstupenek',
   'announcement.send': 'Odeslal kritické oznámení',

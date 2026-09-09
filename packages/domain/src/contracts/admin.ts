@@ -1150,6 +1150,7 @@ export const adminAuditActionSchema = z.enum([
   'support.resend',
   'participant.invitation_sent',
   'participant.profile_updated',
+  'participant.deleted',
   'ticket_import.preview_created',
   'ticket_import.applied',
   'announcement.send',

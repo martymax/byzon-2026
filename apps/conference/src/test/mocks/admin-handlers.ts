@@ -68,6 +68,8 @@ import {
   adminParticipantCreateRequestSchema,
   adminParticipantCreateResponseSchema,
   adminParticipantDetailSchema,
+  adminParticipantDeleteRequestSchema,
+  adminParticipantDeleteResponseSchema,
   adminParticipantInviteProblemSchema,
   adminParticipantInviteRequestSchema,
   adminParticipantInviteResponseSchema,
@@ -1608,6 +1610,87 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         adminParticipantDetailSchema,
         detail,
         successOptions('admin.mock.participant-detail'),
+      );
+    },
+  ),
+
+  http.delete(
+    '*/api/v1/admin/events/:eventId/participants/:participantId',
+    async ({ params, request }) => {
+      const denied = authorize(
+        supportMutationProblemSchema,
+        ['ticket:any:manage'],
+        'admin.mock.participant-delete',
+      );
+      if (denied) return denied;
+      const body = adminParticipantDeleteRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      const attempt = body.success
+        ? mutationResult(request, 'participant-delete', body.data)
+        : null;
+      if (
+        !routeMatchesEvent(params.eventId) ||
+        !body.success ||
+        !attempt ||
+        body.data.participantId !== params.participantId
+      ) {
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportMutationProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.participant-delete-invalid' },
+        );
+      }
+      if (attempt.kind === 'replay')
+        return mockJsonResponse(
+          adminParticipantDeleteResponseSchema,
+          { ...attempt.response, outcome: 'already_applied' },
+          successOptions('admin.mock.participant-delete-replay'),
+        );
+      if (attempt.kind === 'collision')
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportMutationProblemFixtures.key_reused,
+          { fixtureName: 'admin.mock.participant-delete-collision' },
+        );
+      const current = state.participantDetails.find(
+        (detail) => detail.participantId === params.participantId,
+      );
+      if (!current)
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          supportMutationProblemFixtures.not_found,
+          { fixtureName: 'admin.mock.participant-delete-not-found' },
+        );
+      if (body.data.expectedProfileVersion !== current.profileVersion)
+        return mockProblemResponse(
+          supportMutationProblemSchema,
+          {
+            ...supportMutationProblemFixtures.stale,
+            currentVersion: current.profileVersion,
+          },
+          { fixtureName: 'admin.mock.participant-delete-stale' },
+        );
+      state.participantDetails = state.participantDetails.filter(
+        (detail) => detail.participantId !== params.participantId,
+      );
+      state.supportRecords = state.supportRecords.filter(
+        (record) => record.participantId !== params.participantId,
+      );
+      const response = adminParticipantDeleteResponseSchema.parse({
+        eventId: adminFixtureIds.event,
+        participantId: current.participantId,
+        outcome: 'deleted',
+        accountDeleted: true,
+        membershipRetained: false,
+        deletedAt: new Date().toISOString(),
+        audit: supportMutationFixtures.blocked!.audit,
+      });
+      storeMutation(attempt, 'participant-delete', response);
+      return mockJsonResponse(
+        adminParticipantDeleteResponseSchema,
+        response,
+        successOptions('admin.mock.participant-delete'),
       );
     },
   ),

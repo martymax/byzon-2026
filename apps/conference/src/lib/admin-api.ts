@@ -77,6 +77,9 @@ import {
   adminParticipantCreateRequestSchema,
   adminParticipantCreateResponseSchema,
   adminParticipantDetailSchema,
+  adminParticipantDeleteRequestSchema,
+  adminParticipantDeleteResponseSchema,
+  type AdminParticipantDeleteRequest,
   adminParticipantInviteProblemSchema,
   adminParticipantInviteRequestSchema,
   adminParticipantInviteResponseSchema,
@@ -346,6 +349,17 @@ export const adminParticipantUpdateEndpoint = defineApiEndpoint({
     'IDEMPOTENCY_KEY_REUSED',
     'IDEMPOTENCY_IN_PROGRESS',
   ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
+export const adminParticipantDeleteEndpoint = defineApiEndpoint({
+  method: 'DELETE',
+  requestSchema: adminParticipantDeleteRequestSchema,
+  successSchema: adminParticipantDeleteResponseSchema,
+  problemSchema: supportMutationProblemSchema,
+  problemCodes: adminParticipantUpdateEndpoint.problemCodes,
   responseKind: 'json',
   retry: 'never',
   idempotency: 'required',
@@ -960,6 +974,31 @@ export const requestAdminParticipantUpdate = async (
     (data) =>
       data.eventId === eventId &&
       data.detail.participantId === participantId &&
+      body.participantId === participantId,
+  );
+
+export const requestAdminParticipantDelete = async (
+  api: ApiPort,
+  eventId: string,
+  participantId: string,
+  body: AdminParticipantDeleteRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantDeleteEndpoint, {
+      path: eventPath(
+        eventId,
+        `/participants/${encodeURIComponent(participantId)}`,
+      ),
+      body: adminParticipantDeleteRequestSchema.parse(body),
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.participantId === participantId &&
       body.participantId === participantId,
   );
 

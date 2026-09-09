@@ -5,6 +5,7 @@ import {
   schema,
   writeAuditLog,
   type Database,
+  type DatabaseTransaction,
 } from '@byzon/database';
 import {
   adminAnnouncementDraftSchema,
@@ -124,7 +125,10 @@ const requireAdmin = async (
   return identity.user.id;
 };
 
-const activeParticipantIds = async (db: Database, eventId: string) => {
+const activeParticipantIds = async (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+) => {
   const rows = await db
     .select({ userId: schema.eventRoles.userId })
     .from(schema.eventRoles)
@@ -147,7 +151,7 @@ const activeParticipantIds = async (db: Database, eventId: string) => {
 };
 
 const audienceSnapshot = async (
-  db: Database,
+  db: Database | DatabaseTransaction,
   eventId: string,
   draft: AdminAnnouncementDraft,
 ): Promise<{ recipientIds: string[]; sessionTitle: string | null }> => {
@@ -212,7 +216,7 @@ const audienceSnapshot = async (
 };
 
 const audienceSample = async (
-  db: Database,
+  db: Database | DatabaseTransaction,
   eventId: string,
   userIds: readonly string[],
 ) => {
@@ -351,50 +355,56 @@ export const handleAdminAnnouncementPreview = async (
         'The announcement draft is invalid.',
       );
     }
-    const audience = await audienceSnapshot(
-      dependencies.db,
-      eventId,
-      body.data.draft,
-    );
-    if (audience.recipientIds.length === 0) {
-      throw apiProblem(
-        409,
-        'ANNOUNCEMENT_EMPTY_AUDIENCE',
-        'Empty audience',
-        'The immutable audience would contain no recipients.',
+    const response = await dependencies.db.transaction(async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `announcement-audience:${eventId}`,
       );
-    }
-    const sample = await audienceSample(
-      dependencies.db,
-      eventId,
-      audience.recipientIds.slice(0, 5),
-    );
-    const now = dependencies.now?.() ?? new Date();
-    const previewId = generateUuidV7();
-    const expiresAt = new Date(now.getTime() + PREVIEW_TTL_MS);
-    await dependencies.db.insert(schema.announcementPreviews).values({
-      id: previewId,
-      eventId,
-      version: 1,
-      draft: body.data.draft,
-      recipientUserIds: audience.recipientIds,
-      recipientCount: audience.recipientIds.length,
-      createdBy: actorId,
-      createdAt: now,
-      expiresAt,
-    });
-    const response = adminAnnouncementPreviewResponseSchema.parse({
-      eventId,
-      previewId,
-      previewVersion: 1,
-      draft: body.data.draft,
-      audience: {
+      const audience = await audienceSnapshot(
+        transaction,
+        eventId,
+        body.data.draft,
+      );
+      if (audience.recipientIds.length === 0) {
+        throw apiProblem(
+          409,
+          'ANNOUNCEMENT_EMPTY_AUDIENCE',
+          'Empty audience',
+          'The immutable audience would contain no recipients.',
+        );
+      }
+      const sample = await audienceSample(
+        transaction,
+        eventId,
+        audience.recipientIds.slice(0, 5),
+      );
+      const now = dependencies.now?.() ?? new Date();
+      const previewId = generateUuidV7();
+      const expiresAt = new Date(now.getTime() + PREVIEW_TTL_MS);
+      await transaction.insert(schema.announcementPreviews).values({
+        id: previewId,
+        eventId,
+        version: 1,
+        draft: body.data.draft,
+        recipientUserIds: audience.recipientIds,
         recipientCount: audience.recipientIds.length,
-        excludedCount: 0,
-        sample,
-      },
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
+        createdBy: actorId,
+        createdAt: now,
+        expiresAt,
+      });
+      return adminAnnouncementPreviewResponseSchema.parse({
+        eventId,
+        previewId,
+        previewVersion: 1,
+        draft: body.data.draft,
+        audience: {
+          recipientCount: audience.recipientIds.length,
+          excludedCount: 0,
+          sample,
+        },
+        createdAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      });
     });
     return Response.json(response, {
       status: 201,
@@ -467,6 +477,10 @@ export const handleAdminAnnouncementSend = async (
         now,
       },
       async (transaction) => {
+        await acquireTransactionLock(
+          transaction,
+          `announcement-audience:${eventId}`,
+        );
         await acquireTransactionLock(
           transaction,
           `announcement-preview:${eventId}:${body.data.previewId}`,

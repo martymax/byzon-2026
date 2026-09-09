@@ -419,6 +419,26 @@ export type AdminParticipantUpdateRequest = z.infer<
   typeof adminParticipantUpdateRequestSchema
 >;
 
+export const adminParticipantDeleteRequestSchema = z.strictObject({
+  participantId: uuidSchema,
+  expectedProfileVersion: versionSchema,
+  confirm: z.literal(true),
+});
+
+export type AdminParticipantDeleteRequest = z.infer<
+  typeof adminParticipantDeleteRequestSchema
+>;
+
+export const adminParticipantDeleteResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  participantId: uuidSchema,
+  outcome: z.enum(['deleted', 'already_applied']),
+  accountDeleted: z.boolean(),
+  membershipRetained: z.boolean(),
+  deletedAt: dateTimeSchema,
+  audit: z.strictObject({ auditId: uuidSchema }),
+});
+
 export const adminParticipantUpdateResponseSchema = z.strictObject({
   eventId: uuidSchema,
   outcome: z.enum(['updated', 'already_applied']),

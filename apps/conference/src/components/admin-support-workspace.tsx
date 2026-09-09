@@ -27,6 +27,7 @@ import {
 import {
   requestAdminParticipantCreate,
   requestAdminParticipantDetail,
+  requestAdminParticipantDelete,
   requestAdminParticipantInvite,
   requestAdminParticipantList,
   requestAdminParticipantUpdate,
@@ -1289,16 +1290,27 @@ export const AdminParticipantDetailWorkspace = ({
     null,
   );
   const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState<'load' | 'save' | 'action' | null>('load');
+  const [busy, setBusy] = useState<
+    'load' | 'save' | 'action' | 'delete' | null
+  >('load');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [ticketAction, setTicketAction] = useState<
     'block' | 'reactivate' | null
   >(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleted, setDeleted] = useState<{
+    accountDeleted: boolean;
+    membershipRetained: boolean;
+  } | null>(null);
+  const deleteKey = useRef<{ signature: string; key: string } | null>(null);
+  const deletedHeading = useRef<HTMLHeadingElement>(null);
 
   const load = async (staleMessage?: string) => {
     const request = requestFence.begin('participant-detail');
+    setDeleted(null);
+    setDeleteOpen(false);
     setBusy('load');
     setError(null);
     const result = await requestAdminParticipantDetail(
@@ -1349,7 +1361,7 @@ export const AdminParticipantDetailWorkspace = ({
   }, [detail, draft]);
 
   const save = async () => {
-    if (!detail || !draft || !canMutate) return;
+    if (!detail || !draft || !canMutate || busy !== null) return;
     const parsed = adminParticipantUpdateRequestSchema.safeParse({
       participantId,
       expectedProfileVersion: detail.profileVersion,
@@ -1407,7 +1419,8 @@ export const AdminParticipantDetailWorkspace = ({
   };
 
   const mutateTicket = async () => {
-    if (!detail || !ticketAction || reason.trim().length < 8) return;
+    if (!detail || !ticketAction || reason.trim().length < 8 || busy !== null)
+      return;
     const appliedAction = ticketAction;
     setTicketAction(null);
     setBusy('action');
@@ -1439,7 +1452,7 @@ export const AdminParticipantDetailWorkspace = ({
   };
 
   const sendInvitation = async () => {
-    if (!detail || !canMutate) return;
+    if (!detail || !canMutate || busy !== null) return;
     setInviteOpen(false);
     setBusy('action');
     setError(null);
@@ -1468,6 +1481,85 @@ export const AdminParticipantDetailWorkspace = ({
     setDetail({ ...detail, invitation: result.data.invitation });
     setSuccess(`Pozvánka byla odeslána na ${detail.contactEmail}.`);
   };
+
+  const removeParticipant = async () => {
+    if (!detail || !canMutate || busy !== null) return;
+    setDeleteOpen(false);
+    setBusy('delete');
+    setError(null);
+    setSuccess(null);
+    const body = {
+      participantId,
+      expectedProfileVersion: detail.profileVersion,
+      confirm: true as const,
+    };
+    const signature = JSON.stringify({ eventId, ...body });
+    if (deleteKey.current?.signature !== signature) {
+      deleteKey.current = {
+        signature,
+        key: createAdminIdempotencyKey('participant-delete'),
+      };
+    }
+    const request = requestFence.begin('participant-delete');
+    const result = await requestAdminParticipantDelete(
+      api,
+      eventId,
+      participantId,
+      body,
+      deleteKey.current.key,
+      request.signal,
+    );
+    if (!request.isCurrent()) return;
+    request.finish();
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        setDetail(null);
+        setDraft(null);
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (!isAmbiguousAdminMutationFailure(result)) deleteKey.current = null;
+      if (isStaleAdminFailure(result.failure)) {
+        await load(
+          'Profil mezitím změnil někdo jiný. Zkontrolujte aktuální údaje a potvrďte smazání znovu.',
+        );
+        return;
+      }
+      setError(adminFailureMessage(result.failure, result.metadata?.requestId));
+      return;
+    }
+    if (result.kind !== 'success') return;
+    deleteKey.current = null;
+    setDeleted(result.data);
+    setDetail(null);
+    setDraft(null);
+    setReason('');
+    requestAnimationFrame(() => deletedHeading.current?.focus());
+  };
+
+  if (deleted)
+    return (
+      <section className={styles.stack}>
+        <h1 ref={deletedHeading} tabIndex={-1}>
+          Účastník byl trvale smazán
+        </h1>
+        <p role="status">
+          Účastník byl z této akce odstraněn včetně svých účastnických dat.
+        </p>
+        {!deleted.accountDeleted ? (
+          <p>
+            Uživatelský účet zůstává zachován kvůli dalším vazbám, například
+            roli v týmu, programu nebo účasti na jiné akci.
+          </p>
+        ) : null}
+        <Link className={styles.participantBackLink} href="/admin/ucastnici">
+          ← Zpět na účastníky
+        </Link>
+      </section>
+    );
 
   if (busy === 'load' && !detail)
     return (
@@ -1823,6 +1915,7 @@ export const AdminParticipantDetailWorkspace = ({
             {canMutate && detail.ticket.availableActions.includes('block') ? (
               <button
                 className={styles.dangerButton}
+                disabled={busy !== null}
                 onClick={() => setTicketAction('block')}
                 type="button"
               >
@@ -1833,6 +1926,7 @@ export const AdminParticipantDetailWorkspace = ({
             detail.ticket.availableActions.includes('reactivate') ? (
               <button
                 className={styles.button}
+                disabled={busy !== null}
                 onClick={() => setTicketAction('reactivate')}
                 type="button"
               >
@@ -1855,6 +1949,23 @@ export const AdminParticipantDetailWorkspace = ({
               ) : null}
             </dl>
           </section>
+          {canMutate ? (
+            <section>
+              <h2>Trvalé smazání</h2>
+              <p>
+                Smaže účastníka a jeho data z této akce. Tuto akci nelze vrátit
+                zpět.
+              </p>
+              <button
+                className={styles.dangerButton}
+                disabled={busy !== null}
+                onClick={() => setDeleteOpen(true)}
+                type="button"
+              >
+                {busy === 'delete' ? 'Mažu účastníka…' : 'Smazat účastníka'}
+              </button>
+            </section>
+          ) : null}
           <AdminTechnicalDetails>
             <dl className={styles.detailList}>
               <dt>ID účastníka</dt>
@@ -1875,7 +1986,7 @@ export const AdminParticipantDetailWorkspace = ({
       </div>
 
       {canMutate ? (
-        <div className={styles.participantSaveBar} data-dirty={isDirty}>
+        <div className={styles.participantSaveBar}>
           <div>
             <strong>
               {isDirty ? 'Máte neuložené změny' : 'Všechny změny jsou uložené'}
@@ -1905,6 +2016,37 @@ export const AdminParticipantDetailWorkspace = ({
           Údaje můžete zobrazit, ale nemáte oprávnění je měnit.
         </p>
       )}
+
+      {deleteOpen ? (
+        <AdminConfirmDialog
+          acknowledgement="Rozumím, že smazání je trvalé a nelze je vrátit zpět."
+          confirmLabel="Trvale smazat účastníka"
+          confirmDisabled={busy !== null}
+          danger
+          title="Trvale smazat účastníka?"
+          description={`Smazat účastníka ${displayName} (${detail.contactEmail}) z této akce?`}
+          impact={
+            <div className={styles.stack}>
+              <p>
+                Odstraní se profil, vstupenky, odbavení, rezervace, čekací
+                listiny, otázky, hodnocení, souhlasy a účastnická oznámení i
+                e-mailové fronty. Uvolněná místa se nabídnou čekajícím podle
+                nastavení aktivity.
+              </p>
+              <p>
+                Role v týmu, veřejný program a účast na jiných akcích zůstanou
+                zachované. Účet se smaže, pokud už není potřeba pro další vazby.
+              </p>
+              <p>
+                Záznam v externím prodejním systému zůstane zachován; nový
+                import může účastníka znovu přidat.
+              </p>
+            </div>
+          }
+          onConfirm={() => void removeParticipant()}
+          onDismiss={() => setDeleteOpen(false)}
+        />
+      ) : null}
 
       {ticketAction ? (
         <AdminConfirmDialog

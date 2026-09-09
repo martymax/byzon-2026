@@ -230,6 +230,13 @@ export const dispatchSupportedOutboxOnce = async (
           .where(eq(schema.outboxEvents.id, event.id));
         return;
       }
+      // A deletion can redact audit history and expire old snapshots. Hold the
+      // same event lock until the new export is committed so it cannot restore
+      // a snapshot generated just before that redaction.
+      await acquireTransactionLock(
+        transaction,
+        `operational-export:${event.eventId}`,
+      );
       const request =
         await transaction.query.operationalExportRequests.findFirst({
           where: and(
