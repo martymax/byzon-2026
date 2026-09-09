@@ -68,7 +68,7 @@ const render = (input: Layout): EmailContent => {
   const sections = (input.sections ?? [])
     .map(
       (section) =>
-        `<div class="detail" style="border-left:3px solid #f5218e;padding:0 0 0 16px;margin:0 0 24px;font-size:15px;line-height:1.65;"><h2 style="font-size:16px;line-height:1.5;margin:0 0 6px;">${e(section.title)}</h2>${section.lines.map(paragraph).join('')}</div>`,
+        `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;table-layout:fixed;"><tr><td class="detail" style="border-left:3px solid #f5218e;padding:0 0 0 16px;font-family:Inter,Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;"><h2 style="font-size:16px;line-height:24px;margin:0 0 6px;">${e(section.title)}</h2>${section.lines.map(paragraph).join('')}</td></tr><tr><td height="24" style="height:24px;font-size:0;line-height:0;">&nbsp;</td></tr></table>`,
     )
     .join('');
   const text = [
@@ -89,26 +89,26 @@ const render = (input: Layout): EmailContent => {
 @font-face{font-family:Khand;font-style:normal;font-weight:700;src:url('${e(origin)}/brand/email/khand-latin-ext.woff2') format('woff2');unicode-range:U+0100-024F,U+1E00-1EFF;}
 @font-face{font-family:Inter;font-style:normal;font-weight:100 900;src:url('${e(origin)}/brand/email/inter-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+2000-206F;}
 @font-face{font-family:Inter;font-style:normal;font-weight:100 900;src:url('${e(origin)}/brand/email/inter-latin-ext.woff2') format('woff2');unicode-range:U+0100-024F,U+1E00-1EFF;}
-body{margin:0;}table{border-spacing:0;}td{padding:0;}a:focus-visible{outline:3px solid #b01365;outline-offset:4px;}
-@media(max-width:520px){.outer{padding:12px 0!important;}.inner{padding-left:24px!important;padding-right:24px!important;}.hero-title{font-size:36px!important;}.cta{display:block!important;text-align:center!important;}.card{border-radius:0!important;}}
-@media(prefers-color-scheme:dark){.canvas{background:#140610!important;}.surface{background:#251720!important;color:#f7f0f5!important;}.copy,.detail{color:#f7f0f5!important;}.muted{color:#d0c5cd!important;}.help{background:#382332!important;color:#f7f0f5!important;}.help a,.settings{color:#ffa7d3!important;}.signature{color:#f7f0f5!important;}}
-</style><!--[if mso]><style>body,table,td,p,a,h1,h2{font-family:Arial,sans-serif!important;}</style><![endif]--></head>
-<body class="canvas" style="margin:0;background:#faf7f9;color:#343a46;font-family:Inter,Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${e(input.preheader)}</div>
-<table role="presentation" class="canvas" width="100%" bgcolor="#faf7f9" style="width:100%;background:#faf7f9;"><tr><td class="outer" align="center" style="padding:28px 16px;">
-<!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
-<table role="presentation" class="card surface" width="600" bgcolor="#ffffff" style="width:100%;max-width:600px;table-layout:fixed;overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word;background:#ffffff;border:1px solid #dedee5;border-radius:18px;overflow:hidden;">
-<tr><td class="inner" bgcolor="#140610" style="background:#140610;padding:28px 36px;"><img src="${e(origin)}/brand/email/logo-light.png" width="176" height="28" alt="BYZON.cz" style="display:block;border:0;color:white;font-size:24px;font-weight:bold;">
-<p style="margin:28px 0 12px;color:#f5218e;font-size:11px;line-height:1.5;letter-spacing:2px;font-weight:bold;">${e(input.eyebrow)}</p><h1 class="hero-title" style="font-family:Khand,'Arial Narrow',Arial,sans-serif;font-size:46px;line-height:1.1;font-weight:700;margin:0;color:#ffffff;">${e(input.title)}<br><span style="color:#f5218e;">${e(input.accent)}</span></h1></td></tr>
-<tr><td height="4" bgcolor="#f5218e" style="height:4px;background:#f5218e;font-size:0;line-height:0;">&nbsp;</td></tr>
-<tr><td class="inner copy" style="padding:28px 36px 0;color:#343a46;font-size:16px;line-height:1.65;"><p style="margin:0 0 12px;font-weight:600;">${e(input.greeting)}</p>${paragraph(input.body)}</td></tr>
+body{margin:0;}table{border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;}td{padding:0;}a:focus-visible{outline:3px solid #b01365;outline-offset:4px;}
+@media(max-width:520px){.outer{padding:12px 0!important;}.inner{padding-left:24px!important;padding-right:24px!important;}.hero-title{font-size:36px!important;line-height:40px!important;}.cta{display:block!important;text-align:center!important;}.card,.inner{border-radius:0!important;}}
+@media(prefers-color-scheme:dark){.canvas{background-color:#140610!important;}.surface{background-color:#251720!important;color:#f7f0f5!important;}.copy,.detail{color:#f7f0f5!important;}.muted{color:#d0c5cd!important;}.help{background-color:#382332!important;color:#f7f0f5!important;}.help a,.settings{color:#ffa7d3!important;}.signature{color:#f7f0f5!important;}}
+</style><!--[if mso]><style>body,table,td,p,a,h1,h2{font-family:Arial,sans-serif!important;}td,p,h1,h2{mso-line-height-rule:exactly;}</style><![endif]--></head>
+<body class="canvas" style="margin:0;background-color:#faf7f9;color:#343a46;font-family:Inter,Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;mso-hide:all;">${e(input.preheader)}</div>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" class="canvas" width="100%" bgcolor="#faf7f9" style="width:100%;background-color:#faf7f9;color:#343a46;font-family:Inter,Arial,Helvetica,sans-serif;"><tr><td class="outer" align="center" style="padding:28px 16px;">
+<!--[if mso]><table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600"><tr><td><![endif]-->
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" class="card surface" width="600" bgcolor="#ffffff" style="font-family:Inter,Arial,Helvetica,sans-serif;width:100%;max-width:600px;table-layout:fixed;overflow-wrap:anywhere;word-wrap:break-word;background-color:#ffffff;border:1px solid #dedee5;border-radius:18px;">
+<tr><td class="inner" bgcolor="#140610" style="background-color:#140610;padding:28px 36px;border-radius:18px 18px 0 0;"><img src="${e(origin)}/brand/email/logo-light.png" width="176" height="28" alt="BYZON.cz" style="display:block;border:0;color:white;font-size:24px;font-weight:bold;">
+<p style="margin:28px 0 12px;color:#f5218e;font-size:11px;line-height:17px;letter-spacing:2px;font-weight:bold;">${e(input.eyebrow)}</p><h1 class="hero-title" style="font-family:Khand,'Arial Narrow',Arial,sans-serif;font-size:46px;line-height:51px;font-weight:700;margin:0;color:#ffffff;">${e(input.title)}<br><span style="color:#f5218e;">${e(input.accent)}</span></h1></td></tr>
+<tr><td height="4" bgcolor="#f5218e" style="height:4px;background-color:#f5218e;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td class="inner copy" style="padding:28px 36px 0;color:#343a46;font-size:16px;line-height:26px;"><p style="margin:0 0 12px;font-weight:bold;">${e(input.greeting)}</p>${paragraph(input.body)}</td></tr>
 <tr><td class="inner" style="padding:12px 36px 12px;">
 <!--[if mso]><v:roundrect href="${e(url)}" style="height:52px;v-text-anchor:middle;width:280px;" arcsize="50%" stroke="f" fillcolor="#f5218e"><w:anchorlock/><center style="color:#140610;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${e(input.cta)}</center></v:roundrect><![endif]-->
-<!--[if !mso]><!--><a class="cta" href="${e(url)}" style="display:inline-block;padding:16px 28px;background:#f5218e;border-radius:999px;color:#140610;text-decoration:none;font-size:16px;font-weight:700;line-height:20px;">${e(input.cta)} &rarr;</a><!--<![endif]-->
-</td></tr><tr><td class="inner muted" style="padding:0 36px 24px;color:#606a78;font-size:13px;line-height:1.6;">${input.note ? e(input.note) : ''}</td></tr>
+<!--[if !mso]><!--><a class="cta" href="${e(url)}" style="display:inline-block;padding:16px 28px;background-color:#f5218e;border-radius:999px;color:#140610;text-decoration:none;font-size:16px;font-weight:700;line-height:20px;">${e(input.cta)} &rarr;</a><!--<![endif]-->
+</td></tr><tr><td class="inner muted" style="padding:0 36px 24px;color:#606a78;font-size:13px;line-height:21px;">${input.note ? e(input.note) : ''}</td></tr>
 ${sections ? `<tr><td class="inner copy" style="padding:0 36px;color:#343a46;">${sections}</td></tr>` : ''}
-${input.footer ? `<tr><td class="inner muted" style="padding:0 36px 24px;color:#606a78;font-size:14px;line-height:1.65;">${paragraph(input.footer)}</td></tr>` : ''}
-<tr><td class="inner help" bgcolor="#fceef5" style="padding:20px 36px;background:#fceef5;color:#343a46;font-size:13px;line-height:1.65;"><p style="margin:0 0 6px;"><strong>Nefunguje tlačítko?</strong> Zkopírujte do prohlížeče celý odkaz:</p><p style="margin:0;word-break:break-all;overflow-wrap:anywhere;"><a href="${e(url)}" style="color:#b01365;text-decoration:underline;word-break:break-all;">${e(url)}</a></p>${recovery ? `<p style="margin:10px 0 0;">Odkaz už neplatí? <a href="${e(recovery)}" style="color:#b01365;">Vyžádejte si nový na přihlašovací stránce.</a></p>` : ''}</td></tr></table>
-<table role="presentation" width="600" style="width:100%;max-width:600px;"><tr><td class="muted" align="center" style="padding:22px 16px;font-size:13px;line-height:1.7;color:#606a78;"><p class="signature" style="margin:0 0 4px;color:#140610;font-weight:bold;">Tým BYZON</p><p style="margin:0;">Potřebujete pomoc? Odpovězte na tento e-mail.</p>${settings ? `<p style="margin:12px 0 0;"><a class="settings" href="${e(settings)}" style="color:#b01365;">Nastavení e-mailů a oslovení</a></p>` : ''}<p style="margin:12px 0 0;font-size:12px;">Lidskost jako konkurenční výhoda</p></td></tr></table>
+${input.footer ? `<tr><td class="inner muted" style="padding:0 36px 24px;color:#606a78;font-size:14px;line-height:23px;">${paragraph(input.footer)}</td></tr>` : ''}
+<tr><td class="inner help" bgcolor="#fceef5" style="padding:20px 36px;border-radius:0 0 18px 18px;background-color:#fceef5;color:#343a46;font-size:13px;line-height:22px;"><p style="margin:0 0 6px;"><strong>Nefunguje tlačítko?</strong> Zkopírujte do prohlížeče celý odkaz:</p><p style="margin:0;word-break:break-all;overflow-wrap:anywhere;"><a href="${e(url)}" style="color:#b01365;text-decoration:underline;word-break:break-all;">${e(url)}</a></p>${recovery ? `<p style="margin:10px 0 0;">Odkaz už neplatí? <a href="${e(recovery)}" style="color:#b01365;">Vyžádejte si nový na přihlašovací stránce.</a></p>` : ''}</td></tr></table>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="font-family:Inter,Arial,Helvetica,sans-serif;width:100%;max-width:600px;"><tr><td class="muted" align="center" style="padding:22px 16px;font-size:13px;line-height:22px;color:#606a78;"><p class="signature" style="margin:0 0 4px;color:#140610;font-weight:bold;">Tým BYZON</p><p style="margin:0;">Potřebujete pomoc? Odpovězte na tento e-mail.</p>${settings ? `<p style="margin:12px 0 0;"><a class="settings" href="${e(settings)}" style="color:#b01365;">Nastavení e-mailů a oslovení</a></p>` : ''}<p style="margin:12px 0 0;font-size:12px;">Lidskost jako konkurenční výhoda</p></td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
   return { subject: input.subject, text, html };
@@ -119,11 +119,11 @@ const authCopy: Record<
   Pick<Layout, 'subject' | 'eyebrow' | 'title' | 'accent' | 'body' | 'cta'>
 > = {
   'participant-invitation': {
-    subject: 'BYZON 2026: váš přístup do konferenční aplikace',
+    subject: 'BYZON 2026: Váš přístup do konferenční aplikace',
     eyebrow: 'VAŠE KONFERENČNÍ APLIKACE',
     title: 'Váš BYZON',
     accent: 'začíná tady.',
-    body: 'zveme vás do aplikace konference BYZON 2026. Připravte si vlastní program a mějte důležité informace po ruce.',
+    body: 'zveme Vás do aplikace konference BYZON 2026. Připravte si vlastní program a mějte důležité informace po ruce.',
     cta: 'Otevřít aplikaci',
   },
   'team-invitation': {
@@ -131,7 +131,7 @@ const authCopy: Record<
     eyebrow: 'ORGANIZAČNÍ TÝM',
     title: 'Pojďme připravit',
     accent: 'skvělý BYZON.',
-    body: 'zveme vás do organizačního týmu BYZON 2026. Otevřete administraci pomocí svého osobního odkazu.',
+    body: 'zveme Vás do organizačního týmu BYZON 2026. Otevřete administraci pomocí svého osobního odkazu.',
     cta: 'Otevřít administraci',
   },
   'account-activation': {
@@ -143,11 +143,11 @@ const authCopy: Record<
     cta: 'Aktivovat účet',
   },
   'sign-in': {
-    subject: 'BYZON 2026: váš přihlašovací odkaz',
+    subject: 'BYZON 2026: Váš přihlašovací odkaz',
     eyebrow: 'PŘIHLÁŠENÍ DO APLIKACE',
     title: 'Přihlášení',
     accent: 'jedním kliknutím.',
-    body: 'tady je váš jednorázový odkaz do aplikace BYZON 2026. Kliknutím se přihlásíte bez hesla.',
+    body: 'tady je Váš jednorázový odkaz do aplikace BYZON 2026. Kliknutím se přihlásíte bez hesla.',
     cta: 'Přihlásit se',
   },
 };
@@ -190,7 +190,7 @@ export const createAuthEmail = (input: AuthEmailInput): EmailContent => {
       input.purpose === 'participant-invitation'
         ? [
             {
-              title: 'Program podle vás',
+              title: 'Program podle Vás',
               lines: [
                 'Uložte si zajímavé přednášky do své agendy. Program, místa konání i zprávy organizátorů najdete na jednom místě.',
               ],
@@ -201,12 +201,12 @@ export const createAuthEmail = (input: AuthEmailInput): EmailContent => {
               {
                 title: 'Váš přístup do týmu',
                 lines: [
-                  'V administraci najdete funkce podle přidělených oprávnění. Pokud vám něco chybí, ozvěte se organizátorovi.',
+                  'V administraci najdete funkce podle přidělených oprávnění. Pokud Vám něco chybí, ozvěte se organizátorovi.',
                 ],
               },
             ]
           : [],
-    footer: `Odkaz je určený jen vám. Nepřeposílejte ho.\n${invitation ? 'Pokud se vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.' : input.purpose === 'sign-in' ? 'Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.' : 'Pokud právě neaktivujete svůj účet, můžete tento e-mail ignorovat.'}`,
+    footer: `Odkaz je určený jen Vám. Nepřeposílejte ho.\n${invitation ? 'Pokud se Vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.' : input.purpose === 'sign-in' ? 'Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.' : 'Pokud právě neaktivujete svůj účet, můžete tento e-mail ignorovat.'}`,
     recoveryUrl: recovery.href,
   });
 };
@@ -231,21 +231,21 @@ export const createNotificationEmail = (
       'Rezervace potvrzena',
       'Místo máte',
       'rezervované.',
-      'vaše rezervace je potvrzená. Podrobnosti najdete níže a ve své agendě.',
+      'Vaše rezervace je potvrzená. Podrobnosti najdete níže a ve své agendě.',
     ],
     reservation_cancelled: [
       'Zrušení rezervace',
       'Rezervace',
       'je zrušená.',
       p.cancelledByOrganizer
-        ? 'organizátor zrušil vaši rezervaci. Aktuální možnosti najdete ve své agendě. Pokud potřebujete pomoc, odpovězte na tento e-mail.'
-        : 'potvrzujeme zrušení vaší rezervace. Aktuální možnosti najdete ve své agendě.',
+        ? 'organizátor zrušil Vaši rezervaci. Aktuální možnosti najdete ve své agendě. Pokud potřebujete pomoc, odpovězte na tento e-mail.'
+        : 'potvrzujeme zrušení Vaší rezervace. Aktuální možnosti najdete ve své agendě.',
     ],
     waitlist_joined: [
       'Zařazení do čekací listiny',
       'Jste na',
       'čekací listině.',
-      'vaše žádost je na čekací listině. Místo zatím není rezervované. Pokud na vás přijde řada a nekoliduje s jinou rezervací, aplikace místo automaticky potvrdí a pošleme vám e-mail.',
+      'Vaše žádost je na čekací listině. Místo zatím není rezervované. Pokud na Vás přijde řada a nekoliduje s jinou rezervací, aplikace místo automaticky potvrdí a pošleme Vám e-mail.',
     ],
     waitlist_left: [
       'Odhlášení z čekací listiny',
@@ -254,13 +254,13 @@ export const createNotificationEmail = (
       'potvrzujeme odhlášení z čekací listiny. U této aktivity už nečekáte na uvolnění místa.',
     ],
     waitlist_promoted: [
-      'Místo z čekací listiny je vaše',
+      'Místo z čekací listiny je Vaše',
       'Dobrá zpráva.',
       'Máte místo!',
-      'uvolnilo se místo a vaše rezervace je nyní potvrzená. Nemusíte ji znovu potvrzovat. Podrobnosti najdete níže a ve své agendě.',
+      'uvolnilo se místo a Vaše rezervace je nyní potvrzená. Nemusíte ji znovu potvrzovat. Podrobnosti najdete níže a ve své agendě.',
     ],
     program_changed: [
-      'Změna ve vašem programu',
+      'Změna ve Vašem programu',
       'Váš program',
       'se změnil.',
       'organizátoři upravili program aktivit, které máte v agendě, rezervované nebo na čekací listině. Zkontrolujte prosím aktuální čas a místo.',
@@ -272,10 +272,10 @@ export const createNotificationEmail = (
       p.body ?? 'v aplikaci najdete novou zprávu od organizátorů.',
     ],
     rating_reminder: [
-      'Jaký byl váš BYZON?',
+      'Jaký byl Váš BYZON?',
       'Děkujeme, že',
       'jste u toho.',
-      'zajímá nás, jaký byl váš BYZON. Co se povedlo a co můžeme příště zlepšit? Podělte se s námi o své hodnocení konference.',
+      'zajímá nás, jaký byl Váš BYZON. Co se povedlo a co můžeme příště zlepšit? Podělte se s námi o své hodnocení konference.',
     ],
   }[p.kind];
   const path =
@@ -325,7 +325,7 @@ export const createNotificationEmail = (
     footer:
       p.kind === 'rating_reminder'
         ? 'Hodnocení je dobrovolné. Připomenutí hodnocení můžete vypnout v nastavení e-mailů.'
-        : 'Tato zpráva se týká vaší účasti na konferenci. Aktuální stav najdete vždy v aplikaci.',
+        : 'Tato zpráva se týká Vaší účasti na konferenci. Aktuální stav najdete vždy v aplikaci.',
     settingsUrl: new URL('/app/profil', origin).href,
   });
 };

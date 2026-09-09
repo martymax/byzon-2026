@@ -9,7 +9,7 @@ Těšíme se na společné rozhovory a zážitky.
 Přečíst zprávu:
 https://app.example.test/app/oznameni/33333333-3333-4333-8333-333333333333
 
-Tato zpráva se týká vaší účasti na konferenci. Aktuální stav najdete vždy v aplikaci.
+Tato zpráva se týká Vaší účasti na konferenci. Aktuální stav najdete vždy v aplikaci.
 
 Nastavení e-mailů a oslovení: https://app.example.test/app/profil
 

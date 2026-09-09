@@ -1,8 +1,8 @@
-BYZON 2026: Místo z čekací listiny je vaše
+BYZON 2026: Místo z čekací listiny je Vaše
 
 Dobrý den, Jano,
 
-uvolnilo se místo a vaše rezervace je nyní potvrzená. Nemusíte ji znovu potvrzovat. Podrobnosti najdete níže a ve své agendě.
+uvolnilo se místo a Vaše rezervace je nyní potvrzená. Nemusíte ji znovu potvrzovat. Podrobnosti najdete níže a ve své agendě.
 
 Otevřít moji agendu:
 https://app.example.test/app/agenda
@@ -10,7 +10,7 @@ https://app.example.test/app/agenda
 Lidskost jako konkurenční výhoda
 18. září v 14:00 – 18. září v 15:00 · Hlavní sál
 
-Tato zpráva se týká vaší účasti na konferenci. Aktuální stav najdete vždy v aplikaci.
+Tato zpráva se týká Vaší účasti na konferenci. Aktuální stav najdete vždy v aplikaci.
 
 Nastavení e-mailů a oslovení: https://app.example.test/app/profil
 

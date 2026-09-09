@@ -99,7 +99,7 @@ Odeslané oznámení už nelze odvolat ze schránky; administrační potvrzení 
 
 Náhledy znovu vytvoří `pnpm --filter @byzon/mail build` a
 `node scripts/generate-email-preview.mjs` (nebo společně `pnpm preview:emails`).
-`node scripts/check-email-preview.mjs` zkontroluje 26 variant rozložení včetně
+`node scripts/check-email-preview.mjs` zkontroluje 50 variant rozložení včetně
 dlouhých hodnot bez obrázků/fontů a aktualizuje screenshoty. Prohlédnout lze i
 [desktop](email-preview/desktop.png), [mobil](email-preview/mobile.png)
 a [tmavý režim](email-preview/dark.png).
@@ -110,3 +110,37 @@ spouštěče, opakované akce, souhrny publikace a uložení preferencí.
 Browser testy ověřují oslovení, preference a odeslání hodnocení konference
 na telefonu, tabletu a desktopu, včetně automatických kontrol přístupnosti.
 Integrační testy vyžadují samostatnou migrovanou databázi v `TEST_DATABASE_URL`.
+
+## Kontrola kompatibility a zdvořilostní tvary — 9. září 2026
+
+Systémové předměty, preheadery, HTML i prostý text používají zdvořilostní
+„Vy/Vám/Vás/Váš“ ve všech pádech. Zvratná zájmena „svůj/své“ zůstávají malá.
+Jde o adresnou korespondenci; pravidlo vychází z
+[jazykové příručky ÚJČ](https://m.prirucka.ujc.cas.cz/l/?id=850).
+Volný obsah oznámení, názvy aktivit a vlastní oslovení se automaticky nepřepisují.
+
+HTML Check stagingového Mailpitu ověřil všech 12 šablon, vždy 187 testy.
+Pozvánka do týmu měla před změnou při opakovaném měření 86,94 % podpory
+(screenshot z původní kontroly ukazoval 86,61 %); po změně 88,77 %.
+Počet typů výhrad klesl z 25 na 23. Podrobnosti včetně poznámek ke zbývajícím
+výhradám obsahuje [výsledek kontroly](email-preview/mailpit-check.json).
+Skóre popisuje podporu vlastností podle Can I Email; neověřuje skutečný rendering
+konkrétní verze Outlooku a samo o sobě není počtem HTML chyb.
+
+- Pozadí používají `background-color` a tabulkové `bgcolor` místo shorthandu.
+- Tabulky mají explicitní `cellpadding`, `cellspacing` a `border`; detaily používají
+  odsazení a okraj buňky. Základní fonty a barvy nezávisí jen na elementu `body`.
+- Řádkování má konkrétní rozměry a pravidlo pro Outlook. VML varianta tlačítka
+  zůstává zachovaná.
+- Karta neořezává přetékající obsah. Dlouhé odkazy mají náhradní zalamování;
+  jejich text a cíl se nemění ani nedoplňují o neviditelné znaky.
+- Tmavý režim, mobilní úpravy, zaoblení a zvýraznění klávesnicového zaměření
+  zůstávají doplňky nad funkčním základním HTML. Nepodpora těchto vlastností
+  je v Mailpitu stále uvedená.
+
+Ověření zahrnuje 30 testů mailového balíčku a 50 kontrol rozložení: všechny
+šablony na mobilu a desktopu, také bez hlavičkového CSS, obalu `body`, obrázků
+či fontů; dále extrémně dlouhé hodnoty a vizuální kontrolu tmavého režimu.
+Ve stagingovém Mailpitu zůstává jediná syntetická zpráva s předmětem
+`[HTML CHECK] BYZON 2026: pozvánka do organizačního týmu`, adresovaná na
+`html-check@example.invalid`. Obsahuje nefunkční ukázkový token.

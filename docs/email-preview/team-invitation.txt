@@ -2,7 +2,7 @@ BYZON 2026: pozvánka do organizačního týmu
 
 Dobrý den, Martine,
 
-zveme vás do organizačního týmu BYZON 2026. Otevřete administraci pomocí svého osobního odkazu.
+zveme Vás do organizačního týmu BYZON 2026. Otevřete administraci pomocí svého osobního odkazu.
 
 Otevřít administraci:
 https://app.example.test/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=%2Fadmin
@@ -10,10 +10,10 @@ https://app.example.test/api/auth/magic-link/verify?token=synthetic-preview-only
 Odkaz platí 24 hodin od odeslání a funguje jen jednou.
 
 Váš přístup do týmu
-V administraci najdete funkce podle přidělených oprávnění. Pokud vám něco chybí, ozvěte se organizátorovi.
+V administraci najdete funkce podle přidělených oprávnění. Pokud Vám něco chybí, ozvěte se organizátorovi.
 
-Odkaz je určený jen vám. Nepřeposílejte ho.
-Pokud se vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.
+Odkaz je určený jen Vám. Nepřeposílejte ho.
+Pokud se Vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.
 
 Odkaz už neplatí? Vyžádejte si nový: https://app.example.test/prihlaseni?mode=recovery&returnTo=%2Fadmin
 
