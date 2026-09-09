@@ -173,7 +173,7 @@ describe('production auth mail provider', () => {
 
     const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
     expect(body.subject).toBe(
-      'BYZON 2026: váš přístup do konferenční aplikace',
+      'BYZON 2026: Váš přístup do konferenční aplikace',
     );
     expect(body.text).toContain('aplikace konference BYZON 2026');
     expect(body.text).toContain('Odkaz platí 24 hodin');
