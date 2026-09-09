@@ -24,6 +24,7 @@ import { useRef, useState } from 'react';
 
 import type { ParticipantAccountResourceValue } from '@/components/participant-account-resource';
 import { ParticipantAccountBoundary } from '@/components/participant-account-state';
+import { ParticipantPrivacyDocuments } from '@/components/participant-privacy-documents';
 import type { ApiPort } from '@/lib/api';
 import {
   browserIdentityApi,
@@ -470,6 +471,7 @@ export const ParticipantPrivacy = ({
     <ParticipantAccountBoundary loginReturnTo="/app/soukromi">
       {(identity, resource) => (
         <div className="participant-account-stack">
+          <ParticipantPrivacyDocuments />
           <section
             aria-labelledby="participant-legal-title"
             className="participant-account-section"

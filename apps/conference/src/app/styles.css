@@ -3346,6 +3346,34 @@ main > .ui-participant-nav-spacer {
   color: var(--byzon-text-muted);
   font-size: 0.9375rem;
 }
+.participant-app-document-content {
+  max-height: none;
+  overflow: visible;
+  line-height: 1.65;
+}
+.participant-app-document-content h4 {
+  margin-block-start: var(--byzon-space-4);
+  color: var(--byzon-ink);
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+.participant-app-document-content h5 {
+  color: var(--byzon-ink);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.participant-app-document-content table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.participant-app-document-content th,
+.participant-app-document-content td {
+  padding: var(--byzon-space-2);
+  border: 1px solid var(--byzon-border);
+  text-align: start;
+  vertical-align: top;
+}
 .participant-privacy-request-grid {
   min-width: 0;
   display: grid;
