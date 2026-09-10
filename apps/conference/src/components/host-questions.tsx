@@ -474,21 +474,27 @@ export function ModeratorFeed({
                         ? 'Zodpovězeno na konferenci'
                         : 'Čeká na odpověď'}
                     </p>
-                    <strong>{item.authorName}</strong>
-                    <p className={styles.meta}>
-                      {questionTime(item.submittedAt)}
+                    <p className={styles.moderatorQuestion}>{item.text}</p>
+                    <p className={styles.questionAuthor}>
+                      {item.authorName} · {questionTime(item.submittedAt)}
                     </p>
-                    <p className={styles.text}>{item.text}</p>
                     {item.originals.map((original) => (
-                      <div key={original.questionId}>
-                        <strong>{original.authorName}</strong>
-                        <p className={styles.meta}>
+                      <div
+                        className={styles.mergedOriginal}
+                        key={original.questionId}
+                      >
+                        <p className={styles.moderatorQuestion}>
+                          {original.text}
+                        </p>
+                        <p className={styles.questionAuthor}>
+                          {original.authorName} ·{' '}
                           {questionTime(original.submittedAt)}
                         </p>
-                        <p className={styles.text}>{original.text}</p>
                       </div>
                     ))}
-                    <div className={styles.actions}>
+                    <div
+                      className={`${styles.actions} ${styles.questionActions}`}
+                    >
                       <Button
                         variant="secondary"
                         disabled={mutating}
