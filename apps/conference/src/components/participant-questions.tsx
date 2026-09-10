@@ -65,6 +65,7 @@ export function OwnQuestionItems({
                   Odesláno {questionTime(item.submittedAt)}
                 </p>
                 <p className={styles.text}>{item.text}</p>
+                {item.answeredAt ? <p>Zodpovězeno na konferenci</p> : null}
                 {item.answer ? (
                   <div className={styles.answer}>
                     <h3>Písemná odpověď · {item.answer.speakerName}</h3>

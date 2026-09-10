@@ -28,12 +28,48 @@ export const questionSubmitResponseSchema = z.strictObject({
   sessionId: uuidSchema,
   submittedAt: dateTimeSchema,
 });
-export const moderatorQuestionSchema = z.strictObject({
+export const questionOriginalSchema = z.strictObject({
   questionId: uuidSchema,
   authorName: cleanText(1, 257),
   text: cleanText(1, 1_000),
   submittedAt: dateTimeSchema,
 });
+export const moderatorQuestionSchema = questionOriginalSchema.extend({
+  answeredAt: dateTimeSchema.nullable().default(null),
+  moderationVersion: z.number().int().positive().default(1),
+  originals: z.array(questionOriginalSchema).default([]),
+});
+export const questionModerationRequestSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('answer'),
+    questionId: uuidSchema,
+    expectedVersion: z.number().int().positive(),
+    answered: z.boolean(),
+  }),
+  z.strictObject({
+    action: z.literal('delete'),
+    questionId: uuidSchema,
+    expectedVersion: z.number().int().positive(),
+  }),
+  z
+    .strictObject({
+      action: z.literal('merge'),
+      questionId: uuidSchema,
+      expectedVersion: z.number().int().positive(),
+      sourceId: uuidSchema,
+      sourceVersion: z.number().int().positive(),
+    })
+    .refine(
+      (value) => value.questionId !== value.sourceId,
+      'Choose different questions',
+    ),
+]);
+export const questionModerationResponseSchema = z.strictObject({
+  questionId: uuidSchema,
+});
+export type QuestionModerationRequest = z.infer<
+  typeof questionModerationRequestSchema
+>;
 export const moderatorQuestionFeedQuerySchema = z
   .strictObject({
     after: dateTimeSchema.optional(),
@@ -200,6 +236,7 @@ export const questionAnswerSchema = z.strictObject({
   version: z.number().int().positive(),
 });
 export const ownQuestionSchema = z.strictObject({
+  answeredAt: dateTimeSchema.nullable().default(null),
   questionId: uuidSchema,
   sessionId: uuidSchema,
   sessionTitle: cleanText(1, 512),
@@ -284,6 +321,7 @@ export const questionFollowUpProblemSchema = z.discriminatedUnion('code', [
   defineApiProblemSchema('QUESTIONS_CLOSED', 409),
   defineApiProblemSchema('QUESTION_FOLLOW_UPS_DISABLED', 409),
   defineApiProblemSchema('QUESTION_ANSWER_CONFLICT', 409),
+  defineApiProblemSchema('QUESTION_MODERATION_CONFLICT', 409),
   defineApiProblemSchema('QUESTION_ACCESS_DENIED', 403),
   defineApiProblemSchema('QUESTION_NOT_FOUND', 404),
 ]);

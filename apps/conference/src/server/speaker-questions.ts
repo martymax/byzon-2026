@@ -149,6 +149,7 @@ export async function readSpeakerSessions(
         .where(
           and(
             eq(schema.questions.eventId, actor.eventId),
+            isNull(schema.questions.deletedAt),
             eq(schema.questions.sessionId, link.sessionId),
           ),
         );
@@ -215,6 +216,7 @@ export async function readSpeakerQuestions(
       .where(
         and(
           eq(schema.questions.eventId, actor.eventId),
+          isNull(schema.questions.deletedAt),
           eq(schema.questions.sessionId, sessionId),
           query.status === 'answered'
             ? isNotNull(schema.questionAnswers.id)
@@ -294,6 +296,7 @@ export async function writeQuestionAnswer(
       columns: { sessionId: true },
       where: and(
         eq(schema.questions.eventId, actor.eventId),
+        isNull(schema.questions.deletedAt),
         eq(schema.questions.id, questionId),
       ),
     });
@@ -339,6 +342,15 @@ export async function writeQuestionAnswer(
         await tx.execute(
           sql`select id from questions where event_id=${actor.eventId} and id=${questionId} for update`,
         );
+        const visible = await tx.query.questions.findFirst({
+          where: and(
+            eq(schema.questions.id, questionId),
+            eq(schema.questions.eventId, actor.eventId),
+            isNull(schema.questions.deletedAt),
+          ),
+        });
+        if (!visible)
+          questionFailure('QUESTION_NOT_FOUND', 404, 'Dotaz byl smazán.');
         const existing = await tx.query.questionAnswers.findFirst({
           where: and(
             eq(schema.questionAnswers.eventId, actor.eventId),

@@ -31,6 +31,7 @@ export async function loadQuestionActor(
   request: Request,
   dependencies: QuestionsDependencies,
   db: QuestionDb = dependencies.db,
+  allowManagement = false,
 ) {
   const identity = await dependencies.getSession(request.headers);
   if (!identity)
@@ -73,8 +74,10 @@ export async function loadQuestionActor(
   ]);
   if (
     membership?.status !== 'active' ||
-    !profile ||
-    !roles.some((role) => role.role === 'participant')
+    (!(
+      allowManagement && roles.some((role) => role.role === 'organizer_admin')
+    ) &&
+      (!profile || !roles.some((role) => role.role === 'participant')))
   )
     questionFailure(
       'EVENT_ACCESS_DENIED',
@@ -204,4 +207,23 @@ export async function lockQuestionAccess(
   await tx.execute(
     sql`select event_id from event_features where event_id=${eventId} for share`,
   );
+}
+
+export function requireQuestionManagement(
+  actor: Awaited<ReturnType<typeof loadQuestionActor>>,
+  sessionId: string,
+) {
+  if (
+    !actor.roles.some(
+      (role) =>
+        role.role === 'organizer_admin' ||
+        (role.role === 'moderator' &&
+          role.scope.sessionIds?.includes(sessionId)),
+    )
+  )
+    questionFailure(
+      'QUESTION_ACCESS_DENIED',
+      403,
+      'Ke správě těchto dotazů nemáte oprávnění.',
+    );
 }

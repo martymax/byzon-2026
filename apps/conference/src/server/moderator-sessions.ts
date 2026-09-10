@@ -3,7 +3,7 @@ import {
   questionSessionListSchema,
   type QuestionSessionList,
 } from '@byzon/domain/contracts';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import {
   loadQuestionActor,
@@ -21,17 +21,31 @@ export async function readModeratorSessions(
   dependencies: QuestionsDependencies,
 ) {
   try {
-    const actor = await loadQuestionActor(request, dependencies);
+    const actor = await loadQuestionActor(
+      request,
+      dependencies,
+      dependencies.db,
+      true,
+    );
     const assignments = actor.roles.filter((r) => r.role === 'moderator');
-    if (!assignments.length)
+    const admin = actor.roles.some((role) => role.role === 'organizer_admin');
+    if (!admin && !assignments.length)
       questionFailure(
         'QUESTION_ACCESS_DENIED',
         403,
         'Moderování není přiřazeno.',
       );
-    const ids = [
-      ...new Set(assignments.flatMap((r) => r.scope.sessionIds ?? [])),
-    ];
+    const ids = admin
+      ? (
+          await dependencies.db.query.programSessions.findMany({
+            columns: { id: true },
+            where: and(
+              eq(schema.programSessions.eventId, actor.eventId),
+              eq(schema.programSessions.questionMode, 'moderated_follow_up'),
+            ),
+          })
+        ).map((row) => row.id)
+      : [...new Set(assignments.flatMap((r) => r.scope.sessionIds ?? []))];
     const now = dependencies.now?.() ?? new Date();
     const sessions: QuestionSessionList['sessions'] = [];
     for (const id of ids) {
@@ -63,6 +77,8 @@ export async function readModeratorSessions(
           and(
             eq(schema.questions.eventId, actor.eventId),
             eq(schema.questions.sessionId, id),
+            isNull(schema.questions.deletedAt),
+            isNull(schema.questions.mergedIntoId),
           ),
         );
       sessions.push({

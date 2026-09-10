@@ -58,7 +58,7 @@ suite('authoritative participant Q&A', () => {
           f.dependencies(f.users.admin),
         )
       ).status,
-    ).toBe(403);
+    ).toBe(200);
   });
   it.each([
     ['2026-09-07T08:00:00Z', 201, null],
@@ -167,7 +167,7 @@ suite('authoritative participant Q&A', () => {
           f.dependencies(f.users.admin),
         )
       ).status,
-    ).toBe(403);
+    ).toBe(200);
   });
   it('paginates more than 100 questions with identical timestamps without duplicates', async () => {
     await f.client.db.insert(schema.questions).values(

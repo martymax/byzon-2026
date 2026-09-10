@@ -133,6 +133,7 @@ export async function readHostCapabilities(
         .where(
           and(
             eq(schema.questions.eventId, event.id),
+            isNull(schema.questions.deletedAt),
             inArray(schema.questions.sessionId, ids),
             lte(
               schema.programSessions.endsAt,

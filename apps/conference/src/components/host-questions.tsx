@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ActionLink, Button, Card } from '@byzon/ui';
 import {
   moderatorQuestionFeedSchema,
+  questionModerationResponseSchema,
+  type QuestionModerationRequest,
   questionContextSchema,
   questionSessionListSchema,
   type ModeratorQuestionFeed,
@@ -194,9 +196,11 @@ export function HostQuestionSessions({
 export function ModeratorFeed({
   eventId,
   sessionId,
+  embedded = false,
 }: {
   eventId: string;
   sessionId: string;
+  embedded?: boolean;
 }) {
   const [items, setItems] = useState<ModeratorQuestionFeed['items']>([]),
     [context, setContext] = useState<QuestionContext | null>(null),
@@ -204,29 +208,43 @@ export function ModeratorFeed({
     [blocked, setBlocked] = useState(false),
     [error, setError] = useState(''),
     [success, setSuccess] = useState(''),
-    [newIds, setNewIds] = useState<string[]>([]);
+    [newIds, setNewIds] = useState<string[]>([]),
+    [selected, setSelected] = useState<string[]>([]),
+    [pendingDelete, setPendingDelete] = useState<string | null>(null),
+    [mutating, setMutating] = useState(false),
+    [actionError, setActionError] = useState('');
+  const mutationFence = useRef(0);
+  const mutationBusy = useRef(false);
   const refresh = useRef<() => void>(() => {});
   useEffect(() => {
     let active = true,
       busy = false,
-      initialized = false;
+      initialized = false,
+      reloadRequested = false;
+    mutationFence.current += 1;
     let displayedIds = new Set<string>();
-    const all = new Map<string, ModeratorQuestionFeed['items'][number]>();
     const abort = new AbortController();
     const wipe = () => {
       active = false;
       abort.abort();
-      all.clear();
+      mutationFence.current += 1;
+      setSelected([]);
+      setPendingDelete(null);
       setItems([]);
       setContext(null);
       setNewIds([]);
       setBlocked(true);
     };
     const load = async () => {
-      if (!active || busy || document.hidden) return;
+      if (!active || document.hidden) return;
+      if (busy) {
+        reloadRequested = true;
+        return;
+      }
       busy = true;
       try {
-        let last = [...all.values()].at(-1);
+        const all = new Map<string, ModeratorQuestionFeed['items'][number]>();
+        let last: ModeratorQuestionFeed['items'][number] | undefined;
         let more = true;
         while (more && active) {
           const params = new URLSearchParams({ limit: '100' });
@@ -271,6 +289,8 @@ export function ModeratorFeed({
                 a.questionId.localeCompare(b.questionId),
             ),
           );
+          setSelected((previous) => previous.filter((id) => all.has(id)));
+          setNewIds((previous) => previous.filter((id) => all.has(id)));
           setContext(nextContext);
           setLoaded(true);
           setError('');
@@ -297,6 +317,10 @@ export function ModeratorFeed({
         }
       } finally {
         busy = false;
+        if (reloadRequested && active) {
+          reloadRequested = false;
+          void load();
+        }
       }
     };
     refresh.current = () => void load();
@@ -309,17 +333,55 @@ export function ModeratorFeed({
     return () => {
       active = false;
       abort.abort();
-      all.clear();
+      mutationFence.current += 1;
       clearInterval(timer);
       unsubscribe();
       window.removeEventListener('online', resume);
       document.removeEventListener('visibilitychange', resume);
     };
   }, [eventId, sessionId]);
+  const mutate = async (body: QuestionModerationRequest) => {
+    if (mutationBusy.current || blocked) return;
+    const fence = mutationFence.current;
+    mutationBusy.current = true;
+    setMutating(true);
+    setActionError('');
+    try {
+      await requestPrivateJson(
+        `/api/v1/moderator/sessions/${sessionId}/questions`,
+        questionModerationResponseSchema,
+        {
+          body,
+          key: crypto.randomUUID(),
+        },
+      );
+      if (fence !== mutationFence.current) return;
+      setSelected([]);
+      setPendingDelete(null);
+      refresh.current();
+    } catch (e) {
+      if (fence !== mutationFence.current) return;
+      if (e instanceof PrivateApiError && [401, 403].includes(e.status)) {
+        void invalidateParticipantPrivateResources(
+          e.status === 401 ? 'session_expired' : 'permission',
+        );
+      } else {
+        setActionError(
+          e instanceof PrivateApiError
+            ? e.message
+            : 'Změnu se nepodařilo potvrdit. Obnovte dotazy a zkontrolujte výsledek.',
+        );
+        refresh.current();
+      }
+    } finally {
+      mutationBusy.current = false;
+      if (fence === mutationFence.current) setMutating(false);
+    }
+  };
   return (
     <section className={`app-page ${styles.workspace} ${styles.feed}`}>
       <header className={styles.sticky}>
-        <p className="eyebrow">Moderátor · pouze pro čtení</p>
+        <p>Správa Q&amp;A</p>
         <h1 data-route-heading tabIndex={-1}>
           {context?.session.title ?? 'Dotazy účastníků'}
         </h1>
@@ -354,6 +416,42 @@ export function ModeratorFeed({
           </div>
         ) : null}
       </header>
+      {!blocked && selected.length === 2 ? (
+        <div className={styles.actions}>
+          <p>
+            Sloučení zachová všechna původní znění i autory. Pokud některý dotaz
+            čeká na odpověď, bude čekat i sloučený dotaz.
+          </p>
+          <Button
+            disabled={mutating}
+            onClick={() => {
+              const target = items.find(
+                (item) => item.questionId === selected[0],
+              );
+              const source = items.find(
+                (item) => item.questionId === selected[1],
+              );
+              if (target && source)
+                void mutate({
+                  action: 'merge',
+                  questionId: target.questionId,
+                  expectedVersion: target.moderationVersion,
+                  sourceId: source.questionId,
+                  sourceVersion: source.moderationVersion,
+                });
+            }}
+          >
+            Sloučit vybrané otázky
+          </Button>
+          <Button
+            variant="quiet"
+            disabled={mutating}
+            onClick={() => setSelected([])}
+          >
+            Zrušit výběr
+          </Button>
+        </div>
+      ) : null}
       {blocked ? (
         <p role="alert">
           Přístup byl ukončen. Soukromé dotazy byly odstraněny.
@@ -361,6 +459,7 @@ export function ModeratorFeed({
       ) : (
         <>
           {error ? <p role="alert">{error}</p> : null}
+          {actionError ? <p role="alert">{actionError}</p> : null}
           {!loaded ? (
             <p role="status">Načítám dotazy…</p>
           ) : !items.length ? (
@@ -370,11 +469,104 @@ export function ModeratorFeed({
               {items.map((item) => (
                 <li id={`question-${item.questionId}`} key={item.questionId}>
                   <Card>
+                    <p className={styles.meta}>
+                      {item.answeredAt
+                        ? 'Zodpovězeno na konferenci'
+                        : 'Čeká na odpověď'}
+                    </p>
                     <strong>{item.authorName}</strong>
                     <p className={styles.meta}>
                       {questionTime(item.submittedAt)}
                     </p>
                     <p className={styles.text}>{item.text}</p>
+                    {item.originals.map((original) => (
+                      <div key={original.questionId}>
+                        <strong>{original.authorName}</strong>
+                        <p className={styles.meta}>
+                          {questionTime(original.submittedAt)}
+                        </p>
+                        <p className={styles.text}>{original.text}</p>
+                      </div>
+                    ))}
+                    <div className={styles.actions}>
+                      <Button
+                        variant="secondary"
+                        disabled={mutating}
+                        onClick={() =>
+                          void mutate({
+                            action: 'answer',
+                            questionId: item.questionId,
+                            expectedVersion: item.moderationVersion,
+                            answered: !item.answeredAt,
+                          })
+                        }
+                      >
+                        {item.answeredAt
+                          ? 'Vrátit mezi nezodpovězené'
+                          : 'Označit jako zodpovězenou'}
+                      </Button>
+                      <label className={styles.selection}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Vybrat ke sloučení: ${item.text}`}
+                          checked={selected.includes(item.questionId)}
+                          disabled={
+                            mutating ||
+                            (selected.length >= 2 &&
+                              !selected.includes(item.questionId))
+                          }
+                          onChange={(event) =>
+                            setSelected((previous) =>
+                              event.target.checked
+                                ? [...previous, item.questionId]
+                                : previous.filter(
+                                    (id) => id !== item.questionId,
+                                  ),
+                            )
+                          }
+                        />
+                        Vybrat ke sloučení
+                      </label>
+                      <Button
+                        variant="quiet"
+                        disabled={mutating}
+                        onClick={() => setPendingDelete(item.questionId)}
+                      >
+                        Smazat otázku
+                      </Button>
+                    </div>
+                    {pendingDelete === item.questionId ? (
+                      <div className={styles.form}>
+                        <p>
+                          Smazat tuto otázku
+                          {item.originals.length
+                            ? ' včetně všech sloučených dotazů'
+                            : ''}
+                          ? Zmizí také z přehledů tazatelů a řečníků.
+                        </p>
+                        <div className={styles.actions}>
+                          <Button
+                            disabled={mutating}
+                            onClick={() =>
+                              void mutate({
+                                action: 'delete',
+                                questionId: item.questionId,
+                                expectedVersion: item.moderationVersion,
+                              })
+                            }
+                          >
+                            Potvrdit smazání
+                          </Button>
+                          <Button
+                            variant="quiet"
+                            disabled={mutating}
+                            onClick={() => setPendingDelete(null)}
+                          >
+                            Zrušit
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </Card>
                 </li>
               ))}
@@ -382,13 +574,15 @@ export function ModeratorFeed({
           )}
         </>
       )}
-      <ActionLink
-        className={styles.backLink}
-        variant="secondary"
-        href="/host/moderace"
-      >
-        Moje moderované přednášky
-      </ActionLink>
+      {!embedded ? (
+        <ActionLink
+          className={styles.backLink}
+          variant="secondary"
+          href="/host/moderace"
+        >
+          Moje moderované přednášky
+        </ActionLink>
+      ) : null}
     </section>
   );
 }

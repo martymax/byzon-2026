@@ -111,3 +111,15 @@ Nasazujte expand migraci 0028 před aplikací. `speakerPortalEnabled` zůstává
 Při problému nejprve vypněte **Otázky pro řečníky**. Zastaví se nové dotazy, staré zůstanou čitelné moderátorovi i autorovi. Pokud je problém s odpověďmi, samostatně vypněte **Písemné odpovědi po vystoupení**. Tím zastavíte speaker čtení i zápis, autorovi zůstanou uložené odpovědi. Při chybném přiřazení odeberte pouze příslušný scope/propojení. Databázové tabulky ani již přijatá data nemažte; rollback aplikace musí zachovat expand schéma. Nevracejte starý server s původními benevolentními pravidly Q&A při zapnutém sběru.
 
 Sledujte technickou chybovost, dobu odpovědí, 401/403, 409 a 429. Nelogujte request/response body. Konflikt 409 při souběhu či zastaralé verzi je očekávaná ochrana. Překročení osmi dotazových pokusů za minutu pro účet/session vrací 429; počkejte podle `Retry-After`.
+
+## Správa dotazů během konference
+
+Od migrace `0031_question_moderation.sql` může přiřazený moderátor v **Moderování** a administrátor v **Interakce → Spravovat dotazy**:
+
+- označit otázku jako **Zodpovězeno na konferenci** a případně ji vrátit mezi nezodpovězené;
+- smazat otázku po potvrzení; u sloučené otázky se odstraní celá skupina z moderátorského, účastnického i řečnického přehledu;
+- vybrat dvě otázky ze stejné přednášky a sloučit je. Lze slučovat i již sloučené skupiny. Každé původní znění, autor a čas zůstávají zachované. Pokud některá část nebyla zodpovězená, výsledná skupina čeká na odpověď.
+
+Původní znění se v databázi nepřepisují. Smazání používá `deleted_at`; nejde o fyzický výmaz uložených záznamů. Soukromé písemné odpovědi zůstávají navázané na původní otázky a nesdílejí se mezi tazateli. Účastník vidí své původní znění a označení zodpovězení na konferenci. Moderátorský přehled obnovuje i změny a odstranění existujících otázek.
+
+Změny kontrolují aktivní oprávnění a verzi otázky v transakci, zapisují audit bez soukromého textu a podporují idempotentní opakování. Při konfliktu obnovte dotazy a proveďte zamýšlenou akci nad aktuální verzí. Migraci 0031 nasaďte před novou aplikací; starší aplikace neumí respektovat označení smazaných a sloučených otázek.

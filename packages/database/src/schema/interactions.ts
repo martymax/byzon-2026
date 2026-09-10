@@ -28,6 +28,10 @@ export const questions = pgTable(
     sessionId: uuid('session_id').notNull(),
     authorUserId: uuid('author_user_id').notNull(),
     text: text('text').notNull(),
+    answeredAt: timestamp('answered_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    mergedIntoId: uuid('merged_into_id'),
+    moderationVersion: integer('moderation_version').default(1).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -59,6 +63,20 @@ export const questions = pgTable(
       table.sessionId,
       table.createdAt,
       table.id,
+    ),
+    foreignKey({
+      columns: [table.eventId, table.sessionId, table.mergedIntoId],
+      foreignColumns: [table.eventId, table.sessionId, table.id],
+      name: 'questions_merge_same_session_fk',
+    }),
+    index('questions_merged_into_idx').on(table.mergedIntoId),
+    check(
+      'questions_merge_not_self',
+      sql`${table.mergedIntoId} <> ${table.id}`,
+    ),
+    check(
+      'questions_moderation_version_check',
+      sql`${table.moderationVersion} > 0`,
     ),
     check(
       'questions_text_length_check',

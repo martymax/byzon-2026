@@ -3,7 +3,7 @@ import {
   ownQuestionsQuerySchema,
   ownQuestionsSchema,
 } from '@byzon/domain/contracts';
-import { and, asc, eq, gt, or } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { getRequestId, problemResponse } from './api/problem';
 import {
@@ -28,7 +28,12 @@ export async function readQuestionContext(
       !z.string().uuid().safeParse(sessionId).success
     )
       questionFailure('VALIDATION_FAILED', 422, 'Neplatná session.');
-    const actor = await loadQuestionActor(request, dependencies);
+    const actor = await loadQuestionActor(
+      request,
+      dependencies,
+      dependencies.db,
+      true,
+    );
     const result = await loadQuestionSession(
       dependencies.db,
       actor.eventId,
@@ -68,6 +73,7 @@ export async function readOwnQuestions(
         sessionId: schema.questions.sessionId,
         sessionTitle: schema.programSessions.title,
         text: schema.questions.text,
+        answeredAt: schema.questions.answeredAt,
         createdAt: schema.questions.createdAt,
         answer: schema.questionAnswers,
       })
@@ -90,6 +96,7 @@ export async function readOwnQuestions(
         and(
           eq(schema.questions.eventId, actor.eventId),
           eq(schema.questions.authorUserId, actor.userId),
+          isNull(schema.questions.deletedAt),
           query.sessionId
             ? eq(schema.questions.sessionId, query.sessionId)
             : undefined,
@@ -115,6 +122,7 @@ export async function readOwnQuestions(
           sessionId: row.sessionId,
           sessionTitle: row.sessionTitle,
           text: row.text,
+          answeredAt: row.answeredAt?.toISOString() ?? null,
           submittedAt: row.createdAt.toISOString(),
           answer: row.answer
             ? {

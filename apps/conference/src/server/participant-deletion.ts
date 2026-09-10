@@ -247,10 +247,30 @@ export const deleteParticipantData = async (
         participantId,
       ),
     );
+  // Serialize with Q&A grouping before locking questions. Deleting a participant
+  // must preserve other authors' original questions in a merged group.
+  const ownedSessions = await tx
+    .selectDistinct({ sessionId: schema.questions.sessionId })
+    .from(schema.questions)
+    .where(
+      and(
+        eq(schema.questions.eventId, eventId),
+        eq(schema.questions.authorUserId, participantId),
+      ),
+    )
+    .orderBy(schema.questions.sessionId);
+  for (const { sessionId } of ownedSessions) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`question-moderation:${eventId}:${sessionId}`}, 0))`,
+    );
+  }
   // Answer publication locks its question first. Lock all owned questions
   // before collecting answer IDs so a concurrent reply cannot escape cleanup.
   const questions = await tx
-    .select({ id: schema.questions.id })
+    .select({
+      id: schema.questions.id,
+      mergedIntoId: schema.questions.mergedIntoId,
+    })
     .from(schema.questions)
     .where(
       scoped(
@@ -276,6 +296,38 @@ export const deleteParticipantData = async (
         ),
       ),
   );
+  if (questions.length) {
+    const parentIds = questions.flatMap((row) =>
+      row.mergedIntoId ? [row.mergedIntoId] : [],
+    );
+    if (parentIds.length)
+      await tx
+        .update(schema.questions)
+        .set({
+          moderationVersion: sql`${schema.questions.moderationVersion} + 1`,
+        })
+        .where(
+          and(
+            eq(schema.questions.eventId, eventId),
+            inArray(schema.questions.id, parentIds),
+          ),
+        );
+    await tx
+      .update(schema.questions)
+      .set({
+        mergedIntoId: null,
+        moderationVersion: sql`${schema.questions.moderationVersion} + 1`,
+      })
+      .where(
+        and(
+          eq(schema.questions.eventId, eventId),
+          inArray(
+            schema.questions.mergedIntoId,
+            questions.map((row) => row.id),
+          ),
+        ),
+      );
+  }
   remember(
     await tx
       .delete(schema.questions)

@@ -18,6 +18,7 @@ import {
 import { AdminSessionModeratorDialog } from './admin-session-moderator-dialog';
 import { AdminBulkSelectAll } from './admin-bulk-selection';
 import { AdminEngagementBulk } from './admin-engagement-bulk';
+import { ModeratorFeed } from './host-questions';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
@@ -103,6 +104,9 @@ const sessionStatusLabel = (status: AdminEngagementSession['status']) =>
         : 'Archivováno';
 
 export const AdminEngagementWorkspace = () => {
+  const [moderationSessionId, setModerationSessionId] = useState<string | null>(
+    null,
+  );
   const {
     api,
     context,
@@ -695,6 +699,23 @@ export const AdminEngagementWorkspace = () => {
               <p className={styles.empty}>V programu nejsou žádné přednášky.</p>
             ) : (
               <>
+                {moderationSessionId ? (
+                  <div>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => setModerationSessionId(null)}
+                    >
+                      Zavřít dotazy
+                    </button>
+                    <ModeratorFeed
+                      key={`${overview.eventId}:${moderationSessionId}`}
+                      eventId={overview.eventId}
+                      sessionId={moderationSessionId}
+                      embedded
+                    />
+                  </div>
+                ) : null}
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <caption>
@@ -765,12 +786,23 @@ export const AdminEngagementWorkspace = () => {
                             </button>
                             {moderatorButton(session)}
                             {session.status === 'published' ? (
-                              <a
-                                className={styles.secondaryButton}
-                                href={`/api/v1/admin/events/${overview.eventId}/session-qr/${session.sessionId}?target=questions`}
-                              >
-                                Q&amp;A QR
-                              </a>
+                              <>
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() =>
+                                    setModerationSessionId(session.sessionId)
+                                  }
+                                >
+                                  Spravovat dotazy
+                                </button>
+                                <a
+                                  className={styles.secondaryButton}
+                                  href={`/api/v1/admin/events/${overview.eventId}/session-qr/${session.sessionId}?target=questions`}
+                                >
+                                  Q&amp;A QR
+                                </a>
+                              </>
                             ) : null}
                           </td>
                         </tr>
@@ -819,6 +851,17 @@ export const AdminEngagementWorkspace = () => {
                           </dd>
                         </dl>
                         <div className={styles.actionRow}>
+                          {session.status === 'published' ? (
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={() =>
+                                setModerationSessionId(session.sessionId)
+                              }
+                            >
+                              Spravovat dotazy
+                            </button>
+                          ) : null}
                           {session.status === 'published' ? (
                             <a
                               className={styles.secondaryButton}

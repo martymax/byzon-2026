@@ -9,7 +9,7 @@ import {
   ratingSubmitRequestSchema,
   ratingSubmitResponseSchema,
 } from '@byzon/domain/contracts';
-import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -25,6 +25,7 @@ import {
   loadQuestionSession,
   requireQuestionCollection,
   lockQuestionAccess,
+  requireQuestionManagement,
 } from './question-runtime';
 import type { QuestionsRateLimiter } from './questions-rate-limit';
 
@@ -289,31 +290,6 @@ export const submitQuestion = async (
   }
 };
 
-const requireAssignedModerator = async (
-  dependencies: QuestionsDependencies,
-  eventId: string,
-  userId: string,
-  sessionId: string,
-) => {
-  const roles = await dependencies.db.query.eventRoles.findMany({
-    columns: { role: true, scope: true },
-    where: and(
-      eq(schema.eventRoles.eventId, eventId),
-      eq(schema.eventRoles.userId, userId),
-      eq(schema.eventRoles.role, 'moderator'),
-      isNull(schema.eventRoles.revokedAt),
-    ),
-  });
-  if (!roles.some(({ scope }) => scope.sessionIds?.includes(sessionId))) {
-    throw apiProblem(
-      403,
-      'EVENT_ACCESS_DENIED',
-      'Event access denied',
-      'The moderator feed is unavailable.',
-    );
-  }
-};
-
 export const readModeratorQuestions = async (
   request: Request,
   sessionId: string,
@@ -333,7 +309,12 @@ export const readModeratorQuestions = async (
         'The moderator request is invalid.',
       );
     }
-    const actor = await loadQuestionActor(request, dependencies);
+    const actor = await loadQuestionActor(
+      request,
+      dependencies,
+      dependencies.db,
+      true,
+    );
     const context = await loadQuestionSession(
       dependencies.db,
       actor.eventId,
@@ -347,12 +328,7 @@ export const readModeratorQuestions = async (
         'Unsupported session',
         'Tento blok nepodporuje dotazy.',
       );
-    await requireAssignedModerator(
-      dependencies,
-      actor.eventId,
-      actor.userId,
-      sessionId,
-    );
+    requireQuestionManagement(actor, sessionId);
     const url = new URL(request.url);
     const known = new Set(['after', 'cursor', 'limit']);
     if ([...url.searchParams.keys()].some((key) => !known.has(key))) {
@@ -388,6 +364,8 @@ export const readModeratorQuestions = async (
       .select({
         questionId: schema.questions.id,
         text: schema.questions.text,
+        answeredAt: schema.questions.answeredAt,
+        moderationVersion: schema.questions.moderationVersion,
         createdAt: schema.questions.createdAt,
         authorFirstName: schema.participantProfiles.firstName,
         authorLastName: schema.participantProfiles.lastName,
@@ -409,6 +387,8 @@ export const readModeratorQuestions = async (
         and(
           eq(schema.questions.eventId, actor.eventId),
           eq(schema.questions.sessionId, sessionId),
+          isNull(schema.questions.deletedAt),
+          isNull(schema.questions.mergedIntoId),
           after
             ? or(
                 gt(schema.questions.createdAt, after),
@@ -424,6 +404,45 @@ export const readModeratorQuestions = async (
       )
       .orderBy(asc(schema.questions.createdAt), asc(schema.questions.id))
       .limit(limit);
+    const originals = rows.length
+      ? await dependencies.db
+          .select({
+            questionId: schema.questions.id,
+            mergedIntoId: schema.questions.mergedIntoId,
+            text: schema.questions.text,
+            createdAt: schema.questions.createdAt,
+            authorFirstName: schema.participantProfiles.firstName,
+            authorLastName: schema.participantProfiles.lastName,
+            authorAccountName: schema.users.name,
+          })
+          .from(schema.questions)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.questions.authorUserId),
+          )
+          .leftJoin(
+            schema.participantProfiles,
+            and(
+              eq(schema.participantProfiles.eventId, actor.eventId),
+              eq(
+                schema.participantProfiles.userId,
+                schema.questions.authorUserId,
+              ),
+            ),
+          )
+          .where(
+            and(
+              eq(schema.questions.eventId, actor.eventId),
+              eq(schema.questions.sessionId, sessionId),
+              isNull(schema.questions.deletedAt),
+              inArray(
+                schema.questions.mergedIntoId,
+                rows.map((row) => row.questionId),
+              ),
+            ),
+          )
+          .orderBy(asc(schema.questions.createdAt), asc(schema.questions.id))
+      : [];
     const now = dependencies.now?.() ?? new Date();
     const body = moderatorQuestionFeedSchema.parse({
       eventId: actor.eventId,
@@ -431,6 +450,20 @@ export const readModeratorQuestions = async (
       serverTime: now.toISOString(),
       items: rows.map((row) => ({
         questionId: row.questionId,
+        answeredAt: row.answeredAt?.toISOString() ?? null,
+        moderationVersion: row.moderationVersion,
+        originals: originals
+          .filter((original) => original.mergedIntoId === row.questionId)
+          .map((original) => ({
+            questionId: original.questionId,
+            text: original.text,
+            submittedAt: original.createdAt.toISOString(),
+            authorName: participantName(
+              original.authorFirstName,
+              original.authorLastName,
+              original.authorAccountName,
+            ),
+          })),
         authorName: participantName(
           row.authorFirstName,
           row.authorLastName,
