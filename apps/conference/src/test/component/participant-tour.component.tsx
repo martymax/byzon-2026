@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { usePathname } from 'next/navigation';
+import { usePathname } from './navigation-stub';
 import { useState } from 'react';
 import '../../app/styles.css';
 import { ParticipantTour } from '../../components/participant-tour';
