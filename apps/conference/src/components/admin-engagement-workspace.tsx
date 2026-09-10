@@ -656,8 +656,9 @@ export const AdminEngagementWorkspace = () => {
               {overview.sessions.filter((s) => s.moderatorReady).length}/
               {overview.sessions.length}. Propojené účty řečníků:{' '}
               {overview.sessions.filter((s) => s.speakerReady).length}/
-              {overview.sessions.length}. Zapnutí server odmítne, pokud chybí
-              potřebné přiřazení.
+              {overview.sessions.length}. Sběr dotazů nevyžaduje moderátora;
+              spravovat je může administrátor. Pro písemné odpovědi jsou potřeba
+              propojené účty řečníků.
             </p>
             {context.event.phase !== 'archived' ? (
               <AdminBulkSelectAll

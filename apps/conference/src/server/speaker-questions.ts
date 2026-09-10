@@ -202,6 +202,7 @@ export async function readSpeakerQuestions(
       .select({
         questionId: schema.questions.id,
         text: schema.questions.text,
+        answeredAt: schema.questions.answeredAt,
         createdAt: schema.questions.createdAt,
         answer: schema.questionAnswers,
       })
@@ -244,6 +245,7 @@ export async function readSpeakerQuestions(
         items: rows.map((r) => ({
           questionId: r.questionId,
           text: r.text,
+          answeredAt: r.answeredAt?.toISOString() ?? null,
           submittedAt: r.createdAt.toISOString(),
           answer: r.answer ? answerDto(r.answer) : null,
           canEdit: r.answer?.answeredByUserId === actor.userId,

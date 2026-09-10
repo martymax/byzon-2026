@@ -490,6 +490,9 @@ export const SessionView = ({
           Tento bod programu byl zrušen.
         </p>
       ) : null}
+      {!coachingSlot && session.status !== 'cancelled' ? (
+        <QuestionSessionAction eventId={eventId} sessionId={session.id} />
+      ) : null}
       {coachingSlot ? (
         <p className="lead">
           Vyberte si konkrétního kouče a následně dokončete rezervaci místa.
@@ -522,9 +525,6 @@ export const SessionView = ({
       ) : null}
       {!coachingSlot ? (
         <ParticipantSessionCalendarExport eventId={eventId} session={session} />
-      ) : null}
-      {!coachingSlot && session.status !== 'cancelled' ? (
-        <QuestionSessionAction eventId={eventId} sessionId={session.id} />
       ) : null}
       {!coachingSlot && session.status !== 'cancelled' ? (
         <SessionRating sessionId={session.id} endsAt={session.endsAt} />

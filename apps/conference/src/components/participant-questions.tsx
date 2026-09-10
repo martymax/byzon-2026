@@ -15,6 +15,7 @@ import {
   subscribeToPrivateResourceInvalidation,
 } from '@/lib/private-resource-events';
 import styles from './question-workspace.module.css';
+import { QuestionStatus } from './question-ui';
 export const questionTime = (value: string) =>
   new Intl.DateTimeFormat('cs-CZ', {
     timeZone: 'Europe/Prague',
@@ -44,7 +45,7 @@ export function OwnQuestionItems({
   showSession?: boolean;
 }) {
   return (
-    <section>
+    <section id="moje-dotazy" className={styles.history}>
       <h2>Moje dotazy</h2>
       {!items.length ? (
         <p>Zatím jste neposlali žádný dotaz.</p>
@@ -52,7 +53,13 @@ export function OwnQuestionItems({
         <ol className={styles.list}>
           {items.map((item) => (
             <li key={item.questionId}>
-              <Card>
+              <Card
+                className={
+                  item.answeredAt || item.answer
+                    ? styles.answeredQuestion
+                    : undefined
+                }
+              >
                 {showSession ? (
                   <ActionLink
                     variant="quiet"
@@ -61,11 +68,19 @@ export function OwnQuestionItems({
                     {item.sessionTitle}
                   </ActionLink>
                 ) : null}
-                <p className={styles.meta}>
+                <QuestionStatus
+                  answeredAt={item.answeredAt}
+                  written={Boolean(item.answer)}
+                />
+                <p className={styles.questionText}>{item.text}</p>
+                <p className={styles.questionAuthor}>
                   Odesláno {questionTime(item.submittedAt)}
                 </p>
-                <p className={styles.text}>{item.text}</p>
-                {item.answeredAt ? <p>Zodpovězeno na konferenci</p> : null}
+                {item.answeredAt && item.answer ? (
+                  <p className={styles.questionAuthor}>
+                    Zodpovězeno také na konferenci
+                  </p>
+                ) : null}
                 {item.answer ? (
                   <div className={styles.answer}>
                     <h3>Písemná odpověď · {item.answer.speakerName}</h3>
@@ -240,7 +255,13 @@ export function ParticipantQuestionPanel({
   return (
     <div className={styles.workspace}>
       <header>
-        <p className="eyebrow">Soukromé Q&A</p>
+        <ActionLink
+          variant="quiet"
+          className={styles.backLink}
+          href={sessionId ? `/app/program/${sessionId}` : '/app/vice'}
+        >
+          {sessionId ? 'Zpět na přednášku' : 'Zpět do mého účtu'}
+        </ActionLink>
         <h1 data-route-heading tabIndex={-1}>
           {context?.session.title ??
             (sessionId ? 'Dotazy k přednášce' : 'Moje dotazy a odpovědi')}
@@ -256,17 +277,29 @@ export function ParticipantQuestionPanel({
                 minute: '2-digit',
               }).format(new Date(context.session.endsAt))}
             </p>
-            <p role="status">{stateLabels[context.state]}</p>
+            <p
+              className={
+                context.canSubmit
+                  ? styles.collectionOpen
+                  : styles.collectionClosed
+              }
+              role="status"
+            >
+              {stateLabels[context.state]}
+            </p>
           </>
         ) : null}
       </header>
-      {sessionId && context && context.state !== 'unsupported' ? (
+      {sessionId &&
+      context &&
+      context.state !== 'unsupported' &&
+      (context.canSubmit || text || hasPending) ? (
         <Card>
           <h2>Položit dotaz</h2>
           <p id="question-privacy">
-            Během vystoupení dotaz uvidí pouze moderátor. Po skončení jej mohou
-            bez údajů o autorovi vidět řečníci a případně na něj písemně
-            odpovědět. Odpověď uvidíte jen vy.
+            Dotaz uvidí moderátor a administrátor. Po vystoupení mohou řečníci
+            odpovědět soukromě, bez zobrazení vašeho jména. Jejich odpověď
+            uvidíte jen vy.
           </p>
           <form
             className={styles.form}
@@ -296,7 +329,9 @@ export function ParticipantQuestionPanel({
                     pending.current = null;
                     setHasPending(false);
                     setText('');
-                    setMessage('Dotaz byl odeslán moderátorovi.');
+                    setMessage(
+                      'Dotaz byl odeslán. Najdete ho níže v přehledu Moje dotazy.',
+                    );
                     await reload.current();
                   },
                   (error) => {
@@ -339,8 +374,11 @@ export function ParticipantQuestionPanel({
                 }
               }}
             />
-            <span id="question-count">{text.length} / 1000 znaků</span>
+            <span className={styles.meta} id="question-count">
+              {text.length} / 1000 znaků
+            </span>
             <Button
+              className={styles.submitAction}
               type="submit"
               disabled={
                 working || (!context.canSubmit && !hasPending) || !text.trim()
@@ -355,7 +393,11 @@ export function ParticipantQuestionPanel({
           </form>
         </Card>
       ) : null}
-      {message ? <p role="status">{message}</p> : null}
+      {message ? (
+        <p className={styles.successNotice} role="status">
+          {message}
+        </p>
+      ) : null}
       {error ? (
         <div>
           <p role="alert" className={styles.error}>
@@ -377,12 +419,6 @@ export function ParticipantQuestionPanel({
       ) : (
         <p role="status">Načítám vaše dotazy…</p>
       )}
-      <ActionLink
-        variant="secondary"
-        href={sessionId ? `/app/program/${sessionId}` : '/app/vice'}
-      >
-        {sessionId ? 'Zpět na přednášku' : 'Zpět do mého účtu'}
-      </ActionLink>
     </div>
   );
 }
@@ -432,12 +468,23 @@ export function QuestionSessionAction({
   }, [eventId, sessionId]);
   if (!context || context.state === 'unsupported') return null;
   return (
-    <ActionLink href={`/app/interakce/${sessionId}`} variant="secondary">
-      {context.canSubmit
-        ? 'Položit dotaz moderátorovi'
-        : context.state === 'closed'
-          ? 'Moje dotazy a odpovědi'
-          : 'Dotazy k přednášce'}
-    </ActionLink>
+    <section className={styles.sessionEntry} aria-label="Dotazy k přednášce">
+      <div>
+        <h2>Dotazy k přednášce</h2>
+        <p>
+          {context.canSubmit
+            ? 'Máte otázku? Pošlete ji před přednáškou nebo během ní.'
+            : context.state === 'closed'
+              ? 'Sběr skončil. Své dotazy a soukromé odpovědi najdete v přehledu.'
+              : 'Sběr dotazů je nyní vypnutý. Přehled vašich dotazů zůstává dostupný.'}
+        </p>
+      </div>
+      <ActionLink
+        href={`/app/interakce/${sessionId}`}
+        variant={context.canSubmit ? 'primary' : 'secondary'}
+      >
+        {context.canSubmit ? 'Položit dotaz' : 'Moje dotazy a odpovědi'}
+      </ActionLink>
+    </section>
   );
 }

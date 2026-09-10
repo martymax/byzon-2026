@@ -41,7 +41,7 @@ it('retains answer and key after network loss and retries the same write', async
   );
   await expectComponentToPassAxe(screen.container);
   await screen
-    .getByRole('button', { name: 'Zveřejnit soukromou odpověď' })
+    .getByRole('button', { name: 'Odeslat soukromou odpověď' })
     .click();
   await expect
     .element(screen.getByRole('alert'))
@@ -50,7 +50,7 @@ it('retains answer and key after network loss and retries the same write', async
     .element(screen.getByRole('textbox'))
     .toHaveValue('Začněte rozhovorem.');
   await screen
-    .getByRole('button', { name: 'Zveřejnit soukromou odpověď' })
+    .getByRole('button', { name: 'Odeslat soukromou odpověď' })
     .click();
   await expect.poll(() => saved.mock.calls.length).toBe(1);
   expect(keys[0]).toBe(keys[1]);
@@ -83,7 +83,7 @@ it('keeps the draft when another speaker wins and requires a conflict review', a
   );
   await screen.getByRole('textbox').fill('Můj návrh');
   await screen
-    .getByRole('button', { name: 'Zveřejnit soukromou odpověď' })
+    .getByRole('button', { name: 'Odeslat soukromou odpověď' })
     .click();
   await expect
     .element(screen.getByRole('alert'))
@@ -91,7 +91,7 @@ it('keeps the draft when another speaker wins and requires a conflict review', a
   await expect.element(screen.getByRole('textbox')).toHaveValue('Můj návrh');
   expect(
     screen
-      .getByRole('button', { name: 'Zveřejnit soukromou odpověď' })
+      .getByRole('button', { name: 'Odeslat soukromou odpověď' })
       .elements(),
   ).toHaveLength(0);
 });

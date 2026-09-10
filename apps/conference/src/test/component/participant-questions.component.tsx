@@ -74,7 +74,11 @@ describe('private participant questions', () => {
       .toHaveValue('Jak začít?');
     await screen.getByRole('button', { name: 'Odeslat dotaz' }).click();
     await expect
-      .element(screen.getByText('Dotaz byl odeslán moderátorovi.'))
+      .element(
+        screen.getByText(
+          'Dotaz byl odeslán. Najdete ho níže v přehledu Moje dotazy.',
+        ),
+      )
       .toBeVisible();
     await expect
       .element(screen.getByRole('textbox', { name: 'Váš dotaz' }))

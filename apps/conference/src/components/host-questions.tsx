@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { ActionLink, Button, Card } from '@byzon/ui';
+import { ActionLink, Button, Card, DestructiveConfirmation } from '@byzon/ui';
 import {
   moderatorQuestionFeedSchema,
   questionModerationResponseSchema,
@@ -19,6 +19,12 @@ import {
 } from '@/lib/private-resource-events';
 import { questionTime } from './participant-questions';
 import styles from './question-workspace.module.css';
+import {
+  QuestionStatus,
+  QuestionFilters,
+  DeleteQuestionIcon,
+  type QuestionFilter,
+} from './question-ui';
 export function HostQuestionPage({
   kind,
   sessionId,
@@ -212,7 +218,16 @@ export function ModeratorFeed({
     [selected, setSelected] = useState<string[]>([]),
     [pendingDelete, setPendingDelete] = useState<string | null>(null),
     [mutating, setMutating] = useState(false),
-    [actionError, setActionError] = useState('');
+    [actionError, setActionError] = useState(''),
+    [notice, setNotice] = useState(''),
+    [filter, setFilter] = useState<QuestionFilter>('all');
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (embedded) {
+      headingRef.current?.scrollIntoView({ block: 'start' });
+      headingRef.current?.focus({ preventScroll: true });
+    }
+  }, [embedded]);
   const mutationFence = useRef(0);
   const mutationBusy = useRef(false);
   const refresh = useRef<() => void>(() => {});
@@ -346,6 +361,7 @@ export function ModeratorFeed({
     mutationBusy.current = true;
     setMutating(true);
     setActionError('');
+    setNotice('');
     try {
       await requestPrivateJson(
         `/api/v1/moderator/sessions/${sessionId}/questions`,
@@ -358,6 +374,15 @@ export function ModeratorFeed({
       if (fence !== mutationFence.current) return;
       setSelected([]);
       setPendingDelete(null);
+      setNotice(
+        body.action === 'delete'
+          ? 'Otázka byla smazána.'
+          : body.action === 'merge'
+            ? 'Otázky byly sloučeny. Všechna původní znění zůstala zachována.'
+            : body.answered
+              ? 'Otázka byla označena jako zodpovězená.'
+              : 'Otázka byla vrácena mezi nezodpovězené.',
+      );
       refresh.current();
     } catch (e) {
       if (fence !== mutationFence.current) return;
@@ -378,13 +403,27 @@ export function ModeratorFeed({
       if (fence === mutationFence.current) setMutating(false);
     }
   };
+  const answeredCount = items.filter((item) => item.answeredAt).length;
+  const visibleItems = items.filter(
+    (item) =>
+      filter === 'all' ||
+      (filter === 'answered' ? Boolean(item.answeredAt) : !item.answeredAt),
+  );
+  const deleting = items.find((item) => item.questionId === pendingDelete);
+  const Heading = embedded ? 'h3' : 'h1';
   return (
-    <section className={`app-page ${styles.workspace} ${styles.feed}`}>
+    <section
+      className={`${embedded ? styles.embeddedFeed : 'app-page'} ${styles.workspace} ${styles.feed}`}
+    >
       <header className={styles.sticky}>
-        <p>Správa Q&amp;A</p>
-        <h1 data-route-heading tabIndex={-1}>
+        <Heading
+          ref={headingRef}
+          className={styles.feedHeading}
+          data-route-heading={!embedded || undefined}
+          tabIndex={-1}
+        >
           {context?.session.title ?? 'Dotazy účastníků'}
-        </h1>
+        </Heading>
         {context ? (
           <p>
             {context.session.roomName} ·{' '}
@@ -400,9 +439,12 @@ export function ModeratorFeed({
             {newIds.length ? (
               <Button
                 onClick={() => {
-                  document
-                    .getElementById(`question-${newIds[0]}`)
-                    ?.scrollIntoView({ block: 'center' });
+                  setFilter('all');
+                  requestAnimationFrame(() =>
+                    document
+                      .getElementById(`question-${newIds[0]}`)
+                      ?.scrollIntoView({ block: 'center' }),
+                  );
                   setNewIds([]);
                 }}
               >
@@ -415,7 +457,41 @@ export function ModeratorFeed({
             </span>
           </div>
         ) : null}
+        {!blocked && loaded ? (
+          <QuestionFilters
+            value={filter}
+            onChange={(next) => {
+              setFilter(next);
+              setSelected([]);
+            }}
+            total={items.length}
+            answered={answeredCount}
+          />
+        ) : null}
       </header>
+      {!blocked && selected.length ? (
+        <div
+          className={styles.selectionBar}
+          role="region"
+          aria-label="Sloučení otázek"
+        >
+          <p>
+            Vybráno {selected.length} ze 2 dotazů.{' '}
+            {selected.length === 1
+              ? 'Vyberte druhý dotaz ke sloučení.'
+              : 'Připraveno ke sloučení.'}
+          </p>
+          {selected.length === 1 ? (
+            <Button
+              variant="quiet"
+              disabled={mutating}
+              onClick={() => setSelected([])}
+            >
+              Zrušit výběr
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {!blocked && selected.length === 2 ? (
         <div className={styles.actions}>
           <p>
@@ -460,43 +536,29 @@ export function ModeratorFeed({
         <>
           {error ? <p role="alert">{error}</p> : null}
           {actionError ? <p role="alert">{actionError}</p> : null}
+          {notice ? (
+            <p className={styles.successNotice} role="status">
+              {notice}
+            </p>
+          ) : null}
           {!loaded ? (
             <p role="status">Načítám dotazy…</p>
-          ) : !items.length ? (
-            <p>Zatím nebyl odeslán žádný dotaz.</p>
+          ) : !visibleItems.length ? (
+            <p className={styles.empty}>
+              {!items.length
+                ? 'Zatím nebyl odeslán žádný dotaz.'
+                : 'V tomto filtru nejsou žádné dotazy.'}
+            </p>
           ) : (
             <ol className={styles.list}>
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <li id={`question-${item.questionId}`} key={item.questionId}>
                   <Card
                     className={
                       item.answeredAt ? styles.answeredQuestion : undefined
                     }
                   >
-                    <p
-                      className={
-                        item.answeredAt ? styles.answeredStatus : styles.meta
-                      }
-                    >
-                      {item.answeredAt ? (
-                        <svg
-                          aria-hidden="true"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m5 12 4 4L19 6" />
-                        </svg>
-                      ) : null}
-                      {item.answeredAt
-                        ? 'Zodpovězeno na konferenci'
-                        : 'Čeká na odpověď'}
-                    </p>
+                    <QuestionStatus answeredAt={item.answeredAt} />
                     <p className={styles.moderatorQuestion}>{item.text}</p>
                     <p className={styles.questionAuthor}>
                       {item.authorName} · {questionTime(item.submittedAt)}
@@ -557,45 +619,15 @@ export function ModeratorFeed({
                         Vybrat ke sloučení
                       </label>
                       <Button
-                        variant="quiet"
+                        variant="secondary"
+                        className={styles.deleteAction}
+                        leadingIcon={<DeleteQuestionIcon />}
                         disabled={mutating}
                         onClick={() => setPendingDelete(item.questionId)}
                       >
                         Smazat otázku
                       </Button>
                     </div>
-                    {pendingDelete === item.questionId ? (
-                      <div className={styles.form}>
-                        <p>
-                          Smazat tuto otázku
-                          {item.originals.length
-                            ? ' včetně všech sloučených dotazů'
-                            : ''}
-                          ? Zmizí také z přehledů tazatelů a řečníků.
-                        </p>
-                        <div className={styles.actions}>
-                          <Button
-                            disabled={mutating}
-                            onClick={() =>
-                              void mutate({
-                                action: 'delete',
-                                questionId: item.questionId,
-                                expectedVersion: item.moderationVersion,
-                              })
-                            }
-                          >
-                            Potvrdit smazání
-                          </Button>
-                          <Button
-                            variant="quiet"
-                            disabled={mutating}
-                            onClick={() => setPendingDelete(null)}
-                          >
-                            Zrušit
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
                   </Card>
                 </li>
               ))}
@@ -603,6 +635,39 @@ export function ModeratorFeed({
           )}
         </>
       )}
+      <DestructiveConfirmation
+        open={!blocked && Boolean(deleting)}
+        title="Smazat otázku?"
+        actionLabel="Potvrdit smazání"
+        working={mutating}
+        onCancel={() => {
+          if (!mutating) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (deleting)
+            void mutate({
+              action: 'delete',
+              questionId: deleting.questionId,
+              expectedVersion: deleting.moderationVersion,
+            });
+        }}
+      >
+        {deleting ? (
+          <div className={styles.deletePreview}>
+            {actionError ? <p role="alert">{actionError}</p> : null}
+            <p>
+              Otázka zmizí z přehledů moderátorů, tazatelů i řečníků.{' '}
+              {deleting.originals.length
+                ? 'Smažou se také všechna sloučená znění.'
+                : ''}
+            </p>
+            <blockquote>{deleting.text}</blockquote>
+            {deleting.originals.map((original) => (
+              <blockquote key={original.questionId}>{original.text}</blockquote>
+            ))}
+          </div>
+        ) : null}
+      </DestructiveConfirmation>
       {!embedded ? (
         <ActionLink
           className={styles.backLink}

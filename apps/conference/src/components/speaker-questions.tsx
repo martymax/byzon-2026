@@ -11,6 +11,7 @@ import { PrivateApiError, requestPrivateJson } from '@/lib/private-json';
 import { subscribeToPrivateResourceInvalidation } from '@/lib/private-resource-events';
 import { questionError, questionTime } from './participant-questions';
 import styles from './question-workspace.module.css';
+import { QuestionStatus, QuestionFilters } from './question-ui';
 export function SpeakerQuestionPage({ sessionId }: { sessionId: string }) {
   return (
     <ParticipantAccountBoundary loginReturnTo={`/host/dotazy/${sessionId}`}>
@@ -39,7 +40,8 @@ export function SpeakerAnswerEditor({
     [version, setVersion] = useState(item.answer?.version ?? 0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [conflict, setConflict] = useState(false);
+    [conflict, setConflict] = useState(false),
+    [savedMessage, setSavedMessage] = useState('');
   const pending = useRef<{
     text: string;
     expectedVersion: number;
@@ -72,6 +74,7 @@ export function SpeakerAnswerEditor({
         const request = pending.current;
         setBusy(true);
         setError('');
+        setSavedMessage('');
         void requestPrivateJson(
           `/api/v1/speaker/questions/${item.questionId}/answer`,
           questionAnswerMutationResponseSchema,
@@ -90,6 +93,9 @@ export function SpeakerAnswerEditor({
               if (signal?.aborted) return;
               pending.current = null;
               setVersion(result.version);
+              setSavedMessage(
+                'Odpověď byla uložena. Vidí ji pouze autor dotazu.',
+              );
               await onSaved();
             },
             async (e) => {
@@ -133,6 +139,11 @@ export function SpeakerAnswerEditor({
       <p id={`privacy-${item.questionId}`}>
         {text.length} / 4000 znaků · Odpověď uvidí pouze autor dotazu.
       </p>
+      {savedMessage ? (
+        <p className={styles.successNotice} role="status">
+          {savedMessage}
+        </p>
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {conflict || (item.answer && !item.canEdit) ? (
         <>
@@ -161,7 +172,7 @@ export function SpeakerAnswerEditor({
             ? 'Ukládám…'
             : version
               ? 'Uložit úpravu odpovědi'
-              : 'Zveřejnit soukromou odpověď'}
+              : 'Odeslat soukromou odpověď'}
         </Button>
       )}
     </form>
@@ -260,7 +271,9 @@ export function SpeakerQuestionPanel({
   return (
     <section className={styles.workspace}>
       <header>
-        <p className="eyebrow">Řečník · soukromé odpovědi</p>
+        <ActionLink variant="quiet" href="/host/dotazy">
+          Moje přednášky
+        </ActionLink>
         <h1 data-route-heading tabIndex={-1}>
           {feed?.session.title ?? 'Dotazy po vystoupení'}
         </h1>
@@ -282,22 +295,15 @@ export function SpeakerQuestionPanel({
             kterýkoli přiřazený řečník; upravovat odpověď může pouze ten, kdo ji
             napsal.
           </p>
-          <div className={styles.tabs} aria-label="Filtr dotazů">
-            {(['unanswered', 'answered', 'all'] as const).map((value) => (
-              <Button
-                key={value}
-                variant={filter === value ? 'primary' : 'secondary'}
-                aria-pressed={filter === value}
-                onClick={() => setFilter(value)}
-              >
-                {value === 'unanswered'
-                  ? 'Bez odpovědi'
-                  : value === 'answered'
-                    ? 'Zodpovězené'
-                    : 'Všechny'}
-              </Button>
-            ))}
-            <Button variant="secondary" onClick={() => void reload.current()}>
+          <div className={styles.toolbar}>
+            <QuestionFilters
+              value={filter}
+              onChange={setFilter}
+              total={feed?.items.length ?? 0}
+              answered={feed?.items.filter((item) => item.answer).length ?? 0}
+              written
+            />
+            <Button variant="quiet" onClick={() => void reload.current()}>
               Obnovit dotazy
             </Button>
           </div>
@@ -307,12 +313,22 @@ export function SpeakerQuestionPanel({
           ) : (
             <>
               <p role="status">
-                {feed.items.filter((i) => !i.answer).length} bez odpovědi ·{' '}
-                {feed.items.filter((i) => i.answer).length} zodpovězených
+                {feed.items.filter((i) => !i.answer).length} bez písemné
+                odpovědi · {feed.items.filter((i) => i.answer).length} písemně
+                zodpovězených
               </p>
-              {!feed.items.length ? (
-                <p>Zatím nejsou žádné dotazy.</p>
-              ) : (
+              {!feed.items.some(
+                (item) =>
+                  filter === 'all' ||
+                  (filter === 'answered' ? Boolean(item.answer) : !item.answer),
+              ) ? (
+                <p className={styles.empty}>
+                  {!feed.items.length
+                    ? 'Zatím nejsou žádné dotazy.'
+                    : 'V tomto filtru nejsou žádné dotazy.'}
+                </p>
+              ) : null}
+              {feed.items.length ? (
                 <ol className={styles.list}>
                   {feed.items.map((item) => (
                     <li
@@ -325,11 +341,27 @@ export function SpeakerQuestionPanel({
                             : false
                       }
                     >
-                      <Card>
-                        <p className={styles.meta}>
+                      <Card
+                        className={
+                          item.answer || item.answeredAt
+                            ? styles.answeredQuestion
+                            : undefined
+                        }
+                      >
+                        <QuestionStatus
+                          answeredAt={item.answeredAt}
+                          written={Boolean(item.answer)}
+                        />
+                        <p className={styles.questionText}>{item.text}</p>
+                        <p className={styles.questionAuthor}>
                           {questionTime(item.submittedAt)}
                         </p>
-                        <p className={styles.text}>{item.text}</p>
+                        {item.answeredAt && !item.answer ? (
+                          <p className={styles.questionAuthor}>
+                            Písemnou odpověď můžete doplnit i po zodpovězení na
+                            konferenci.
+                          </p>
+                        ) : null}
                         {item.answer ? (
                           <div className={styles.answer}>
                             <h2>Odpověď · {item.answer.speakerName}</h2>
@@ -337,27 +369,33 @@ export function SpeakerQuestionPanel({
                             <p>{questionTime(item.answer.updatedAt)}</p>
                           </div>
                         ) : null}
-                        <SpeakerAnswerEditor
-                          item={item}
-                          onSaved={async () => {
-                            setFilter('all');
-                            await reload.current();
-                          }}
-                          onDenied={() => wipeRef.current()}
-                          {...(signal ? { signal } : {})}
-                        />
+                        <details className={styles.answerEditor}>
+                          <summary>
+                            {item.answer
+                              ? item.canEdit
+                                ? 'Upravit vlastní odpověď'
+                                : 'Informace o odpovědi'
+                              : 'Napsat soukromou odpověď'}
+                          </summary>
+                          <SpeakerAnswerEditor
+                            item={item}
+                            onSaved={async () => {
+                              setFilter('all');
+                              await reload.current();
+                            }}
+                            onDenied={() => wipeRef.current()}
+                            {...(signal ? { signal } : {})}
+                          />
+                        </details>
                       </Card>
                     </li>
                   ))}
                 </ol>
-              )}
+              ) : null}
             </>
           )}
         </>
       )}
-      <ActionLink variant="secondary" href="/host/dotazy">
-        Moje přednášky
-      </ActionLink>
     </section>
   );
 }

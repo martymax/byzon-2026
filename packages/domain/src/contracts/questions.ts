@@ -279,6 +279,7 @@ export const questionSessionListSchema = z.strictObject({
     .max(300),
 });
 export const speakerQuestionSchema = z.strictObject({
+  answeredAt: dateTimeSchema.nullable().optional(),
   questionId: uuidSchema,
   text: cleanText(1, 1_000),
   submittedAt: dateTimeSchema,
