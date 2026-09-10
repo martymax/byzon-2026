@@ -336,6 +336,29 @@ beforeEach(async () => {
 });
 
 describe('F3-01..F3-05 participant agenda', () => {
+  it('shows the automatic speaker assignment without removal or reservation actions', async () => {
+    const fixture = participantAgendaFixtures.happy!;
+    const item = fixture.items[0]!;
+    if (item.state !== 'saved') throw new Error('Expected saved fixture');
+    const { api } = agendaApiFor({
+      onRead: {
+        ...fixture,
+        items: [{ ...item, source: 'speaker' }],
+      },
+    });
+    const screen = await renderComponent(<AgendaProbe agendaApi={api} />);
+    await expect
+      .element(screen.getByText('Vlastní vystoupení', { exact: true }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Odebrat z agendy' }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(screen.getByRole('button', { name: 'Rezervovat místo' }))
+      .not.toBeInTheDocument();
+    await expectComponentToPassAxe(screen.container);
+  });
+
   it('renders grouped canonical states, an ICS download, responsive geometry and an axe-clean baseline', async () => {
     const { api } = agendaApiFor({
       onRead: participantAgendaFixtures.happy!,

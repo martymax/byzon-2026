@@ -21,6 +21,20 @@ const onlyItem = (
 };
 
 describe('participant agenda view model', () => {
+  it('labels automatic speaker items and does not offer removal or reservation', () => {
+    const saved = onlyItem(participantAgendaFixtures.happy!);
+    if (saved.state !== 'saved') throw new Error('Expected a saved fixture');
+    const item = { ...saved, source: 'speaker' as const };
+    expect(participantAgendaItemStatus(item).label).toBe('Vlastní vystoupení');
+    expect(participantAgendaActions(item)).toEqual([]);
+    expect(
+      participantAgendaActions({
+        ...item,
+        session: { ...item.session, status: 'cancelled' },
+      }),
+    ).toEqual([]);
+  });
+
   it('groups the canonical ordered snapshot by event-local day', () => {
     const groups = groupParticipantAgendaByDay(
       participantAgendaFixtures.happy!.items,

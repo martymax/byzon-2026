@@ -101,6 +101,14 @@ export const participantAgendaItemStatus = (
     };
   }
 
+  if (item.source === 'speaker') {
+    return {
+      label: 'Vlastní vystoupení',
+      detail: 'Automaticky přiřazeno podle vašeho zapojení do programu.',
+      tone: 'info',
+    };
+  }
+
   return {
     label: 'Uloženo',
     detail:
@@ -153,6 +161,7 @@ export const participantAgendaCapacityCopy = (
 export const participantAgendaActions = (
   item: ParticipantAgendaItem,
 ): readonly AgendaItemAction[] => {
+  if (item.state === 'saved' && item.source === 'speaker') return [];
   const sessionId = item.session.id;
   if (
     item.session.status === 'cancelled' ||

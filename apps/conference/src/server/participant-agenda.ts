@@ -24,7 +24,7 @@ import {
   type ParticipantAgendaResponse,
   type PublishedProgramAgendaSnapshot,
 } from '@byzon/domain/contracts';
-import { and, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -559,6 +559,50 @@ const capacityProjection = (
   };
 };
 
+// Derived from current assignments: existing speakers need no backfill, and
+// removing a role or program link removes the automatic item on the next read.
+const loadSpeakerAgendaRows = async (
+  db: AgendaDatabase,
+  eventId: string,
+  userId: string,
+  sessionIds: readonly string[],
+) =>
+  sessionIds.length === 0
+    ? []
+    : db
+        .selectDistinct({
+          sessionId: schema.sessionSpeakers.sessionId,
+          createdAt: schema.speakerProfiles.createdAt,
+        })
+        .from(schema.sessionSpeakers)
+        .innerJoin(
+          schema.speakerProfiles,
+          and(
+            eq(schema.speakerProfiles.eventId, schema.sessionSpeakers.eventId),
+            eq(
+              schema.speakerProfiles.id,
+              schema.sessionSpeakers.speakerProfileId,
+            ),
+          ),
+        )
+        .innerJoin(
+          schema.eventRoles,
+          and(
+            eq(schema.eventRoles.eventId, schema.speakerProfiles.eventId),
+            eq(schema.eventRoles.userId, schema.speakerProfiles.userId),
+            eq(schema.eventRoles.role, 'speaker'),
+            isNull(schema.eventRoles.revokedAt),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.sessionSpeakers.eventId, eventId),
+            eq(schema.speakerProfiles.userId, userId),
+            inArray(schema.sessionSpeakers.sessionId, [...sessionIds]),
+          ),
+        )
+        .limit(MAX_AGENDA_ITEMS + 1);
+
 const loadParticipantAgendaSnapshotUnlocked = async (
   db: AgendaDatabase,
   context: AgendaContext,
@@ -597,6 +641,12 @@ const loadParticipantAgendaSnapshotUnlocked = async (
             ),
           )
           .limit(MAX_AGENDA_ITEMS + 1);
+  const speakerRows = await loadSpeakerAgendaRows(
+    db,
+    context.event.id,
+    userId,
+    publishedSessionIds,
+  );
   const reservationRows =
     publishedSessionIds.length === 0
       ? []
@@ -656,6 +706,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           )
           .limit(MAX_AGENDA_ITEMS + 1);
   if (
+    speakerRows.length > MAX_AGENDA_ITEMS ||
     savedRows.length > MAX_AGENDA_ITEMS ||
     reservationRows.length > MAX_AGENDA_ITEMS ||
     waitingRows.length > MAX_AGENDA_ITEMS
@@ -663,7 +714,17 @@ const loadParticipantAgendaSnapshotUnlocked = async (
     throw new Error('Participant agenda row limit exceeded');
   }
 
-  const savedBySession = new Map(savedRows.map((row) => [row.sessionId, row]));
+  const savedBySession = new Map<
+    string,
+    {
+      sessionId: string;
+      createdAt: Date;
+      source: 'manual' | 'organizer' | 'speaker';
+    }
+  >(savedRows.map((row) => [row.sessionId, row]));
+  for (const row of speakerRows) {
+    savedBySession.set(row.sessionId, { ...row, source: 'speaker' });
+  }
   const reservationBySession = new Map(
     reservationRows.map((row) => [row.sessionId, row]),
   );
@@ -1024,7 +1085,15 @@ const loadProjectedAgendaSessionIds = async (
         ),
     )
     .limit(MAX_AGENDA_ITEMS + 1);
-  return rows.map(({ sessionId }) => sessionId);
+  const speakerRows = await loadSpeakerAgendaRows(
+    transaction,
+    eventId,
+    userId,
+    publishedSessionIds,
+  );
+  return [
+    ...new Set([...rows, ...speakerRows].map(({ sessionId }) => sessionId)),
+  ];
 };
 
 const ensureAgendaRoot = async (
@@ -1788,6 +1857,19 @@ export const mutateParticipantAgenda = async (
             if (inserted.length === 1) outcome = 'applied';
           }
         } else if (parsed.data.action === 'remove') {
+          const speakerRows = await loadSpeakerAgendaRows(
+            transaction,
+            context.event.id,
+            session.user.id,
+            [parsed.data.sessionId],
+          );
+          if (speakerRows.length > 0) {
+            throw validationFailed({
+              action: [
+                'Vlastní vystoupení je do agendy přiřazeno automaticky.',
+              ],
+            });
+          }
           const reservation = await transaction.query.reservations.findFirst({
             columns: { id: true },
             where: and(

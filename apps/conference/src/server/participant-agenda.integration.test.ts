@@ -709,6 +709,150 @@ integration('CS-AGENDA-01 HTTP integration', () => {
     await client.close();
   });
 
+  it('projects linked speaker sessions without reservations and follows assignment changes', async () => {
+    const userId = participantWithoutLegacyTicketUserId;
+    const profileId = crypto.randomUUID();
+    const roleId = crypto.randomUUID();
+    const read = async () => {
+      const response = await readParticipantAgenda(
+        readRequest(),
+        dependencies(userId),
+      );
+      expect(response.status).toBe(200);
+      return participantAgendaResponseSchema.parse(await response.json());
+    };
+    await client.db.insert(schema.speakerProfiles).values({
+      id: profileId,
+      eventId,
+      userId,
+      slug: `speaker-${profileId}`,
+      firstName: 'Test',
+      lastName: 'Speaker',
+      sortOrder: 0,
+      status: 'published',
+    });
+    await client.db.insert(schema.sessionSpeakers).values([
+      {
+        eventId,
+        speakerProfileId: profileId,
+        sessionId: savedSessionId,
+        sortOrder: 0,
+      },
+      {
+        eventId,
+        speakerProfileId: profileId,
+        sessionId: reservedSessionId,
+        sortOrder: 0,
+      },
+      {
+        eventId,
+        speakerProfileId: profileId,
+        sessionId: archivedOperationalSessionId,
+        sortOrder: 0,
+      },
+    ]);
+    try {
+      expect((await read()).items).toEqual([]);
+      await client.db.insert(schema.eventRoles).values({
+        id: roleId,
+        eventId,
+        userId,
+        role: 'speaker',
+      });
+      const agenda = await read();
+      expect(agenda.items.map((item) => item.session.id).sort()).toEqual(
+        [savedSessionId, reservedSessionId].sort(),
+      );
+      expect(agenda.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ state: 'saved', source: 'speaker' }),
+        ]),
+      );
+      const calendar = await readParticipantAgendaCalendar(
+        calendarRequest(),
+        dependencies(userId),
+      );
+      expect(calendar.status).toBe(303);
+      const download = await readParticipantAgendaCalendar(
+        new Request(calendar.headers.get('location')!),
+        dependencies(null),
+      );
+      expect(download.status).toBe(200);
+      expect(await download.text()).toContain(
+        `UID:${savedSessionId}@agenda.byzon.cz`,
+      );
+      expect(
+        await client.db.query.reservations.findMany({
+          where: and(
+            eq(schema.reservations.eventId, eventId),
+            eq(schema.reservations.userId, userId),
+          ),
+        }),
+      ).toEqual([]);
+      const remove = await mutate(
+        userId,
+        {
+          action: 'remove',
+          sessionId: savedSessionId,
+          expectedVersion: agenda.version,
+        },
+        crypto.randomUUID(),
+      );
+      expect(remove.status).toBe(422);
+      await client.db
+        .insert(schema.participantAgendas)
+        .values({ eventId, userId })
+        .onConflictDoNothing();
+      await client.db.insert(schema.agendaItems).values({
+        eventId,
+        userId,
+        sessionId: savedSessionId,
+        source: 'manual',
+      });
+      expect(
+        (await read()).items.filter(
+          (item) => item.session.id === savedSessionId,
+        ),
+      ).toHaveLength(1);
+      await client.db
+        .delete(schema.sessionSpeakers)
+        .where(
+          and(
+            eq(schema.sessionSpeakers.speakerProfileId, profileId),
+            eq(schema.sessionSpeakers.sessionId, reservedSessionId),
+          ),
+        );
+      expect((await read()).items.map((item) => item.session.id)).toEqual([
+        savedSessionId,
+      ]);
+      await client.db
+        .update(schema.eventRoles)
+        .set({ revokedAt: fixedNow })
+        .where(eq(schema.eventRoles.id, roleId));
+      expect((await read()).items).toEqual([
+        expect.objectContaining({ state: 'saved', source: 'manual' }),
+      ]);
+    } finally {
+      await client.db
+        .delete(schema.sessionSpeakers)
+        .where(eq(schema.sessionSpeakers.speakerProfileId, profileId));
+      await client.db
+        .delete(schema.speakerProfiles)
+        .where(eq(schema.speakerProfiles.id, profileId));
+      await client.db
+        .delete(schema.eventRoles)
+        .where(eq(schema.eventRoles.id, roleId));
+      await client.db
+        .delete(schema.agendaItems)
+        .where(
+          and(
+            eq(schema.agendaItems.eventId, eventId),
+            eq(schema.agendaItems.userId, userId),
+          ),
+        );
+    }
+  });
+
   it('auto-promotes an eligible participant without a legacy ticket credential', async () => {
     const addAndReturnVersion = async (userId: string, key: string) => {
       const added = await mutate(

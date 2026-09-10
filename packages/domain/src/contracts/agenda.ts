@@ -230,7 +230,7 @@ export const participantAgendaItemSchema = z
     z.strictObject({
       ...agendaItemBaseShape,
       state: z.literal('saved'),
-      source: z.enum(['manual', 'organizer']),
+      source: z.enum(['manual', 'organizer', 'speaker']),
       savedAt: dateTimeSchema,
     }),
     z.strictObject({

@@ -186,7 +186,7 @@ export const participantActivityContextAction = (
   mode: ParticipantShellNavigationMode,
 ): NavigationItem | undefined =>
   (mode === 'active' || mode === 'active-preview') &&
-  (roles.includes('speaker') || roles.includes('room_operator'))
+  roles.includes('room_operator')
     ? activityManagementNavigationItem
     : undefined;
 
