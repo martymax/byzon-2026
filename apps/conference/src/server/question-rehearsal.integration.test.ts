@@ -142,7 +142,7 @@ suite('complete Q&A handler rehearsal', () => {
             f.dependencies(f.users.admin),
           )
         ).status,
-      ).toBe(403);
+      ).toBe(200);
     } finally {
       await f.cleanup();
     }

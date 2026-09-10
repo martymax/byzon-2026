@@ -26,7 +26,7 @@ import {
   hasParticipantBaseline,
   questionReadiness,
   requireModeratorBaseline,
-  requireQuestionPreflight,
+  requireQuestionFollowUpPreflight,
 } from './question-readiness';
 import { requireWritableAdminEvent } from './admin-event-writability';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
@@ -327,13 +327,11 @@ const updateFeatures = async (
     where: eq(schema.eventFeatures.eventId, context.eventId),
   });
   const before = currentFeatures(beforeRow);
-  if (input.features.questionsEnabled && !before.questionsEnabled)
-    await requireQuestionPreflight(transaction, context.eventId, 'collection');
   if (
     input.features.questionFollowUpsEnabled &&
     !before.questionFollowUpsEnabled
   )
-    await requireQuestionPreflight(transaction, context.eventId, 'followUps');
+    await requireQuestionFollowUpPreflight(transaction, context.eventId);
   await transaction
     .insert(schema.eventFeatures)
     .values({
@@ -447,18 +445,6 @@ const updateSessionQuestions = async (
       'Unsupported session',
       'Tento blok nepodporuje dotazy.',
     );
-  if (input.enabled) {
-    const feature = await transaction.query.eventFeatures.findFirst({
-      where: eq(schema.eventFeatures.eventId, context.eventId),
-    });
-    if (feature?.questionsEnabled)
-      await requireQuestionPreflight(
-        transaction,
-        context.eventId,
-        'collection',
-        input.sessionId,
-      );
-  }
   if (current.version !== input.expectedSessionVersion) {
     throw problem(
       409,

@@ -106,7 +106,7 @@ Dlouhý feed se 125 otázkami, shodné timestampy, souběhy a bezpečné návrat
 
 Před produkčním zapnutím pořadatel do release záznamu doplní jméno odpovědného operátora, zálohu operátora, release SHA, výsledek readiness, datum QR rehearsal a použité zařízení. Tyto údaje nelze nahradit syntetickým testem.
 
-Nasazujte expand migraci 0028 před aplikací. `speakerPortalEnabled` zůstává vypnutý. Připravte všechny účty, vazby, publikaci a moderátory při OFF. Globální sběr zapněte až po kontrole coverage, follow-up samostatně po speaker/author UAT. Přepínače jsou v **Interakce**; každá změna vyžaduje důvod a potvrzení.
+Nasazujte expand migraci 0028 před aplikací. `speakerPortalEnabled` zůstává vypnutý. Připravte všechny účty, vazby, publikaci a moderátory při OFF. Globální sběr lze zapnout bez přiřazených moderátorů; následně povolte sběr u vybraných přednášek. Follow-up zapněte samostatně po speaker/author UAT. Přepínače jsou v **Interakce**; každá změna vyžaduje důvod a potvrzení.
 
 Při problému nejprve vypněte **Otázky pro řečníky**. Zastaví se nové dotazy, staré zůstanou čitelné moderátorovi i autorovi. Pokud je problém s odpověďmi, samostatně vypněte **Písemné odpovědi po vystoupení**. Tím zastavíte speaker čtení i zápis, autorovi zůstanou uložené odpovědi. Při chybném přiřazení odeberte pouze příslušný scope/propojení. Databázové tabulky ani již přijatá data nemažte; rollback aplikace musí zachovat expand schéma. Nevracejte starý server s původními benevolentními pravidly Q&A při zapnutém sběru.
 
@@ -123,3 +123,5 @@ Od migrace `0031_question_moderation.sql` může přiřazený moderátor v **Mod
 Původní znění se v databázi nepřepisují. Smazání používá `deleted_at`; nejde o fyzický výmaz uložených záznamů. Soukromé písemné odpovědi zůstávají navázané na původní otázky a nesdílejí se mezi tazateli. Účastník vidí své původní znění a označení zodpovězení na konferenci. Moderátorský přehled obnovuje i změny a odstranění existujících otázek.
 
 Změny kontrolují aktivní oprávnění a verzi otázky v transakci, zapisují audit bez soukromého textu a podporují idempotentní opakování. Při konfliktu obnovte dotazy a proveďte zamýšlenou akci nad aktuální verzí. Migraci 0031 nasaďte před novou aplikací; starší aplikace neumí respektovat označení smazaných a sloučených otázek.
+
+Sběr dotazů nevyžaduje přiřazeného moderátora. Globální přepínač **Otázky pro řečníky** slouží jako hlavní vypínač, samotný sběr se povoluje u jednotlivých podporovaných přednášek. Vypnutá přednáška nepřijímá dotazy ani při zapnutém globálním přepínači; globální vypnutí zastaví sběr všude. Přehled přiřazení moderátorů je informativní, dotazy může spravovat administrátor. Podmínky pro soukromé písemné odpovědi řečníků zůstávají zachované.

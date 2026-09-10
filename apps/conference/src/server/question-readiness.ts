@@ -112,28 +112,20 @@ export async function questionReadiness(db: QuestionDb, eventId: string) {
     };
   });
 }
-export async function requireQuestionPreflight(
+// Moderator coverage is informational: administrators can manage every Q&A.
+// Only private written follow-ups require all linked speaker accounts.
+export async function requireQuestionFollowUpPreflight(
   db: QuestionDb,
   eventId: string,
-  kind: 'collection' | 'followUps',
-  sessionId?: string,
 ) {
   const rows = (await questionReadiness(db, eventId)).filter(
-    (r) =>
-      r.status === 'published' &&
-      (sessionId
-        ? r.sessionId === sessionId
-        : kind === 'followUps' || r.enabled),
+    (r) => r.status === 'published',
   );
-  const missing = rows.filter((r) =>
-    kind === 'collection' ? !r.moderatorReady : !r.speakerReady,
-  );
+  const missing = rows.filter((r) => !r.speakerReady);
   if (!rows.length || missing.length)
     questionFailure(
       'ADMIN_INVALID_TRANSITION',
       409,
-      kind === 'collection'
-        ? `Nelze zapnout sběr: ${missing.length || 1} přednášek nemá připraveného moderátora nebo není publikována. Podrobnosti jsou v přehledu přiřazení.`
-        : `Nelze zapnout odpovědi: ${missing.length || 1} přednášek nemá propojené aktivní účty všech řečníků. Podrobnosti jsou v přehledu přiřazení.`,
+      `Nelze zapnout odpovědi: ${missing.length || 1} přednášek nemá propojené aktivní účty všech řečníků. Podrobnosti jsou v přehledu přiřazení.`,
     );
 }

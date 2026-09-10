@@ -59,7 +59,7 @@ const featureLabels: ReadonlyArray<{
     key: 'questionsEnabled',
     title: 'Otázky pro řečníky',
     description:
-      'Globální pojistka. Konkrétní přednášky se povolují samostatně níže.',
+      'Hlavní vypínač sběru dotazů. Po zapnutí povolte konkrétní přednášky níže. Přiřazený moderátor není podmínkou; dotazy může spravovat administrátor.',
   },
   {
     key: 'questionFollowUpsEnabled',

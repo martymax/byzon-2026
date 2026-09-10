@@ -3,6 +3,8 @@ import { schema } from '@byzon/database';
 import { eq } from 'drizzle-orm';
 import { createQuestionFixture } from '../test/server/question-fixture';
 import { handleAdminEngagement } from './admin-engagement';
+import { submitQuestion } from './questions';
+import { readQuestionContext } from './own-questions';
 import { validateProgramRoleScope } from './admin-role-export';
 const suite = process.env.TEST_DATABASE_URL
   ? describe.sequential
@@ -88,7 +90,7 @@ suite('Q&A administration preflight', () => {
       ).status,
     ).toBe(409);
   });
-  it('rejects missing moderator and speaker coverage and allows switching OFF at any time', async () => {
+  it('allows collection without moderators but still requires speaker coverage for written follow-ups', async () => {
     await f.client.db
       .update(schema.eventRoles)
       .set({ revokedAt: new Date() })
@@ -97,12 +99,51 @@ suite('Q&A administration preflight', () => {
       .update(schema.eventRoles)
       .set({ revokedAt: new Date() })
       .where(eq(schema.eventRoles.userId, f.users.other));
-    expect((await features(true, false)).status).toBe(409);
+    expect((await features(true, false)).status).toBe(200);
     await f.client.db
       .update(schema.speakerProfiles)
       .set({ userId: null })
       .where(eq(schema.speakerProfiles.id, f.speakerProfileId));
     expect((await features(false, true)).status).toBe(409);
     expect((await features(false, false)).status).toBe(200);
+  });
+  it('allows enabling just one talk and keeps other talks and the global OFF switch closed', async () => {
+    await f.client.db
+      .update(schema.programSessions)
+      .set({ questionMode: 'moderated_follow_up', questionsEnabled: false })
+      .where(eq(schema.programSessions.id, f.unsupportedId));
+    const sessionSwitch = async (sessionId: string, enabled: boolean) => {
+      const view = await overview();
+      const session = view.sessions.find(
+        (row: { sessionId: string }) => row.sessionId === sessionId,
+      );
+      return mutate({
+        action: 'set_session_questions',
+        sessionId,
+        enabled,
+        expectedSessionVersion: session.version,
+        reason: 'Sběr jen u vybrané přednášky',
+      });
+    };
+    expect((await sessionSwitch(f.sessionId, false)).status).toBe(200);
+    expect((await features(true, false)).status).toBe(200);
+    expect((await sessionSwitch(f.sessionId, true)).status).toBe(200);
+    const context = async (id: string) =>
+      (
+        await readQuestionContext(f.request('/context'), id, f.dependencies())
+      ).json();
+    expect((await context(f.sessionId)).canSubmit).toBe(true);
+    expect((await context(f.unsupportedId)).canSubmit).toBe(false);
+    const submit = (id: string) =>
+      submitQuestion(
+        f.request('/submit', { text: 'Dotaz bez přiřazeného moderátora?' }),
+        id,
+        f.dependencies(),
+      );
+    expect((await submit(f.sessionId)).status).toBe(201);
+    expect((await submit(f.unsupportedId)).status).toBe(409);
+    expect((await features(false, false)).status).toBe(200);
+    expect((await context(f.sessionId)).canSubmit).toBe(false);
+    expect((await submit(f.sessionId)).status).toBe(409);
   });
 });
