@@ -534,7 +534,13 @@ export const createAdminContentPreviewPort = ({
       if (signal?.aborted) return failure('aborted', 'Požadavek byl zrušen.');
       const blocked = writeGuard(candidateEventId);
       if (blocked) return blocked;
-      const fieldErrors = validateBody(resource, body);
+      const existing = id
+        ? content[resource].find((item) => item.id === id)
+        : undefined;
+      const fieldErrors = validateBody(
+        resource,
+        existing ? { ...existing, ...body } : body,
+      );
       if (Object.keys(fieldErrors).length) {
         return failure(
           'validation',

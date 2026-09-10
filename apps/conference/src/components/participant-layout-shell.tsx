@@ -18,6 +18,7 @@ import {
   type ParticipantShellNavigationMode,
 } from './participant-shell-navigation';
 import { ParticipantNotificationCenter } from './participant-notification-center';
+import { ParticipantTour } from './participant-tour';
 import { RouteFocus } from './route-focus';
 
 export const ParticipantLayoutShell = ({
@@ -70,6 +71,9 @@ export const ParticipantLayoutShell = ({
           <ParticipantAdminNotice />
           {children}
         </div>
+        {navigationMode === 'active' || navigationMode === 'active-preview' ? (
+          <ParticipantTour />
+        ) : null}
       </ParticipantAccountResourceProvider>
     </ParticipantSessionContextProvider>
   );

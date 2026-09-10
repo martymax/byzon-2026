@@ -88,23 +88,35 @@ describe('participant shell navigation', () => {
     expect(participantNavigationItemsForMode('unavailable')).toEqual([]);
   });
 
-  it('offers activity management only to linked speakers and activity leaders in an active event', () => {
-    expect(
-      participantActivityContextAction(['participant', 'speaker'], 'active'),
-    ).toMatchObject({ href: '/host/aktivity', label: 'Správa aktivit' });
-    expect(
-      participantActivityContextAction(
+  it.each(['active', 'active-preview'] as const)(
+    'offers activity management only to room operators in %s mode',
+    (mode) => {
+      for (const roles of [
         ['participant', 'room_operator'],
-        'active-preview',
-      ),
-    ).toMatchObject({ href: '/host/aktivity' });
-    expect(
-      participantActivityContextAction(['participant'], 'active'),
-    ).toBeUndefined();
-    expect(
-      participantActivityContextAction(['participant', 'speaker'], 'archived'),
-    ).toBeUndefined();
-  });
+        ['participant', 'speaker', 'room_operator'],
+      ]) {
+        expect(participantActivityContextAction(roles, mode)).toMatchObject({
+          href: '/host/aktivity',
+          label: 'Správa aktivit',
+        });
+      }
+      for (const roles of [[], ['participant'], ['participant', 'speaker']]) {
+        expect(participantActivityContextAction(roles, mode)).toBeUndefined();
+      }
+    },
+  );
+
+  it.each(['archived', 'archived-preview', 'unavailable'] as const)(
+    'hides activity management in %s mode even for room operators',
+    (mode) => {
+      expect(
+        participantActivityContextAction(
+          ['participant', 'speaker', 'room_operator'],
+          mode,
+        ),
+      ).toBeUndefined();
+    },
+  );
 
   it.each([
     ['/app', 'overview'],

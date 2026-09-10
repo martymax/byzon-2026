@@ -36,6 +36,7 @@ const mutationReasonSchema = z
 export const adminEngagementFeaturesSchema = z.strictObject({
   networkingEnabled: z.boolean(),
   questionsEnabled: z.boolean(),
+  questionFollowUpsEnabled: z.boolean(),
   ratingsEnabled: z.boolean(),
 });
 
@@ -69,6 +70,12 @@ export const adminEngagementSessionSchema = z
     sessionId: uuidSchema,
     title: safeInlineTextSchema(512),
     startsAt: dateTimeSchema,
+    endsAt: dateTimeSchema,
+    roomName: z.string().nullable(),
+    moderatorReady: z.boolean(),
+    speakerReady: z.boolean(),
+    speakerCount: z.number().int().nonnegative(),
+    readySpeakerCount: z.number().int().nonnegative(),
     status: z.enum(['draft', 'published', 'cancelled', 'archived']),
     questionsEnabled: z.boolean(),
     version: versionSchema,

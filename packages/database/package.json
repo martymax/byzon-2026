@@ -20,10 +20,12 @@
     "db:provision-checkin-device": "tsx src/provision-checkin-device.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:readiness": "tsx src/program-readiness-cli.ts",
     "db:seed": "tsx src/seed.ts",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:test-question-upgrade": "tsx src/question-upgrade-rehearsal.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

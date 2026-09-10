@@ -37,6 +37,16 @@ integration('content publication integration', () => {
     await client.db
       .insert(schema.eventMemberships)
       .values({ eventId, userId: publisherId });
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: publisherId,
+      firstName: 'Martin',
+      lastName: 'Test',
+      contactEmail: `${publisherId}@example.invalid`,
+    });
+    await client.db
+      .insert(schema.participantAgendas)
+      .values({ eventId, userId: publisherId });
     await client.db.insert(schema.eventDays).values({
       id: dayId,
       eventId,
@@ -158,6 +168,22 @@ integration('content publication integration', () => {
   });
 
   it('targets significant program changes through a deduplicated outbox event', async () => {
+    expect(
+      await client.db.query.emailDeliveries.findMany({
+        where: eq(schema.emailDeliveries.eventId, eventId),
+      }),
+    ).toHaveLength(0);
+    await client.db
+      .insert(schema.agendaItems)
+      .values({ eventId, userId: publisherId, sessionId });
+    await client.db.insert(schema.reservations).values({
+      id: generateUuidV7(),
+      eventId,
+      userId: publisherId,
+      sessionId,
+      source: 'participant',
+    });
+
     await client.db
       .update(schema.programSessions)
       .set({
@@ -185,6 +211,23 @@ integration('content publication integration', () => {
       deduplicationKey: 'program.changed:2',
       status: 'pending',
       payload: { version: 2, sessionIds: [sessionId] },
+    });
+    const emails = await client.db.query.emailDeliveries.findMany({
+      where: eq(schema.emailDeliveries.eventId, eventId),
+    });
+    expect(emails).toHaveLength(1);
+    expect(emails[0]).toMatchObject({
+      userId: publisherId,
+      payload: {
+        kind: 'program_changed',
+        sessions: [
+          {
+            id: sessionId,
+            startsAt: '2026-09-18T09:00:00.000Z',
+            previous: { startsAt: '2026-09-18T08:00:00.000Z' },
+          },
+        ],
+      },
     });
   });
 });

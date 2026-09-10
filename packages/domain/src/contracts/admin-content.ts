@@ -138,7 +138,15 @@ export const adminAssetOwnerSchema = z.discriminatedUnion('kind', [
 ]);
 
 export const adminAssetPreviewSchema = z.strictObject({
-  url: safeHttpsUrlSchema,
+  url: z.union([
+    safeHttpsUrlSchema,
+    // Authenticated same-origin proxy, including on local HTTP development.
+    z
+      .string()
+      .regex(
+        /^\/api\/v1\/admin\/events\/[0-9a-f-]+\/content-assets\/(partners|speakers)\/[0-9a-f-]+\?file=preview&assetId=[0-9a-f-]+&expires=\d+$/,
+      ),
+  ]),
   expiresAt: dateTimeSchema,
   width: z.number().int().positive(),
   height: z.number().int().positive(),
@@ -150,7 +158,15 @@ export const adminAssetDescriptorSchema = z
     eventId: uuidSchema,
     owner: adminAssetOwnerSchema,
     purpose: adminAssetPurposeSchema,
-    contentType: adminAssetContentTypeSchema,
+    // Imported, reviewed site assets can also be SVG/GIF/AVIF; uploads remain raster-only.
+    contentType: z.enum([
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/svg+xml',
+      'image/gif',
+      'image/avif',
+    ]),
     byteSize: z
       .number()
       .int()

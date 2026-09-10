@@ -83,6 +83,7 @@ export const adminContentListColumns = {
     version: true,
   },
   sessions: {
+    questionMode: true,
     dayId: true,
     description: true,
     endsAt: true,

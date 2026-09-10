@@ -1,6 +1,11 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { readConferenceEnv, type BaseEnv } from '@byzon/config';
 import { schema, type Database } from '@byzon/database';
+import {
+  ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
+  LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
+} from '@byzon/mail';
+import { and, eq } from 'drizzle-orm';
 import { betterAuth } from 'better-auth';
 import { magicLink } from 'better-auth/plugins';
 
@@ -8,8 +13,10 @@ import { database } from './database';
 import { authMailProvider, type AuthMailProvider } from './mail';
 import { stagingEmailLogin } from './staging-email-login';
 
-export const ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS = 24 * 60 * 60;
-export const LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS = 30 * 60;
+export {
+  ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
+  LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
+};
 export const SESSION_EXPIRES_IN_SECONDS = 48 * 60 * 60;
 export const SESSION_UPDATE_AGE_SECONDS = 24 * 60 * 60;
 export const SESSION_FRESH_AGE_SECONDS = 24 * 60 * 60;
@@ -76,7 +83,7 @@ export const createAuth = (
           LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
         storeToken: 'hashed',
         rateLimit: { window: 60, max: options.magicLinkRateLimitMax ?? 5 },
-        sendMagicLink: ({ email, url, metadata }) => {
+        sendMagicLink: async ({ email, url, metadata }) => {
           const invitation =
             metadata?.purpose === 'account-activation' ||
             metadata?.purpose === 'participant-invitation' ||
@@ -88,7 +95,47 @@ export const createAuth = (
                     : {}),
                 }
               : {};
-          return mailProvider.sendMagicLink({ to: email, url, ...invitation });
+          // Public auth requests have their metadata replaced by the API route.
+          // Names/preferences always come from the server; never from user input.
+          const eventId =
+            typeof metadata?.eventId === 'string' &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              metadata.eventId,
+            )
+              ? metadata.eventId
+              : undefined;
+          const [profile] = await db
+            .select({
+              firstName: schema.participantProfiles.firstName,
+              emailSalutation: schema.participantProfiles.emailSalutation,
+            })
+            .from(schema.participantProfiles)
+            .innerJoin(
+              schema.users,
+              eq(schema.users.id, schema.participantProfiles.userId),
+            )
+            .innerJoin(
+              schema.events,
+              eq(schema.events.id, schema.participantProfiles.eventId),
+            )
+            .where(
+              and(
+                eq(schema.users.email, email),
+                eventId
+                  ? eq(schema.events.id, eventId)
+                  : eq(schema.events.slug, 'byzon-2026'),
+              ),
+            )
+            .limit(1);
+          return mailProvider.sendMagicLink({
+            to: email,
+            url,
+            ...invitation,
+            ...(profile ?? {}),
+            expiresInSeconds:
+              options.magicLinkExpiresInSeconds ??
+              LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
+          });
         },
       }),
       stagingEmailLogin({ enabled: env.APP_ENV === 'staging' }),

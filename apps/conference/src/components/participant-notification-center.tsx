@@ -141,20 +141,20 @@ export const ParticipantNotificationCenter = ({
           (announcement) => announcement.readAt === null,
         );
         const currentNewest = newest.current;
-        if (initialized.current) {
-          const additions = unread.filter((announcement) =>
-            isNewerThan(announcement, currentNewest),
-          );
-          if (additions.length > 0) {
-            setToasts((current) => {
-              const known = new Set(current.map(({ id }) => id));
-              return [
-                ...additions.filter(({ id }) => !known.has(id)),
-                ...current,
-              ].slice(0, MAX_VISIBLE_TOASTS);
-            });
-          }
-        }
+        const additions = initialized.current
+          ? unread.filter((announcement) =>
+              isNewerThan(announcement, currentNewest),
+            )
+          : [];
+        setToasts((current) => {
+          const visibleIds = new Set(unread.map(({ id }) => id));
+          const retained = current.filter(({ id }) => visibleIds.has(id));
+          const known = new Set(retained.map(({ id }) => id));
+          return [
+            ...additions.filter(({ id }) => !known.has(id)),
+            ...retained,
+          ].slice(0, MAX_VISIBLE_TOASTS);
+        });
         const first = unread[0];
         if (first && isNewerThan(first, newest.current)) {
           newest.current = {

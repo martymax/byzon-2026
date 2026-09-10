@@ -2,10 +2,13 @@ import pino from 'pino';
 import { readWorkerEnv } from '@byzon/config';
 import { createDatabaseClient } from '@byzon/database';
 import { createRedisConnection } from '@byzon/redis';
+import { createMailTransport } from '@byzon/mail/transport';
+import { dispatchEmailOnce, scheduleRatingEmails } from './email.js';
 
 import { dispatchSupportedOutboxOnce } from './outbox.js';
 
 const env = readWorkerEnv(process.env);
+const mailTransport = createMailTransport(env);
 const logger = pino({
   level: env.LOG_LEVEL,
   base: {
@@ -84,10 +87,29 @@ logger.info(
 );
 
 let dispatchRunning = false;
+let dispatchPromise: Promise<void> = Promise.resolve();
+let lastRatingScanAt = 0;
 const dispatch = async (): Promise<void> => {
   if (dispatchRunning) return;
   dispatchRunning = true;
   try {
+    if (Date.now() - lastRatingScanAt >= 60_000) {
+      await scheduleRatingEmails(database.db);
+      lastRatingScanAt = Date.now();
+    }
+    for (let i = 0; i < env.WORKER_CONCURRENCY_EMAIL; i += 1) {
+      const emailOutcome = await dispatchEmailOnce(
+        database.db,
+        mailTransport,
+        env.APP_BASE_URL,
+      );
+      if (emailOutcome === 'failed')
+        logger.error(
+          { outcome: emailOutcome },
+          'Email delivery exhausted its retries',
+        );
+      if (emailOutcome === 'idle') break;
+    }
     const outcome = await dispatchSupportedOutboxOnce(database.db);
     if (outcome === 'failed') {
       logger.error({ outcome }, 'Outbox event moved to dead letter state');
@@ -102,7 +124,9 @@ const dispatch = async (): Promise<void> => {
   }
 };
 await dispatch();
-const dispatchTimer = setInterval(() => void dispatch(), 1_000);
+const dispatchTimer = setInterval(() => {
+  if (!dispatchRunning) dispatchPromise = dispatch();
+}, 1_000);
 await new Promise<void>((resolve) => {
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Worker skeleton stopped');
@@ -112,4 +136,5 @@ await new Promise<void>((resolve) => {
   process.once('SIGINT', () => shutdown('SIGINT'));
 });
 clearInterval(dispatchTimer);
+await dispatchPromise;
 await Promise.all([redis.close(), database.close()]);

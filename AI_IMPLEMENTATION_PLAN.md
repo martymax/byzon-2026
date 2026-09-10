@@ -206,8 +206,9 @@ Nová aplikace se přidá do stejného repozitáře jako monorepo. Přesun nebo 
 
 - Mobilně orientovaná PWA na `app.byzon.cz`, bez povinné instalace.
 - Veřejný `byzon.cz` zůstává marketingovým/prodejním webem.
-- Účastníci se importují ze SimpleShop API a administrátor následně
-  výslovně spouští e-mailovou pozvánku do aplikace.
+- Účastníci se importují ze SimpleShop API; pro programové spolupracovníky
+  je primární existující ruční participant flow podle ADR-017. Administrátor
+  následně samostatně spouští e-mailovou pozvánku do aplikace.
 - Program, osobní agenda, rezervace, čekací listiny a praktické informace.
 - Online seznamy přihlášených pro vedoucí přiřazených kapacitních aktivit.
 - Kritická provozní oznámení a organizační přehledy v rozsahu nutném pro akci.
@@ -220,8 +221,8 @@ Nová aplikace se přidá do stejného repozitáře jako monorepo. Přesun nebo 
 - nativní mobilní aplikace;
 - automatizované spojování účastníků, žádosti o spojení, interní zprávy,
   doporučování kontaktů a plánování networkingových schůzek;
-- hlasování o dotazech, ankety, projekce dotazů/výsledků a odpovědi řečníků po
-  skončení vystoupení;
+- hlasování o dotazech, ankety a projekce dotazů/výsledků; soukromé písemné
+  odpovědi linked speakerů po session jsou nově povolené podle ADR-017;
 - samostatný portál řečníka, upload/review prezentací, speaker reminder workflow
   a zpřístupňování materiálů po akci;
 - partner účty nebo partner portál; partner je v aplikaci prezentován pouze
@@ -261,9 +262,9 @@ odkazy pro úkoly a akceptaci; nerozhodnuté body zůstávají pouze v §22.
 | --- | --- | --- | --- |
 | `SCOPE-2026-01` | Launch staví na menším spolehlivém základu; social wall se vůbec neimplementuje. | Gate A je jediná launch gate; Priority B je volitelná a nemá blokovat go-live. | `AAACE2Bh_kg`, `AAACFfwvgWA`, `AAACD524Haw` |
 | `SCOPE-2026-02` | Networking je pouze dobrovolný adresář profilů. Profil obsahuje představení, zvolené kontakty a pevný výběr „Dnes lovím“: sdílení know-how, lidi do týmu, investory, obchodní partnery, dodavatele, klienty. | Žádné recommendations, žádosti, spojení, zprávy, meetingy ani jejich reporty; kontakt má pouze viditelnost `hidden | directory`. | `AAACFfwvgQ4`, `AAACFfwvgQ0`, `AAACFfwvgPE`, `AAACFfwvgV8` |
-| `SCOPE-2026-03` | Řečníci nedostanou portál. Registrují se bezplatnou vstupenkou jako běžní účastníci; medailonky zůstávají publikovaným obsahem programu. | Nevznikají speaker invitations, vlastní dashboard, uploady, workflow podkladů, reminders ani odpovědi po akci. | `AAACFfwvgUg`, `AAACFfwvgTw`, `AAACFfwvgTk`, `AAACFfwvgTg`, `AAACFfwvgTc`, `AAACFfwvgTY`, `AAACFfwvgTU` |
+| `SCOPE-2026-03` | Řečníci používají participant baseline, primárně ručně vytvořený adminem; SimpleShop je alternativa. ADR-017 povoluje úzké `/host/dotazy` pro linked speakery po session. | Bez obecného speaker portálu, uploadů, podkladů a reminders; soukromou odpověď vidí jen autor otázky. Pozvánka je existující participant operace. | `AAACFfwvgUg`, `AAACFfwvgTw`, `AAACFfwvgTk`, `AAACFfwvgTg`, `AAACFfwvgTc`, `AAACFfwvgTY`, `AAACFfwvgTU` ; aktualizace 7. 9. 2026, [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md) |
 | `SCOPE-2026-04` | Partner nemá zvláštní přístup. V aplikaci jsou loga partnerů; partnerské vstupenky se chovají jako běžné účastnické vstupenky. | Bez partner role, partner dashboardu a přístupu k účastníkům. | `AAACFfwvgV4`, `AAACD524Hb8` |
-| `SCOPE-2026-05` | Dotazy jsou prostý sběr bez hlasování a moderátorského workflow. Jsou povolené jen pro páteční program na Byzon stage a Leadership stage; vidí je pouze přiřazení moderátoři na tabletu. | Žádné ankety, votes, merge, answered state, projection ani post-event answers. Každý publikovaný bod programu má stažitelný QR deep link pro úvodní slide; možnost položit dotaz se zobrazí jen u podporované session. | `AAACFfwvgXA`, `AAACFfwvgSw`, `AAACFfwvgRI` |
+| `SCOPE-2026-05` | Dotazy jsou prostý soukromý sběr pro explicitní whitelist 17 pátečních session; moderátor má read-only feed, linked speaker anonymizované texty až po konci a autor vlastní historii. | ADR-017 povoluje jednu písemnou odpověď jen autorovi pod samostatným flagem a Q&A target stávající QR služby. Bez anket, votes, merge, ručního answered stavu a projection. | `AAACFfwvgXA`, `AAACFfwvgSw`, `AAACFfwvgRI` ; aktualizace 7. 9. 2026, [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md) |
 | `SCOPE-2026-06` | Oznámení slouží jen pro kritické změny, například odpadnutí řečníka, zrušení části programu nebo bezpečnostní incident. | Povolené audience jsou celá akce nebo přímo dotčené sessions; běžné reminders a marketingové rozesílky se nestaví. Kalendář `.ics` zůstává. | `AAACFfwvgTE`, `AAACFfwvgP8` |
 | `SCOPE-2026-07` | Samostatný plánek, materiály a samoobslužný datový export se nestaví. Profil lze opravit přímo; telefon je dobrovolné profilové pole. | Lokace je text v programu, privacy UI nabízí editaci a kontaktní cestu, nikoli exportní job. | `AAACFfwvgWI`, `AAACFfwvgTA`, `AAACFfwvgPo`, `AAACFfwvgO4` |
 | `SCOPE-2026-08` | Rezervovatelné aktivity: pátek koučink, mastermind Expertního Boardu a řízený networking; sobota workshopy a mastermind Tomáše Ryzy. Počáteční administrátorské hodnoty: koučink 1 osoba/slot, EB21 12, každý sobotní workshop 20, sobotní mastermind 6; nejde o konstanty v aplikačním kódu a provozní kapacita session je auditovaně editovatelná v administraci. Registrace končí začátkem aktivity; každý použitý pořadník je striktně FIFO s automatickým potvrzením prvního čekajícího. Networking nemá hardcoded výchozí kapacitu a otevře se až po zadání kladné hodnoty v administraci. Dvě části sobotního mastermindu sdílejí jednu rezervaci, kapacitu a roster. | Nabídka s expirací, TTL a `registration_estimate` se neimplementují; podrobnosti závazně popisuje [ADR-014](docs/adr/014-reservation-waitlist-grouping.md). | `AAACFfwvgWU`, `AAACD524HbQ`, rozhodnutí produktu 30. 8. 2026 |
@@ -271,7 +272,7 @@ odkazy pro úkoly a akceptaci; nerozhodnuté body zůstávají pouze v §22.
 | `SCOPE-2026-10` | Kouči, vedoucí mastermindů, workshopů a řízeného networkingu potřebují online jméno a firmu přihlášených pouze u svých aktivit. | Stávající technická role `room_operator` se v UI jmenuje „Vedoucí aktivity“, je scoped na session a má read-only roster; nedostává globální seznam ani práva řečníka/admina. | `AAACFfwvgUg`, `AAACFfwvgQM`, `AAACFfwvgOQ`, `AAACD524HbY` |
 | `SCOPE-2026-11` | Obecný QR na badge a obrazovkách vede jen na `https://app.byzon.cz`; osobní přístup přijde ověřeným e-mailovým linkem. | Veřejný QR nesmí obsahovat ticket ani token; ideální pozvánka 11. 9. 2026, hard deadline 15. 9. 2026; zachovat recovery přes e-mail. | `AAACD524Ha0`, `AAACFfwvgOk` |
 | `SCOPE-2026-12` | Vstupním baseline je aktuální web; partner list se ještě aktualizuje, FAQ se doplní a obsahová uzávěrka je 31. 8. 2026. Praktické kontakty: Jindřich Hrdý 774 835 456, Tomáš Ryza 776 089 866, Veronika Vicková 733 726 753. | Finální web → DB reconciliation/content UAT je samostatný gate; po publikaci zůstává autoritou DB dle ADR-008. Do uzávěrky lze používat viditelně označený draft. | `AAACFfwvgW4` |
-| `SCOPE-2026-13` | Přístup vzniká importem účastníků ze SimpleShop API a následnou e-mailovou pozvánkou spuštěnou administrátorem. | Bez volné registrace, ticket claimu a QR credentialu; import a invitation batch jsou oddělené auditované kroky. | Rozhodnutí produktu 31. 8. 2026, [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) |
+| `SCOPE-2026-13` | Přístup vzniká SimpleShop importem nebo, pro programové spolupracovníky primárně, existujícím ručním participant flow (ADR-017). Pozvánku spouští administrátor samostatně. | Bez volné registrace, ticket claimu a QR credentialu; import a invitation batch jsou oddělené auditované kroky. | Rozhodnutí produktu 31. 8. 2026, [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) ; aktualizace 7. 9. 2026, [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md) |
 | `SCOPE-2026-14` | Kontrola vstupenek a check-in jsou pro rok 2026 mimo rozsah aplikace. | `P6` a ticket presentation/claim UI nejsou launch gate; aktivní admin UI ani provozní metriky je nenabízejí. | Rozhodnutí produktu 31. 8. 2026, [ADR-016](docs/adr/016-participant-access-and-2026-operations-scope.md) |
 | `SCOPE-2026-15` | Networking vyžaduje event-wide povolení administrátorem i výslovný opt-in účastníka. Po opt-in se zobrazí všechna vyplněná pole veřejného profilu; bez opt-in není profil viditelný. | Jediná profilová visibility je odvozena z opt-in; opt-out okamžitě skryje celý profil. | Rozhodnutí produktu 31. 8. 2026 |
 | `SCOPE-2026-16` | Data se automaticky nemažou; odstranění/anonymizaci řídí organizátor. | Žádný aktivní produkční retention job s domyšlenou lhůtou; ruční operace zůstává auditovaná. | Rozhodnutí produktu 31. 8. 2026 |
@@ -698,7 +699,7 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 | `CS-NETWORKING-01` | opt-in adresář, profil a fixed „Dnes lovím“ | `packages/domain/src/contracts/networking.ts` | `P11` | participant Priority B | `integrated`; event-wide gate + explicitní participant opt-in, který atomicky zveřejní všechna vyplněná veřejná pole |
 | `CS-ADMIN-ENGAGEMENT-01` | event flags, session questions a session-scoped moderátoři | `packages/domain/src/contracts/admin-engagement.ts` | `P11-08`, `P12-10` | admin Priority B | `integrated`; private/no-store snapshot, masked candidates, optimistic/idempotentní auditované mutace a `/admin/interakce` |
 | `CS-SESSION-QR-01` | stabilní programový deep link a QR metadata pro každý publikovaný bod | `packages/domain/src/contracts/content.ts` | `P3-12` | admin/content + participant | `integrated`; SVG + batch ZIP nad latest immutable publication |
-| `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` | participant + moderator Priority B | `not started` |
+| `CS-QUESTIONS-01` | submit a session-scoped chronologický seznam bez moderation/votes/polls/projection | `packages/domain/src/contracts/questions.ts` | `P12` + AQ/QA/SPEAKER track | participant + moderator Priority B | capability, lifecycle, owner history, moderator feed a speaker follow-up implementovány dle ADR-017; provozní ověření viz Q&A runbook |
 
 ---
 
@@ -716,9 +717,11 @@ veřejné exporty a skládání endpointových problem unionů popisují verzova
 - `system_worker` – technická identita, nepřihlašuje se přes UI
 
 Role se vážou k `event_id`. Globální superadmin se ve verzi 2026 nevytváří, pokud není explicitně požadován.
-Řečník používá běžnou bezplatnou vstupenku a roli `participant`. Historická
-enum hodnota `speaker` může do bezpečné databázové migrace zůstat, ale nesmí
-udělovat žádné zvláštní UI/API oprávnění. Partner role neexistuje.
+Řečník používá aktivní participant baseline a doplňkovou roli `speaker`.
+ADR-017 povoluje anonymizované dotazy a soukromé odpovědi pouze po skončení
+vlastní linked session a pod samostatným follow-up flagem. Tato capability
+je implementována v AQ-01/SPEAKER-03/04; roster vyžaduje explicitní `room_operator`.
+Partner role neexistuje.
 
 ### 8.2 Matice minimálních oprávnění
 
@@ -1939,6 +1942,11 @@ fixtures.
   kontrakt, syntetické fixtures a mockované preview/replace/remove UI včetně
   read-only varianty. Produkční endpoint, audit, storage/auth integrace a E2E
   zůstávají otevřené a smí je uzavřít až `AUX-13L`.
+  Aktualizace 8. 9. 2026: na explicitní rozhodnutí zadavatele je implementován
+  Railway Volume adaptér pro loga/fotografie, autorizované API, audit, stažení,
+  publikování a produkční UI. Původní bucket gate se pro tyto obrázky nahrazuje
+  dodatkem ADR-007. Lokální testy jsou v implementaci; skutečné připojení volume,
+  nasazení a ověření po restartu eviduje `docs/partner-logo-storage.md`.
 
 **Akceptace:** participant nikdy nevidí draft; publish je atomický; stejná
 version vrací deterministický JSON; významná změna vytváří cílitelnou událost;
@@ -2870,11 +2878,13 @@ Před zahájením volitelné Priority B musí být na staging akceptováno:
 ### Etapa 10 – portál řečníka zrušen
 
 - [–] `P10-01` až `P10-07` – speaker invitation, dashboard, instrukce,
-  upload/review podkladů, publish permission, reminders a odpovědi po akci jsou
-  vyřazené rozhodnutím `SCOPE-2026-03`.
+  upload/review podkladů, publish materiálů a reminders zůstávají vyřazené.
+  Úzké soukromé odpovědi po session nově povoluje ADR-017 a vlastní je
+  `P12-09`/`SPEAKER-03`/`04`, nikoli obecný speaker portál.
 
-Veřejné medailonky a vazby řečníků na program zůstávají v P3. Řečník aktivuje
-bezplatnou vstupenku jako participant; případný přístup k rosteru dostane jen
+Veřejné medailonky a vazby řečníků na program zůstávají v P3. Řečník získá
+participant baseline primárně existujícím ručním flow, alternativně importem;
+případný přístup k rosteru dostane jen
 jako explicitně session-scoped `room_operator` podle P5/P9.
 
 ### Etapa 11 – jednoduchý networkingový adresář, volitelná Priority B
@@ -2902,6 +2912,12 @@ do DTO/cache; adresář neposkytuje interní komunikaci ani export kontaktů.
 
 ### Etapa 12 – jednoduché dotazy a hodnocení, volitelná Priority B
 
+Aktuální rozšíření řídí [plán přístupu a Q&A](docs/participant-access-and-live-qa-implementation-plan.md)
+a [ADR-017](docs/adr/017-participant-collaborators-and-private-question-follow-ups.md).
+Staré `[x]` níže označuje existující základ, nikoli splnění nové testovací
+matice nebo staging rehearsal. AQ-00 má k 7. 9. 2026 inventář 17 session;
+AQ-01 až ADMIN-03 jsou implementované a lokálně ověřené. QA-05 automatickou evidenci a zbývající fyzický staging rehearsal zachycuje Q&A runbook.
+
 **Závislost:** finální seznam pátečních sessions na Byzon/Leadership stage a
 konkrétní session-scoped moderátoři v `BLOCKER-LIVE-01`.
 
@@ -2914,16 +2930,16 @@ konkrétní session-scoped moderátoři v `BLOCKER-LIVE-01`.
   admin read, hide/delete, approve/merge/reorder/answered workflow.
 - [x] `P12-04` Bounded REST polling s cursor/server time, backoffem a canonical
   reloadem po reconnectu; bez SSE/Redis pub-sub.
-- [x] `P12-05` Napojit question CTA podporovaných sessions na kanonické
-  programové deep linky/QR z `P3-12`; nevytvářet druhý question-only QR formát.
+- [x] `P12-05` Programová QR služba rozšířena o target `questions` přímo do `/app/interakce/:sessionId`, whitelist, manifest a admin single/bulk download (`QR-02`/`ADMIN-03`).
 - [~] `P12-06` Rate-limit/XSS/IDOR testy a rehearsal na reálných tabletech
   moderátorů v obou pátečních scénách.
 - [x] `P12-07` Session/event ratings a completed suppression jako oddělený
   volitelný slice; komentáře hodnocení nijak nezrušily.
 - [–] `P12-08` Hlasování o dotazech, ankety, projection view a live výsledky –
   mimo rozsah 2026.
-- [–] `P12-09` Přiřazení nezodpovězených dotazů řečníkům a odpovědi po akci –
-  mimo rozsah 2026.
+- [x] `P12-09` ADR-017 implementuje anonymizované dotazy po vlastní session
+  a jednu soukromou písemnou odpověď pro autora pod samostatným flagem.
+  Dokončeno v `SPEAKER-03`/`04`; bez ručního předávání moderátorem.
 - [x] `P12-10` Integrovat `/admin/interakce`: event-wide otázky a hodnocení,
   samostatný přepínač otázek u každé session a session-scoped přiřazení
   moderátora výběrem přednášky a aktivního účastníka. Vše je defaultně
@@ -3374,3 +3390,8 @@ Při implementaci se řiď aktuální dokumentací a přesné použité verze v�
 | 6.52 | 2. 9. 2026 | `AUX-13E` zpevnil lokální produkční `/admin/ucastnici`: legacy ticket search používá jen same-origin POST/no-store body, current-event slug, deduplikaci osoby, maskovaný kontakt a HMACovaný Redis limit 30/min; block/reactivate navíc vyžaduje `ticket:any:manage`, má limit 10/min, audit a kanonický `already_applied` replay. Server/unit sada má 609 PASS a PostgreSQL PII/origin/permission/audit regrese je připravená pro CI. Finální `[x]` zůstává blokované, protože scope-aligned SimpleShop import nevytváří ticket credential a resend/recovery importované identity vyžaduje invitation handshake `P4-06`–`P4-09`/`BLOCKER-AUTH-01`; reassign/transfer se nevytváří. |
 | 6.53 | 2. 9. 2026 | Závěrečný admin redesign gate audit potvrdil, že všechny lokálně implementovatelné AUX řezy jsou na `main`, root format/lint/typecheck/test/build a browser 1053/1053 jsou zelené. Veřejný Railway staging vrací ready pro DB/Redis a anonymní admin context korektně failuje private/no-store 401, ale běží starý release `bfead325…`; bez deploye aktuálního `main` a schváleného organizer UAT účtu nelze uzavřít `AUX-13A` ani navazující UAT. Otevřené jsou pouze explicitní externí/product gates: UAT aktéři a zařízení, invitation/recovery, support významy, supportMessage, privátní storage/DPA, finální obsah a personální obsazení. |
 | 6.54 | 2. 9. 2026 | Úplný status audit následně uzavřel poslední lokální `GAP-AUX-AUDIT-01`: produkční audit query filtruje PII-safe actor a odvozený outcome v SQL před keyset limitem, UI drží filtry i na dalších stránkách a exhaustive typovaný registr pokrývá všechny zapisované admin i podporované historické akce bez raw kódu. Server/unit sada má 609 PASS a browser 1053/1053; `AUX-13J` už čeká pouze na společný staging `AUX-13A`. |
+
+
+### AQ release evidence — 7. 9. 2026
+
+Balíčky AQ-00 až ADMIN-03 jsou implementované v samostatných commitech. QA-05 automatické ověření a provozní předání popisuje [runbook](docs/runbooks/participant-access-live-qa.md); [evidence](docs/evidence/participant-access-live-qa-verification.md) odděluje lokální výsledky od dosud neprovedeného staging/production zapnutí. Speaker portal/check-in zůstávají vypnuté, nové collection/follow-up flags nejsou tímto kódem provozně zapnuté.

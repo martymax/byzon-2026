@@ -19,6 +19,18 @@ nebo autorizovaný serverový proxy endpoint.
 Upload key určuje server. Soubor zůstane v karanténě do ověření velikosti,
 checksumu, skutečného MIME a schválené bezpečnostní kontroly.
 
+## Dodatek 8. září 2026: loga a fotografie
+
+Na základě rozhodnutí zadavatele používají loga partnerů a fotografie řečníků
+Railway Volume připojený k webové službě. Tento dodatek nahrazuje požadavek
+Storage Bucket pro tyto dva účely. Metadata zůstávají v PostgreSQL; upload,
+kontrola souboru, autorizované čtení a audit probíhají v aplikaci. Nové obrázky
+se zpřístupní veřejnému API až při publikování obsahu. Exporty a zálohy tímto
+dodatkem nemění své úložiště.
+
+Konfigurace, limity a postup nasazení jsou v
+[postupu pro loga a fotografie](../partner-logo-storage.md).
+
 ## Důsledky
 
 - Bucket není veřejný CDN ani autorizační databáze.

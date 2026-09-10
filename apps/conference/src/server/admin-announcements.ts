@@ -1,12 +1,16 @@
+import { queueAnnouncementEmails } from './email-notifications';
 import {
   acquireTransactionLock,
   generateUuidV7,
   schema,
   writeAuditLog,
   type Database,
+  type DatabaseTransaction,
 } from '@byzon/database';
 import {
   adminAnnouncementDraftSchema,
+  adminAnnouncementListResponseSchema,
+  adminAnnouncementDeleteResponseSchema,
   adminAnnouncementPreviewRequestSchema,
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendRequestSchema,
@@ -14,7 +18,7 @@ import {
   adminAnnouncementTargetListResponseSchema,
   type AdminAnnouncementDraft,
 } from '@byzon/domain/contracts';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -121,7 +125,10 @@ const requireAdmin = async (
   return identity.user.id;
 };
 
-const activeParticipantIds = async (db: Database, eventId: string) => {
+const activeParticipantIds = async (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+) => {
   const rows = await db
     .select({ userId: schema.eventRoles.userId })
     .from(schema.eventRoles)
@@ -144,7 +151,7 @@ const activeParticipantIds = async (db: Database, eventId: string) => {
 };
 
 const audienceSnapshot = async (
-  db: Database,
+  db: Database | DatabaseTransaction,
   eventId: string,
   draft: AdminAnnouncementDraft,
 ): Promise<{ recipientIds: string[]; sessionTitle: string | null }> => {
@@ -209,7 +216,7 @@ const audienceSnapshot = async (
 };
 
 const audienceSample = async (
-  db: Database,
+  db: Database | DatabaseTransaction,
   eventId: string,
   userIds: readonly string[],
 ) => {
@@ -348,50 +355,56 @@ export const handleAdminAnnouncementPreview = async (
         'The announcement draft is invalid.',
       );
     }
-    const audience = await audienceSnapshot(
-      dependencies.db,
-      eventId,
-      body.data.draft,
-    );
-    if (audience.recipientIds.length === 0) {
-      throw apiProblem(
-        409,
-        'ANNOUNCEMENT_EMPTY_AUDIENCE',
-        'Empty audience',
-        'The immutable audience would contain no recipients.',
+    const response = await dependencies.db.transaction(async (transaction) => {
+      await acquireTransactionLock(
+        transaction,
+        `announcement-audience:${eventId}`,
       );
-    }
-    const sample = await audienceSample(
-      dependencies.db,
-      eventId,
-      audience.recipientIds.slice(0, 5),
-    );
-    const now = dependencies.now?.() ?? new Date();
-    const previewId = generateUuidV7();
-    const expiresAt = new Date(now.getTime() + PREVIEW_TTL_MS);
-    await dependencies.db.insert(schema.announcementPreviews).values({
-      id: previewId,
-      eventId,
-      version: 1,
-      draft: body.data.draft,
-      recipientUserIds: audience.recipientIds,
-      recipientCount: audience.recipientIds.length,
-      createdBy: actorId,
-      createdAt: now,
-      expiresAt,
-    });
-    const response = adminAnnouncementPreviewResponseSchema.parse({
-      eventId,
-      previewId,
-      previewVersion: 1,
-      draft: body.data.draft,
-      audience: {
+      const audience = await audienceSnapshot(
+        transaction,
+        eventId,
+        body.data.draft,
+      );
+      if (audience.recipientIds.length === 0) {
+        throw apiProblem(
+          409,
+          'ANNOUNCEMENT_EMPTY_AUDIENCE',
+          'Empty audience',
+          'The immutable audience would contain no recipients.',
+        );
+      }
+      const sample = await audienceSample(
+        transaction,
+        eventId,
+        audience.recipientIds.slice(0, 5),
+      );
+      const now = dependencies.now?.() ?? new Date();
+      const previewId = generateUuidV7();
+      const expiresAt = new Date(now.getTime() + PREVIEW_TTL_MS);
+      await transaction.insert(schema.announcementPreviews).values({
+        id: previewId,
+        eventId,
+        version: 1,
+        draft: body.data.draft,
+        recipientUserIds: audience.recipientIds,
         recipientCount: audience.recipientIds.length,
-        excludedCount: 0,
-        sample,
-      },
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
+        createdBy: actorId,
+        createdAt: now,
+        expiresAt,
+      });
+      return adminAnnouncementPreviewResponseSchema.parse({
+        eventId,
+        previewId,
+        previewVersion: 1,
+        draft: body.data.draft,
+        audience: {
+          recipientCount: audience.recipientIds.length,
+          excludedCount: 0,
+          sample,
+        },
+        createdAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      });
     });
     return Response.json(response, {
       status: 201,
@@ -464,6 +477,10 @@ export const handleAdminAnnouncementSend = async (
         now,
       },
       async (transaction) => {
+        await acquireTransactionLock(
+          transaction,
+          `announcement-audience:${eventId}`,
+        );
         await acquireTransactionLock(
           transaction,
           `announcement-preview:${eventId}:${body.data.previewId}`,
@@ -583,6 +600,14 @@ export const handleAdminAnnouncementSend = async (
             createdAt: now,
           })),
         );
+        await queueAnnouncementEmails(transaction, {
+          eventId,
+          announcementId,
+          userIds: preview.recipientUserIds,
+          title: draft.title,
+          body: draft.bodyText,
+          now,
+        });
         await transaction
           .update(schema.announcementPreviews)
           .set({ sentAnnouncementId: announcementId })
@@ -613,6 +638,202 @@ export const handleAdminAnnouncementSend = async (
           audit: { auditId },
         });
         return { status: 201, body: response, resultReference: announcementId };
+      },
+    );
+    return Response.json(result.body, {
+      status: result.status,
+      headers: {
+        ...privateHeaders(requestId),
+        'idempotency-replayed': String(result.replayed),
+      },
+    });
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+export const handleAdminAnnouncementList = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminAnnouncementDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'GET') {
+      throw apiProblem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    await requireAdmin(request, eventId, dependencies);
+    const cursor = new URL(request.url).searchParams.get('cursor');
+    if (cursor !== null && !uuidSchema.safeParse(cursor).success) {
+      throw apiProblem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid cursor',
+        'The announcement cursor is invalid.',
+      );
+    }
+    const rows = await dependencies.db
+      .select({
+        id: schema.announcements.id,
+        title: schema.announcements.title,
+        summary: schema.announcements.summary,
+        bodyText: schema.announcements.bodyText,
+        severity: schema.announcements.severity,
+        publishedAt: schema.announcements.publishedAt,
+        audienceKind: schema.announcements.audienceKind,
+        sessionId: schema.announcements.sessionId,
+        sessionTitle: schema.announcements.sessionTitle,
+        recipientCount: schema.announcementPreviews.recipientCount,
+      })
+      .from(schema.announcements)
+      .innerJoin(
+        schema.announcementPreviews,
+        and(
+          eq(schema.announcementPreviews.eventId, schema.announcements.eventId),
+          eq(schema.announcementPreviews.id, schema.announcements.previewId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.announcements.eventId, eventId),
+          cursor ? lt(schema.announcements.id, cursor) : undefined,
+        ),
+      )
+      .orderBy(desc(schema.announcements.id))
+      .limit(21);
+    const page = rows.slice(0, 20);
+    return Response.json(
+      adminAnnouncementListResponseSchema.parse({
+        eventId,
+        items: page.map((row) => ({
+          id: row.id,
+          title: row.title,
+          summary: row.summary,
+          bodyText: row.bodyText,
+          severity: row.severity,
+          publishedAt: row.publishedAt.toISOString(),
+          recipientCount: row.recipientCount,
+          context:
+            row.audienceKind === 'event'
+              ? { kind: 'event' }
+              : {
+                  kind: 'session',
+                  session: { id: row.sessionId, title: row.sessionTitle },
+                },
+        })),
+        nextCursor: rows.length > 20 ? page.at(-1)!.id : null,
+      }),
+      { headers: privateHeaders(requestId) },
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+export const handleAdminAnnouncementDelete = async (
+  request: Request,
+  eventId: string,
+  announcementId: string,
+  dependencies: AdminAnnouncementDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'DELETE') {
+      throw apiProblem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    if (request.headers.get('origin') !== dependencies.allowedOrigin) {
+      throw apiProblem(
+        403,
+        'EVENT_ACCESS_DENIED',
+        'Event access denied',
+        'The request origin is not allowed.',
+      );
+    }
+    const actorId = await requireAdmin(request, eventId, dependencies);
+    if (!uuidSchema.safeParse(announcementId).success) {
+      throw apiProblem(
+        404,
+        'ANNOUNCEMENT_NOT_FOUND',
+        'Announcement not found',
+        'The announcement is unavailable.',
+      );
+    }
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'announcement.delete',
+        key: readIdempotencyKey(request.headers),
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: '',
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now: dependencies.now?.() ?? new Date(),
+      },
+      async (transaction) => {
+        // The recipient FK cascades in this transaction, removing read and unread deliveries.
+        // Keep the preview's sentAnnouncementId so a send retry cannot recreate the message.
+        const [deleted] = await transaction
+          .delete(schema.announcements)
+          .where(
+            and(
+              eq(schema.announcements.eventId, eventId),
+              eq(schema.announcements.id, announcementId),
+            ),
+          )
+          .returning({
+            id: schema.announcements.id,
+            audienceKind: schema.announcements.audienceKind,
+          });
+        if (!deleted) {
+          throw apiProblem(
+            404,
+            'ANNOUNCEMENT_NOT_FOUND',
+            'Announcement not found',
+            'The announcement is unavailable.',
+          );
+        }
+        await writeAuditLog(transaction, {
+          eventId,
+          actorId,
+          actorType: 'user',
+          action: 'announcement.delete',
+          targetType: 'announcement',
+          targetId: announcementId,
+          requestId,
+          reason: 'Oznámení odstraněno administrátorem.',
+          before: { audienceKind: deleted.audienceKind },
+          after: { deleted: true },
+        });
+        return {
+          status: 200,
+          body: adminAnnouncementDeleteResponseSchema.parse({
+            eventId,
+            announcementId,
+            outcome: 'deleted',
+          }),
+        };
       },
     );
     return Response.json(result.body, {

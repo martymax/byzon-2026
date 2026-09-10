@@ -70,6 +70,7 @@ export class ApiRequestConfigurationError extends Error {
 }
 
 export interface FetchApiClientOptions {
+  readonly onOnboardingRequired?: () => void;
   readonly baseUrl?: string;
   readonly fetch?: FetchImplementation;
   readonly isOnline?: () => boolean;
@@ -715,6 +716,20 @@ export const createFetchApiClient = (
           return failureResult({ kind: 'aborted' });
         }
         if (timedOut) return failureResult({ kind: 'timeout' });
+
+        if (
+          response.status === 403 &&
+          response.headers.get('x-byzon-onboarding-required') === 'true'
+        ) {
+          if (clientOptions.onOnboardingRequired)
+            clientOptions.onOnboardingRequired();
+          else if (
+            typeof window !== 'undefined' &&
+            window.location.pathname !== '/onboarding'
+          ) {
+            window.location.replace('/onboarding');
+          }
+        }
 
         if (
           RETRYABLE_READ_STATUSES.has(response.status) &&

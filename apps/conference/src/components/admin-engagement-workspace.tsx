@@ -15,6 +15,10 @@ import {
   requestAdminEngagementOverview,
 } from '@/lib/admin-api';
 
+import { AdminSessionModeratorDialog } from './admin-session-moderator-dialog';
+import { AdminBulkSelectAll } from './admin-bulk-selection';
+import { AdminEngagementBulk } from './admin-engagement-bulk';
+import { ModeratorFeed } from './host-questions';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { AdminFormErrorSummary } from './admin-form-error-summary';
 import {
@@ -55,7 +59,13 @@ const featureLabels: ReadonlyArray<{
     key: 'questionsEnabled',
     title: 'Otázky pro řečníky',
     description:
-      'Globální pojistka. Konkrétní přednášky se povolují samostatně níže.',
+      'Hlavní vypínač sběru dotazů. Po zapnutí povolte konkrétní přednášky níže. Přiřazený moderátor není podmínkou; dotazy může spravovat administrátor.',
+  },
+  {
+    key: 'questionFollowUpsEnabled',
+    title: 'Písemné odpovědi po vystoupení',
+    description:
+      'Zpřístupní dotazy propojeným řečníkům po skončení přednášky. Vypnutí zachová odpovědi jejich autorům.',
   },
   {
     key: 'ratingsEnabled',
@@ -94,8 +104,17 @@ const sessionStatusLabel = (status: AdminEngagementSession['status']) =>
         : 'Archivováno';
 
 export const AdminEngagementWorkspace = () => {
-  const { api, eventId, eventTimezone, invalidateSensitive, permissions } =
-    useAdminWorkspace();
+  const [moderationSessionId, setModerationSessionId] = useState<string | null>(
+    null,
+  );
+  const {
+    api,
+    context,
+    eventId,
+    eventTimezone,
+    invalidateSensitive,
+    permissions,
+  } = useAdminWorkspace();
   const requestFence = useAdminRequestFence();
   const [overview, setOverview] = useState<AdminEngagementOverview | null>(
     null,
@@ -113,6 +132,10 @@ export const AdminEngagementWorkspace = () => {
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [reload, setReload] = useState(0);
+  const [selectedSessions, setSelectedSessions] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [moderatorSessionId, setModeratorSessionId] = useState('');
 
   const hasRequiredPermissions = requiredPermissions.every((permission) =>
     permissions.includes(permission),
@@ -143,6 +166,7 @@ export const AdminEngagementWorkspace = () => {
         if (result.kind === 'success') {
           setError(null);
           setOverview(result.data);
+          setSelectedSessions(new Set());
           setDraftFeatures(result.data.features);
           setSelectedSessionId((current) =>
             result.data.sessions.some(({ sessionId }) => sessionId === current)
@@ -191,8 +215,7 @@ export const AdminEngagementWorkspace = () => {
   const reasonValid = reason.trim().length >= 8;
   const validationFailed = attempted && !reasonValid;
   const moderatorAssignmentAllowed =
-    overview?.features.questionsEnabled === true &&
-    selectedSession?.questionsEnabled === true &&
+    selectedSession !== undefined &&
     selectedSession.status !== 'cancelled' &&
     selectedSession.status !== 'archived';
 
@@ -364,6 +387,49 @@ export const AdminEngagementWorkspace = () => {
     }
   };
 
+  const sessionActionsDisabled =
+    busy !== null || pending !== null || context.event.phase === 'archived';
+  const selectableSessions = (overview?.sessions ?? []).filter(
+    (session) => !['cancelled', 'archived'].includes(session.status),
+  );
+  const moderatorSession = overview?.sessions.find(
+    (session) => session.sessionId === moderatorSessionId,
+  );
+  const sessionChoice = (session: AdminEngagementSession) => (
+    <label className={styles.checkRow}>
+      <input
+        type="checkbox"
+        aria-label={`Vybrat přednášku ${session.title}`}
+        checked={selectedSessions.has(session.sessionId)}
+        disabled={
+          sessionActionsDisabled ||
+          ['cancelled', 'archived'].includes(session.status)
+        }
+        onChange={(event) => {
+          const next = new Set(selectedSessions);
+          if (event.target.checked) next.add(session.sessionId);
+          else next.delete(session.sessionId);
+          setSelectedSessions(next);
+        }}
+      />
+      <strong>{session.title}</strong>
+    </label>
+  );
+  const moderatorButton = (session: AdminEngagementSession) => (
+    <button
+      type="button"
+      className={styles.secondaryButton}
+      aria-label={`Přiřadit moderátora pro ${session.title}`}
+      disabled={
+        sessionActionsDisabled ||
+        ['cancelled', 'archived'].includes(session.status)
+      }
+      onClick={() => setModeratorSessionId(session.sessionId)}
+    >
+      Přiřadit moderátora
+    </button>
+  );
+
   if (!hasRequiredPermissions) {
     return (
       <section className={styles.forbidden} role="alert">
@@ -382,11 +448,17 @@ export const AdminEngagementWorkspace = () => {
         <p className={styles.eyebrow}>Interakce účastníků</p>
         <h1>Networking, otázky a hodnocení</h1>
         <p>
-          Všechny funkce jsou ve výchozím stavu vypnuté. Tato část vyžaduje
-          připojení; změny platí jen pro tuto akci a po potvrzení se zapíší do
-          historie změn.
+          Nastavte dostupnost networkingu, otázek a hodnocení. U přednášek
+          spravujte sběr dotazů a přiřazené moderátory.
         </p>
       </header>
+      {overview ? (
+        <nav className={styles.sectionLinks} aria-label="Sekce interakcí">
+          <a href="#engagement-features">Dostupnost funkcí</a>
+          <a href="#engagement-sessions">Otázky podle přednášky</a>
+          <a href="#engagement-moderators">Moderátoři</a>
+        </nav>
+      ) : null}
 
       {error ? (
         <>
@@ -440,12 +512,17 @@ export const AdminEngagementWorkspace = () => {
         </section>
       ) : (
         <>
-          <section className={styles.panel} aria-labelledby="reason-title">
-            <h2 id="reason-title">Důvod změny</h2>
-            <p className={styles.muted}>
-              Důvod se použije pro jednu následující operaci a po uložení se
-              vymaže.
-            </p>
+          <section
+            className={`${styles.panel} ${styles.engagementReason}`}
+            aria-labelledby="reason-title"
+          >
+            <div>
+              <h2 id="reason-title">Důvod změny</h2>
+              <p className={styles.muted}>
+                Důvod se použije pro jednu následující operaci a po uložení se
+                vymaže.
+              </p>
+            </div>
             {validationFailed ? (
               <AdminFormErrorSummary
                 descriptionId="admin-engagement-reason-error"
@@ -473,7 +550,11 @@ export const AdminEngagementWorkspace = () => {
             </label>
           </section>
 
-          <section className={styles.panel} aria-labelledby="features-title">
+          <section
+            id="engagement-features"
+            className={styles.panel}
+            aria-labelledby="features-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="features-title">Dostupnost pro celou akci</h2>
@@ -545,7 +626,11 @@ export const AdminEngagementWorkspace = () => {
             </div>
           </section>
 
-          <section className={styles.panel} aria-labelledby="sessions-title">
+          <section
+            id="engagement-sessions"
+            className={styles.panel}
+            aria-labelledby="sessions-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="sessions-title">Otázky podle přednášky</h2>
@@ -566,10 +651,72 @@ export const AdminEngagementWorkspace = () => {
                   : 'Globálně vypnuto'}
               </span>
             </div>
+            <p className={styles.callout}>
+              Připravení moderátoři:{' '}
+              {overview.sessions.filter((s) => s.moderatorReady).length}/
+              {overview.sessions.length}. Propojené účty řečníků:{' '}
+              {overview.sessions.filter((s) => s.speakerReady).length}/
+              {overview.sessions.length}. Sběr dotazů nevyžaduje moderátora;
+              spravovat je může administrátor. Pro písemné odpovědi jsou potřeba
+              propojené účty řečníků.
+            </p>
+            {context.event.phase !== 'archived' ? (
+              <AdminBulkSelectAll
+                selection={{
+                  selectedIds: selectedSessions,
+                  onSelectionChange: setSelectedSessions,
+                }}
+                ids={selectableSessions.map((session) => session.sessionId)}
+                disabled={sessionActionsDisabled}
+                label="Vybrat všechny přednášky"
+              />
+            ) : null}
+            {context.event.phase !== 'archived' ? (
+              <AdminEngagementBulk
+                overview={overview}
+                selectedIds={selectedSessions}
+                onSelectionChange={setSelectedSessions}
+                disabled={
+                  busy !== null ||
+                  pending !== null ||
+                  moderatorSessionId !== '' ||
+                  featuresDirty ||
+                  error !== null
+                }
+                onBusyChange={(running) => setBusy(running ? 'mutation' : null)}
+                onCompleted={() => {
+                  setBusy('read');
+                  setReload((value) => value + 1);
+                }}
+              />
+            ) : null}
+            <a
+              className={styles.secondaryButton}
+              href={`/api/v1/admin/events/${overview.eventId}/session-qr?target=questions`}
+            >
+              Stáhnout všechny Q&amp;A QR (ZIP)
+            </a>
             {overview.sessions.length === 0 ? (
               <p className={styles.empty}>V programu nejsou žádné přednášky.</p>
             ) : (
               <>
+                {moderationSessionId ? (
+                  <div>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => setModerationSessionId(null)}
+                    >
+                      Zavřít dotazy
+                    </button>
+                    <ModeratorFeed
+                      key={`${overview.eventId}:${moderationSessionId}`}
+                      eventId={overview.eventId}
+                      sessionId={moderationSessionId}
+                      embedded
+                    />
+                  </div>
+                ) : null}
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <caption>
@@ -586,9 +733,14 @@ export const AdminEngagementWorkspace = () => {
                     </thead>
                     <tbody>
                       {overview.sessions.map((session) => (
-                        <tr key={session.sessionId}>
+                        <tr
+                          key={session.sessionId}
+                          data-bulk-selected={selectedSessions.has(
+                            session.sessionId,
+                          )}
+                        >
                           <th scope="row">
-                            {session.title}
+                            {sessionChoice(session)}
                             <small className={styles.sessionMeta}>
                               {formatSessionTime(
                                 session.startsAt,
@@ -596,7 +748,13 @@ export const AdminEngagementWorkspace = () => {
                               )}
                             </small>
                           </th>
-                          <td>{sessionStatusLabel(session.status)}</td>
+                          <td>
+                            {sessionStatusLabel(session.status)}
+                            <small>
+                              {session.roomName} · řečníci{' '}
+                              {session.readySpeakerCount}/{session.speakerCount}
+                            </small>
+                          </td>
                           <td>
                             {session.questionsEnabled ? 'Povoleny' : 'Zakázány'}
                           </td>
@@ -606,6 +764,11 @@ export const AdminEngagementWorkspace = () => {
                                   .map(({ displayName }) => displayName)
                                   .join(', ')
                               : 'Bez moderátora'}
+                            <small>
+                              {session.moderatorReady
+                                ? 'Přístup připraven'
+                                : 'Chybí aktivní účastnický přístup moderátora'}
+                            </small>
                           </td>
                           <td>
                             <button
@@ -622,6 +785,26 @@ export const AdminEngagementWorkspace = () => {
                             >
                               {session.questionsEnabled ? 'Zakázat' : 'Povolit'}
                             </button>
+                            {moderatorButton(session)}
+                            {session.status === 'published' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() =>
+                                    setModerationSessionId(session.sessionId)
+                                  }
+                                >
+                                  Spravovat dotazy
+                                </button>
+                                <a
+                                  className={styles.secondaryButton}
+                                  href={`/api/v1/admin/events/${overview.eventId}/session-qr/${session.sessionId}?target=questions`}
+                                >
+                                  Q&amp;A QR
+                                </a>
+                              </>
+                            ) : null}
                           </td>
                         </tr>
                       ))}
@@ -631,8 +814,14 @@ export const AdminEngagementWorkspace = () => {
                 <div className={styles.cards}>
                   <ul className={styles.cardList}>
                     {overview.sessions.map((session) => (
-                      <li className={styles.dataCard} key={session.sessionId}>
-                        <strong>{session.title}</strong>
+                      <li
+                        className={styles.dataCard}
+                        key={session.sessionId}
+                        data-bulk-selected={selectedSessions.has(
+                          session.sessionId,
+                        )}
+                      >
+                        {sessionChoice(session)}
                         <dl>
                           <dt>Začátek</dt>
                           <dd>
@@ -651,24 +840,55 @@ export const AdminEngagementWorkspace = () => {
                                   .map(({ displayName }) => displayName)
                                   .join(', ')
                               : 'Bez moderátora'}
+                            <p>
+                              {session.moderatorReady
+                                ? 'Přístup připraven'
+                                : 'Chybí aktivní účastnický přístup moderátora'}
+                            </p>
+                          </dd>
+                          <dt>Účty řečníků</dt>
+                          <dd>
+                            {session.readySpeakerCount}/{session.speakerCount}
                           </dd>
                         </dl>
-                        <button
-                          aria-label={`${session.questionsEnabled ? 'Zakázat' : 'Povolit'} otázky pro ${session.title}`}
-                          className={styles.secondaryButton}
-                          disabled={
-                            busy !== null ||
-                            pending !== null ||
-                            session.status === 'cancelled' ||
-                            session.status === 'archived'
-                          }
-                          onClick={() => queueSessionUpdate(session)}
-                          type="button"
-                        >
-                          {session.questionsEnabled
-                            ? 'Zakázat otázky'
-                            : 'Povolit otázky'}
-                        </button>
+                        <div className={styles.actionRow}>
+                          {session.status === 'published' ? (
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={() =>
+                                setModerationSessionId(session.sessionId)
+                              }
+                            >
+                              Spravovat dotazy
+                            </button>
+                          ) : null}
+                          {session.status === 'published' ? (
+                            <a
+                              className={styles.secondaryButton}
+                              href={`/api/v1/admin/events/${overview.eventId}/session-qr/${session.sessionId}?target=questions`}
+                            >
+                              Q&amp;A QR
+                            </a>
+                          ) : null}
+                          <button
+                            aria-label={`${session.questionsEnabled ? 'Zakázat' : 'Povolit'} otázky pro ${session.title}`}
+                            className={styles.secondaryButton}
+                            disabled={
+                              busy !== null ||
+                              pending !== null ||
+                              session.status === 'cancelled' ||
+                              session.status === 'archived'
+                            }
+                            onClick={() => queueSessionUpdate(session)}
+                            type="button"
+                          >
+                            {session.questionsEnabled
+                              ? 'Zakázat otázky'
+                              : 'Povolit otázky'}
+                          </button>
+                          {moderatorButton(session)}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -677,7 +897,11 @@ export const AdminEngagementWorkspace = () => {
             )}
           </section>
 
-          <section className={styles.panel} aria-labelledby="moderators-title">
+          <section
+            id="engagement-moderators"
+            className={styles.panel}
+            aria-labelledby="moderators-title"
+          >
             <div className={styles.panelHeader}>
               <div>
                 <h2 id="moderators-title">Moderátoři přednášek</h2>
@@ -733,8 +957,8 @@ export const AdminEngagementWorkspace = () => {
             </div>
             {!moderatorAssignmentAllowed ? (
               <p className={styles.callout}>
-                Pro přiřazení moderátora nejprve zapněte otázky globálně a pro
-                vybranou přednášku.
+                Vyberte podporovanou přednášku. Moderátora lze přiřadit i při
+                vypnutém sběru.
               </p>
             ) : null}
             <button
@@ -787,6 +1011,31 @@ export const AdminEngagementWorkspace = () => {
           </section>
         </>
       )}
+
+      {moderatorSession && overview ? (
+        <AdminSessionModeratorDialog
+          key={moderatorSession.sessionId}
+          session={moderatorSession}
+          candidates={overview.moderatorCandidates}
+          assignmentsVersion={overview.assignmentsVersion}
+          onDismiss={() => setModeratorSessionId('')}
+          onConfirm={(body) => {
+            const attempt: PendingMutation = {
+              body,
+              idempotencyKey: createAdminIdempotencyKey('engagement'),
+              title: 'Přiřadit moderátora',
+              description: moderatorSession.title,
+              acknowledgement: 'Potvrzuji vybraného moderátora a přednášku.',
+              confirmLabel: 'Přiřadit moderátora',
+              danger: false,
+            };
+            setPending(attempt);
+            setModeratorSessionId('');
+            setAmbiguous(false);
+            void execute(attempt);
+          }}
+        />
+      ) : null}
 
       {confirming && pending ? (
         <AdminConfirmDialog

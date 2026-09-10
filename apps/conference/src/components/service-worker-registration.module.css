@@ -76,9 +76,15 @@
   border-color: var(--byzon-border-strong);
 }
 
-.action:hover,
-.quietAction:hover {
+.action:hover:enabled,
+.quietAction:hover:enabled {
   transform: translateY(-1px);
+}
+
+.action:disabled,
+.quietAction:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .action:focus-visible,

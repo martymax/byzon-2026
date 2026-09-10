@@ -22,7 +22,20 @@ import {
 } from '../lib/admin-content-api';
 import { ADMIN_CONTENT_SCOPE_CHANGE_EVENT } from '../lib/admin-content-dirty-guard';
 
+import {
+  AdminBulkCheckbox,
+  AdminBulkSelectAll,
+  useAdminBulkSelection,
+  type AdminBulkSelection,
+} from './admin-bulk-selection';
+import { AdminContentBulk } from './admin-content-bulk';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
+import { AdminSessionQr } from './admin-session-qr';
+import { AdminProgramFilters } from './admin-program-filters';
+import {
+  emptyProgramFilters,
+  matchesProgramFilters,
+} from '../lib/admin-program-filters';
 import {
   AdminContentAssetField,
   type AdminContentAssetPort,
@@ -407,7 +420,9 @@ const itemLabel = (item: AdminContentItem): string =>
 const contentListRenderBatchSize = 20;
 
 const AdminContentItemList = memo(function AdminContentItemList({
+  selection,
   archiveBlocked,
+  eventId,
   items,
   onArchive,
   onEdit,
@@ -417,7 +432,9 @@ const AdminContentItemList = memo(function AdminContentItemList({
   timezone,
   writesBlocked,
 }: {
+  readonly selection: AdminBulkSelection;
   readonly archiveBlocked: boolean;
+  readonly eventId: string;
   readonly items: readonly AdminContentItem[];
   readonly onArchive: (item: AdminContentItem) => void;
   readonly onEdit: (item: AdminContentItem) => void;
@@ -473,61 +490,112 @@ const AdminContentItemList = memo(function AdminContentItemList({
       className={styles.contentList}
     >
       {renderedItems.map((item) => (
-        <li data-archived={item.status === 'archived'} key={item.id}>
-          <span>
-            <strong>{itemLabel(item)}</strong>
-            {resource === 'sessions' ? (
-              <dl className={styles.sessionMetadata}>
-                <div>
-                  <dt>Čas</dt>
-                  <dd>
-                    {daysById.get(String(item.dayId))
-                      ? `${daysById.get(String(item.dayId))} · `
-                      : ''}
-                    {formatProgramTimeRange(
-                      item.startsAt,
-                      item.endsAt,
-                      timeFormatter,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Stage</dt>
-                  <dd>
-                    {roomsById.get(String(item.roomId)) ?? 'Stage neurčena'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Řečníci</dt>
-                  <dd>
-                    {Array.isArray(item.speakerIds) &&
-                    item.speakerIds.length > 0
-                      ? item.speakerIds
-                          .map((id) => speakersById.get(String(id)))
-                          .filter(Boolean)
-                          .join(', ') || 'Řečník neurčen'
-                      : 'Bez řečníka'}
-                  </dd>
-                </div>
-              </dl>
+        <li
+          data-archived={item.status === 'archived'}
+          data-bulk-selected={selection.selectedIds.has(item.id)}
+          key={item.id}
+        >
+          <span className={styles.bulkContentIdentity}>
+            {!readOnly ? (
+              <AdminBulkCheckbox
+                selection={selection}
+                id={item.id}
+                label={itemLabel(item)}
+                disabled={archiveBlocked}
+              />
             ) : null}
-            <small>
-              {resource === 'speakers' ? (
-                <>
-                  {[item.jobTitle, item.company]
-                    .filter(Boolean)
-                    .map(String)
-                    .join(' · ') || 'Bez uvedené role'}
-                  {' · '}
-                  {Array.isArray(item.sessionIds)
-                    ? `${item.sessionIds.length} vystoupení`
-                    : '0 vystoupení'}
-                  {' · '}
-                </>
+            <span>
+              <strong>{itemLabel(item)}</strong>
+              {resource === 'sessions' ? (
+                <dl className={styles.sessionMetadata}>
+                  <div>
+                    <dt>Čas</dt>
+                    <dd>
+                      {daysById.get(String(item.dayId))
+                        ? `${daysById.get(String(item.dayId))} · `
+                        : ''}
+                      {formatProgramTimeRange(
+                        item.startsAt,
+                        item.endsAt,
+                        timeFormatter,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Stage</dt>
+                    <dd>
+                      {roomsById.get(String(item.roomId)) ?? 'Stage neurčena'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Řečníci</dt>
+                    <dd>
+                      {Array.isArray(item.speakerIds) &&
+                      item.speakerIds.length > 0
+                        ? item.speakerIds
+                            .map((id) => speakersById.get(String(id)))
+                            .filter(Boolean)
+                            .join(', ') || 'Řečník neurčen'
+                        : 'Bez řečníka'}
+                    </dd>
+                  </div>
+                </dl>
               ) : null}
-              {contentPublicationStateLabel(item)}
-            </small>
+              <small>
+                {resource === 'speakers' ? (
+                  <>
+                    {[item.jobTitle, item.company]
+                      .filter(Boolean)
+                      .map(String)
+                      .join(' · ') || 'Bez uvedené role'}
+                    {' · '}
+                    {Array.isArray(item.sessionIds)
+                      ? `${item.sessionIds.length} vystoupení`
+                      : '0 vystoupení'}
+                    {' · '}
+                  </>
+                ) : null}
+                {contentPublicationStateLabel(item)}
+              </small>
+            </span>
           </span>
+          {resource === 'sessions' && !readOnly ? (
+            item.status !== 'archived' &&
+            item.status !== 'cancelled' &&
+            (item.publicationState === 'published' ||
+              item.status === 'published') ? (
+              <div className={styles.actionRow}>
+                <AdminSessionQr
+                  eventId={eventId}
+                  sessionId={item.id}
+                  title={itemLabel(item)}
+                  target="program"
+                />
+                {item.questionMode === 'moderated_follow_up' ? (
+                  <AdminSessionQr
+                    eventId={eventId}
+                    sessionId={item.id}
+                    title={itemLabel(item)}
+                    target="questions"
+                  />
+                ) : null}
+                {item.type !== 'coaching' ? (
+                  <AdminSessionQr
+                    eventId={eventId}
+                    sessionId={item.id}
+                    title={itemLabel(item)}
+                    target="rating"
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <small className={styles.muted}>
+                {item.status === 'archived' || item.status === 'cancelled'
+                  ? 'QR není dostupné'
+                  : 'QR po zveřejnění'}
+              </small>
+            )
+          ) : null}
           {!readOnly && item.status !== 'archived' ? (
             <span className={styles.contentActions}>
               <button
@@ -806,6 +874,9 @@ export const AdminContentConsole = ({
   const [editorFieldsReady, setEditorFieldsReady] = useState(false);
   const [listFilter, setListFilter] = useState<'active' | 'archived'>('active');
   const [speakerListQuery, setSpeakerListQuery] = useState('');
+  const [programFilters, setProgramFilters] = useState({
+    ...emptyProgramFilters,
+  });
   const [slugValue, setSlugValue] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [sortOrder, setSortOrder] = useState(0);
@@ -816,6 +887,8 @@ export const AdminContentConsole = ({
   const [archiveCandidate, setArchiveCandidate] =
     useState<AdminContentItem | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [assetBusy, setAssetBusy] = useState(false);
+  const [assetPending, setAssetPending] = useState(false);
   const [busy, setBusy] = useState<'loading' | 'saving' | 'archiving' | null>(
     'loading',
   );
@@ -828,7 +901,8 @@ export const AdminContentConsole = ({
   const [reconciliationRequired, setReconciliationRequired] = useState(false);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [localFormAvailable, setLocalFormAvailable] = useState(false);
-  const working = busy !== null;
+  const working = busy !== null || assetBusy;
+  const mutating = busy === 'saving' || busy === 'archiving' || assetBusy;
   const operationLocked = useRef(false);
   const activeMutation = useRef<AbortController | null>(null);
   const activeResource = useRef<AdminContentResource>(initialResource);
@@ -839,7 +913,25 @@ export const AdminContentConsole = ({
   const listTitleRef = useRef<HTMLHeadingElement>(null);
   const listScrollPosition = useRef(0);
 
-  useUnsavedContentGuard(dirty);
+  const handleAssetMutation = useCallback(
+    (version: number) => {
+      setEditing((current) =>
+        current
+          ? { ...current, version, publicationState: 'unpublished' }
+          : current,
+      );
+      setItems((current) =>
+        current.map((item) =>
+          item.id === editing?.id
+            ? { ...item, version, publicationState: 'unpublished' }
+            : item,
+        ),
+      );
+      onContentChanged?.();
+    },
+    [editing?.id, onContentChanged],
+  );
+  useUnsavedContentGuard(dirty || mutating || assetPending);
 
   useEffect(() => {
     const closeFromHistory = () => {
@@ -877,8 +969,8 @@ export const AdminContentConsole = ({
   }, [editorOpen]);
 
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange?.(dirty || mutating || assetPending);
+  }, [dirty, mutating, assetPending, onDirtyChange]);
 
   useEffect(
     () => () => {
@@ -1087,11 +1179,14 @@ export const AdminContentConsole = ({
 
   const requestEditorClose = useCallback(() => {
     if (working) return;
-    if (dirty && !window.confirm('Zahodit neuložené změny formuláře?')) {
+    if (
+      (dirty || assetPending) &&
+      !window.confirm('Zahodit neuložené změny formuláře?')
+    ) {
       return;
     }
     closeEditor();
-  }, [closeEditor, dirty, working]);
+  }, [closeEditor, dirty, assetPending, working]);
 
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
@@ -1123,7 +1218,20 @@ export const AdminContentConsole = ({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (operationLocked.current || readOnly || reconciliationRequired) return;
+    if (
+      operationLocked.current ||
+      readOnly ||
+      reconciliationRequired ||
+      assetBusy
+    )
+      return;
+    if (assetPending) {
+      setError({
+        kind: 'validation',
+        message: 'Nejprve nahrajte vybraný obrázek, nebo zrušte jeho výběr.',
+      });
+      return;
+    }
     const formElement = event.currentTarget;
     setMessage('');
     setError(null);
@@ -1277,6 +1385,15 @@ export const AdminContentConsole = ({
   const bodyFieldName = bodyFieldNames[resource];
   const area = resourceArea[selectedResource];
   const areaResources = contentAreaResources[area];
+  const bulkSelection = useAdminBulkSelection(
+    JSON.stringify([
+      eventId,
+      resource,
+      listFilter,
+      speakerListQuery,
+      programFilters,
+    ]),
+  );
   const visibleItems = useMemo(
     () =>
       items.filter((item) => {
@@ -1284,7 +1401,15 @@ export const AdminContentConsole = ({
           listFilter === 'archived'
             ? item.status === 'archived'
             : item.status !== 'archived';
-        if (!statusMatches || resource !== 'speakers') return statusMatches;
+        if (!statusMatches) return false;
+        if (resource === 'sessions')
+          return matchesProgramFilters(
+            item,
+            programFilters,
+            references.rooms,
+            timezone,
+          );
+        if (resource !== 'speakers') return true;
         const query = speakerListQuery.trim().toLocaleLowerCase('cs-CZ');
         return (
           !query ||
@@ -1295,7 +1420,15 @@ export const AdminContentConsole = ({
             .includes(query)
         );
       }),
-    [items, listFilter, resource, speakerListQuery],
+    [
+      items,
+      listFilter,
+      resource,
+      speakerListQuery,
+      programFilters,
+      references.rooms,
+      timezone,
+    ],
   );
   const visibleSpeakers = references.speakers.filter((speaker) => {
     const query = speakerSearch.trim().toLocaleLowerCase('cs-CZ');
@@ -1336,7 +1469,7 @@ export const AdminContentConsole = ({
           <p className={styles.eyebrow}>
             {resource === 'speakers'
               ? 'Profily, medailonky a vystoupení'
-              : 'Jediný editor obsahu'}
+              : 'Obsah pro účastníky'}
           </p>
           <h2 id="admin-content-editor-title">
             {resource === 'speakers'
@@ -1530,6 +1663,7 @@ export const AdminContentConsole = ({
             <label className={styles.contentListSearch}>
               <span>Filtrovat řečníky</span>
               <input
+                disabled={working}
                 onChange={(event) => setSpeakerListQuery(event.target.value)}
                 placeholder="Jméno, firma nebo role"
                 type="search"
@@ -1544,6 +1678,7 @@ export const AdminContentConsole = ({
                 ? styles.filterActive
                 : styles.filterButton
             }
+            disabled={working}
             onClick={() => setListFilter('active')}
             type="button"
           >
@@ -1556,12 +1691,80 @@ export const AdminContentConsole = ({
                 ? styles.filterActive
                 : styles.filterButton
             }
+            disabled={working}
             onClick={() => setListFilter('archived')}
             type="button"
           >
             Archiv
           </button>
         </div>
+        {resource === 'sessions' ? (
+          <AdminProgramFilters
+            value={programFilters}
+            onChange={setProgramFilters}
+            references={references}
+            count={visibleItems.length}
+            total={
+              items.filter((item) =>
+                listFilter === 'archived'
+                  ? item.status === 'archived'
+                  : item.status !== 'archived',
+              ).length
+            }
+            timezone={timezone}
+          />
+        ) : null}
+        {resource === 'sessions' && !readOnly ? (
+          <div className={styles.actionRow}>
+            {(
+              [
+                ['program', 'programu'],
+                ['questions', 'Q&A'],
+                ['rating', 'hodnocení'],
+              ] as const
+            ).map(([target, label]) => (
+              <a
+                key={target}
+                className={styles.secondaryButton}
+                href={`/api/v1/admin/events/${eventId}/session-qr?target=${target}&format=png`}
+              >
+                Stáhnout všechna QR {label} (ZIP · PNG)
+              </a>
+            ))}
+          </div>
+        ) : null}
+        {!readOnly && snapshotReady && visibleItems.length > 0 ? (
+          <AdminBulkSelectAll
+            selection={bulkSelection}
+            ids={visibleItems.map((item) => item.id)}
+            disabled={writesBlocked || dirty || editorOpen}
+          />
+        ) : null}
+        {!readOnly ? (
+          <AdminContentBulk
+            {...bulkSelection}
+            items={visibleItems}
+            resource={resource}
+            references={references}
+            port={port}
+            eventId={eventId}
+            disabled={writesBlocked || dirty || editorOpen}
+            onSecurityFailure={acceptFailure}
+            onBusyChange={(running) => {
+              operationLocked.current = running;
+              setBusy(running ? 'saving' : null);
+            }}
+            onCompleted={() => {
+              onContentChanged?.();
+              setBusy('loading');
+              setSnapshotReady(false);
+              setLoadRequest(({ sequence }) => ({
+                resource,
+                sequence: sequence + 1,
+              }));
+            }}
+          />
+        ) : null}
         {busy === 'loading' ? (
           <p role="status">Načítám obsah…</p>
         ) : !snapshotReady ? (
@@ -1570,12 +1773,17 @@ export const AdminContentConsole = ({
           </p>
         ) : visibleItems.length === 0 ? (
           <p className={styles.empty} role="status">
-            {listFilter === 'archived'
-              ? 'V archivu nejsou žádné položky.'
-              : 'V této oblasti zatím není žádná položka.'}
+            {resource === 'sessions' &&
+            Object.values(programFilters).some(Boolean)
+              ? 'Žádný bod programu neodpovídá zvoleným filtrům.'
+              : listFilter === 'archived'
+                ? 'V archivu nejsou žádné položky.'
+                : 'V této oblasti zatím není žádná položka.'}
           </p>
         ) : (
           <AdminContentItemList
+            selection={bulkSelection}
+            eventId={eventId}
             archiveBlocked={writesBlocked || dirty}
             items={visibleItems}
             onArchive={setArchiveCandidate}
@@ -2058,9 +2266,13 @@ export const AdminContentConsole = ({
                         eventId={eventId}
                         owner={{ kind: 'speaker', id: editing.id }}
                         ownerVersion={Number(editing.version ?? 1)}
+                        onMutation={handleAssetMutation}
+                        onBusyChange={setAssetBusy}
+                        onPendingChange={setAssetPending}
+                        {...(onSecurityFailure ? { onSecurityFailure } : {})}
                         {...(assetPort ? { port: assetPort } : {})}
                         purpose="speaker_photo"
-                        readOnly={readOnly}
+                        readOnly={readOnly || editing.status === 'archived'}
                       />
                     ) : (
                       <section
@@ -2209,9 +2421,13 @@ export const AdminContentConsole = ({
                         eventId={eventId}
                         owner={{ kind: 'partner', id: editing.id }}
                         ownerVersion={Number(editing.version ?? 1)}
+                        onMutation={handleAssetMutation}
+                        onBusyChange={setAssetBusy}
+                        onPendingChange={setAssetPending}
+                        {...(onSecurityFailure ? { onSecurityFailure } : {})}
                         {...(assetPort ? { port: assetPort } : {})}
                         purpose="partner_logo"
-                        readOnly={readOnly}
+                        readOnly={readOnly || editing.status === 'archived'}
                       />
                     ) : (
                       <section

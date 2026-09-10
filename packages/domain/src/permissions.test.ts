@@ -21,15 +21,15 @@ const allowed = (role: EventRole, permission: EventPermission): boolean =>
 describe('event permission matrix', () => {
   it('keeps the full role and permission matrix explicit', () => {
     expect(eventRoles).toHaveLength(7);
-    expect(eventPermissions).toHaveLength(24);
+    expect(eventPermissions).toHaveLength(25);
     expect(eventRoles).not.toContain('support_operator');
   });
 
   it.each([
     ['participant', 'agenda:own:write', true],
     ['participant', 'announcement:own:read', true],
-    ['speaker', 'announcement:own:read', true],
-    ['speaker', 'agenda:own:write', true],
+    ['speaker', 'announcement:own:read', false],
+    ['speaker', 'agenda:own:write', false],
     ['checkin_operator', 'checkin:perform', true],
     ['checkin_operator', 'reservation:assigned:read', false],
     ['moderator', 'session:assigned:moderate', true],
@@ -54,29 +54,30 @@ describe('event permission matrix', () => {
     },
   );
 
-  it('keeps a legacy speaker role limited to ordinary participant rights', () => {
+  it('requires participant baseline separately from a linked speaker capability', () => {
     expect(
       hasEventPermission(['speaker'], 'agenda:own:write', {
         ownsResource: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       hasEventPermission(['speaker', 'participant'], 'agenda:own:write', {
         ownsResource: true,
       }),
     ).toBe(true);
+    expect(hasEventPermission(['speaker'], 'question:own-session:answer')).toBe(
+      false,
+    );
     expect(
-      hasEventPermission(['speaker'], 'networking:directory:read', {
-        networkingOptedIn: true,
+      hasEventPermission(['speaker'], 'question:own-session:answer', {
+        assignedSession: true,
       }),
     ).toBe(true);
     expect(
-      hasEventPermission(
-        ['speaker', 'participant'],
-        'networking:directory:read',
-        { networkingOptedIn: true },
-      ),
-    ).toBe(true);
+      hasEventPermission(['organizer_admin'], 'question:own-session:answer', {
+        assignedSession: true,
+      }),
+    ).toBe(false);
   });
 
   it('fails closed when conditional policy context is absent', () => {
@@ -129,7 +130,7 @@ describe('event permission matrix', () => {
       hasEventPermission(['speaker'], 'announcement:own:read', {
         announcementRecipient: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       hasEventPermission(['speaker', 'participant'], 'announcement:own:read', {
         announcementRecipient: true,

@@ -16,3 +16,5 @@ export * from './questions.js';
 export * from './support.js';
 export * from './ticket.js';
 export * from './ticket-import.js';
+
+export * from './program-access.js';

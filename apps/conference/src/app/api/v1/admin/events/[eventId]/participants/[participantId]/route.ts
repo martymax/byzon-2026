@@ -1,5 +1,6 @@
 import {
   handleAdminParticipantDetail,
+  handleAdminParticipantDelete,
   handleAdminParticipantUpdate,
 } from '@/server/admin-support';
 import { adminSupportRateLimit } from '@/server/admin-support-rate-limit';
@@ -30,6 +31,16 @@ export const GET = (request: Request, context: Context) =>
 export const PATCH = (request: Request, context: Context) =>
   context.params.then(({ eventId, participantId }) =>
     handleAdminParticipantUpdate(
+      request,
+      eventId,
+      participantId,
+      dependencies(),
+    ),
+  );
+
+export const DELETE = (request: Request, context: Context) =>
+  context.params.then(({ eventId, participantId }) =>
+    handleAdminParticipantDelete(
       request,
       eventId,
       participantId,

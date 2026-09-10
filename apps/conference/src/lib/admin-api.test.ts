@@ -334,6 +334,7 @@ describe('admin API contract policies', () => {
       features: {
         networkingEnabled: true,
         questionsEnabled: true,
+        questionFollowUpsEnabled: false,
         ratingsEnabled: false,
       },
       reason: 'Schválené zapnutí networkingu.',
@@ -510,7 +511,11 @@ describe('admin API contract policies', () => {
       action: 'grant' as const,
       operatorId: granted.assignment!.operatorId,
       role: granted.assignment!.role,
-      scope: granted.assignment!.scope,
+      scope: {
+        kind: 'station' as const,
+        stationId: adminFixtureIds.station,
+        label: 'Stanoviště',
+      },
       expectedVersion: granted.assignmentsVersion - 1,
       reason: 'Bezpečný test přesné korelace role.',
     };

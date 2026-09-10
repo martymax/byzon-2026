@@ -1,3 +1,4 @@
+import { queueBookingEmail } from './email-notifications';
 import {
   schema,
   writeAuditLog,
@@ -374,6 +375,16 @@ export const promoteAutomaticWaitlist = async ({
       },
       { generateId },
     );
+    if (!existing)
+      await queueBookingEmail(transaction, {
+        eventId,
+        userId: waiting.userId,
+        sessionId,
+        kind: 'waitlist_promoted',
+        reservationId,
+        waitlistEntryId: waiting.id,
+        now,
+      });
     promoted.push({
       waitlistEntryId: waiting.id,
       reservationId,

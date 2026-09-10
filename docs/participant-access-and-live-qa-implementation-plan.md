@@ -1,10 +1,38 @@
 # Přístup programových spolupracovníků a živé Q&A
 
-Stav: návrh připravený k rozdělení mezi implementační agenty
+Stav: implementace AQ-00 až ADMIN-03 a automatická část QA-05 dokončeny 7. 9. 2026; nasazení a fyzický staging rehearsal zbývají. [Přesný návod](runbooks/participant-access-live-qa.md) · [Ověření a commity](evidence/participant-access-live-qa-verification.md)
 
 Datum: 5. 9. 2026
 
 Primární aplikace: `apps/conference`
+
+## Průběh realizace
+
+- 7. 9. 2026: AQ-00 – přijat [ADR-017](adr/017-participant-collaborators-and-private-question-follow-ups.md), vytvořen [source inventář](evidence/participant-access-live-qa-inventory.md) a strojový whitelist s kontrolou proti kanonickým datům.
+- Uživatel potvrdil vyloučení EB21 a „Jak na networking“ z Q&A: 17 přednáškových/panelových session. Kanonický rezervovatelný networking je Leadership Stage; druhá projekce je pouze informativní.
+- AQ-01: expand schéma, migrace `0028`, sdílené Q&A DTO a scoped speaker permission implementovány. Čistá lokální PostgreSQL 17 migrace/seed prošly; database lint/typecheck + 128 testů a domain lint/typecheck + 208 testů prošly. Navazující balíčky jsou rozpracované. Skutečné účty, publikace, provozní kapacita networkingu a staging rehearsal čekají na ověření; lokální inventář je nenahrazuje.
+
+- DATA-02: source obsahuje stabilní slugs, explicitní speaker vazby a Q&A capability. Reimport zachovává admin kapacitu Leadership networkingu; druhá projekce je informativní. `db:readiness` vrací metadata bez e-mailů; lokální report správně odmítá chybějící speaker účty a nezadanou kapacitu. Database lint/typecheck + 129 testů a static build/smoke prošly. Staging kontrola skutečných účtů zbývá.
+
+- ACCESS-02: implementovány source-independent search/options/preview/apply a částečné revoke pro participant baseline. Role/scopes odvozuje server z presetu; preview hash, assignments version, transakce, audit a idempotency chrání změny. Žádný účet/membership/pozvánka nevzniká. Domain lint/typecheck + 208 testů; conference lint/typecheck + 829 testů včetně 4 provisioning integračních scénářů prošly.
+
+- ACCESS-03: admin průvodce vyhledání → náhled → potvrzení/revoke, stav účtu/pozvánky a serverové role-aware odkazy ve Více. Host stránky používají participant shell; speaker-only roster větev je odstraněná. Conference lint/typecheck, 18 cílených backend testů a 6 browser/axe scénářů na 375/768/1280 px prošly.
+
+- QA-02: společný runtime context nad publikovanou session a živými přepínači; submit kontroluje capability a UTC interval pod DB zámky, exact retry přijme i po konci. Owner history je oddělená od vypínačů, moderator read zůstává po konci/OFF. Conference lint/typecheck a 16 integračních testů (10 Q&A) prošly, včetně hranic času, cizí historie, revokace a 125 dotazů se shodným časem.
+
+- QA-03: účastnický runtime formulář, bezpečný návrat po přihlášení a soukromá historie odpovědí. Ověřeno 59 navigačních testů a 6 browser/axe scénářů včetně ztracené odpovědi, stejného idempotency klíče a vymazání obsahu při 403.
+
+- MOD-03: přiřazené session, nový host tablet feed a redirect původní URL. Feed načítá všechny stránky, deduplikuje, zachová pozici čtení, označí nové dotazy a maže obsah při ztrátě přístupu. 11 serverových a 3 browser/axe testy prošly včetně 125 dotazů.
+
+- SPEAKER-03: soukromé feed/list API a transakční publish/edit, aktivní participant baseline + speaker vazby, hranice konce, oddělený kill switch, first-wins a optimistic version. Audit a idempotency obsahují jen metadata. Typecheck a 7 integračních/audit testů prošly včetně souběhů panelistů a editací.
+
+- SPEAKER-04: rozcestník a soukromý feed ukončených přednášek, filtry, počty a publish/edit formulář s retry a konfliktem bez ztráty rozepsané odpovědi. 6 browser/axe scénářů na telefonu/tabletu/desktopu prošlo; typecheck prošel.
+
+- QR-02: explicitní `target=questions` exportuje pouze publikované podporované session, deep link vede na `/app/interakce/:id`; programový cíl je zachován. ZIP manifest obsahuje název, stage, časy, odkaz a unikátní bezpečný soubor. 5 QR testů prošlo včetně whitelist filtru a čistého odkazu bez credentials/query.
+
+- ADMIN-03: Q&A seznam jen podporovaných session, oddělené přepínače a readiness, příprava moderátora při OFF ve všech administračních cestách, QR v Interakcích i Obsahu. Obecný seznam rolí umí zobrazit kompletní programové scopes. Lint/typecheck, 31 cílených integračních testů a nové browser scénáře prošly; dva starší tabletové timeouty následně prošly v samostatném běhu (12 testů).
+
+- QA-05: lokální integrační, security, browser/axe a upgrade rehearsal dokončeny. Doplněný timeout/retry, kontrola participant baseline i na přímém roster API, log redakce a zachování rozepsané odpovědi při souběhu. Kompletní conference sada 861 testů + navazující řetězec; database 129, domain 208; produkční build prošel. Fyzický staging rehearsal a produkční zapnutí nejsou touto evidencí tvrzeny; viz [runbook](runbooks/participant-access-live-qa.md).
 
 ## 1. Cíl
 
@@ -122,7 +150,7 @@ MVP neposílá e-mailové notifikace o novém dotazu ani odpovědi. Participant 
 
 ### 3.6 Časová pravidla
 
-- Formulář může zobrazit stav předem, ale přijímá dotazy pouze v intervalu `startsAt <= now < endsAt`.
+- Dotazy lze posílat i před začátkem přednášky; časová podmínka je `now < endsAt + 30 minut`.
 - Čas vyhodnocuje výhradně server v UTC; lokalizace se používá jen pro zobrazení.
 - Po konci je nový submit odmítnut stabilním problem kódem, ale autor stále může číst svůj dotaz a pozdější odpověď.
 - Speaker může číst a publikovat písemné odpovědi od `endsAt` do archivace eventu nebo odebrání přístupu.
@@ -214,7 +242,7 @@ Před přidělením rolí je nutný datový preflight:
 
 - koučovací sloty musí mít aktuálně přiřazené coach-specific rooms; starší data mohla mít `roomId = null`;
 - oba díly sobotního mastermindu musí zůstat v jedné reservation group a v jednom multi-session scope;
-- páteční řízený networking má ve zdroji dvě projekce a dnes může být importovaný jako `other` bez kapacity. Product owner musí určit jednu kanonickou session, nebo výslovně potvrdit jejich seskupení;
+- páteční řízený networking má ve zdroji dvě projekce a dnes může být importovaný jako `other` bez kapacity. potvrzená kanonická rezervovatelná session je Leadership Stage, druhá projekce je pouze informativní;
 - každá aktivita musí mít před provozem právě očekávaného vedoucího, kapacitu a validní roster scope.
 
 Aktuální kandidáti podle repozitáře, které je nutné před apply potvrdit proti finálním datům a e-mailům:
@@ -223,7 +251,7 @@ Aktuální kandidáti podle repozitáře, které je nutné před apply potvrdit 
 | ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
 | Páteční coaching          | Radim Roček, Stanislava Maunová | room scope každého kouče; speaker profil není potřeba                                         |
 | Páteční mastermind EB21   | Lucie Libovická, Pavel Janoušek | oba participant účty, speaker links a společný roster scope                                   |
-| Páteční řízený networking | Tomáš Řezníček                  | zvolit kanonickou projekci, typ a kladnou kapacitu                                            |
+| Páteční řízený networking | Tomáš Řezníček                  | Leadership je kanonická rezervace; doplnit typ, speaker link a kladnou kapacitu               |
 | Sobotní workshop          | Leonid Kushnir                  | ověřit explicitní speaker/session vazbu                                                       |
 | Sobotní workshop          | Blanka Mrázková                 | doplnit explicitní source speaker link; dnešní title/meta párování není dostatečně spolehlivé |
 | Sobotní mastermind        | Tomáš Ryza                      | link k oběma částem a jeden logický roster                                                    |
@@ -323,7 +351,7 @@ event.questionsEnabled
 AND session.questionMode = moderated_follow_up
 AND session.questionsEnabled
 AND session.status = published
-AND startsAt <= now < endsAt
+AND now < endsAt + INTERVAL '30 minutes'
 ```
 
 Backfill smí nastavit `moderated_follow_up` jen na explicitní whitelist session z pátku na BYZON Stage a Leadership Stage. Whitelist musí být dohledatelný v content seed/import datech a pokrytý testem; migrace ani request-time autorizace nesmí hádat podle názvu.
@@ -889,8 +917,8 @@ Přístup vedoucích a speakerů ručním participant flow je potvrzený a není
 2. **Otevření sběru.** Doporučeno: přesně od startu do konce session. Alternativa: explicitní `questionsOpensAt`, pokud se mají sbírat otázky už předem.
 3. **Editace odpovědi.** Doporučeno: speaker může editovat do archivace eventu, každá změna je verzovaná a auditovaná metadaty.
 4. **Panel s více speakery.** Doporučeno: právě jedna odpověď, první úspěšný publish vyhrává.
-5. **Přesný Q&A whitelist.** Potvrdit zejména, zda páteční mastermind a blok „Jak na networking“ na těchto stage patří mezi „přednášky“; registrace, pauzy, jídlo, společné bloky a večerní networking jsou doporučeně mimo.
-6. **Kanonický páteční networking.** Potvrdit, která ze dvou dnešních projekcí je rezervovatelná, případně že se mají explicitně seskupit.
+5. **Přesný Q&A whitelist – potvrzeno 7. 9. 2026.** 17 přednáškových/panelových session dle inventáře; EB21 a „Jak na networking“ mimo. Registrace, pauzy, jídlo, společné bloky a večerní networking jsou mimo.
+6. **Kanonický páteční networking – potvrzeno 7. 9. 2026.** Leadership Stage je rezervovatelná; projekce Networking a afterparty pouze informativní. Kladná kapacita zůstává provozní precondition.
 7. **Lidé a účty.** Dodat finální e-maily vedoucích, speakerů a moderátorů. Vedoucí a speakeři se standardně založí ručně; pokud už někdo existuje ze SimpleShopu, znovu se použije.
 8. **Invitation delivery.** Ověřit produkčního e-mail providera, sender doménu a SPF/DKIM/DMARC. Jde o blocker odeslání a přihlašovacího UAT, nikoli blocker ručního založení lidí a přípravy rolí.
 

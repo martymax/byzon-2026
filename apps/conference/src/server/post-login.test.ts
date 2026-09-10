@@ -7,7 +7,9 @@ const queryMocks = vi.hoisted(() => ({
   event: vi.fn(),
   membership: vi.fn(),
   role: vi.fn(),
+  onboarding: vi.fn(),
 }));
+vi.mock('./onboarding', () => ({ loadOnboardingState: queryMocks.onboarding }));
 
 const database = {
   query: {
@@ -25,6 +27,7 @@ describe('post-login destination', () => {
     queryMocks.event.mockResolvedValue({ id: 'event-id' });
     queryMocks.membership.mockResolvedValue({ userId: 'user-id' });
     queryMocks.role.mockResolvedValue({ userId: 'user-id' });
+    queryMocks.onboarding.mockReset().mockResolvedValue({ status: 'complete' });
   });
 
   it('sends an active organizer admin to the admin workspace', async () => {
@@ -32,6 +35,19 @@ describe('post-login destination', () => {
       resolvePostLoginDestination(database, 'user-id'),
     ).resolves.toBe('/admin');
   });
+  it.each([
+    'profile_required',
+    'legal_acknowledgement_required',
+    'blocked_missing_legal_documents',
+  ])(
+    'sends an authenticated user to onboarding for %s even with an admin role',
+    async (status) => {
+      queryMocks.onboarding.mockResolvedValue({ status });
+      await expect(
+        resolvePostLoginDestination(database, 'user-id'),
+      ).resolves.toBe('/onboarding');
+    },
+  );
 
   it.each([
     ['missing event', 'event'],

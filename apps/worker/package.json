@@ -7,7 +7,7 @@
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --alias:@byzon/config=../../packages/config/src/index.ts --alias:@byzon/database=../../packages/database/src/index.ts --outfile=dist/index.js",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
-    "pretest": "pnpm --filter @byzon/database build && pnpm --filter @byzon/redis build",
+    "pretest": "pnpm --filter @byzon/domain build && pnpm --filter @byzon/mail build && pnpm --filter @byzon/database build && pnpm --filter @byzon/redis build",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
@@ -19,7 +19,9 @@
     "drizzle-orm": "0.45.2",
     "pg": "8.22.0",
     "pino": "10.3.1",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@byzon/mail": "workspace:*",
+    "@byzon/domain": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

@@ -36,6 +36,7 @@ const actionCategories = {
   'support.resend': 'support',
   'participant.invitation_sent': 'support',
   'participant.profile_updated': 'support',
+  'participant.deleted': 'support',
   'ticket_import.preview_created': 'import',
   'ticket_import.applied': 'import',
   'announcement.send': 'announcement',
@@ -54,6 +55,8 @@ const actionCategories = {
   'settings.update': 'settings',
   'settings.engagement.update': 'settings',
   'settings.session-questions.update': 'settings',
+  'question.answer.published': 'settings',
+  'question.answer.edited': 'settings',
   'export.queued': 'export',
   'export.download': 'export',
 } satisfies Readonly<Record<AdminAuditAction, AdminAuditCategory>>;

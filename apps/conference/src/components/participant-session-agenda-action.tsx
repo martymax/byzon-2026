@@ -29,7 +29,11 @@ export const ParticipantSessionAgendaAction = ({
 
   if (state.status === 'loading') {
     return (
-      <section aria-label="Osobní agenda" className="agenda-session-action">
+      <section
+        aria-label="Osobní agenda"
+        className="agenda-session-action"
+        data-tour="agenda-action"
+      >
         <Skeleton label="Načítám stav osobní agendy" lines={2} />
       </section>
     );
@@ -37,7 +41,11 @@ export const ParticipantSessionAgendaAction = ({
 
   if (state.status !== 'ready') {
     return (
-      <section aria-label="Osobní agenda" className="agenda-session-action">
+      <section
+        aria-label="Osobní agenda"
+        className="agenda-session-action"
+        data-tour="agenda-action"
+      >
         <strong>Osobní agenda teď není dostupná.</strong>
         <Link href="/app/agenda">Otevřít osobní agendu</Link>
       </section>
@@ -65,7 +73,11 @@ export const ParticipantSessionAgendaAction = ({
   if (item) {
     const status = participantAgendaItemStatus(item);
     return (
-      <section aria-label="Osobní agenda" className="agenda-session-action">
+      <section
+        aria-label="Osobní agenda"
+        className="agenda-session-action"
+        data-tour="agenda-action"
+      >
         {mutationPresentation}
         <div>
           <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
@@ -79,7 +91,11 @@ export const ParticipantSessionAgendaAction = ({
 
   if (resource.readOnly) {
     return (
-      <section aria-label="Osobní agenda" className="agenda-session-action">
+      <section
+        aria-label="Osobní agenda"
+        className="agenda-session-action"
+        data-tour="agenda-action"
+      >
         {mutationPresentation}
         <strong>Osobní agenda je po skončení akce jen ke čtení.</strong>
         <Link href="/app/agenda">Otevřít osobní agendu</Link>
@@ -88,7 +104,11 @@ export const ParticipantSessionAgendaAction = ({
   }
 
   return (
-    <section aria-label="Osobní agenda" className="agenda-session-action">
+    <section
+      aria-label="Osobní agenda"
+      className="agenda-session-action"
+      data-tour="agenda-action"
+    >
       {mutationPresentation}
       <div>
         <strong>Tento bod ještě nemáte v osobní agendě.</strong>

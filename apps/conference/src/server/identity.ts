@@ -317,8 +317,17 @@ const successResponse = (
   return new Response(JSON.stringify(body), { status, headers });
 };
 
-const legalPreview = (value: string): string =>
-  value.replace(/\s+/g, ' ').trim().slice(0, 2_048);
+const legalPreview = (value: string): string => {
+  const introduction = value.split(/\n\s*\n/).find((block) => {
+    const trimmed = block.trim();
+    return trimmed && !/^(#|\*\*|\|)/.test(trimmed);
+  });
+  return (introduction ?? value)
+    .replace(/\\\./g, '.')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 2_048);
+};
 
 const projectLegalDocument = (
   document: typeof schema.legalDocuments.$inferSelect,
@@ -544,6 +553,8 @@ export const loadIdentityBootstrap = async (
           lastName: profile.lastName,
           contactEmail: profile.contactEmail,
           phone: profile.phone,
+          emailSalutation: profile.emailSalutation,
+          ratingEmailsEnabled: profile.ratingEmailsEnabled,
         }
       : null,
     profileManagement,
@@ -636,12 +647,9 @@ export const completeIdentityOnboarding = async (
       session.user.id,
       dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
     );
-    await requireOwnPermission(
-      dependencies,
-      context,
-      session.user.id,
-      'profile:own:write',
-    );
+    // Every active member must be able to complete their own mandatory setup,
+    // including team members who do not also hold the participant role.
+    if (context.membership.status !== 'active') throw eventAccessDenied();
     if (context.event.status === 'archived') throw eventAccessDenied();
     const key = requireCleanMutationTransport(request, 'required')!;
     const json = await readBoundedJson(request);
@@ -727,6 +735,8 @@ export const completeIdentityOnboarding = async (
               lastName: profile.lastName,
               contactEmail: profile.contactEmail,
               phone: profile.phone,
+              emailSalutation: profile.emailSalutation,
+              ratingEmailsEnabled: profile.ratingEmailsEnabled,
             },
             acknowledgements: records
               .map((record) => {
@@ -846,7 +856,16 @@ export const updateIdentityProfile = async (
       return identityProfileUpdateResponseSchema.parse({
         eventId: context.event.id,
         userId: session.user.id,
-        profile: parsed.data.profile,
+        profile: {
+          ...parsed.data.profile,
+          emailSalutation:
+            parsed.data.profile.emailSalutation === undefined
+              ? current.emailSalutation
+              : parsed.data.profile.emailSalutation,
+          ratingEmailsEnabled:
+            parsed.data.profile.ratingEmailsEnabled ??
+            current.ratingEmailsEnabled,
+        },
         profileManagement: { state: 'editable', version: nextVersion },
         updatedAt: now.toISOString(),
       });

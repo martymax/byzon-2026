@@ -461,7 +461,7 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
         .first()
         .click();
       await expect(
-        page.getByText('Detail účastníka', { exact: true }),
+        page.locator('header').getByText('Detail účastníka', { exact: true }),
       ).toBeVisible();
     });
     await expectNoPageOverflow(page);

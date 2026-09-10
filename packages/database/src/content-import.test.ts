@@ -64,11 +64,6 @@ describe('content import preparation', () => {
         expect.objectContaining({ code: 'unknown_type', value: 'shared' }),
         expect.objectContaining({
           code: 'unknown_type',
-          path: 'program.days[0].stages[1].events[14].type',
-          value: 'social',
-        }),
-        expect.objectContaining({
-          code: 'unknown_type',
           path: 'program.days[0].stages[1].events[15].type',
           value: 'social',
         }),

@@ -57,6 +57,9 @@ import {
   type AdminTeamMemberMutationRequest,
 } from '@byzon/domain/contracts/admin';
 import {
+  adminAnnouncementListResponseSchema,
+  adminAnnouncementDeleteResponseSchema,
+  adminAnnouncementDeleteProblemSchema,
   adminAnnouncementPreviewProblemSchema,
   adminAnnouncementPreviewRequestSchema,
   adminAnnouncementPreviewResponseSchema,
@@ -74,6 +77,9 @@ import {
   adminParticipantCreateRequestSchema,
   adminParticipantCreateResponseSchema,
   adminParticipantDetailSchema,
+  adminParticipantDeleteRequestSchema,
+  adminParticipantDeleteResponseSchema,
+  type AdminParticipantDeleteRequest,
   adminParticipantInviteProblemSchema,
   adminParticipantInviteRequestSchema,
   adminParticipantInviteResponseSchema,
@@ -343,6 +349,17 @@ export const adminParticipantUpdateEndpoint = defineApiEndpoint({
     'IDEMPOTENCY_KEY_REUSED',
     'IDEMPOTENCY_IN_PROGRESS',
   ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+
+export const adminParticipantDeleteEndpoint = defineApiEndpoint({
+  method: 'DELETE',
+  requestSchema: adminParticipantDeleteRequestSchema,
+  successSchema: adminParticipantDeleteResponseSchema,
+  problemSchema: supportMutationProblemSchema,
+  problemCodes: adminParticipantUpdateEndpoint.problemCodes,
   responseKind: 'json',
   retry: 'never',
   idempotency: 'required',
@@ -960,6 +977,31 @@ export const requestAdminParticipantUpdate = async (
       body.participantId === participantId,
   );
 
+export const requestAdminParticipantDelete = async (
+  api: ApiPort,
+  eventId: string,
+  participantId: string,
+  body: AdminParticipantDeleteRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminParticipantDeleteEndpoint, {
+      path: eventPath(
+        eventId,
+        `/participants/${encodeURIComponent(participantId)}`,
+      ),
+      body: adminParticipantDeleteRequestSchema.parse(body),
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.participantId === participantId &&
+      body.participantId === participantId,
+  );
+
 export const requestAdminParticipantInvite = async (
   api: ApiPort,
   eventId: string,
@@ -1371,4 +1413,67 @@ export const requestAdminTicketImportPreview = async (
       ...(signal ? { signal } : {}),
     }),
     (data) => data.eventId === eventId && data.source.kind === 'simpleshop_api',
+  );
+
+export const adminAnnouncementListEndpoint = defineApiEndpoint({
+  ...adminAnnouncementTargetsEndpoint,
+  successSchema: adminAnnouncementListResponseSchema,
+});
+export const adminAnnouncementDeleteEndpoint = defineApiEndpoint({
+  method: 'DELETE',
+  requestSchema: null,
+  successSchema: adminAnnouncementDeleteResponseSchema,
+  problemSchema: adminAnnouncementDeleteProblemSchema,
+  problemCodes: [
+    'AUTHENTICATION_REQUIRED',
+    'AUTH_SESSION_EXPIRED',
+    'EVENT_ACCESS_DENIED',
+    'ANNOUNCEMENTS_DISABLED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+    'ANNOUNCEMENT_NOT_FOUND',
+    'IDEMPOTENCY_KEY_REUSED',
+    'IDEMPOTENCY_IN_PROGRESS',
+  ],
+  responseKind: 'json',
+  retry: 'never',
+  idempotency: 'required',
+});
+export const requestAdminAnnouncementList = async (
+  api: ApiPort,
+  eventId: string,
+  cursor?: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminAnnouncementListEndpoint, {
+      path: eventPath(
+        eventId,
+        `/announcements${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminAnnouncementDelete = async (
+  api: ApiPort,
+  eventId: string,
+  announcementId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminAnnouncementDeleteEndpoint, {
+      path: eventPath(
+        eventId,
+        `/announcements/${encodeURIComponent(announcementId)}`,
+      ),
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId && data.announcementId === announcementId,
   );

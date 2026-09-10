@@ -1,3 +1,38 @@
+# Railway production — zachované původní prostředí
+
+Od 11. 9. 2026 je cílovým názvem stávajícího Railway prostředí `production`
+a zdrojovou větví webu i workeru `main`. Jde o přejmenování existujícího
+prostředí `35c2e399-920a-42c1-84ef-0aede59bf52b`, nikoli o klon nebo novou DB.
+Doména `https://app.byzon.cz`, služby, volumes, credentials a uložená data se
+zachovávají.
+
+Na výslovný pokyn vlastníka zatím zůstává `APP_ENV=staging` na webu i workeru,
+`MAIL_PROVIDER=mailpit` a testovací přihlášení e-mailem. Název Railway prostředí
+`production` tedy zatím neznamená ostrý autentizační a e-mailový režim.
+`BYZON_TIMELESS_TEST_MODE` není v nasazeném releasu zapnutý.
+
+Web používá `/railway.web.json`, worker `/railway.worker.json`. Nový deploy
+webu spouští pouze `db:migrate`; automatický seed a import obsahu se při
+přejmenování vypínají, aby se zachovala ručně upravená data. Publikace obsahu
+zůstává samostatnou akcí v administraci. Worker migrace nespouští.
+Nasazuje se přes Git integraci z `main`, bez force push a bez `railway up`.
+
+Před přepnutím runtime na `APP_ENV=production` je nutné dokončit konfiguraci
+skutečného doručování e-mailů. Mailpit produkční validace odmítá a stagingový
+přihlašovací endpoint se vypne. Tato změna není součástí přejmenování.
+
+Po změně ověřte stejné ID prostředí a volumes, větev obou deployment triggerů,
+release SHA webu i workeru, `/health/live` a `/health/ready`. Readiness zatím
+správně hlásí `environment=staging`, protože čte `APP_ENV`.
+Starší větev `stage/participant-access-live-qa` zůstává historickou referencí;
+nové nasazení se z ní nespouští. Lokální rozpracované změny ve starších
+checkoutech se nesmějí naslepo nasadit přes novější `main`.
+
+## Historický postup před přejmenováním (neplatí pro nový deployment)
+
+Následující záznam zachovává původní konfiguraci a výsledky kontrol. Při
+rozporu má přednost aktuální postup výše.
+
 # Railway prostředí
 
 Autoritativní staging aplikace je během testování dostupná na
@@ -31,7 +66,8 @@ je níže zachované pouze jako provozní záznam.
 
 1. Každý dokončený funkční celek nejprve projde testy, dostane samostatný Git
    commit a odešle se do vzdáleného repozitáře. Staging se standardně nasazuje
-   pouze přes Git integraci z větve `stage/participant-access-live-qa`; `railway up` se pro běžné nasazení
+   pouze přes Git integraci z větve `stage/participant-access-live-qa`;
+   `railway up` se pro běžné nasazení
    nepoužívá. CLI slouží k read-only diagnostice. Ruční deploy je výjimečný
    recovery krok, který musí být předem výslovně schválený a zdokumentovaný.
 2. Web používá `/railway.web.json`, worker `/railway.worker.json`; obě služby
@@ -93,6 +129,19 @@ nesmí ponechat jako povolený auth origin.
 Better Auth ve stagingu a produkci čte klientskou IP pouze z `X-Real-IP`, který
 Railway edge nastavuje a přepisuje. Bez tohoto explicitního headeru by se za
 proxy všechny auth požadavky propadly do jednoho sdíleného rate-limit bucketu.
+
+## E-mailové notifikace od 9. 9. 2026
+
+Web i worker používají ve stagingu stejný Mailpit a stejné `MAILPIT_API_*`,
+`MAIL_FROM`, `MAIL_REPLY_TO` a `APP_BASE_URL`. Zprávy zůstávají zachycené
+v Mailpitu. Konfigurace workeru už neobsahuje placeholder pro aktivního
+poskytovatele; nevyužitý `MAIL_API_KEY` může zůstat inertní.
+
+Migrace `0030_email_notifications` přidává doručovací frontu a preference
+oslovení/hodnocení v profilu. Spouští ji webový pre-deploy krok. Worker
+zpracovává nové rezervace, čekací listinu, publikované změny programu,
+oznámení a jednorázové připomenutí hodnocení. Podrobnosti a náhledy:
+[e-mailové notifikace](../email-notifications.md).
 
 ## E-mailové placeholders a magic link
 

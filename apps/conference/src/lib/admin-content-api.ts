@@ -181,6 +181,7 @@ const resourceItemSchemas = {
       dayId: z.string().uuid(),
       description: itemNullableText,
       endsAt: z.string().datetime({ offset: true }),
+      questionMode: z.enum(['disabled', 'moderated_follow_up']).optional(),
       roomId: z.string().uuid().nullable().optional(),
       slug: itemSlug,
       speakerIds: z.array(z.string().uuid()).max(50),

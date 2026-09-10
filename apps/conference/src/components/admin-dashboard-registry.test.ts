@@ -17,11 +17,35 @@ describe('admin dashboard metric registry', () => {
     );
   });
 
-  it('does not invent actions for metrics without a permission-safe target', () => {
-    expect(adminDashboardMetricRegistry.activation.resolveAction()).toBeNull();
-    expect(adminDashboardMetricRegistry.import.resolveAction()).toBeNull();
+  it('links to existing workspaces with the corresponding permissions', () => {
+    const context = adminContextFixtures.organizer!;
     expect(
-      adminDashboardMetricRegistry.notification.resolveAction(),
+      adminDashboardMetricRegistry.activation.resolveAction(context)?.href,
+    ).toBe('/admin/ucastnici');
+    expect(
+      adminDashboardMetricRegistry.import.resolveAction(context)?.href,
+    ).toBe('/admin/vstupenky');
+    expect(
+      adminDashboardMetricRegistry.notification.resolveAction(context)?.href,
+    ).toBe('/admin/oznameni');
+    const restricted = {
+      ...context,
+      actor: { ...context.actor, permissions: [] },
+    };
+    expect(
+      adminDashboardMetricRegistry.activation.resolveAction(restricted),
+    ).toBeNull();
+    expect(
+      adminDashboardMetricRegistry.import.resolveAction(restricted),
+    ).toBeNull();
+    expect(
+      adminDashboardMetricRegistry.notification.resolveAction(restricted),
+    ).toBeNull();
+    expect(
+      adminDashboardMetricRegistry.notification.resolveAction({
+        ...context,
+        features: { announcementsEnabled: false },
+      }),
     ).toBeNull();
   });
 

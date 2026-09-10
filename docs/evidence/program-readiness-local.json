@@ -1,0 +1,111 @@
+{
+  "environment": "isolated-local-postgresql-17",
+  "verifiedAt": "2026-09-07",
+  "report": {
+    "eventId": "019f7e6f-62ed-7c87-bce7-b742be58ce0b",
+    "ready": false,
+    "counts": {
+      "questions": 17,
+      "coaching": 26,
+      "networking": 1
+    },
+    "findings": [
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aa94-7c0b-a3b5-d50d5ebe552d"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aa9a-7d59-85ec-9b32551d2cee"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aa9c-7004-9b35-184884463aa8"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aa9e-743d-ad38-8cf8602bca94"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaa2-76ad-91bd-3e5f56410807"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaa4-72e0-942c-898a7d67c278"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaa6-7f0d-81e5-785d99297400"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaa9-7340-b24a-51989fdeb7c6"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaab-7e71-a297-dd9a691af210"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaac-74ec-a93a-35e1a332d0ce"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aab0-7799-9bdd-3b757e82a4d1"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aab7-7711-b28e-50d564afc26a"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaba-7191-ac98-89bd3b251b6f"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aabc-756f-a0d0-2ff7b4515d94"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aabf-75a9-97cf-6cb6a8e51c3d"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aac1-78c9-8d86-8a7d556d6b09"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aac2-7ab5-bdae-d1afda491bf5"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aac6-7a26-b8b8-c9b1b0938f19"
+      },
+      {
+        "code": "positive_capacity_required",
+        "sessionId": "01a07b24-aacc-731f-8b98-98cf0e750111"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aacc-731f-8b98-98cf0e750111"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aade-7194-b4f1-097d877795a2"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aae2-7fda-bd19-3fceaaf02e6f"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aae8-7862-9f2a-98acaec218fd"
+      },
+      {
+        "code": "speaker_account_unlinked",
+        "sessionId": "01a07b24-aaeb-74c7-936e-2f13386fefc8"
+      }
+    ]
+  }
+}

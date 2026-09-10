@@ -1,3 +1,4 @@
+import { hasParticipantBaseline } from './question-readiness';
 import { schema, type Database } from '@byzon/database';
 import {
   activityRosterResponseSchema,
@@ -100,7 +101,7 @@ const loadAssignedSessionIds = async (
   eventId: string,
   userId: string,
 ): Promise<readonly string[]> => {
-  const [membership, assignments, speakerProfile] = await Promise.all([
+  const [membership, assignments] = await Promise.all([
     dependencies.db.query.eventMemberships.findFirst({
       columns: { userId: true },
       where: and(
@@ -118,15 +119,12 @@ const loadAssignedSessionIds = async (
         isNull(schema.eventRoles.revokedAt),
       ),
     }),
-    dependencies.db.query.speakerProfiles.findFirst({
-      columns: { id: true },
-      where: and(
-        eq(schema.speakerProfiles.eventId, eventId),
-        eq(schema.speakerProfiles.userId, userId),
-      ),
-    }),
   ]);
-  if (!membership || (assignments.length === 0 && !speakerProfile)) {
+  if (
+    !membership ||
+    assignments.length === 0 ||
+    !(await hasParticipantBaseline(dependencies.db, eventId, userId))
+  ) {
     throw eventAccessDenied();
   }
 
@@ -138,28 +136,17 @@ const loadAssignedSessionIds = async (
     scope.data.sessionIds?.forEach((id) => sessionIds.add(id));
     scope.data.roomIds?.forEach((id) => roomIds.add(id));
   }
-  const [roomSessions, speakerSessions] = await Promise.all([
+  const roomSessions =
     roomIds.size === 0
       ? []
-      : dependencies.db.query.programSessions.findMany({
+      : await dependencies.db.query.programSessions.findMany({
           columns: { id: true },
           where: and(
             eq(schema.programSessions.eventId, eventId),
             inArray(schema.programSessions.roomId, [...roomIds]),
           ),
-        }),
-    !speakerProfile
-      ? []
-      : dependencies.db.query.sessionSpeakers.findMany({
-          columns: { sessionId: true },
-          where: and(
-            eq(schema.sessionSpeakers.eventId, eventId),
-            eq(schema.sessionSpeakers.speakerProfileId, speakerProfile.id),
-          ),
-        }),
-  ]);
+        });
   roomSessions.forEach(({ id }) => sessionIds.add(id));
-  speakerSessions.forEach(({ sessionId }) => sessionIds.add(sessionId));
   if (sessionIds.size > MAX_ASSIGNED_SESSIONS) throw eventAccessDenied();
   return [...sessionIds];
 };

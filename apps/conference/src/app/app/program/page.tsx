@@ -5,10 +5,12 @@ export default async function ProgramPage() {
   const eventId = await loadCurrentEventId();
   return (
     <section className="app-page">
-      <p className="eyebrow">BYZON 2026</p>
-      <h1 data-route-heading tabIndex={-1}>
-        Program
-      </h1>
+      <header className="participant-page-heading">
+        <p className="eyebrow">BYZON 2026</p>
+        <h1 data-route-heading tabIndex={-1}>
+          Program
+        </h1>
+      </header>
       {eventId ? (
         <ProgramView eventId={eventId} />
       ) : (

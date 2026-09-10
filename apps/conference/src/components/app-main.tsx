@@ -4,6 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect, type MouseEvent, type ReactNode } from 'react';
 
 import { subscribeToClientNavigation } from '@/lib/client-navigation-events';
+import { preserveParticipantTourNavigation } from '@/lib/participant-tour';
+
+const applicationDestination = (url: URL): string =>
+  preserveParticipantTourNavigation(
+    `${url.pathname}${url.search}${url.hash}`,
+    window.location.href,
+  );
 
 const shouldUseClientNavigation = (
   event: MouseEvent<HTMLElement>,
@@ -44,9 +51,7 @@ export const AppMain = ({ children }: { readonly children: ReactNode }) => {
         const current = new URL(window.location.href);
         const destination = new URL(href, current);
         if (destination.origin !== current.origin) return;
-        router.push(
-          `${destination.pathname}${destination.search}${destination.hash}`,
-        );
+        router.push(applicationDestination(destination));
       }),
     [router],
   );
@@ -63,9 +68,7 @@ export const AppMain = ({ children }: { readonly children: ReactNode }) => {
 
         const destination = new URL(link.href, window.location.href);
         event.preventDefault();
-        router.push(
-          `${destination.pathname}${destination.search}${destination.hash}`,
-        );
+        router.push(applicationDestination(destination));
       }}
       tabIndex={-1}
     >

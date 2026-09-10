@@ -1,3 +1,4 @@
+import { queueBookingEmail } from './email-notifications';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -1749,6 +1750,15 @@ export const mutateAdminReservation = async (
               ? new AdminStaleVersionError(latest.version)
               : resourceNotFound();
           }
+          await queueBookingEmail(transaction, {
+            eventId: event.id,
+            userId: current.userId,
+            sessionId: current.sessionId,
+            kind: 'reservation_cancelled',
+            reservationId: current.id,
+            cancelledByOrganizer: true,
+            now: changedAt,
+          });
           confirmedAfter = Math.max(0, confirmedBefore - 1);
           nextState = 'cancelled';
           await transaction

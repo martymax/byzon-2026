@@ -11,6 +11,7 @@ describe('admin engagement identity policy', () => {
         features: {
           networkingEnabled: false,
           questionsEnabled: false,
+          questionFollowUpsEnabled: false,
           ratingsEnabled: false,
         },
         sessions: [],

@@ -12,7 +12,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { programSessions } from './content.js';
+import { programSessions, speakerProfiles } from './content.js';
 import { eventMemberships, events } from './events.js';
 
 export const ratingTargetType = pgEnum('rating_target_type', [
@@ -28,6 +28,10 @@ export const questions = pgTable(
     sessionId: uuid('session_id').notNull(),
     authorUserId: uuid('author_user_id').notNull(),
     text: text('text').notNull(),
+    answeredAt: timestamp('answered_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    mergedIntoId: uuid('merged_into_id'),
+    moderationVersion: integer('moderation_version').default(1).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -43,15 +47,93 @@ export const questions = pgTable(
       foreignColumns: [eventMemberships.eventId, eventMemberships.userId],
       name: 'questions_author_membership_fk',
     }).onDelete('cascade'),
+    uniqueIndex('questions_event_session_id_unique').on(
+      table.eventId,
+      table.sessionId,
+      table.id,
+    ),
+    index('questions_author_created_idx').on(
+      table.eventId,
+      table.authorUserId,
+      table.createdAt,
+      table.id,
+    ),
     index('questions_session_created_idx').on(
       table.eventId,
       table.sessionId,
       table.createdAt,
       table.id,
     ),
+    foreignKey({
+      columns: [table.eventId, table.sessionId, table.mergedIntoId],
+      foreignColumns: [table.eventId, table.sessionId, table.id],
+      name: 'questions_merge_same_session_fk',
+    }),
+    index('questions_merged_into_idx').on(table.mergedIntoId),
+    check(
+      'questions_merge_not_self',
+      sql`${table.mergedIntoId} <> ${table.id}`,
+    ),
+    check(
+      'questions_moderation_version_check',
+      sql`${table.moderationVersion} > 0`,
+    ),
     check(
       'questions_text_length_check',
       sql`char_length(${table.text}) between 1 and 1000`,
+    ),
+  ],
+);
+
+export const questionAnswers = pgTable(
+  'question_answers',
+  {
+    id: uuid('id').primaryKey(),
+    eventId: uuid('event_id').notNull(),
+    sessionId: uuid('session_id').notNull(),
+    questionId: uuid('question_id').notNull(),
+    speakerProfileId: uuid('speaker_profile_id').notNull(),
+    answeredByUserId: uuid('answered_by_user_id').notNull(),
+    speakerName: text('speaker_name').notNull(),
+    text: text('text').notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    version: integer('version').default(1).notNull(),
+  },
+  (table) => [
+    uniqueIndex('question_answers_question_unique').on(table.questionId),
+    foreignKey({
+      columns: [table.eventId, table.sessionId, table.questionId],
+      foreignColumns: [questions.eventId, questions.sessionId, questions.id],
+      name: 'question_answers_question_event_session_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.eventId, table.speakerProfileId],
+      foreignColumns: [speakerProfiles.eventId, speakerProfiles.id],
+      name: 'question_answers_speaker_event_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.eventId, table.answeredByUserId],
+      foreignColumns: [eventMemberships.eventId, eventMemberships.userId],
+      name: 'question_answers_membership_fk',
+    }).onDelete('restrict'),
+    index('question_answers_session_idx').on(table.eventId, table.sessionId),
+    check(
+      'question_answers_text_length_check',
+      sql`char_length(${table.text}) between 1 and 4000`,
+    ),
+    check(
+      'question_answers_speaker_name_check',
+      sql`char_length(${table.speakerName}) between 1 and 257`,
+    ),
+    check('question_answers_version_check', sql`${table.version} > 0`),
+    check(
+      'question_answers_time_check',
+      sql`${table.updatedAt} >= ${table.publishedAt}`,
     ),
   ],
 );

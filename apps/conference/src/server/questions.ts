@@ -9,7 +9,7 @@ import {
   ratingSubmitRequestSchema,
   ratingSubmitResponseSchema,
 } from '@byzon/domain/contracts';
-import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -20,6 +20,13 @@ import {
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { rateLimitHeaders } from './api/rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
+import {
+  loadQuestionActor,
+  loadQuestionSession,
+  requireQuestionCollection,
+  lockQuestionAccess,
+  requireQuestionManagement,
+} from './question-runtime';
 import type { QuestionsRateLimiter } from './questions-rate-limit';
 
 const MAX_BODY_BYTES = 8_192;
@@ -160,43 +167,6 @@ const loadEventActor = async (
   return { endsAt: event.endsAt, eventId: event.id, userId: identity.user.id };
 };
 
-const requireQuestionSession = async (
-  dependencies: QuestionsDependencies,
-  eventId: string,
-  sessionId: string,
-) => {
-  const [feature, session] = await Promise.all([
-    dependencies.db.query.eventFeatures.findFirst({
-      columns: { questionsEnabled: true },
-      where: eq(schema.eventFeatures.eventId, eventId),
-    }),
-    dependencies.db.query.programSessions.findFirst({
-      columns: { id: true, questionsEnabled: true, status: true },
-      where: and(
-        eq(schema.programSessions.eventId, eventId),
-        eq(schema.programSessions.id, sessionId),
-      ),
-    }),
-  ]);
-  if (!feature?.questionsEnabled) {
-    throw apiProblem(
-      409,
-      'QUESTIONS_DISABLED',
-      'Questions disabled',
-      'Questions are not enabled for this event.',
-    );
-  }
-  if (!session || session.status !== 'published' || !session.questionsEnabled) {
-    throw apiProblem(
-      404,
-      'SESSION_NOT_FOUND',
-      'Session not found',
-      'Questions are unavailable for this session.',
-    );
-  }
-  return session;
-};
-
 const requireParticipantRole = async (
   dependencies: QuestionsDependencies,
   eventId: string,
@@ -241,9 +211,7 @@ export const submitQuestion = async (
         'The question request is invalid.',
       );
     }
-    const actor = await loadEventActor(request, dependencies);
-    await requireParticipantRole(dependencies, actor.eventId, actor.userId);
-    await requireQuestionSession(dependencies, actor.eventId, sessionId);
+    const actor = await loadQuestionActor(request, dependencies);
     const decision = await dependencies.rateLimit?.(actor.userId, sessionId);
     const json = await readJson(request);
     const parsed = questionSubmitRequestSchema.safeParse(json.value);
@@ -275,6 +243,21 @@ export const submitQuestion = async (
         generateId,
       },
       async (transaction) => {
+        await lockQuestionAccess(
+          transaction,
+          actor.eventId,
+          actor.userId,
+          sessionId,
+        );
+        await loadQuestionActor(request, dependencies, transaction);
+        const submittedAt = dependencies.now?.() ?? new Date();
+        const session = await loadQuestionSession(
+          transaction,
+          actor.eventId,
+          sessionId,
+          submittedAt,
+        );
+        requireQuestionCollection(session.context);
         const questionId = generateId();
         await transaction.insert(schema.questions).values({
           id: questionId,
@@ -282,14 +265,14 @@ export const submitQuestion = async (
           sessionId,
           authorUserId: actor.userId,
           text: parsed.data.text,
-          createdAt: now,
+          createdAt: submittedAt,
         });
         return {
           status: 201,
           body: questionSubmitResponseSchema.parse({
             questionId,
             sessionId,
-            submittedAt: now.toISOString(),
+            submittedAt: submittedAt.toISOString(),
           }),
           resultReference: questionId,
         };
@@ -304,31 +287,6 @@ export const submitQuestion = async (
     });
   } catch (error) {
     return respondProblem(error, requestId);
-  }
-};
-
-const requireAssignedModerator = async (
-  dependencies: QuestionsDependencies,
-  eventId: string,
-  userId: string,
-  sessionId: string,
-) => {
-  const roles = await dependencies.db.query.eventRoles.findMany({
-    columns: { role: true, scope: true },
-    where: and(
-      eq(schema.eventRoles.eventId, eventId),
-      eq(schema.eventRoles.userId, userId),
-      eq(schema.eventRoles.role, 'moderator'),
-      isNull(schema.eventRoles.revokedAt),
-    ),
-  });
-  if (!roles.some(({ scope }) => scope.sessionIds?.includes(sessionId))) {
-    throw apiProblem(
-      403,
-      'EVENT_ACCESS_DENIED',
-      'Event access denied',
-      'The moderator feed is unavailable.',
-    );
   }
 };
 
@@ -351,14 +309,26 @@ export const readModeratorQuestions = async (
         'The moderator request is invalid.',
       );
     }
-    const actor = await loadEventActor(request, dependencies);
-    await requireQuestionSession(dependencies, actor.eventId, sessionId);
-    await requireAssignedModerator(
+    const actor = await loadQuestionActor(
+      request,
       dependencies,
-      actor.eventId,
-      actor.userId,
-      sessionId,
+      dependencies.db,
+      true,
     );
+    const context = await loadQuestionSession(
+      dependencies.db,
+      actor.eventId,
+      sessionId,
+      dependencies.now?.() ?? new Date(),
+    );
+    if (context.record.questionMode !== 'moderated_follow_up')
+      throw apiProblem(
+        409,
+        'QUESTIONS_UNSUPPORTED',
+        'Unsupported session',
+        'Tento blok nepodporuje dotazy.',
+      );
+    requireQuestionManagement(actor, sessionId);
     const url = new URL(request.url);
     const known = new Set(['after', 'cursor', 'limit']);
     if ([...url.searchParams.keys()].some((key) => !known.has(key))) {
@@ -394,6 +364,8 @@ export const readModeratorQuestions = async (
       .select({
         questionId: schema.questions.id,
         text: schema.questions.text,
+        answeredAt: schema.questions.answeredAt,
+        moderationVersion: schema.questions.moderationVersion,
         createdAt: schema.questions.createdAt,
         authorFirstName: schema.participantProfiles.firstName,
         authorLastName: schema.participantProfiles.lastName,
@@ -415,6 +387,8 @@ export const readModeratorQuestions = async (
         and(
           eq(schema.questions.eventId, actor.eventId),
           eq(schema.questions.sessionId, sessionId),
+          isNull(schema.questions.deletedAt),
+          isNull(schema.questions.mergedIntoId),
           after
             ? or(
                 gt(schema.questions.createdAt, after),
@@ -430,6 +404,45 @@ export const readModeratorQuestions = async (
       )
       .orderBy(asc(schema.questions.createdAt), asc(schema.questions.id))
       .limit(limit);
+    const originals = rows.length
+      ? await dependencies.db
+          .select({
+            questionId: schema.questions.id,
+            mergedIntoId: schema.questions.mergedIntoId,
+            text: schema.questions.text,
+            createdAt: schema.questions.createdAt,
+            authorFirstName: schema.participantProfiles.firstName,
+            authorLastName: schema.participantProfiles.lastName,
+            authorAccountName: schema.users.name,
+          })
+          .from(schema.questions)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.questions.authorUserId),
+          )
+          .leftJoin(
+            schema.participantProfiles,
+            and(
+              eq(schema.participantProfiles.eventId, actor.eventId),
+              eq(
+                schema.participantProfiles.userId,
+                schema.questions.authorUserId,
+              ),
+            ),
+          )
+          .where(
+            and(
+              eq(schema.questions.eventId, actor.eventId),
+              eq(schema.questions.sessionId, sessionId),
+              isNull(schema.questions.deletedAt),
+              inArray(
+                schema.questions.mergedIntoId,
+                rows.map((row) => row.questionId),
+              ),
+            ),
+          )
+          .orderBy(asc(schema.questions.createdAt), asc(schema.questions.id))
+      : [];
     const now = dependencies.now?.() ?? new Date();
     const body = moderatorQuestionFeedSchema.parse({
       eventId: actor.eventId,
@@ -437,6 +450,20 @@ export const readModeratorQuestions = async (
       serverTime: now.toISOString(),
       items: rows.map((row) => ({
         questionId: row.questionId,
+        answeredAt: row.answeredAt?.toISOString() ?? null,
+        moderationVersion: row.moderationVersion,
+        originals: originals
+          .filter((original) => original.mergedIntoId === row.questionId)
+          .map((original) => ({
+            questionId: original.questionId,
+            text: original.text,
+            submittedAt: original.createdAt.toISOString(),
+            authorName: participantName(
+              original.authorFirstName,
+              original.authorLastName,
+              original.authorAccountName,
+            ),
+          })),
         authorName: participantName(
           row.authorFirstName,
           row.authorLastName,

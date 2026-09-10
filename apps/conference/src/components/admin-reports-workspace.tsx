@@ -333,161 +333,165 @@ export const AdminReportsRedesign = ({
         </section>
       ) : null}
 
-      <section className={styles.panel} aria-labelledby="report-create-title">
-        <h2 id="report-create-title">Vytvořit report</h2>
-        {invalid ? (
-          <AdminFormErrorSummary
-            descriptionId="admin-report-validation"
-            heading="Doplňte údaje reportu"
-            message="Zkontrolujte období a napište důvod o nejméně 8 znacích."
-          />
-        ) : null}
-        <fieldset className={styles.fieldset}>
-          <legend>Obsah reportu</legend>
-          <div className={styles.summaryGrid}>
-            {(Object.keys(reportLabels) as AdminExportReport[]).map(
-              (option) => (
-                <label className={styles.dataCard} key={option}>
-                  <input
-                    checked={report === option}
-                    name="report-type"
-                    onChange={() => setReport(option)}
-                    type="radio"
-                  />
-                  <strong>{reportLabels[option]}</strong>
-                  <span>{reportDescriptions[option]}</span>
-                </label>
-              ),
-            )}
-          </div>
-        </fieldset>
-        <label className={styles.checkRow}>
-          <input
-            checked={customRange}
-            onChange={(event) => setCustomRange(event.target.checked)}
-            type="checkbox"
-          />
-          <span>Omezit report na vlastní období</span>
-        </label>
-        {customRange ? (
-          <div className={styles.twoColumn}>
-            <label className={styles.field}>
-              <span>Od ({eventTimezone})</span>
-              <input
-                onChange={(event) => setFrom(event.target.value)}
-                type="datetime-local"
-                value={from}
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Do ({eventTimezone})</span>
-              <input
-                onChange={(event) => setTo(event.target.value)}
-                type="datetime-local"
-                value={to}
-              />
-            </label>
-          </div>
-        ) : (
-          <p className={styles.helper}>Výchozí období je celá akce.</p>
-        )}
-        <label className={styles.field}>
-          <span>Formát</span>
-          <select
-            onChange={(event) =>
-              setFormat(event.target.value as 'csv' | 'json')
-            }
-            value={format}
-          >
-            <option value="csv">CSV · doporučeno</option>
-            <option value="json">JSON · pokročilé</option>
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>Důvod vytvoření reportu</span>
-          <textarea
-            aria-invalid={invalid}
-            onChange={(event) => setReason(event.target.value)}
-            value={reason}
-          />
-          <span className={styles.helper}>
-            Důvod se uloží do historie, protože report může obsahovat provozní
-            osobní data.
-          </span>
-        </label>
-        <button
-          className={styles.button}
-          disabled={busy !== null || pending !== null}
-          onClick={prepare}
-          type="button"
-        >
-          Vytvořit report
-        </button>
-        {ambiguous && pending ? (
+      <div className={styles.reportLayout}>
+        <section className={styles.panel} aria-labelledby="report-create-title">
+          <h2 id="report-create-title">Vytvořit report</h2>
+          {invalid ? (
+            <AdminFormErrorSummary
+              descriptionId="admin-report-validation"
+              heading="Doplňte údaje reportu"
+              message="Zkontrolujte období a napište důvod o nejméně 8 znacích."
+            />
+          ) : null}
+          <fieldset className={styles.fieldset}>
+            <legend>Obsah reportu</legend>
+            <div className={styles.summaryGrid}>
+              {(Object.keys(reportLabels) as AdminExportReport[]).map(
+                (option) => (
+                  <label className={styles.dataCard} key={option}>
+                    <input
+                      checked={report === option}
+                      name="report-type"
+                      onChange={() => setReport(option)}
+                      type="radio"
+                    />
+                    <strong>{reportLabels[option]}</strong>
+                    <span>{reportDescriptions[option]}</span>
+                  </label>
+                ),
+              )}
+            </div>
+          </fieldset>
+          <label className={styles.checkRow}>
+            <input
+              checked={customRange}
+              onChange={(event) => setCustomRange(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Omezit report na vlastní období</span>
+          </label>
+          {customRange ? (
+            <div className={styles.twoColumn}>
+              <label className={styles.field}>
+                <span>Od ({eventTimezone})</span>
+                <input
+                  onChange={(event) => setFrom(event.target.value)}
+                  type="datetime-local"
+                  value={from}
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Do ({eventTimezone})</span>
+                <input
+                  onChange={(event) => setTo(event.target.value)}
+                  type="datetime-local"
+                  value={to}
+                />
+              </label>
+            </div>
+          ) : (
+            <p className={styles.helper}>Výchozí období je celá akce.</p>
+          )}
+          <label className={styles.field}>
+            <span>Formát</span>
+            <select
+              onChange={(event) =>
+                setFormat(event.target.value as 'csv' | 'json')
+              }
+              value={format}
+            >
+              <option value="csv">CSV · doporučeno</option>
+              <option value="json">JSON · pokročilé</option>
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span>Důvod vytvoření reportu</span>
+            <textarea
+              aria-invalid={invalid}
+              onChange={(event) => setReason(event.target.value)}
+              value={reason}
+            />
+            <span className={styles.helper}>
+              Důvod se uloží do historie, protože report může obsahovat provozní
+              osobní data.
+            </span>
+          </label>
           <button
-            className={styles.secondaryButton}
-            disabled={busy !== null}
-            onClick={() => void execute(pending)}
+            className={styles.button}
+            disabled={busy !== null || pending !== null}
+            onClick={prepare}
             type="button"
           >
-            Zopakovat přesně stejný pokus
+            Vytvořit report
           </button>
-        ) : null}
-      </section>
+          {ambiguous && pending ? (
+            <button
+              className={styles.secondaryButton}
+              disabled={busy !== null}
+              onClick={() => void execute(pending)}
+              type="button"
+            >
+              Zopakovat přesně stejný pokus
+            </button>
+          ) : null}
+        </section>
 
-      <section className={styles.panel} aria-labelledby="report-history-title">
-        <h2 id="report-history-title">Historie exportů</h2>
-        {busy === 'jobs' && !jobs ? (
-          <p role="status">Načítám historii reportů…</p>
-        ) : jobs?.items.length === 0 ? (
-          <p className={styles.empty}>Zatím nebyl vytvořen žádný report.</p>
-        ) : jobs ? (
-          <>
-            <ul className={styles.cardList}>
-              {jobs.items.map((job) => (
-                <li className={styles.dataCard} key={job.exportId}>
-                  <div className={styles.panelHeader}>
-                    <strong>{reportLabels[job.report]}</strong>
-                    <span className={styles.statusBadge}>
-                      {jobStateLabels[job.state]}
-                    </span>
-                  </div>
-                  <p>
-                    {job.createdByLabel} · {job.format.toUpperCase()}
-                  </p>
-                  <p>Období: {formatRange(job.range, eventTimezone)}</p>
-                  <p>
-                    Vytvořeno {formatMoment(job.createdAt, eventTimezone)} ·
-                    expiruje {formatMoment(job.expiresAt, eventTimezone)}
-                  </p>
-                  {job.state === 'ready' && job.downloadPath ? (
-                    <a className={styles.button} href={job.downloadPath}>
-                      Stáhnout
-                    </a>
-                  ) : null}
-                  <AdminTechnicalDetails>
-                    <dl className={styles.detailList}>
-                      <dt>ID exportu</dt>
-                      <dd>{job.exportId}</dd>
-                    </dl>
-                  </AdminTechnicalDetails>
-                </li>
-              ))}
-            </ul>
-            {jobs.pageInfo.hasMore ? (
-              <button
-                className={styles.secondaryButton}
-                disabled={busy !== null}
-                onClick={() => void loadMoreJobs()}
-                type="button"
-              >
-                Načíst další reporty
-              </button>
-            ) : null}
-          </>
-        ) : null}
-      </section>
-
+        <section
+          className={styles.panel}
+          aria-labelledby="report-history-title"
+        >
+          <h2 id="report-history-title">Historie exportů</h2>
+          {busy === 'jobs' && !jobs ? (
+            <p role="status">Načítám historii reportů…</p>
+          ) : jobs?.items.length === 0 ? (
+            <p className={styles.empty}>Zatím nebyl vytvořen žádný report.</p>
+          ) : jobs ? (
+            <>
+              <ul className={styles.cardList}>
+                {jobs.items.map((job) => (
+                  <li className={styles.dataCard} key={job.exportId}>
+                    <div className={styles.panelHeader}>
+                      <strong>{reportLabels[job.report]}</strong>
+                      <span className={styles.statusBadge}>
+                        {jobStateLabels[job.state]}
+                      </span>
+                    </div>
+                    <p>
+                      {job.createdByLabel} · {job.format.toUpperCase()}
+                    </p>
+                    <p>Období: {formatRange(job.range, eventTimezone)}</p>
+                    <p>
+                      Vytvořeno {formatMoment(job.createdAt, eventTimezone)} ·
+                      expiruje {formatMoment(job.expiresAt, eventTimezone)}
+                    </p>
+                    {job.state === 'ready' && job.downloadPath ? (
+                      <a className={styles.button} href={job.downloadPath}>
+                        Stáhnout
+                      </a>
+                    ) : null}
+                    <AdminTechnicalDetails>
+                      <dl className={styles.detailList}>
+                        <dt>ID exportu</dt>
+                        <dd>{job.exportId}</dd>
+                      </dl>
+                    </AdminTechnicalDetails>
+                  </li>
+                ))}
+              </ul>
+              {jobs.pageInfo.hasMore ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={busy !== null}
+                  onClick={() => void loadMoreJobs()}
+                  type="button"
+                >
+                  Načíst další reporty
+                </button>
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      </div>
       <AdminConfirmDialog
         actionLabel="Zařadit report"
         onCancel={() => {

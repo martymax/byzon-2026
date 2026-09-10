@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
     'byzonconference-fe-mock-preview.up.railway.app',
   ],
   output: 'standalone',
+  // Sharp loads libvips through native code, outside Next's JavaScript tracing.
+  outputFileTracingIncludes: {
+    '/*': [
+      '../../node_modules/.pnpm/@img+sharp-*/node_modules/@img/sharp-*/**/*',
+    ],
+  },
   poweredByHeader: false,
   transpilePackages: ['@byzon/config'],
   async headers() {

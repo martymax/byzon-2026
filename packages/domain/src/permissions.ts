@@ -26,6 +26,7 @@ export const eventPermissions = [
   'reservation:assigned:read',
   'reservation:any:read',
   'session:assigned:moderate',
+  'question:own-session:answer',
   'announcement:own:read',
   'announcement:send',
   'ticket:any:manage',
@@ -59,16 +60,7 @@ const rolePermissions = {
     'reservation:own:read',
     'announcement:own:read',
   ],
-  speaker: [
-    'program:published:read',
-    'agenda:own:write',
-    'networking:directory:read',
-    'profile:own:write',
-    'privacy:own:write',
-    'checkin:own-code:read',
-    'reservation:own:read',
-    'announcement:own:read',
-  ],
+  speaker: ['program:published:read', 'question:own-session:answer'],
   organizer_admin: [
     'program:published:read',
     'agenda:any:override',
@@ -118,6 +110,8 @@ const contextAllows = (
       return context.networkingOptedIn === true;
     case 'reservation:assigned:read':
       return context.assignedRoom === true || context.assignedSession === true;
+    case 'question:own-session:answer':
+      return context.assignedSession === true;
     case 'session:assigned:moderate':
       return role === 'organizer_admin' || context.assignedSession === true;
     case 'announcement:send':

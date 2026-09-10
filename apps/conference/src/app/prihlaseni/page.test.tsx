@@ -48,6 +48,21 @@ describe('dedicated sign-in page', () => {
     });
   });
 
+  it('opens self-service recovery from an activation link while preserving the destination', async () => {
+    renderToStaticMarkup(
+      await LoginPage({
+        searchParams: Promise.resolve({
+          mode: 'recovery',
+          returnTo: '/app/networking',
+        }),
+      }),
+    );
+    expect(loginMocks.render).toHaveBeenCalledWith({
+      recovery: true,
+      returnTo: '/app/networking',
+    });
+  });
+
   it('keeps an explicit allowlisted admin destination', async () => {
     renderToStaticMarkup(
       await LoginPage({

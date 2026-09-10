@@ -82,10 +82,10 @@ const ParticipantProgramProbe = () => (
   </ParticipantProbe>
 );
 
-const SpeakerParticipantProbe = () => (
+const ActivityLeaderParticipantProbe = () => (
   <main
     id="main"
-    data-testid="speaker-participant-shell"
+    data-testid="activity-leader-participant-shell"
     style={visualTestStyle}
     tabIndex={-1}
   >
@@ -96,10 +96,10 @@ const SpeakerParticipantProbe = () => (
           membership: {
             ...identityBootstrapFixtures.complete!.membership,
             access: { state: 'active' },
-            roles: ['participant', 'speaker'],
+            roles: ['participant', 'speaker', 'room_operator'],
           },
         },
-        'component-speaker-account-0001',
+        'component-activity-leader-account-0001',
       )}
       accountScope={{ kind: 'active', eventId: program.eventId }}
       navigationMode="active-preview"
@@ -279,8 +279,8 @@ describe('F2-06 participant shell and program quality gate', () => {
       .toHaveAttribute('href', '/app/recnici');
   });
 
-  it('shows an accessible non-overlapping context switch to linked speakers', async () => {
-    const screen = await renderComponent(<SpeakerParticipantProbe />);
+  it('shows an accessible non-overlapping context switch to activity leaders', async () => {
+    const screen = await renderComponent(<ActivityLeaderParticipantProbe />);
     const switchLink = screen.getByRole('link', { name: 'Správa aktivit' });
 
     await expect.element(switchLink).toBeVisible();
