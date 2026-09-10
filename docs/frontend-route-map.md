@@ -36,11 +36,19 @@ Frontendový guard nesmí být jedinou ochranou route ani dat.
 
 ### 1.2 Vyloučený rozsah
 
-Následující routes nejsou v Priority A grafu. Prostý session question flow lze
-přidat jako Priority B až po Gate A:
+ADR-017 (7. 9. 2026) přidává úzké soukromé Q&A. Implementované rozšíření má následující routes; původní počty výše popisují základ Priority A. Všechny nové obrazovky jsou online-only, API `private, no-store`, bez browser persistence. Participant baseline znamená aktivní membership, profil a participant roli. Staging UAT je samostatná release podmínka.
 
-- `/app/interakce/[sessionId]`;
-- `/moderator/[sessionId]`.
+| Route                        | Přístup a chování                                                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/app/interakce/[sessionId]` | Participant baseline; kontext, vlastní historie, submit jen během publikované podporované přednášky při obou collection přepínačích ON. |
+| `/app/dotazy`                | Participant baseline; vlastní otázky a odpovědi nezávisle na collection/follow-up přepínačích.                                          |
+| `/host/moderace`             | Baseline + přiřazený moderator; seznam vlastních podporovaných session.                                                                 |
+| `/host/moderace/[sessionId]` | Baseline + moderator konkrétní session; chronologický feed se jmény, dostupný i po konci/OFF.                                           |
+| `/host/dotazy`               | Baseline + speaker + linked profil, event live/ended a follow-up ON; vlastní ukončené session.                                          |
+| `/host/dotazy/[sessionId]`   | Stejné + session link a serverový čas po konci; anonymizované otázky, jedna odpověď, edit jen původním řečníkem.                        |
+| `/moderator/[sessionId]`     | Kompatibilní redirect na `/host/moderace/[sessionId]`.                                                                                  |
+
+Bezpečný login return whitelist zahrnuje nové host i participant cesty a odmítá vnější URL, traversal a libovolné query. `Více` zobrazuje host odkazy podle serverového capability endpointu. Provoz a přesné testy: [runbook](runbooks/participant-access-live-qa.md).
 
 Routes pro spojení/zprávy, speaker portál/podklady, ankety/projekci, social wall,
 plánek, materiály a participant self-export jsou pro rok 2026 vyřazené a
@@ -68,6 +76,8 @@ Fáze se nikdy neodvozuje jen z času zařízení. Autoritativní je serverový
 | Flag nebo gate             | Routes                             | Pravidlo                                                                                                                                            |
 | -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `announcementsEnabled`     | participant a admin oznámení       | Při vypnutí zobrazit vysvětlený nedostupný stav oprávněným uživatelům; participant navigation položku lze skrýt, pokud není unread deep link.       |
+| `questionFollowUpsEnabled` | `/host/dotazy` a detail            | Samostatný default-OFF přepínač řečnického čtení/zápisu po konci; owner history zachována.                                                          |
+| `questionsEnabled`         | `/app/interakce/[sessionId]`       | Globální sběr + session toggle + capability + serverový interval; moderator/owner read není tímto přepínačem podmíněn.                              |
 | `networkingEnabled`        | `/app/networking` a detail profilu | Adresář je dostupný jen přihlášeným účastníkům. Každý profil je výchozí skrytý a zveřejní se až výslovným opt-inem jeho vlastníka.                  |
 | `offlineCheckinEnabled`    | `/check-in`                        | Nezapíná samotný online check-in. Povoluje pouze později schválený offline adapter po `BLOCKER-TKT-04` a provozním gate; výchozí stav je vypnuto.   |
 | `publicContentSyncEnabled` | admin dashboard a obsah            | Ovlivňuje pouze sync status/akci veřejného webu, ne čtení publikovaného obsahu v aplikaci.                                                          |
@@ -81,7 +91,7 @@ doručení oznámení, ale samo nemění produkční klientskou navigaci; její 
 bude rozhodnuto samostatně.
 
 Priority A route nesmí být podmíněna nesouvisejícím Priority B/C flagem
-(`speakerPortalEnabled`, `questionsEnabled`,
+(`speakerPortalEnabled`,
 `pollsEnabled`, `ratingsEnabled`, `socialWallEnabled`).
 
 ### 2.3 Stavy identity a přístupu

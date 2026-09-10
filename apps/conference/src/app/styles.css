@@ -1,5 +1,10 @@
 @import '@byzon/ui/styles.css';
 
+:root {
+  --participant-title-size: clamp(2rem, 1.6rem + 1.5vw, 2.5rem);
+  --participant-section-title-size: 1.5rem;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -43,7 +48,7 @@ h5,
 .skip-link:focus {
   left: 1rem;
   top: 1rem;
-  z-index: 10;
+  z-index: 110;
   padding: 0.7rem 1rem;
   border-radius: 999px;
   background: var(--pink-dark);
@@ -57,6 +62,79 @@ h5,
   max-width: 76rem;
   margin: auto;
   padding: 0 clamp(1.25rem, 5vw, 3rem);
+}
+.app-header--application {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  max-width: none;
+  height: calc(5rem + env(safe-area-inset-top, 0px));
+  gap: var(--byzon-space-2);
+  padding-inline: max(
+    clamp(1.25rem, 5vw, 3rem),
+    calc((100vw - 76rem) / 2 + 3rem)
+  );
+  padding-block-start: env(safe-area-inset-top, 0px);
+  background: var(--byzon-surface-translucent);
+  backdrop-filter: blur(14px);
+}
+.app-header-help {
+  flex: none;
+}
+.app-header-help--with-notifications {
+  padding-inline-end: calc(var(--byzon-touch-target) + var(--byzon-space-2));
+}
+.app-help-link {
+  width: var(--byzon-touch-target);
+  height: var(--byzon-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--byzon-border);
+  border-radius: var(--byzon-radius-pill);
+  color: var(--byzon-ink);
+  background: var(--byzon-surface-translucent);
+  box-shadow: var(--byzon-shadow-sm);
+  text-decoration: none;
+  backdrop-filter: blur(14px);
+  touch-action: manipulation;
+  transition:
+    color var(--byzon-motion-fast) var(--byzon-ease),
+    border-color var(--byzon-motion-fast) var(--byzon-ease),
+    background-color var(--byzon-motion-fast) var(--byzon-ease);
+}
+.app-help-link svg {
+  flex: none;
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.app-help-link:hover,
+.app-help-link:active,
+.app-help-link[aria-current='page'] {
+  border-color: var(--byzon-brand);
+  color: var(--byzon-brand-active);
+  background: var(--byzon-brand-soft);
+}
+.app-help-link:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+html:has(.app-header--application) {
+  scroll-padding-top: calc(6rem + env(safe-area-inset-top, 0px));
+}
+body:has(.app-header--application) .participant-tour {
+  max-height: calc(
+    100dvh - 12rem - var(--byzon-safe-bottom) - env(safe-area-inset-top, 0px)
+  );
+}
+@media (min-width: 48rem) {
+  .app-header--application ~ main .ui-participant-nav {
+    top: calc(5rem + env(safe-area-inset-top, 0px));
+  }
+  html:has(.app-header--application) {
+    scroll-padding-top: calc(10rem + env(safe-area-inset-top, 0px));
+  }
 }
 .brand {
   display: flex;
@@ -278,8 +356,8 @@ h1 span {
 }
 .participant-notification-link {
   position: fixed;
-  z-index: 40;
-  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  z-index: 41;
+  top: calc(1.125rem + env(safe-area-inset-top, 0px));
   right: max(clamp(1.25rem, 5vw, 3rem), calc((100vw - 76rem) / 2 + 3rem));
   width: var(--byzon-touch-target);
   height: var(--byzon-touch-target);
@@ -985,10 +1063,40 @@ main > .ui-participant-nav-spacer {
   padding: 2.5rem 0 6rem;
 }
 .app-page > h1,
+.participant-page-heading h1,
+.agenda-heading h1,
+.participant-account-heading h1,
 .detail-card h1 {
+  margin: 0;
+  color: var(--byzon-ink);
+  font-size: var(--participant-title-size);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.app-page > h1 {
   margin: 0.25rem 0 1.5rem;
-  font-size: clamp(3rem, 10vw, 6rem);
-  line-height: 0.9;
+}
+.participant-page-heading,
+.agenda-heading,
+.participant-account-heading {
+  display: grid;
+  gap: var(--byzon-space-2);
+}
+.participant-page-heading {
+  margin-bottom: var(--byzon-space-6);
+}
+.participant-page-heading .eyebrow,
+.agenda-heading .eyebrow,
+.participant-account-heading .eyebrow {
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+}
+.agenda-heading .lead,
+.participant-account-heading .lead {
+  max-width: 65ch;
+  font-size: 1rem;
+  line-height: 1.6;
 }
 [data-route-heading]:focus {
   outline: none;
@@ -1829,14 +1937,14 @@ main > .ui-participant-nav-spacer {
 }
 .agenda-page {
   display: grid;
-  gap: clamp(1.5rem, 4vw, 2.5rem);
+  gap: var(--byzon-space-6);
 }
 .agenda-heading {
   max-width: 54rem;
 }
 .agenda-heading h1 {
-  max-width: 11ch;
-  margin-block: 0.35rem 0.9rem;
+  max-width: none;
+  margin: 0;
 }
 .agenda-loading {
   max-width: 48rem;
@@ -1998,8 +2106,8 @@ main > .ui-participant-nav-spacer {
 }
 .agenda-calendar-export h2 {
   color: var(--byzon-ink);
-  font-size: clamp(1.5rem, 4vw, 2rem);
-  line-height: 1.1;
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
 }
 .session-calendar-export {
   display: grid;
@@ -2232,29 +2340,6 @@ main > .ui-participant-nav-spacer {
   .app-page {
     width: min(100% - 2.5rem, 72rem);
     padding-top: 1.25rem;
-  }
-  .app-page > h1,
-  .agenda-heading h1,
-  .participant-account-heading h1 {
-    font-size: clamp(2.75rem, 12vw, 3rem);
-    line-height: 0.88;
-  }
-  .app-page > h1 {
-    margin-block: 0.25rem 0.75rem;
-  }
-  .agenda-heading h1,
-  .participant-account-heading h1 {
-    margin: 0;
-  }
-  .agenda-heading .lead,
-  .participant-account-heading .lead {
-    font-size: 1.0625rem;
-    line-height: 1.45;
-  }
-  .agenda-heading,
-  .participant-account-heading {
-    display: grid;
-    gap: var(--byzon-space-2);
   }
   .agenda-item-topline {
     justify-content: flex-start;
@@ -3066,22 +3151,9 @@ main > .ui-participant-nav-spacer {
 
 .participant-account-page {
   display: grid;
-  gap: clamp(1.5rem, 5vw, 2.75rem);
-  max-width: 62rem;
+  gap: var(--byzon-space-6);
 }
-.participant-account-heading {
-  display: grid;
-  gap: var(--byzon-space-3);
-}
-.participant-account-heading h1 {
-  max-width: 12ch;
-  margin: 0;
-  font-size: clamp(3.5rem, 11vw, 7rem);
-  line-height: 0.85;
-}
-.participant-account-heading .lead {
-  max-width: 48rem;
-}
+
 .participant-account-stack,
 .participant-account-section,
 .participant-legal-list,
@@ -3094,14 +3166,15 @@ main > .ui-participant-nav-spacer {
   display: grid;
   gap: var(--byzon-space-2);
 }
+.participant-account-page .session-controls h2,
 .participant-account-section > header h2,
 .participant-account-card h2,
 .participant-account-summary h2,
 .participant-support-card h2,
 .participant-privacy-request-card h3 {
   color: var(--byzon-ink);
-  font-size: clamp(1.65rem, 5vw, 2.5rem);
-  line-height: 1.05;
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
 }
 .participant-account-card,
 .participant-account-summary,
@@ -3114,14 +3187,9 @@ main > .ui-participant-nav-spacer {
   overflow-wrap: anywhere;
 }
 .participant-account-summary {
-  border-inline-start: 0.35rem solid var(--byzon-brand);
-  background:
-    radial-gradient(
-      circle at 100% 0,
-      var(--byzon-brand-glow),
-      transparent 16rem
-    ),
-    var(--byzon-surface);
+  gap: var(--byzon-space-2);
+  border-inline-start: 0.25rem solid var(--byzon-brand);
+  background: var(--byzon-surface);
 }
 .participant-account-secondary {
   color: var(--byzon-text-muted);
@@ -3135,6 +3203,8 @@ main > .ui-participant-nav-spacer {
 .participant-more-grid .ui-action {
   min-width: 0;
   min-height: 3.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--byzon-radius-md);
   justify-content: space-between;
   text-align: start;
 }
@@ -3142,6 +3212,22 @@ main > .ui-participant-nav-spacer {
   content: '→';
   flex: none;
   margin-inline-start: var(--byzon-space-3);
+}
+.participant-role-section {
+  display: grid;
+  gap: var(--byzon-space-4);
+  padding-top: var(--byzon-space-6);
+  border-top: 1px solid var(--byzon-border);
+}
+.participant-role-section h2 {
+  color: var(--byzon-ink);
+  font-size: var(--participant-section-title-size);
+  line-height: 1.25;
+}
+.participant-role-section header p {
+  margin-top: var(--byzon-space-1);
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
 }
 .participant-support-card {
   border-style: dashed;
@@ -3333,6 +3419,34 @@ main > .ui-participant-nav-spacer {
   color: var(--byzon-text-muted);
   font-size: 0.9375rem;
 }
+.participant-app-document-content {
+  max-height: none;
+  overflow: visible;
+  line-height: 1.65;
+}
+.participant-app-document-content h4 {
+  margin-block-start: var(--byzon-space-4);
+  color: var(--byzon-ink);
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+.participant-app-document-content h5 {
+  color: var(--byzon-ink);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.participant-app-document-content table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.participant-app-document-content th,
+.participant-app-document-content td {
+  padding: var(--byzon-space-2);
+  border: 1px solid var(--byzon-border);
+  text-align: start;
+  vertical-align: top;
+}
 .participant-privacy-request-grid {
   min-width: 0;
   display: grid;
@@ -3395,5 +3509,166 @@ main > .ui-participant-nav-spacer {
   .speaker-session-card__action svg,
   .speaker-portrait img {
     transition: none;
+  }
+}
+
+.participant-help-page {
+  max-width: 68rem;
+}
+.participant-guide-intro,
+.participant-help-faq {
+  display: grid;
+  gap: 1.5rem;
+}
+.participant-guide-intro {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.participant-guide-intro p {
+  max-width: 65ch;
+}
+.participant-guide-launch-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+.participant-help-search {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.participant-help-answers {
+  display: grid;
+  gap: 0.75rem;
+}
+.participant-help-answers details {
+  background: var(--byzon-surface);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+.participant-help-answers summary {
+  padding: 1.25rem;
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 3rem;
+}
+.participant-help-answers summary:hover {
+  color: var(--pink-dark);
+}
+.participant-help-answers details > div {
+  display: grid;
+  gap: 1rem;
+  padding: 0 1.25rem 1.25rem;
+  max-width: 72ch;
+}
+.participant-help-answers .text-link {
+  width: fit-content;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .participant-guide-intro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+[data-tour-highlight='true'] {
+  outline: 3px solid var(--pink-dark);
+  outline-offset: 5px;
+  border-radius: 0.5rem;
+  scroll-margin-block: 6rem;
+}
+a[data-tour-highlight='true'] {
+  outline-offset: -3px;
+}
+body:has(.participant-tour) .participant-shell-content {
+  padding-bottom: min(60vh, 30rem);
+}
+.participant-tour {
+  position: fixed;
+  z-index: 100;
+  width: min(368px, calc(100vw - 32px));
+  max-height: calc(100dvh - 120px - var(--byzon-safe-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem;
+  color: var(--slate);
+  background: var(--byzon-surface);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--pink-dark);
+  border-radius: 1rem;
+  box-shadow: var(--byzon-shadow-overlay);
+  line-height: 1.5;
+}
+.participant-tour-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+.participant-tour-top > div {
+  display: flex;
+}
+.participant-tour-top button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+}
+.participant-tour-top button:hover {
+  background: var(--soft);
+}
+.participant-tour-top button:last-child {
+  font-size: 1.5rem;
+}
+.participant-tour h2 {
+  font-size: 1.625rem;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0.5rem 0 0.75rem;
+  text-wrap: balance;
+}
+.participant-tour [hidden] {
+  display: none;
+}
+.participant-tour-target-action,
+.participant-tour-skip {
+  background: transparent;
+  border: 0;
+  padding: 0.5rem 0;
+  min-height: 2.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+}
+.participant-tour-target-action {
+  margin-top: 0.5rem;
+}
+.participant-tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.participant-tour-actions > :last-child {
+  flex: 1;
+}
+.participant-tour--collapsed {
+  padding: 0.5rem 0.75rem;
+}
+.participant-tour--collapsed h2 {
+  font-size: 1.125rem;
+  margin: 0 0 0.25rem;
+}
+@media (max-width: 899px) {
+  .participant-tour {
+    margin-bottom: var(--byzon-safe-bottom);
   }
 }

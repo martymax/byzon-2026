@@ -22,6 +22,12 @@ import {
   readIdempotencyKey,
 } from './api/idempotency';
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
+import {
+  hasParticipantBaseline,
+  questionReadiness,
+  requireModeratorBaseline,
+  requireQuestionFollowUpPreflight,
+} from './question-readiness';
 import { requireWritableAdminEvent } from './admin-event-writability';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 
@@ -31,6 +37,7 @@ const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 const defaultFeatures: AdminEngagementFeatures = {
   networkingEnabled: false,
   questionsEnabled: false,
+  questionFollowUpsEnabled: false,
   ratingsEnabled: false,
 };
 
@@ -111,7 +118,10 @@ const currentFeatures = (
   row:
     | Pick<
         typeof schema.eventFeatures.$inferSelect,
-        'networkingEnabled' | 'questionsEnabled' | 'ratingsEnabled'
+        | 'networkingEnabled'
+        | 'questionsEnabled'
+        | 'questionFollowUpsEnabled'
+        | 'ratingsEnabled'
       >
     | undefined,
 ): AdminEngagementFeatures =>
@@ -119,6 +129,7 @@ const currentFeatures = (
     ? {
         networkingEnabled: row.networkingEnabled,
         questionsEnabled: row.questionsEnabled,
+        questionFollowUpsEnabled: row.questionFollowUpsEnabled,
         ratingsEnabled: row.ratingsEnabled,
       }
     : defaultFeatures;
@@ -141,6 +152,7 @@ const loadOverview = async (
         columns: {
           networkingEnabled: true,
           questionsEnabled: true,
+          questionFollowUpsEnabled: true,
           ratingsEnabled: true,
         },
         where: eq(schema.eventFeatures.eventId, eventId),
@@ -154,7 +166,10 @@ const loadOverview = async (
           title: true,
           version: true,
         },
-        where: eq(schema.programSessions.eventId, eventId),
+        where: and(
+          eq(schema.programSessions.eventId, eventId),
+          eq(schema.programSessions.questionMode, 'moderated_follow_up'),
+        ),
         orderBy: [asc(schema.programSessions.startsAt)],
         limit: 300,
       }),
@@ -196,12 +211,35 @@ const loadOverview = async (
         ),
     ]);
 
+  const readiness = await questionReadiness(db, eventId);
+  const readyCandidates = new Set(
+    (
+      await Promise.all(
+        candidates.map(async (c) =>
+          (await hasParticipantBaseline(db, eventId, c.userId))
+            ? c.userId
+            : null,
+        ),
+      )
+    ).filter(Boolean),
+  );
   return adminEngagementOverviewSchema.parse({
     eventId,
     settingsVersion: settings?.version ?? 1,
     assignmentsVersion: version?.assignmentsVersion ?? 1,
     features: currentFeatures(featureRow),
     sessions: sessions.map((session) => ({
+      ...(() => {
+        const r = readiness.find((r) => r.sessionId === session.id)!;
+        return {
+          endsAt: r.endsAt,
+          roomName: r.roomName,
+          moderatorReady: r.moderatorReady,
+          speakerReady: r.speakerReady,
+          speakerCount: r.speakerCount,
+          readySpeakerCount: r.readySpeakerCount,
+        };
+      })(),
       sessionId: session.id,
       title: session.title,
       startsAt: session.startsAt.toISOString(),
@@ -217,11 +255,13 @@ const loadOverview = async (
           contactEmail: role.email,
         })),
     })),
-    moderatorCandidates: candidates.map((candidate) => ({
-      userId: candidate.userId,
-      displayName: candidate.displayName,
-      contactEmail: candidate.email,
-    })),
+    moderatorCandidates: candidates
+      .filter((c) => readyCandidates.has(c.userId))
+      .map((candidate) => ({
+        userId: candidate.userId,
+        displayName: candidate.displayName,
+        contactEmail: candidate.email,
+      })),
   });
 };
 
@@ -281,11 +321,17 @@ const updateFeatures = async (
     columns: {
       networkingEnabled: true,
       questionsEnabled: true,
+      questionFollowUpsEnabled: true,
       ratingsEnabled: true,
     },
     where: eq(schema.eventFeatures.eventId, context.eventId),
   });
   const before = currentFeatures(beforeRow);
+  if (
+    input.features.questionFollowUpsEnabled &&
+    !before.questionFollowUpsEnabled
+  )
+    await requireQuestionFollowUpPreflight(transaction, context.eventId);
   await transaction
     .insert(schema.eventFeatures)
     .values({
@@ -369,7 +415,13 @@ const updateSessionQuestions = async (
     `admin-session-engagement:${context.eventId}:${input.sessionId}`,
   );
   const current = await transaction.query.programSessions.findFirst({
-    columns: { id: true, questionsEnabled: true, version: true },
+    columns: {
+      id: true,
+      questionsEnabled: true,
+      questionMode: true,
+      status: true,
+      version: true,
+    },
     where: and(
       eq(schema.programSessions.eventId, context.eventId),
       eq(schema.programSessions.id, input.sessionId),
@@ -383,6 +435,16 @@ const updateSessionQuestions = async (
       'The selected session is unavailable.',
     );
   }
+  if (
+    current.questionMode !== 'moderated_follow_up' ||
+    !['draft', 'published'].includes(current.status)
+  )
+    throw problem(
+      409,
+      'ADMIN_INVALID_TRANSITION',
+      'Unsupported session',
+      'Tento blok nepodporuje dotazy.',
+    );
   if (current.version !== input.expectedSessionVersion) {
     throw problem(
       409,
@@ -472,7 +534,7 @@ const updateModerator = async (
     );
   }
   const selectedSession = await transaction.query.programSessions.findFirst({
-    columns: { id: true, questionsEnabled: true, status: true },
+    columns: { id: true, questionMode: true, status: true },
     where: and(
       eq(schema.programSessions.eventId, context.eventId),
       eq(schema.programSessions.id, input.sessionId),
@@ -517,23 +579,17 @@ const updateModerator = async (
         'The selected moderator must have an active event membership.',
       );
     }
-    const feature = await transaction.query.eventFeatures.findFirst({
-      columns: { questionsEnabled: true },
-      where: eq(schema.eventFeatures.eventId, context.eventId),
-    });
+    await requireModeratorBaseline(transaction, context.eventId, input.userId);
     if (
-      !feature?.questionsEnabled ||
-      !selectedSession.questionsEnabled ||
-      selectedSession.status === 'cancelled' ||
-      selectedSession.status === 'archived'
-    ) {
+      selectedSession.questionMode !== 'moderated_follow_up' ||
+      !['draft', 'published'].includes(selectedSession.status)
+    )
       throw problem(
         409,
         'ADMIN_INVALID_TRANSITION',
-        'Questions are not active',
-        'Enable event and session questions before assigning a moderator.',
+        'Unsupported session',
+        'Tento blok nepodporuje dotazy.',
       );
-    }
   }
   const existing = await transaction.query.eventRoles.findFirst({
     where: and(
@@ -741,6 +797,12 @@ export const handleAdminEngagement = async (
           : {}),
       },
       async (transaction) => {
+        await acquireTransactionLock(transaction, `admin-roles:${eventId}`);
+        await authorize(request, eventId, permissions, {
+          ...dependencies,
+          db: transaction as Database,
+        });
+        await requireWritableAdminEvent(transaction, eventId);
         const context = {
           actorId,
           eventId,

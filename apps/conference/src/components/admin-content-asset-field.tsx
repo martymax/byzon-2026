@@ -4,7 +4,7 @@ import type {
   AdminAssetDescriptor,
   AdminAssetPurpose,
 } from '@byzon/domain/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import styles from './admin-workspace.module.css';
 
@@ -12,7 +12,12 @@ type AssetOwner = AdminAssetDescriptor['owner'];
 
 export interface AdminContentAssetFailure {
   readonly kind:
-    'offline' | 'permission' | 'stale' | 'validation' | 'transport';
+    | 'offline'
+    | 'session_expired'
+    | 'permission'
+    | 'stale'
+    | 'validation'
+    | 'transport';
   readonly message: string;
 }
 
@@ -21,6 +26,10 @@ export type AdminContentAssetResult<Value> =
   | { readonly ok: false; readonly failure: AdminContentAssetFailure };
 
 export interface AdminContentAssetPort {
+  readonly download?: (input: {
+    readonly asset: AdminAssetDescriptor;
+    readonly signal?: AbortSignal;
+  }) => Promise<AdminContentAssetResult<Blob>>;
   readonly resolve: (input: {
     readonly eventId: string;
     readonly owner: AssetOwner;
@@ -68,6 +77,10 @@ export const AdminContentAssetField = ({
   eventId,
   owner,
   ownerVersion,
+  onMutation,
+  onBusyChange,
+  onPendingChange,
+  onSecurityFailure,
   port,
   purpose,
   readOnly,
@@ -75,36 +88,91 @@ export const AdminContentAssetField = ({
   readonly eventId: string;
   readonly owner: AssetOwner;
   readonly ownerVersion: number;
+  readonly onMutation?: (version: number) => void;
+  readonly onBusyChange?: (busy: boolean) => void;
+  readonly onPendingChange?: (pending: boolean) => void;
+  readonly onSecurityFailure?: (failure: AdminContentAssetFailure) => void;
   readonly port?: AdminContentAssetPort;
   readonly purpose: AdminAssetPurpose;
   readonly readOnly: boolean;
 }) => {
   const copy = purposeCopy[purpose];
   const [asset, setAsset] = useState<AdminAssetDescriptor | null>(null);
-  const [busy, setBusy] = useState<'read' | 'replace' | 'remove' | null>(
-    port ? 'read' : null,
-  );
+  const [busy, setBusy] = useState<
+    'read' | 'replace' | 'remove' | 'download' | null
+  >(port ? 'read' : null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [altText, setAltText] = useState('');
   const [currentOwnerVersion, setCurrentOwnerVersion] = useState(ownerVersion);
   const controller = useRef<AbortController | null>(null);
 
+  const securityFailure = useRef(onSecurityFailure);
+  useEffect(() => {
+    securityFailure.current = onSecurityFailure;
+  }, [onSecurityFailure]);
+  const reportFailure = useCallback((failure: AdminContentAssetFailure) => {
+    setError(failure.message);
+    if (failure.kind === 'permission' || failure.kind === 'session_expired')
+      securityFailure.current?.(failure);
+  }, []);
+  useEffect(() => {
+    onBusyChange?.(busy !== null);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
+  useEffect(() => {
+    onPendingChange?.(file !== null);
+    return () => onPendingChange?.(false);
+  }, [file, onPendingChange]);
+  useEffect(() => () => controller.current?.abort(), []);
+
   useEffect(() => {
     if (!port) return;
     const request = new AbortController();
     controller.current = request;
-    void port
-      .resolve({ eventId, owner, purpose, signal: request.signal })
-      .then((result) => {
-        if (request.signal.aborted) return;
-        setBusy(null);
-        if (result.ok) setAsset(result.data);
-        else setError(result.failure.message);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      const result = await port.resolve({
+        eventId,
+        owner: { kind: owner.kind, id: owner.id },
+        purpose,
+        signal: request.signal,
       });
-    return () => request.abort();
-  }, [eventId, owner, port, purpose]);
+      if (request.signal.aborted) return;
+      setBusy((current) => (current === 'read' ? null : current));
+      if (result.ok) {
+        setAsset(result.data);
+        setPreviewFailed(false);
+        if (result.data?.preview) {
+          const delay = Math.max(
+            30_000,
+            new Date(result.data.preview.expiresAt).getTime() -
+              Date.now() -
+              30_000,
+          );
+          timer = setTimeout(() => void refresh(), delay);
+        }
+      } else reportFailure(result.failure);
+    };
+    void refresh();
+    return () => {
+      request.abort();
+      clearTimeout(timer);
+    };
+  }, [
+    eventId,
+    owner.id,
+    owner.kind,
+    ownerVersion,
+    currentOwnerVersion,
+    port,
+    purpose,
+    reportFailure,
+  ]);
 
   const replace = async () => {
     if (!port || busy || readOnly) return;
@@ -131,10 +199,11 @@ export const AdminContentAssetField = ({
     setBusy('replace');
     setProgress(0);
     setError('');
+    setNotice('');
     const result = await port.replace({
       altText: altText.trim(),
       eventId,
-      expectedOwnerVersion: currentOwnerVersion,
+      expectedOwnerVersion: Math.max(currentOwnerVersion, ownerVersion),
       file,
       onProgress: setProgress,
       owner,
@@ -145,11 +214,17 @@ export const AdminContentAssetField = ({
     setBusy(null);
     if (result.ok) {
       setAsset(result.data.asset);
+      setPreviewFailed(false);
       setCurrentOwnerVersion(result.data.ownerVersion);
+      onMutation?.(result.data.ownerVersion);
       setProgress(100);
       setFile(null);
       setAltText('');
-    } else setError(result.failure.message);
+      if (fileInput.current) fileInput.current.value = '';
+      setNotice(
+        'Obrázek byl uložen. Na webu se změna projeví po zveřejnění obsahu.',
+      );
+    } else reportFailure(result.failure);
   };
 
   const remove = async () => {
@@ -160,15 +235,50 @@ export const AdminContentAssetField = ({
     setError('');
     const result = await port.remove({
       asset,
-      expectedOwnerVersion: currentOwnerVersion,
+      expectedOwnerVersion: Math.max(currentOwnerVersion, ownerVersion),
       signal: request.signal,
     });
     if (request.signal.aborted) return;
     setBusy(null);
     if (result.ok) {
       setAsset(null);
+      setNotice(
+        'Obrázek byl odebrán z rozpracovaného obsahu. Změnu ještě zveřejněte.',
+      );
       setCurrentOwnerVersion(result.data.ownerVersion);
-    } else setError(result.failure.message);
+      onMutation?.(result.data.ownerVersion);
+    } else reportFailure(result.failure);
+  };
+
+  const download = async () => {
+    if (!asset || !port?.download || busy) return;
+    const request = new AbortController();
+    controller.current = request;
+    setBusy('download');
+    setError('');
+    const result = await port.download({ asset, signal: request.signal });
+    if (request.signal.aborted) return;
+    setBusy(null);
+    if (!result.ok) {
+      reportFailure(result.failure);
+      return;
+    }
+    const url = URL.createObjectURL(result.data);
+    const link = document.createElement('a');
+    link.href = url;
+    const extension = {
+      'image/webp': 'webp',
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/svg+xml': 'svg',
+      'image/gif': 'gif',
+      'image/avif': 'avif',
+    }[asset.contentType];
+    link.download = `${purpose === 'partner_logo' ? 'logo' : 'fotografie'}.${extension}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
   };
 
   return (
@@ -183,6 +293,7 @@ export const AdminContentAssetField = ({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={asset.altText}
+            onError={() => setPreviewFailed(true)}
             referrerPolicy="no-referrer"
             src={asset.preview.url}
           />
@@ -193,23 +304,38 @@ export const AdminContentAssetField = ({
           <strong>
             {busy === 'read'
               ? 'Načítám bezpečný náhled…'
-              : asset?.status === 'failed'
+              : previewFailed || asset?.status === 'failed'
                 ? 'Obrázek se nepodařilo zpracovat'
                 : asset
-                  ? 'Bezpečný náhled je dostupný'
+                  ? `${copy.label} je uložen${purpose === 'speaker_photo' ? 'a' : 'o'}`
                   : copy.unavailable}
           </strong>
           <span>
             {port
               ? readOnly
                 ? 'Archivovaný obsah je pouze ke čtení.'
-                : 'Náhled je krátkodobý a v prohlížeči se trvale neukládá.'
+                : 'Obrázek se ukládá samostatně. Poté změnu zveřejněte spolu s obsahem.'
               : 'Nahrání se zobrazí až po připojení autorizovaného resolveru.'}
           </span>
         </p>
       </div>
 
       {error ? <p role="alert">{error}</p> : null}
+      {notice ? <p role="status">{notice}</p> : null}
+      {asset && port?.download ? (
+        <button
+          className={styles.secondaryButton}
+          disabled={busy !== null}
+          onClick={() => void download()}
+          type="button"
+        >
+          {busy === 'download'
+            ? 'Stahuji…'
+            : purpose === 'partner_logo'
+              ? 'Stáhnout logo'
+              : 'Stáhnout fotografii'}
+        </button>
+      ) : null}
       {busy === 'replace' ? (
         <label className={styles.assetProgress}>
           <span>Nahrávání obrázku: {progress} %</span>
@@ -225,6 +351,7 @@ export const AdminContentAssetField = ({
               accept="image/jpeg,image/png,image/webp"
               disabled={busy !== null}
               name="assetFile"
+              ref={fileInput}
               onChange={(event) => {
                 event.stopPropagation();
                 setFile(event.target.files?.[0] ?? null);

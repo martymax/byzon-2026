@@ -216,9 +216,9 @@ export const dispatchSupportedOutboxOnce = async (
   try {
     await db.transaction(async (transaction) => {
       if (event.type === 'program.changed') {
-        // Publication diffs are informational by default. They are consumed
-        // without creating a draft; only an organizer's explicit critical
-        // announcement preview/send action may materialize recipients.
+        // Targeted program emails are enqueued atomically with the publication
+        // in email_deliveries. This legacy event remains informational and
+        // must not create a second delivery or an organizer announcement.
         await transaction
           .update(schema.outboxEvents)
           .set({
@@ -230,6 +230,13 @@ export const dispatchSupportedOutboxOnce = async (
           .where(eq(schema.outboxEvents.id, event.id));
         return;
       }
+      // A deletion can redact audit history and expire old snapshots. Hold the
+      // same event lock until the new export is committed so it cannot restore
+      // a snapshot generated just before that redaction.
+      await acquireTransactionLock(
+        transaction,
+        `operational-export:${event.eventId}`,
+      );
       const request =
         await transaction.query.operationalExportRequests.findFirst({
           where: and(

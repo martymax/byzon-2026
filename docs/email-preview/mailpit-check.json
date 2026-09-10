@@ -1,0 +1,463 @@
+{
+  "checkedAt": "2026-09-09T10:31:10.532Z",
+  "baseline": {
+    "Tests": 187,
+    "Nodes": 52,
+    "Supported": 86.94331,
+    "Partial": 11.133602,
+    "Unsupported": 1.9230769
+  },
+  "reports": [
+    {
+      "template": "account-activation",
+      "total": {
+        "Tests": 187,
+        "Nodes": 47,
+        "Supported": 88.017914,
+        "Partial": 9.854423,
+        "Unsupported": 2.1276596
+      },
+      "warnings": 23
+    },
+    {
+      "template": "announcement",
+      "total": {
+        "Tests": 187,
+        "Nodes": 48,
+        "Supported": 88.26754,
+        "Partial": 9.649122,
+        "Unsupported": 2.0833333
+      },
+      "warnings": 23
+    },
+    {
+      "template": "participant-invitation",
+      "total": {
+        "Tests": 187,
+        "Nodes": 57,
+        "Supported": 88.76577,
+        "Partial": 9.479839,
+        "Unsupported": 1.754386
+      },
+      "warnings": 23
+    },
+    {
+      "template": "program_changed",
+      "total": {
+        "Tests": 187,
+        "Nodes": 57,
+        "Supported": 88.088646,
+        "Partial": 10.156971,
+        "Unsupported": 1.754386
+      },
+      "warnings": 23
+    },
+    {
+      "template": "rating_reminder",
+      "total": {
+        "Tests": 187,
+        "Nodes": 46,
+        "Supported": 87.75744,
+        "Partial": 10.068649,
+        "Unsupported": 2.173913
+      },
+      "warnings": 23
+    },
+    {
+      "template": "reservation_cancelled",
+      "total": {
+        "Tests": 187,
+        "Nodes": 56,
+        "Supported": 88.56516,
+        "Partial": 9.649122,
+        "Unsupported": 1.7857143
+      },
+      "warnings": 23
+    },
+    {
+      "template": "reservation_confirmed",
+      "total": {
+        "Tests": 187,
+        "Nodes": 56,
+        "Supported": 88.56516,
+        "Partial": 9.649122,
+        "Unsupported": 1.7857143
+      },
+      "warnings": 23
+    },
+    {
+      "template": "sign-in",
+      "total": {
+        "Tests": 187,
+        "Nodes": 47,
+        "Supported": 88.017914,
+        "Partial": 9.854423,
+        "Unsupported": 2.1276596
+      },
+      "warnings": 23
+    },
+    {
+      "template": "team-invitation",
+      "total": {
+        "Tests": 187,
+        "Nodes": 57,
+        "Supported": 88.76577,
+        "Partial": 9.479839,
+        "Unsupported": 1.754386
+      },
+      "warnings": 23
+    },
+    {
+      "template": "waitlist_joined",
+      "total": {
+        "Tests": 187,
+        "Nodes": 56,
+        "Supported": 88.56516,
+        "Partial": 9.649122,
+        "Unsupported": 1.7857143
+      },
+      "warnings": 23
+    },
+    {
+      "template": "waitlist_left",
+      "total": {
+        "Tests": 187,
+        "Nodes": 56,
+        "Supported": 88.56516,
+        "Partial": 9.649122,
+        "Unsupported": 1.7857143
+      },
+      "warnings": 23
+    },
+    {
+      "template": "waitlist_promoted",
+      "total": {
+        "Tests": 187,
+        "Nodes": 56,
+        "Supported": 88.56516,
+        "Partial": 9.649122,
+        "Unsupported": 1.7857143
+      },
+      "warnings": 23
+    }
+  ],
+  "warningDetails": [
+    {
+      "title": "margin",
+      "score": {
+        "Found": 14,
+        "Supported": 61.403507,
+        "Partial": 38.59649,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial. Negative values are not supported.",
+        "2": "Partial. Not supported on <code>&lt;span&gt;</code> and <code>&lt;body&gt;</code> elements.",
+        "3": "Buggy. <code>background-color</code> is included inside the <code>margin</code>.",
+        "4": "Partial. <code>auto</code> value is not supported."
+      }
+    },
+    {
+      "title": "line-height",
+      "score": {
+        "Found": 13,
+        "Supported": 82.97873,
+        "Partial": 17.021276,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Buggy. <code>em</code> and <code>px</code> units behave weirdly. Use <code>mso-line-height-rule:exactly</code>.",
+        "2": "Partial. <code>normal</code> value is not supported."
+      }
+    },
+    {
+      "title": "overflow-wrap",
+      "score": {
+        "Found": 2,
+        "Supported": 15.789473,
+        "Partial": 34.210526,
+        "Unsupported": 50
+      },
+      "notes": {
+        "1": "Buggy. Requires <code>word-break:normal</code> to reset Apple Mail default style (See <a href=\"https://github.com/hteumeuleu/caniemail/issues/394\" target=\"_blank\">issue#394</a>.)"
+      }
+    },
+    {
+      "title": "padding",
+      "score": {
+        "Found": 13,
+        "Supported": 88.2353,
+        "Partial": 11.764706,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial. Only supported on table cells.",
+        "2": "Buggy. Vertical padding will be the same for all cells of a same row, adopting the biggest value."
+      }
+    },
+    {
+      "title": "word-break",
+      "score": {
+        "Found": 2,
+        "Supported": 27.659575,
+        "Partial": 42.553192,
+        "Unsupported": 29.787233
+      },
+      "notes": {
+        "1": "Supported. But Gmail adds <code>&lt;wbr&gt;</code> every 30 characters.",
+        "2": "Buggy. Supported but a <code>word-wrap:break-word</code> is applied, making it look like <code>break-all</code>.",
+        "3": "Partially supported. Only <code>word-break:break-all</code> works.",
+        "4": "Buggy. Every value is replaced by <code>break-word</code>."
+      }
+    },
+    {
+      "title": "border-radius",
+      "score": {
+        "Found": 4,
+        "Supported": 64.15094,
+        "Partial": 24.528303,
+        "Unsupported": 11.320755
+      },
+      "notes": {
+        "1": "Round corners can be used in VML with the <code>RoundRect</code> element. See <a href=\"https://buttons.cm/\" target=\"_blank\">buttons.cm</a> and <a href=\"https://docs.microsoft.com/en-us/windows/win32/vml/msdn-online-vml-roundrect-element\" target=\"_blank\">VML documentation</a>.",
+        "2": "Partial support. Shorthand for setting elliptical borders with the slash <code>/</code> notation is not supported e.g. <code>border-radius: 27% 73% 70% 30% / 30% 34% 66% 70%;</code>."
+      }
+    },
+    {
+      "title": "font-weight",
+      "score": {
+        "Found": 6,
+        "Supported": 76.5625,
+        "Partial": 23.4375,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial support. <code>&lt;number&gt;</code> values are not supported as per CSS Fonts Level 4 where any <code>&lt;number&gt;</code> value between 1 and 1000 (inclusive) is a valid value. Only the following numeric values are supported: 100, 200, 300, 400, 500, 600, 700, 800, and 900.",
+        "2": "Partial support. <code>&lt;number&gt;</code> values between 0 and 599 are set as normal font weight. <code>&lt;number&gt;</code> values between 600 and 1000 are set as bold font weight."
+      }
+    },
+    {
+      "title": "@media",
+      "score": {
+        "Found": 2,
+        "Supported": 31.88406,
+        "Partial": 46.376812,
+        "Unsupported": 21.73913
+      },
+      "notes": {
+        "1": "Partial. Does not support nested media queries.",
+        "2": "Partial. Only supports <code>screen</code>, <code>min-width</code>, <code>max-width</code>, <code>min-height</code> and <code>max-height</code> based media queries.",
+        "3": "Buggy. Requires a double <code>&lt;head&gt;</code> hack to work.",
+        "4": "Partial. Does not support simple <code>@media {}</code> declarations.",
+        "5": "Buggy. The first rule inside a media query is not prefixed.",
+        "6": "Partial. Not supported with non Google accounts.",
+        "7": "Partial. Does not support height based media queries.",
+        "8": "Partial. Does not support landscape media query.",
+        "9": "Partial. Not supported with Hotmail/Outlook accounts.",
+        "10": "Partial. Nested media queries are removed."
+      }
+    },
+    {
+      "title": "display",
+      "score": {
+        "Found": 3,
+        "Supported": 56.521736,
+        "Partial": 43.47826,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial. <code>flex</code>, <code>grid</code>, <code>flow-root</code>, <code>contents</code>, <code>inline flow-root</code>, <code>inline flex</code>, <code>inline grid</code>, <code>initial</code>, <code>revert</code>, <code>unset</code> are not supported with non Google accounts.",
+        "2": "Partial. <code>inline-flex</code>, <code>inline-grid</code>, <code>flex</code>, <code>grid</code>, <code>flow-root</code>, <code>contents</code>, <code>inline flow-root</code>, <code>inline flex</code>, <code>inline grid</code>, <code>initial</code>, <code>revert</code>, <code>unset</code> values are not supported.",
+        "3": "Buggy. Only the first value is kept with the two-value syntax.",
+        "4": "Buggy. <code>display:none</code> does not inherit to inner tables.",
+        "5": "Partial. Only supports <code>display:none</code> (but not on <code>&lt;img&gt;</code>).",
+        "6": "Partial. <code>flow-root</code>, <code>inline-flex</code>, <code>inline-grid</code>, <code>inline flow</code>, <code>contents</code>, <code>revert</code> are not supported.",
+        "7": "Partial. Two-value syntax are combined into a single one with a dash."
+      }
+    },
+    {
+      "title": "table-layout",
+      "score": {
+        "Found": 2,
+        "Supported": 59.574467,
+        "Partial": 25.531916,
+        "Unsupported": 14.893617
+      },
+      "notes": {
+        "1": "Not supported. All tables are forced to <code>table-layout:fixed</code>."
+      }
+    },
+    {
+      "title": "background-color",
+      "score": {
+        "Found": 8,
+        "Supported": 90.196075,
+        "Partial": 9.803922,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Buggy. Only supports <a href=\"https://developer.mozilla.org/en-US/docs/Web/CSS/color_value#color_keywords\" target=\"_blank\">color keywords from CSS Level 1</a>."
+      }
+    },
+    {
+      "title": "height property",
+      "score": {
+        "Found": 3,
+        "Supported": 78,
+        "Partial": 22,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Buggy. Replaces <code>height</code> by <code>min-height</code>.",
+        "2": "Partial. Not supported on <code>&lt;body&gt;</code>, <code>&lt;span&gt;</code>, <code>&lt;div&gt;</code> or <code>&lt;p&gt;</code> elements."
+      }
+    },
+    {
+      "title": "text-decoration",
+      "score": {
+        "Found": 2,
+        "Supported": 68.75,
+        "Partial": 25,
+        "Unsupported": 6.25
+      },
+      "notes": {
+        "1": "Partial. Not supported with non Google accounts.",
+        "2": "Partial. Not supported with multiple values.",
+        "3": "Partial. <code>overline</code> is not supported.",
+        "4": "Partial. Only supports the line property, not style, color or thickness.",
+        "5": "Partial. Only supports style, color or thickness when written with long hand selectors."
+      }
+    },
+    {
+      "title": "<body> element",
+      "score": {
+        "Found": 1,
+        "Supported": 38.77551,
+        "Partial": 28.57143,
+        "Unsupported": 32.65306
+      },
+      "notes": {
+        "1": "Partial. Replaced by a <code>&lt;div&gt;</code> with supported attributes."
+      }
+    },
+    {
+      "title": "width property",
+      "score": {
+        "Found": 5,
+        "Supported": 88,
+        "Partial": 12,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial. Not supported on <code>&lt;body&gt;</code>, <code>&lt;span&gt;</code>, <code>&lt;div&gt;</code>, <code>&lt;p&gt;</code> or <code>&lt;img&gt;</code> elements.",
+        "2": "Buggy. The webmail has a generic style that sets <code>table { width:inherit; }</code>."
+      }
+    },
+    {
+      "title": "overflow",
+      "score": {
+        "Found": 1,
+        "Supported": 47.5,
+        "Partial": 41.25,
+        "Unsupported": 11.25
+      },
+      "notes": {
+        "1": "Buggy. Cannot scroll through to hidden content.",
+        "2": "Not supported. <code>overflow</code> is replaced by <code>java-script</code>.",
+        "3": "Partial. Support for <code>overflow-block</code> &amp; <code>overflow-inline</code> depends on browser support.",
+        "4": "Partial. <code>overflow-block</code> &amp; <code>overflow-inline</code> not supported."
+      }
+    },
+    {
+      "title": ":focus",
+      "score": {
+        "Found": 1,
+        "Supported": 49.019608,
+        "Partial": 5.882353,
+        "Unsupported": 45.098038
+      },
+      "notes": {
+        "1": "Partial. Only supported on type selectors."
+      }
+    },
+    {
+      "title": "max-width",
+      "score": {
+        "Found": 2,
+        "Supported": 78.57143,
+        "Partial": 14.285715,
+        "Unsupported": 7.1428576
+      },
+      "notes": {
+        "1": "Partial. Only works on <code>&lt;table&gt;</code> elements.",
+        "2": "Partial. Doesn&rsquo;t work on <code>&lt;table&gt;</code> elements, as per <a href=\"https://www.w3.org/TR/CSS2/visudet.html#min-max-widths\" target=\"_blank\">CSS 2.1 specification</a>."
+      }
+    },
+    {
+      "title": "<style> element",
+      "score": {
+        "Found": 1,
+        "Supported": 61.11111,
+        "Partial": 18.88889,
+        "Unsupported": 20
+      },
+      "notes": {
+        "1": "Partial. Not supported inside the <code>&lt;body&gt;</code>.",
+        "2": "Partial. Not supported with non Google accounts.",
+        "3": "Buggy. The first <code>&lt;head&gt;</code> in the HTML is removed, so <code>&lt;style&gt;</code> elements need to be in a second <code>&lt;head&gt;</code> element.",
+        "4": "Buggy. <code>&lt;style&gt;</code> elements need to be declared before their rules are used.",
+        "5": "A CSS rule following a CSS comment is ignored. (See <a href=\"https://github.com/hteumeuleu/email-bugs/issues/25\" target=\"_blank\">email-bugs#25</a>.)",
+        "6": "The size of the <code>&lt;style&gt;</code> tag <a href=\"https://github.com/hteumeuleu/email-bugs/issues/90\" target=\"_blank\">is limited to 16 KB</a>"
+      }
+    },
+    {
+      "title": "border",
+      "score": {
+        "Found": 3,
+        "Supported": 87.23405,
+        "Partial": 12.765958,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial. A border can not be bigger than 8px.",
+        "2": "Buggy. Unreliable if used on a <code>&lt;p&gt;</code> or a <code>&lt;div&gt;</code>."
+      }
+    },
+    {
+      "title": "display:none",
+      "score": {
+        "Found": 1,
+        "Supported": 85.106384,
+        "Partial": 12.765958,
+        "Unsupported": 2.1276596
+      },
+      "notes": {
+        "1": "Partial. Does not inherit onto nested <code>&lt;table&gt;</code> elements.",
+        "2": "Partial. Does not work when applied directly to an <code>&lt;img&gt;</code> element."
+      }
+    },
+    {
+      "title": "max-height property",
+      "score": {
+        "Found": 1,
+        "Supported": 87.5,
+        "Partial": 0,
+        "Unsupported": 12.5
+      },
+      "notes": {}
+    },
+    {
+      "title": "letter-spacing",
+      "score": {
+        "Found": 1,
+        "Supported": 87.755104,
+        "Partial": 12.244898,
+        "Unsupported": 0
+      },
+      "notes": {
+        "1": "Partial. Big negative values are rendered differently from CSS standards.",
+        "2": "Buggy. Values set in <code>em</code> are smaller than the expected render in CSS. See <a href=\"https://github.com/hteumeuleu/caniemail/issues/192\" target=\"_blank\">#192</a>."
+      }
+    }
+  ]
+}

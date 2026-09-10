@@ -61,6 +61,23 @@ const response = (body: unknown, status = 200) =>
   });
 
 describe('admin content fetch port', () => {
+  it.each(['disabled', 'moderated_follow_up'] as const)(
+    'preserves Q&A capability %s when parsing the program list',
+    async (questionMode) => {
+      const port = createFetchAdminContentPort(async () =>
+        response({
+          resource: 'sessions',
+          items: [{ ...sessionItem(), questionMode }],
+          requestId: 'admin-content-test-0001',
+        }),
+      );
+      await expect(port.list(ids.event, 'sessions')).resolves.toMatchObject({
+        ok: true,
+        data: { items: [{ id: ids.item, questionMode }] },
+      });
+    },
+  );
+
   it('performs an event-correlated no-store list read', async () => {
     const fetcher = vi.fn(async () =>
       response({

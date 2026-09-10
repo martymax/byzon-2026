@@ -20,12 +20,14 @@ export const MagicLinkLogin = ({
   directEmailLogin = false,
   fetch = globalThis.fetch,
   invalidLink = false,
+  recovery = false,
   navigate = (destination) => window.location.assign(destination),
   returnTo = POST_LOGIN_DESTINATION,
 }: {
   readonly directEmailLogin?: boolean;
   readonly fetch?: typeof globalThis.fetch;
   readonly invalidLink?: boolean;
+  readonly recovery?: boolean;
   readonly navigate?: (destination: AuthReturnTo) => void;
   readonly returnTo?: AuthReturnTo;
 }) => {
@@ -36,6 +38,7 @@ export const MagicLinkLogin = ({
   const [submitting, setSubmitting] = useState(false);
   const submitLocked = useRef(false);
   const feedback = useRef<HTMLDivElement>(null);
+  const recovering = !directEmailLogin && (recovery || invalidLink);
 
   const focusFeedback = () => {
     requestAnimationFrame(() => {
@@ -77,7 +80,7 @@ export const MagicLinkLogin = ({
               : {
                   email: normalizedEmail,
                   callbackURL: returnTo,
-                  errorCallbackURL: `/prihlaseni?returnTo=${encodeURIComponent(returnTo)}`,
+                  errorCallbackURL: `/prihlaseni?${recovering ? 'mode=recovery&' : ''}returnTo=${encodeURIComponent(returnTo)}`,
                 },
           ),
           cache: 'no-store',
@@ -127,10 +130,23 @@ export const MagicLinkLogin = ({
             title="Pokud je účet připravený, odkaz byl odeslán"
           >
             <p data-login-feedback tabIndex={-1}>
-              Odpověď je stejná pro existující i neexistující účet. Aktivační
-              odkaz platí 24 hodin, odkaz pro další přihlášení 30 minut.
+              Aktivační odkaz platí 24 hodin od nového odeslání, odkaz pro další
+              přihlášení 30 minut. Zkontrolujte také složku se spamem.
             </p>
           </StatePanel>
+          <div className="activation-form-actions">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSent(false);
+                requestAnimationFrame(() =>
+                  document.getElementById('login-email')?.focus(),
+                );
+              }}
+            >
+              Vyžádat další odkaz
+            </Button>
+          </div>
         </div>
       </section>
     );
@@ -141,12 +157,14 @@ export const MagicLinkLogin = ({
       <header>
         <p className="eyebrow">Konferenční aplikace</p>
         <h1 data-route-heading tabIndex={-1}>
-          Přihlaste se do BYZON
+          {recovering ? 'Vyžádejte si nový odkaz' : 'Přihlaste se do BYZON'}
         </h1>
         <p className="lead">
           {directEmailLogin
             ? 'Na stagingu stačí zadat e-mail existujícího účtu. Přihlašovací odkaz neposíláme.'
-            : 'Pošleme vám jednorázový odkaz. Pro nový účet platí 24 hodin, pro další přihlášení 30 minut. Heslo nepotřebujete.'}
+            : recovering
+              ? 'Zadejte e-mail, na který jste dostali pozvánku. Pošleme vám nový odkaz k dokončení aktivace s novou platností 24 hodin. Pokud už máte účet aktivovaný, dostanete přihlašovací odkaz na 30 minut.'
+              : 'Pošleme vám jednorázový odkaz. Pro nový účet platí 24 hodin, pro další přihlášení 30 minut. Heslo nepotřebujete.'}
         </p>
       </header>
 
@@ -157,7 +175,7 @@ export const MagicLinkLogin = ({
               <p>
                 {directEmailLogin
                   ? 'Odkaz vypršel nebo už byl použit. Na stagingu pokračujte zadáním e-mailu.'
-                  : 'Odkaz vypršel nebo už byl použit. Zadejte svůj e-mail a pošleme vám nový; stav účtu přitom nikomu neprozradíme.'}
+                  : 'Odkaz vypršel nebo už byl použit. Nový si můžete vyžádat níže bez pomoci pořadatele.'}
               </p>
             </Alert>
           </div>
@@ -192,7 +210,7 @@ export const MagicLinkLogin = ({
                       ? 'Přihlášení vyžaduje připojení k internetu.'
                       : directEmailLogin
                         ? 'Požadavek se nepodařilo dokončit. Zkuste to prosím znovu.'
-                        : 'Zkontrolujte e-mailovou službu a požadavek potom zopakujte.'}
+                        : 'Požadavek se nepodařilo dokončit. Zkuste to prosím znovu za chvíli.'}
               </p>
             </Alert>
           </div>
@@ -228,7 +246,11 @@ export const MagicLinkLogin = ({
             loadingLabel={directEmailLogin ? 'Přihlašuji…' : 'Odesílám…'}
             type="submit"
           >
-            {directEmailLogin ? 'Přihlásit se' : 'Poslat přihlašovací odkaz'}
+            {directEmailLogin
+              ? 'Přihlásit se'
+              : recovering
+                ? 'Poslat nový odkaz'
+                : 'Poslat přihlašovací odkaz'}
           </Button>
         </div>
       </form>

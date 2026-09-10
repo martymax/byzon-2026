@@ -107,6 +107,45 @@ beforeEach(() => {
 });
 
 describe('admin content user journeys', () => {
+  it('selects program rows and saves a bulk change from a single focused dialog', async () => {
+    const port = createAdminContentPreviewPort({ eventId });
+    const save = vi.fn(port.save);
+    const screen = await renderContent({ port: { ...port, save } });
+    await screen
+      .getByRole('checkbox', {
+        name: 'Vybrat: Otevření konference',
+        exact: true,
+      })
+      .click();
+    expect(
+      screen.getByText('Otevření konference', { exact: true }).elements(),
+    ).toHaveLength(1);
+    await screen.getByRole('button', { name: 'Upravit vybrané' }).click();
+    await expectComponentToPassAxe(contentRoot());
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
+    await screen.getByRole('menuitem', { name: 'Změnit typ programu' }).click();
+    expect(screen.getByRole('dialog').elements()).toHaveLength(1);
+    await screen
+      .getByRole('combobox', { name: 'Typ programu' })
+      .selectOptions('panel');
+    await screen.getByRole('button', { name: 'Provést změnu (1)' }).click();
+    await expect
+      .element(screen.getByText('Hotovo. Změna provedena u 1 položky.'))
+      .toBeVisible();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0]![0].body).toMatchObject({ type: 'panel' });
+    await expect
+      .element(
+        screen.getByRole('checkbox', {
+          name: 'Vybrat: Otevření konference',
+          exact: true,
+        }),
+      )
+      .not.toBeChecked();
+  });
+
   it('opens a focused speaker environment with profiles and program pairing', async () => {
     window.history.replaceState({}, '', '/admin/recnici');
     const screen = await renderContent({
@@ -126,7 +165,9 @@ describe('admin content user journeys', () => {
     await screen
       .getByRole('searchbox', { name: 'Filtrovat řečníky' })
       .fill('Example');
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByRole('dialog', { name: 'Alex Novák' }))
@@ -154,9 +195,56 @@ describe('admin content user journeys', () => {
     const screen = await renderContent();
 
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    const selectedType = screen
+      .getByRole('button', { name: 'Body programu', exact: true })
+      .element();
+    expect(getComputedStyle(selectedType).minHeight).toBe('44px');
+    expect(getComputedStyle(selectedType).backgroundColor).not.toBe(
+      'rgba(0, 0, 0, 0)',
+    );
+
+    await screen
+      .getByRole('searchbox', { name: 'Hledat podle názvu' })
+      .fill('nenalezitelný název');
+    await expect
+      .element(
+        screen.getByText('Žádný bod programu neodpovídá zvoleným filtrům.'),
+      )
+      .toBeVisible();
+    await screen.getByRole('button', { name: 'Vymazat filtry' }).click();
+    await expect.element(screen.getByText('Otevření konference')).toBeVisible();
+    const qrButton = screen.getByRole('button', {
+      name: 'Zobrazit QR programu: Otevření konference',
+    });
+    await qrButton.click();
+    const qrDialog = screen.getByRole('dialog', {
+      name: 'Otevření konference',
+    });
+    await expect.element(qrDialog).toBeVisible();
+    await expect
+      .element(qrDialog.getByRole('link', { name: 'Stáhnout SVG' }))
+      .toHaveAttribute(
+        'href',
+        expect.stringContaining('target=program&format=svg'),
+      );
+    await expect
+      .element(qrDialog.getByRole('link', { name: 'Stáhnout PNG' }))
+      .toHaveAttribute(
+        'href',
+        expect.stringContaining('target=program&format=png'),
+      );
+    await expectComponentToPassAxe(contentRoot());
+    await userEvent.keyboard('{Escape}');
+    await expect.element(qrDialog).not.toBeInTheDocument();
+    await expect.element(qrButton).toHaveFocus();
+
     await expect.element(screen.getByText('Pátek · 9:00–10:00')).toBeVisible();
-    await expect.element(screen.getByText('Main Stage')).toBeVisible();
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Main Stage'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     expect(
       screen.getByText('Ve zveřejněné verzi').elements().length,
     ).toBeGreaterThan(0);
@@ -301,7 +389,9 @@ describe('admin content user journeys', () => {
     const screen = await renderContent();
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
     selectArea('speakers');
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByRole('textbox', { name: 'Pozice nebo role' }))
@@ -369,7 +459,7 @@ describe('admin content user journeys', () => {
       .element(screen.getByRole('heading', { name: 'Archivovat obsah?' }))
       .toBeVisible();
     expect(document.body.textContent).not.toContain('Trvale smazat');
-    await screen.getByRole('checkbox').click();
+    await screen.getByRole('dialog').getByRole('checkbox').click();
     await screen.getByRole('button', { name: 'Archivovat položku' }).click();
     await screen.getByRole('button', { name: 'Archiv', exact: true }).click();
     await expect
@@ -418,7 +508,7 @@ describe('admin content user journeys', () => {
       .toHaveFocus();
     const confirm = screen.getByRole('button', { name: 'Zveřejnit změny' });
     expect((await confirm.element()).className).not.toContain('danger');
-    await screen.getByRole('checkbox').click();
+    await screen.getByRole('dialog').getByRole('checkbox').click();
     await confirm.click();
     await expect
       .element(screen.getByText(/Změny byly zveřejněné/))
@@ -443,7 +533,7 @@ describe('admin content user journeys', () => {
     await screen
       .getByRole('button', { name: 'Pokračovat ke zveřejnění' })
       .click();
-    await screen.getByRole('checkbox').click();
+    await screen.getByRole('dialog').getByRole('checkbox').click();
     await screen.getByRole('button', { name: 'Zveřejnit změny' }).click();
     await expect
       .element(
@@ -486,7 +576,7 @@ describe('admin content user journeys', () => {
     await screen
       .getByRole('button', { name: 'Pokračovat ke zveřejnění' })
       .click();
-    await screen.getByRole('checkbox').click();
+    await screen.getByRole('dialog').getByRole('checkbox').click();
     await screen.getByRole('button', { name: 'Zveřejnit změny' }).click();
     await screen.getByRole('button', { name: 'Načíst aktuální stav' }).click();
 
@@ -537,7 +627,9 @@ describe('admin content user journeys', () => {
     });
     await expect.element(screen.getByText('Otevření konference')).toBeVisible();
     selectArea('speakers');
-    await expect.element(screen.getByText('Alex Novák')).toBeVisible();
+    await expect
+      .element(screen.getByRole('listitem').getByText('Alex Novák'))
+      .toBeVisible();
     await screen.getByRole('button', { name: 'Upravit: Alex Novák' }).click();
     await expect
       .element(screen.getByText('Fotografie řečníka zatím není dostupná'))

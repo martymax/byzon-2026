@@ -10,6 +10,8 @@ import {
 } from '@byzon/database';
 import {
   adminParticipantDetailSchema,
+  adminParticipantDeleteRequestSchema,
+  adminParticipantDeleteResponseSchema,
   adminParticipantCreateRequestSchema,
   adminParticipantCreateResponseSchema,
   adminParticipantInviteRequestSchema,
@@ -52,6 +54,7 @@ import type { AdminSupportRateLimiter } from './admin-support-rate-limit';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 import { promoteAutomaticWaitlist } from './reservation-waitlist';
+import { deleteParticipantData } from './participant-deletion';
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 const uuidSchema = z.string().uuid();
@@ -787,6 +790,141 @@ export const handleAdminParticipantCreate = async (
         }),
         {
           status: result.replayed ? 200 : result.status,
+          headers: {
+            ...privateHeaders(requestId),
+            'idempotency-replayed': String(result.replayed),
+          },
+        },
+      ),
+      rateLimitDecision,
+    );
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return withRateLimitHeaders(response, rateLimitDecision);
+  }
+};
+
+export const handleAdminParticipantDelete = async (
+  request: Request,
+  eventId: string,
+  participantId: string,
+  dependencies: AdminSupportDependencies,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  let rateLimitDecision: RateLimitDecision | null = null;
+  try {
+    if (request.method !== 'DELETE')
+      throw problem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    requireSameOrigin(request, dependencies);
+    const actorId = await authorize(
+      request,
+      eventId,
+      'ticket:any:manage',
+      dependencies,
+    );
+    rateLimitDecision =
+      (await dependencies.rateLimit?.('mutation', actorId)) ?? null;
+    const rawBody = await request.text();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(rawBody);
+    } catch {
+      raw = null;
+    }
+    const parsed = adminParticipantDeleteRequestSchema.safeParse(raw);
+    if (!parsed.success || parsed.data.participantId !== participantId) {
+      throw problem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid participant deletion',
+        'Confirm deletion of the current participant version.',
+      );
+    }
+    const now = dependencies.now?.() ?? new Date();
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'participant.delete',
+        key: readIdempotencyKey(request.headers),
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: rawBody,
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now,
+      },
+      async (transaction) => {
+        await acquireTransactionLock(transaction, `admin-roles:${eventId}`);
+        try {
+          await requireEventPermission(
+            transaction,
+            { userId: actorId },
+            eventId,
+            'ticket:any:manage',
+          );
+        } catch (error) {
+          if (!(error instanceof EventAccessDeniedError)) throw error;
+          throw problem(
+            403,
+            'EVENT_ACCESS_DENIED',
+            'Event access denied',
+            'Participant deletion is unavailable.',
+          );
+        }
+        const deleted = await deleteParticipantData(transaction, {
+          eventId,
+          participantId,
+          expectedProfileVersion: parsed.data.expectedProfileVersion,
+          now,
+          requestId,
+        });
+        const auditId = await writeAuditLog(
+          transaction,
+          {
+            eventId,
+            actorId,
+            actorType: 'user',
+            action: 'participant.deleted',
+            targetType: 'participant_profile',
+            // A receipt remains, without copying the deleted person's identity.
+            targetId: null,
+            requestId,
+            reason: 'Účastník trvale smazán z administrace.',
+            after: deleted,
+          },
+          { occurredAt: now },
+        );
+        return {
+          status: 200,
+          body: adminParticipantDeleteResponseSchema.parse({
+            eventId,
+            participantId,
+            outcome: 'deleted',
+            ...deleted,
+            deletedAt: now.toISOString(),
+            audit: { auditId },
+          }),
+        };
+      },
+    );
+    return withRateLimitHeaders(
+      Response.json(
+        adminParticipantDeleteResponseSchema.parse({
+          ...result.body,
+          outcome: result.replayed ? 'already_applied' : 'deleted',
+        }),
+        {
           headers: {
             ...privateHeaders(requestId),
             'idempotency-replayed': String(result.replayed),

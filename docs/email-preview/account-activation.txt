@@ -1,0 +1,18 @@
+BYZON 2026: dokončete aktivaci účtu
+
+Dobrý den, Martine,
+
+k dokončení aktivace účtu BYZON 2026 stačí ověřit tuto e-mailovou adresu. Pokračujte tlačítkem níže.
+
+Aktivovat účet:
+https://app.example.test/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=%2Fapp
+
+Odkaz platí 24 hodin od odeslání a funguje jen jednou.
+
+Odkaz je určený jen Vám. Nepřeposílejte ho.
+Pokud právě neaktivujete svůj účet, můžete tento e-mail ignorovat.
+
+Odkaz už neplatí? Vyžádejte si nový: https://app.example.test/prihlaseni?mode=recovery&returnTo=%2Fapp
+
+Tým BYZON
+Potřebujete pomoc? Odpovězte na tento e-mail.

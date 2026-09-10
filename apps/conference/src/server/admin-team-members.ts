@@ -1,3 +1,5 @@
+import { requireModeratorBaseline } from './question-readiness';
+import { validateProgramRoleScope } from './admin-role-export';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -261,58 +263,7 @@ const validateScope = async (
   db: TeamDb,
   eventId: string,
   access: Exclude<AdminTeamAccess, { role: 'organizer_admin' }>,
-) => {
-  const { role, scope } = access;
-  if (role === 'checkin_operator' && scope.kind === 'station') {
-    const station = await db.query.checkinStations.findFirst({
-      columns: { id: true },
-      where: and(
-        eq(schema.checkinStations.eventId, eventId),
-        eq(schema.checkinStations.id, scope.stationId),
-      ),
-    });
-    if (station) return { stationIds: [scope.stationId] };
-  }
-  if (
-    (role === 'moderator' || role === 'room_operator') &&
-    scope.kind === 'session'
-  ) {
-    const session = await db.query.programSessions.findFirst({
-      columns: { questionsEnabled: true },
-      where: and(
-        eq(schema.programSessions.eventId, eventId),
-        eq(schema.programSessions.id, scope.sessionId),
-      ),
-    });
-    if (session && role === 'room_operator') {
-      return { sessionIds: [scope.sessionId] };
-    }
-    if (session?.questionsEnabled && role === 'moderator') {
-      const features = await db.query.eventFeatures.findFirst({
-        columns: { questionsEnabled: true },
-        where: eq(schema.eventFeatures.eventId, eventId),
-      });
-      if (features?.questionsEnabled) return { sessionIds: [scope.sessionId] };
-    }
-  }
-  if (role === 'room_operator' && scope.kind === 'room') {
-    const room = await db.query.rooms.findFirst({
-      columns: { id: true },
-      where: and(
-        eq(schema.rooms.eventId, eventId),
-        eq(schema.rooms.id, scope.roomId),
-        ne(schema.rooms.status, 'archived'),
-      ),
-    });
-    if (room) return { roomIds: [scope.roomId] };
-  }
-  throw problem(
-    409,
-    'ADMIN_INVALID_TRANSITION',
-    'Invalid team access scope',
-    'The selected scope is not compatible with the team role.',
-  );
-};
+) => validateProgramRoleScope(db, eventId, access.role, access.scope);
 
 const getActiveMemberRoles = async (
   db: TeamDb,
@@ -534,6 +485,8 @@ export const handleAdminTeamMemberMutation = async (
           }
           if (!user) throw new Error('Created team identity is unavailable.');
           memberId = user.id;
+          if (parsed.data.access.role === 'moderator')
+            await requireModeratorBaseline(transaction, eventId, memberId);
           const existingRoles = await getActiveMemberRoles(
             transaction,
             eventId,

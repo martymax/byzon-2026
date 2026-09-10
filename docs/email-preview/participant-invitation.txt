@@ -1,0 +1,21 @@
+BYZON 2026: Váš přístup do konferenční aplikace
+
+Dobrý den, Martine,
+
+zveme Vás do aplikace konference BYZON 2026. Připravte si vlastní program a mějte důležité informace po ruce.
+
+Otevřít aplikaci:
+https://app.example.test/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=%2Fapp
+
+Odkaz platí 24 hodin od odeslání a funguje jen jednou.
+
+Program podle Vás
+Uložte si zajímavé přednášky do své agendy. Program, místa konání i zprávy organizátorů najdete na jednom místě.
+
+Odkaz je určený jen Vám. Nepřeposílejte ho.
+Pokud se Vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.
+
+Odkaz už neplatí? Vyžádejte si nový: https://app.example.test/prihlaseni?mode=recovery&returnTo=%2Fapp
+
+Tým BYZON
+Potřebujete pomoc? Odpovězte na tento e-mail.

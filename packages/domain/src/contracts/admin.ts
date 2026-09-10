@@ -188,6 +188,33 @@ export const adminOperationsOverviewResponseSchema = z
     generatedAt: dateTimeSchema,
     metrics: z.array(adminOperationsMetricSchema).max(6),
     queues: z.array(adminQueueSummarySchema).max(3),
+    summary: z
+      .strictObject({
+        activation: z.strictObject({
+          activated: z.number().int().nonnegative(),
+          total: z.number().int().nonnegative(),
+        }),
+        reservations: z.strictObject({
+          confirmed: z.number().int().nonnegative(),
+          capacity: z.number().int().nonnegative(),
+          sessionCount: z.number().int().nonnegative(),
+          fullSessions: z.number().int().nonnegative(),
+          overbookedSessions: z.number().int().nonnegative(),
+          sessions: z
+            .array(
+              z.strictObject({
+                sessionId: uuidSchema,
+                title: safeInlineTextSchema(240),
+                startsAt: dateTimeSchema,
+                status: z.enum(['draft', 'published']),
+                capacity: z.number().int().nonnegative().nullable(),
+                confirmed: z.number().int().nonnegative(),
+              }),
+            )
+            .max(5),
+        }),
+      })
+      .optional(),
   })
   .superRefine((overview, context) => {
     const metricIds = overview.metrics.map(({ id }) => id);
@@ -250,7 +277,23 @@ export const adminRoleAssignmentSchema = z.strictObject({
   operatorId: uuidSchema,
   operatorLabel: safeInlineTextSchema(120),
   role: adminAssignmentRoleSchema,
-  scope: adminAssignmentScopeSchema,
+  scope: z.union([
+    adminAssignmentScopeSchema,
+    z.strictObject({
+      kind: z.literal('program'),
+      label: safeInlineTextSchema(160),
+      sessions: z
+        .array(
+          z.strictObject({ id: uuidSchema, label: safeInlineTextSchema(160) }),
+        )
+        .max(300),
+      rooms: z
+        .array(
+          z.strictObject({ id: uuidSchema, label: safeInlineTextSchema(160) }),
+        )
+        .max(300),
+    }),
+  ]),
   state: z.enum(['active', 'scheduled']),
   version: versionSchema,
 });
@@ -1107,6 +1150,7 @@ export const adminAuditActionSchema = z.enum([
   'support.resend',
   'participant.invitation_sent',
   'participant.profile_updated',
+  'participant.deleted',
   'ticket_import.preview_created',
   'ticket_import.applied',
   'announcement.send',
@@ -1125,6 +1169,8 @@ export const adminAuditActionSchema = z.enum([
   'settings.update',
   'settings.engagement.update',
   'settings.session-questions.update',
+  'question.answer.published',
+  'question.answer.edited',
   'export.queued',
   'export.download',
 ]);

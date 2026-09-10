@@ -45,6 +45,11 @@ export const participantProfiles = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     firstName: varchar('first_name', { length: 128 }).notNull(),
     lastName: varchar('last_name', { length: 128 }).notNull(),
+    // null = dictionary; '' = greeting without a name; other text = preferred vocative.
+    emailSalutation: varchar('email_salutation', { length: 128 }),
+    ratingEmailsEnabled: boolean('rating_emails_enabled')
+      .default(true)
+      .notNull(),
     company: varchar('company', { length: 160 }),
     jobTitle: varchar('job_title', { length: 160 }),
     bio: text('bio'),

@@ -422,6 +422,42 @@ integration('admin participant support integration', () => {
     expect(audits).toHaveLength(1);
   });
 
+  it('delivers an already-sent invitation again with a fresh key and updates its timestamp', async () => {
+    const sentAt = new Date(now.getTime() + 60 * 60 * 1000);
+    const sendParticipantInvitation = vi.fn(async () => undefined);
+    const response = await handleAdminParticipantInvite(
+      new Request(inviteUrl, {
+        method: 'POST',
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'idempotency-key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ participantId }),
+      }),
+      eventId,
+      participantId,
+      { ...dependencies(), now: () => sentAt, sendParticipantInvitation },
+    );
+    expect(response.status).toBe(200);
+    expect(
+      adminParticipantInviteResponseSchema.parse(await response.json()),
+    ).toMatchObject({
+      outcome: 'sent',
+      sentAt: sentAt.toISOString(),
+      invitation: { status: 'sent', lastSentAt: sentAt.toISOString() },
+    });
+    expect(sendParticipantInvitation).toHaveBeenCalledTimes(1);
+    const audits = await client.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'participant.invitation_sent'),
+        eq(schema.auditLogs.targetId, participantId),
+      ),
+    });
+    expect(audits).toHaveLength(2);
+  });
+
   it('blocks with manage permission, audit and exact idempotent replay', async () => {
     rateLimit.mockClear();
     const idempotencyKey = crypto.randomUUID();

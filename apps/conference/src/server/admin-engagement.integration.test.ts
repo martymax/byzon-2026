@@ -93,6 +93,13 @@ integration('admin engagement integration', () => {
         role: 'participant',
       },
     ]);
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: participantId,
+      firstName: 'Demo',
+      lastName: 'Moderátor',
+      contactEmail: `moderator-${participantId}@example.invalid`,
+    });
     await client.db.insert(schema.eventFeatures).values({ eventId });
     await client.db.insert(schema.eventDays).values({
       id: dayId,
@@ -108,6 +115,7 @@ integration('admin engagement integration', () => {
       slug: `questions-${sessionId}`,
       title: 'Přednáška s dotazy',
       type: 'talk',
+      questionMode: 'moderated_follow_up',
       startsAt: new Date('2026-09-18T08:00:00.000Z'),
       endsAt: new Date('2026-09-18T09:00:00.000Z'),
       status: 'published',
@@ -148,6 +156,7 @@ integration('admin engagement integration', () => {
     expect(initialBody.features).toEqual({
       networkingEnabled: false,
       questionsEnabled: false,
+      questionFollowUpsEnabled: false,
       ratingsEnabled: false,
     });
     const candidate = initialBody.moderatorCandidates.find(
@@ -156,25 +165,6 @@ integration('admin engagement integration', () => {
     expect(candidate?.contactEmail).toBe(
       `moderator-${participantId}@example.invalid`,
     );
-
-    const features = await mutate(
-      {
-        action: 'update_features',
-        expectedSettingsVersion: initialBody.settingsVersion,
-        features: {
-          networkingEnabled: true,
-          questionsEnabled: true,
-          ratingsEnabled: true,
-        },
-        reason: 'Schválené staging ověření interakcí.',
-      },
-      'engagement-features-0001',
-    );
-    expect(features.status).toBe(200);
-    const featuresBody = adminEngagementMutationResponseSchema.parse(
-      await features.json(),
-    );
-    expect(featuresBody.action).toBe('update_features');
 
     const session = await mutate(
       {
@@ -207,6 +197,26 @@ integration('admin engagement integration', () => {
       outcome: 'updated',
       assignment: { sessionId, userId: participantId },
     });
+
+    const features = await mutate(
+      {
+        action: 'update_features',
+        expectedSettingsVersion: initialBody.settingsVersion,
+        features: {
+          networkingEnabled: true,
+          questionsEnabled: true,
+          questionFollowUpsEnabled: false,
+          ratingsEnabled: true,
+        },
+        reason: 'Schválené staging ověření interakcí.',
+      },
+      'engagement-features-0001',
+    );
+    expect(features.status).toBe(200);
+    const featuresBody = adminEngagementMutationResponseSchema.parse(
+      await features.json(),
+    );
+    expect(featuresBody.action).toBe('update_features');
 
     const role = await client.db.query.eventRoles.findFirst({
       where: and(
@@ -298,6 +308,7 @@ integration('admin engagement integration', () => {
           features: {
             networkingEnabled: false,
             questionsEnabled: false,
+            questionFollowUpsEnabled: false,
             ratingsEnabled: false,
           },
           reason: 'Tento požadavek nesmí projít.',

@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdminContentResource } from '@/lib/admin-content-api';
+import { browserAdminContentAssetPort } from '../lib/admin-content-asset-api';
 
 import { AdminContentWorkspace } from './admin-content-workspace';
 import { useAdminWorkspace } from './admin-workspace-shell';
@@ -27,10 +28,11 @@ export const AdminContentProductionWorkspace = ({
         <p>
           {speakerFocused
             ? 'Spravujte medailonky, fotografie, sociální odkazy a přiřazení řečníků k programu na jednom místě.'
-            : 'Nejdřív vyberte oblast a existující položku. Uložené změny pak samostatně zkontrolujte a zveřejněte.'}
+            : 'Spravujte program, místa, partnery a praktické informace. Uložené změny se účastníkům zobrazí až po zveřejnění.'}
         </p>
       </header>
       <AdminContentWorkspace
+        assetPort={browserAdminContentAssetPort}
         eventId={eventId}
         initialResource={initialResource}
         showAreaNavigation={!speakerFocused}

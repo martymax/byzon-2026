@@ -127,6 +127,9 @@ export const assets = pgTable(
     sniffedMimeType: varchar('sniffed_mime_type', { length: 255 }),
     sizeBytes: integer('size_bytes'),
     checksumSha256: varchar('checksum_sha256', { length: 64 }),
+    altText: varchar('alt_text', { length: 300 }),
+    width: integer('width'),
+    height: integer('height'),
     status: assetStatus('status').default('uploading').notNull(),
     isPublic: boolean('is_public').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -295,6 +298,11 @@ export const rooms = pgTable(
   ],
 );
 
+export const questionMode = pgEnum('question_mode', [
+  'disabled',
+  'moderated_follow_up',
+]);
+
 export const programSessions = pgTable(
   'sessions',
   {
@@ -326,6 +334,7 @@ export const programSessions = pgTable(
     allowReleaseAfterDeadline: boolean('allow_release_after_deadline')
       .default(false)
       .notNull(),
+    questionMode: questionMode('question_mode').default('disabled').notNull(),
     questionsEnabled: boolean('questions_enabled').default(false).notNull(),
     sortOrder: integer('sort_order').notNull(),
     version: integer('version').default(1).notNull(),

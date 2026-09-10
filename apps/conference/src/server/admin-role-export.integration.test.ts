@@ -132,6 +132,7 @@ integration('admin role and export integration', () => {
       slug: `role-session-${sessionId}`,
       title: 'Růst bez zkratek',
       type: 'workshop',
+      questionMode: 'moderated_follow_up',
       startsAt: new Date('2026-09-18T08:00:00Z'),
       endsAt: new Date('2026-09-18T09:00:00Z'),
       status: 'published',

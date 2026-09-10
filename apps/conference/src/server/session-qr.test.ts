@@ -27,3 +27,16 @@ describe('session QR', () => {
     expect(() => unzipSync(new Uint8Array())).toThrow();
   });
 });
+
+it.each([
+  ['questions', 'interakce'],
+  ['rating', 'hodnoceni'],
+] as const)('links %s QR directly to its participant page', (target, path) => {
+  expect(
+    buildSessionDeepLink(
+      'https://user:secret@app.byzon.cz/old?token=secret#old',
+      SESSION_ID,
+      target,
+    ),
+  ).toBe(`https://app.byzon.cz/app/${path}/${SESSION_ID}`);
+});

@@ -58,7 +58,7 @@ describe('CS-ANN-01 admin contracts', () => {
     ).toBe(false);
   });
 
-  it('validates in-app-only draft and immutable audience preview', () => {
+  it('validates the app/email draft and immutable audience preview', () => {
     expect(adminAnnouncementPreviewRequestSchema.parse({ draft })).toEqual({
       draft,
     });
@@ -117,7 +117,7 @@ describe('CS-ANN-01 admin contracts', () => {
       previewMutation: 'online-only',
       sendMutation: 'online-only',
       sendIdempotency: 'required',
-      deliveryChannels: 'in-app-only',
+      deliveryChannels: 'in-app-and-email',
     });
   });
 

@@ -113,6 +113,7 @@ export const adminAuditActionLabels = {
   'support.resend': 'Znovu odeslal pozvánku',
   'participant.invitation_sent': 'Odeslal pozvánku účastníkovi',
   'participant.profile_updated': 'Upravil profil účastníka',
+  'participant.deleted': 'Trvale smazal účastníka',
   'ticket_import.preview_created': 'Načetl změny vstupenek',
   'ticket_import.applied': 'Použil změny vstupenek',
   'announcement.send': 'Odeslal kritické oznámení',
@@ -131,6 +132,8 @@ export const adminAuditActionLabels = {
   'settings.update': 'Upravil nastavení akce',
   'settings.engagement.update': 'Upravil interaktivní funkce',
   'settings.session-questions.update': 'Upravil otázky k aktivitě',
+  'question.answer.published': 'Zveřejnil soukromou odpověď',
+  'question.answer.edited': 'Upravil soukromou odpověď',
   'export.queued': 'Zařadil report ke zpracování',
   'export.download': 'Stáhl report',
 } satisfies Record<AdminAuditAction, string>;
@@ -257,6 +260,7 @@ export const adminEngagementSessionStatusLabels = {
 export const adminEngagementFeatureLabels = {
   networkingEnabled: 'Networking',
   questionsEnabled: 'Otázky pro řečníky',
+  questionFollowUpsEnabled: 'Písemné odpovědi po vystoupení',
   ratingsEnabled: 'Hodnocení programu',
 } satisfies Record<keyof AdminEngagementFeatures, string>;
 

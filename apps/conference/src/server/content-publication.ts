@@ -1,6 +1,7 @@
+import { queueProgramChangeEmails } from './email-notifications';
 import { createHash } from 'node:crypto';
 
-import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, inArray } from 'drizzle-orm';
 import {
   acquireTransactionLock,
   generateUuidV7,
@@ -599,6 +600,24 @@ export const publishContent = async (
       ),
       publishedAt: publishedAt.toISOString(),
     };
+    // Uploaded images become public only with an immutable content publication.
+    // Keep older published assets readable for cached/offline publication versions.
+    const publishedImages = publishedContentSnapshotSchema.parse(snapshot);
+    const assetIds = [
+      ...publishedImages.partners.map((partner) => partner.logoAssetId),
+      ...publishedImages.speakers.map((speaker) => speaker.photoAssetId),
+    ].filter((id): id is string => typeof id === 'string');
+    if (assetIds.length)
+      await transaction
+        .update(schema.assets)
+        .set({ isPublic: true, updatedAt: publishedAt })
+        .where(
+          and(
+            eq(schema.assets.eventId, input.eventId),
+            eq(schema.assets.status, 'ready'),
+            inArray(schema.assets.id, assetIds),
+          ),
+        );
     const publicationId = generateUuidV7();
     await transaction.insert(schema.contentPublications).values({
       id: publicationId,
@@ -609,6 +628,14 @@ export const publishContent = async (
       checksumSha256: result.checksumSha256,
       publishedBy: input.actorId,
       publishedAt,
+    });
+    await queueProgramChangeEmails(transaction, {
+      eventId: input.eventId,
+      publicationId,
+      previous: previous?.snapshot ?? null,
+      current: snapshot,
+      sessionIds: result.significantSessionIds,
+      now: publishedAt,
     });
     await transaction.insert(schema.outboxEvents).values({
       id: generateUuidV7(),

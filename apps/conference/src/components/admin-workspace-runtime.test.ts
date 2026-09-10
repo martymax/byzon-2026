@@ -2,7 +2,10 @@ import {
   adminMutationProblemFixtures,
   adminReadProblemFixtures,
 } from '@byzon/test-support/fixtures';
-import { sessionExpiredProblemSchema } from '@byzon/domain/contracts';
+import {
+  apiProblemSchema,
+  sessionExpiredProblemSchema,
+} from '@byzon/domain/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -43,6 +46,38 @@ describe('admin failure classification', () => {
 });
 
 describe('admin shared feedback copy', () => {
+  it('shows the Q&A readiness rejection and preserves its technical reference', () => {
+    const problem = apiProblemSchema.parse({
+      type: 'urn:byzon:problem:admin-invalid-transition',
+      title: 'Dotazy nejsou dostupné',
+      status: 409,
+      code: 'ADMIN_INVALID_TRANSITION',
+      detail:
+        'Nelze zapnout sběr: 1 přednášek nemá připraveného moderátora nebo není publikována. Podrobnosti jsou v přehledu přiřazení.',
+      requestId: '15306555-7e4f-4e24-8a1c-0d6d7d43054b',
+    });
+    const failure = { kind: 'problem', problem } as const;
+
+    expect(adminFailureMessage(failure)).toBe(problem.detail);
+    expect(adminFailureMessage(failure, problem.requestId)).toBe(
+      `${problem.detail} Reference požadavku: ${problem.requestId}.`,
+    );
+    expect(isAmbiguousAdminMutationFailure({ status: 409, failure })).toBe(
+      false,
+    );
+  });
+
+  it('keeps unexpected server error details out of user feedback', () => {
+    const problem = {
+      ...adminReadProblemFixtures.internal_error!,
+      detail: 'Database query failed: internal diagnostic information.',
+    };
+
+    expect(adminFailureMessage({ kind: 'problem', problem })).toBe(
+      'Tuto část se nepodařilo načíst. Zkuste to znovu. Pokud problém trvá, otevřete Technické údaje a předejte referenci podpoře.',
+    );
+  });
+
   it.each([
     [
       { kind: 'offline' } as const,

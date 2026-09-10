@@ -14,6 +14,7 @@ import { AdminWorkspaceShell } from '../../components/admin-workspace-shell';
 import {
   adminContextEndpoint,
   adminOperationsOverviewEndpoint,
+  requestAdminOperationsOverview,
 } from '../../lib/admin-api';
 import type { ApiPort } from '../../lib/api/endpoint';
 import { expectComponentToPassAxe } from './accessibility';
@@ -28,15 +29,20 @@ const renderOverview = async ({
   context = adminContextFixtures.organizer!,
   operations = adminOperationsOverviewFixtures.healthy!,
   operationsFailure = false,
+  loadOperations,
 }: {
   readonly context?: AdminContextResponse;
   readonly operations?: AdminOperationsOverviewResponse;
   readonly operationsFailure?: boolean;
+  readonly loadOperations?: () => ReturnType<
+    typeof requestAdminOperationsOverview
+  >;
 } = {}) => {
   const api: ApiPort = {
     request: vi.fn(async (endpoint) => {
       if (endpoint === adminContextEndpoint) return success(context);
       if (endpoint === adminOperationsOverviewEndpoint) {
+        if (loadOperations) return loadOperations();
         return operationsFailure
           ? ({
               ok: false,
@@ -59,7 +65,7 @@ const renderOverview = async ({
 beforeEach(() => window.history.replaceState({}, '', '/admin'));
 
 describe('admin overview dashboard', () => {
-  it('renders six contract metrics, derived attention and safe actions', async () => {
+  it('renders participant progress, real capacities and severity-ordered actions', async () => {
     const operations = {
       ...adminOperationsOverviewFixtures.degraded!,
       metrics: adminOperationsOverviewFixtures.degraded!.metrics.map(
@@ -74,11 +80,11 @@ describe('admin overview dashboard', () => {
       .element(screen.getByRole('heading', { level: 1, name: 'Přehled akce' }))
       .toBeVisible();
     for (const label of [
-      'Aktivace účastníků',
+      'Importovaní účastníci',
+      'Aktivované přístupy',
       'Aktualizace vstupenek',
       'Program a obsah',
-      'Odbavení',
-      'Rezervace',
+      'Obsazenost aktivit',
       'Oznámení',
     ]) {
       expect(screen.getByText(label).elements().length).toBeGreaterThan(0);
@@ -101,7 +107,22 @@ describe('admin overview dashboard', () => {
     expect(document.body.textContent).not.toContain('notifications');
     expect(document.body.textContent).not.toContain('DLQ');
     expect(document.body.textContent).not.toContain('SERVER ');
-    await expect.element(screen.getByText('Aktuální k 12:05')).toBeVisible();
+    await expect
+      .element(screen.getByRole('heading', { name: 'Růst bez zkratek' }))
+      .toBeVisible();
+    await expect.element(screen.getByText('Plně obsazeno')).toBeVisible();
+    await expect.element(screen.getByText('1 volné místo')).toBeVisible();
+    await expect
+      .element(screen.getByText('93 %', { exact: true }))
+      .toBeVisible();
+    expect(document.querySelector('ol h3')?.textContent).toBe(
+      'Zkontrolujte doručení oznámení',
+    );
+    await expect
+      .element(
+        screen.getByText('Aktuální k 25. 7. 2026 12:05', { exact: false }),
+      )
+      .toBeVisible();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );
@@ -126,6 +147,68 @@ describe('admin overview dashboard', () => {
     await expect
       .element(empty.getByRole('link', { name: 'Načíst změny vstupenek' }))
       .toBeVisible();
+  });
+
+  it('keeps the previous response visible during refresh, then replaces it', async () => {
+    let refreshing = false;
+    let finish!: (
+      value: Awaited<ReturnType<typeof requestAdminOperationsOverview>>,
+    ) => void;
+    const screen = await renderOverview({
+      loadOperations: () =>
+        refreshing
+          ? new Promise((resolve) => {
+              finish = resolve;
+            })
+          : Promise.resolve(success(adminOperationsOverviewFixtures.healthy!)),
+    });
+    await expect
+      .element(screen.getByText('412', { exact: true }))
+      .toBeVisible();
+    refreshing = true;
+    await screen.getByRole('button', { name: 'Obnovit přehled' }).click();
+    await expect
+      .element(screen.getByRole('button', { name: 'Obnovuji…' }))
+      .toBeDisabled();
+    await expect
+      .element(screen.getByText('412', { exact: true }))
+      .toBeVisible();
+    finish(success(adminOperationsOverviewFixtures.degraded!));
+    await expect
+      .element(screen.getByText('410', { exact: true }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Obnovit přehled' }))
+      .toBeEnabled();
+    expect(screen.getByText('412', { exact: true })).not.toBeInTheDocument();
+    await screen.getByRole('button', { name: 'Obnovit přehled' }).click();
+    finish({
+      ok: false,
+      kind: 'failure',
+      status: 0,
+      failure: { kind: 'timeout' },
+    });
+    await expect
+      .element(screen.getByText('Zobrazuji poslední načtené údaje'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByText('410', { exact: true }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole('button', { name: 'Zkusit znovu' }))
+      .toBeVisible();
+  });
+
+  it('does not claim complete health when detailed data are unavailable', async () => {
+    const legacy = { ...adminOperationsOverviewFixtures.healthy! };
+    delete legacy.summary;
+    const screen = await renderOverview({ operations: legacy });
+    await expect
+      .element(screen.getByText('Některé údaje zatím chybí'))
+      .toBeVisible();
+    expect(
+      screen.getByText('Teď není potřeba žádný zásah'),
+    ).not.toBeInTheDocument();
   });
 
   it('does not ask for a content review when a publication is available in the app', async () => {
@@ -171,9 +254,9 @@ describe('admin overview dashboard', () => {
       operations: adminOperationsOverviewFixtures.degraded!,
     });
 
-    await expect
-      .element(screen.getByText('Odbavení vyžaduje samostatné oprávnění.'))
-      .toBeVisible();
+    expect(
+      screen.getByText('Odbavení vyžaduje pozornost'),
+    ).not.toBeInTheDocument();
     await expect
       .element(screen.getByText('Oznámení jsou pro tuto akci vypnutá.'))
       .toBeVisible();

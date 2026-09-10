@@ -6,6 +6,10 @@
 - Dotčené části: `P4`, `P6`, `P8`, `P11`, `P12`, Railway staging
 - Nahrazuje: ticket-claim a check-in části ADR-004/ADR-015 pro ročník 2026
 
+> Doplněno 7. 9. 2026: [ADR-017](017-participant-collaborators-and-private-question-follow-ups.md)
+> mění bod 2 pro programové spolupracovníky a rozšiřuje Q&A o soukromé odpovědi.
+> Původní rozhodnutí je níže zachováno jako historie.
+
 ## Kontext
 
 Aplikace nemá kontrolovat vstupenky ani zajišťovat check-in. SimpleShop je

@@ -100,6 +100,31 @@ const clientWith = (options: FetchApiClientOptions) =>
   });
 
 describe('fetch API client success contract', () => {
+  it('routes an authenticated onboarding denial to legal review without retrying', async () => {
+    const onOnboardingRequired = vi.fn();
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse(problem('EVENT_ACCESS_DENIED', 403), {
+        status: 403,
+        headers: {
+          'content-type': 'application/problem+json',
+          'x-byzon-onboarding-required': 'true',
+        },
+      }),
+    );
+    const client = createFetchApiClient({ fetch, onOnboardingRequired });
+    const endpoint = defineApiEndpoint({
+      ...readEndpoint,
+      problemSchema: apiProblemSchema,
+      problemCodes: ['EVENT_ACCESS_DENIED'],
+    });
+    const result = await client.request(endpoint, {
+      path: '/api/v1/me/agenda',
+    });
+    expect(result.ok).toBe(false);
+    expect(onOnboardingRequired).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('validates JSON, metadata and managed same-origin request options', async () => {
     const fetch = vi.fn<TestFetch>(async () =>
       jsonResponse(

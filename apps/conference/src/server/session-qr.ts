@@ -1,6 +1,6 @@
 import { schema, type Database } from '@byzon/database';
 import { publishedProgramSnapshotSchema } from '@byzon/domain/contracts';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, notInArray } from 'drizzle-orm';
 import { strToU8, zipSync } from 'fflate';
 import QRCode from 'qrcode';
 import { z } from 'zod';
@@ -24,6 +24,9 @@ interface PublishedQrSession {
   id: string;
   slug: string;
   title: string;
+  startsAt: string;
+  endsAt: string;
+  roomName: string | null;
 }
 
 const privateHeaders = (requestId: string) => ({
@@ -47,12 +50,15 @@ const safeFilename = (value: string): string => {
 export const buildSessionDeepLink = (
   appOrigin: string,
   sessionId: string,
+  target: 'program' | 'questions' | 'rating' = 'program',
 ): string => {
   const origin = new URL(appOrigin);
   if (origin.protocol !== 'https:' && origin.hostname !== 'localhost') {
     throw new Error('Session QR origin must use HTTPS');
   }
-  origin.pathname = `/app/program/${uuidSchema.parse(sessionId)}`;
+  origin.username = '';
+  origin.password = '';
+  origin.pathname = `/app/${target === 'questions' ? 'interakce' : target === 'rating' ? 'hodnoceni' : 'program'}/${uuidSchema.parse(sessionId)}`;
   origin.search = '';
   origin.hash = '';
   return origin.toString();
@@ -70,6 +76,7 @@ export const renderSessionQrSvg = async (deepLink: string): Promise<string> =>
 const loadPublishedSessions = async (
   db: Database,
   eventId: string,
+  target: 'program' | 'questions' | 'rating',
 ): Promise<readonly PublishedQrSession[]> => {
   const publication = await db.query.contentPublications.findFirst({
     columns: { snapshot: true },
@@ -87,9 +94,40 @@ const loadPublishedSessions = async (
       detail: 'No valid published program is available for QR generation.',
     });
   }
+  const supported =
+    target === 'questions'
+      ? new Set(
+          (
+            await db.query.programSessions.findMany({
+              columns: { id: true },
+              where: and(
+                eq(schema.programSessions.eventId, eventId),
+                eq(schema.programSessions.questionMode, 'moderated_follow_up'),
+                notInArray(schema.programSessions.status, [
+                  'archived',
+                  'cancelled',
+                ]),
+              ),
+            })
+          ).map((s) => s.id),
+        )
+      : null;
   return snapshot.data.program.sessions
-    .filter(({ status }) => status !== 'cancelled')
-    .map(({ id, slug, title }) => ({ id, slug, title }))
+    .filter(
+      ({ status, id, type }) =>
+        (target !== 'rating' || type !== 'coaching') &&
+        status !== 'cancelled' &&
+        (!supported || supported.has(id)),
+    )
+    .map(({ id, slug, title, startsAt, endsAt, roomId }) => ({
+      id,
+      slug,
+      title,
+      startsAt,
+      endsAt,
+      roomName:
+        snapshot.data.program.rooms.find((r) => r.id === roomId)?.name ?? null,
+    }))
     .sort((left, right) => left.id.localeCompare(right.id));
 };
 
@@ -150,7 +188,27 @@ export const handleSessionQr = async (
       });
     }
     await authorize(request, eventId, dependencies);
-    const sessions = await loadPublishedSessions(dependencies.db, eventId);
+    const query = Object.fromEntries(new URL(request.url).searchParams);
+    const parsed = z
+      .strictObject({
+        target: z.enum(['program', 'questions', 'rating']).optional(),
+        format: z.enum(['svg', 'png']).optional(),
+      })
+      .safeParse(query);
+    if (!parsed.success)
+      throw new ApiProblemError({
+        status: 422,
+        code: 'VALIDATION_FAILED',
+        title: 'Invalid target',
+        detail: 'Neplatný cíl QR kódu.',
+      });
+    const target = parsed.data.target ?? 'program';
+    const format = parsed.data.format ?? 'svg';
+    const sessions = await loadPublishedSessions(
+      dependencies.db,
+      eventId,
+      target,
+    );
 
     if (sessionId !== undefined) {
       if (!uuidSchema.safeParse(sessionId).success) {
@@ -170,15 +228,40 @@ export const handleSessionQr = async (
           detail: 'The published session is not available.',
         });
       }
-      const svg = await renderSessionQrSvg(
-        buildSessionDeepLink(dependencies.appOrigin, sessionId),
+      const deepLink = buildSessionDeepLink(
+        dependencies.appOrigin,
+        sessionId,
+        target,
       );
-      return new Response(svg, {
+      const body =
+        format === 'png'
+          ? new Uint8Array(
+              await QRCode.toBuffer(deepLink, {
+                type: 'png',
+                errorCorrectionLevel: 'M',
+                margin: 4,
+                width: 1024,
+                color: { dark: '#101114', light: '#ffffff' },
+              }),
+            )
+          : await renderSessionQrSvg(deepLink);
+      return new Response(body, {
         headers: {
           ...privateHeaders(requestId),
-          'content-type': 'image/svg+xml; charset=utf-8',
-          'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}.svg"`,
+          'content-type':
+            format === 'png' ? 'image/png' : 'image/svg+xml; charset=utf-8',
+          'content-disposition': `attachment; filename="${safeFilename(publishedSession.slug)}-${sessionId}${target === 'program' ? '' : `-${target}`}.${format}"`,
         },
+      });
+    }
+
+    if (sessions.length === 0) {
+      throw new ApiProblemError({
+        status: 404,
+        code: 'NO_QR_SESSIONS',
+        title: 'Žádné QR kódy ke stažení',
+        detail:
+          'Zveřejněný program neobsahuje žádné dostupné body pro tento QR export.',
       });
     }
 
@@ -188,30 +271,48 @@ export const handleSessionQr = async (
       title: string;
       deepLink: string;
       filename: string;
+      startsAt: string;
+      endsAt: string;
+      roomName: string | null;
     }> = [];
     for (const publishedSession of sessions) {
       const deepLink = buildSessionDeepLink(
         dependencies.appOrigin,
         publishedSession.id,
+        target,
       );
-      const filename = `${safeFilename(publishedSession.slug)}-${publishedSession.id}.svg`;
-      files[filename] = strToU8(await renderSessionQrSvg(deepLink));
+      const filename = `${safeFilename(publishedSession.slug)}-${publishedSession.id}${target === 'program' ? '' : `-${target}`}.${format}`;
+      files[filename] =
+        format === 'png'
+          ? new Uint8Array(
+              await QRCode.toBuffer(deepLink, {
+                type: 'png',
+                errorCorrectionLevel: 'M',
+                margin: 4,
+                width: 1024,
+                color: { dark: '#101114', light: '#ffffff' },
+              }),
+            )
+          : strToU8(await renderSessionQrSvg(deepLink));
       manifest.push({
         id: publishedSession.id,
         title: publishedSession.title,
+        startsAt: publishedSession.startsAt,
+        endsAt: publishedSession.endsAt,
+        roomName: publishedSession.roomName,
         deepLink,
         filename,
       });
     }
     files['manifest.json'] = strToU8(
-      `${JSON.stringify({ eventId, generatedAt: new Date().toISOString(), sessions: manifest }, null, 2)}\n`,
+      `${JSON.stringify({ eventId, target, format, generatedAt: new Date().toISOString(), sessions: manifest }, null, 2)}\n`,
     );
     const archive = zipSync(files, { level: 6 });
     return new Response(new Uint8Array(archive), {
       headers: {
         ...privateHeaders(requestId),
         'content-type': 'application/zip',
-        'content-disposition': `attachment; filename="byzon-session-qr-${eventId}.zip"`,
+        'content-disposition': `attachment; filename="byzon-${target}-qr-${eventId}.zip"`,
       },
     });
   } catch (error) {

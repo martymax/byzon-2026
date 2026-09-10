@@ -54,7 +54,7 @@ export const AdminConfirmDialog = ({
         if (event.key === 'Tab') {
           const focusable = Array.from(
             dialogRef.current?.querySelectorAll<HTMLElement>(
-              'button:not(:disabled), input:not(:disabled)',
+              'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
             ) ?? [],
           );
           const first = focusable[0];

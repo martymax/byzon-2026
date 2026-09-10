@@ -80,6 +80,9 @@ export const eventFeatures = pgTable('event_features', {
     .default(false)
     .notNull(),
   questionsEnabled: boolean('questions_enabled').default(false).notNull(),
+  questionFollowUpsEnabled: boolean('question_followups_enabled')
+    .default(false)
+    .notNull(),
   pollsEnabled: boolean('polls_enabled').default(false).notNull(),
   ratingsEnabled: boolean('ratings_enabled').default(false).notNull(),
   socialWallEnabled: boolean('social_wall_enabled').default(false).notNull(),

@@ -122,6 +122,33 @@ integration('CS-ROSTER-01 HTTP integration', () => {
         status: 'active',
       },
     ]);
+    await client.db.insert(schema.eventRoles).values(
+      allUserIds.map((userId) => ({
+        id: crypto.randomUUID(),
+        eventId: userId === isolationOperatorId ? isolationEventId : eventId,
+        userId,
+        role: 'participant' as const,
+      })),
+    );
+    await client.db.insert(schema.participantProfiles).values(
+      allUserIds
+        .filter(
+          (id) =>
+            ![
+              reservedUserId,
+              waitingUserId,
+              inactiveUserId,
+              speakerId,
+            ].includes(id),
+        )
+        .map((userId) => ({
+          eventId: userId === isolationOperatorId ? isolationEventId : eventId,
+          userId,
+          firstName: 'Demo',
+          lastName: 'Vedoucí',
+          contactEmail: `roster-${userId}@example.invalid`,
+        })),
+    );
     await client.db.insert(schema.eventRoles).values([
       {
         id: crypto.randomUUID(),
@@ -632,24 +659,15 @@ integration('CS-ROSTER-01 HTTP integration', () => {
     }
   });
 
-  it("derives a speaker's own program sessions from the linked profile", async () => {
+  it('rejects a linked speaker without explicit room_operator access', async () => {
     const response = await readActivityRoster(
       request(),
       dependencies(speakerId),
     );
-
-    expect(response.status).toBe(200);
-    expect(
-      activityRosterResponseSchema.parse(await response.json()).sessions,
-    ).toEqual([
-      {
-        sessionId: nonCapacitySessionId,
-        title: 'Nekapacitní přednáška',
-        startsAt: '2026-09-18T11:00:00.000Z',
-        capacity: null,
-        participants: [],
-      },
-    ]);
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(await response.json())).not.toContain(
+      'Nekapacitní přednáška',
+    );
   });
 
   it('resolves an assignment to the second mastermind part to the shared roster', async () => {

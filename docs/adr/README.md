@@ -23,6 +23,7 @@ v úkolech, které je zavádějí.
 | [ADR-014](014-reservation-waitlist-grouping.md) | Automatický FIFO waitlist a seskupené rezervace | Přijato |
 | [ADR-015](015-simpleshop-api-sync.md) | SimpleShop API synchronizace na vyžádání | Přijato |
 | [ADR-016](016-participant-access-and-2026-operations-scope.md) | Přístup účastníků a provozní rozsah 2026 | Přijato |
+| [ADR-017](017-participant-collaborators-and-private-question-follow-ups.md) | Programoví spolupracovníci a soukromé Q&A odpovědi | Přijato pro implementaci |
 
 ## Životní cyklus
 

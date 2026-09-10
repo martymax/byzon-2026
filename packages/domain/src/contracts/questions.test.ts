@@ -61,3 +61,65 @@ describe('simple question and rating contracts', () => {
     ).toBe(false);
   });
 });
+
+import {
+  questionAnswerPublishSchema,
+  questionAnswerEditSchema,
+  speakerQuestionSchema,
+  ownQuestionsQuerySchema,
+} from './questions.js';
+
+describe('private question follow-up contracts', () => {
+  it('requires explicit creation or optimistic edit versions and safe bounded text', () => {
+    expect(
+      questionAnswerPublishSchema.safeParse({
+        text: 'Odpověď',
+        expectedVersion: 0,
+      }).success,
+    ).toBe(true);
+    expect(
+      questionAnswerPublishSchema.safeParse({
+        text: 'Odpověď',
+        expectedVersion: 1,
+      }).success,
+    ).toBe(false);
+    for (const text of ['', ' ', 'x'.repeat(4001), 'x\u202Ey', 'x\u0000y']) {
+      expect(
+        questionAnswerPublishSchema.safeParse({ text, expectedVersion: 0 })
+          .success,
+      ).toBe(false);
+    }
+    expect(
+      questionAnswerEditSchema.safeParse({ text: 'Oprava', expectedVersion: 0 })
+        .success,
+    ).toBe(false);
+    expect(
+      questionAnswerEditSchema.safeParse({ text: 'Oprava', expectedVersion: 2 })
+        .success,
+    ).toBe(true);
+  });
+  it('rejects author identity in speaker output and incomplete cursors', () => {
+    const item = {
+      questionId: '019fa200-0000-7000-8000-000000000003',
+      text: 'Dotaz?',
+      submittedAt: '2026-09-18T09:00:00Z',
+      answer: null,
+      canEdit: false,
+    };
+    expect(speakerQuestionSchema.safeParse(item).success).toBe(true);
+    for (const key of ['authorName', 'authorUserId', 'email', 'company']) {
+      expect(
+        speakerQuestionSchema.safeParse({ ...item, [key]: 'private' }).success,
+      ).toBe(false);
+    }
+    expect(
+      ownQuestionsQuerySchema.safeParse({ cursor: item.questionId }).success,
+    ).toBe(false);
+    expect(
+      ownQuestionsQuerySchema.safeParse({
+        cursor: item.questionId,
+        after: item.submittedAt,
+      }).success,
+    ).toBe(true);
+  });
+});

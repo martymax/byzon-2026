@@ -17,6 +17,7 @@ export default async function LoginPage({
 }: {
   readonly searchParams: Promise<{
     readonly error?: string | string[] | undefined;
+    readonly mode?: string | string[] | undefined;
     readonly returnTo?: string | string[] | undefined;
   }>;
 }) {
@@ -25,6 +26,7 @@ export default async function LoginPage({
     <MagicLinkLogin
       {...(isStagingEnvironment(process.env) ? { directEmailLogin: true } : {})}
       {...(query.error === 'INVALID_TOKEN' ? { invalidLink: true } : {})}
+      {...(query.mode === 'recovery' ? { recovery: true } : {})}
       returnTo={resolveAuthReturnTo(query.returnTo, POST_LOGIN_DESTINATION)}
     />
   );

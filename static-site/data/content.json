@@ -500,7 +500,9 @@
         "slug": "lidskost-jako-konkurencni-vyhoda",
         "title": "Lidskost jako konkurenční výhoda",
         "kind": "Přednáška",
-        "speakers": ["margareta-krizova"],
+        "speakers": [
+          "margareta-krizova"
+        ],
         "annotation": [
           "V businessu, kde dominují čísla, měřitelný výkon a tlak na neustálý růst, se může lidskost na první pohled zdát jako slabost. Opak je ale pravdou.",
           "Ukážu vám, proč jsou emoční inteligence, moderní leadership a psychologické bezpečí skutečnou konkurenční výhodou 21. století – a jak je využít v praxi.",
@@ -515,7 +517,9 @@
         "slug": "proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate",
         "title": "Proč Vám lidé věří, i když jim nic neprodáváte",
         "kind": "Přednáška",
-        "speakers": ["lukas-hejlik"],
+        "speakers": [
+          "lukas-hejlik"
+        ],
         "annotation": [
           "Gastromapa začala jako osobní vášeň. Dnes je z ní značka, komunita a jeden z nejznámějších průvodců českou gastronomií. Lukáš Hejlík ukáže, co se za roky práce s lidmi naučil o důvěře, osobním doporučení a budování komunity. Proč lidé dají na doporučení člověka, kterému věří? Jak se buduje značka, která nepotřebuje lidi přesvědčovat? A proč může být právě důvěra v dnešní době jednou z největších konkurenčních výhod?"
         ]
@@ -524,7 +528,9 @@
         "slug": "lide-duveruji-lidem",
         "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou",
         "kind": "Přednáška",
-        "speakers": ["hana-slacalkova"],
+        "speakers": [
+          "hana-slacalkova"
+        ],
         "annotation": [
           "Dnes už firmy nebojují jen cenou, produktem nebo reklamou. Bojují hlavně o důvěru zákazníků, kvalitní lidi do týmu a dlouhodobé vztahy. A právě lidé ve firmách – zakladatelé, lídři i týmy – často rozhodují o tom, komu zákazníci uvěří, od koho nakoupí nebo kde budou chtít pracovat.",
           "Na konkrétních příkladech z praxe si ukážeme, proč dnes autenticita, osobní viditelnost a přirozená komunikace fungují lépe než dokonalý marketing. Ukážeme si, jak firmy díky viditelným lidem získávají nové klienty, přitahují kvalitní talenty a budují komunitu lidí, kteří je přirozeně doporučují dál."
@@ -534,7 +540,9 @@
         "slug": "human-magic",
         "title": "Human Magic - a co ta lidskost vlastně je?",
         "kind": "Přednáška",
-        "speakers": ["leonid-kushnir"],
+        "speakers": [
+          "leonid-kushnir"
+        ],
         "annotation": [
           "Ve světě automatizace, dat a umělé inteligence se stává největší konkurenční výhodou to, co nelze nasimulovat - čistá lidskost. Jenže co přesně to \"human magic\" znamená v každodenním byznysu i v životě? Existuje na to vůbec jediná správná odpověď?",
           "Zapomeňte na pasivní poslech. Během tohoto dynamického 30minutového vstupu proměníme celý sál v jednu velkou inovační laboratoř. Využijeme světově uznávanou metodu LEGO® SERIOUS PLAY®, spojíme se do náhodných dvojic a prozkoumáme komplexní téma lidskosti přesně tam, kde vznikají ty nejlepší nápady: v našich rukách."
@@ -551,7 +559,9 @@
         "slug": "kdyz-lidskost-nekonci-u-bran-fabriky",
         "title": "Když lidskost nekončí u bran fabriky: Jak stavět byznys, komunitu a lepší společnost",
         "kind": "Přednáška",
-        "speakers": ["jan-plojhar"],
+        "speakers": [
+          "jan-plojhar"
+        ],
         "annotation": [
           "Co se stane, když se tradiční průmyslová výroba potká s moderní digitalizací, otevřenou komunitou a chutí měnit věci kolem sebe? Jan Plojhar ve své přednášce ukáže, že skutečná lidskost v byznysu není jen prázdná fráze pro HR brožury. Na příkladech z rodinné firmy Plojhar s.r.o. a budování budějovického coworkingu BudeHub nasdílí, jak lidský přístup pomáhá zvládat technologické transformace a držet lidi pohromadě. Pohled úspěšného manažera ale v jeho podání nekončí u firemních výsledků. Dozvíte se, proč by moderní lídři měli vystoupit z komfortní zóny, opustit roli pasivních kritiků a aktivně se zapojit do formování komunity i veřejného prostoru. Protože pokud chceme změnit svět kolem nás, musíme pro to sami něco udělat – klidně jen tím, že nahlas podpoříme ty, kteří do toho jdou."
         ]
@@ -560,7 +570,10 @@
         "slug": "host-to-pozna",
         "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu",
         "kind": "Panelová diskuze",
-        "speakers": ["vladimir-macoun", "konstancie-zelezna"],
+        "speakers": [
+          "vladimir-macoun",
+          "konstancie-zelezna"
+        ],
         "annotation": [
           "V gastru nerozhoduje jen chuť, kvalita surovin nebo design prostoru. Host pozná atmosféru, péči i to, jak spolu lidé za oponou skutečně fungují. Jak se lidskost propisuje do služby, produktu a celkového zážitku? A dá se osobní přístup udržet i ve chvíli, kdy podnik roste, přibývají pravidla a roste tlak na výkon?"
         ]
@@ -569,7 +582,9 @@
         "slug": "prestante-lidi-motivovat",
         "title": "Přestaňte lidi motivovat",
         "kind": "Přednáška",
-        "speakers": ["blanka-mrazkova"],
+        "speakers": [
+          "blanka-mrazkova"
+        ],
         "annotation": [
           "Jedna z nejčastějších otázek ve vedení lidí zní: „Jak motivovat lidi?“",
           "Na dlouhodobý efekt externí motivace nevěřím. Věřím ale na systematické zvyšování angažovanosti týmů. A na rozdíl od navyšování mezd nebo přidávání dalších benefitů to firmu nemusí stát ani korunu navíc.",
@@ -581,7 +596,9 @@
         "slug": "co-vas-dostalo-sem-vas-dal-nedostane",
         "title": "Co vás dostalo sem, vás dál nedostane",
         "kind": "Přednáška",
-        "speakers": ["david-kolar"],
+        "speakers": [
+          "david-kolar"
+        ],
         "annotation": [
           "Při růstu firmy se lídři často dostávají do pomyslných údolí smrti – momentů, kdy přestává fungovat to, co firmu dostalo až sem. Další růst vyžaduje změnu přístupu. David Kolář ukáže, jak rozpoznat strop, na který firma narazila, co je potřeba změnit a jak další růst ustát, aniž by firma spadla dolů."
         ],
@@ -602,7 +619,9 @@
         "slug": "co-mi-nikdo-nerekl-o-tom-byt-ceo",
         "title": "Co mi nikdo neřekl o tom být CEO",
         "kind": "Přednáška",
-        "speakers": ["andrea-bohacikova"],
+        "speakers": [
+          "andrea-bohacikova"
+        ],
         "annotation": [
           "Za posledních patnáct let jsem vedla týmy, startup, jednala s firmami, investory i státní správou i politiky. Měnila firemní kulturu, podílela se na systémových změnách a budovala organizaci, která dnes patří mezi nejvýraznější hlasy v oblasti práce, rodičovství a leadershipu v Česku. A přesto mě na některé věci nikdo nepřipravil.",
           "Na této přednášce otevřeně sdílím zkušenosti, které se do učebnic leadershipu nevejdou. Co se děje ve chvíli, kdy věci nejdou podle plánu? Jak se rozhodovat, když nemáte všechny odpovědi? Jak poznat, co vás skutečně posouvá vpřed a co vás naopak brzdí? A proč bývá největší překážkou růstu často něco úplně jiného, než si myslíme?",
@@ -613,7 +632,11 @@
         "slug": "lidskost-pod-tlakem",
         "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?",
         "kind": "Panelová diskuze",
-        "speakers": ["barbora-tumova", "petr-dvorak", "michal-vesely"],
+        "speakers": [
+          "barbora-tumova",
+          "petr-dvorak",
+          "michal-vesely"
+        ],
         "annotation": [
           "Ve chvíli, kdy firma čelí tlaku na výkon, výsledky a efektivitu, se její hodnoty ukazují v praxi. Jak neztratit lidskost ve velké organizaci, kde se rozhoduje o tisících lidí? A má lidský přístup své hranice? O těžkých rozhodnutích, odpovědnosti a tom, co z firemních hodnot zůstává, když jde do tuhého. Z pohledu top managementu i employer brandingu."
         ]
@@ -622,7 +645,9 @@
         "slug": "jak-vyjednavat-lidsky",
         "title": "Jak vyjednávat lidsky a získávat zákazníky jinak než slevami",
         "kind": "Přednáška",
-        "speakers": ["ondrej-vojacek"],
+        "speakers": [
+          "ondrej-vojacek"
+        ],
         "annotation": [
           "Kolik peněz necháváte každý měsíc na stole při jednání o cenách?",
           "Jako podnikatelé vyjednáváte denně: s dodavateli o lepších cenách vstupů, s odběrateli o zakázkách, s bankou o podmínkách úvěru atd. Naučil vás někdy někdo, jak správně vyjednávat, abyste nenechávali peníze zbytečně ležet na stole?",
@@ -636,7 +661,9 @@
         "slug": "nejdrazsi-konkurencni-vyhoda-lidskost",
         "title": "Nejdražší konkurenční výhoda? Lidskost.",
         "kind": "Přednáška",
-        "speakers": ["jiri-jemelka"],
+        "speakers": [
+          "jiri-jemelka"
+        ],
         "annotation": [
           "Většina firem investuje do technologií, procesů a efektivity. Jen málokterá systematicky investuje do charakteru lidí a firemní kultury.",
           "Přitom právě důvěra, férovost, respekt a schopnost vytvářet zdravé vztahy patří mezi nejcennější aktiva každé organizace. Tato přednáška ukazuje, proč lidskost není slabost ani idealismus, ale tvrdá strategická výhoda, která ovlivňuje výkon, loajalitu lidí, reputaci i dlouhodobou hodnotu firmy."
@@ -646,7 +673,9 @@
         "slug": "zradci-lidskosti",
         "title": "Zrádci lidskosti – moderovaná diskuze",
         "kind": "Moderovaná diskuze",
-        "speakers": ["markus-krug"],
+        "speakers": [
+          "markus-krug"
+        ],
         "annotation": [
           "Zrádci jsou televizní hra, ale situace, které vytvářejí, známe i z pracovního života. Málo informací, velký tlak, boj o vliv, skryté zájmy a otázka, komu se dá věřit. Režisér Markus Krug odhalí, co se děje za kulisami jedné z nejintenzivnějších psychologických her – a co nám chování jejích hráčů ukazuje o důvěře, moci, skupinovém rozhodování i lidskosti v byznysu."
         ]
@@ -655,7 +684,10 @@
         "slug": "co-o-svych-lidech-skutecne-vite",
         "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
         "kind": "Mastermind",
-        "speakers": ["lucie-libovicka", "pavel-janousek"],
+        "speakers": [
+          "lucie-libovicka",
+          "pavel-janousek"
+        ],
         "presenter_title": "Mastermind vedou",
         "annotation": [
           "Jste majitel nebo ředitel firmy? Přijďte ochutnat profesionálně vedený mastermind. V uzavřené skupině maximálně 12 účastníků pod vedením facilitátora a mentora zažijete sdílení zkušeností, získáte inspiraci od majitelů firem z různých oborů, nové úhly pohledu a tipy přímo pro Váš byznys. Počet míst je omezený, registrace bude probíhat prostřednictvím konferenční aplikace. Vedete firmu? Nezapomeňte si rezervovat své místo."
@@ -681,7 +713,9 @@
         "slug": "tyrkysova-firma",
         "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?",
         "kind": "Přednáška",
-        "speakers": ["patrik-cada"],
+        "speakers": [
+          "patrik-cada"
+        ],
         "annotation": [
           "Před třemi lety jsem přestal říkat lidem, co mají dělat, a začal jsem jim věřit. Dnes každý v našem týmu rozhoduje sám, bez mého souhlasu, bez schválení, bez strachu. Tohle je přednáška o tyrkysové firmě zevnitř. A neřeknu vám jen, jak to funguje, ukážu vám to."
         ]
@@ -710,7 +744,9 @@
         "slug": "zmena-je-prilezitosti-leadership-je-cesta",
         "title": "Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.",
         "kind": "Workshop",
-        "speakers": ["leonid-kushnir"],
+        "speakers": [
+          "leonid-kushnir"
+        ],
         "annotation": [
           "Ve světě plném každodenních změn je velice snadné ztratit směr. Pravdou je, že mnozí z nás často uvíznou na mrtvém bodě. Analyzujeme, plánujeme, optimalizujeme – a nenápadně upadáme do pasti „popisné představivosti“. Pouze popisujeme to, co už existuje, a pracujeme v mezích toho, co je, nikoli toho, co by mohlo být.",
           "Tento 90minutový praktický workshop o strategickém leadershipu není jen další běžný seminář. Je to dynamický zážitek navržený pro ty z vás, kteří chtějí aktivně formovat a řídit svůj vlastní přístup k leadershipu.",
@@ -727,6 +763,19 @@
           "Hotové pracovní plátno (canvas) pro vaše každodenní strategické iniciativy."
         ],
         "closing": "Vykročte ze zajetých kolejí a postavte svou budoucnost, kostku po kostce. Zajistěte si své místo a buďte tvůrcem změn, kterého vaše odvětví potřebuje."
+      },
+      {
+        "slug": "nekompetentni-lidskost-jako-cesta-do-pekel",
+        "title": "Nekompetentní lidskost jako cesta do pekel",
+        "kind": "Přednáška",
+        "speakers": [
+          "simon-srp"
+        ],
+        "annotation": [
+          "Přednáška neaspiruje na to, aby si z ní účastnici odnesli konkrétní hard dovednosti, něco, co si následně přenesou do praxe.",
+          "Naší ambicí je předat vám námi interpretovaná reálná tržní data, na jejichž základě chceme změřit přínos a hodnotu lidskosti v kombinaci s kvalitním nebo nekvalitním managementem. Jaký má dopad na angažovanost či rezistenci? Jak se projevuje na reálných výsledcích firmy?",
+          "Věci, co se z učebnice aplikovaného managementu nedozvíte. Reálná praxe evropských firem."
+        ]
       }
     ]
   },
@@ -926,76 +975,512 @@
           {
             "name": "BYZON Stage",
             "events": [
-              { "time": "8:00 - 9:00", "title": "Registrace", "type": "shared", "span": "all" },
-              { "time": "9:00 - 9:15", "title": "Zahájení a slovo primátorky", "type": "shared" },
-              { "time": "9:15 - 10:00", "title": "Lidskost jako konkurenční výhoda", "meta": "Margareta Křížová", "detail": "lidskost-jako-konkurencni-vyhoda" },
-              { "time": "10:00 - 10:15", "title": "Jak na networking", "meta": "Tomáš Řezníček", "detail": "jak-na-networking" },
-              { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
-              { "time": "10:45 - 11:15", "title": "Proč Vám lidé věří, i když jim nic neprodáváte", "meta": "Lukáš Hejlík", "detail": "proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate" },
-              { "time": "11:15 - 11:45", "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou", "meta": "Hana Slačálková", "detail": "lide-duveruji-lidem" },
-              { "time": "11:45 - 12:15", "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu", "meta": "Vladimír Macoun, Konstancie Železná", "type": "discussion", "detail": "host-to-pozna" },
-              { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
-              { "time": "13:15 - 13:45", "title": "Co vás dostalo sem, vás dál nedostane", "meta": "David Kolář", "detail": "co-vas-dostalo-sem-vas-dal-nedostane" },
-              { "time": "13:45 - 14:15", "title": "Co mi nikdo neřekl o tom být CEO", "meta": "Andrea Bohačíková", "detail": "co-mi-nikdo-nerekl-o-tom-byt-ceo" },
-              { "time": "14:15 - 14:45", "title": "Šimon Srp" },
-              { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 15:45", "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?", "meta": "Barbora Tůmová, Petr Dvořák, Michal Veselý", "type": "discussion", "detail": "lidskost-pod-tlakem" },
-              { "time": "15:45 - 16:15", "title": "Jak vyjednávat lidsky a získávat zákazníky jinak než slevami", "meta": "Ondřej Vojáček", "detail": "jak-vyjednavat-lidsky" },
-              { "time": "16:15 - 16:45", "title": "Nejdražší konkurenční výhoda? Lidskost.", "meta": "Jiří Jemelka", "detail": "nejdrazsi-konkurencni-vyhoda-lidskost" },
-              { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
-              { "time": "17:00 - 17:45", "title": "Zrádci lidskosti – moderovaná diskuze", "meta": "Markus Krug", "detail": "zradci-lidskosti" },
-              { "time": "17:45 - 18:00", "title": "Tombola, závěr", "type": "shared" },
-              { "time": "18:00 - 18:15", "title": "Společné foto před Clarionem", "meta": "z dronu", "type": "shared" }
+              {
+                "time": "8:00 - 9:00",
+                "title": "Registrace",
+                "type": "shared",
+                "span": "all",
+                "slug": "byzon-stage-registrace-800900",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "9:00 - 9:15",
+                "title": "Zahájení a slovo primátorky",
+                "type": "shared",
+                "slug": "byzon-stage-zahajeni-a-slovo-primatorky-900915",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "9:15 - 10:00",
+                "title": "Lidskost jako konkurenční výhoda",
+                "meta": "Margareta Křížová",
+                "detail": "lidskost-jako-konkurencni-vyhoda",
+                "slug": "byzon-stage-lidskost-jako-konkurencni-vyhoda-9151000",
+                "speakerSlugs": [
+                  "margareta-krizova"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "10:00 - 10:15",
+                "title": "Jak na networking",
+                "meta": "Tomáš Řezníček",
+                "slug": "byzon-stage-jak-na-networking-10001015",
+                "speakerSlugs": [
+                  "tomas-reznicek"
+                ],
+                "questionMode": "disabled",
+                "detail": "jak-na-networking"
+              },
+              {
+                "time": "10:15 - 10:45",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "byzon-stage-coffee-break-10151045",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "10:45 - 11:15",
+                "title": "Proč Vám lidé věří, i když jim nic neprodáváte",
+                "meta": "Lukáš Hejlík",
+                "detail": "proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate",
+                "slug": "byzon-stage-proc-vam-lide-veri-i-kdyz-jim-nic-neprodavate-10451115",
+                "speakerSlugs": [
+                  "lukas-hejlik"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "11:15 - 11:45",
+                "title": "Lidé důvěřují lidem: Konkurenční výhoda, kterou nejde koupit reklamou",
+                "meta": "Hana Slačálková",
+                "detail": "lide-duveruji-lidem",
+                "slug": "byzon-stage-lide-duveruji-lidem-konkurencni-vyhoda-kterou-nejde-koupit-reklamou-11151145",
+                "speakerSlugs": [
+                  "hana-slacalkova"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "11:45 - 12:15",
+                "title": "Host to pozná: Lidskost jako nejdůležitější ingredience gastro byznysu",
+                "meta": "Vladimír Macoun, Konstancie Železná",
+                "type": "discussion",
+                "detail": "host-to-pozna",
+                "slug": "byzon-stage-host-to-pozna-lidskost-jako-nejdulezitejsi-ingredience-gastro-byznysu-11451215",
+                "speakerSlugs": [
+                  "vladimir-macoun",
+                  "konstancie-zelezna"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "12:15 - 13:15",
+                "title": "Oběd",
+                "type": "meal",
+                "slug": "byzon-stage-obed-12151315",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "13:15 - 13:45",
+                "title": "Co vás dostalo sem, vás dál nedostane",
+                "meta": "David Kolář",
+                "detail": "co-vas-dostalo-sem-vas-dal-nedostane",
+                "slug": "byzon-stage-co-vas-dostalo-sem-vas-dal-nedostane-13151345",
+                "speakerSlugs": [
+                  "david-kolar"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "13:45 - 14:15",
+                "title": "Co mi nikdo neřekl o tom být CEO",
+                "meta": "Andrea Bohačíková",
+                "detail": "co-mi-nikdo-nerekl-o-tom-byt-ceo",
+                "slug": "byzon-stage-co-mi-nikdo-nerekl-o-tom-byt-ceo-13451415",
+                "speakerSlugs": [
+                  "andrea-bohacikova"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "14:15 - 14:45",
+                "title": "Nekompetentní lidskost jako cesta do pekel",
+                "slug": "byzon-stage-simon-srp-14151445",
+                "speakerSlugs": [
+                  "simon-srp"
+                ],
+                "questionMode": "moderated_follow_up",
+                "meta": "Šimon Srp",
+                "detail": "nekompetentni-lidskost-jako-cesta-do-pekel"
+              },
+              {
+                "time": "14:45 - 15:15",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "byzon-stage-coffee-break-14451515",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "15:15 - 15:45",
+                "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?",
+                "meta": "Barbora Tůmová, Petr Dvořák, Michal Veselý",
+                "type": "discussion",
+                "detail": "lidskost-pod-tlakem",
+                "slug": "byzon-stage-lidskost-pod-tlakem-kolik-lidskosti-si-muze-firma-dovolit-15151545",
+                "speakerSlugs": [
+                  "barbora-tumova",
+                  "petr-dvorak",
+                  "michal-vesely"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "15:45 - 16:15",
+                "title": "Jak vyjednávat lidsky a získávat zákazníky jinak než slevami",
+                "meta": "Ondřej Vojáček",
+                "detail": "jak-vyjednavat-lidsky",
+                "slug": "byzon-stage-jak-vyjednavat-lidsky-a-ziskavat-zakazniky-jinak-nez-slevami-15451615",
+                "speakerSlugs": [
+                  "ondrej-vojacek"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "16:15 - 16:45",
+                "title": "Nejdražší konkurenční výhoda? Lidskost.",
+                "meta": "Jiří Jemelka",
+                "detail": "nejdrazsi-konkurencni-vyhoda-lidskost",
+                "slug": "byzon-stage-nejdrazsi-konkurencni-vyhoda-lidskost-16151645",
+                "speakerSlugs": [
+                  "jiri-jemelka"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "16:45 - 17:00",
+                "title": "Coffee break mini",
+                "type": "break",
+                "slug": "byzon-stage-coffee-break-mini-16451700",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "17:00 - 17:45",
+                "title": "Zrádci lidskosti – moderovaná diskuze",
+                "meta": "Markus Krug",
+                "detail": "zradci-lidskosti",
+                "slug": "byzon-stage-zradci-lidskosti-moderovana-diskuze-17001745",
+                "speakerSlugs": [
+                  "markus-krug"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "17:45 - 18:00",
+                "title": "Tombola, závěr",
+                "type": "shared",
+                "slug": "byzon-stage-tombola-zaver-17451800",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "18:00 - 18:15",
+                "title": "Společné foto před Clarionem",
+                "meta": "z dronu",
+                "type": "shared",
+                "slug": "byzon-stage-spolecne-foto-pred-clarionem-18001815",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           },
           {
             "name": "Leadership Stage",
             "events": [
-              { "time": "9:00 - 10:15", "title": "Společně na BYZON Stage", "type": "shared" },
-              { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
-              { "time": "10:45 - 11:15", "title": "Human Magic - a co ta lidskost vlastně je?", "meta": "Leonid Kushnir", "detail": "human-magic" },
-              { "time": "11:15 - 11:45", "title": "Když lidskost nekončí u bran fabriky: Jak stavět byznys, komunitu a lepší společnost", "meta": "Jan Plojhar", "detail": "kdyz-lidskost-nekonci-u-bran-fabriky" },
-              { "time": "11:45 - 12:15", "title": "Přestaňte lidi motivovat", "meta": "Blanka Mrázková", "detail": "prestante-lidi-motivovat" },
-              { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
-              { "time": "13:15 - 13:45", "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?", "meta": "Patrik Čada", "detail": "tyrkysova-firma" },
-              { "time": "13:45 - 14:15", "title": "Jak lidsky získat GenZ a vést s energií", "meta": "Andrea Bílá", "detail": "jak-lidsky-ziskat-genz-a-vest-s-energii" },
-              { "time": "14:15 - 14:45", "title": "Jakub Zikmund" },
-              { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 16:45", "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?", "meta": "Lucie Libovická, Pavel Janoušek", "badge": "Mastermind", "detail": "co-o-svych-lidech-skutecne-vite" },
-              { "time": "16:45 - 17:00", "title": "Coffee break mini", "type": "break" },
-              { "time": "17:00 - 18:15", "title": "Společně na BYZON Stage", "type": "shared" },
-              { "time": "18:15 - 19:00", "title": "Volný program", "type": "shared" },
-              { "time": "19:00 - 21:00", "title": "Řízený networking", "type": "social" },
-              { "time": "21:00 - 24:00", "title": "DJ & afterparty", "type": "social" }
+              {
+                "time": "9:00 - 10:15",
+                "title": "Společně na BYZON Stage",
+                "type": "shared",
+                "slug": "leadership-stage-spolecne-na-byzon-stage-9001015",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "10:15 - 10:45",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "leadership-stage-coffee-break-10151045",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "10:45 - 11:15",
+                "title": "Human Magic - a co ta lidskost vlastně je?",
+                "meta": "Leonid Kushnir",
+                "detail": "human-magic",
+                "slug": "leadership-stage-human-magic-a-co-ta-lidskost-vlastne-je-10451115",
+                "speakerSlugs": [
+                  "leonid-kushnir"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "11:15 - 11:45",
+                "title": "Když lidskost nekončí u bran fabriky: Jak stavět byznys, komunitu a lepší společnost",
+                "meta": "Jan Plojhar",
+                "detail": "kdyz-lidskost-nekonci-u-bran-fabriky",
+                "slug": "leadership-stage-kdyz-lidskost-nekonci-u-bran-fabriky-jak-stavet-byznys-komunitu-a-lepsi-spolecnost-11151145",
+                "speakerSlugs": [
+                  "jan-plojhar"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "11:45 - 12:15",
+                "title": "Přestaňte lidi motivovat",
+                "meta": "Blanka Mrázková",
+                "detail": "prestante-lidi-motivovat",
+                "slug": "leadership-stage-prestante-lidi-motivovat-11451215",
+                "speakerSlugs": [
+                  "blanka-mrazkova"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "12:15 - 13:15",
+                "title": "Oběd",
+                "type": "meal",
+                "slug": "leadership-stage-obed-12151315",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "13:15 - 13:45",
+                "title": "Tyrkysová firma: Co se stane, když svému týmu opravdu věříte?",
+                "meta": "Patrik Čada",
+                "detail": "tyrkysova-firma",
+                "slug": "leadership-stage-tyrkysova-firma-co-se-stane-kdyz-svemu-tymu-opravdu-verite-13151345",
+                "speakerSlugs": [
+                  "patrik-cada"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "13:45 - 14:15",
+                "title": "Jak lidsky získat GenZ a vést s energií",
+                "meta": "Andrea Bílá",
+                "slug": "leadership-stage-jak-lidsky-ziskat-genz-a-vest-s-energii-13451415",
+                "speakerSlugs": [
+                  "andrea-bila"
+                ],
+                "questionMode": "moderated_follow_up",
+                "detail": "jak-lidsky-ziskat-genz-a-vest-s-energii"
+              },
+              {
+                "time": "14:15 - 14:45",
+                "title": "Jakub Zikmund",
+                "slug": "leadership-stage-jakub-zikmund-14151445",
+                "speakerSlugs": [
+                  "jakub-zikmund"
+                ],
+                "questionMode": "moderated_follow_up"
+              },
+              {
+                "time": "14:45 - 15:15",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "leadership-stage-coffee-break-14451515",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "15:15 - 16:45",
+                "title": "Co o svých lidech skutečně víte? Měříte výkon, potenciál nebo jen dojmy?",
+                "meta": "Lucie Libovická, Pavel Janoušek",
+                "badge": "Mastermind",
+                "detail": "co-o-svych-lidech-skutecne-vite",
+                "slug": "leadership-stage-co-o-svych-lidech-skutecne-vite-merite-vykon-potencial-nebo-jen-dojmy-15151645",
+                "speakerSlugs": [
+                  "lucie-libovicka",
+                  "pavel-janousek"
+                ],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "16:45 - 17:00",
+                "title": "Coffee break mini",
+                "type": "break",
+                "slug": "leadership-stage-coffee-break-mini-16451700",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "17:00 - 18:15",
+                "title": "Společně na BYZON Stage",
+                "type": "shared",
+                "slug": "leadership-stage-spolecne-na-byzon-stage-17001815",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "18:15 - 19:00",
+                "title": "Volný program",
+                "type": "shared",
+                "slug": "leadership-stage-volny-program-18151900",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "19:00 - 21:00",
+                "title": "Řízený networking",
+                "type": "networking",
+                "slug": "leadership-stage-rizeny-networking-19002100",
+                "speakerSlugs": [
+                  "tomas-reznicek"
+                ],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "21:00 - 24:00",
+                "title": "DJ & afterparty",
+                "type": "social",
+                "slug": "leadership-stage-dj-afterparty-21002400",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           },
           {
             "name": "Koučovací zóna",
             "note": "Koučování probíhá v paralelních 30minutových slotech.",
             "events": [
-              { "time": "9:15 - 9:45", "title": "Koučovací sloty" },
-              { "time": "9:45 - 10:15", "title": "Koučovací sloty" },
-              { "time": "10:15 - 10:45", "title": "Coffee break", "type": "break" },
-              { "time": "10:45 - 11:15", "title": "Koučovací sloty" },
-              { "time": "11:15 - 11:45", "title": "Koučovací sloty" },
-              { "time": "11:45 - 12:15", "title": "Koučovací sloty" },
-              { "time": "12:15 - 13:15", "title": "Oběd", "type": "meal" },
-              { "time": "13:15 - 13:45", "title": "Koučovací sloty" },
-              { "time": "13:45 - 14:15", "title": "Koučovací sloty" },
-              { "time": "14:15 - 14:45", "title": "Koučovací sloty" },
-              { "time": "14:45 - 15:15", "title": "Coffee break", "type": "break" },
-              { "time": "15:15 - 15:45", "title": "Koučovací sloty" },
-              { "time": "15:45 - 16:15", "title": "Koučovací sloty" },
-              { "time": "16:15 - 16:45", "title": "Koučovací sloty" }
+              {
+                "time": "9:15 - 9:45",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-915945",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "9:45 - 10:15",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-9451015",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "10:15 - 10:45",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "koucovaci-zona-coffee-break-10151045",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "10:45 - 11:15",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-10451115",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "11:15 - 11:45",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-11151145",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "11:45 - 12:15",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-11451215",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "12:15 - 13:15",
+                "title": "Oběd",
+                "type": "meal",
+                "slug": "koucovaci-zona-obed-12151315",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "13:15 - 13:45",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-13151345",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "13:45 - 14:15",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-13451415",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "14:15 - 14:45",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-14151445",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "14:45 - 15:15",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "koucovaci-zona-coffee-break-14451515",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "15:15 - 15:45",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-15151545",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "15:45 - 16:15",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-15451615",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "16:15 - 16:45",
+                "title": "Koučovací sloty",
+                "slug": "koucovaci-zona-koucovaci-sloty-16151645",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           },
           {
             "name": "Networking a afterparty",
             "events": [
-              { "time": "18:15 - 19:00", "title": "Volný program" },
-              { "time": "19:00 - 21:00", "title": "Řízený networking", "meta": "Tomáš Řezníček", "detail": "rizeny-networking" },
-              { "time": "21:00 - 24:00", "title": "DJ & afterparty", "type": "social" },
-              { "time": "24:00 - ?", "title": "Ukončení na Clarionu", "meta": "přesun na after-afterparty", "type": "social" }
+              {
+                "time": "18:15 - 19:00",
+                "title": "Volný program",
+                "slug": "networking-a-afterparty-volny-program-18151900",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "19:00 - 21:00",
+                "title": "Řízený networking",
+                "meta": "Tomáš Řezníček",
+                "slug": "networking-a-afterparty-rizeny-networking-19002100",
+                "speakerSlugs": [
+                  "tomas-reznicek"
+                ],
+                "questionMode": "disabled",
+                "detail": "rizeny-networking"
+              },
+              {
+                "time": "21:00 - 24:00",
+                "title": "DJ & afterparty",
+                "type": "social",
+                "slug": "networking-a-afterparty-dj-afterparty-21002400",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "24:00 - ?",
+                "title": "Ukončení na Clarionu",
+                "meta": "přesun na after-afterparty",
+                "type": "social",
+                "slug": "networking-a-afterparty-ukonceni-na-clarionu-2400",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           }
         ]
@@ -1007,23 +1492,121 @@
           {
             "name": "IN LOCO Clarion",
             "events": [
-              { "time": "9:00 - 9:15", "title": "Registrace", "type": "shared" },
-              { "time": "9:15 - 9:30", "title": "Úvod představení JCI", "type": "shared" },
-              { "time": "9:30 - 11:00", "title": "Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.", "meta": "Leonid Kushnir", "detail": "zmena-je-prilezitosti-leadership-je-cesta" },
-              { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
-              { "time": "11:15 - 12:45", "title": "Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky", "meta": "Blanka Mrázková", "detail": "jak-vest-1-1-ktere-nejsou-ztratou-casu" },
-              { "time": "12:45 - 13:00", "title": "Poděkování, rozloučení", "type": "shared" },
-              { "time": "13:00 - 15:15", "title": "Volný program", "type": "shared", "span": "all", "compact": true }
+              {
+                "time": "9:00 - 9:15",
+                "title": "Registrace",
+                "type": "shared",
+                "slug": "in-loco-clarion-registrace-900915",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "9:15 - 9:30",
+                "title": "Úvod představení JCI",
+                "type": "shared",
+                "slug": "in-loco-clarion-uvod-predstaveni-jci-915930",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "9:30 - 11:00",
+                "title": "Změna je příležitostí, leadership je cesta. Uchopte svůj osobní leadership skrze metodu LEGO® SERIOUS PLAY®.",
+                "meta": "Leonid Kushnir",
+                "detail": "zmena-je-prilezitosti-leadership-je-cesta",
+                "slug": "in-loco-clarion-zmena-je-prilezitosti-leadership-je-cesta-uchopte-svuj-osobni-leadership-skrze-metodu-lego-serious-play-9301100",
+                "speakerSlugs": [
+                  "leonid-kushnir"
+                ],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "11:00 - 11:15",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "in-loco-clarion-coffee-break-11001115",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "11:15 - 12:45",
+                "title": "Jak vést 1:1, které nejsou ztrátou času, ale reálně mění lidi i výsledky",
+                "meta": "Blanka Mrázková",
+                "detail": "jak-vest-1-1-ktere-nejsou-ztratou-casu",
+                "slug": "in-loco-clarion-workshop-blanka-mrazkova-11151245",
+                "speakerSlugs": [
+                  "blanka-mrazkova"
+                ],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "12:45 - 13:00",
+                "title": "Poděkování, rozloučení",
+                "type": "shared",
+                "slug": "in-loco-clarion-podekovani-rozlouceni-12451300",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "13:00 - 15:15",
+                "title": "Volný program",
+                "type": "shared",
+                "span": "all",
+                "compact": true,
+                "slug": "in-loco-clarion-volny-program-13001515",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           },
           {
             "name": "Předsálí Clarion",
             "events": [
-              { "time": "9:15 - 9:30", "title": "Společně v sálu IN LOCO", "type": "shared" },
-              { "time": "9:30 - 11:00", "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1", "meta": "Tomáš Ryza", "detail": "chci-mluvit-s-clovekem" },
-              { "time": "11:00 - 11:15", "title": "Coffee break", "type": "break" },
-              { "time": "11:15 - 12:45", "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2", "meta": "Tomáš Ryza", "detail": "chci-mluvit-s-clovekem" },
-              { "time": "12:45 - 13:00", "title": "Společně v sálu IN LOCO", "type": "shared" }
+              {
+                "time": "9:15 - 9:30",
+                "title": "Společně v sálu IN LOCO",
+                "type": "shared",
+                "slug": "predsali-clarion-spolecne-v-salu-in-loco-915930",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "9:30 - 11:00",
+                "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 1",
+                "meta": "Tomáš Ryza",
+                "slug": "predsali-clarion-mastermind-cast-1-9301100",
+                "speakerSlugs": [
+                  "tomas-ryza"
+                ],
+                "questionMode": "disabled",
+                "detail": "chci-mluvit-s-clovekem"
+              },
+              {
+                "time": "11:00 - 11:15",
+                "title": "Coffee break",
+                "type": "break",
+                "slug": "predsali-clarion-coffee-break-11001115",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "11:15 - 12:45",
+                "title": "„Chci mluvit s člověkem“: Kdy je lidský přístup konkurenční výhodou? – skupina 2",
+                "meta": "Tomáš Ryza",
+                "slug": "predsali-clarion-mastermind-cast-2-11151245",
+                "speakerSlugs": [
+                  "tomas-ryza"
+                ],
+                "questionMode": "disabled",
+                "detail": "chci-mluvit-s-clovekem"
+              },
+              {
+                "time": "12:45 - 13:00",
+                "title": "Společně v sálu IN LOCO",
+                "type": "shared",
+                "slug": "predsali-clarion-spolecne-v-salu-in-loco-12451300",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           },
           {
@@ -1031,8 +1614,21 @@
             "note": "Rudolfovská tř. 34, České Budějovice",
             "mobile_label": "Bude Hub · Rudolfovská tř. 34, České Budějovice",
             "events": [
-              { "time": "15:15 - 17:15", "title": "Finále JCI Debating 2026" },
-              { "time": "17:15 - 18:30", "title": "Galakoktejl - předání JCI awards (nejlepší projekty, leader roku)", "type": "social" }
+              {
+                "time": "15:15 - 17:15",
+                "title": "Finále JCI Debating 2026",
+                "slug": "bude-hub-finale-jci-debating-2026-15151715",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              },
+              {
+                "time": "17:15 - 18:30",
+                "title": "Galakoktejl - předání JCI awards (nejlepší projekty, leader roku)",
+                "type": "social",
+                "slug": "bude-hub-galakoktejl-predani-jci-awards-nejlepsi-projekty-leader-roku-17151830",
+                "speakerSlugs": [],
+                "questionMode": "disabled"
+              }
             ]
           }
         ]

@@ -153,7 +153,7 @@ describe('production auth mail provider', () => {
     expect(JSON.stringify(body)).not.toContain('re_secret');
   });
 
-  it('renders participant invitations with the app call to action and escaped name', async () => {
+  it('renders participant invitations with the app call to action and a Czech greeting', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Promise.resolve(new Response('{"id":"mail-id"}')),
     );
@@ -168,14 +168,17 @@ describe('production auth mail provider', () => {
       url: 'https://app.byzon.cz/api/auth/magic-link/verify?token=synthetic&callbackURL=%2Fapp',
       purpose: 'participant-invitation',
       recipientName: 'Kateřina <Novotná>',
+      firstName: 'Kateřina',
     });
 
     const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
-    expect(body.subject).toBe('Pozvánka do účastnické aplikace BYZON 2026');
-    expect(body.text).toContain('účastnické aplikace BYZON 2026');
-    expect(body.text).toContain('Aktivační odkaz platí 24 hodin');
-    expect(body.html).toContain('Otevřít účastnickou aplikaci');
-    expect(body.html).toContain('Kateřina &lt;Novotná&gt;');
+    expect(body.subject).toBe(
+      'BYZON 2026: Váš přístup do konferenční aplikace',
+    );
+    expect(body.text).toContain('aplikace konference BYZON 2026');
+    expect(body.text).toContain('Odkaz platí 24 hodin');
+    expect(body.html).toContain('Otevřít aplikaci');
+    expect(body.html).toContain('Dobrý den, Kateřino,');
     expect(body.html).not.toContain('Kateřina <Novotná>');
   });
 
@@ -194,14 +197,15 @@ describe('production auth mail provider', () => {
       url: 'https://app.byzon.cz/api/auth/magic-link/verify?token=synthetic&callbackURL=%2Fadmin',
       purpose: 'team-invitation',
       recipientName: 'Jana <Týmová>',
+      firstName: 'Jana',
     });
 
     const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
-    expect(body.subject).toBe('Pozvánka do administrace BYZON 2026');
+    expect(body.subject).toBe('BYZON 2026: pozvánka do organizačního týmu');
     expect(body.text).toContain('týmu BYZON 2026');
-    expect(body.text).toContain('Aktivační odkaz platí 24 hodin');
+    expect(body.text).toContain('Odkaz platí 24 hodin');
     expect(body.html).toContain('Otevřít administraci');
-    expect(body.html).toContain('Jana &lt;Týmová&gt;');
+    expect(body.html).toContain('Dobrý den, Jano,');
     expect(body.html).not.toContain('Jana <Týmová>');
   });
 
@@ -223,8 +227,8 @@ describe('production auth mail provider', () => {
     });
 
     const body = JSON.parse(String(fetch.mock.calls[0]![1]?.body));
-    expect(body.subject).toBe('Aktivace účtu BYZON 2026');
-    expect(body.text).toContain('Aktivační odkaz platí 24 hodin');
+    expect(body.subject).toBe('BYZON 2026: dokončete aktivaci účtu');
+    expect(body.text).toContain('Odkaz platí 24 hodin');
     expect(body.html).toContain('Aktivovat účet');
   });
 });

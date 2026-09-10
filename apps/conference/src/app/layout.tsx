@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   description: 'Konferenční aplikace BYZON 2026',
   applicationName: 'BYZON 2026',
   manifest: '/manifest.webmanifest',
+  icons: { apple: '/icons/apple-touch-icon.png' },
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'BYZON' },
 };
 

@@ -1,0 +1,324 @@
+[
+  {
+    "name": "account-activation.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "announcement.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "participant-invitation.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "program_changed.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "rating_reminder.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "reservation_cancelled.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "reservation_confirmed.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "sign-in.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "team-invitation.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "waitlist_joined.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "waitlist_left.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "waitlist_promoted.html",
+    "width": 375,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "account-activation.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "announcement.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "participant-invitation.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "program_changed.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "rating_reminder.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "reservation_cancelled.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "reservation_confirmed.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "sign-in.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "team-invitation.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "waitlist_joined.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "waitlist_left.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "waitlist_promoted.html",
+    "width": 660,
+    "overflow": false,
+    "links": 3,
+    "logoLoaded": true
+  },
+  {
+    "name": "account-activation.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "announcement.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "participant-invitation.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "program_changed.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "rating_reminder.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "reservation_cancelled.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "reservation_confirmed.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "sign-in.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "team-invitation.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "waitlist_joined.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "waitlist_left.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "waitlist_promoted.html",
+    "width": 375,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "account-activation.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "announcement.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "participant-invitation.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "program_changed.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "rating_reminder.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "reservation_cancelled.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "reservation_confirmed.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "sign-in.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "team-invitation.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "waitlist_joined.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "waitlist_left.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "waitlist_promoted.html",
+    "width": 660,
+    "mode": "no-head-body-or-assets",
+    "overflow": false
+  },
+  {
+    "name": "long-auth-no-assets",
+    "width": 375,
+    "overflow": false
+  },
+  {
+    "name": "long-announcement-no-assets",
+    "width": 375,
+    "overflow": false
+  }
+]

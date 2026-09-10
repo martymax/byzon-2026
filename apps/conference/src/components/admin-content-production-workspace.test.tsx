@@ -64,6 +64,15 @@ describe('AdminContentProductionWorkspace', () => {
       }),
     );
     expect(mocks.workspace.mock.calls[0]![0]).not.toHaveProperty('port');
+    expect(mocks.workspace.mock.calls[0]![0]).toHaveProperty(
+      'assetPort',
+      expect.objectContaining({
+        resolve: expect.any(Function),
+        replace: expect.any(Function),
+        remove: expect.any(Function),
+        download: expect.any(Function),
+      }),
+    );
   });
 
   it.each([

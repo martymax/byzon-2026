@@ -112,6 +112,7 @@ const AgendaItem = ({
 
   return (
     <article
+      data-tour="agenda-item"
       className={`agenda-item agenda-item--${status.tone}${
         cancelled ? ' agenda-item--cancelled' : ''
       }`}
@@ -260,14 +261,13 @@ export const ParticipantAgenda = ({
 
   return (
     <section className="app-page agenda-page">
-      <header className="agenda-heading">
+      <header className="agenda-heading" data-tour="agenda-heading">
         <p className="eyebrow">Můj plán</p>
         <h1 data-route-heading tabIndex={-1}>
           Osobní agenda
         </h1>
         <p className="lead">
-          Uložené body, potvrzené rezervace i čekací listina v jednom kanonickém
-          přehledu.
+          Uložené body, potvrzené rezervace i čekací listina na jednom místě.
         </p>
       </header>
       {resource.state.status === 'ready' ? (
