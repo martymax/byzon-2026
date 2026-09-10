@@ -629,6 +629,19 @@
         ]
       },
       {
+        "slug": "nekompetentni-lidskost-jako-cesta-do-pekel",
+        "title": "Nekompetentní lidskost jako cesta do pekel",
+        "kind": "Přednáška",
+        "speakers": [
+          "simon-srp"
+        ],
+        "annotation": [
+          "Přednáška neaspiruje na to, aby si z ní účastnici odnesli konkrétní hard dovednosti, něco, co si následně přenesou do praxe.",
+          "Naší ambicí je předat vám námi interpretovaná reálná tržní data, na jejichž základě chceme změřit přínos a hodnotu lidskosti v kombinaci s kvalitním nebo nekvalitním managementem. Jaký má dopad na angažovanost či rezistenci? Jak se projevuje na reálných výsledcích firmy?",
+          "Věci, co se z učebnice aplikovaného managementu nedozvíte. Reálná praxe evropských firem."
+        ]
+      },
+      {
         "slug": "lidskost-pod-tlakem",
         "title": "Lidskost pod tlakem: Kolik lidskosti si může firma dovolit?",
         "kind": "Panelová diskuze",
@@ -763,19 +776,6 @@
           "Hotové pracovní plátno (canvas) pro vaše každodenní strategické iniciativy."
         ],
         "closing": "Vykročte ze zajetých kolejí a postavte svou budoucnost, kostku po kostce. Zajistěte si své místo a buďte tvůrcem změn, kterého vaše odvětví potřebuje."
-      },
-      {
-        "slug": "nekompetentni-lidskost-jako-cesta-do-pekel",
-        "title": "Nekompetentní lidskost jako cesta do pekel",
-        "kind": "Přednáška",
-        "speakers": [
-          "simon-srp"
-        ],
-        "annotation": [
-          "Přednáška neaspiruje na to, aby si z ní účastnici odnesli konkrétní hard dovednosti, něco, co si následně přenesou do praxe.",
-          "Naší ambicí je předat vám námi interpretovaná reálná tržní data, na jejichž základě chceme změřit přínos a hodnotu lidskosti v kombinaci s kvalitním nebo nekvalitním managementem. Jaký má dopad na angažovanost či rezistenci? Jak se projevuje na reálných výsledcích firmy?",
-          "Věci, co se z učebnice aplikovaného managementu nedozvíte. Reálná praxe evropských firem."
-        ]
       }
     ]
   },
