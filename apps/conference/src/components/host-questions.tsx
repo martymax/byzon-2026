@@ -468,8 +468,31 @@ export function ModeratorFeed({
             <ol className={styles.list}>
               {items.map((item) => (
                 <li id={`question-${item.questionId}`} key={item.questionId}>
-                  <Card>
-                    <p className={styles.meta}>
+                  <Card
+                    className={
+                      item.answeredAt ? styles.answeredQuestion : undefined
+                    }
+                  >
+                    <p
+                      className={
+                        item.answeredAt ? styles.answeredStatus : styles.meta
+                      }
+                    >
+                      {item.answeredAt ? (
+                        <svg
+                          aria-hidden="true"
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      ) : null}
                       {item.answeredAt
                         ? 'Zodpovězeno na konferenci'
                         : 'Čeká na odpověď'}

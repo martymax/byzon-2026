@@ -219,3 +219,31 @@
   padding-top: 1rem;
   border-top: 1px solid var(--byzon-border);
 }
+
+.feed .answeredQuestion {
+  background: var(--byzon-success-soft);
+  border-color: var(--byzon-success);
+  box-shadow: none;
+}
+.answeredStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--byzon-radius-pill);
+  background: var(--byzon-surface);
+  color: var(--byzon-success);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.answeredStatus svg {
+  flex-shrink: 0;
+}
+.answeredQuestion .questionAuthor {
+  color: var(--byzon-success);
+}
+.answeredQuestion :is(.mergedOriginal, .questionActions) {
+  border-color: var(--byzon-success);
+}
