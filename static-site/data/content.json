@@ -955,6 +955,12 @@
         "websiteUrl": "https://www.igycentrum.cz/",
         "tall": true,
         "on_dark": false
+      },
+      {
+        "name": "BudeHub",
+        "src": "/assets/img/2026/09/budehub.png",
+        "websiteUrl": "https://www.budehub.cz/",
+        "on_dark": false
       }
     ],
     "organizer": {
