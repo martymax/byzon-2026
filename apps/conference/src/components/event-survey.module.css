@@ -126,10 +126,6 @@
   padding: 0.75rem 0.375rem;
   overflow-wrap: anywhere;
 }
-.rating strong {
-  font-size: 1.5rem;
-  line-height: 1.2;
-}
 .skip {
   margin-top: 0.5rem;
   font-size: 0.9375rem;

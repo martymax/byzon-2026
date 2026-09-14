@@ -93,9 +93,6 @@ function Question({
               checked={value === option}
               onChange={() => change(option)}
             />
-            {question.kind === 'rating' ? (
-              <strong aria-hidden="true">{option}</strong>
-            ) : null}
             <span>{text}</span>
           </label>
         ))}
@@ -158,9 +155,7 @@ function ProgramQuestions({
     );
   return (
     <div className={styles.groups}>
-      <p className={styles.hint}>
-        4 = spokojen/a · 1 = nespokojen/a. Nevyplněná vystoupení přeskočíme.
-      </p>
+      <p className={styles.hint}>Nevyplněná vystoupení přeskočíme.</p>
       {groups.map((group) => {
         const items = sessions.filter(
           (session) => `${session.day}|${session.stage}` === group,

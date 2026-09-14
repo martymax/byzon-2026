@@ -37,12 +37,10 @@ export const eventSurveyProgramSchema = z.strictObject({
 export const eventSurveySchema = z
   .strictObject({
     version: z.literal(1),
-    gender: z.enum(['man', 'woman', 'other', 'prefer_not_to_say']).nullable(),
+    gender: z.enum(['man', 'woman', 'other', 'prefer_not_to_say']),
     genderOther: text(128),
     city: text(256),
-    ticketSource: z
-      .enum(['company', 'self', 'team', 'speaker', 'other'])
-      .nullable(),
+    ticketSource: z.enum(['company', 'self', 'team', 'speaker', 'other']),
     programVersion: z.number().int().positive().nullable(),
     sessions: z
       .array(

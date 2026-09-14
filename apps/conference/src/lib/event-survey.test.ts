@@ -18,6 +18,20 @@ describe('conference survey contract', () => {
         eventSurveySchema.safeParse({ ...survey, websiteScore: score }).success,
       ).toBe(false);
   });
+  it('requires gender and ticket source while allowing an explicit refusal to disclose gender', () => {
+    const survey = eventSurveyFixture();
+    for (const field of ['gender', 'ticketSource']) {
+      for (const value of [null, undefined, '']) {
+        expect(
+          eventSurveySchema.safeParse({ ...survey, [field]: value }).success,
+        ).toBe(false);
+      }
+    }
+    expect(
+      eventSurveySchema.safeParse({ ...survey, gender: 'prefer_not_to_say' })
+        .success,
+    ).toBe(true);
+  });
   it('rejects contradictory attendance, duplicate sessions and missing published version', () => {
     const survey = eventSurveyFixture();
     expect(
@@ -78,6 +92,7 @@ describe('conference survey contract', () => {
     const result = buildEventSurveySubmission(
       {
         gender: 'prefer_not_to_say',
+        ticketSource: 'self',
         genderOther: 'Do not submit',
         coachingAttended: 'no',
         coachingScore: '4',

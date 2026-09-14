@@ -86,7 +86,15 @@ const choose = (label: string, choice: string) =>
     .getByRole('group', { name: label, exact: true })
     .getByRole('radio', { name: choice, exact: true })
     .click();
+const answerAbout = async () => {
+  await choose('Jste: (povinné)', 'Nechci odpovídat');
+  await choose(
+    'Jak jste získali vstupenku? (povinné)',
+    'Vstupenku jsem si pořídil/a sám/sama',
+  );
+};
 const throughBasics = async () => {
+  await answerAbout();
   await next();
   await next();
   await choose('Využili jste koučovací zónu? (povinné)', 'Ne');
@@ -128,6 +136,7 @@ it('submits the full survey with separate web/app ratings, published talks and c
     )
     .toBeVisible();
   await expectComponentToPassAxe(screen.container);
+  await answerAbout();
   await next();
   await page.getByText('BYZON stage', { exact: false }).click();
   await choose('Letošní přednáška (volitelné)', 'Spokojen/a');
@@ -152,6 +161,18 @@ it('submits the full survey with separate web/app ratings, published talks and c
     'Networkingu jsem se nezúčastnil/a',
   );
   await next();
+  for (const value of ['1', '2', '3', '4']) {
+    await expect
+      .element(
+        page
+          .getByRole('group', {
+            name: 'Jak hodnotíte web konference byzon.cz? (povinné)',
+            exact: true,
+          })
+          .getByText(value, { exact: true }),
+      )
+      .not.toBeInTheDocument();
+  }
   await page
     .getByRole('textbox', { name: 'Co na webu fungovalo' })
     .fill('Přehledný program.');
@@ -189,6 +210,8 @@ it('submits the full survey with separate web/app ratings, published talks and c
     comment: 'Díky za konferenci.',
     survey: {
       version: 1,
+      gender: 'prefer_not_to_say',
+      ticketSource: 'self',
       programVersion: 7,
       websiteScore: 3,
       appScore: 4,
@@ -206,6 +229,19 @@ it('submits the full survey with separate web/app ratings, published talks and c
 
 it('has no preselected ratings, validates each step and retains answers going back', async () => {
   const { screen, fetcher } = await setup();
+  await next();
+  await expect
+    .element(page.getByRole('alert'))
+    .toHaveTextContent('Doplňte prosím označené otázky (2).');
+  await choose('Jste: (povinné)', 'Nechci odpovídat');
+  await next();
+  await expect
+    .element(page.getByRole('alert'))
+    .toHaveTextContent('Doplňte prosím označené otázky (1).');
+  await choose(
+    'Jak jste získali vstupenku? (povinné)',
+    'Vstupenku jsem si pořídil/a sám/sama',
+  );
   await next();
   await next();
   await next();

@@ -60,10 +60,11 @@ export const surveySections = (
   {
     title: 'Něco o vás',
     description:
-      'Tyto otázky jsou dobrovolné. Pomáhají nám poznat návštěvníky konference.',
+      'Pomozte nám poznat návštěvníky konference. Otázky označené * jsou povinné.',
     questions: [
       {
         id: 'gender',
+        required: true,
         label: 'Jste:',
         kind: 'choice',
         options: [
@@ -88,6 +89,7 @@ export const surveySections = (
       },
       {
         id: 'ticketSource',
+        required: true,
         label: 'Jak jste získali vstupenku?',
         kind: 'choice',
         options: [
@@ -140,7 +142,7 @@ export const surveySections = (
   {
     title: 'Občerstvení a networking',
     description:
-      'Čím vyšší číslo, tím lepší hodnocení. Pokud jste něco nevyužili, zvolte tuto možnost.',
+      'Vyberte, jak jste byli spokojeni. Pokud jste něco nevyužili, zvolte tuto možnost.',
     questions: [
       rating('lunchScore', 'Jak hodnotíte oběd?', 'Oběd jsem nevyužil/a'),
       comment('lunchComment', 'Co nám chcete říct k obědu?'),

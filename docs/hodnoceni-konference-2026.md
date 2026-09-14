@@ -14,7 +14,7 @@ Rozpracované odpovědi zůstávají při přecházení mezi kroky na této str�
 
 ## Otázky
 
-1. **Něco o vás** – dobrovolné: pohlaví včetně „Nechci odpovídat“ a „Jiné“, město/obec, způsob získání vstupenky (firma, vlastní nákup, organizační tým, řečník, jinak).
+1. **Něco o vás** – povinné: pohlaví (včetně možnosti „Nechci odpovídat“ a „Jiné“) a způsob získání vstupenky (firma, vlastní nákup, organizační tým, řečník, jinak). Město/obec a upřesnění „Jiné“ jsou dobrovolné.
 2. **Přednášky a řečníci** – dobrovolné hodnocení jednotlivých letošních vystoupení, seskupených podle dne a stage. Nabídka se načítá ze zveřejněného programu. U každého vystoupení lze uvést, že se ho účastník nezúčastnil. Nevyplněná vystoupení se přeskočí.
 3. **Koučování a workshopy** – účast ano/ne*. Pokud ano: hodnocení aktivity* a dobrovolný komentář. U workshopů navíc dobrovolné hodnocení jednotlivých workshopů a mastermindů z letošního programu.
 4. **Občerstvení a networking** – hodnocení oběda*, coffee breaků* a networkingu*, pokaždé s možností „Nevyužil/a jsem“ a dobrovolným komentářem.
@@ -31,6 +31,8 @@ Rozpracované odpovědi zůstávají při přecházení mezi kroky na této str�
 
 ### Škály
 
+Ve formuláři se zobrazují pouze slovní popisky; čísla 1–4 slouží internímu vyhodnocení.
+
 | Odpověď                    | Uložená hodnota                  |
 | -------------------------- | -------------------------------- |
 | Spokojen/a                 | 4                                |
@@ -41,7 +43,7 @@ Rozpracované odpovědi zůstávají při přecházení mezi kroky na této str�
 
 Celkové hodnocení zachovává možnosti z roku 2025: Výborná (5), Velmi dobrá (4), Dobrá (3), Průměrná (2), Slabá (1). Zájem o další ročník: Určitě ano / Spíše ano / Spíše ne / Určitě ne. Rok se odvozuje od termínu konference, pro BYZON 2026 tedy 2027.
 
-Žádná známka není předvybraná. Čtyřbodová spokojenost a pětibodové celkové hodnocení jsou oddělené škály. Pro srovnání s rokem 2025 je nutné zohlednit dobrovolnost osobních a otevřených otázek i jiné složení respondentů.
+Žádná známka není předvybraná. Čtyřbodová spokojenost a pětibodové celkové hodnocení jsou oddělené škály. Pro srovnání s rokem 2025 je nutné zohlednit dobrovolnost města/obce a otevřených otázek i jiné složení respondentů.
 
 ## Odeslání a dostupnost
 

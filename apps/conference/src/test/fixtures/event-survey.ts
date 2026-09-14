@@ -2,10 +2,10 @@ import type { EventSurvey } from '@byzon/domain/contracts';
 
 export const eventSurveyFixture = (): EventSurvey => ({
   version: 1,
-  gender: null,
+  gender: 'prefer_not_to_say',
   genderOther: null,
   city: null,
-  ticketSource: null,
+  ticketSource: 'self',
   programVersion: null,
   sessions: [],
   coachingAttended: false,
