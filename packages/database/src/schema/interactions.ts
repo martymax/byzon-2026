@@ -4,6 +4,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -150,6 +151,7 @@ export const ratings = pgTable(
     targetType: ratingTargetType('target_type').notNull(),
     score: integer('score').notNull(),
     comment: text('comment'),
+    survey: jsonb('survey').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),

@@ -1,0 +1,1 @@
+ALTER TABLE "ratings" ADD COLUMN "survey" jsonb;

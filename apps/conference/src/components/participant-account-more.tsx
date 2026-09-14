@@ -68,6 +68,9 @@ export const ParticipantMoreHub = ({
             <ActionLink block href="/app/nastaveni" variant="secondary">
               Nastavení a přihlášení
             </ActionLink>
+            <ActionLink block href="/app/hodnoceni" variant="secondary">
+              Hodnocení konference
+            </ActionLink>
           </nav>
 
           {identity.membership.roles.some((role) =>

@@ -151,6 +151,4 @@ export const SessionRating = (props: {
   explicit?: boolean;
   api?: ApiPort;
 }) => <RatingForm {...props} targetType="session" />;
-export const EventRating = (props: { endsAt: string; api?: ApiPort }) => (
-  <RatingForm {...props} targetType="event" explicit />
-);
+export { EventRating } from './event-survey';

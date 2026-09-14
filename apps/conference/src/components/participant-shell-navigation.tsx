@@ -145,6 +145,7 @@ const accountDestinations = [
   '/app/nastaveni',
   '/app/vstupenka',
   '/app/informace',
+  '/app/hodnoceni',
 ] as const;
 
 const isDestination = (pathname: string, href: string): boolean =>

@@ -13,6 +13,7 @@ export * from './offline.js';
 export * from './networking.js';
 export * from './program-calendar.js';
 export * from './questions.js';
+export * from './event-survey.js';
 export * from './support.js';
 export * from './ticket.js';
 export * from './ticket-import.js';

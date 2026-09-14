@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventSurveyProgramSchema, eventSurveySchema } from './event-survey.js';
 
 import {
   defineApiProblemSchema,
@@ -122,12 +123,14 @@ export const ratingStatusResponseSchema = z.strictObject({
   targetType: ratingTargetTypeSchema,
   sessionId: uuidSchema.nullable(),
   completed: z.boolean(),
+  surveyProgram: eventSurveyProgramSchema.nullable().optional(),
 });
 export const ratingSubmitRequestSchema = z.discriminatedUnion('targetType', [
   z.strictObject({
     targetType: z.literal('event'),
     score: z.number().int().min(1).max(5),
     comment: cleanText(1, 2_000).nullable(),
+    survey: eventSurveySchema.optional(),
   }),
   z.strictObject({
     targetType: z.literal('session'),

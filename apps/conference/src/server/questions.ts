@@ -28,6 +28,10 @@ import {
   requireQuestionManagement,
 } from './question-runtime';
 import type { QuestionsRateLimiter } from './questions-rate-limit';
+import {
+  loadEventSurveyProgram,
+  validateEventSurveyProgram,
+} from './event-survey';
 
 const MAX_BODY_BYTES = 8_192;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
@@ -88,7 +92,7 @@ const respondProblem = (error: unknown, requestId: string): Response => {
   return response;
 };
 
-const readJson = async (request: Request) => {
+const readJson = async (request: Request, maximumBytes = MAX_BODY_BYTES) => {
   if (
     request.headers.get('content-type')?.split(';', 1)[0]?.trim() !==
     'application/json'
@@ -101,7 +105,7 @@ const readJson = async (request: Request) => {
     );
   }
   const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > maximumBytes) {
     throw apiProblem(
       422,
       'VALIDATION_FAILED',
@@ -582,6 +586,15 @@ export const handleRatings = async (
           targetType: query.data.targetType,
           sessionId,
           completed: Boolean(existing),
+          ...(query.data.targetType === 'event' && !existing
+            ? {
+                surveyProgram: await loadEventSurveyProgram(
+                  dependencies.db,
+                  actor.eventId,
+                  now,
+                ),
+              }
+            : {}),
         }),
         { headers: privateHeaders(requestId) },
       );
@@ -598,7 +611,7 @@ export const handleRatings = async (
         'The rating request is invalid.',
       );
     }
-    const json = await readJson(request);
+    const json = await readJson(request, 131_072);
     const parsed = ratingSubmitRequestSchema.safeParse(json.value);
     if (!parsed.success) {
       throw apiProblem(
@@ -635,6 +648,14 @@ export const handleRatings = async (
         );
       }
     }
+    if (parsed.data.targetType === 'event' && parsed.data.survey) {
+      await validateEventSurveyProgram(
+        dependencies.db,
+        actor.eventId,
+        now,
+        parsed.data.survey,
+      );
+    }
     const key = readIdempotencyKey(request.headers);
     const generateId = dependencies.generateId ?? generateUuidV7;
     const result = await executeIdempotentMutation(
@@ -665,6 +686,10 @@ export const handleRatings = async (
             targetType: parsed.data.targetType,
             score: parsed.data.score,
             comment: parsed.data.comment,
+            survey:
+              parsed.data.targetType === 'event'
+                ? (parsed.data.survey ?? null)
+                : null,
             createdAt: now,
           })
           .onConflictDoNothing()
