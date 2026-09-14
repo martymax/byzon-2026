@@ -1,5 +1,7 @@
 'use client';
 
+import { TimelessTestSettings } from './timeless-test-settings';
+
 import { Card } from '@byzon/ui';
 
 import { useParticipantAccountResource } from '@/components/participant-account-resource';
@@ -58,6 +60,8 @@ export const ParticipantAccountSettings = ({
           </div>
         )}
       </ParticipantAccountBoundary>
+
+      <TimelessTestSettings />
 
       <SessionExitControls
         api={api}

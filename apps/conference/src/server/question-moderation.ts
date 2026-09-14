@@ -78,6 +78,7 @@ export async function moderateQuestion(
           actor.eventId,
           sessionId,
           now,
+          current.timelessTestMode,
         );
         if (session.record.questionMode !== 'moderated_follow_up')
           questionFailure(

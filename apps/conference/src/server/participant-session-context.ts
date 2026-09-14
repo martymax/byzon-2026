@@ -4,10 +4,13 @@ import { schema, type Database } from '@byzon/database';
 import type { ParticipantSessionContext } from '@/lib/participant-session-context';
 import { CURRENT_EVENT_SLUG } from './current-event';
 
+import { isTimelessTestMode } from './timeless-test-mode';
+
 // Navigation context only. Every protected endpoint still authorizes its request.
 export const resolveParticipantSessionContext = async (
   db: Database,
   userId: string | undefined,
+  requestHeaders?: Headers,
 ): Promise<ParticipantSessionContext | null> => {
   if (!userId) return null;
   const event = await db.query.events.findFirst({
@@ -33,6 +36,9 @@ export const resolveParticipantSessionContext = async (
     ),
   });
   return {
+    timelessTestMode: requestHeaders
+      ? await isTimelessTestMode(db, requestHeaders, event.id, userId)
+      : false,
     isAdmin: roles.some(({ role }) => role === 'organizer_admin'),
     isParticipant: roles.some(({ role }) => role === 'participant'),
   };

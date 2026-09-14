@@ -12,6 +12,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ApiProblemError } from './api/problem';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import type { QuestionsDependencies } from './questions';
+import { isTimelessTestMode } from './timeless-test-mode';
 const QUESTION_GRACE_PERIOD_MS = 30 * 60 * 1000;
 
 export type QuestionDb = Database | DatabaseTransaction;
@@ -88,6 +89,12 @@ export async function loadQuestionActor(
     eventId: event.id,
     userId: identity.user.id,
     eventStatus: event.status,
+    timelessTestMode: await isTimelessTestMode(
+      db,
+      request.headers,
+      event.id,
+      identity.user.id,
+    ),
     roles,
   };
 }
@@ -96,6 +103,7 @@ export async function loadQuestionSession(
   eventId: string,
   sessionId: string,
   now: Date,
+  timelessTestMode = false,
 ): Promise<{
   context: QuestionContext;
   record: typeof schema.programSessions.$inferSelect;
@@ -137,7 +145,8 @@ export async function loadQuestionSession(
       ? 'unsupported'
       : !feature?.questionsEnabled || !record.questionsEnabled
         ? 'disabled'
-        : now.getTime() >= record.endsAt.getTime() + QUESTION_GRACE_PERIOD_MS
+        : !timelessTestMode &&
+            now.getTime() >= record.endsAt.getTime() + QUESTION_GRACE_PERIOD_MS
           ? 'closed'
           : 'open';
   const roomName = snapshot.success

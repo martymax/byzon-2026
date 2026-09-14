@@ -19,7 +19,16 @@ export const ParticipantAdminNotice = () => {
       className="participant-admin-notice"
       aria-label="Administrátorský přístup"
     >
-      <p>Prohlížíte účastnickou aplikaci jako administrátor.</p>
+      <p>
+        {session.timelessTestMode
+          ? 'Testovací režim je zapnutý. Časová omezení pro váš účet neplatí; změny se ukládají.'
+          : 'Prohlížíte účastnickou aplikaci jako administrátor.'}
+      </p>
+      <ActionLink href="/app/nastaveni" variant="secondary">
+        {session.timelessTestMode
+          ? 'Nastavit testovací režim'
+          : 'Testování funkcí'}
+      </ActionLink>
       <ActionLink href="/admin" variant="secondary">
         Zpět do administrace
       </ActionLink>

@@ -9,7 +9,7 @@ zachovávají.
 Na výslovný pokyn vlastníka zatím zůstává `APP_ENV=staging` na webu i workeru,
 `MAIL_PROVIDER=mailpit` a testovací přihlášení e-mailem. Název Railway prostředí
 `production` tedy zatím neznamená ostrý autentizační a e-mailový režim.
-`BYZON_TIMELESS_TEST_MODE` není v nasazeném releasu zapnutý.
+`BYZON_TIMELESS_TEST_MODE` se nepoužívá. Administrátor zapíná časově neomezené testování pro své přihlášení v `/app/nastaveni`; nejde o globální přepínač prostředí. Podrobnosti: [Testovací režim](../timeless-test-mode.md).
 
 Web používá `/railway.web.json`, worker `/railway.worker.json`. Nový deploy
 webu spouští pouze `db:migrate`; automatický seed a import obsahu se při

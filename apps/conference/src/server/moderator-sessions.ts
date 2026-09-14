@@ -65,6 +65,7 @@ export async function readModeratorSessions(
           actor.eventId,
           id,
           now,
+          actor.timelessTestMode,
         );
       } catch (error) {
         if (error instanceof ApiProblemError && error.status === 404) continue;

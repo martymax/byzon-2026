@@ -90,6 +90,7 @@ describe('participant layout event-phase gate', () => {
     expect(layoutMocks.resolveSessionContext).toHaveBeenCalledWith(
       {},
       'admin-id',
+      expect.any(Headers),
     );
     expect(layoutMocks.sessionContext).toHaveBeenCalledWith(context);
   });

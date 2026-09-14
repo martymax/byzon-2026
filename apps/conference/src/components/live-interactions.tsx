@@ -1,5 +1,7 @@
 'use client';
 
+import { useParticipantSessionContext } from './participant-session-context';
+
 import { Button, Card } from '@byzon/ui';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
@@ -22,9 +24,15 @@ const RatingForm = ({
   explicit?: boolean;
   api?: ApiPort;
 }) => {
+  const timelessTestMode =
+    useParticipantSessionContext()?.timelessTestMode === true;
   const [status, setStatus] = useState<
     'waiting' | 'loading' | 'ready' | 'completed' | 'error'
-  >(() => (Date.parse(endsAt) > Date.now() ? 'waiting' : 'loading'));
+  >(() =>
+    !timelessTestMode && Date.parse(endsAt) > Date.now()
+      ? 'waiting'
+      : 'loading',
+  );
   const [retry, setRetry] = useState(0);
   const [working, setWorking] = useState(false);
   const locked = useRef(false);
@@ -34,7 +42,7 @@ const RatingForm = ({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = () => {
       const remaining = Date.parse(endsAt) - Date.now();
-      if (remaining > 0) {
+      if (!timelessTestMode && remaining > 0) {
         timer = setTimeout(load, Math.min(remaining + 100, 60_000));
         return;
       }
@@ -52,7 +60,7 @@ const RatingForm = ({
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [endsAt, sessionId, targetType, retry, api]);
+  }, [endsAt, sessionId, targetType, retry, api, timelessTestMode]);
   if (status !== 'ready') {
     if (!explicit) return null;
     return (

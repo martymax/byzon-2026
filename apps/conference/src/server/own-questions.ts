@@ -39,6 +39,7 @@ export async function readQuestionContext(
       actor.eventId,
       sessionId,
       dependencies.now?.() ?? new Date(),
+      actor.timelessTestMode,
     );
     return Response.json(result.context, { headers });
   } catch (error) {

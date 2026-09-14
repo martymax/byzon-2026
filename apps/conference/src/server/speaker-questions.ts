@@ -51,7 +51,7 @@ async function speakerActor(
   });
   if (
     !features?.questionFollowUpsEnabled ||
-    !['live', 'ended'].includes(actor.eventStatus)
+    (!actor.timelessTestMode && !['live', 'ended'].includes(actor.eventStatus))
   )
     questionFailure(
       'QUESTION_FOLLOW_UPS_DISABLED',
@@ -91,14 +91,20 @@ async function speakerSession(
       403,
       'Tato přednáška vám není přiřazena.',
     );
-  const session = await loadQuestionSession(db, actor.eventId, sessionId, now);
+  const session = await loadQuestionSession(
+    db,
+    actor.eventId,
+    sessionId,
+    now,
+    actor.timelessTestMode,
+  );
   if (session.record.questionMode !== 'moderated_follow_up')
     questionFailure(
       'QUESTIONS_UNSUPPORTED',
       409,
       'Tento blok nepodporuje dotazy.',
     );
-  if (now < session.record.endsAt)
+  if (!actor.timelessTestMode && now < session.record.endsAt)
     questionFailure(
       'QUESTIONS_NOT_OPEN',
       409,

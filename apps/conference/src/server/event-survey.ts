@@ -27,6 +27,7 @@ export const loadEventSurveyProgram = async (
   eventId: string,
   now: Date,
   version?: number,
+  timelessTestMode = false,
 ): Promise<EventSurveyProgram | null> => {
   const publication = await db.query.contentPublications.findFirst({
     columns: { version: true, snapshot: true },
@@ -50,7 +51,7 @@ export const loadEventSurveyProgram = async (
         (session) =>
           ['talk', 'panel', 'workshop', 'mastermind'].includes(session.type) &&
           session.status !== 'cancelled' &&
-          Date.parse(session.endsAt) <= now.getTime(),
+          (timelessTestMode || Date.parse(session.endsAt) <= now.getTime()),
       )
       .sort(
         (a, b) =>
@@ -77,6 +78,7 @@ export const validateEventSurveyProgram = async (
   eventId: string,
   now: Date,
   survey: EventSurvey,
+  timelessTestMode = false,
 ) => {
   if (!survey.sessions.length) return;
   const program = await loadEventSurveyProgram(
@@ -84,6 +86,7 @@ export const validateEventSurveyProgram = async (
     eventId,
     now,
     survey.programVersion!,
+    timelessTestMode,
   );
   const valid =
     program &&

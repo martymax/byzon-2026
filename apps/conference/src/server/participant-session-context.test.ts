@@ -36,7 +36,7 @@ describe('participant shell session context', () => {
       roles.mockResolvedValue((values as string[]).map((role) => ({ role })));
       await expect(
         resolveParticipantSessionContext(db, 'user-id'),
-      ).resolves.toEqual(expected);
+      ).resolves.toEqual({ ...expected, timelessTestMode: false });
     },
   );
 

@@ -17,10 +17,12 @@ export const dynamic = 'force-dynamic';
 const loadSessionNavigationContext = async (previewAvailable: boolean) => {
   if (previewAvailable) return null;
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const requestHeaders = await headers();
+    const session = await auth.api.getSession({ headers: requestHeaders });
     return await resolveParticipantSessionContext(
       database.db,
       session?.user.id,
+      requestHeaders,
     );
   } catch {
     // Navigation hints must not make the account recovery controls unreachable.

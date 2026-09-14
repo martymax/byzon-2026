@@ -1,3 +1,4 @@
+import { isTimelessTestMode } from './timeless-test-mode';
 import { queueBookingEmail } from './email-notifications';
 import {
   acquireTransactionLock,
@@ -99,6 +100,8 @@ type AgendaEvent = Pick<
 >;
 
 interface AgendaContext {
+  testHeaders?: Headers;
+  timelessTestMode?: boolean;
   event: AgendaEvent;
   program: PublishedProgramAgendaSnapshot;
   publicationVersion: number;
@@ -405,6 +408,7 @@ const loadAgendaContext = async (
   userId: string,
   now: Date,
   mutation: boolean,
+  requestHeaders?: Headers,
 ): Promise<AgendaContext> => {
   const loadedEvent = await dependencies.db.query.events.findFirst({
     columns: {
@@ -420,7 +424,20 @@ const loadAgendaContext = async (
   });
   const event = requireAgendaEventAvailable(loadedEvent, now, mutation);
   await requireAgendaPermission(dependencies.db, userId, event.id);
-  return loadAgendaPublication(dependencies.db, event);
+  return {
+    ...(await loadAgendaPublication(dependencies.db, event)),
+    ...(requestHeaders
+      ? {
+          testHeaders: requestHeaders,
+          timelessTestMode: await isTimelessTestMode(
+            dependencies.db,
+            requestHeaders,
+            event.id,
+            userId,
+          ),
+        }
+      : {}),
+  };
 };
 
 const requireAgendaPermission = async (
@@ -506,6 +523,7 @@ const capacityProjection = (
   published: PublishedProgramAgendaSnapshot['sessions'][number],
   confirmed: number,
   now: Date,
+  timelessTestMode = false,
 ): Pick<ParticipantAgendaItem, 'action' | 'capacity'> => {
   if (session.capacityMode !== 'reservation' || session.capacity === null) {
     return {
@@ -529,7 +547,8 @@ const capacityProjection = (
       : published.reservationClosesAt === null
         ? Date.parse(published.startsAt)
         : Date.parse(published.reservationClosesAt);
-  const closed = now.getTime() < opensAt || now.getTime() >= closesAt;
+  const closed =
+    !timelessTestMode && (now.getTime() < opensAt || now.getTime() >= closesAt);
   return {
     capacity: {
       mode: 'reservation',
@@ -829,6 +848,7 @@ const loadParticipantAgendaSnapshotUnlocked = async (
       reservationPublished,
       confirmed,
       now,
+      context.timelessTestMode,
     );
     const state =
       published.status === 'cancelled'
@@ -897,7 +917,8 @@ const loadParticipantAgendaSnapshotUnlocked = async (
           confirmedAt: reservation.createdAt.toISOString(),
           cancellation:
             common.session.status === 'published' &&
-            now.getTime() < Date.parse(reservationPublished.startsAt)
+            (context.timelessTestMode ||
+              now.getTime() < Date.parse(reservationPublished.startsAt))
               ? { state: 'available' }
               : { state: 'unavailable', reason: 'closed' },
         },
@@ -1032,6 +1053,14 @@ export const loadParticipantAgendaSnapshot = async (
     );
     await requireAgendaPermission(transaction, userId, context.event.id);
     const lockedContext = await loadAgendaPublication(transaction, lockedEvent);
+    lockedContext.timelessTestMode = context.testHeaders
+      ? await isTimelessTestMode(
+          transaction,
+          context.testHeaders,
+          context.event.id,
+          userId,
+        )
+      : false;
     return loadParticipantAgendaSnapshotUnlocked(
       transaction,
       lockedContext,
@@ -1487,6 +1516,7 @@ const readParticipantAgendaRepresentation = async (
       session.user.id,
       now,
       false,
+      request.headers,
     );
     const body = await loadParticipantAgendaSnapshot(
       dependencies.db,
@@ -1562,6 +1592,7 @@ async function readParticipantAgendaCalendarWithTicket(
         session.user.id,
         now,
         false,
+        request.headers,
       );
       const body = await loadParticipantAgendaSnapshot(
         dependencies.db,
@@ -1649,6 +1680,7 @@ export const mutateParticipantAgenda = async (
       session.user.id,
       now,
       false,
+      request.headers,
     );
     canonical = { context, userId: session.user.id };
     const json = await readBoundedJson(request);
@@ -1707,11 +1739,17 @@ export const mutateParticipantAgenda = async (
         }
         const mutationNow = getNow();
         responseNow = mutationNow;
+        const timelessTestMode = await isTimelessTestMode(
+          transaction,
+          request.headers,
+          context.event.id,
+          session.user.id,
+        );
         const lockedEvent = await loadCurrentAgendaEvent(
           transaction,
           context.event.id,
           mutationNow,
-          true,
+          !timelessTestMode,
         );
         await requireAgendaPermission(
           transaction,
@@ -1722,6 +1760,7 @@ export const mutateParticipantAgenda = async (
           transaction,
           lockedEvent,
         );
+        lockedContext.timelessTestMode = timelessTestMode;
         const publishedTarget = targetPublishedSession(
           lockedContext,
           parsed.data.sessionId,
@@ -1911,8 +1950,9 @@ export const mutateParticipantAgenda = async (
             throw sessionNotFound();
           }
           if (
+            !timelessTestMode &&
             mutationNow.getTime() >=
-            Date.parse(reservationPublishedTarget.startsAt)
+              Date.parse(reservationPublishedTarget.startsAt)
           ) {
             throw new AgendaReservationClosedError(parsed.data.sessionId);
           }
@@ -2030,8 +2070,9 @@ export const mutateParticipantAgenda = async (
                 ? Date.parse(reservationPublishedTarget.startsAt)
                 : Date.parse(reservationPublishedTarget.reservationClosesAt);
           if (
-            mutationNow.getTime() < opensAt ||
-            mutationNow.getTime() >= closesAt
+            !timelessTestMode &&
+            (mutationNow.getTime() < opensAt ||
+              mutationNow.getTime() >= closesAt)
           ) {
             throw new AgendaReservationClosedError(parsed.data.sessionId);
           }

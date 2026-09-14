@@ -33,6 +33,8 @@ import {
   validateEventSurveyProgram,
 } from './event-survey';
 
+import { isTimelessTestMode } from './timeless-test-mode';
+
 const MAX_BODY_BYTES = 8_192;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 const uuidSchema = z.string().uuid();
@@ -168,7 +170,17 @@ const loadEventActor = async (
       'The interaction is unavailable.',
     );
   }
-  return { endsAt: event.endsAt, eventId: event.id, userId: identity.user.id };
+  return {
+    endsAt: event.endsAt,
+    eventId: event.id,
+    userId: identity.user.id,
+    timelessTestMode: await isTimelessTestMode(
+      dependencies.db,
+      request.headers,
+      event.id,
+      identity.user.id,
+    ),
+  };
 };
 
 const requireParticipantRole = async (
@@ -253,13 +265,18 @@ export const submitQuestion = async (
           actor.userId,
           sessionId,
         );
-        await loadQuestionActor(request, dependencies, transaction);
+        const currentActor = await loadQuestionActor(
+          request,
+          dependencies,
+          transaction,
+        );
         const submittedAt = dependencies.now?.() ?? new Date();
         const session = await loadQuestionSession(
           transaction,
           actor.eventId,
           sessionId,
           submittedAt,
+          currentActor.timelessTestMode,
         );
         requireQuestionCollection(session.context);
         const questionId = generateId();
@@ -324,6 +341,7 @@ export const readModeratorQuestions = async (
       actor.eventId,
       sessionId,
       dependencies.now?.() ?? new Date(),
+      actor.timelessTestMode,
     );
     if (context.record.questionMode !== 'moderated_follow_up')
       throw apiProblem(
@@ -538,7 +556,11 @@ export const handleRatings = async (
           'The rating target is invalid.',
         );
       }
-      if (query.data.targetType === 'event' && actor.endsAt > now) {
+      if (
+        query.data.targetType === 'event' &&
+        !actor.timelessTestMode &&
+        actor.endsAt > now
+      ) {
         throw apiProblem(
           404,
           'SESSION_NOT_FOUND',
@@ -559,7 +581,7 @@ export const handleRatings = async (
         if (
           !session ||
           session.status !== 'published' ||
-          session.endsAt > now
+          (!actor.timelessTestMode && session.endsAt > now)
         ) {
           throw apiProblem(
             404,
@@ -592,6 +614,8 @@ export const handleRatings = async (
                   dependencies.db,
                   actor.eventId,
                   now,
+                  undefined,
+                  actor.timelessTestMode,
                 ),
               }
             : {}),
@@ -623,7 +647,11 @@ export const handleRatings = async (
     }
     const sessionId =
       parsed.data.targetType === 'session' ? parsed.data.sessionId : null;
-    if (parsed.data.targetType === 'event' && actor.endsAt > now) {
+    if (
+      parsed.data.targetType === 'event' &&
+      !actor.timelessTestMode &&
+      actor.endsAt > now
+    ) {
       throw apiProblem(
         404,
         'SESSION_NOT_FOUND',
@@ -639,7 +667,11 @@ export const handleRatings = async (
           eq(schema.programSessions.id, sessionId),
         ),
       });
-      if (!session || session.status !== 'published' || session.endsAt > now) {
+      if (
+        !session ||
+        session.status !== 'published' ||
+        (!actor.timelessTestMode && session.endsAt > now)
+      ) {
         throw apiProblem(
           404,
           'SESSION_NOT_FOUND',
@@ -654,6 +686,7 @@ export const handleRatings = async (
         actor.eventId,
         now,
         parsed.data.survey,
+        actor.timelessTestMode,
       );
     }
     const key = readIdempotencyKey(request.headers);

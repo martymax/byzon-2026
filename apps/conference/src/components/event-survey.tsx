@@ -1,5 +1,7 @@
 'use client';
 
+import { useParticipantSessionContext } from './participant-session-context';
+
 import type { EventSurveyProgram } from '@byzon/domain/contracts';
 import {
   ActionLink,
@@ -226,8 +228,12 @@ export function EventRating({
   endsAt: string;
   api?: ApiPort;
 }) {
+  const timelessTestMode =
+    useParticipantSessionContext()?.timelessTestMode === true;
   const [status, setStatus] = useState<Status>(() =>
-    Date.parse(endsAt) > Date.now() ? 'waiting' : 'loading',
+    !timelessTestMode && Date.parse(endsAt) > Date.now()
+      ? 'waiting'
+      : 'loading',
   );
   const [program, setProgram] = useState<EventSurveyProgram | null>(null);
   const [answers, setAnswers] = useState<SurveyAnswers>({});
@@ -249,7 +255,7 @@ export function EventRating({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = () => {
       const remaining = Date.parse(endsAt) - Date.now();
-      if (remaining > 0) {
+      if (!timelessTestMode && remaining > 0) {
         timer = setTimeout(load, Math.min(remaining + 100, 60_000));
         return;
       }
@@ -296,7 +302,7 @@ export function EventRating({
       if (timer) clearTimeout(timer);
       unsubscribe();
     };
-  }, [endsAt, api, retry]);
+  }, [endsAt, api, retry, timelessTestMode]);
 
   const dirty = status === 'ready' && Object.values(answers).some(Boolean);
   useEffect(() => {
