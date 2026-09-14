@@ -70,7 +70,7 @@ export async function updateTimelessTestMode(
     {
       headers: {
         ...headers,
-        'set-cookie': `${TIMELESS_TEST_COOKIE}=${parsed.data.enabled ? fingerprint : ''}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${parsed.data.enabled ? 28800 : 0}${new URL(dependencies.allowedOrigin).protocol === 'https:' ? '; Secure' : ''}`,
+        'set-cookie': `${TIMELESS_TEST_COOKIE}=${parsed.data.enabled ? fingerprint : ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${parsed.data.enabled ? 28800 : 0}${new URL(dependencies.allowedOrigin).protocol === 'https:' ? '; Secure' : ''}`,
       },
     },
   );

@@ -194,7 +194,7 @@ const url = process.env.TEST_DATABASE_URL;
     );
     expect(on.status).toBe(200);
     expect(on.headers.get('set-cookie')).toContain(
-      'HttpOnly; SameSite=Strict; Max-Age=28800; Secure',
+      'HttpOnly; SameSite=Lax; Max-Age=28800; Secure',
     );
     expect(on.headers.get('set-cookie')).toContain(testCookie().split('; ')[1]);
     const off = await updateTimelessTestMode(
