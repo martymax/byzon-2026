@@ -961,6 +961,43 @@
         "src": "/assets/img/2026/09/budehub.png",
         "websiteUrl": "https://www.budehub.cz/",
         "on_dark": false
+      },
+      {
+        "name": "Bylinka",
+        "src": "/assets/img/2026/09/bylinka.svg",
+        "websiteUrl": "https://www.ceskabylinka.cz/",
+        "on_dark": false
+      },
+      {
+        "name": "Sady sv. Prokopa",
+        "src": "/assets/img/2026/09/sady-sv-prokopa.png",
+        "websiteUrl": "https://sady-prokopa.cz/",
+        "on_dark": false
+      },
+      {
+        "name": "AutoWallis",
+        "src": "/assets/img/2026/09/autowallis.svg",
+        "websiteUrl": "https://www.autowalliscb.cz/",
+        "on_dark": false
+      },
+      {
+        "name": "Kukutch",
+        "src": "/assets/img/2026/09/kukutch.svg",
+        "websiteUrl": "https://www.kukutch.com/",
+        "on_dark": false
+      },
+      {
+        "name": "DUUM",
+        "src": "/assets/img/2026/09/duum.webp",
+        "websiteUrl": "https://duum.cz/",
+        "tall": true,
+        "on_dark": false
+      },
+      {
+        "name": "BYD",
+        "src": "/assets/img/2026/09/byd.svg",
+        "websiteUrl": "https://www.byd.com/cz",
+        "on_dark": false
       }
     ],
     "organizer": {
