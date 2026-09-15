@@ -181,7 +181,7 @@ describe('F2-02 participant home overview', () => {
       Array.from(navigation.element().querySelectorAll('a')).map((link) =>
         link.textContent?.trim(),
       ),
-    ).toEqual(['Program', 'Agenda', 'Networking', 'Řečníci', 'Můj účet']);
+    ).toEqual(['Program', 'Moje agenda', 'Networking', 'Řečníci', 'Můj účet']);
     expect(
       navigation.element().querySelector('[aria-current="page"]'),
     ).toBeNull();

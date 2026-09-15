@@ -65,7 +65,7 @@ const participantNavigationItems: NavigationItem[] = [
   {
     id: 'agenda',
     href: '/app/agenda',
-    label: 'Agenda',
+    label: 'Moje agenda',
     icon: (
       <NavigationIcon>
         <rect height="16" rx="2" width="16" x="4" y="5" />

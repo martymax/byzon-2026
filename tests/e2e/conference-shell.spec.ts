@@ -223,7 +223,7 @@ test('participant reserves the available place and downloads the Prague-time age
 
   await page
     .getByRole('navigation', { name: 'Hlavní navigace' })
-    .getByRole('link', { name: 'Agenda', exact: true })
+    .getByRole('link', { name: 'Moje agenda', exact: true })
     .click();
   await expect(page).toHaveURL(/\/app\/agenda$/, { timeout: 20_000 });
   await expect(
