@@ -15,6 +15,7 @@ import { QuestionSessionAction } from './participant-questions';
 import { SessionRating } from './live-interactions';
 import {
   ParticipantProgramSchedule,
+  SessionCapacity,
   participantProgramDateLabel,
 } from './participant-program-schedule';
 import { ParticipantSessionCalendarExport } from './participant-session-calendar-export';
@@ -231,6 +232,7 @@ const CoachingSlotChoice = ({
               type="button"
             >
               <span>{coachName}</span>
+              <SessionCapacity session={option} />
               <small>
                 {option.status === 'cancelled'
                   ? 'Tento kouč není v daném čase dostupný'
@@ -485,6 +487,7 @@ export const SessionView = ({
         </time>
         {coachingSlot ? ' · Koučovací zóna' : room ? ` · ${room.name}` : ''}
       </p>
+      {!coachingSlot ? <SessionCapacity session={session} /> : null}
       {session.status === 'cancelled' ? (
         <p className="status-notice" role="status">
           Tento bod programu byl zrušen.

@@ -346,6 +346,16 @@ def main() -> int:
     html_files = sorted(PUBLIC_ROOT / relative for relative in outputs if relative.endswith(".html"))
     validate_local_references(html_files)
     validate_critical_contract(content)
+    program_html = (PUBLIC_ROOT / "program/index.html").read_text(encoding="utf-8")
+    assert program_html.count('class="program-session-capacity"') == 32, "Missing program capacity labels"
+    for slug, capacity in {
+        "co-o-svych-lidech-skutecne-vite": 12,
+        "chci-mluvit-s-clovekem": 6,
+        "jak-vest-1-1-ktere-nejsou-ztratou-casu": 20,
+        "zmena-je-prilezitosti-leadership-je-cesta": 20,
+    }.items():
+        detail = (PUBLIC_ROOT / "program" / slug / "index.html").read_text(encoding="utf-8")
+        assert f'Kapacita: {capacity}</p>' in detail, f"Missing capacity for {slug}"
 
     html_bytes = sum(path.stat().st_size for path in html_files)
     asset_files = [

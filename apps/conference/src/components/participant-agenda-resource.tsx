@@ -878,6 +878,7 @@ export const useParticipantAgendaResource = (
           pendingAttempt.current = null;
           reconciliationRequired.current = false;
           const canonical = snapshotFromMutation(result.data);
+          window.dispatchEvent(new Event('byzon:reservation-updated'));
           setReservationConflict(null);
           storeState({
             status: 'ready',

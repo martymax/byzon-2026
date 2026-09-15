@@ -1118,3 +1118,16 @@ strong { color: var(--ink); }
   .session-presenter--pending { grid-template-columns: 92px minmax(0, 1fr); gap: 14px; }
   .session-presenter__portrait { width: 92px; }
 }
+
+.program-session-capacity {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.program-cal-event .program-session-capacity {
+  grid-column: 1 / -1;
+  grid-row: 4;
+}

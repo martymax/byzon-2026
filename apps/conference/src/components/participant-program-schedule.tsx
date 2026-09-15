@@ -23,6 +23,20 @@ interface CalendarRows {
   readonly rowByMinute: ReadonlyMap<number, number>;
 }
 
+export const SessionCapacity = ({
+  session,
+}: {
+  readonly session: ProgramSession;
+}) =>
+  session.availability &&
+  session.availability.capacity > 0 &&
+  session.status !== 'cancelled' ? (
+    <span className="program-session-capacity">
+      Kapacita: {session.availability.capacity} · Volná místa:{' '}
+      {session.availability.remaining}
+    </span>
+  ) : null;
+
 const SLOT_MINUTES = 15;
 const EVENING_START_MINUTES = 18 * 60 + 15;
 const UNASSIGNED_ROOM_ID = 'unassigned';
@@ -234,6 +248,19 @@ const collapsedCoachingSessions = (
       roomId: coachingRoomId,
       title: COACHING_SLOT_TITLE,
       summary: null,
+      availability: candidates
+        .filter(({ status }) => status !== 'cancelled')
+        .every(({ availability }) => availability != null)
+        ? candidates
+            .filter(({ status }) => status !== 'cancelled')
+            .reduce(
+              (total, { availability }) => ({
+                capacity: total.capacity + availability!.capacity,
+                remaining: total.remaining + availability!.remaining,
+              }),
+              { capacity: 0, remaining: 0 },
+            )
+        : null,
       status: candidates.every(({ status }) => status === 'cancelled')
         ? ('cancelled' as const)
         : ('published' as const),
@@ -570,6 +597,7 @@ const Calendar = ({
                         {session.summary}
                       </span>
                     ) : null}
+                    <SessionCapacity session={session} />
                     <SessionBadge session={session} />
                   </Link>
                 </article>
@@ -746,6 +774,7 @@ const MobileAgenda = ({
                         <strong className="program-mobile-event__title">
                           {session.title}
                         </strong>
+                        <SessionCapacity session={session} />
                         {session.summary ? (
                           <span className="program-mobile-event__meta">
                             {session.summary}

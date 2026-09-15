@@ -9,7 +9,7 @@ import {
   publishedProgramSnapshotSchema,
   type ParticipantProgramResponse,
 } from '@byzon/domain/contracts';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
@@ -214,15 +214,71 @@ const loadParticipantProgram = async (
       (!filters.room || programSession.roomId === selectedRoom?.id) &&
       (!filters.type || programSession.type === filters.type),
   );
+  const operational = await dependencies.db.query.programSessions.findMany({
+    where: and(
+      eq(schema.programSessions.eventId, eventId),
+      ne(schema.programSessions.status, 'archived'),
+    ),
+    columns: {
+      id: true,
+      capacity: true,
+      capacityMode: true,
+      reservationGroupId: true,
+    },
+  });
+  const byId = new Map(operational.map((row) => [row.id, row]));
+  const targets = [
+    ...new Set(
+      sessions.map(({ id }) => byId.get(id)?.reservationGroupId ?? id),
+    ),
+  ];
+  const reservations = targets.length
+    ? await dependencies.db
+        .select({
+          sessionId: schema.reservations.sessionId,
+          confirmed: count(),
+        })
+        .from(schema.reservations)
+        .where(
+          and(
+            eq(schema.reservations.eventId, eventId),
+            eq(schema.reservations.status, 'confirmed'),
+            inArray(schema.reservations.sessionId, targets),
+          ),
+        )
+        .groupBy(schema.reservations.sessionId)
+    : [];
+  const confirmedById = new Map(
+    reservations.map((row) => [row.sessionId, row.confirmed]),
+  );
+  const sessionsWithAvailability = sessions.map((session) => {
+    const row = byId.get(session.id);
+    const target = row?.reservationGroupId
+      ? byId.get(row.reservationGroupId)
+      : row;
+    const availability =
+      target?.capacityMode === 'reservation' && target.capacity !== null
+        ? {
+            capacity: target.capacity,
+            remaining: Math.max(
+              0,
+              target.capacity - (confirmedById.get(target.id) ?? 0),
+            ),
+          }
+        : null;
+    return { ...session, availability };
+  });
   const visibleDayIds = new Set(sessions.map(({ dayId }) => dayId));
   const visibleRoomIds = new Set(
     sessions.flatMap(({ roomId }) => (roomId ? [roomId] : [])),
   );
-  const etag = etagFor(
-    publication.checksumSha256,
-    publication.version,
-    filters,
-  );
+  const etag = etagFor(publication.checksumSha256, publication.version, {
+    ...filters,
+    availability: sessionsWithAvailability.map(({ id, availability }) => ({
+      id,
+      availability,
+    })),
+  });
   const body = participantProgramResponseSchema.parse({
     eventId,
     version: publication.version,
@@ -232,7 +288,7 @@ const loadParticipantProgram = async (
       rooms: parsed.data.program.rooms.filter((room) =>
         visibleRoomIds.has(room.id),
       ),
-      sessions,
+      sessions: sessionsWithAvailability,
     },
     filters: {
       day: filters.day ?? null,

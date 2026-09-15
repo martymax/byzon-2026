@@ -3672,3 +3672,16 @@ body:has(.participant-tour) .participant-shell-content {
     margin-bottom: var(--byzon-safe-bottom);
   }
 }
+
+.program-session-capacity {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.program-cal-event .program-session-capacity {
+  grid-column: 1 / -1;
+  grid-row: 4;
+}

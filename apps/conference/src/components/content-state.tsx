@@ -75,8 +75,25 @@ const useContentResource = <
 >(
   load: (signal: AbortSignal) => Promise<ApiResult<Data, Problem>>,
   expectedEventId: string,
+  refreshProgram = false,
 ): ContentResourceState<Data> & { readonly retry: () => void } => {
   const [attempt, setAttempt] = useState(0);
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    if (!refreshProgram) return;
+    const update = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine)
+        setRefresh((value) => value + 1);
+    };
+    const timer = window.setInterval(update, 30_000);
+    window.addEventListener('focus', update);
+    window.addEventListener('byzon:reservation-updated', update);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', update);
+      window.removeEventListener('byzon:reservation-updated', update);
+    };
+  }, [refreshProgram]);
   const [resultState, setResultState] = useState<
     ContentResourceState<Data> & {
       readonly attempt: number;
@@ -161,7 +178,7 @@ const useContentResource = <
       unsubscribe();
       controller.abort();
     };
-  }, [attempt, expectedEventId, load]);
+  }, [attempt, expectedEventId, load, refresh]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   const state: ContentResourceState<Data> =
@@ -182,6 +199,7 @@ export const useParticipantProgram = (
   return useContentResource<ParticipantProgramResponse, ApiProblem>(
     load,
     eventId,
+    true,
   );
 };
 

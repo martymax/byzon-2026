@@ -168,6 +168,14 @@ def program_event_meta(meta, inside_link=False):
     return content
 
 
+PROGRAM_CAPACITIES = json.load(open(os.path.join(ROOT, "data/program-capacities.json"), encoding="utf-8"))
+
+
+def program_capacity(ev):
+    capacity = PROGRAM_CAPACITIES.get(ev.get("slug"))
+    return f'<span class="program-session-capacity">Kapacita: {capacity}</span>' if capacity else ""
+
+
 def program_event_badge(ev, class_name):
     badge = ev.get("badge")
     if not badge:
@@ -185,7 +193,7 @@ def program_event(ev):
     extra_class = " program-event--has-link" if href else ""
     badge_html = program_event_badge(ev, "program-event__badge")
     meta_html = f'<span class="program-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
-    desc_html = f'<p>{esc(desc)}</p>' if desc else ""
+    desc_html = program_capacity(ev) + (f'<p>{esc(desc)}</p>' if desc else "")
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-event__title">{title_text}</strong>'
     if direct_speaker_links:
@@ -374,7 +382,7 @@ def program_calendar_event(ev, col, row_by_slot):
         f'{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>'
         if meta else ""
     )
-    desc_html = f'<p>{esc(desc)}</p>' if desc else ""
+    desc_html = program_capacity(ev) + (f'<p>{esc(desc)}</p>' if desc else "")
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-cal-event__title">{title_text}</strong>'
     if direct_speaker_links:
@@ -425,7 +433,7 @@ def program_mobile_event(item, total_count):
     stage_label = _mobile_stage_label(item["stage_names"], total_count)
     stage_ids = " ".join(item["stage_ids"])
     meta_html = f'<span class="program-mobile-event__meta">{program_event_meta(meta, bool(href) and not direct_speaker_links)}</span>' if meta else ""
-    desc_html = f'<p>{esc(desc)}</p>' if desc else ""
+    desc_html = program_capacity(ev) + (f'<p>{esc(desc)}</p>' if desc else "")
     title_text = esc(title) if href else link_speaker_names(title)
     title_html = f'<strong class="program-mobile-event__title">{title_text}</strong>'
     if direct_speaker_links:
@@ -1268,6 +1276,8 @@ def session_annotation(session):
 
 
 def page_session(session):
+    capacities = {PROGRAM_CAPACITIES[e["slug"]] for day in C["program"]["days"] for stage in day.get("stages", []) for e in stage.get("events", []) if e.get("detail") == session["slug"] and e.get("slug") in PROGRAM_CAPACITIES}
+    capacity_html = f'<p class="program-session-capacity">Kapacita: {next(iter(capacities))}</p>' if len(capacities) == 1 else ""
     annotation = session_annotation(session)
     annotation_html = f'\n      <div class="session-annotation">{annotation}</div>' if annotation else ""
     presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
@@ -1284,7 +1294,7 @@ def page_session(session):
     <nav class="breadcrumb speaker-back" aria-label="Návrat do programu" style="justify-content:flex-start"><a href="/program/">‹ Zpět na program</a></nav>
     <article class="session-intro">
       <span class="eyebrow">{esc(session.get('kind', 'Přednáška'))}</span>
-      <h1>{esc(session['title'])}</h1>{annotation_html}
+      <h1>{esc(session['title'])}</h1>{capacity_html}{annotation_html}
     </article>
     <section class="session-speakers" aria-labelledby="session-speakers-title">
       <h2 id="session-speakers-title">{presenter_title}</h2>

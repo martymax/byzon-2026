@@ -460,7 +460,22 @@ export const participantProgramResponseSchema = z.strictObject({
   eventId: uuidSchema,
   version: publicationVersionSchema,
   publishedAt: z.string().datetime({ offset: true }),
-  program: publishedProgramSchema,
+  program: publishedProgramSchema.safeExtend({
+    sessions: z
+      .array(
+        publishedProgramSessionSchema.safeExtend({
+          availability: z
+            .strictObject({
+              capacity: z.number().int().positive(),
+              remaining: z.number().int().nonnegative(),
+            })
+            .refine((value) => value.remaining <= value.capacity)
+            .nullable()
+            .optional(),
+        }),
+      )
+      .max(MAX_SESSIONS),
+  }),
   filters: z.strictObject({
     day: boundedNonBlankString(128).nullable(),
     room: boundedNonBlankString(128).nullable(),
