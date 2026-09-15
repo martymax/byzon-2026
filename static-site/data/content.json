@@ -998,6 +998,18 @@
         "src": "/assets/img/2026/09/byd.svg",
         "websiteUrl": "https://www.byd.com/cz",
         "on_dark": false
+      },
+      {
+        "name": "Scaleupboard",
+        "src": "/assets/img/2026/09/scaleupboard.svg",
+        "websiteUrl": "https://scaleupboard.com/",
+        "on_dark": false
+      },
+      {
+        "name": "Carmen Clinic",
+        "src": "/assets/img/2026/09/carmen-clinic.svg",
+        "websiteUrl": "https://www.carmenclinic.cz/",
+        "on_dark": false
       }
     ],
     "organizer": {
