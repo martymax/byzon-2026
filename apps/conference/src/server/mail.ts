@@ -18,6 +18,7 @@ import {
 
 export { MailDeliveryUnavailableError };
 export interface MagicLinkMessage {
+  roles?: readonly string[];
   to: string;
   url: string;
   purpose?: AuthEmailPurpose;
@@ -54,6 +55,7 @@ const send = (
   const purpose = message.purpose ?? 'sign-in';
   const content = createAuthEmail({
     purpose,
+    ...(message.roles ? { roles: message.roles } : {}),
     url: message.url,
     appOrigin: appOrigin ?? new URL(message.url).origin,
     expiresInSeconds:

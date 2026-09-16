@@ -811,6 +811,9 @@ const AdminWorkspaceView = ({
             />
           ) : null}
           <div className={styles.sidebarFooter}>
+            <Link href="/navody/administrator" prefetch={false}>
+              Návod pro administrátora
+            </Link>
             <Link href="/app" prefetch={false}>
               Otevřít účastnickou aplikaci <span aria-hidden="true">↗</span>
             </Link>
@@ -878,6 +881,9 @@ const AdminWorkspaceView = ({
                       id="admin-account-links"
                     >
                       <p>{adminActorRoleLabels[primaryRole]}</p>
+                      <Link href="/navody/administrator" prefetch={false}>
+                        Návod pro administrátora
+                      </Link>
                       <Link href="/app" prefetch={false}>
                         Přejít do aplikace účastníka
                       </Link>

@@ -8,7 +8,7 @@ nahrazené lokálními soubory.
 | E-mail                     | Spuštění a příjemce                                                                                         |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Pozvánka účastníka         | Odeslání pozvánky organizátorem; aktivační odkaz 24 hodin.                                                  |
-| Pozvánka do týmu           | Pozvánka člena týmu; administrace, odkaz 24 hodin.                                                          |
+| Pozvánka do týmu           | Pozvánka člena týmu; aplikace podle přidělené role, odkaz 24 hodin.                                         |
 | Aktivace účtu              | Samoobslužná aktivace; odkaz 24 hodin.                                                                      |
 | Přihlášení                 | Vyžádání jednorázového přihlášení; odkaz 30 minut.                                                          |
 | Potvrzení rezervace        | Úspěšná rezervace; jeden e-mail k rezervaci.                                                                |
@@ -19,6 +19,10 @@ nahrazené lokálními soubory.
 | Změna programu             | Publikování významné změny. Souhrn jen účastníkům s dotčeným bodem v agendě, rezervaci nebo čekací listině. |
 | Oznámení organizátora      | Stávající náhled a odeslání oznámení nyní zakládá také e-maily stejným příjemcům.                           |
 | Hodnocení konference       | Jednou, nejdříve 12 hodin po konci konference, pouze bez vyplněného hodnocení; odkaz na `/app/hodnoceni`.   |
+
+Pozvánky a aktivace obsahují také [veřejné návody podle rolí](public-guides.md).
+Příjemce s více rolemi dostává více odkazů v jedné zprávě. Odkazy neobsahují
+přihlašovací token a fungují bez přihlášení. Galerie zahrnuje náhled každé role.
 
 ## Připojení schránky Webglobe
 

@@ -33,8 +33,9 @@ export const POST = (request: Request, context: Context) =>
           headers: new Headers({ origin: getAuthAppOrigin() }),
           body: {
             email,
-            callbackURL: '/admin',
-            errorCallbackURL: '/prihlaseni?returnTo=%2Fadmin',
+            callbackURL: '/po-prihlaseni',
+            errorCallbackURL:
+              '/prihlaseni?mode=recovery&returnTo=%2Fpo-prihlaseni',
             metadata: {
               purpose: 'team-invitation',
               eventId,

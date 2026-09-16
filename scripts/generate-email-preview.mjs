@@ -7,6 +7,7 @@ import {
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
   LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
 } from '../packages/mail/dist/index.js';
+import { roleGuides } from '../packages/mail/dist/guides.js';
 
 const directory = new URL('../docs/email-preview/', import.meta.url);
 const appOrigin = 'https://app.example.test';
@@ -30,11 +31,28 @@ for (const [purpose, label] of [
       purpose,
       firstName: 'Martin',
       appOrigin,
-      url: `${appOrigin}/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=${purpose === 'team-invitation' ? '%2Fadmin' : '%2Fapp'}`,
+      ...(purpose === 'team-invitation' ? { roles: ['organizer_admin'] } : {}),
+      url: `${appOrigin}/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=${purpose === 'team-invitation' ? '%2Fpo-prihlaseni' : '%2Fapp'}`,
       expiresInSeconds:
         purpose === 'sign-in'
           ? LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS
           : ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
+    }),
+  });
+}
+for (const guide of roleGuides) {
+  examples.push({
+    id: `role-${guide.slug}`,
+    label: `Pozvánka: ${guide.title}`,
+    content: createAuthEmail({
+      purpose: ['participant', 'speaker'].includes(guide.role)
+        ? 'participant-invitation'
+        : 'team-invitation',
+      firstName: 'Martin',
+      appOrigin,
+      roles: [guide.role],
+      url: `${appOrigin}/api/auth/magic-link/verify?token=synthetic-preview-only&callbackURL=%2Fpo-prihlaseni`,
+      expiresInSeconds: ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
     }),
   });
 }

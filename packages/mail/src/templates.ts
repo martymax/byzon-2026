@@ -1,4 +1,5 @@
 import { czechGreeting } from './salutation.js';
+import { guidePath, guidesForRoles } from './guides.js';
 import {
   notificationPayloadSchema,
   type AuthEmailInput,
@@ -36,6 +37,7 @@ interface Section {
   lines: string[];
 }
 interface Layout {
+  guides?: { title: string; url: string }[];
   appOrigin: string;
   subject: string;
   preheader: string;
@@ -63,6 +65,10 @@ const render = (input: Layout): EmailContent => {
     ? actionUrl(input.settingsUrl, origin)
     : null;
   const e = escape;
+  const guides = (input.guides ?? []).map((guide) => ({
+    title: guide.title,
+    url: actionUrl(guide.url, origin),
+  }));
   const paragraph = (text: string) =>
     `<p style="margin:0 0 12px;">${e(text).replaceAll('\n', '<br>')}</p>`;
   const sections = (input.sections ?? [])
@@ -77,6 +83,13 @@ const render = (input: Layout): EmailContent => {
     `${input.cta}:\n${url}`,
     input.note,
     ...(input.sections ?? []).map((s) => [s.title, ...s.lines].join('\n')),
+    ...(guides.length
+      ? [
+          'Návody pro Vaši roli — bez přihlášení',
+          'Připravte se předem. Tyto veřejné odkazy můžete sdílet a fungují i po vypršení pozvánky.',
+          ...guides.map((guide) => `${guide.title}: ${guide.url}`),
+        ]
+      : []),
     input.footer,
     recovery ? `Odkaz už neplatí? Vyžádejte si nový: ${recovery}` : null,
     settings ? `Nastavení e-mailů a oslovení: ${settings}` : null,
@@ -106,6 +119,7 @@ body{margin:0;}table{border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;
 <!--[if !mso]><!--><a class="cta" href="${e(url)}" style="display:inline-block;padding:16px 28px;background-color:#f5218e;border-radius:999px;color:#140610;text-decoration:none;font-size:16px;font-weight:700;line-height:20px;">${e(input.cta)} &rarr;</a><!--<![endif]-->
 </td></tr><tr><td class="inner muted" style="padding:0 36px 24px;color:#606a78;font-size:13px;line-height:21px;">${input.note ? e(input.note) : ''}</td></tr>
 ${sections ? `<tr><td class="inner copy" style="padding:0 36px;color:#343a46;">${sections}</td></tr>` : ''}
+${guides.length ? `<tr><td class="inner copy" style="padding:0 36px 24px;color:#343a46;font-size:15px;line-height:25px;"><h2 style="font-size:18px;line-height:26px;margin:0 0 8px;">Návody pro Vaši roli — bez přihlášení</h2><p style="margin:0 0 12px;">Připravte se předem. Tyto veřejné odkazy můžete sdílet a fungují i po vypršení pozvánky.</p>${guides.map((guide) => `<p style="margin:0 0 8px;"><a class="settings" href="${e(guide.url)}" style="color:#b01365;text-decoration:underline;">${e(guide.title)} &rarr;</a></p>`).join('')}</td></tr>` : ''}
 ${input.footer ? `<tr><td class="inner muted" style="padding:0 36px 24px;color:#606a78;font-size:14px;line-height:23px;">${paragraph(input.footer)}</td></tr>` : ''}
 <tr><td class="inner help" bgcolor="#fceef5" style="padding:20px 36px;border-radius:0 0 18px 18px;background-color:#fceef5;color:#343a46;font-size:13px;line-height:22px;"><p style="margin:0 0 6px;"><strong>Nefunguje tlačítko?</strong> Zkopírujte do prohlížeče celý odkaz:</p><p style="margin:0;word-break:break-all;overflow-wrap:anywhere;"><a href="${e(url)}" style="color:#b01365;text-decoration:underline;word-break:break-all;">${e(url)}</a></p>${recovery ? `<p style="margin:10px 0 0;">Odkaz už neplatí? <a href="${e(recovery)}" style="color:#b01365;">Vyžádejte si nový na přihlašovací stránce.</a></p>` : ''}</td></tr></table>
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="font-family:Inter,Arial,Helvetica,sans-serif;width:100%;max-width:600px;"><tr><td class="muted" align="center" style="padding:22px 16px;font-size:13px;line-height:22px;color:#606a78;"><p class="signature" style="margin:0 0 4px;color:#140610;font-weight:bold;">Tým BYZON</p><p style="margin:0;">Potřebujete pomoc? Odpovězte na tento e-mail.</p>${settings ? `<p style="margin:12px 0 0;"><a class="settings" href="${e(settings)}" style="color:#b01365;">Nastavení e-mailů a oslovení</a></p>` : ''}<p style="margin:12px 0 0;font-size:12px;">Lidskost jako konkurenční výhoda</p></td></tr></table>
@@ -131,8 +145,8 @@ const authCopy: Record<
     eyebrow: 'ORGANIZAČNÍ TÝM',
     title: 'Pojďme připravit',
     accent: 'skvělý BYZON.',
-    body: 'zveme Vás do organizačního týmu BYZON 2026. Otevřete administraci pomocí svého osobního odkazu.',
-    cta: 'Otevřít administraci',
+    body: 'zveme Vás do týmu BYZON 2026. Pomocí svého osobního odkazu otevřete aplikaci a nástroje pro svou roli.',
+    cta: 'Otevřít aplikaci',
   },
   'account-activation': {
     subject: 'BYZON 2026: dokončete aktivaci účtu',
@@ -169,7 +183,10 @@ export const createAuthEmail = (input: AuthEmailInput): EmailContent => {
   const returnTo =
     destination && new URL(destination, origin).pathname.startsWith('/admin')
       ? '/admin'
-      : '/app';
+      : destination &&
+          new URL(destination, origin).pathname === '/po-prihlaseni'
+        ? '/po-prihlaseni'
+        : '/app';
   const recovery = new URL('/prihlaseni', origin);
   recovery.search = new URLSearchParams({
     mode: 'recovery',
@@ -179,10 +196,22 @@ export const createAuthEmail = (input: AuthEmailInput): EmailContent => {
   const invitation =
     input.purpose === 'participant-invitation' ||
     input.purpose === 'team-invitation';
+  const includeGuides = invitation || input.purpose === 'account-activation';
+  const guides = guidesForRoles(
+    input.roles ?? (input.purpose === 'team-invitation' ? [] : ['participant']),
+  );
   return render({
     ...authCopy[input.purpose],
     appOrigin: origin,
     url,
+    guides: includeGuides
+      ? guides.length
+        ? guides.map((guide) => ({
+            title: `Návod: ${guide.title}`,
+            url: guidePath(guide.slug),
+          }))
+        : [{ title: 'Vybrat návod podle své role', url: '/navody' }]
+      : [],
     greeting: czechGreeting(input.firstName, input.emailSalutation),
     preheader: `${input.purpose === 'sign-in' ? 'Přihlaste se bez hesla.' : 'Otevřete svůj přístup do BYZONu.'} Odkaz platí ${ttl}.`,
     note: `Odkaz platí ${ttl} od odeslání a funguje jen jednou.`,
@@ -201,12 +230,12 @@ export const createAuthEmail = (input: AuthEmailInput): EmailContent => {
               {
                 title: 'Váš přístup do týmu',
                 lines: [
-                  'V administraci najdete funkce podle přidělených oprávnění. Pokud Vám něco chybí, ozvěte se organizátorovi.',
+                  'Po přihlášení najdete nástroje podle přidělených oprávnění. Moderování, vedení aktivit a dotazy pro řečníky jsou v Můj účet → Moje role; administrátor má také přístup do administrace. Pokud Vám něco chybí, ozvěte se organizátorovi.',
                 ],
               },
             ]
           : [],
-    footer: `Odkaz je určený jen Vám. Nepřeposílejte ho.\n${invitation ? 'Pokud se Vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.' : input.purpose === 'sign-in' ? 'Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.' : 'Pokud právě neaktivujete svůj účet, můžete tento e-mail ignorovat.'}`,
+    footer: `Osobní přihlašovací odkaz je určený jen Vám. Nepřeposílejte ho.\n${invitation ? 'Pokud se Vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.' : input.purpose === 'sign-in' ? 'Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.' : 'Pokud právě neaktivujete svůj účet, můžete tento e-mail ignorovat.'}`,
     recoveryUrl: recovery.href,
   });
 };

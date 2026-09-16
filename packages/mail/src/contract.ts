@@ -17,6 +17,8 @@ export interface EmailRecipient {
   emailSalutation?: string | null;
 }
 export interface AuthEmailInput extends EmailRecipient {
+  /** Active event roles resolved by the server, never invitation form input. */
+  roles?: readonly string[];
   purpose: AuthEmailPurpose;
   url: string;
   appOrigin: string;

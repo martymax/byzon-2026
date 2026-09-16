@@ -1,0 +1,315 @@
+.root {
+  max-width: 70rem;
+  margin: 0 auto;
+  padding: 0 clamp(1.25rem, 4vw, 3rem) 3rem;
+}
+.root a {
+  text-underline-offset: 0.22em;
+}
+.root a:focus-visible,
+.root summary:focus-visible {
+  outline: 3px solid var(--byzon-brand-active);
+  outline-offset: 5px;
+}
+.root ::selection {
+  background: var(--byzon-brand);
+  color: var(--byzon-ink);
+}
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--byzon-border);
+}
+.topbar a {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.heading {
+  padding: clamp(2rem, 6vw, 4rem) 0;
+  max-width: 51rem;
+}
+.heading h1 {
+  color: var(--byzon-ink);
+  font-size: clamp(2.5rem, 5.8vw, 4.5rem);
+  line-height: 1.08;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.heading h1 span {
+  color: var(--byzon-brand-active);
+}
+.heading > p {
+  max-width: 65ch;
+  font-size: 1.125rem;
+  margin-top: 1.25rem;
+}
+.heading .publicNote {
+  font-size: 0.9375rem;
+  color: var(--byzon-text-muted);
+  margin-top: 1rem;
+}
+.back {
+  display: inline-block;
+  padding-block: 0.5rem;
+  margin-bottom: 1.25rem;
+  font-weight: 600;
+}
+.section {
+  margin-bottom: 3.5rem;
+}
+.section h2,
+.article h2 {
+  color: var(--byzon-ink);
+  font-size: clamp(1.75rem, 3vw, 2.125rem);
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 1.25rem;
+  text-wrap: balance;
+}
+.roleList {
+  border-top: 1px solid var(--byzon-border);
+}
+.roleLink {
+  display: grid;
+  grid-template-columns: 14rem 1fr auto;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.5rem 0.5rem;
+  border-bottom: 1px solid var(--byzon-border);
+  text-decoration: none;
+  transition: background-color 150ms ease-out;
+}
+.roleLink:hover {
+  background: var(--byzon-brand-soft);
+}
+.roleLink h3 {
+  color: var(--byzon-ink);
+  font-weight: 600;
+  font-size: 1.75rem;
+}
+.roleLink p {
+  max-width: 54ch;
+}
+.roleLink > span {
+  color: var(--byzon-brand-active);
+  font-size: 1.75rem;
+}
+.startSteps {
+  padding-left: 1.5rem;
+  max-width: 72ch;
+}
+.startSteps li {
+  padding-left: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.startSteps li::marker,
+.article li::marker {
+  color: var(--byzon-brand-active);
+  font-weight: 700;
+}
+.startSteps h3 {
+  color: var(--byzon-ink);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+.faq {
+  max-width: 75ch;
+  border-top: 1px solid var(--byzon-border);
+}
+.faq details {
+  border-bottom: 1px solid var(--byzon-border);
+  padding: 1rem 0;
+}
+.faq summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 2.75rem;
+  align-content: center;
+}
+.faq details p {
+  padding: 0.5rem 0 1rem;
+}
+.readingLayout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: start;
+}
+.contents {
+  position: sticky;
+  top: 1.5rem;
+}
+.contents h2 {
+  color: var(--byzon-ink);
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+.contents a {
+  display: block;
+  padding: 0.6rem 0;
+  font-size: 0.9375rem;
+  text-decoration: none;
+}
+.contents a:hover {
+  color: var(--byzon-brand-active);
+  text-decoration: underline;
+}
+.article {
+  max-width: 72ch;
+  min-width: 0;
+}
+.article section {
+  scroll-margin-top: 1.5rem;
+}
+.article ol {
+  padding-left: 1.5rem;
+}
+.article li {
+  padding-left: 0.4rem;
+  margin-bottom: 1rem;
+}
+.quickStart {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: var(--byzon-brand-soft);
+  border-radius: 12px;
+}
+.chapter {
+  padding-top: 2.75rem;
+  margin-top: 2.75rem;
+  border-top: 1px solid var(--byzon-border);
+}
+.note {
+  padding: 1rem 1.25rem;
+  background: var(--byzon-surface);
+  border: 1px solid var(--byzon-border);
+  border-radius: 12px;
+}
+.textLink {
+  display: inline-block;
+  padding-block: 0.65rem;
+  margin-top: 0.5rem;
+  color: var(--byzon-brand-active);
+  font-weight: 600;
+}
+.loginHint {
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+.primaryLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  margin: 1.5rem 0.75rem 0.5rem 0;
+  padding: 0.75rem 1.25rem;
+  background: var(--byzon-brand-active);
+  color: var(--byzon-surface);
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.primaryLink:hover {
+  background: var(--byzon-ink);
+}
+.relatedHeading {
+  font-size: 1.5rem;
+  color: var(--byzon-ink);
+  font-weight: 600;
+  margin: 2rem 0 0.5rem;
+}
+.related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+.related a {
+  display: inline-block;
+  min-height: 2.75rem;
+  padding: 0.6rem 0;
+}
+.footer {
+  border-top: 1px solid var(--byzon-border);
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  font-size: 0.9375rem;
+}
+.footer p {
+  max-width: 75ch;
+  margin-bottom: 0.5rem;
+}
+.footer > a {
+  display: inline-block;
+  padding-block: 0.75rem;
+}
+@media (max-width: 760px) {
+  .readingLayout {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .contents {
+    position: static;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--byzon-border);
+  }
+  .roleLink {
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 1rem;
+  }
+  .roleLink p {
+    grid-column: 1;
+  }
+  .roleLink > span {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .chapter {
+    padding-top: 2rem;
+    margin-top: 2rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roleLink {
+    transition: none;
+  }
+}
+@media print {
+  .topbar,
+  .contents,
+  .primaryLink,
+  .back,
+  .related {
+    display: none;
+  }
+  .root {
+    max-width: none;
+    padding: 0;
+  }
+  .heading {
+    padding: 1rem 0;
+  }
+  .heading h1 {
+    font-size: 2.5rem;
+  }
+  .readingLayout {
+    display: block;
+  }
+  .article {
+    max-width: none;
+  }
+  .chapter {
+    padding-top: 1rem;
+    margin-top: 1rem;
+  }
+  .article li,
+  .note {
+    break-inside: avoid;
+  }
+}

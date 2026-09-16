@@ -138,6 +138,79 @@ integration('magic-link authentication integration', () => {
     return setCookie!.split(';', 1)[0]!;
   };
 
+  it('resolves invitation guides from active roles in the invited event, ignoring supplied and revoked roles', async () => {
+    const [user] = await client.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email));
+    const eventId = crypto.randomUUID();
+    const otherEventId = crypto.randomUUID();
+    try {
+      await client.db.insert(schema.events).values(
+        [eventId, otherEventId].map((id) => ({
+          id,
+          slug: `guide-invitation-${id}`,
+          name: 'Synthetic guide invitation',
+          startsAt: new Date('2026-09-18T08:00:00Z'),
+          endsAt: new Date('2026-09-18T18:00:00Z'),
+          timezone: 'Europe/Prague',
+        })),
+      );
+      await client.db.insert(schema.eventMemberships).values(
+        [eventId, otherEventId].map((id) => ({
+          eventId: id,
+          userId: user!.id,
+          status: 'active' as const,
+        })),
+      );
+      await client.db.insert(schema.eventRoles).values([
+        { id: crypto.randomUUID(), eventId, userId: user!.id, role: 'speaker' },
+        {
+          id: crypto.randomUUID(),
+          eventId,
+          userId: user!.id,
+          role: 'moderator',
+        },
+        {
+          id: crypto.randomUUID(),
+          eventId,
+          userId: user!.id,
+          role: 'organizer_admin',
+          revokedAt: new Date(),
+        },
+        {
+          id: crypto.randomUUID(),
+          eventId: otherEventId,
+          userId: user!.id,
+          role: 'room_operator',
+        },
+      ]);
+      await activationAuth.api.signInMagicLink({
+        headers: new Headers({ origin: 'http://localhost:3000' }),
+        body: {
+          email,
+          callbackURL: '/po-prihlaseni',
+          metadata: {
+            purpose: 'team-invitation',
+            eventId,
+            roles: ['organizer_admin'],
+          },
+        },
+      });
+      expect(mail.messages.at(-1)?.roles?.toSorted()).toEqual([
+        'moderator',
+        'speaker',
+      ]);
+    } finally {
+      await client.db
+        .delete(schema.events)
+        .where(eq(schema.events.id, eventId));
+      await client.db
+        .delete(schema.events)
+        .where(eq(schema.events.id, otherEventId));
+    }
+  });
+
   it('signs a provisioned account in directly on staging without sending mail', async () => {
     const response = await stagingAuth.handler(
       new Request('http://localhost:3000/api/auth/sign-in/staging-email', {

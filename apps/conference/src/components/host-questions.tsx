@@ -138,6 +138,12 @@ export function HostQuestionSessions({
         </p>
       </header>
       <div className={styles.toolbar}>
+        <ActionLink
+          variant="quiet"
+          href={kind === 'moderator' ? '/navody/moderator' : '/navody/recnik'}
+        >
+          Návod pro {kind === 'moderator' ? 'moderátora' : 'řečníka'}
+        </ActionLink>
         <ActionLink variant="quiet" href="/app/vice">
           Zpět do mého účtu
         </ActionLink>

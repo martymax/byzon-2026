@@ -11,6 +11,9 @@ export const ActivityRoster = ({
     <header>
       <nav className="activity-context-switch" aria-label="Režim aplikace">
         <Link href="/app">Účastnická aplikace</Link>
+        <Link href="/navody/vedouci-aktivity">
+          Návod pro vedoucího aktivity
+        </Link>
         <span aria-current="page">Správa aktivit</span>
       </nav>
       <p className="eyebrow">Řečník a vedoucí aktivity</p>

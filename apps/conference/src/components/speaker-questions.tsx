@@ -271,6 +271,9 @@ export function SpeakerQuestionPanel({
   return (
     <section className={styles.workspace}>
       <header>
+        <ActionLink variant="quiet" href="/navody/recnik">
+          Návod pro řečníka
+        </ActionLink>
         <ActionLink variant="quiet" href="/host/dotazy">
           Moje přednášky
         </ActionLink>

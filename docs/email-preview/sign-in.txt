@@ -9,7 +9,7 @@ https://app.example.test/api/auth/magic-link/verify?token=synthetic-preview-only
 
 Odkaz platí 30 minut od odeslání a funguje jen jednou.
 
-Odkaz je určený jen Vám. Nepřeposílejte ho.
+Osobní přihlašovací odkaz je určený jen Vám. Nepřeposílejte ho.
 Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.
 
 Odkaz už neplatí? Vyžádejte si nový: https://app.example.test/prihlaseni?mode=recovery&returnTo=%2Fapp

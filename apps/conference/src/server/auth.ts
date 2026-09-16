@@ -10,9 +10,14 @@ import { betterAuth } from 'better-auth';
 import { magicLink } from 'better-auth/plugins';
 
 import { database } from './database';
-import { authMailProvider, type AuthMailProvider } from './mail';
+import {
+  authMailProvider,
+  type AuthMailProvider,
+  type MagicLinkMessage,
+} from './mail';
 import { stagingEmailLogin } from './staging-email-login';
 import { sendRecordedAuthEmail } from './mail-history';
+import { loadEventPolicy } from './policy';
 
 export {
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
@@ -85,7 +90,10 @@ export const createAuth = (
         storeToken: 'hashed',
         rateLimit: { window: 60, max: options.magicLinkRateLimitMax ?? 5 },
         sendMagicLink: async ({ email, url, metadata }) => {
-          const invitation =
+          const invitation: Pick<
+            MagicLinkMessage,
+            'purpose' | 'recipientName'
+          > =
             metadata?.purpose === 'account-activation' ||
             metadata?.purpose === 'participant-invitation' ||
             metadata?.purpose === 'team-invitation'
@@ -130,10 +138,19 @@ export const createAuth = (
               ),
             )
             .limit(1);
+          const policy =
+            profile && invitation.purpose
+              ? await loadEventPolicy(
+                  db,
+                  { userId: profile.userId },
+                  profile.eventId,
+                )
+              : null;
           const message = {
             to: email,
             url,
             ...invitation,
+            ...(policy ? { roles: policy.roles } : {}),
             firstName: profile?.firstName ?? null,
             emailSalutation: profile?.emailSalutation ?? null,
             expiresInSeconds:

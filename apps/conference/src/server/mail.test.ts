@@ -182,7 +182,7 @@ describe('production auth mail provider', () => {
     expect(body.html).not.toContain('Kateřina <Novotná>');
   });
 
-  it('renders team invitations with an admin call to action', async () => {
+  it('renders team invitations with a role-neutral call to action', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Promise.resolve(new Response('{"id":"mail-id"}')),
     );
@@ -204,7 +204,7 @@ describe('production auth mail provider', () => {
     expect(body.subject).toBe('BYZON 2026: pozvánka do organizačního týmu');
     expect(body.text).toContain('týmu BYZON 2026');
     expect(body.text).toContain('Odkaz platí 24 hodin');
-    expect(body.html).toContain('Otevřít administraci');
+    expect(body.html).toContain('Otevřít aplikaci');
     expect(body.html).toContain('Dobrý den, Jano,');
     expect(body.html).not.toContain('Jana <Týmová>');
   });

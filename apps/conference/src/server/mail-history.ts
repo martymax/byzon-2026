@@ -14,6 +14,7 @@ export const archivedAuthContent = (
 ) =>
   createAuthEmail({
     purpose: message.purpose ?? 'sign-in',
+    ...(message.roles ? { roles: message.roles } : {}),
     url: `${appOrigin}/prihlaseni#jednorazovy-odkaz-skryt`,
     appOrigin,
     expiresInSeconds:

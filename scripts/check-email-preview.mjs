@@ -15,7 +15,7 @@ try {
   const files = (await readdir(directory)).filter(
     (file) => file.endsWith('.html') && file !== 'index.html',
   );
-  assert.equal(files.length, 12);
+  assert.equal(files.length, 18);
   const checks = [];
   for (const width of [375, 660]) {
     await page.setViewportSize({ width, height: 900 });

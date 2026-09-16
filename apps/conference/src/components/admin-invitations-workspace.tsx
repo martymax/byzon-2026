@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { guidePath, guidesForRoles } from '@byzon/mail/guides';
 import {
   adminInvitationRecipientsSchema,
   type AdminInvitationRecipients,
@@ -237,6 +238,12 @@ function Invitations() {
           Vyberte role a konkrétní příjemce. Všem zaškrtnutým odešlete pozvánku
           do aplikace najednou.
         </p>
+        <p>
+          Každá pozvánka obsahuje veřejné návody podle aktuálních rolí příjemce.{' '}
+          <a href="/navody" target="_blank" rel="noreferrer">
+            Prohlédnout všechny návody
+          </a>
+        </p>
       </header>
       {!allowed ? (
         <p className={styles.warning}>
@@ -441,9 +448,19 @@ function Invitations() {
                       ) : null}
                     </div>
                     <div className={invitationStyles.roleList}>
-                      {item.roles
-                        .map((role) => invitationRoleLabels[role])
-                        .join(', ')}
+                      {guidesForRoles(item.roles).map((guide, index) => (
+                        <span key={guide.role}>
+                          {index > 0 ? ', ' : ''}
+                          <a
+                            href={guidePath(guide.slug)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`Veřejný návod: ${guide.title}`}
+                          >
+                            {invitationRoleLabels[guide.role]}
+                          </a>
+                        </span>
+                      ))}
                     </div>
                     <div className={invitationStyles.status}>
                       <span className={styles.statusBadge}>

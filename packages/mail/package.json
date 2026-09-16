@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
+    "./guides": {
+      "types": "./src/guides.ts",
+      "default": "./dist/guides.js"
+    },
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"

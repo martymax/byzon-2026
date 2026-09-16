@@ -16,7 +16,7 @@ Návody pro Vaši roli — bez přihlášení
 
 Připravte se předem. Tyto veřejné odkazy můžete sdílet a fungují i po vypršení pozvánky.
 
-Návod: Administrátor: https://app.example.test/navody/administrator
+Návod: Vedoucí aktivity: https://app.example.test/navody/vedouci-aktivity
 
 Osobní přihlašovací odkaz je určený jen Vám. Nepřeposílejte ho.
 Pokud se Vás tato pozvánka netýká, dejte nám prosím vědět odpovědí na tento e-mail.

@@ -106,6 +106,16 @@ export function ParticipantHelpContent({
   );
   return (
     <div className="participant-account-stack">
+      <Card>
+        <h2>Návod pro každou roli</h2>
+        <p>
+          Účastník, moderátor, řečník i vedoucí aktivity tu najde svůj postup.
+          Veřejné návody můžete číst bez přihlášení a sdílet s kolegy.
+        </p>
+        <ActionLink href="/navody" variant="secondary">
+          Vybrat návod podle role
+        </ActionLink>
+      </Card>
       <ParticipantGuide />
       <section aria-labelledby="faq-heading" className="participant-help-faq">
         <div>
