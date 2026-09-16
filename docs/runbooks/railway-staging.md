@@ -6,12 +6,14 @@ prostředí `35c2e399-920a-42c1-84ef-0aede59bf52b`, nikoli o klon nebo novou DB.
 Doména `https://app.byzon.cz`, služby, volumes, credentials a uložená data se
 zachovávají.
 
-Na výslovný pokyn vlastníka zatím zůstává `APP_ENV=staging` na webu i workeru
-a testovací přihlášení e-mailem. Od 16. 9. 2026 používají obě služby
+Od 16. 9. 2026 je na výslovný pokyn vlastníka nastavené `APP_ENV=production`
+na webu i workeru. Přihlašování vyžaduje jednorázový odkaz doručený e-mailem;
+přímé testovací přihlášení `/api/auth/sign-in/staging-email` je vypnuté.
+Obě služby používají
 `MAIL_PROVIDER=smtp`, server `mail.webglobe.cz:465` a odesílatele
 `Konference BYZON <jsem@byzon.cz>` (`MAIL_FROM_NAME` a `MAIL_FROM`).
-E-maily se odesílají skutečným příjemcům; název prostředí `production`
-sám o sobě nemění autentizační režim.
+E-maily se odesílají skutečným příjemcům. Přihlašovací odkaz platí 30 minut,
+aktivační a pozvánkový odkaz 24 hodin; odkazy jsou jednorázové.
 `BYZON_TIMELESS_TEST_MODE` se nepoužívá. Administrátor zapíná časově neomezené testování pro své přihlášení v `/app/nastaveni`; nejde o globální přepínač prostředí. Podrobnosti: [Testovací režim](../timeless-test-mode.md).
 
 Web používá `/railway.web.json`, worker `/railway.worker.json`. Nový deploy
@@ -20,13 +22,13 @@ přejmenování vypínají, aby se zachovala ručně upravená data. Publikace o
 zůstává samostatnou akcí v administraci. Worker migrace nespouští.
 Nasazuje se přes Git integraci z `main`, bez force push a bez `railway up`.
 
-Před přepnutím runtime na `APP_ENV=production` je nutné dokončit konfiguraci
-skutečného doručování e-mailů. Mailpit produkční validace odmítá a stagingový
-přihlašovací endpoint se vypne. Tato změna není součástí přejmenování.
+Přepnutí runtime na `APP_ENV=production` následovalo až po potvrzení
+skutečného doručení testovacího e-mailu. Mailpit produkční validace odmítá.
+Existující přihlášené relace nebyly při přepnutí hromadně odhlášeny.
 
 Po změně ověřte stejné ID prostředí a volumes, větev obou deployment triggerů,
-release SHA webu i workeru, `/health/live` a `/health/ready`. Readiness zatím
-správně hlásí `environment=staging`, protože čte `APP_ENV`.
+release SHA webu i workeru, `/health/live` a `/health/ready`. Readiness musí
+hlásit `environment=production`, protože čte `APP_ENV`.
 Starší větev `stage/participant-access-live-qa` zůstává historickou referencí;
 nové nasazení se z ní nespouští. Lokální rozpracované změny ve starších
 checkoutech se nesmějí naslepo nasadit přes novější `main`.
@@ -48,8 +50,15 @@ neodesílaly testovací zprávy.
 
 Při aktivaci proběhlo autorizované ruční opakování nasazení pro diagnostiku
 síťového problému a následný deployment síťového nastavení přes Railway API.
-Běžné nasazování nadále používá Git integraci z `main`. `APP_ENV=staging`
-a testovací přihlášení zůstávají zachované; Mailpit už není aktivní transport.
+Běžné nasazování nadále používá Git integraci z `main`. Mailpit už není
+aktivní transport. Původně zachovaný testovací autentizační režim byl po
+ověření doručení přepnut na `APP_ENV=production` (viz výše).
+
+Samotné SMTP `verify` neověřuje oprávnění odeslat zprávu. Následný test
+odhalil GeoIP blokaci `550 Sending mail from your country (us) is not allowed`.
+Po přidání USA mezi povolené země schránky ve Webglobe prošlo odeslání
+z webu a uživatel potvrdil doručení testovacího e-mailu. Nasazení obou služeb
+zůstává v Amsterdamu; označení US pochází z GeoIP klasifikace odchozí IP.
 
 ## Historický postup před přejmenováním (neplatí pro nový deployment)
 
