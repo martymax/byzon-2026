@@ -5,6 +5,8 @@ import {
   type AdminEngagementOverview,
 } from '@byzon/domain/contracts/admin-engagement';
 import {
+  adminInvitationRecipientsSchema,
+  type AdminInvitationRecipient,
   adminAnnouncementListResponseSchema,
   adminAnnouncementDeleteResponseSchema,
   adminAnnouncementDeleteProblemSchema,
@@ -727,6 +729,55 @@ const reservationAfter = (
 });
 
 export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
+  http.get('*/api/v1/admin/events/:eventId/invitations', ({ params }) => {
+    const denied = authorize(
+      adminReadProblemSchema,
+      ['role:manage', 'participant:operational:read', 'ticket:any:manage'],
+      'admin.mock.invitations',
+    );
+    if (denied) return denied;
+    if (!routeMatchesEvent(params.eventId))
+      return mockProblemResponse(
+        adminReadProblemSchema,
+        adminReadProblemFixtures.permission,
+        { fixtureName: 'admin.mock.invitations-event' },
+      );
+    const recipients = new Map<string, AdminInvitationRecipient>();
+    state.participantDetails
+      .filter((detail) => detail.membershipStatus === 'active')
+      .forEach((detail, index) => {
+        recipients.set(detail.participantId, {
+          userId: detail.participantId,
+          displayName: `${detail.firstName} ${detail.lastName}`,
+          email: detail.contactEmail,
+          roles: index === 0 ? ['participant', 'speaker'] : ['participant'],
+          invitation: detail.invitation,
+          delivery: detail.ticket.state === 'active' ? 'participant' : null,
+        });
+      });
+    state.teamMembers.forEach((member) => {
+      const existing = recipients.get(member.memberId);
+      recipients.set(member.memberId, {
+        userId: member.memberId,
+        displayName: member.displayName,
+        email: member.email,
+        roles: [...new Set([...(existing?.roles ?? []), ...member.roles])],
+        invitation: member.invitation,
+        delivery: member.roles.includes('organizer_admin')
+          ? 'team'
+          : (existing?.delivery ?? 'team'),
+      });
+    });
+    return mockJsonResponse(
+      adminInvitationRecipientsSchema,
+      {
+        eventId: adminFixtureIds.event,
+        items: [...recipients.values()],
+        nextCursor: null,
+      },
+      successOptions('admin.mock.invitations'),
+    );
+  }),
   http.get('*/api/v1/admin/context', ({ request }) => {
     const rawPersona = new URL(request.url).searchParams.get('persona');
     if (

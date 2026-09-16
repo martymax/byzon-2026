@@ -1,0 +1,121 @@
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  border: 0;
+  padding: 0;
+  margin: 1.25rem 0 0.5rem;
+}
+.roles legend {
+  font-weight: 650;
+  margin-bottom: 0.5rem;
+}
+.filters {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+.selection {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+}
+.recipients,
+.review,
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.recipients {
+  max-height: 38rem;
+  overflow-y: auto;
+}
+.recipient {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  border-top: 1px solid var(--admin-border);
+  padding: 1rem 0;
+}
+.recipient[data-selected] {
+  background: var(--admin-surface-brand);
+}
+.person,
+.status {
+  display: grid;
+  gap: 0.25rem;
+  overflow-wrap: anywhere;
+}
+.person span,
+.roleList,
+.status time {
+  font-size: 0.875rem;
+  color: var(--admin-muted);
+}
+.status {
+  justify-items: start;
+}
+.sendBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-surface);
+}
+.sendBar p {
+  margin: 0.25rem 0 0;
+}
+.progress {
+  flex-basis: 100%;
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+}
+.progress progress {
+  width: 100%;
+  accent-color: var(--admin-primary);
+}
+.review {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.review li {
+  display: grid;
+  gap: 0.2rem;
+  padding-block: 0.75rem;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--admin-border);
+}
+.results {
+  max-height: 15rem;
+  overflow-y: auto;
+}
+.results li {
+  margin-block: 0.5rem;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+  .recipient {
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+  }
+  .roleList,
+  .status {
+    grid-column: 2;
+  }
+  .sendBar {
+    padding: 1rem;
+  }
+}

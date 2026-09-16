@@ -35,6 +35,7 @@ type AdminWorkspaceSection =
   | 'overview'
   | 'tickets'
   | 'participants'
+  | 'invitations'
   | 'announcements'
   | 'engagement'
   | 'reservations'
@@ -50,6 +51,7 @@ type AdminNavigationIcon =
   | 'content'
   | 'speakers'
   | 'participants'
+  | 'invitations'
   | 'tickets'
   | 'reservations'
   | 'announcements'
@@ -114,6 +116,13 @@ const navigationGroups: readonly AdminNavigationGroup[] = [
         label: 'Účastníci',
         permission: 'participant:operational:read',
         section: 'participants',
+      },
+      {
+        href: '/admin/pozvanky',
+        icon: 'invitations',
+        label: 'Pozvánky',
+        permission: 'role:manage',
+        section: 'invitations',
       },
       {
         href: '/admin/vstupenky',
@@ -214,6 +223,11 @@ const sectionPermissions: Readonly<
   overview: ['operations:read'],
   tickets: ['ticket:any:manage'],
   participants: ['participant:operational:read'],
+  invitations: [
+    'role:manage',
+    'participant:operational:read',
+    'ticket:any:manage',
+  ],
   announcements: ['announcement:send'],
   engagement: [
     'event:settings:manage',
@@ -319,6 +333,12 @@ const AdminNavigationIcon = ({
         <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
       </>
     ),
+    invitations: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m3 6 9 7 9-7" />
+      </>
+    ),
     tickets: (
       <>
         <path d="M20 12a2 2 0 0 0 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 0 0-4V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 0-2 2Z" />
@@ -390,7 +410,7 @@ const visibleNavigationGroups = (
   navigationGroups.flatMap((group) => {
     const items = group.items.filter((item) => {
       if (item.capability) return context.capabilities[item.capability];
-      if (item.section === 'engagement')
+      if (item.section === 'engagement' || item.section === 'invitations')
         return mayAccess(context, item.section);
       return item.permission
         ? context.actor.permissions.includes(item.permission)
