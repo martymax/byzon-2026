@@ -355,7 +355,7 @@ def main() -> int:
         "zmena-je-prilezitosti-leadership-je-cesta": 20,
     }.items():
         detail = (PUBLIC_ROOT / "program" / slug / "index.html").read_text(encoding="utf-8")
-        assert f'Kapacita: {capacity}</p>' in detail, f"Missing capacity for {slug}"
+        assert f'Kapacita: {capacity} míst</h2>' in detail, f"Missing capacity for {slug}"
 
     html_bytes = sum(path.stat().st_size for path in html_files)
     asset_files = [

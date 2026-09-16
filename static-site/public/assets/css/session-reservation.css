@@ -1,0 +1,60 @@
+/* Reservation guidance belongs only to capacity-limited activity details. */
+.session-reservation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 28px;
+  padding: 24px 0;
+  border-block: 1px solid var(--pink-100);
+}
+.session-reservation__copy {
+  min-width: 0;
+  max-width: 52ch;
+}
+.session-reservation__title {
+  margin: 0 0 6px;
+  color: var(--pink-700);
+  font: 600 1.65rem/1.2 var(--font-display);
+  text-wrap: balance;
+}
+.session-reservation__copy p {
+  color: var(--ink);
+  font-size: 1.06rem;
+  line-height: 1.5;
+}
+.session-reservation__action {
+  flex-shrink: 0;
+  min-height: 48px;
+}
+.session-reservation__action:hover,
+.session-reservation__action:active {
+  transform: none;
+}
+.session-reservation__action:focus-visible {
+  outline-color: var(--pink-700);
+  outline-offset: 4px;
+}
+@media (max-width: 700px) {
+  .session-reservation {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    margin-top: 24px;
+    padding-block: 20px;
+  }
+  .session-reservation__title {
+    font-size: 1.5rem;
+    text-wrap: pretty;
+  }
+  .session-reservation__action {
+    white-space: normal;
+    text-align: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .session-reservation__action,
+  .session-reservation__action .arrow {
+    transition: none;
+  }
+}

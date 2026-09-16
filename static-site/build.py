@@ -629,7 +629,12 @@ def program_day_schedule(day):
 
 
 # ----------------------------------------------------------- components ------
-def head(title, description, page_path, og_image=None):
+def head(title, description, page_path, og_image=None, extra_css=None):
+    extra_styles = ""
+    if extra_css:
+        with open(os.path.join(PUBLIC, extra_css.lstrip("/")), "rb") as asset:
+            version = hashlib.sha256(asset.read()).hexdigest()[:8]
+        extra_styles = f'\n<link rel="stylesheet" href="{att(extra_css)}?v={version}">'
     s = C["site"]
     base = s["url"].rstrip("/")
     url = base + page_path
@@ -657,7 +662,7 @@ def head(title, description, page_path, og_image=None):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Khand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/css/styles.css?v={ASSET_VER}">
+<link rel="stylesheet" href="/assets/css/styles.css?v={ASSET_VER}">{extra_styles}
 </head>
 <body>
 <a class="skip-link" href="#main">Přeskočit na obsah</a>
@@ -1277,14 +1282,22 @@ def session_annotation(session):
 
 def page_session(session):
     capacities = {PROGRAM_CAPACITIES[e["slug"]] for day in C["program"]["days"] for stage in day.get("stages", []) for e in stage.get("events", []) if e.get("detail") == session["slug"] and e.get("slug") in PROGRAM_CAPACITIES}
-    capacity_html = f'<p class="program-session-capacity">Kapacita: {next(iter(capacities))}</p>' if len(capacities) == 1 else ""
-    reservation_note = (
-        '<p>Místo je potřeba rezervovat prostřednictvím '
-        '<a href="https://app.byzon.cz/app/program">konferenční aplikace</a>, '
-        'kde najdete i aktuální počet volných míst.</p>'
-        if capacities else ""
-    )
-    annotation = reservation_note + session_annotation(session)
+    reservation_html = ""
+    if capacities:
+        minimum, maximum = min(capacities), max(capacities)
+        places = "místo" if maximum == 1 else "místa" if maximum in (2, 3, 4) else "míst"
+        capacity_label = (
+            f"Kapacita: {minimum} {places}" if minimum == maximum
+            else f"Kapacita: {minimum}–{maximum} {places} podle času"
+        )
+        reservation_html = f'''<section class="session-reservation" aria-labelledby="session-reservation-title">
+        <div class="session-reservation__copy">
+          <h2 class="session-reservation__title" id="session-reservation-title">{capacity_label}</h2>
+          <p>Místo si rezervujte v konferenční aplikaci. Najdete tam i aktuální počet volných míst.</p>
+        </div>
+        <a class="btn session-reservation__action" href="https://app.byzon.cz/app/program">Rezervovat v aplikaci {ICONS["arrow"].replace('<svg ', '<svg aria-hidden="true" ')}</a>
+      </section>'''
+    annotation = session_annotation(session)
     annotation_html = f'\n      <div class="session-annotation">{annotation}</div>' if annotation else ""
     presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
     presenter_count = len(session.get("speakers", []))
@@ -1300,7 +1313,7 @@ def page_session(session):
     <nav class="breadcrumb speaker-back" aria-label="Návrat do programu" style="justify-content:flex-start"><a href="/program/">‹ Zpět na program</a></nav>
     <article class="session-intro">
       <span class="eyebrow">{esc(session.get('kind', 'Přednáška'))}</span>
-      <h1>{esc(session['title'])}</h1>{capacity_html}{annotation_html}
+      <h1>{esc(session['title'])}</h1>{reservation_html}{annotation_html}
     </article>
     <section class="session-speakers" aria-labelledby="session-speakers-title">
       <h2 id="session-speakers-title">{presenter_title}</h2>
@@ -1321,6 +1334,7 @@ def page_session(session):
         description,
         f"/program/{session['slug']}/",
         image,
+        extra_css="/assets/css/session-reservation.css" if capacities else None,
     ) + body + footer()
 
 
