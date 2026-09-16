@@ -108,6 +108,35 @@ Dne 31. 8. 2026 organizátor schválil konzervativní participant apply:
    vstupenkou. Skupinový nákup bez jednoznačných účastnických e-mailů jde do
    ručního řešení a nevytvoří duplicitní identity ani pozvánky.
 
+## Ověření hromadných nákupů 16. 9. 2026
+
+Read-only kontrola aktuálního exportu našla 77 objednávek a 96 vstupenek
+(94 uhrazených, 2 neuhrazené). Patnáct objednávek obsahovalo více vstupenek.
+Účastnické e-maily v exportu odpovídaly údajům dokumentovaného endpointu
+`GET /2.0/invoice/{id}/sell-on-name` u všech těchto objednávek.
+
+U objednávky s pěti vstupenkami bylo ověřeno pět samostatných ticket ID,
+pět různých účastnických e-mailů a shoda všech šesti kontaktních polí
+(jméno, příjmení, e-mail, firma, pozice, telefon) s detailem objednávky.
+Stávající export tedy poskytuje všechny údaje pro import pěti samostatných
+účastníků. Další request na detail při každém importu není potřeba; endpoint
+navíc nevrací ticket ID, takže jeho záznamy nelze obecně párovat jen pořadím.
+
+Kontrola zároveň odhalila sdílené účastnické e-maily: u sedmi objednávek
+se stejný e-mail opakoval na více placených vstupenkách. Protože účty mají
+identitu podle e-mailu, jejich automatický import by sloučil více vstupenek
+do jednoho účastníka. Adapter nyní tyto řádky označuje `manual_review`,
+zachová pojmenované kontakty a preview požaduje vlastní e-mail každého
+účastníka. Ostatní jednoznačné účastníky lze vybrat a importovat samostatně.
+Normalizace e-mailů probíhá před kontrolou duplicit; jiné objednávky ani
+neuhrazené či stornované vstupenky tuto kontrolu neovlivňují.
+
+Regresní test pokrývá pět osob pod jednou objednávkou včetně profilů,
+aktivních membershipů, blokace sdílených e-mailů, idempotentního opakování
+a následného preview s pěti nezměněnými řádky. Souhrnné řádky afterparty
+a slev se nadále nepřevádějí na další účastníky. Živá kontrola byla pouze
+čtení; nebyl proveden import do běžící aplikace ani odeslání pozvánek.
+
 ## Provozní tok
 
 1. Organizátor zvolí „Načíst ze SimpleShopu“.

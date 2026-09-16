@@ -12,7 +12,15 @@ import {
 import { and, count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import type { SimpleShopTicketSourceSnapshot } from './simpleshop-ticket-source';
+import {
+  createSimpleShopTicketSourceAdapter,
+  type SimpleShopTicketSourceSnapshot,
+} from './simpleshop-ticket-source';
+import {
+  simpleShopGroupCsv,
+  simpleShopGroupEmails,
+  simpleShopGroupProduct,
+} from '../test/server/simpleshop-group-fixture';
 import {
   handleAdminParticipantDetail,
   handleAdminParticipantInvite,
@@ -167,7 +175,7 @@ integration('P4-03 SimpleShop participant apply integration', () => {
 
   afterAll(async () => client.close());
 
-  const preview = async () => {
+  const preview = async (currentSnapshot = snapshot) => {
     const response = await previewSimpleShopTickets(
       new Request(
         `${appOrigin}/api/v1/admin/events/${eventId}/ticket-imports/preview`,
@@ -185,7 +193,9 @@ integration('P4-03 SimpleShop participant apply integration', () => {
       {
         allowedOrigin: appOrigin,
         getSession: vi.fn(async () => ({ user: { id: adminId } })),
-        sourceAdapter: { fetchPreviewSource: vi.fn(async () => snapshot) },
+        sourceAdapter: {
+          fetchPreviewSource: vi.fn(async () => currentSnapshot),
+        },
         store: createDatabaseTicketImportPreviewStore(client.db, {
           currentEventSlug: eventSlug,
         }),
@@ -550,6 +560,134 @@ integration('P4-03 SimpleShop participant apply integration', () => {
     ).toMatchObject({
       code: 'IMPORT_PREVIEW_STALE',
       currentPreviewVersion: 1,
+    });
+  });
+
+  it('imports all five named group participants, blocks shared emails and is idempotent', async () => {
+    const groupSnapshot = (emails = simpleShopGroupEmails) =>
+      createSimpleShopTicketSourceAdapter({
+        email: 'api@example.test',
+        apiKey: 'synthetic-key',
+        fetch: async (input) =>
+          new Response(
+            JSON.stringify(
+              new URL(String(input)).pathname === '/2.0/product/143958/'
+                ? simpleShopGroupProduct
+                : { csv: simpleShopGroupCsv(emails) },
+            ),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      }).fetchPreviewSource();
+    const shared = await groupSnapshot([
+      simpleShopGroupEmails[0]!,
+      simpleShopGroupEmails[0]!,
+      ...simpleShopGroupEmails.slice(2),
+    ]);
+    const sharedPreview = await preview(shared);
+    expect(sharedPreview.summary).toMatchObject({ new: 3, conflict: 2 });
+    const bodyFor = (value: typeof sharedPreview) => ({
+      eventId,
+      previewId: value.previewId,
+      previewVersion: value.previewVersion,
+      expectedImpact: value.summary,
+      selectedRowIds: value.rows.map((row) => row.rowId),
+      reason: 'Import všech pěti účastníků jedné hromadné objednávky.',
+    });
+    const blocked = await applyRequest(
+      bodyFor(sharedPreview),
+      'simpleshop-group-shared-0001',
+      adminId,
+      fixedNow,
+      shared,
+    );
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({
+      code: 'IMPORT_PREVIEW_BLOCKED',
+    });
+    const importedGroup = () =>
+      client.db.query.ticketSourceParticipants.findMany({
+        where: and(
+          eq(schema.ticketSourceParticipants.eventId, eventId),
+          eq(schema.ticketSourceParticipants.orderExternalId, '9500001'),
+        ),
+      });
+    expect(await importedGroup()).toHaveLength(0);
+
+    const valid = await groupSnapshot();
+    const validPreview = await preview(valid);
+    expect(validPreview.summary).toMatchObject({
+      total: 5,
+      new: 5,
+      conflict: 0,
+    });
+    const body = bodyFor(validPreview);
+    const response = await applyRequest(
+      body,
+      'simpleshop-group-five-0001',
+      adminId,
+      fixedNow,
+      valid,
+    );
+    expect(response.status).toBe(200);
+    const applied = await response.json();
+    expect(applied).toMatchObject({
+      result: { created: 5, statusChanged: 0, unchanged: 0 },
+    });
+    const imported = await importedGroup();
+    expect(imported).toHaveLength(5);
+    expect(new Set(imported.map((row) => row.userId)).size).toBe(5);
+    for (const [index, email] of simpleShopGroupEmails.entries()) {
+      const user = await client.db.query.users.findFirst({
+        where: eq(schema.users.email, email),
+      });
+      expect(user).toMatchObject({
+        name: `Účastník ${index + 1} Skupiny`,
+        email,
+      });
+      expect(imported).toContainEqual(
+        expect.objectContaining({
+          userId: user!.id,
+          externalId: String(9_500_010 + index),
+        }),
+      );
+      const profile = await client.db.query.participantProfiles.findFirst({
+        where: and(
+          eq(schema.participantProfiles.eventId, eventId),
+          eq(schema.participantProfiles.userId, user!.id),
+        ),
+      });
+      expect(profile).toMatchObject({
+        contactEmail: email,
+        company: `Firma ${index + 1}`,
+        jobTitle: `Pozice ${index + 1}`,
+        phone: `+42077711122${index + 1}`,
+      });
+      const membership = await client.db.query.eventMemberships.findFirst({
+        where: and(
+          eq(schema.eventMemberships.eventId, eventId),
+          eq(schema.eventMemberships.userId, user!.id),
+        ),
+      });
+      expect(membership?.status).toBe('active');
+    }
+    const replay = await applyRequest(
+      body,
+      'simpleshop-group-five-0001',
+      adminId,
+      fixedNow,
+      valid,
+    );
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      ...applied,
+      outcome: 'already_applied',
+    });
+    expect(await importedGroup()).toHaveLength(5);
+    expect((await preview(valid)).summary).toMatchObject({
+      total: 5,
+      new: 0,
+      unchanged: 5,
+      conflict: 0,
     });
   });
 });

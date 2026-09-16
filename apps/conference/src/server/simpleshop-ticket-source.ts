@@ -439,6 +439,7 @@ const parseExport = (
     throw new SimpleShopTicketSourceError('invalid_payload');
   }
   const paidTicketCountByOrder = new Map<string, number>();
+  const paidNamedEmailCountsByOrder = new Map<string, Map<string, number>>();
   const ticketRowsByOrder = new Map<string, ParsedSimpleShopTicketRow[]>();
   for (const row of parsedTicketRows) {
     const orderRows = ticketRowsByOrder.get(row.orderExternalId) ?? [];
@@ -449,19 +450,39 @@ const parseExport = (
       row.orderExternalId,
       (paidTicketCountByOrder.get(row.orderExternalId) ?? 0) + 1,
     );
+    if (row.namedContactEmail !== null) {
+      const emailCounts =
+        paidNamedEmailCountsByOrder.get(row.orderExternalId) ?? new Map();
+      emailCounts.set(
+        row.namedContactEmail,
+        (emailCounts.get(row.namedContactEmail) ?? 0) + 1,
+      );
+      paidNamedEmailCountsByOrder.set(row.orderExternalId, emailCounts);
+    }
   }
   const records: SimpleShopTicketSourceRecord[] = parsedTicketRows.map(
     (row) => {
       const hasNamedParticipant = row.namedContactEmail !== null;
+      // An account is keyed by email. Reusing a group contact would silently
+      // merge multiple tickets/people into one participant membership.
+      const hasSharedParticipantEmail =
+        row.sourceStatus === 'paid' &&
+        row.namedContactEmail !== null &&
+        (paidNamedEmailCountsByOrder
+          .get(row.orderExternalId)
+          ?.get(row.namedContactEmail) ?? 0) > 1;
       const canUseSingleTicketBuyer =
         row.sourceStatus === 'paid' &&
         paidTicketCountByOrder.get(row.orderExternalId) === 1 &&
         row.buyerEmail !== null;
-      const identitySource: TicketImportIdentitySource = hasNamedParticipant
-        ? 'named_participant'
-        : canUseSingleTicketBuyer
-          ? 'single_paid_ticket_buyer'
-          : 'manual_review';
+      const identitySource: TicketImportIdentitySource =
+        hasSharedParticipantEmail
+          ? 'manual_review'
+          : hasNamedParticipant
+            ? 'named_participant'
+            : canUseSingleTicketBuyer
+              ? 'single_paid_ticket_buyer'
+              : 'manual_review';
       return {
         sourceRowNumber: row.sourceRowNumber,
         externalId: row.externalId,
@@ -475,26 +496,15 @@ const parseExport = (
             .findIndex(({ externalId }) => externalId === row.externalId) + 1,
         purchasedOn: row.purchasedOn,
         discountCoupon: row.discountCoupon,
-        contactName:
-          identitySource === 'named_participant'
-            ? row.namedContactName
-            : row.buyerName,
-        contactEmail:
-          identitySource === 'named_participant'
-            ? row.namedContactEmail
-            : row.buyerEmail,
-        contactCompany:
-          identitySource === 'named_participant'
-            ? row.namedContactCompany
-            : null,
-        contactPosition:
-          identitySource === 'named_participant'
-            ? row.namedContactPosition
-            : null,
-        contactPhone:
-          identitySource === 'named_participant'
-            ? row.namedContactPhone
-            : row.buyerPhone,
+        contactName: hasNamedParticipant ? row.namedContactName : row.buyerName,
+        contactEmail: hasNamedParticipant
+          ? row.namedContactEmail
+          : row.buyerEmail,
+        contactCompany: hasNamedParticipant ? row.namedContactCompany : null,
+        contactPosition: hasNamedParticipant ? row.namedContactPosition : null,
+        contactPhone: hasNamedParticipant
+          ? row.namedContactPhone
+          : row.buyerPhone,
         identitySource,
       };
     },

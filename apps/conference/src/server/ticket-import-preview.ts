@@ -316,7 +316,7 @@ const rowFor = (
   const identityIssue = {
     code: 'participant_identity_manual_review' as const,
     message:
-      'Chybí potvrzený účastnický e-mail; kontakt kupujícího slouží pouze pro ruční dořešení.',
+      'Chybí jednoznačný účastnický e-mail nebo jej sdílí více vstupenek v objednávce; před importem doplňte vlastní e-mail každého účastníka.',
   };
   if (source.sourceStatus === 'unknown') {
     return {

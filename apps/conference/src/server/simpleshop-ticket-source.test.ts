@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  simpleShopGroupCsv,
+  simpleShopGroupEmails,
+} from '../test/server/simpleshop-group-fixture';
+import { buildTicketImportPreview } from './ticket-import-preview';
+import {
   SIMPLESHOP_API_BASE_URL,
   SimpleShopTicketSourceError,
   assertSimpleShopReadRequest,
@@ -286,6 +291,102 @@ describe('SimpleShopTicketSourceAdapter', () => {
     expect(changed.snapshotDigest).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it.each([
+    {
+      name: 'five distinct participants',
+      emails: simpleShopGroupEmails,
+      expectedNew: 5,
+    },
+    {
+      name: 'two participants sharing a normalized email',
+      emails: [
+        simpleShopGroupEmails[0]!,
+        ` ${simpleShopGroupEmails[0]!.toUpperCase()} `,
+        ...simpleShopGroupEmails.slice(2),
+      ],
+      expectedNew: 3,
+    },
+    {
+      name: 'one participant without an email',
+      emails: [
+        simpleShopGroupEmails[0]!,
+        '',
+        ...simpleShopGroupEmails.slice(2),
+      ],
+      expectedNew: 4,
+    },
+  ])(
+    'previews a paid group with $name without merging or multiplying tickets',
+    async ({ emails, expectedNew }) => {
+      const snapshot = await createSimpleShopTicketSourceAdapter({
+        ...credentials,
+        fetch: async (input) =>
+          jsonResponse(
+            new URL(String(input)).pathname === '/2.0/product/143958/'
+              ? product
+              : { csv: simpleShopGroupCsv(emails) },
+          ),
+      }).fetchPreviewSource();
+
+      expect(snapshot.source).toMatchObject({
+        sourceRows: 7,
+        ticketRows: 5,
+        ignoredSummaryRows: 2,
+        multipleQuantitySummaryRows: 1,
+      });
+      expect(snapshot.records).toHaveLength(5);
+      expect(new Set(snapshot.records.map((row) => row.externalId)).size).toBe(
+        5,
+      );
+      expect(snapshot.records.map((row) => row.orderTicketPosition)).toEqual([
+        1, 2, 3, 4, 5,
+      ]);
+      for (const [index, row] of snapshot.records.entries()) {
+        expect(row).toMatchObject({
+          orderExternalId: '9500001',
+          orderTicketCount: 5,
+          quantity: 1,
+        });
+        if (!emails[index]) continue;
+        expect(row).toMatchObject({
+          contactName: `Účastník ${index + 1} Skupiny`,
+          contactEmail: emails[index]!.trim().toLowerCase(),
+          contactCompany: `Firma ${index + 1}`,
+          contactPosition: `Pozice ${index + 1}`,
+          contactPhone: `+42077711122${index + 1}`,
+        });
+      }
+      const { response } = buildTicketImportPreview({
+        eventId: crypto.randomUUID(),
+        previewId: crypto.randomUUID(),
+        createdAt: new Date('2026-09-16T10:00:00Z'),
+        snapshot,
+        existing: [],
+        generateId: () => crypto.randomUUID(),
+      });
+      expect(response.summary).toMatchObject({
+        total: 5,
+        new: expectedNew,
+        conflict: 5 - expectedNew,
+      });
+      expect(
+        response.rows
+          .filter((row) => row.status === 'new')
+          .every((row) => row.identitySource === 'named_participant'),
+      ).toBe(true);
+      for (const row of response.rows.filter(
+        (row) => row.status === 'conflict',
+      )) {
+        expect(row.identitySource).toBe('manual_review');
+        expect(row.issues).toContainEqual(
+          expect.objectContaining({
+            code: 'participant_identity_manual_review',
+          }),
+        );
+      }
+    },
+  );
+
   it('uses a buyer only for a single paid ticket and flags group buyers for review', async () => {
     const identityRows = [
       [
@@ -371,6 +472,29 @@ describe('SimpleShopTicketSourceAdapter', () => {
       [1, 1],
       [2, 1],
       [2, 2],
+    ]);
+  });
+
+  it('allows an email on separate orders and ignores unpaid or cancelled tickets when checking shared identities', async () => {
+    const rows = ['Uhrazeno', 'Uhrazeno', 'Neuhrazeno', 'STORNO'].map(
+      (status, index) => {
+        const row: string[] = [...sourceRows[0]];
+        row[0] = String(7_000_050 + index);
+        row[1] = `SAME0${index}`;
+        row[3] = index === 1 ? '80000050' : '80000001';
+        row[4] = status;
+        return row;
+      },
+    );
+    const snapshot = await createSimpleShopTicketSourceAdapter({
+      ...credentials,
+      fetch: successfulFetch(rows),
+    }).fetchPreviewSource();
+    expect(snapshot.records.map((row) => row.identitySource)).toEqual([
+      'named_participant',
+      'named_participant',
+      'named_participant',
+      'named_participant',
     ]);
   });
 
