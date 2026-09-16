@@ -6,11 +6,14 @@ import {
   participantProgramProblemFixtures,
 } from '@byzon/test-support/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { page } from 'vitest/browser';
+import sourceContent from '../../../../../static-site/data/content.json';
 
 import '../../app/styles.css';
 import {
   PracticalContent,
   SpeakerDetail,
+  SpeakerDirectory,
 } from '../../components/content-directory';
 import { EmptyContent, ResourceStatus } from '../../components/content-state';
 import { ProgramView, SessionView } from '../../components/program-view';
@@ -151,6 +154,130 @@ beforeEach(() => {
 });
 
 describe('CS-CONTENT-01 participant UI', () => {
+  it('shows both coach biographies below the annotation even with only one coach available, and hides them from the directory', async () => {
+    const coachSources = sourceContent.speakers.list.filter(({ slug }) =>
+      ['stanislava-maunova', 'radim-rocek'].includes(slug),
+    );
+    const coaches = coachSources.map((source, index) => ({
+      ...participantContentFixtures.happy!.content.speakers[0]!,
+      id: index === 0 ? coachingIds.stana : coachingIds.radim,
+      slug: source.slug,
+      firstName: source.name.split(' ')[0]!,
+      lastName: source.name.split(' ')[1]!,
+      jobTitle: source.role,
+      bioMarkdown: source.bio.join('\n\n'),
+      photoAssetId: null,
+    }));
+    const annotation = sourceContent.sessions.list
+      .find(({ slug }) => slug === 'koucovaci-zona')!
+      .annotation.join('\n\n');
+    const program = {
+      ...coachingProgram,
+      program: {
+        ...coachingProgram.program,
+        sessions: coachingProgram.program.sessions.map((session) =>
+          session.type === 'coaching'
+            ? {
+                ...session,
+                description: annotation,
+                speakerIds: [session.id],
+                ...(session.id === coachingIds.stana
+                  ? {
+                      startsAt: '2026-09-18T07:45:00.000Z',
+                      endsAt: '2026-09-18T08:15:00.000Z',
+                    }
+                  : {}),
+              }
+            : session,
+        ),
+      },
+    };
+    const content = {
+      ...participantContentFixtures.happy!,
+      content: {
+        ...participantContentFixtures.happy!.content,
+        speakers: [
+          ...participantContentFixtures.happy!.content.speakers,
+          ...coaches,
+        ],
+      },
+    };
+    const api = createFetchApiClient({
+      maxRetries: 0,
+      fetch: async (input) =>
+        new Response(
+          JSON.stringify(
+            (input instanceof Request ? input.url : String(input)).endsWith(
+              '/program',
+            )
+              ? program
+              : content,
+          ),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-request-id': 'component-coaches-0001',
+            },
+          },
+        ),
+    });
+    const screen = await renderComponent(
+      <SessionView
+        chooseCoach
+        eventId={program.eventId}
+        sessionId={coachingIds.radim}
+        api={api}
+      />,
+    );
+    for (const coach of coachSources) {
+      await expect
+        .element(screen.getByRole('heading', { name: coach.name, level: 3 }))
+        .toBeVisible();
+      await expect.element(screen.getByText(coach.bio[0]!)).toBeVisible();
+    }
+    const annotationNode = screen.container.querySelector('.prose')!;
+    const profiles = screen.container.querySelector('.coaching-profiles')!;
+    expect(
+      annotationNode.compareDocumentPosition(profiles) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Stanislava Maunová/ }).elements(),
+    ).toHaveLength(0);
+    await screen
+      .getByRole('button', { name: /Radim Roček.*Vybrat kouče/ })
+      .click();
+    await expect
+      .element(screen.getByRole('link', { name: 'Přidat tento bod' }))
+      .toHaveAttribute(
+        'href',
+        `/api/v1/events/${program.eventId}/program/${coachingIds.radim}/calendar.ics`,
+      );
+    await expectComponentToPassAxe(screen.container);
+    expect(screen.container.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    await page.viewport(
+      viewport.width,
+      Math.ceil(screen.container.scrollHeight) + 32,
+    );
+    window.scrollTo(0, 0);
+    await page.screenshot({
+      element: screen.container,
+      path: `../../../../../test-results/coaching-profiles-${viewport.width}.png`,
+    });
+    await page.viewport(viewport.width, viewport.height);
+    await screen.unmount();
+    const directory = await renderComponent(
+      <SpeakerDirectory eventId={program.eventId} api={api} />,
+    );
+    await expect.element(directory.getByRole('link').first()).toBeVisible();
+    expect(directory.getByText('Stanislava Maunová').elements()).toHaveLength(
+      0,
+    );
+    expect(directory.getByText('Radim Roček').elements()).toHaveLength(0);
+  });
+
   it('switches conference days and preserves the selection in the URL', async () => {
     const screen = await renderComponent(
       <ProgramView

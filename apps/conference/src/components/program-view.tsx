@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ApiPort } from '@/lib/api';
+import { CoachingProfiles } from './coaching-profiles';
 
 import {
   EmptyContent,
@@ -471,6 +472,13 @@ export const SessionView = ({
         )
       : [];
   const coachingSlot = coachingSessions.length > 0;
+  const coachSpeakerIds = [
+    ...new Set(
+      state.data.program.sessions
+        .filter((candidate) => candidate.type === 'coaching')
+        .flatMap((candidate) => candidate.speakerIds ?? []),
+    ),
+  ];
   const backHref =
     returnOrigin === 'agenda'
       ? '/app/agenda'
@@ -503,12 +511,19 @@ export const SessionView = ({
       ) : session.summary ? (
         <p className="lead">{session.summary}</p>
       ) : null}
-      {!coachingSlot && session.description ? (
+      {session.description ? (
         <div className="prose">
           {session.description.split('\n\n').map((paragraph, index) => (
             <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
           ))}
         </div>
+      ) : null}
+      {coachingSlot && coachSpeakerIds.length > 0 ? (
+        <CoachingProfiles
+          eventId={eventId}
+          speakerIds={coachSpeakerIds}
+          {...(api ? { api } : {})}
+        />
       ) : null}
       {coachingSlot ? (
         <CoachingSlotChoice

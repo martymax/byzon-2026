@@ -464,6 +464,28 @@
         "links": {
           "linkedin": "https://www.linkedin.com/in/tomasreznicek/"
         }
+      },
+      {
+        "slug": "stanislava-maunova",
+        "name": "Stanislava Maunová",
+        "photo": "/assets/img/2026/09/Stanislava-Maunova.webp",
+        "homepage": false,
+        "label": "Koučka",
+        "role": "Profesionální koučka s certifikací PCC (ICF)",
+        "bio": [
+          "Certifikovaná koučka PCC (ICF), specializující se na rozvoj obchodních dovedností a strategií. Mým cílem je transformovat způsoby, jakými podnikatelé komunikují a získávají klienty, aby nejen prodávali své produkty nebo myšlenky, ale dělali to excelentně s důrazem na dlouhodobé vztahy a loajalitu zákazníků. Pomohu vám odkrýt, jak efektivní komunikace a strategické plánování mohou otevřít nové možnosti pro růst a úspěch vašeho podnikání. Jsem také vášnivá školitelka v oblasti využívání umělé inteligence a propagátorka duchovního růstu."
+        ]
+      },
+      {
+        "slug": "radim-rocek",
+        "name": "Radim Roček",
+        "photo": "/assets/img/2026/09/Radim-Rocek.webp",
+        "homepage": false,
+        "label": "Kouč",
+        "role": "Byznys kouč s 30 lety zkušeností ve 23 zemích",
+        "bio": [
+          "Byznys kouč s 30 lety zkušeností ve 23 zemích. Vystudoval matematiku a biologii na Masarykově univerzitě a následně získal MBA s vyznamenáním ve strategickém řízení na Nottingham Trent University. Koučování se intenzivně věnuje od roku 2019, prošel akreditovaným tréninkem na PCC a má přes 1000 hodin zkušeností. Specializuje se na majitele a ředitele malých a středních firem se vztahem k udržitelnosti. Organizuje workshopy pro lídry firem na témata: Strategické řízení, AI pro majitele firem, Osobní energie a mental fitness, Byznys na Linkedin pro majitele firem a další."
+        ]
       }
     ]
   },
@@ -776,6 +798,22 @@
           "Hotové pracovní plátno (canvas) pro vaše každodenní strategické iniciativy."
         ],
         "closing": "Vykročte ze zajetých kolejí a postavte svou budoucnost, kostku po kostce. Zajistěte si své místo a buďte tvůrcem změn, kterého vaše odvětví potřebuje."
+      },
+      {
+        "slug": "koucovaci-zona",
+        "title": "Koučovací zóna",
+        "kind": "Koučink",
+        "presenter_title": "Kouči",
+        "speakers": [
+          "stanislava-maunova",
+          "radim-rocek"
+        ],
+        "annotation": [
+          "Dopřejte si během konference 30 minut jen pro sebe a téma, které právě řešíte.",
+          "V koučovací zóně vám budou k dispozici dva profesionální kouči s dlouholetou praxí a specializací na byznysová témata. Během individuálního koučovacího setkání získáte odstup od situace, pojmenujete si, co je pro vás podstatné, a odnesete si konkrétní další krok.",
+          "Vyberte si svůj čas a rezervujte si místo co nejdříve přímo v aplikaci. Svůj koučink si rovnou uložte do kalendáře, ať na něj ve víru konference nezapomenete.",
+          "Koučovací zónu najdete v přízemí v lobby, kde budete mít prostor na nerušený rozhovor. Značky vás dovedou přímo na místo."
+        ]
       }
     ]
   },
@@ -1400,14 +1438,16 @@
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-915945",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "9:45 - 10:15",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-9451015",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "10:15 - 10:45",
@@ -1422,21 +1462,24 @@
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-10451115",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "11:15 - 11:45",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-11151145",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "11:45 - 12:15",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-11451215",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "12:15 - 13:15",
@@ -1451,21 +1494,24 @@
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-13151345",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "13:45 - 14:15",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-13451415",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "14:15 - 14:45",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-14151445",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "14:45 - 15:15",
@@ -1480,21 +1526,24 @@
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-15151545",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "15:45 - 16:15",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-15451615",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               },
               {
                 "time": "16:15 - 16:45",
                 "title": "Koučovací sloty",
                 "slug": "koucovaci-zona-koucovaci-sloty-16151645",
                 "speakerSlugs": [],
-                "questionMode": "disabled"
+                "questionMode": "disabled",
+                "detail": "koucovaci-zona"
               }
             ]
           },

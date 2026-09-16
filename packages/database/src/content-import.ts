@@ -854,6 +854,9 @@ export async function importContentJson(options: {
       questionMode: 'disabled',
       title: slot.title,
       summary: 'Koučovací zóna · Individuální 30minutový koučink',
+      description: sessionDescription(
+        source.sessions?.list.find(({ slug }) => slug === 'koucovaci-zona'),
+      ),
       startsAt: range.startsAt,
       endsAt: range.endsAt,
       type: 'coaching',
@@ -862,7 +865,9 @@ export async function importContentJson(options: {
       reservationGroupKey: null,
       roomSlug,
       sortOrder: slot.sortOrder,
-      speakerSlugs: [],
+      speakerSlugs: speakerSlugByName.has(slot.coachName)
+        ? [speakerSlugByName.get(slot.coachName)!]
+        : [],
     });
   }
 

@@ -148,7 +148,7 @@ const SpeakerProgram = ({
   );
 };
 
-const SpeakerPortrait = ({
+export const SpeakerPortrait = ({
   speaker,
   detail = false,
 }: {
@@ -193,6 +193,7 @@ const SpeakerPortrait = ({
 
 export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
   const state = useParticipantContent(eventId, api);
+  const programState = useParticipantProgram(eventId, api);
   if (state.status !== 'ready') {
     return (
       <ResourceStatus
@@ -202,7 +203,25 @@ export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
       />
     );
   }
-  if (state.data.content.speakers.length === 0) {
+  if (programState.status !== 'ready') {
+    return (
+      <ResourceStatus
+        loginReturnTo="/app/recnici"
+        state={programState}
+        onRetry={programState.retry}
+      />
+    );
+  }
+  const speakers = state.data.content.speakers.filter((speaker) => {
+    const sessions = programState.data.program.sessions.filter((session) =>
+      session.speakerIds?.includes(speaker.id),
+    );
+    return (
+      !sessions.length ||
+      sessions.some((session) => session.type !== 'coaching')
+    );
+  });
+  if (speakers.length === 0) {
     return (
       <EmptyContent
         title="Řečníci zatím nejsou zveřejnění"
@@ -212,7 +231,7 @@ export const SpeakerDirectory = ({ eventId, api }: ContentProps) => {
   }
   return (
     <ul className="card-grid speaker-grid">
-      {state.data.content.speakers.map((speaker) => (
+      {speakers.map((speaker) => (
         <li key={speaker.id}>
           <Link className="speaker-card" href={`/app/recnici/${speaker.slug}`}>
             <SpeakerPortrait speaker={speaker} />
