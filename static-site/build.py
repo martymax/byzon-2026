@@ -169,6 +169,7 @@ def program_event_meta(meta, inside_link=False):
 
 
 PROGRAM_CAPACITIES = json.load(open(os.path.join(ROOT, "data/program-capacities.json"), encoding="utf-8"))
+PROGRAM_APP_LINKS = json.load(open(os.path.join(ROOT, "data/program-app-links.json"), encoding="utf-8"))
 
 
 def program_capacity(ev):
@@ -1280,6 +1281,36 @@ def session_annotation(session):
     return paragraphs + title + f'<ul class="session-takeaways">{items}</ul>' + closing_html
 
 
+def session_reservation_actions(session):
+    choices = PROGRAM_APP_LINKS[session["slug"]]
+    if not choices:
+        raise ValueError(f"Missing app reservation destination: {session['slug']}")
+    links = []
+    for choice in choices:
+        session_id = choice["sessionId"]
+        if not re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", session_id):
+            raise ValueError(f"Invalid app session identifier: {session_id}")
+        href = f"https://app.byzon.cz/app/program/{session_id}"
+        if choice.get("chooseCoach"):
+            href += "?coaching=choose"
+        class_name = "btn session-reservation__action" if len(choices) == 1 else "session-reservation__choice"
+        arrow = ICONS["arrow"].replace('<svg ', '<svg aria-hidden="true" ')
+        links.append(f'<a class="{class_name}" href="{att(href)}">{esc(choice["label"])} {arrow}</a>')
+    if len(links) == 1:
+        return links[0]
+    coaching = all(choice.get("chooseCoach") for choice in choices)
+    label = "Vybrat čas koučinku" if coaching else "Vybrat skupinu"
+    day_label = choices[0].get("dayLabel", "")
+    help_text = f'<p class="session-reservation__help">{esc(day_label)}<br>Po výběru času si v aplikaci zvolíte kouče.</p>' if coaching else ""
+    grid_class = " session-reservation__options--times" if coaching else ""
+    return (
+        '<details class="session-reservation__choices">'
+        f'<summary class="btn session-reservation__action">{label} {arrow}</summary>'
+        f'{help_text}<div class="session-reservation__options{grid_class}">{"".join(links)}</div>'
+        '</details>'
+    )
+
+
 def page_session(session):
     capacities = {PROGRAM_CAPACITIES[e["slug"]] for day in C["program"]["days"] for stage in day.get("stages", []) for e in stage.get("events", []) if e.get("detail") == session["slug"] and e.get("slug") in PROGRAM_CAPACITIES}
     reservation_html = ""
@@ -1295,7 +1326,7 @@ def page_session(session):
           <h2 class="session-reservation__title" id="session-reservation-title">{capacity_label}</h2>
           <p>Místo si rezervujte v konferenční aplikaci. Najdete tam i aktuální počet volných míst.</p>
         </div>
-        <a class="btn session-reservation__action" href="https://app.byzon.cz/app/program">Rezervovat v aplikaci {ICONS["arrow"].replace('<svg ', '<svg aria-hidden="true" ')}</a>
+        {session_reservation_actions(session)}
       </section>'''
     annotation = session_annotation(session)
     annotation_html = f'\n      <div class="session-annotation">{annotation}</div>' if annotation else ""

@@ -1,0 +1,116 @@
+{
+  "co-o-svych-lidech-skutecne-vite": [
+    {
+      "sessionId": "01a06277-5fe6-72f6-999b-fc016da843e7",
+      "label": "Rezervovat v aplikaci"
+    }
+  ],
+  "zmena-je-prilezitosti-leadership-je-cesta": [
+    {
+      "sessionId": "01a06277-6acd-782e-85ec-6ed0b39eaae8",
+      "label": "Rezervovat v aplikaci"
+    }
+  ],
+  "jak-vest-1-1-ktere-nejsou-ztratou-casu": [
+    {
+      "sessionId": "01a06277-6bd3-7fdc-b98e-0ed86b16bd96",
+      "label": "Rezervovat v aplikaci"
+    }
+  ],
+  "chci-mluvit-s-clovekem": [
+    {
+      "sessionId": "01a06277-6edd-775b-9932-b9fe127d7ea1",
+      "label": "Skupina 1 · sobota 09:30–11:00"
+    },
+    {
+      "sessionId": "01a06277-7009-7f6a-b276-9dfa189d9e29",
+      "label": "Skupina 2 · sobota 11:15–12:45"
+    }
+  ],
+  "koucovaci-zona": [
+    {
+      "sessionId": "01a06277-7419-7b4f-8499-a7a17e1a6780",
+      "label": "09:15–09:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-75d6-7511-8119-6958bfb6465f",
+      "label": "09:45–10:15",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-776f-79fd-8f8f-3ecf57bb6b6f",
+      "label": "10:15–10:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-7874-75a1-91bf-20a8450d6bae",
+      "label": "10:45–11:15",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-7a09-7549-9ea5-9d1c12148fc1",
+      "label": "11:15–11:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-7bea-78b4-a96e-9815926139d4",
+      "label": "11:45–12:15",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-7d82-786d-81ec-a5d87894b918",
+      "label": "12:15–12:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-7f63-71e9-8ee1-f22644365bfc",
+      "label": "13:15–13:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-80a8-7962-9ec4-240295ac0a82",
+      "label": "13:45–14:15",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-8231-7bdf-9b7c-8185b65cd187",
+      "label": "14:15–14:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-83e4-745b-aeb7-c946cb16d419",
+      "label": "14:45–15:15",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-858a-7268-8f42-f2757b2fc26f",
+      "label": "15:15–15:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-8607-7b67-a78c-375f8fbdd004",
+      "label": "15:45–16:15",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    },
+    {
+      "sessionId": "01a06277-8682-7039-8f5b-63959afaca88",
+      "label": "16:15–16:45",
+      "chooseCoach": true,
+      "dayLabel": "Pátek 18. září"
+    }
+  ]
+}

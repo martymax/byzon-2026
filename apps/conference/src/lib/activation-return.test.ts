@@ -12,6 +12,8 @@ describe('activation return destination', () => {
     '/app/oznameni?view=unread',
     '/app/program/550e8400-e29b-41d4-a716-446655440000',
     '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=choose',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda&coaching=choose',
     '/app/oznameni/01910000-0000-7000-8000-000000000011',
     '/app/recnici/jana-novakova',
   ] as const)('accepts the allowlisted route %s', (value) => {
@@ -20,6 +22,10 @@ describe('activation return destination', () => {
 
   it.each([
     undefined,
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=other',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=choose&next=%2Fapp',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=choose&coaching=choose',
+    '/app/hodnoceni/550e8400-e29b-41d4-a716-446655440000?coaching=choose',
     'https://evil.example/app',
     '//evil.example/app',
     '\\\\evil.example\\app',

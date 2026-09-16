@@ -58,3 +58,69 @@
     transition: none;
   }
 }
+
+.session-reservation__choices {
+  flex: 0 0 310px;
+  min-width: 0;
+}
+.session-reservation:has(.session-reservation__choices[open]) {
+  align-items: flex-start;
+}
+.session-reservation__choices > summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+}
+.session-reservation__choices > summary::-webkit-details-marker {
+  display: none;
+}
+.session-reservation__choices > summary .arrow {
+  transform: rotate(90deg);
+}
+.session-reservation__choices[open] > summary .arrow {
+  transform: rotate(-90deg);
+}
+.session-reservation__help {
+  margin-top: 14px;
+  color: var(--slate);
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.session-reservation__options {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.session-reservation__options--times {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.session-reservation__choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--pink-100);
+  border-radius: var(--r-sm);
+  background: var(--white);
+  color: var(--pink-700);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.session-reservation__choice .arrow {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+.session-reservation__choice:hover {
+  background: var(--pink-50);
+  border-color: var(--pink-700);
+}
+@media (max-width: 700px) {
+  .session-reservation__choices {
+    flex-basis: auto;
+    width: 100%;
+  }
+}

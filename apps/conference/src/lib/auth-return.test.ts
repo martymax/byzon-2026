@@ -6,6 +6,8 @@ describe('authentication return destination', () => {
   it.each([
     '/app',
     '/app/agenda',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=choose',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?from=agenda&coaching=choose',
     '/app/dotazy',
     '/host/aktivity',
     '/host/moderace',
@@ -26,6 +28,10 @@ describe('authentication return destination', () => {
   it.each([
     undefined,
     ['/admin', '/app'],
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=other',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=choose&next=%2Fapp',
+    '/app/program/550e8400-e29b-41d4-a716-446655440000?coaching=choose&coaching=choose',
+    '/app/hodnoceni/550e8400-e29b-41d4-a716-446655440000?coaching=choose',
     'https://evil.example/admin',
     '//evil.example/admin',
     '/admin?token=secret',

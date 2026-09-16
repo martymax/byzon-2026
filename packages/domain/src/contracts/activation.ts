@@ -101,7 +101,7 @@ const participantActivationStaticReturnToSet = new Set<string>(
   participantActivationStaticReturnToValues,
 );
 const participantActivationDetailReturnToPattern =
-  /^\/app\/(program|oznameni|networking|interakce|hodnoceni)\/([^/?]+)(\?from=agenda)?$/;
+  /^\/app\/(program|oznameni|networking|interakce|hodnoceni)\/([^/?]+)(\?(?:from=agenda(?:&coaching=choose)?|coaching=choose))?$/;
 const participantSpeakerReturnToPattern =
   /^\/app\/recnici\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
