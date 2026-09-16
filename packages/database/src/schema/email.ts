@@ -7,12 +7,46 @@ import {
   jsonb,
   pgTable,
   timestamp,
+  text,
   uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { participantProfiles } from './profiles.js';
 import { outboxStatus } from './operations.js';
+import { events } from './events.js';
+import { users } from './auth.js';
+
+/** Private archive; auth links are redacted before insertion. */
+export const emailMessages = pgTable(
+  'email_messages',
+  {
+    id: uuid('id').primaryKey(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    deduplicationKey: text('deduplication_key').notNull(),
+    kind: varchar('kind', { length: 64 }).notNull(),
+    recipient: text('recipient'),
+    sender: text('sender'),
+    subject: text('subject'),
+    html: text('html'),
+    text: text('text'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex('email_messages_dedup_unique').on(
+      t.eventId,
+      t.deduplicationKey,
+    ),
+    index('email_messages_event_sent_idx').on(t.eventId, t.sentAt, t.id),
+    index('email_messages_user_idx').on(t.userId),
+  ],
+);
 
 /** Cascade with the private profile, including frozen recipient/content used for retries. */
 export const emailDeliveries = pgTable(

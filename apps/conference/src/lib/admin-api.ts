@@ -1,4 +1,10 @@
 import {
+  adminEmailListSchema,
+  adminEmailDetailSchema,
+  adminEmailQuerySchema,
+  type AdminEmailQuery,
+} from '@byzon/domain/contracts';
+import {
   adminEngagementMutationRequestSchema,
   adminEngagementMutationResponseSchema,
   adminEngagementOverviewSchema,
@@ -617,6 +623,52 @@ export const adminAuditEndpoint = defineApiEndpoint({
   retry: 'safe-read',
   idempotency: 'forbidden',
 });
+
+export const adminEmailListEndpoint = defineApiEndpoint({
+  ...adminAuditEndpoint,
+  successSchema: adminEmailListSchema,
+});
+export const adminEmailDetailEndpoint = defineApiEndpoint({
+  ...adminAuditEndpoint,
+  successSchema: adminEmailDetailSchema,
+});
+
+export const requestAdminEmails = async (
+  api: ApiPort,
+  eventId: string,
+  query: AdminEmailQuery,
+  signal?: AbortSignal,
+) => {
+  const parameters = new URLSearchParams();
+  Object.entries(adminEmailQuerySchema.parse(query)).forEach(([key, value]) => {
+    if (value !== undefined) parameters.set(key, String(value));
+  });
+  return correlated(
+    await api.request(adminEmailListEndpoint, {
+      path: eventPath(eventId, `/emails?${parameters}`),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      data.items.every((item) => item.eventId === eventId),
+  );
+};
+
+export const requestAdminEmail = async (
+  api: ApiPort,
+  eventId: string,
+  messageId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminEmailDetailEndpoint, {
+      path: eventPath(eventId, `/emails/${encodeURIComponent(messageId)}`),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId && data.id === messageId,
+  );
 
 export const adminEventSettingsEndpoint = defineApiEndpoint({
   method: 'GET',

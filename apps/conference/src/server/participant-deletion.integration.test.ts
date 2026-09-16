@@ -372,6 +372,17 @@ integration('permanent participant deletion', () => {
         createdAt: now,
         expiresAt: new Date(now.getTime() + 60000),
       });
+      await client.db.insert(schema.emailMessages).values({
+        id: uuid(),
+        eventId,
+        userId: person.id,
+        deduplicationKey: `archive-${person.id}`,
+        kind: 'announcement',
+        recipient: person.email,
+        html: 'Private sent content',
+        text: 'Private sent content',
+        sentAt: now,
+      });
       await client.db.insert(schema.outboxEvents).values({
         id: uuid(),
         eventId,
@@ -472,6 +483,7 @@ integration('permanent participant deletion', () => {
       schema.announcementRecipients,
       schema.ticketSourceParticipants,
       schema.emailDeliveries,
+      schema.emailMessages,
       schema.sessions,
       schema.accounts,
     ]) {

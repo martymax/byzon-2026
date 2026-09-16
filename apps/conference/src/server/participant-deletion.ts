@@ -538,6 +538,16 @@ export const deleteParticipantData = async (
       .returning({ id: schema.emailDeliveries.id }),
   );
   await tx
+    .delete(schema.emailMessages)
+    .where(
+      scoped(
+        schema.emailMessages.eventId,
+        schema.emailMessages.userId,
+        eventId,
+        participantId,
+      ),
+    );
+  await tx
     .delete(schema.participantProfiles)
     .where(
       scoped(

@@ -100,7 +100,8 @@ omezený zámek a nejvýše 8 pokusů s prodlužovanou prodlevou. Síťový pož
 probíhá mimo databázovou transakci. Obsah prvního pokusu se pro opakování
 zafixuje a Resend dostává stabilní idempotency key. Mailpit slouží ke stagingovým
 kontrolám a jeho vlastní hlavička sama o sobě nezaručuje deduplikaci doručení.
-Po dokončení se osobní podoba zprávy z fronty odstraní. Chyby obsahují jen
+Po dokončení se osobní podoba zprávy z fronty odstraní; odeslaná zpráva zůstává
+v soukromém archivu `email_messages`. Chyby obsahují jen
 obecné kódy, ne adresy, tokeny nebo odpovědi poskytovatele.
 
 Před odesláním se znovu ověřuje aktivní účastnická role a členství, ověření
@@ -122,6 +123,31 @@ Přehled provozu administrace započítává také čekající a selhané e-mail
 Odeslané oznámení už nelze odvolat ze schránky; administrační potvrzení to uvádí.
 
 ## Nasazení a kontrola
+
+### Historie odeslaných e-mailů
+
+Administrace `/admin/emaily` zobrazuje pozvánky, aktivace, přihlášení i všechny
+notifikace. Umožňuje hledat podle původní adresy a předmětu, filtrovat podle
+typu, postupně načítat další zprávy a otevřít HTML náhled nebo prostý text.
+Přístup vyžaduje oprávnění `audit:read` pro danou akci; odpovědi se neukládají
+do cache. HTML se vykresluje v izolovaném iframe bez skriptů a formulářů.
+
+Migrace `0033_email_history.sql` přidává archiv a převádí dochované záznamy
+skutečně odeslaných notifikací a pozvánek. Přeskočené zprávy nejsou odeslané.
+Pokud se dříve neuložila adresa, předmět nebo obsah, přehled to výslovně uvádí;
+starý obsah se negeneruje z aktuálních šablon. Dřívější přihlášení ani aktivace
+bez záznamu o odeslání nelze zpětně doplnit.
+
+Nové zprávy se ukládají před kontaktem s poskytovatelem a v přehledu se zobrazí
+až po potvrzení přijetí k odeslání. Jde o potvrzení od poštovního serveru,
+nikoli o potvrzení doručení do schránky. Jednorázové autentizační odkazy jsou
+v uloženém obsahu nahrazené nefunkčním odkazem; token se do archivu nedostane.
+Úspěšně potvrzený záznam brání opakovanému odeslání stejného klíče. Nejasný
+výsledek síťového požadavku nadále podléhá omezením deduplikace SMTP.
+Odstranění účastníka smaže také jeho archiv pro danou akci; odstranění účtu
+nebo akce jej maže kaskádou.
+
+### Postup nasazení
 
 1. Spustit `pnpm --filter @byzon/database db:migrate` proti cílové databázi
    před aktualizací webu a workeru. Migrace je přídavná a neodesílá zprávy.

@@ -164,6 +164,9 @@ integration('transactional email delivery', () => {
   });
   beforeEach(async () => {
     await client.db
+      .delete(schema.emailMessages)
+      .where(eq(schema.emailMessages.eventId, eventId));
+    await client.db
       .delete(schema.emailDeliveries)
       .where(eq(schema.emailDeliveries.eventId, eventId));
     await client.db
@@ -261,6 +264,17 @@ integration('transactional email delivery', () => {
       status: 'delivered',
       attempts: 1,
       rendered: null,
+    });
+    const archived = await client.db.query.emailMessages.findMany({
+      where: eq(schema.emailMessages.eventId, eventId),
+    });
+    expect(archived).toHaveLength(1);
+    expect(archived[0]).toMatchObject({
+      recipient: send.mock.calls[0]![0].to,
+      subject: send.mock.calls[0]![0].subject,
+      html: send.mock.calls[0]![0].html,
+      text: send.mock.calls[0]![0].text,
+      sentAt: now,
     });
   });
 

@@ -36,6 +36,7 @@ type AdminWorkspaceSection =
   | 'tickets'
   | 'participants'
   | 'invitations'
+  | 'emails'
   | 'announcements'
   | 'engagement'
   | 'reservations'
@@ -123,6 +124,13 @@ const navigationGroups: readonly AdminNavigationGroup[] = [
         label: 'Pozvánky',
         permission: 'role:manage',
         section: 'invitations',
+      },
+      {
+        href: '/admin/emaily',
+        icon: 'invitations',
+        label: 'Odeslané e-maily',
+        permission: 'audit:read',
+        section: 'emails',
       },
       {
         href: '/admin/vstupenky',
@@ -240,6 +248,7 @@ const sectionPermissions: Readonly<
   roles: ['role:manage'],
   reports: ['operations:read'],
   audit: ['audit:read'],
+  emails: ['audit:read'],
   settings: ['event:settings:manage'],
 };
 

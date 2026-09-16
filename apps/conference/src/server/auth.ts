@@ -12,6 +12,7 @@ import { magicLink } from 'better-auth/plugins';
 import { database } from './database';
 import { authMailProvider, type AuthMailProvider } from './mail';
 import { stagingEmailLogin } from './staging-email-login';
+import { sendRecordedAuthEmail } from './mail-history';
 
 export {
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
@@ -106,17 +107,19 @@ export const createAuth = (
               : undefined;
           const [profile] = await db
             .select({
+              eventId: schema.events.id,
+              userId: schema.users.id,
               firstName: schema.participantProfiles.firstName,
               emailSalutation: schema.participantProfiles.emailSalutation,
             })
-            .from(schema.participantProfiles)
-            .innerJoin(
-              schema.users,
-              eq(schema.users.id, schema.participantProfiles.userId),
-            )
-            .innerJoin(
-              schema.events,
-              eq(schema.events.id, schema.participantProfiles.eventId),
+            .from(schema.events)
+            .innerJoin(schema.users, eq(schema.users.email, email))
+            .leftJoin(
+              schema.participantProfiles,
+              and(
+                eq(schema.users.id, schema.participantProfiles.userId),
+                eq(schema.events.id, schema.participantProfiles.eventId),
+              ),
             )
             .where(
               and(
@@ -127,14 +130,24 @@ export const createAuth = (
               ),
             )
             .limit(1);
-          return mailProvider.sendMagicLink({
+          const message = {
             to: email,
             url,
             ...invitation,
-            ...(profile ?? {}),
+            firstName: profile?.firstName ?? null,
+            emailSalutation: profile?.emailSalutation ?? null,
             expiresInSeconds:
               options.magicLinkExpiresInSeconds ??
               LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
+          };
+          if (!profile) return mailProvider.sendMagicLink(message);
+          return sendRecordedAuthEmail(db, mailProvider, message, {
+            eventId: profile.eventId,
+            userId: profile.userId,
+            appOrigin: env.APP_BASE_URL,
+            sender: env.MAIL_FROM_NAME
+              ? `${env.MAIL_FROM_NAME} <${env.MAIL_FROM}>`
+              : (env.MAIL_FROM ?? null),
           });
         },
       }),

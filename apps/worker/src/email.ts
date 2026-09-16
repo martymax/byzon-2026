@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { enqueueEmailDelivery, schema, type Database } from '@byzon/database';
+import {
+  enqueueEmailDelivery,
+  sendRecordedEmail,
+  schema,
+  type Database,
+} from '@byzon/database';
 import { publishedProgramAgendaSnapshotSchema } from '@byzon/domain/contracts';
 import {
   createNotificationEmail,
@@ -384,11 +389,29 @@ export const dispatchEmailOnce = async (
       .where(owned(delivery))
       .returning({ id: schema.emailDeliveries.id });
     if (!saved.length) return 'skipped';
-    await transport.send({
-      ...content,
-      category: 'notification',
-      idempotencyKey: `byzon-notification-${delivery.id}`,
-    });
+    await sendRecordedEmail(
+      db,
+      {
+        eventId: delivery.eventId,
+        userId: delivery.userId,
+        deduplicationKey: `notification:${delivery.id}`,
+        kind: parsed.data.kind,
+        recipient: content.to,
+        sender: process.env.MAIL_FROM_NAME
+          ? `${process.env.MAIL_FROM_NAME} <${process.env.MAIL_FROM}>`
+          : (process.env.MAIL_FROM ?? null),
+        subject: content.subject,
+        html: content.html,
+        text: content.text,
+      },
+      () =>
+        transport.send({
+          ...content,
+          category: 'notification',
+          idempotencyKey: `byzon-notification-${delivery.id}`,
+        }),
+      now,
+    );
     await finish(db, delivery, now, null);
     return 'delivered';
   } catch {

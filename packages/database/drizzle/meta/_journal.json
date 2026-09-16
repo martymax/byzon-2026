@@ -232,6 +232,13 @@
       "when": 1789420328817,
       "tag": "0032_event_survey",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789598653017,
+      "tag": "0033_email_history",
+      "breakpoints": true
     }
   ]
 }

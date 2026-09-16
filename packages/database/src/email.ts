@@ -1,7 +1,38 @@
 import { and, eq } from 'drizzle-orm';
-import type { DatabaseTransaction } from './client.js';
+import type { Database, DatabaseTransaction } from './client.js';
 import { generateUuidV7 } from './ids.js';
-import { emailDeliveries, participantProfiles } from './schema/index.js';
+import {
+  emailDeliveries,
+  emailMessages,
+  participantProfiles,
+} from './schema/index.js';
+
+/** Save content before network I/O. A confirmed send also fences a later retry. */
+export const sendRecordedEmail = async (
+  db: Database,
+  message: Omit<
+    typeof emailMessages.$inferInsert,
+    'id' | 'createdAt' | 'sentAt'
+  >,
+  send: () => Promise<void>,
+  now: Date = new Date(),
+): Promise<void> => {
+  await db
+    .insert(emailMessages)
+    .values({ ...message, id: generateUuidV7(), createdAt: now })
+    .onConflictDoNothing({
+      target: [emailMessages.eventId, emailMessages.deduplicationKey],
+    });
+  const condition = and(
+    eq(emailMessages.eventId, message.eventId),
+    eq(emailMessages.deduplicationKey, message.deduplicationKey),
+  );
+  const saved = await db.query.emailMessages.findFirst({ where: condition });
+  if (!saved) throw new Error('Email archive unavailable');
+  if (saved.sentAt) return;
+  await send();
+  await db.update(emailMessages).set({ sentAt: now }).where(condition);
+};
 
 export interface QueueEmailInput {
   eventId: string;
