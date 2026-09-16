@@ -76,3 +76,79 @@ test('expired or incomplete sessions cannot gate public instructions', async ({
       .getByRole('link', { name: 'Přihlásit se do aplikace', exact: true }),
   ).toHaveAttribute('href', '/prihlaseni?returnTo=%2Fadmin');
 });
+
+test('guide screenshots select the matching device and stay public', async ({
+  page,
+  request,
+}) => {
+  const images: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/guides/') && request.url().endsWith('.webp'))
+      images.push(request.url());
+  });
+  await page.goto('/navody/moderator#zive-qa');
+  const figure = page.locator('#zive-qa figure');
+  const screenshot = figure.getByRole('img');
+  await screenshot.scrollIntoViewIfNeeded();
+  const mobile = page.viewportSize()!.width <= 760;
+  await expect
+    .poll(() =>
+      screenshot.evaluate(
+        (img: HTMLImageElement) => img.complete && img.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
+  await expect
+    .poll(() => screenshot.evaluate((img: HTMLImageElement) => img.currentSrc))
+    .toContain(mobile ? '-mobile.webp' : '-laptop.webp');
+  if (mobile) {
+    await expect(figure.getByRole('button', { name: 'Notebook' })).toBeHidden();
+    expect(images.every((url) => url.endsWith('-mobile.webp'))).toBe(true);
+  } else {
+    await figure.getByRole('button', { name: 'Mobil', exact: true }).click();
+    await expect(
+      figure.getByRole('button', { name: 'Mobil', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(() =>
+        screenshot.evaluate((img: HTMLImageElement) => img.currentSrc),
+      )
+      .toContain('-mobile.webp');
+    await figure.getByRole('button', { name: 'Notebook' }).click();
+    await expect
+      .poll(() =>
+        screenshot.evaluate((img: HTMLImageElement) => img.currentSrc),
+      )
+      .toContain('-laptop.webp');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(figure.getByRole('button', { name: 'Notebook' })).toBeHidden();
+    await expect
+      .poll(() =>
+        screenshot.evaluate((img: HTMLImageElement) => img.currentSrc),
+      )
+      .toContain('-mobile.webp');
+    await expect(
+      figure.getByRole('link', { name: 'Zvětšit snímek (nová karta)' }),
+    ).toHaveAttribute('href', '/guides/moderovani-mobile.webp');
+  }
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  for (const name of [
+    'prihlaseni',
+    'program',
+    'moderovani',
+    'odpoved',
+    'aktivita',
+    'pozvanky',
+  ]) {
+    for (const device of ['mobile', 'laptop']) {
+      const response = await request.get(`/guides/${name}-${device}.webp`);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toContain('image/webp');
+      expect((await response.body()).length).toBeGreaterThan(5000);
+    }
+  }
+});

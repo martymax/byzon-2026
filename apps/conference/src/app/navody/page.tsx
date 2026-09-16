@@ -1,3 +1,4 @@
+import { GuideScreenshot } from '../../components/guide-screenshot';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { guidePath, roleGuides } from '@byzon/mail/guides';
@@ -73,6 +74,7 @@ export default function GuidesPage() {
             </li>
           ))}
         </ol>
+        <GuideScreenshot screenshot="prihlaseni" />
         <Link className={styles.textLink} href="/prihlaseni">
           Přejít k přihlášení
         </Link>

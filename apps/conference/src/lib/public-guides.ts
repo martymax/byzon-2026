@@ -1,3 +1,4 @@
+import type { GuideScreenshotId } from './guide-screenshots';
 import type { GuideSlug } from '@byzon/mail/guides';
 
 interface GuideSection {
@@ -5,6 +6,7 @@ interface GuideSection {
   title: string;
   intro?: string;
   steps: readonly string[];
+  screenshot?: GuideScreenshotId;
   note?: string;
   link?: { href: string; label: string };
 }
@@ -29,6 +31,7 @@ export const publicGuideContent = {
     sections: [
       {
         id: 'program',
+        screenshot: 'program',
         title: 'Program a vlastní agenda',
         steps: [
           'V Programu otevřete detail aktivity. Zkontrolujte čas, místo, popis a řečníky.',
@@ -103,6 +106,7 @@ export const publicGuideContent = {
       },
       {
         id: 'zive-qa',
+        screenshot: 'moderovani',
         title: 'Během živého Q&A',
         steps: [
           'Sledujte přicházející dotazy. Otevřený přehled se průběžně obnovuje; při potížích použijte Obnovit dotazy.',
@@ -176,6 +180,7 @@ export const publicGuideContent = {
       },
       {
         id: 'odpoved',
+        screenshot: 'odpoved',
         title: 'Napsat a upravit odpověď',
         steps: [
           'U otázky otevřete Napsat soukromou odpověď.',
@@ -219,6 +224,7 @@ export const publicGuideContent = {
       },
       {
         id: 'seznam',
+        screenshot: 'aktivita',
         title: 'Jak číst seznam účastníků',
         steps: [
           'U aktivity s omezenou kapacitou zkontrolujte údaj Kapacita a seznam přihlášených.',
@@ -281,6 +287,7 @@ export const publicGuideContent = {
       },
       {
         id: 'pozvanky',
+        screenshot: 'pozvanky',
         title: 'Odeslat pozvánky s návody',
         steps: [
           'Otevřete Pozvánky a filtrujte příjemce podle rolí, jména, e-mailu nebo stavu pozvánky.',
@@ -342,6 +349,7 @@ export const publicGuideContent = {
       },
       {
         id: 'pomoc',
+        screenshot: 'program',
         title: 'Pomoc účastníkovi na místě',
         steps: [
           'S vyhledáním času a místa pomozte přes Program a aktuální Oznámení.',

@@ -1,3 +1,4 @@
+import { GuideScreenshot } from '../../../components/guide-screenshot';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -81,6 +82,9 @@ export default async function RoleGuidePage({ params }: Props) {
                   <li key={step}>{step}</li>
                 ))}
               </ol>
+              {section.screenshot ? (
+                <GuideScreenshot screenshot={section.screenshot} />
+              ) : null}
               {section.note ? (
                 <p className={styles.note}>{section.note}</p>
               ) : null}

@@ -1,0 +1,152 @@
+.figure {
+  margin: 2rem 0;
+  min-width: 0;
+}
+.switcher {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+.switcher button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--byzon-border);
+  background: var(--byzon-surface);
+  color: var(--byzon-text);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.switcher button[aria-pressed='true'] {
+  background: var(--byzon-ink);
+  border-color: var(--byzon-ink);
+  color: #fff;
+}
+.switcher button:focus-visible,
+.caption a:focus-visible {
+  outline: 3px solid var(--byzon-focus);
+  outline-offset: 3px;
+}
+.stage {
+  padding: 1.5rem 1rem 2rem;
+  background: var(--byzon-surface-soft);
+  border: 1px solid var(--byzon-border);
+  border-radius: 1rem;
+}
+.device {
+  position: relative;
+  margin-inline: auto;
+  background: #24222a;
+  border: 8px solid #24222a;
+  border-top-width: 14px;
+  border-radius: 12px 12px 4px 4px;
+  max-width: 100%;
+}
+.device::before {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #77717d;
+  border-radius: 50%;
+  top: -9px;
+  left: calc(50% - 2px);
+}
+.device::after {
+  content: '';
+  position: absolute;
+  bottom: -18px;
+  left: -14px;
+  right: -14px;
+  height: 10px;
+  border-radius: 2px 2px 12px 12px;
+  background: linear-gradient(#c7c5cc, #939099);
+}
+.device picture,
+.device img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.device[data-device='mobile'] {
+  max-width: 310px;
+  border: 8px solid #24222a;
+  border-top-width: 18px;
+  border-bottom-width: 18px;
+  border-radius: 30px;
+}
+.device[data-device='mobile'] picture {
+  overflow: hidden;
+  border-radius: 14px;
+}
+.device[data-device='mobile']::before {
+  top: -12px;
+}
+.device[data-device='mobile']::after {
+  height: 3px;
+  width: 64px;
+  left: calc(50% - 32px);
+  right: auto;
+  bottom: -11px;
+  background: #9c98a1;
+  border-radius: 3px;
+}
+.caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--byzon-text-muted);
+}
+.caption strong {
+  color: var(--byzon-ink);
+  font-size: 1rem;
+}
+.caption a {
+  color: var(--byzon-brand-active);
+  width: fit-content;
+  text-underline-offset: 3px;
+  padding-block: 0.4rem;
+}
+.caption .mobileLink {
+  display: none;
+}
+@media (max-width: 760px) {
+  .switcher,
+  .caption .desktopLink {
+    display: none;
+  }
+  .caption .mobileLink {
+    display: inline;
+  }
+  .stage {
+    padding: 1.25rem 0.75rem;
+  }
+  .device {
+    max-width: 310px;
+    border: 8px solid #24222a;
+    border-top-width: 18px;
+    border-bottom-width: 18px;
+    border-radius: 30px;
+  }
+  .device picture {
+    overflow: hidden;
+    border-radius: 14px;
+  }
+  .device::before {
+    top: -12px;
+  }
+  .device::after {
+    height: 3px;
+    width: 64px;
+    left: calc(50% - 32px);
+    right: auto;
+    bottom: -11px;
+    background: #9c98a1;
+    border-radius: 3px;
+  }
+}

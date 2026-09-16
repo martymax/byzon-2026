@@ -1,8 +1,8 @@
 # Veřejné návody a pozvánky
 
 Rozcestník: <https://app.byzon.cz/navody>. Návody jsou statické veřejné
-stránky, nezávislé na přihlášení, onboardingu a databázi. Neobsahují seznamy
-účastníků ani data konkrétní akce. Přístup k pracovním nástrojům nadále
+stránky, nezávislé na přihlášení, onboardingu a databázi. Neobsahují údaje skutečných
+účastníků ani neveřejná data konkrétní akce. Přístup k pracovním nástrojům nadále
 ověřuje aplikace.
 
 | Role             | Veřejná cesta                 |
@@ -57,3 +57,34 @@ i ze starých či již použitých pozvánek po zaslání veřejné URL organiz�
 - `pnpm preview:emails` generuje HTML a textové náhledy včetně šesti
   samostatných rolí. `node scripts/check-email-preview.mjs` kontroluje jejich
   zobrazení s assety i bez nich.
+
+## Snímky aplikace
+
+Důležité postupy doplňuje šest dvojic skutečných snímků rozhraní: přihlášení,
+program, moderování, písemná odpověď řečníka, účastníci aktivity a pozvánky.
+Jména, e-maily, program i otázky pocházejí výhradně ze syntetických fixtures;
+nejde o údaje skutečných účastníků. Zachyceno při rozšíření návodů v září 2026.
+
+Katalog a alternativní texty: `apps/conference/src/lib/guide-screenshots.ts`.
+Přiřazení do kapitol: pole `screenshot` v `public-guides.ts`. WebP soubory:
+`apps/conference/public/guides/`. Komponenta `GuideScreenshot` používá na
+notebooku přepínač Notebook/Mobil. Do šířky 760 px volí nativní `<picture>`
+pouze mobilní soubor, skryje přepínač a vykreslí rám telefonu i bez JavaScriptu.
+Snímky se načítají líně a mají odkaz na plné rozlišení.
+
+Obnova snímků vyžaduje sestavený `@byzon/test-support`, Playwright Chromium
+a nástroj `cwebp`. Spusťte lokální server:
+
+```sh
+BYZON_FRONTEND_PREVIEW=enabled pnpm --filter @byzon/conference exec next dev --port 3100
+```
+
+V druhém terminálu spusťte `node scripts/capture-guide-screenshots.mjs`.
+Skript má pevnou lokální adresu, nahrazuje API syntetickými odpověďmi a
+blokuje mutace; pozvánky ani odpovědi neodesílá. Aktivita používá existující
+vývojový náhled serverové stránky. Výstupní rozměry jsou 390 × 844 a
+1280 × 800 px. Před publikováním zkontrolujte obě varianty, zejména ořez
+pracovních ovládacích prvků při změně layoutu aplikace.
+
+E2E test navíc ověřuje přepínání, změnu velikosti okna, mobilní výběr souboru
+bez stažení notebookové varianty a anonymní dostupnost všech 12 obrázků.
