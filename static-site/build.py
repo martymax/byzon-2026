@@ -1278,7 +1278,13 @@ def session_annotation(session):
 def page_session(session):
     capacities = {PROGRAM_CAPACITIES[e["slug"]] for day in C["program"]["days"] for stage in day.get("stages", []) for e in stage.get("events", []) if e.get("detail") == session["slug"] and e.get("slug") in PROGRAM_CAPACITIES}
     capacity_html = f'<p class="program-session-capacity">Kapacita: {next(iter(capacities))}</p>' if len(capacities) == 1 else ""
-    annotation = session_annotation(session)
+    reservation_note = (
+        '<p>Místo je potřeba rezervovat prostřednictvím '
+        '<a href="https://app.byzon.cz/app/program">konferenční aplikace</a>, '
+        'kde najdete i aktuální počet volných míst.</p>'
+        if capacities else ""
+    )
+    annotation = reservation_note + session_annotation(session)
     annotation_html = f'\n      <div class="session-annotation">{annotation}</div>' if annotation else ""
     presenters = "".join(session_presenter(value) for value in session.get("speakers", []))
     presenter_count = len(session.get("speakers", []))
