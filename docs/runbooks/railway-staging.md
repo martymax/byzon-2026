@@ -31,6 +31,26 @@ Starší větev `stage/participant-access-live-qa` zůstává historickou refere
 nové nasazení se z ní nespouští. Lokální rozpracované změny ve starších
 checkoutech se nesmějí naslepo nasadit přes novější `main`.
 
+## Aktivace SMTP — 16. 9. 2026
+
+Web i worker používají `MAIL_PROVIDER=smtp`, `SMTP_HOST=mail.webglobe.cz`,
+`SMTP_PORT=465`, `MAIL_FROM=jsem@byzon.cz` a `MAIL_FROM_NAME=Konference BYZON`.
+SMTP přihlašovací údaje jsou uložené v Railway Variables obou služeb.
+Nasazená implementace: `431a5b2`.
+
+Webová služba má v Railway zapnuté **Outbound IPv6**
+(`deploy.ipv6EgressEnabled=true`). IPv4 spojení z webu na porty 465 i 587
+při nasazení opakovaně vypršelo, zatímco worker se připojil. Opakované nasazení
+stejného webového releasu problém nevyřešilo; po zapnutí IPv6 prošlo dvakrát
+ověření TLS a SMTP autentizace přímo z webového kontejneru. Worker prošel
+stejným ověřením bez změny síťového nastavení. Kontroly použily SMTP `verify`,
+neodesílaly testovací zprávy.
+
+Při aktivaci proběhlo autorizované ruční opakování nasazení pro diagnostiku
+síťového problému a následný deployment síťového nastavení přes Railway API.
+Běžné nasazování nadále používá Git integraci z `main`. `APP_ENV=staging`
+a testovací přihlášení zůstávají zachované; Mailpit už není aktivní transport.
+
 ## Historický postup před přejmenováním (neplatí pro nový deployment)
 
 Následující záznam zachovává původní konfiguraci a výsledky kontrol. Při
