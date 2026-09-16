@@ -1248,7 +1248,10 @@ def session_presenter(value):
     role = f'<p class="role">{esc(sp["role"])}</p>' if sp.get("role") else ""
     # The program detail needs a compact medallion; the full biography remains
     # available on the dedicated speaker page.
-    bio = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in sp.get("bio", [])[:1])
+    paragraphs = sp.get("bio", [])
+    if not sp.get("program_bio_full", False):
+        paragraphs = paragraphs[:1]
+    bio = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in paragraphs)
     return f"""<article class="session-presenter">
       <a class="session-presenter__portrait" href="/speaker/{att(sp['slug'])}/" aria-label="Profil řečníka: {att(sp['name'])}">
         <img src="{att(sp['photo'])}" alt="{att(sp['name'])}" width="720" height="900" loading="lazy" decoding="async" data-fallback="{att(sp['name'])}">

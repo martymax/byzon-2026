@@ -473,8 +473,10 @@
         "label": "Koučka",
         "role": "Profesionální koučka s certifikací PCC (ICF)",
         "bio": [
-          "Certifikovaná koučka PCC (ICF), specializující se na rozvoj obchodních dovedností a strategií. Mým cílem je transformovat způsoby, jakými podnikatelé komunikují a získávají klienty, aby nejen prodávali své produkty nebo myšlenky, ale dělali to excelentně s důrazem na dlouhodobé vztahy a loajalitu zákazníků. Pomohu vám odkrýt, jak efektivní komunikace a strategické plánování mohou otevřít nové možnosti pro růst a úspěch vašeho podnikání. Jsem také vášnivá školitelka v oblasti využívání umělé inteligence a propagátorka duchovního růstu."
-        ]
+          "Koučuji a mentoruji podnikatele v klíčovém bodě růstu – když jejich byznys vyrostl z garáže na desítky zaměstnanců a začal si žít vlastním životem. Společně hledáme cestu, jak firmu řídit tak, aby už nepotřebovala svého majitele u každého rozhodnutí a on měl znovu prostor dívat se dopředu místo řešení každodenní operativy.",
+          "Minimalistickou cestou k velkým výsledkům."
+        ],
+        "program_bio_full": true
       },
       {
         "slug": "radim-rocek",
