@@ -31,6 +31,11 @@ import {
   type SimpleShopTicketSourceSnapshot,
 } from './simpleshop-ticket-source';
 import type { SimpleShopPreviewRateLimiter } from './simpleshop-preview-rate-limit';
+import {
+  identityRepairMappingKey,
+  participantReferenceDigest,
+  type ImportedParticipantReference,
+} from './ticket-import-participant-reference';
 
 const REQUEST_MAX_BYTES = 1_024;
 const PREVIEW_TTL_MS = 20 * 60 * 1_000;
@@ -42,10 +47,12 @@ type ExistingTicketStatus =
 export interface ExistingTicketRecord {
   readonly externalId: string;
   readonly status: ExistingTicketStatus;
+  readonly participant?: ImportedParticipantReference;
 }
 
 interface PersistedPreviewRow {
   readonly id: string;
+  readonly participantSnapshotDigest?: string;
   readonly source: Pick<
     SimpleShopTicketSourceRecord,
     'sourceRowNumber' | 'externalId' | 'orderExternalId' | 'sourceStatus'
@@ -398,6 +405,44 @@ const rowFor = (
       issues: [],
     };
   }
+  if (
+    existing.participant &&
+    (existing.participant.email.toLowerCase() !== source.contactEmail ||
+      existing.participant.orderExternalId !== source.orderExternalId ||
+      existing.participant.membershipStatus !== 'active')
+  ) {
+    const canRepair =
+      currentState === 'active' &&
+      existing.participant.membershipStatus === 'active' &&
+      existing.participant.orderExternalId === source.orderExternalId &&
+      source.orderTicketCount > 1 &&
+      source.identitySource === 'named_participant';
+    return {
+      rowId,
+      sourceRowNumber: source.sourceRowNumber,
+      ...participant,
+      sourceStatus: source.sourceStatus,
+      status: canRepair ? 'new' : 'conflict',
+      incomingState: canRepair ? 'active' : null,
+      currentState: canRepair ? null : currentState,
+      ...(canRepair
+        ? {
+            identityRepair: {
+              previousContactEmail: existing.participant.email,
+            },
+          }
+        : {}),
+      issues: canRepair
+        ? []
+        : [
+            {
+              code: 'participant_identity_manual_review',
+              message:
+                'Už importovaná vstupenka má jiné přiřazení účastníka nebo neaktivní účet. Před dalším importem zkontrolujte původní účet.',
+            },
+          ],
+    };
+  }
   if (currentState === 'active') {
     return {
       rowId,
@@ -460,9 +505,17 @@ export const buildTicketImportPreview = (input: {
   }
   const rows = input.snapshot.records.map((source) => {
     const id = input.generateId();
-    const preview = rowFor(source, existingById.get(source.externalId), id);
+    const existing = existingById.get(source.externalId);
+    const preview = rowFor(source, existing, id);
     return {
       id,
+      ...(preview.identityRepair && existing?.participant
+        ? {
+            participantSnapshotDigest: participantReferenceDigest(
+              existing.participant,
+            ),
+          }
+        : {}),
       source: {
         sourceRowNumber: source.sourceRowNumber,
         externalId: source.externalId,
@@ -487,9 +540,10 @@ export const buildTicketImportPreview = (input: {
   });
   return {
     response,
-    rows: rows.map(({ id, source, preview }) => ({
+    rows: rows.map(({ id, source, preview, participantSnapshotDigest }) => ({
       id,
       source,
+      ...(participantSnapshotDigest ? { participantSnapshotDigest } : {}),
       preview: {
         incomingState: preview.incomingState,
         issues: preview.issues,
@@ -556,8 +610,33 @@ export const createDatabaseTicketImportPreviewStore = (
             ),
           ),
         db
-          .select({ externalId: schema.ticketSourceParticipants.externalId })
+          .select({
+            externalId: schema.ticketSourceParticipants.externalId,
+            id: schema.ticketSourceParticipants.id,
+            userId: schema.ticketSourceParticipants.userId,
+            version: schema.ticketSourceParticipants.version,
+            orderExternalId: schema.ticketSourceParticipants.orderExternalId,
+            email: schema.users.email,
+            membershipStatus: schema.eventMemberships.status,
+          })
           .from(schema.ticketSourceParticipants)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.ticketSourceParticipants.userId),
+          )
+          .innerJoin(
+            schema.eventMemberships,
+            and(
+              eq(
+                schema.eventMemberships.eventId,
+                schema.ticketSourceParticipants.eventId,
+              ),
+              eq(
+                schema.eventMemberships.userId,
+                schema.ticketSourceParticipants.userId,
+              ),
+            ),
+          )
           .where(
             and(
               eq(schema.ticketSourceParticipants.eventId, eventId),
@@ -565,16 +644,17 @@ export const createDatabaseTicketImportPreviewStore = (
             ),
           ),
       ]);
-      const existing = new Map<string, ExistingTicketStatus>(
-        importedRows.map(({ externalId }) => [externalId, 'valid']),
+      const existing = new Map<string, ExistingTicketRecord>(
+        importedRows.map(({ externalId, ...participant }) => [
+          externalId,
+          { externalId, status: 'valid', participant },
+        ]),
       );
       for (const { externalId, status } of ticketRows) {
-        if (externalId !== null) existing.set(externalId, status);
+        if (externalId !== null)
+          existing.set(externalId, { externalId, status });
       }
-      return [...existing].map(([externalId, status]) => ({
-        externalId,
-        status,
-      }));
+      return [...existing.values()];
     },
     savePreview: async (input) => {
       await withTransaction(db, async (transaction) => {
@@ -608,6 +688,18 @@ export const createDatabaseTicketImportPreviewStore = (
             cancelled: 'unapproved',
             refunded: 'not_observed',
             unknown: 'unapproved',
+            ...Object.fromEntries(
+              input.rows.flatMap((row) =>
+                row.participantSnapshotDigest
+                  ? [
+                      [
+                        identityRepairMappingKey(row.source.externalId),
+                        row.participantSnapshotDigest,
+                      ],
+                    ]
+                  : [],
+              ),
+            ),
           },
           createdBy: input.actorId,
           validatedAt: input.createdAt,

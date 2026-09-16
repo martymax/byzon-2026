@@ -28,6 +28,10 @@ import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 import type { SimpleShopPreviewRateLimiter } from './simpleshop-preview-rate-limit';
 import {
+  identityRepairMappingKey,
+  participantReferenceDigest,
+} from './ticket-import-participant-reference';
+import {
   SimpleShopTicketSourceError,
   type SimpleShopTicketSourceAdapter,
 } from './simpleshop-ticket-source';
@@ -517,8 +521,34 @@ export const applySimpleShopTicketImport = async (
         }
         const [imported, legacyTickets] = await Promise.all([
           transaction
-            .select({ externalId: schema.ticketSourceParticipants.externalId })
+            .select({
+              externalId: schema.ticketSourceParticipants.externalId,
+              id: schema.ticketSourceParticipants.id,
+              userId: schema.ticketSourceParticipants.userId,
+              version: schema.ticketSourceParticipants.version,
+              orderExternalId: schema.ticketSourceParticipants.orderExternalId,
+              importBatchId: schema.ticketSourceParticipants.importBatchId,
+              email: schema.users.email,
+              membershipStatus: schema.eventMemberships.status,
+            })
             .from(schema.ticketSourceParticipants)
+            .innerJoin(
+              schema.users,
+              eq(schema.users.id, schema.ticketSourceParticipants.userId),
+            )
+            .innerJoin(
+              schema.eventMemberships,
+              and(
+                eq(
+                  schema.eventMemberships.eventId,
+                  schema.ticketSourceParticipants.eventId,
+                ),
+                eq(
+                  schema.eventMemberships.userId,
+                  schema.ticketSourceParticipants.userId,
+                ),
+              ),
+            )
             .where(
               and(
                 eq(schema.ticketSourceParticipants.eventId, eventId),
@@ -527,7 +557,8 @@ export const applySimpleShopTicketImport = async (
                   externalIds,
                 ),
               ),
-            ),
+            )
+            .for('update'),
           transaction
             .select({
               externalId: schema.tickets.externalId,
@@ -541,21 +572,24 @@ export const applySimpleShopTicketImport = async (
               ),
             ),
         ]);
-        const existing = new Map<string, 'valid' | 'invalid'>(
-          imported.map(({ externalId }) => [externalId, 'valid']),
-        );
-        for (const ticket of legacyTickets) {
-          if (!ticket.externalId) continue;
-          existing.set(
-            ticket.externalId,
-            ticket.status === 'valid' || ticket.status === 'activated'
-              ? 'valid'
-              : 'invalid',
-          );
-        }
+        const existing = new Map(imported.map((row) => [row.externalId, row]));
+        const legacyIds = new Set(legacyTickets.map((row) => row.externalId));
         for (const { source } of relevantRows) {
           const current = existing.get(source.externalId);
-          if (current !== undefined) {
+          const expectedReference =
+            batch.mapping[identityRepairMappingKey(source.externalId)];
+          if (
+            legacyIds.has(source.externalId) ||
+            (expectedReference
+              ? !current ||
+                participantReferenceDigest(current) !== expectedReference ||
+                current.orderExternalId !== source.orderExternalId ||
+                current.membershipStatus !== 'active' ||
+                current.email.toLowerCase() === source.contactEmail ||
+                source.identitySource !== 'named_participant' ||
+                source.orderTicketCount < 2
+              : current !== undefined)
+          ) {
             throw new TicketImportStaleError(PREVIEW_VERSION);
           }
         }
@@ -668,17 +702,67 @@ export const applySimpleShopTicketImport = async (
               grantedAt: appliedAt,
             });
           }
-          await transaction.insert(schema.ticketSourceParticipants).values({
-            id: generateId(),
-            eventId,
-            externalId: source.externalId,
-            orderExternalId: source.orderExternalId,
-            userId: user.id,
-            sourceStatus: 'paid',
-            importBatchId: batch.id,
-            createdAt: appliedAt,
-            updatedAt: appliedAt,
-          });
+          const previous = existing.get(source.externalId);
+          if (previous) {
+            const updated = await transaction
+              .update(schema.ticketSourceParticipants)
+              .set({
+                userId: user.id,
+                importBatchId: batch.id,
+                version: previous.version + 1,
+                updatedAt: appliedAt,
+              })
+              .where(
+                and(
+                  eq(schema.ticketSourceParticipants.eventId, eventId),
+                  eq(schema.ticketSourceParticipants.id, previous.id),
+                  eq(schema.ticketSourceParticipants.userId, previous.userId),
+                  eq(schema.ticketSourceParticipants.version, previous.version),
+                ),
+              )
+              .returning({ id: schema.ticketSourceParticipants.id });
+            if (updated.length !== 1)
+              throw new TicketImportStaleError(PREVIEW_VERSION);
+            await writeAuditLog(
+              transaction,
+              {
+                eventId,
+                actorId: identity.user.id,
+                actorType: 'user',
+                action: 'ticket_import.participant_reassigned',
+                targetType: 'ticket_source_participant',
+                targetId: previous.id,
+                requestId: uuidSchema.safeParse(requestId).success
+                  ? requestId
+                  : generateId(),
+                reason: parsed.data.reason,
+                before: {
+                  userId: previous.userId,
+                  version: previous.version,
+                  importBatchId: previous.importBatchId,
+                },
+                after: {
+                  userId: user.id,
+                  version: previous.version + 1,
+                  importBatchId: batch.id,
+                  emailSent: false,
+                },
+              },
+              { generateId },
+            );
+          } else {
+            await transaction.insert(schema.ticketSourceParticipants).values({
+              id: generateId(),
+              eventId,
+              externalId: source.externalId,
+              orderExternalId: source.orderExternalId,
+              userId: user.id,
+              sourceStatus: 'paid',
+              importBatchId: batch.id,
+              createdAt: appliedAt,
+              updatedAt: appliedAt,
+            });
+          }
         }
         await transaction
           .update(schema.ticketImportBatches)
@@ -713,6 +797,7 @@ export const applySimpleShopTicketImport = async (
               selectedRowIds: parsed.data.selectedRowIds,
               selectedCount: parsed.data.selectedRowIds.length,
               created: newRows.length,
+              identityRepaired: existing.size,
               statusChanged: 0,
               unchanged: 0,
               skipped: summary.data.total - parsed.data.selectedRowIds.length,

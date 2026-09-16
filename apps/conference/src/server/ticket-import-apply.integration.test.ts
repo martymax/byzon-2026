@@ -690,4 +690,275 @@ integration('P4-03 SimpleShop participant apply integration', () => {
       conflict: 0,
     });
   });
+
+  it('repairs historical group assignments after contact correction and preserves the original account and reservation', async () => {
+    const emails = Array.from(
+      { length: 5 },
+      (_, i) => `history-${i}-${eventId}@example.test`,
+    );
+    const corrected = await createSimpleShopTicketSourceAdapter({
+      email: 'api@example.test',
+      apiKey: 'synthetic-key',
+      fetch: async (input) =>
+        new Response(
+          JSON.stringify(
+            new URL(String(input)).pathname === '/2.0/product/143958/'
+              ? simpleShopGroupProduct
+              : { csv: simpleShopGroupCsv(emails, '9600001', 9_600_010) },
+          ),
+          { headers: { 'content-type': 'application/json' } },
+        ),
+    }).fetchPreviewSource();
+    const originalUserId = crypto.randomUUID();
+    const originalBatchId = crypto.randomUUID();
+    await client.db.insert(schema.users).values({
+      id: originalUserId,
+      email: emails[0]!,
+      name: 'Původní účastník',
+      emailVerified: true,
+    });
+    await client.db
+      .insert(schema.eventMemberships)
+      .values({ eventId, userId: originalUserId, status: 'active' });
+    await client.db.insert(schema.eventRoles).values({
+      id: crypto.randomUUID(),
+      eventId,
+      userId: originalUserId,
+      role: 'participant',
+    });
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: originalUserId,
+      firstName: 'Původní',
+      lastName: 'Účastník',
+      contactEmail: emails[0]!,
+      company: 'Ručně upravená firma',
+      bio: 'Vlastní profil',
+      onboardingCompletedAt: fixedNow,
+    });
+    await client.db.insert(schema.ticketImportBatches).values({
+      id: originalBatchId,
+      eventId,
+      source: 'simpleshop_api',
+      sourceFilename: 'historical-group',
+      fileSha256: 'e'.repeat(64),
+      status: 'applied',
+      rowCount: 5,
+      createdBy: adminId,
+      appliedAt: fixedNow,
+    });
+    await client.db.insert(schema.ticketSourceParticipants).values(
+      corrected.records.map((record) => ({
+        id: crypto.randomUUID(),
+        eventId,
+        externalId: record.externalId,
+        orderExternalId: record.orderExternalId,
+        userId: originalUserId,
+        sourceStatus: 'paid',
+        importBatchId: originalBatchId,
+      })),
+    );
+    const dayId = crypto.randomUUID(),
+      sessionId = crypto.randomUUID(),
+      reservationId = crypto.randomUUID();
+    await client.db.insert(schema.eventDays).values({
+      id: dayId,
+      eventId,
+      localDate: '2026-09-18',
+      title: 'Pátek',
+      sortOrder: 0,
+    });
+    await client.db.insert(schema.programSessions).values({
+      id: sessionId,
+      eventId,
+      dayId,
+      slug: 'historical-reservation',
+      title: 'Původní rezervace',
+      startsAt: new Date('2026-09-18T09:00:00Z'),
+      endsAt: new Date('2026-09-18T10:00:00Z'),
+      sortOrder: 0,
+    });
+    await client.db.insert(schema.reservations).values({
+      id: reservationId,
+      eventId,
+      sessionId,
+      userId: originalUserId,
+      source: 'participant',
+    });
+    const originalUser = await client.db.query.users.findFirst({
+      where: eq(schema.users.id, originalUserId),
+    });
+    const originalProfile = await client.db.query.participantProfiles.findFirst(
+      {
+        where: and(
+          eq(schema.participantProfiles.eventId, eventId),
+          eq(schema.participantProfiles.userId, originalUserId),
+        ),
+      },
+    );
+    const originalReservation = await client.db.query.reservations.findFirst({
+      where: eq(schema.reservations.id, reservationId),
+    });
+    const bodyFor = (p: Awaited<ReturnType<typeof preview>>) => ({
+      eventId,
+      previewId: p.previewId,
+      previewVersion: p.previewVersion,
+      expectedImpact: p.summary,
+      selectedRowIds: p.rows
+        .filter((row) => row.status === 'new')
+        .map((row) => row.rowId),
+      reason: 'Doplnění vlastních e-mailů historicky sloučené skupiny.',
+    });
+    const stale = await preview(corrected);
+    expect(stale.summary).toMatchObject({
+      total: 5,
+      new: 4,
+      unchanged: 1,
+      conflict: 0,
+    });
+    expect(
+      stale.rows
+        .filter((row) => row.status === 'new')
+        .map((row) => row.identityRepair),
+    ).toEqual(
+      Array.from({ length: 4 }, () => ({ previousContactEmail: emails[0] })),
+    );
+    const saved = await client.db.query.ticketImportBatches.findFirst({
+      where: eq(schema.ticketImportBatches.id, stale.previewId),
+    });
+    expect(
+      Object.keys(saved!.mapping).filter((key) =>
+        key.startsWith('identity_repair:'),
+      ),
+    ).toHaveLength(4);
+    expect(JSON.stringify(saved!.mapping)).not.toContain(emails[0]);
+    await client.db
+      .update(schema.ticketSourceParticipants)
+      .set({ version: 2 })
+      .where(
+        and(
+          eq(schema.ticketSourceParticipants.eventId, eventId),
+          eq(schema.ticketSourceParticipants.externalId, '9600011'),
+        ),
+      );
+    const staleResult = await applyRequest(
+      bodyFor(stale),
+      'historical-stale-reference',
+      adminId,
+      fixedNow,
+      corrected,
+    );
+    expect(staleResult.status).toBe(409);
+    expect(await staleResult.json()).toMatchObject({
+      code: 'IMPORT_PREVIEW_STALE',
+    });
+    const emailStale = await preview(corrected);
+    await client.db
+      .update(schema.users)
+      .set({ email: `changed-${eventId}@example.test` })
+      .where(eq(schema.users.id, originalUserId));
+    const emailStaleResult = await applyRequest(
+      bodyFor(emailStale),
+      'historical-stale-email',
+      adminId,
+      fixedNow,
+      corrected,
+    );
+    expect(emailStaleResult.status).toBe(409);
+    expect(await emailStaleResult.json()).toMatchObject({
+      code: 'IMPORT_PREVIEW_STALE',
+    });
+    await client.db
+      .update(schema.users)
+      .set({ email: emails[0]! })
+      .where(eq(schema.users.id, originalUserId));
+    expect(
+      await client.db.query.users.findFirst({
+        where: eq(schema.users.email, emails[1]!),
+      }),
+    ).toBeUndefined();
+
+    const ready = await preview(corrected);
+    const response = await applyRequest(
+      bodyFor(ready),
+      'historical-repair-group',
+      adminId,
+      fixedNow,
+      corrected,
+    );
+    expect(response.status).toBe(200);
+    const applied = await response.json();
+    expect(applied).toMatchObject({
+      result: { created: 4, statusChanged: 0, unchanged: 0 },
+    });
+    const refs = await client.db.query.ticketSourceParticipants.findMany({
+      where: and(
+        eq(schema.ticketSourceParticipants.eventId, eventId),
+        eq(schema.ticketSourceParticipants.orderExternalId, '9600001'),
+      ),
+    });
+    expect(refs).toHaveLength(5);
+    expect(new Set(refs.map((row) => row.userId)).size).toBe(5);
+    for (const [index, email] of emails.entries()) {
+      const user = await client.db.query.users.findFirst({
+        where: eq(schema.users.email, email),
+      });
+      expect(refs).toContainEqual(
+        expect.objectContaining({
+          externalId: String(9_600_010 + index),
+          userId: user!.id,
+        }),
+      );
+      const profile = await client.db.query.participantProfiles.findFirst({
+        where: and(
+          eq(schema.participantProfiles.eventId, eventId),
+          eq(schema.participantProfiles.userId, user!.id),
+        ),
+      });
+      expect(profile?.contactEmail).toBe(email);
+    }
+    expect(
+      await client.db.query.users.findFirst({
+        where: eq(schema.users.id, originalUserId),
+      }),
+    ).toEqual(originalUser);
+    expect(
+      await client.db.query.participantProfiles.findFirst({
+        where: and(
+          eq(schema.participantProfiles.eventId, eventId),
+          eq(schema.participantProfiles.userId, originalUserId),
+        ),
+      }),
+    ).toEqual(originalProfile);
+    expect(
+      await client.db.query.reservations.findFirst({
+        where: eq(schema.reservations.id, reservationId),
+      }),
+    ).toEqual(originalReservation);
+    const audit = await client.db.query.auditLogs.findMany({
+      where: and(
+        eq(schema.auditLogs.eventId, eventId),
+        eq(schema.auditLogs.action, 'ticket_import.participant_reassigned'),
+      ),
+    });
+    expect(audit).toHaveLength(4);
+    expect(audit.every((row) => row.before?.userId === originalUserId)).toBe(
+      true,
+    );
+    const replay = await applyRequest(
+      bodyFor(ready),
+      'historical-repair-group',
+      adminId,
+      fixedNow,
+      corrected,
+    );
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      ...applied,
+      outcome: 'already_applied',
+    });
+    const again = await preview(corrected);
+    expect(again.summary).toMatchObject({ new: 0, unchanged: 5, conflict: 0 });
+    expect(again.rows.every((row) => !row.identityRepair)).toBe(true);
+  });
 });

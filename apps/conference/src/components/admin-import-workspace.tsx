@@ -412,7 +412,7 @@ export const AdminImportWorkspace = ({
     : 0;
   const noChanges = preview ? selectableRows.length === 0 : false;
   const impactText = preview
-    ? `Importuje ${formatCzechCount(selectedRows.length, adminCountForms.attendee)}. Ostatní záznamy zůstanou beze změny.`
+    ? `Importuje ${formatCzechCount(selectedRows.length, adminCountForms.attendee)}. Ostatní záznamy zůstanou beze změny.${selectedRows.some((row) => row.identityRepair) ? ' U dříve importovaných vstupenek se opraví přiřazení účastníka. Původní účty a jejich rezervace zůstanou zachované.' : ''}`
     : '';
 
   const toggleRowSelection = (rowId: string) => {
@@ -697,7 +697,9 @@ export const AdminImportWorkspace = ({
                         <span
                           className={`${styles.statusBadge} ${statusClass[row.status]}`}
                         >
-                          {statusLabels[row.status]}
+                          {row.identityRepair
+                            ? 'Doplnění účastníka'
+                            : statusLabels[row.status]}
                         </span>
                       </div>
                       {isTicketImportRowSelectable(row) ? (
@@ -713,7 +715,11 @@ export const AdminImportWorkspace = ({
                             onChange={() => toggleRowSelection(row.rowId)}
                             type="checkbox"
                           />
-                          <span>Importovat tohoto účastníka</span>
+                          <span>
+                            {row.identityRepair
+                              ? 'Doplnit tohoto účastníka'
+                              : 'Importovat tohoto účastníka'}
+                          </span>
                         </label>
                       ) : (
                         <p className={styles.helper}>
@@ -725,6 +731,12 @@ export const AdminImportWorkspace = ({
                       <dl>
                         <dt>E-mail</dt>
                         <dd>{row.contactEmail ?? 'Neuveden'}</dd>
+                        {row.identityRepair ? (
+                          <>
+                            <dt>Původní účet</dt>
+                            <dd>{row.identityRepair.previousContactEmail}</dd>
+                          </>
+                        ) : null}
                         <dt>Zdroj identity</dt>
                         <dd>{identitySourceLabels[row.identitySource]}</dd>
                         {companyPosition ? (
@@ -759,8 +771,10 @@ export const AdminImportWorkspace = ({
                         </dd>
                         <dt>Výsledek kontroly</dt>
                         <dd>
-                          {statusLabels[row.status]} ·{' '}
-                          {sourceStatusLabels[row.sourceStatus]}
+                          {row.identityRepair
+                            ? 'Změna přiřazení účastníka'
+                            : statusLabels[row.status]}{' '}
+                          · {sourceStatusLabels[row.sourceStatus]}
                         </dd>
                         <dt>Poznámka</dt>
                         <dd>{issueMessage}</dd>
@@ -844,6 +858,12 @@ export const AdminImportWorkspace = ({
                             {row.contactName ?? 'Jméno neuvedeno'}
                           </strong>
                           <span>{row.contactEmail ?? 'E-mail neuveden'}</span>
+                          {row.identityRepair ? (
+                            <small>
+                              Původní účet:{' '}
+                              {row.identityRepair.previousContactEmail}
+                            </small>
+                          ) : null}
                           <small>
                             {identitySourceLabels[row.identitySource]}
                           </small>
@@ -870,7 +890,9 @@ export const AdminImportWorkspace = ({
                           <span
                             className={`${styles.statusBadge} ${statusClass[row.status]}`}
                           >
-                            {statusLabels[row.status]}
+                            {row.identityRepair
+                              ? 'Doplnění účastníka'
+                              : statusLabels[row.status]}
                           </span>
                           <small>{sourceStatusLabels[row.sourceStatus]}</small>
                         </td>

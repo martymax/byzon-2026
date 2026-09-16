@@ -4,6 +4,7 @@ import { ApiProblemError } from './api/problem';
 import { EventAccessDeniedError } from './policy';
 import {
   SimpleShopTicketSourceError,
+  createSimpleShopTicketSourceAdapter,
   type SimpleShopTicketSourceSnapshot,
 } from './simpleshop-ticket-source';
 import {
@@ -12,6 +13,10 @@ import {
   type TicketImportPreviewDependencies,
   type TicketImportPreviewStore,
 } from './ticket-import-preview';
+import {
+  simpleShopGroupCsv,
+  simpleShopGroupProduct,
+} from '../test/server/simpleshop-group-fixture';
 
 const ids = {
   event: '019fb000-0000-7000-8000-000000000001',
@@ -360,6 +365,114 @@ describe('SimpleShop ticket import preview handler', () => {
 });
 
 describe('SimpleShop preview mapping', () => {
+  it.each([
+    {
+      name: 'corrected named group participant',
+      status: 'new',
+      email: 'old@example.test',
+      membershipStatus: 'active',
+      orderExternalId: '9500001',
+    },
+    {
+      name: 'matching participant',
+      status: 'unchanged',
+      email: 'group-participant-1@example.test',
+      membershipStatus: 'active',
+      orderExternalId: '9500001',
+    },
+    {
+      name: 'suspended original account',
+      status: 'conflict',
+      email: 'old@example.test',
+      membershipStatus: 'suspended',
+      orderExternalId: '9500001',
+    },
+    {
+      name: 'changed source order',
+      status: 'conflict',
+      email: 'old@example.test',
+      membershipStatus: 'active',
+      orderExternalId: '9999999',
+    },
+  ])(
+    'reconciles $name against the imported account',
+    async ({ status, email, membershipStatus, orderExternalId }) => {
+      const source = await createSimpleShopTicketSourceAdapter({
+        email: 'api@example.test',
+        apiKey: 'synthetic-key',
+        fetch: async (input) =>
+          new Response(
+            JSON.stringify(
+              new URL(String(input)).pathname === '/2.0/product/143958/'
+                ? simpleShopGroupProduct
+                : { csv: simpleShopGroupCsv() },
+            ),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      }).fetchPreviewSource();
+      const built = buildTicketImportPreview({
+        eventId: ids.event,
+        previewId: ids.preview,
+        createdAt: new Date('2026-09-16T10:00:00Z'),
+        snapshot: source,
+        existing: [
+          {
+            externalId: '9500010',
+            status: 'valid',
+            participant: {
+              id: crypto.randomUUID(),
+              userId: crypto.randomUUID(),
+              version: 1,
+              email,
+              membershipStatus,
+              orderExternalId,
+            },
+          },
+        ],
+        generateId: () => crypto.randomUUID(),
+      });
+      expect(built.response.rows[0]?.status).toBe(status);
+      if (status === 'new') {
+        expect(built.response.rows[0]?.identityRepair).toEqual({
+          previousContactEmail: email,
+        });
+        expect(built.rows[0]?.participantSnapshotDigest).toMatch(
+          /^[a-f0-9]{64}$/,
+        );
+        expect(JSON.stringify(built.rows)).not.toContain(email);
+      } else {
+        expect(built.response.rows[0]?.identityRepair).toBeUndefined();
+        expect(built.rows[0]?.participantSnapshotDigest).toBeUndefined();
+      }
+    },
+  );
+
+  it('requires manual review for an email change on a single ticket', () => {
+    const built = buildTicketImportPreview({
+      eventId: ids.event,
+      previewId: ids.preview,
+      createdAt: new Date('2026-09-16T10:00:00Z'),
+      snapshot,
+      existing: [
+        {
+          externalId: '7000001',
+          status: 'valid',
+          participant: {
+            id: crypto.randomUUID(),
+            userId: crypto.randomUUID(),
+            version: 1,
+            email: 'old@example.test',
+            membershipStatus: 'active',
+            orderExternalId: '80000001',
+          },
+        },
+      ],
+      generateId: () => crypto.randomUUID(),
+    });
+    expect(built.response.rows[0]?.status).toBe('conflict');
+    expect(built.response.rows[0]?.identityRepair).toBeUndefined();
+  });
+
   it('excludes new ineligible records and routes imported ones to manual review', () => {
     const values = [ids.rowPaid, ids.rowUnpaid, ids.rowCancelled];
     const built = buildTicketImportPreview({

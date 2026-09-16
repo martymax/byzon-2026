@@ -1594,6 +1594,85 @@ describe('F4 contract-first admin journeys', () => {
     expect(idempotencyKeys[0]).toBe(idempotencyKeys[1]);
   });
 
+  it('shows the previous account and confirms historical participant repair', async () => {
+    window.history.replaceState({}, '', '/admin/vstupenky');
+    const base = ticketImportPreviewFixtures.clean!;
+    const first = base.rows[0]!;
+    const preview = {
+      ...base,
+      eventId: adminFixtureIds.event,
+      rows: [
+        {
+          ...first,
+          orderTicketCount: 2,
+          identityRepair: { previousContactEmail: 'original@example.test' },
+        },
+        {
+          ...first,
+          rowId: ticketImportFixtureIds.rowUnchanged,
+          sourceRowNumber: 3,
+          sourceTicketId: '7000099',
+          orderTicketCount: 2,
+          orderTicketPosition: 2,
+          status: 'unchanged' as const,
+          currentState: 'active' as const,
+          contactName: 'Původní účastník',
+          contactEmail: 'original@example.test',
+        },
+      ],
+      summary: {
+        total: 2,
+        new: 1,
+        unchanged: 1,
+        statusChanged: 0,
+        excluded: 0,
+        conflict: 0,
+        unknown: 0,
+      },
+    };
+    const port = {
+      preview: vi.fn(async () => success(preview)),
+      apply: vi.fn(async () =>
+        success({
+          ...ticketImportApplyFixtures.applied!,
+          eventId: adminFixtureIds.event,
+          previewId: preview.previewId,
+          selectedRowIds: [first.rowId],
+          result: { created: 1, statusChanged: 0, unchanged: 0 },
+        }),
+      ),
+    } satisfies AdminTicketUpdatePort;
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={organizerApi(() => null)} environment="mocked">
+        <AdminImportWorkspace port={port} />
+      </AdminWorkspaceShell>,
+    );
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await expect
+      .element(screen.getByText('Doplnění účastníka', { exact: true }))
+      .toBeVisible();
+    expect(document.body.textContent).toContain('Původní účet');
+    expect(document.body.textContent).toContain('original@example.test');
+    await screen
+      .getByRole('checkbox', { name: 'Vybrat Syntetický účastník k importu' })
+      .click();
+    await screen
+      .getByRole('textbox', { name: 'Důvod importu' })
+      .fill('Oprava historicky sloučeného účastníka.');
+    await screen
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
+    await expect
+      .element(screen.getByRole('dialog'))
+      .toHaveTextContent('Původní účty a jejich rezervace zůstanou zachované.');
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
+    await vi.waitFor(() => expect(port.apply).toHaveBeenCalledTimes(1));
+  });
+
   it('invalidates a stale apply and reloads the exact preview boundary', async () => {
     window.history.replaceState({}, '', '/admin/vstupenky');
     const preview = {

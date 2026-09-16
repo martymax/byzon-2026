@@ -15,6 +15,8 @@ export const simpleShopGroupEmails = Array.from(
 
 export const simpleShopGroupCsv = (
   emails: readonly string[] = simpleShopGroupEmails,
+  orderExternalId = '9500001',
+  firstTicketId = 9_500_010,
 ): string => {
   const headers = [
     'ID vstupenky',
@@ -54,7 +56,7 @@ export const simpleShopGroupCsv = (
     'Telefonní kontakt (prodej na jméno)',
   ];
   const buyer = {
-    'ID dokladu': '9500001',
+    'ID dokladu': orderExternalId,
     Počet: '1',
     Stav: 'Uhrazeno',
     Vytvořeno: '01.09.2026',
@@ -66,7 +68,7 @@ export const simpleShopGroupCsv = (
   };
   const rows: Record<string, string>[] = emails.map((email, index) => ({
     ...buyer,
-    'ID vstupenky': String(9_500_010 + index),
+    'ID vstupenky': String(firstTicketId + index),
     'Kód vstupenky': `GRP00${index + 1}`,
     Položka: 'Konference BYZON 2026 - Regular Bird (Vstupné pátek)',
     'Jméno (prodej na jméno)': `Účastník ${index + 1}`,

@@ -281,6 +281,11 @@ export const ticketImportRowSchema = z
     contactPosition: optionalContactTextSchema(160),
     contactPhone: optionalContactTextSchema(64),
     identitySource: ticketImportIdentitySourceSchema,
+    identityRepair: z
+      .strictObject({
+        previousContactEmail: z.email().max(320),
+      })
+      .optional(),
     sourceStatus: ticketImportSourceStatusSchema,
     status: ticketImportRowStatusSchema,
     incomingState: ticketImportTicketStateSchema.nullable(),
@@ -308,6 +313,22 @@ export const ticketImportRowSchema = z
         code: 'custom',
         path: ['orderTicketPosition'],
         message: 'Order ticket position cannot exceed the order ticket count',
+      });
+    }
+    if (
+      row.identityRepair &&
+      (row.status !== 'new' ||
+        row.sourceStatus !== 'paid' ||
+        row.identitySource !== 'named_participant' ||
+        row.orderTicketCount < 2 ||
+        row.identityRepair.previousContactEmail.toLowerCase() ===
+          row.contactEmail?.toLowerCase())
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['identityRepair'],
+        message:
+          'A group identity repair requires a new, paid, named participant with a different email',
       });
     }
     if (

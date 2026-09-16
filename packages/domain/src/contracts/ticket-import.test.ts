@@ -8,6 +8,7 @@ import {
   ticketImportApplyRequestSchema,
   ticketImportCachePolicy,
   ticketImportPreviewResponseSchema,
+  ticketImportRowSchema,
 } from './index.js';
 
 const ids = {
@@ -93,6 +94,30 @@ const preview = {
 };
 
 describe('CS-IMPORT-01 contracts', () => {
+  it('allows repair metadata only for an eligible changed group identity', () => {
+    const repair = {
+      ...newRow,
+      orderTicketCount: 2,
+      identityRepair: { previousContactEmail: 'original@example.test' },
+    };
+    expect(ticketImportRowSchema.safeParse(repair).success).toBe(true);
+    for (const changed of [
+      { orderTicketCount: 1 },
+      { sourceStatus: 'unpaid' },
+      { status: 'unchanged', currentState: 'active' },
+      { identitySource: 'single_paid_ticket_buyer' },
+      {
+        identityRepair: {
+          previousContactEmail: newRow.contactEmail.toUpperCase(),
+        },
+      },
+    ]) {
+      expect(
+        ticketImportRowSchema.safeParse({ ...repair, ...changed }).success,
+      ).toBe(false);
+    }
+  });
+
   it('validates an immutable clean preview and private cache policy', () => {
     const parsed = ticketImportPreviewResponseSchema.parse(preview);
 

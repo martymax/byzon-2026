@@ -139,6 +139,50 @@ a slev se nadále nepřevádějí na další účastníky. Živá kontrola byla 
 
 ## Provozní tok
 
+### Oprava historicky sloučených účastníků
+
+Kontrola produkční databáze 16. 9. 2026 potvrdila 94 importovaných placených
+vstupenek; dvě neuhrazené zůstaly neimportované. Pět vstupenek objednávky
+`12932027` bylo správně přiřazeno pěti účtům s profily a aktivními membershipy.
+U sedmi jiných objednávek dvě vstupenky sdílely účet podle shodného e-mailu
+v SimpleShopu. Žádná tehdy uložená vazba se nelišila od aktuálního zdrojového
+e-mailu: nejprve je potřeba upřesnit skutečné kontakty ve zdroji.
+
+| Číslo objednávky | ID dokladu | Vstupenky | Samostatné účty v objednávce |
+| --- | --- | --- | --- |
+| 420260049 | 12556381 | 2 | 1 |
+| 420260047 | 12466545 | 2 | 1 |
+| 420260041 | 12460598 | 2 | 1 |
+| 420260030 | 12455759 | 2 | 1 |
+| 420260020 | 12437199 | 2 | 1 |
+| 420260010 | 12366157 | 2 | 1 |
+| 420260002 | 12242357 | 3 | 2 |
+
+Po doplnění samostatného e-mailu v SimpleShopu preview porovnává i účet
+uložený u již známého ticket ID. U placené skupinové vstupenky s jednoznačnou
+identitou „prodej na jméno“, stejnou objednávkou a aktivním původním
+membershipem nabídne **Doplnění účastníka**. Řádek je `new` vzhledem k
+účastníkovi, má `identityRepair.previousContactEmail` pro kontrolu a lze jej
+vybrat v běžném potvrzeném importu. Jiná objednávka, neaktivní původní účet
+nebo změna identity samostatné vstupenky vyžadují ruční dořešení.
+
+Apply založí nebo použije cílový účet a jeho event membership/profil/roli,
+poté přepojí pouze původní source referenci a zvýší její verzi. Původní účet,
+profil, rezervace, role ani jiné vstupenky nemění. Původní přiřazení a nový
+uživatel jsou dohledatelní auditem `ticket_import.participant_reassigned`.
+Oprava neposílá e-mail a nepřevádí rezervace mezi osobami.
+
+V `mapping_json` immutable batch se pod `identity_repair:<ticket ID>` ukládá
+jen SHA-256 otisk původní source reference, verze, uživatele, jeho e-mailu,
+objednávky a membership statusu. Apply porovnává aktuální řádky pod zámkem
+s tímto otiskem i s nově načteným snapshotem SimpleShopu. Změna zdroje,
+přiřazení, e-mailu původního účtu nebo membershipu zneplatní náhled bez
+částečného zápisu. Staré náhledy bez otisku nikdy nepovolí přepsání reference.
+Opakování použije stávající idempotentní receipt; příští náhled po opravě
+vrací `unchanged`.
+
+### Kroky importu
+
 1. Organizátor zvolí „Načíst ze SimpleShopu“.
 2. Server provede read-only discovery/fetch a vrátí sanitizované preview.
 3. Administrace zobrazí sanitizované počty, konflikty a význam každého
