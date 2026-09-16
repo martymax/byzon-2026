@@ -20,6 +20,44 @@ nahrazené lokálními soubory.
 | Oznámení organizátora      | Stávající náhled a odeslání oznámení nyní zakládá také e-maily stejným příjemcům.                           |
 | Hodnocení konference       | Jednou, nejdříve 12 hodin po konci konference, pouze bez vyplněného hodnocení; odkaz na `/app/hodnoceni`.   |
 
+## Připojení schránky Webglobe
+
+Pro odesílání přihlašovacích zpráv i notifikací nastavte v **obou službách,
+webu a workeru**, tuto sadu proměnných. Heslo doplňte přímo v hostingu:
+
+```dotenv
+MAIL_PROVIDER=smtp
+SMTP_HOST=mail.webglobe.cz
+SMTP_PORT=465
+SMTP_USERNAME=jsem@byzon.cz
+SMTP_PASSWORD=heslo-schránky
+MAIL_FROM=jsem@byzon.cz
+MAIL_FROM_NAME="Konference BYZON"
+MAIL_REPLY_TO=jsem@byzon.cz
+```
+
+V Railway zadejte hodnoty ve Variables příslušné služby (bez obalových uvozovek).
+Heslo patří do secret proměnné, nikdy do repozitáře. Lokálně lze použít
+ignorovaný `.env`; proces musí proměnné načíst do svého prostředí. Příklady
+jsou v kořenovém `.env.example`. `MAIL_FROM` nastavte na tuto schránku nebo
+adresu, kterou smí účet používat; `MAIL_REPLY_TO` může být stejná adresa.
+`MAIL_FROM_NAME` určuje zobrazované jméno odesílatele. Pokud je vyplněné,
+`MAIL_FROM` musí obsahovat pouze e-mailovou adresu bez jména a závorek.
+Bez `MAIL_FROM_NAME` zůstává podporovaný původní formát `Jméno <adresa>`.
+
+Port 465 používá přímé TLS. Alternativní `SMTP_PORT=587` automaticky vynutí
+STARTTLS; ověření certifikátu zůstává zapnuté. Nastavení odpovídá
+[dokumentaci Nodemailer](https://nodemailer.com/smtp).
+`MAIL_API_KEY` se pro SMTP nepoužívá. IMAP (`mail.webglobe.cz:993`) a POP3
+(`mail.webglobe.cz:995`) slouží k příjmu pošty, který aplikace neimplementuje.
+
+Celou sadu doplňte před restartem služeb; neúplná konfigurace včetně prázdného
+hesla nebo `__FILL_IN_RAILWAY__` se odmítne při startu. Staging může nadále
+používat Mailpit. Přepnutí na SMTP umožní skutečné odesílání, včetně čekajících
+notifikací ve frontě. Po nasazení ověřte přihlášení a notifikaci na vlastním
+účtu. SMTP používá stabilní Message-ID, ale nezaručuje deduplikaci: při
+ztraceném potvrzení od serveru může opakovaný pokus doručit zprávu vícekrát.
+
 ## Obsah a oslovení
 
 Společný balíček `packages/mail` vytváří předmět, preheader, HTML a prostý
@@ -88,7 +126,7 @@ Odeslané oznámení už nelze odvolat ze schránky; administrační potvrzení 
 1. Spustit `pnpm --filter @byzon/database db:migrate` proti cílové databázi
    před aktualizací webu a workeru. Migrace je přídavná a neodesílá zprávy.
 2. Obě služby potřebují stejný `APP_BASE_URL`, `MAIL_PROVIDER`, `MAIL_FROM`,
-   `MAIL_REPLY_TO` a konfiguraci Resend nebo stagingového Mailpitu.
+   `MAIL_REPLY_TO` a konfiguraci SMTP, Resend nebo stagingového Mailpitu.
    Příklady jsou v `.env.example`. Web obsluhuje také `/brand/email/*`.
 3. Sestavit `pnpm build:web` a `pnpm build:worker`. Spustit oba procesy;
    bez workeru zůstanou provozní notifikace ve frontě. Neúplná produkční

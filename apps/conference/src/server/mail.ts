@@ -10,6 +10,7 @@ import {
   MailDeliveryUnavailableError,
   ResendMailTransport,
   MailpitMailTransport,
+  createMailTransport,
   type MailTransport,
   type ResendMailOptions,
   type MailpitMailOptions,
@@ -99,12 +100,19 @@ export const createAuthMailProvider = (
   fetch: typeof globalThis.fetch = globalThis.fetch,
 ): AuthMailProvider => {
   const env = readConferenceEnv(environment);
+  if (env.MAIL_PROVIDER === 'smtp') {
+    const transport = createMailTransport(env);
+    return {
+      sendMagicLink: (message) => send(transport, message, env.APP_BASE_URL),
+    };
+  }
   if (env.MAIL_PROVIDER === 'resend')
     return new ResendAuthMailProvider(
       {
         apiKey: env.MAIL_API_KEY!,
         fetch,
         from: env.MAIL_FROM!,
+        fromName: env.MAIL_FROM_NAME,
         replyTo: env.MAIL_REPLY_TO!,
       },
       env.APP_BASE_URL,
@@ -117,6 +125,7 @@ export const createAuthMailProvider = (
         password: env.MAILPIT_API_PASSWORD!,
         fetch,
         from: env.MAIL_FROM!,
+        fromName: env.MAIL_FROM_NAME,
         replyTo: env.MAIL_REPLY_TO!,
       },
       env.APP_BASE_URL,

@@ -49,35 +49,71 @@ const optionalMailUrl = z.preprocess(
 const mailEnvSchema = {
   MAIL_PROVIDER: z.preprocess(
     railwayPlaceholderToUndefined,
-    z.enum(['sink', 'resend', 'mailpit']).optional(),
+    z.enum(['sink', 'resend', 'mailpit', 'smtp']).optional(),
   ),
   MAIL_API_KEY: optionalMailValue(1_024),
+  SMTP_HOST: optionalMailValue(253),
+  SMTP_PORT: z.preprocess(
+    railwayPlaceholderToUndefined,
+    z.coerce
+      .number()
+      .int()
+      .refine(
+        (port) => port === 465 || port === 587,
+        'SMTP_PORT must be 465 (TLS) or 587 (STARTTLS)',
+      )
+      .optional(),
+  ),
+  SMTP_USERNAME: optionalMailValue(320),
+  SMTP_PASSWORD: optionalMailValue(1_024),
   MAILPIT_API_URL: optionalMailUrl,
   MAILPIT_API_USERNAME: optionalMailValue(128),
   MAILPIT_API_PASSWORD: optionalMailValue(1_024),
   MAIL_FROM: optionalMailValue(320),
+  MAIL_FROM_NAME: optionalMailValue(200),
   MAIL_REPLY_TO: optionalMailValue(320),
 } as const;
 
 const validateMailEnvironment = (
   value: {
     readonly APP_ENV: 'development' | 'test' | 'staging' | 'production';
-    readonly MAIL_PROVIDER?: 'sink' | 'resend' | 'mailpit' | undefined;
+    readonly MAIL_PROVIDER?: 'sink' | 'resend' | 'mailpit' | 'smtp' | undefined;
     readonly MAIL_API_KEY?: string | undefined;
+    readonly SMTP_HOST?: string | undefined;
+    readonly SMTP_PORT?: number | undefined;
+    readonly SMTP_USERNAME?: string | undefined;
+    readonly SMTP_PASSWORD?: string | undefined;
     readonly MAILPIT_API_URL?: string | undefined;
     readonly MAILPIT_API_USERNAME?: string | undefined;
     readonly MAILPIT_API_PASSWORD?: string | undefined;
     readonly MAIL_FROM?: string | undefined;
+    readonly MAIL_FROM_NAME?: string | undefined;
     readonly MAIL_REPLY_TO?: string | undefined;
   },
   context: z.RefinementCtx,
 ) => {
+  if (
+    value.MAIL_FROM_NAME !== undefined &&
+    !z.email().safeParse(value.MAIL_FROM).success
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_FROM'],
+      message:
+        'MAIL_FROM must contain only an email address when MAIL_FROM_NAME is set',
+    });
+  }
   const mailValues = [
+    value.SMTP_HOST,
+    value.SMTP_PORT,
+    value.SMTP_USERNAME,
+    value.SMTP_PASSWORD,
     value.MAIL_API_KEY,
     value.MAILPIT_API_URL,
     value.MAILPIT_API_USERNAME,
     value.MAILPIT_API_PASSWORD,
     value.MAIL_FROM,
+    value.MAIL_FROM_NAME,
     value.MAIL_REPLY_TO,
   ];
   if (
@@ -88,6 +124,24 @@ const validateMailEnvironment = (
       code: 'custom',
       path: ['MAIL_PROVIDER'],
       message: 'MAIL_PROVIDER is required when mail settings are present',
+    });
+  }
+  if (
+    value.MAIL_PROVIDER === 'smtp' &&
+    [
+      value.SMTP_HOST,
+      value.SMTP_PORT,
+      value.SMTP_USERNAME,
+      value.SMTP_PASSWORD,
+      value.MAIL_FROM,
+      value.MAIL_REPLY_TO,
+    ].some((candidate) => candidate === undefined)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['MAIL_PROVIDER'],
+      message:
+        'SMTP requires SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, MAIL_FROM and MAIL_REPLY_TO',
     });
   }
   if (

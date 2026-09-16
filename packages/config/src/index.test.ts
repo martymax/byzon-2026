@@ -206,3 +206,73 @@ describe('SimpleShop server environment', () => {
     ).toThrow();
   });
 });
+
+describe.each([readConferenceEnv, readWorkerEnv])(
+  'SMTP environment',
+  (readEnv) => {
+    const smtp = {
+      ...stagingBase,
+      MAIL_PROVIDER: 'smtp',
+      SMTP_HOST: 'mail.webglobe.cz',
+      SMTP_PORT: '465',
+      SMTP_USERNAME: 'sender@example.test',
+      SMTP_PASSWORD: 'secret',
+      MAIL_FROM: 'BYZON <sender@example.test>',
+      MAIL_REPLY_TO: 'sender@example.test',
+    };
+    it.each(['465', '587'])('accepts encrypted SMTP port %s', (port) => {
+      expect(readEnv({ ...smtp, SMTP_PORT: port }).SMTP_PORT).toBe(
+        Number(port),
+      );
+    });
+    it.each([
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_USERNAME',
+      'SMTP_PASSWORD',
+      'MAIL_FROM',
+      'MAIL_REPLY_TO',
+    ])('requires %s', (field) => {
+      for (const value of [undefined, '', '__FILL_IN_RAILWAY__'])
+        expect(() => readEnv({ ...smtp, [field]: value })).toThrow();
+    });
+    it.each(['25', '0', '65536', 'bad'])(
+      'rejects unsupported port %s',
+      (port) => {
+        expect(() => readEnv({ ...smtp, SMTP_PORT: port })).toThrow();
+      },
+    );
+    it('requires an explicit provider', () => {
+      expect(() => readEnv({ ...smtp, MAIL_PROVIDER: undefined })).toThrow();
+    });
+  },
+);
+
+describe('sender display name', () => {
+  it('accepts a separate name and address for web and worker', () => {
+    for (const readEnv of [readConferenceEnv, readWorkerEnv]) {
+      const env = readEnv({
+        MAIL_PROVIDER: 'sink',
+        MAIL_FROM: 'jsem@byzon.cz',
+        MAIL_FROM_NAME: 'Konference BYZON',
+      });
+      expect(env.MAIL_FROM_NAME).toBe('Konference BYZON');
+    }
+  });
+  it('rejects header injection and ambiguous sender addresses', () => {
+    expect(() =>
+      readConferenceEnv({
+        MAIL_PROVIDER: 'sink',
+        MAIL_FROM: 'jsem@byzon.cz',
+        MAIL_FROM_NAME: 'BYZON\r\nBcc: other@example.test',
+      }),
+    ).toThrow();
+    expect(() =>
+      readConferenceEnv({
+        MAIL_PROVIDER: 'sink',
+        MAIL_FROM: 'BYZON <jsem@byzon.cz>',
+        MAIL_FROM_NAME: 'Konference BYZON',
+      }),
+    ).toThrow();
+  });
+});

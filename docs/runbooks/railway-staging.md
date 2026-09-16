@@ -6,9 +6,12 @@ prostředí `35c2e399-920a-42c1-84ef-0aede59bf52b`, nikoli o klon nebo novou DB.
 Doména `https://app.byzon.cz`, služby, volumes, credentials a uložená data se
 zachovávají.
 
-Na výslovný pokyn vlastníka zatím zůstává `APP_ENV=staging` na webu i workeru,
-`MAIL_PROVIDER=mailpit` a testovací přihlášení e-mailem. Název Railway prostředí
-`production` tedy zatím neznamená ostrý autentizační a e-mailový režim.
+Na výslovný pokyn vlastníka zatím zůstává `APP_ENV=staging` na webu i workeru
+a testovací přihlášení e-mailem. Od 16. 9. 2026 používají obě služby
+`MAIL_PROVIDER=smtp`, server `mail.webglobe.cz:465` a odesílatele
+`Konference BYZON <jsem@byzon.cz>` (`MAIL_FROM_NAME` a `MAIL_FROM`).
+E-maily se odesílají skutečným příjemcům; název prostředí `production`
+sám o sobě nemění autentizační režim.
 `BYZON_TIMELESS_TEST_MODE` se nepoužívá. Administrátor zapíná časově neomezené testování pro své přihlášení v `/app/nastaveni`; nejde o globální přepínač prostředí. Podrobnosti: [Testovací režim](../timeless-test-mode.md).
 
 Web používá `/railway.web.json`, worker `/railway.worker.json`. Nový deploy
@@ -144,6 +147,11 @@ oznámení a jednorázové připomenutí hodnocení. Podrobnosti a náhledy:
 [e-mailové notifikace](../email-notifications.md).
 
 ## E-mailové placeholders a magic link
+
+Pro připojení schránky Webglobe je dostupný také `MAIL_PROVIDER=smtp`.
+Úplná sada proměnných pro web i worker a postup aktivace jsou v
+[připojení schránky Webglobe](../email-notifications.md#připojení-schránky-webglobe).
+Následující konfigurace Resend zůstává alternativou; staging může používat Mailpit.
 
 Web má připravený skutečný Resend adapter pro Better Auth magic link. Jeho
 produkční aktivace stále vyžaduje schválení zpracovatele, environment-specific
