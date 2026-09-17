@@ -281,15 +281,15 @@ export const handleAdminOperations = async (
       }),
       dependencies.db
         .select({
-          total: countDistinct(schema.ticketSourceParticipants.userId),
-          activated: sql<number>`count(distinct ${schema.ticketSourceParticipants.userId}) filter (where ${schema.users.emailVerified} = true)`,
+          total: countDistinct(schema.participantProfiles.userId),
+          activated: sql<number>`count(distinct ${schema.participantProfiles.userId}) filter (where ${schema.users.emailVerified} = true)`,
         })
-        .from(schema.ticketSourceParticipants)
+        .from(schema.participantProfiles)
         .innerJoin(
           schema.users,
-          eq(schema.users.id, schema.ticketSourceParticipants.userId),
+          eq(schema.users.id, schema.participantProfiles.userId),
         )
-        .where(eq(schema.ticketSourceParticipants.eventId, eventId)),
+        .where(eq(schema.participantProfiles.eventId, eventId)),
       dependencies.db.query.ticketImportBatches.findFirst({
         columns: { status: true, rowCount: true },
         where: eq(schema.ticketImportBatches.eventId, eventId),

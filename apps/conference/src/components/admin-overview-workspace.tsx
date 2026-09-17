@@ -424,7 +424,7 @@ export const AdminOverviewWorkspace = () => {
           >
             <article className={dashboard.stat}>
               <div className={dashboard.statHeading}>
-                <h2>Importovaní účastníci</h2>
+                <h2>Všichni účastníci</h2>
                 <span className={dashboard.icon}>
                   <DashboardIcon name="tickets" />
                 </span>
@@ -432,7 +432,7 @@ export const AdminOverviewWorkspace = () => {
               <strong className={dashboard.statValue}>
                 {activation ? number(activation.total) : '—'}
               </strong>
-              <p>Lidé s přístupem vytvořeným z importu vstupenek.</p>
+              <p>Všichni účastníci konference bez ohledu na způsob přidání.</p>
               <div className={dashboard.statFooter}>
                 {!archived &&
                 context.actor.permissions.includes(
@@ -443,7 +443,7 @@ export const AdminOverviewWorkspace = () => {
                     <Arrow />
                   </Link>
                 ) : (
-                  <span>Celkový počet účastníků v importu</span>
+                  <span>Celkový počet účastníků konference</span>
                 )}
               </div>
             </article>

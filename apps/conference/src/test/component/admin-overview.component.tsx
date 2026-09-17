@@ -80,7 +80,7 @@ describe('admin overview dashboard', () => {
       .element(screen.getByRole('heading', { level: 1, name: 'Přehled akce' }))
       .toBeVisible();
     for (const label of [
-      'Importovaní účastníci',
+      'Všichni účastníci',
       'Aktivované přístupy',
       'Aktualizace vstupenek',
       'Program a obsah',

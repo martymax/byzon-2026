@@ -147,7 +147,7 @@ ekvivalentní navigaci; breadcrumbs nevytvářejí paralelní systém.
 
 Produkční `/admin` už otevírá stejný dashboard workspace jako ověřené preview.
 Šest karet čte pouze event-scoped agregace: aktivovaný e-mailový přístup
-unikátních importovaných účastníků, stav poslední dávky, publikaci a její sync,
+všech unikátních účastníků konference (včetně ručně přidaných), stav poslední dávky, publikaci a její sync,
 kapacitu po jednotlivých aktivitách, scope status odbavení a počet kritických
 oznámení. Worker fronta je oddělená v lidském technickém souhrnu bez raw chyb;
 sync failure a překročená kapacita jsou degraded. Aktivace, import a oznámení
