@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   czechGreeting,
   createAuthEmail,
+  createLoginCodeEmail,
   createNotificationEmail,
   notificationPayloadSchema,
   type AuthEmailPurpose,
@@ -11,6 +12,22 @@ import {
   SinkMailTransport,
   MailDeliveryUnavailableError,
 } from './transport.js';
+
+it('delivers the one-time code in both email formats without putting it in a URL', () => {
+  const mail = createLoginCodeEmail({
+    code: '123456',
+    appOrigin: 'https://app.byzon.cz',
+    expiresInSeconds: 600,
+  });
+  expect(mail.subject).toBe('BYZON 2026: Váš přihlašovací kód');
+  for (const content of [mail.text, mail.html]) {
+    expect(content).toContain('123456');
+    expect(content).toContain('10 minut');
+    expect(content).toContain('48 hodin');
+    expect(content).toContain('Docku');
+  }
+  expect(mail.html).not.toMatch(/href="[^"]*123456/);
+});
 
 describe('Czech greetings', () => {
   it.each([

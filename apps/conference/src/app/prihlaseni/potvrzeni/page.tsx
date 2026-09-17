@@ -52,6 +52,11 @@ export default async function ConfirmLoginPage({
         )}
         <Button type="submit">Dokončit přihlášení</Button>
       </form>
+      <p>
+        Používáte BYZON z plochy nebo Docku a odkaz se otevřel v prohlížeči?
+        Otevřete aplikaci jejím zástupcem a zvolte přihlášení kódem. Kód z
+        e-mailu pak zadáte přímo v aplikaci.
+      </p>
     </section>
   );
 }

@@ -9,10 +9,21 @@ import {
   StatePanel,
 } from '@byzon/ui';
 import { activationEmailSchema } from '@byzon/domain/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { POST_LOGIN_DESTINATION, type AuthReturnTo } from '../lib/auth-return';
 import styles from './magic-link-login.module.css';
+import { EmailCodeLogin } from './email-code-login';
+
+const subscribeToDisplayMode = (change: () => void) => {
+  const media = window.matchMedia('(display-mode: standalone)');
+  media.addEventListener('change', change);
+  return () => media.removeEventListener('change', change);
+};
+const installedDisplayMode = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+const serverDisplayMode = () => false;
 
 type LoginFailure =
   'offline' | 'rate_limited' | 'unknown_account' | 'unavailable';
@@ -33,6 +44,12 @@ export const MagicLinkLogin = ({
   readonly returnTo?: AuthReturnTo;
 }) => {
   const [email, setEmail] = useState('');
+  const [codeLogin, setCodeLogin] = useState<boolean>();
+  const installed = useSyncExternalStore(
+    subscribeToDisplayMode,
+    installedDisplayMode,
+    serverDisplayMode,
+  );
   const [fieldError, setFieldError] = useState<string>();
   const [failure, setFailure] = useState<LoginFailure>();
   const [sent, setSent] = useState(false);
@@ -126,6 +143,17 @@ export const MagicLinkLogin = ({
     }
   };
 
+  if ((codeLogin ?? installed) && !directEmailLogin) {
+    return (
+      <EmailCodeLogin
+        fetch={fetch}
+        navigate={navigate}
+        returnTo={returnTo}
+        onUseLink={() => setCodeLogin(false)}
+      />
+    );
+  }
+
   if (sent) {
     return (
       <section className="activation-form-page">
@@ -144,6 +172,9 @@ export const MagicLinkLogin = ({
             </p>
           </StatePanel>
           <div className="activation-form-actions">
+            <Button variant="secondary" onClick={() => setCodeLogin(true)}>
+              Přihlásit se kódem v této aplikaci
+            </Button>
             <Button
               variant="secondary"
               onClick={() => {
@@ -274,6 +305,17 @@ export const MagicLinkLogin = ({
           </p>
         ) : null}
       </form>
+      {!directEmailLogin ? (
+        <div className="activation-form-actions">
+          <Button
+            variant="secondary"
+            disabled={submitting}
+            onClick={() => setCodeLogin(true)}
+          >
+            Přihlásit se kódem v této aplikaci
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 };

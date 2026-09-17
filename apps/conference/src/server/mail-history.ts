@@ -2,10 +2,48 @@ import { createHash } from 'node:crypto';
 import { sendRecordedEmail, type Database } from '@byzon/database';
 import {
   createAuthEmail,
+  createLoginCodeEmail,
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
   LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
 } from '@byzon/mail';
-import type { AuthMailProvider, MagicLinkMessage } from './mail';
+import {
+  MailDeliveryUnavailableError,
+  type AuthMailProvider,
+  type LoginCodeMessage,
+  type MagicLinkMessage,
+} from './mail';
+
+export const sendRecordedLoginCodeEmail = (
+  db: Database,
+  provider: AuthMailProvider,
+  message: LoginCodeMessage,
+  context: {
+    eventId: string;
+    userId: string;
+    appOrigin: string;
+    sender: string | null;
+  },
+) =>
+  sendRecordedEmail(
+    db,
+    {
+      eventId: context.eventId,
+      userId: context.userId,
+      deduplicationKey: `login-code:${crypto.randomUUID()}`,
+      kind: 'sign-in',
+      recipient: message.to,
+      sender: context.sender,
+      ...createLoginCodeEmail({
+        code: '[jednorázový kód skryt]',
+        appOrigin: context.appOrigin,
+        expiresInSeconds: message.expiresInSeconds,
+      }),
+    },
+    () => {
+      if (!provider.sendLoginCode) throw new MailDeliveryUnavailableError();
+      return provider.sendLoginCode(message);
+    },
+  );
 
 /** Render with a harmless placeholder so no bearer token ever reaches the archive. */
 export const archivedAuthContent = (

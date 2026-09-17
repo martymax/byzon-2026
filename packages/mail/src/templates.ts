@@ -240,6 +240,33 @@ export const createAuthEmail = (input: AuthEmailInput): EmailContent => {
   });
 };
 
+export const createLoginCodeEmail = (input: {
+  code: string;
+  appOrigin: string;
+  expiresInSeconds: number;
+}): EmailContent => {
+  const ttl = lifetime(input.expiresInSeconds);
+  const content = render({
+    appOrigin: input.appOrigin,
+    subject: 'BYZON 2026: Váš přihlašovací kód',
+    preheader: `Kód zadejte přímo v aplikaci BYZON. Platí ${ttl}.`,
+    eyebrow: 'PŘIHLÁŠENÍ DO APLIKACE',
+    title: 'Váš přihlašovací kód',
+    accent: input.code,
+    greeting: 'Dobrý den,',
+    body: 'vraťte se do aplikace BYZON, ve které jste si kód vyžádali, a zadejte ho do přihlašovacího formuláře. Pokud aplikaci používáte z plochy nebo Docku, otevřete ji jejím zástupcem.',
+    cta: 'Otevřít přihlašovací stránku',
+    url: '/prihlaseni',
+    note: `Kód platí ${ttl} a funguje jen jednou. Přihlášení poté platí 48 hodin.`,
+    footer:
+      'Kód je určený jen Vám. Nikomu ho nesdělujte. Pokud se právě nepřihlašujete, můžete tento e-mail ignorovat.',
+  });
+  return {
+    ...content,
+    text: `Váš přihlašovací kód: ${input.code}\n\n${content.text}`,
+  };
+};
+
 export const createNotificationEmail = (
   payload: NotificationPayload,
   recipient: EmailRecipient,

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readConferenceEnv } from '@byzon/config';
 import {
   createAuthEmail,
+  createLoginCodeEmail,
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
   LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
   type AuthEmailPurpose,
@@ -30,14 +31,25 @@ export interface MagicLinkMessage {
 }
 export interface AuthMailProvider {
   sendMagicLink(message: MagicLinkMessage): Promise<void>;
+  sendLoginCode?(message: LoginCodeMessage): Promise<void>;
+}
+export interface LoginCodeMessage {
+  to: string;
+  code: string;
+  expiresInSeconds: number;
 }
 export class FakeAuthMailProvider implements AuthMailProvider {
   readonly messages: MagicLinkMessage[] = [];
+  readonly codes: LoginCodeMessage[] = [];
+  async sendLoginCode(message: LoginCodeMessage): Promise<void> {
+    this.codes.push({ ...message });
+  }
   async sendMagicLink(message: MagicLinkMessage): Promise<void> {
     this.messages.push({ ...message });
   }
   clear(): void {
     this.messages.length = 0;
+    this.codes.length = 0;
   }
 }
 export class UnconfiguredAuthMailProvider implements AuthMailProvider {
@@ -73,6 +85,17 @@ const send = (
     idempotencyKey: `byzon-magic-link-${createHash('sha256').update(message.url).digest('hex')}`,
   });
 };
+const sendCode = (
+  transport: MailTransport,
+  message: LoginCodeMessage,
+  appOrigin: string,
+) =>
+  transport.send({
+    ...createLoginCodeEmail({ ...message, appOrigin }),
+    to: message.to,
+    category: 'auth',
+    idempotencyKey: `byzon-login-code-${crypto.randomUUID()}`,
+  });
 export class ResendAuthMailProvider implements AuthMailProvider {
   private readonly transport: MailTransport;
   constructor(
@@ -83,6 +106,13 @@ export class ResendAuthMailProvider implements AuthMailProvider {
   }
   sendMagicLink(message: MagicLinkMessage): Promise<void> {
     return send(this.transport, message, this.appOrigin);
+  }
+  sendLoginCode(message: LoginCodeMessage): Promise<void> {
+    return sendCode(
+      this.transport,
+      message,
+      this.appOrigin ?? readConferenceEnv(process.env).APP_BASE_URL,
+    );
   }
 }
 export class MailpitAuthMailProvider implements AuthMailProvider {
@@ -96,6 +126,13 @@ export class MailpitAuthMailProvider implements AuthMailProvider {
   sendMagicLink(message: MagicLinkMessage): Promise<void> {
     return send(this.transport, message, this.appOrigin);
   }
+  sendLoginCode(message: LoginCodeMessage): Promise<void> {
+    return sendCode(
+      this.transport,
+      message,
+      this.appOrigin ?? readConferenceEnv(process.env).APP_BASE_URL,
+    );
+  }
 }
 export const createAuthMailProvider = (
   environment: NodeJS.ProcessEnv | Record<string, unknown> = process.env,
@@ -106,6 +143,8 @@ export const createAuthMailProvider = (
     const transport = createMailTransport(env);
     return {
       sendMagicLink: (message) => send(transport, message, env.APP_BASE_URL),
+      sendLoginCode: (message) =>
+        sendCode(transport, message, env.APP_BASE_URL),
     };
   }
   if (env.MAIL_PROVIDER === 'resend')

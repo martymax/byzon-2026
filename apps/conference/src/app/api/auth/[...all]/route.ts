@@ -53,12 +53,27 @@ export const GET = (request: Request) =>
     : loginHandlers.GET(request);
 
 export const POST = async (request: Request): Promise<Response> => {
-  if (
-    new URL(request.url).pathname.replace(/\/+$/, '') === MAGIC_LINK_VERIFY_PATH
-  ) {
+  const pathname = new URL(request.url).pathname.replace(/\/+$/, '');
+  if (pathname === '/api/auth/email-otp/send-verification-otp') {
+    const body = await request
+      .clone()
+      .json()
+      .catch(() => null);
+    if (
+      body?.type !== 'sign-in' ||
+      !activationEmailSchema.safeParse(body?.email).success
+    ) {
+      return Response.json(
+        { code: 'INVALID_REQUEST' },
+        { status: 400, headers: { 'cache-control': 'private, no-store' } },
+      );
+    }
+    return loginHandlers.POST(request);
+  }
+  if (pathname === MAGIC_LINK_VERIFY_PATH) {
     return confirmMagicLink(request, getAuthAppOrigin(), loginHandlers.GET);
   }
-  if (new URL(request.url).pathname !== magicLinkRequestPath) {
+  if (pathname !== magicLinkRequestPath) {
     return loginHandlers.POST(request);
   }
 

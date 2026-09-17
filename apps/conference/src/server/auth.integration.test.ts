@@ -1,6 +1,14 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import {
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
@@ -97,7 +105,9 @@ integration('magic-link authentication integration', () => {
   beforeEach(async () => {
     mail.clear();
     await client.pool.query(
-      `delete from "verification" where "value"::jsonb ->> 'email' = $1`,
+      `delete from "verification" where
+        case when left("value", 1) = '{' then "value"::jsonb ->> 'email' end = $1
+        or "identifier" = 'sign-in-otp-' || $1`,
       [email],
     );
     await client.pool.query('delete from "user" where email = $1', [email]);
@@ -109,9 +119,13 @@ integration('magic-link authentication integration', () => {
     });
   });
 
+  afterEach(() => vi.useRealTimers());
+
   afterAll(async () => {
     await client.pool.query(
-      `delete from "verification" where "value"::jsonb ->> 'email' = $1`,
+      `delete from "verification" where
+        case when left("value", 1) = '{' then "value"::jsonb ->> 'email' end = $1
+        or "identifier" = 'sign-in-otp-' || $1`,
       [email],
     );
     await client.pool.query('delete from "user" where email = $1', [email]);
@@ -138,7 +152,7 @@ integration('magic-link authentication integration', () => {
     const setCookie = consumed.headers
       .getSetCookie()
       .find((cookie) => cookie.startsWith('better-auth.session_token='));
-    expect(setCookie).toBeTruthy();
+    expect(setCookie).toContain('Max-Age=172800');
     return setCookie!.split(';', 1)[0]!;
   };
 
@@ -506,6 +520,183 @@ integration('magic-link authentication integration', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toBeNull();
+  });
+
+  it('keeps an inactive session for 48 hours, but cannot revive it after expiry', async () => {
+    const cookie = await createSession();
+    const now = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now + 47 * 60 * 60 * 1_000);
+    expect(
+      (await auth.api.getSession({ headers: new Headers({ cookie }) }))?.user
+        .email,
+    ).toBe(email);
+    vi.setSystemTime(now + 48 * 60 * 60 * 1_000 + 1_000);
+    const expired = await auth.handler(
+      new Request('http://localhost:3000/api/auth/get-session', {
+        method: 'POST',
+        headers: { cookie, origin: 'http://localhost:3000' },
+      }),
+    );
+    expect(await expired.json()).toBeNull();
+    expect(expired.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('renews the database and browser cookie together, never during a server read', async () => {
+    const cookie = await createSession();
+    const original = await auth.api.getSession({
+      headers: new Headers({ cookie }),
+    });
+    const now = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now + 47 * 60 * 60 * 1_000);
+    const read = await auth.api.getSession({
+      headers: new Headers({ cookie }),
+    });
+    expect(read?.session.expiresAt).toEqual(original?.session.expiresAt);
+    const response = await auth.handler(
+      new Request('http://localhost:3000/api/auth/get-session', {
+        method: 'POST',
+        headers: { cookie, origin: 'http://localhost:3000' },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=172800');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    const renewed = await response.json();
+    expect(new Date(renewed.session.expiresAt).getTime()).toBe(
+      Date.now() + 48 * 60 * 60 * 1_000,
+    );
+    vi.setSystemTime(now + 49 * 60 * 60 * 1_000);
+    expect(
+      (await auth.api.getSession({ headers: new Headers({ cookie }) }))?.user
+        .email,
+    ).toBe(email);
+    await client.db
+      .delete(schema.sessions)
+      .where(eq(schema.sessions.id, renewed.session.id));
+    expect(
+      await auth.api.getSession({ headers: new Headers({ cookie }) }),
+    ).toBeNull();
+  });
+
+  const requestCode = (address = email) =>
+    auth.handler(
+      new Request(
+        'http://localhost:3000/api/auth/email-otp/send-verification-otp',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'http://localhost:3000',
+          },
+          body: JSON.stringify({ email: address, type: 'sign-in' }),
+        },
+      ),
+    );
+  const verifyCode = (otp: string) =>
+    auth.handler(
+      new Request('http://localhost:3000/api/auth/sign-in/email-otp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://localhost:3000',
+        },
+        body: JSON.stringify({ email, otp }),
+      }),
+    );
+
+  it('signs in the requesting PWA with a hashed one-use code and a persistent 48-hour cookie', async () => {
+    expect((await requestCode()).status).toBe(200);
+    const code = mail.codes.at(-1)!.code;
+    expect(code).toMatch(/^\d{6}$/);
+    const stored = await client.db.query.verifications.findFirst({
+      where: eq(schema.verifications.identifier, `sign-in-otp-${email}`),
+    });
+    expect(stored?.value).not.toContain(code);
+    expect(mail.messages).toHaveLength(0);
+    const archived = await client.db
+      .select({
+        html: schema.emailMessages.html,
+        text: schema.emailMessages.text,
+      })
+      .from(schema.emailMessages)
+      .where(eq(schema.emailMessages.recipient, email));
+    expect(archived.length).toBeGreaterThan(0);
+    expect(JSON.stringify(archived)).not.toContain(code);
+    expect(JSON.stringify(archived)).toContain('jednorázový kód skryt');
+    const response = await verifyCode(code);
+    expect(response.status).toBe(200);
+    const cookie = response.headers
+      .getSetCookie()
+      .find((value) => value.startsWith('better-auth.session_token='))!;
+    expect(cookie).toContain('Max-Age=172800');
+    expect(cookie).toContain('HttpOnly');
+    const session = await auth.api.getSession({
+      headers: new Headers({ cookie: cookie.split(';')[0]! }),
+    });
+    expect(session?.user.email).toBe(email);
+    expect(session?.user.emailVerified).toBe(true);
+    expect((await verifyCode(code)).status).toBe(400);
+  });
+
+  it('rejects an expired code and locks it after three wrong guesses', async () => {
+    await requestCode();
+    const code = mail.codes.at(-1)!.code;
+    const wrong = code === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 3; i++)
+      expect((await verifyCode(wrong)).ok).toBe(false);
+    expect((await verifyCode(code)).ok).toBe(false);
+    await requestCode();
+    await client.db
+      .update(schema.verifications)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(schema.verifications.identifier, `sign-in-otp-${email}`));
+    expect((await verifyCode(mail.codes.at(-1)!.code)).ok).toBe(false);
+  });
+
+  it('does not send codes or create accounts for unknown addresses', async () => {
+    const unknown = `unknown-${crypto.randomUUID()}@example.com`;
+    expect((await requestCode(unknown)).status).toBe(200);
+    expect(mail.codes).toHaveLength(0);
+    expect(
+      await client.db.query.users.findFirst({
+        where: eq(schema.users.email, unknown),
+      }),
+    ).toBeUndefined();
+  });
+
+  it('sets secure persistent cookies and preserves login across auth server instances', async () => {
+    const environment = {
+      NODE_ENV: 'production',
+      APP_ENV: 'test',
+      APP_BASE_URL: 'https://app.example.test',
+      PUBLIC_SITE_URL: 'https://example.test',
+      DATABASE_URL: databaseUrl!,
+      BETTER_AUTH_SECRET: 'integration-test-secret-at-least-32-characters',
+    };
+    const secure = createAuth(mail, client.db, environment);
+    await secure.api.signInMagicLink({
+      body: { email, callbackURL: '/app' },
+      headers: new Headers({ origin: environment.APP_BASE_URL }),
+    });
+    const response = await secure.handler(
+      new Request(mail.messages.at(-1)!.url),
+    );
+    const cookie = response.headers
+      .getSetCookie()
+      .find((value) =>
+        value.startsWith('__Secure-better-auth.session_token='),
+      )!;
+    expect(cookie).toContain('Max-Age=172800');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('SameSite=Lax');
+    const restarted = createAuth(mail, client.db, environment);
+    const session = await restarted.api.getSession({
+      headers: new Headers({ cookie: cookie.split(';')[0]! }),
+    });
+    expect(session?.user.email).toBe(email);
   });
 
   it('revokes every session and expires the caller cookie', async () => {

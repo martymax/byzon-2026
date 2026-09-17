@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/api/auth/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
         source: '/aktivace/odkaz',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },

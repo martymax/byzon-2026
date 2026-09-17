@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Khand } from 'next/font/google';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { RouteAwareChrome } from '@/components/route-aware-chrome';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
+import { SessionRefresh } from '@/components/session-refresh';
 import './styles.css';
 
 const khand = Khand({
@@ -38,6 +39,9 @@ export default function RootLayout({
     <html lang="cs" className={`${khand.variable} ${inter.variable}`}>
       <body>
         <RouteAwareChrome>{children}</RouteAwareChrome>
+        <Suspense fallback={null}>
+          <SessionRefresh />
+        </Suspense>
         <ServiceWorkerRegistration />
       </body>
     </html>

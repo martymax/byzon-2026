@@ -43,6 +43,23 @@ vi.mock('@/server/mail', () => ({ authMailProvider: {} }));
 
 import { GET, POST } from './route';
 
+it.each(['forget-password', 'email-verification', 'change-email'])(
+  'does not expose %s through the login-code sender',
+  async (type) => {
+    const response = await POST(
+      new Request(
+        'https://app.example.test/api/auth/email-otp/send-verification-otp',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type, email: 'participant@example.test' }),
+        },
+      ),
+    );
+    expect(response.status).toBe(400);
+  },
+);
+
 describe('public magic-link confirmation boundary', () => {
   beforeEach(() => routeMocks.verify.mockClear());
 

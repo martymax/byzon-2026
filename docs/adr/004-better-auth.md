@@ -11,7 +11,8 @@ konkrétní vstupenky a akce.
 
 ## Rozhodnutí
 
-Better Auth bude spravovat identity, session lifecycle a magic link mechanismus.
+Better Auth bude spravovat identity, session lifecycle, magic link mechanismus
+a jednorázové e-mailové přihlašovací kódy (Email OTP).
 Event membership, role, onboarding, souhlasy a ticket claim zůstávají vlastní
 doménovou vrstvou nad PostgreSQL. Úspěšné přihlášení samo o sobě neposkytuje
 přístup k datům akce.
@@ -41,3 +42,12 @@ zavedení vlastních hesel vyžaduje nový ADR.
 
 - [Implementační plán](../../AI_IMPLEMENTATION_PLAN.md): §11.2, §16.2 a `P2-04`.
 - [Better Auth – Magic link](https://better-auth.com/docs/plugins/magic-link).
+
+## Přihlášení instalované aplikace — 17. září 2026
+
+Relace platí 48 hodin a obnovuje se pouze browserovým POST, který současně
+vrací cookie. Serverové čtení ji neprodlužuje. Instalovaná aplikace používá
+jako výchozí Email OTP, aby přihlášení nezáviselo na otevírání e-mailových
+odkazů v jiném prohlížeči. Kódy mají platnost 10 minut, tři pokusy a jsou
+uložené hashovaně; účty se automaticky nezakládají. Podrobnosti a ověření:
+[obnova přihlášení](../evidence/session-persistence-2026-09-17.md).

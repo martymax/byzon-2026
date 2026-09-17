@@ -7,16 +7,20 @@ import {
 } from '@byzon/mail';
 import { and, eq } from 'drizzle-orm';
 import { betterAuth } from 'better-auth';
-import { magicLink } from 'better-auth/plugins';
+import { emailOTP, magicLink } from 'better-auth/plugins';
 
 import { database } from './database';
 import {
   authMailProvider,
+  MailDeliveryUnavailableError,
   type AuthMailProvider,
   type MagicLinkMessage,
 } from './mail';
 import { stagingEmailLogin } from './staging-email-login';
-import { sendRecordedAuthEmail } from './mail-history';
+import {
+  sendRecordedAuthEmail,
+  sendRecordedLoginCodeEmail,
+} from './mail-history';
 import { loadEventPolicy } from './policy';
 
 export {
@@ -24,8 +28,11 @@ export {
   LOGIN_MAGIC_LINK_EXPIRES_IN_SECONDS,
 };
 export const SESSION_EXPIRES_IN_SECONDS = 48 * 60 * 60;
-export const SESSION_UPDATE_AGE_SECONDS = 24 * 60 * 60;
+// Browser refreshes are throttled to five minutes and GET reads never renew.
+// Every successful POST also repairs cookies left behind by older deployments.
+export const SESSION_UPDATE_AGE_SECONDS = 0;
 export const SESSION_FRESH_AGE_SECONDS = 24 * 60 * 60;
+export const LOGIN_CODE_EXPIRES_IN_SECONDS = 10 * 60;
 
 export const magicLinkPurposeForAccount = (
   emailVerified: boolean | undefined,
@@ -55,6 +62,35 @@ export const createAuth = (
   const env = readConferenceEnv(environment);
   const appOrigin = getAuthAppOrigin(environment);
   const ipAddressHeaders = authIpAddressHeadersFor(env.APP_ENV);
+  const loginCode = emailOTP({
+    disableSignUp: true,
+    storeOTP: 'hashed',
+    expiresIn: LOGIN_CODE_EXPIRES_IN_SECONDS,
+    allowedAttempts: 3,
+    async sendVerificationOTP({ email, otp, type }) {
+      if (type !== 'sign-in' || !mailProvider.sendLoginCode)
+        throw new MailDeliveryUnavailableError();
+      const message = {
+        to: email,
+        code: otp,
+        expiresInSeconds: LOGIN_CODE_EXPIRES_IN_SECONDS,
+      };
+      const [profile] = await db
+        .select({ eventId: schema.events.id, userId: schema.users.id })
+        .from(schema.events)
+        .innerJoin(schema.users, eq(schema.users.email, email))
+        .where(eq(schema.events.slug, 'byzon-2026'))
+        .limit(1);
+      if (!profile) return mailProvider.sendLoginCode(message);
+      return sendRecordedLoginCodeEmail(db, mailProvider, message, {
+        ...profile,
+        appOrigin,
+        sender: env.MAIL_FROM_NAME
+          ? `${env.MAIL_FROM_NAME} <${env.MAIL_FROM}>`
+          : (env.MAIL_FROM ?? null),
+      });
+    },
+  });
 
   return betterAuth({
     appName: 'BYZON 2026',
@@ -80,8 +116,20 @@ export const createAuth = (
       expiresIn: SESSION_EXPIRES_IN_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       freshAge: SESSION_FRESH_AGE_SECONDS,
+      // Server-side reads cannot reliably forward Set-Cookie to the browser.
+      // Refresh through a browser POST so the DB and cookie advance together.
+      deferSessionRefresh: true,
     },
     plugins: [
+      // Expose only passwordless sign-in, not the plugin's password reset or
+      // e-mail change endpoints. Identity ownership remains with Better Auth.
+      {
+        ...loginCode,
+        endpoints: {
+          sendVerificationOTP: loginCode.endpoints.sendVerificationOTP,
+          signInEmailOTP: loginCode.endpoints.signInEmailOTP,
+        },
+      },
       magicLink({
         disableSignUp: true,
         expiresIn:
