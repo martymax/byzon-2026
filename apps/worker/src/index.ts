@@ -4,6 +4,7 @@ import { createDatabaseClient } from '@byzon/database';
 import { createRedisConnection } from '@byzon/redis';
 import { createMailTransport } from '@byzon/mail/transport';
 import { dispatchEmailOnce, scheduleRatingEmails } from './email.js';
+import { dispatchInvitationOnce } from './invitations.js';
 
 import { dispatchSupportedOutboxOnce } from './outbox.js';
 
@@ -110,6 +111,23 @@ const dispatch = async (): Promise<void> => {
         );
       if (emailOutcome === 'idle') break;
     }
+    const invitationOutcomes = await Promise.all(
+      Array.from({ length: Math.min(env.WORKER_CONCURRENCY_EMAIL, 10) }, () =>
+        dispatchInvitationOnce(database.db, mailTransport, {
+          appOrigin: env.APP_BASE_URL,
+          secret: env.BETTER_AUTH_SECRET,
+          sender: env.MAIL_FROM ?? null,
+        }),
+      ),
+    );
+    if (invitationOutcomes.includes('failed'))
+      logger.error(
+        {
+          count: invitationOutcomes.filter((outcome) => outcome === 'failed')
+            .length,
+        },
+        'Invitation delivery exhausted its retries',
+      );
     const outcome = await dispatchSupportedOutboxOnce(database.db);
     if (outcome === 'failed') {
       logger.error({ outcome }, 'Outbox event moved to dead letter state');

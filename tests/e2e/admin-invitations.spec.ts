@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { expectPageToPassAxe } from '../support/accessibility';
 
-test('selects across roles, reviews exact recipients and sends invitations once', async ({
+test('selects across roles, queues exact recipients once and restores progress after reopening', async ({
   page,
 }, testInfo) => {
   test.setTimeout(60_000);
@@ -9,7 +9,8 @@ test('selects across roles, reviews exact recipients and sends invitations once'
   page.on('request', (request) => {
     if (
       request.method() === 'POST' &&
-      new URL(request.url()).pathname.endsWith('/invite')
+      (new URL(request.url()).pathname.endsWith('/invitations/batches') ||
+        new URL(request.url()).pathname.endsWith('/invite'))
     )
       invitationRequests.push(request.url());
   });
@@ -101,15 +102,39 @@ test('selects across roles, reviews exact recipients and sends invitations once'
   await expectPageToPassAxe(page);
   await review.getByRole('button', { name: 'Potvrdit a odeslat (2)' }).click();
   await expect(
-    page.getByText('Všechny vybrané pozvánky byly odeslány.', { exact: false }),
+    page.getByText('Zařazeno do fronty: 2.', { exact: false }),
   ).toBeVisible();
-  expect(invitationRequests).toHaveLength(2);
-  expect(
-    invitationRequests.filter((url) => url.includes('/participants/')),
-  ).toHaveLength(1);
-  expect(
-    invitationRequests.filter((url) => url.includes('/team-members/')),
-  ).toHaveLength(1);
+  await expect(
+    page.getByRole('heading', { name: 'Průběh rozesílání' }),
+  ).toBeVisible();
+  expect(invitationRequests).toHaveLength(1);
+  expect(invitationRequests[0]).toContain('/invitations/batches');
+  await expectPageToPassAxe(page);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await page.screenshot({
+    path: testInfo.outputPath('invitation-queue.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.reload();
+  await expect(page.locator('#byzon-mock-mode-indicator')).toHaveAttribute(
+    'data-state',
+    'active',
+    { timeout: 30_000 },
+  );
+  await Promise.race([
+    heading.waitFor({ state: 'visible' }),
+    retry.waitFor({ state: 'visible' }),
+  ]);
+  if (await retry.isVisible()) await retry.click();
+  await expect(
+    page.getByRole('heading', { name: 'Průběh rozesílání' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Rozesílání dokončeno', { exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('2 z 2', { exact: true })).toBeVisible();
+  expect(invitationRequests).toHaveLength(1);
   await expect(
     page.getByRole('button', { name: 'Odeslat pozvánky (0)' }),
   ).toBeDisabled();

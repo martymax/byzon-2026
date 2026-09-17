@@ -147,6 +147,16 @@ administračního announcement flow a serverových endpointů.
 
 ## Proměnné workeru
 
+Pro frontu pozvánek od migrace `0034_invitation_queue` vyžaduje worker také
+`BETTER_AUTH_SECRET` (min. 32 znaků). Nastavte referenci
+`${{@byzon/conference.BETTER_AUTH_SECRET}}`, aby používal stejnou hodnotu jako
+web. `WORKER_CONCURRENCY_EMAIL` má výchozí hodnotu 2; pozvánky běží souběžně
+s tímto limitem (nejvýše 10). Web ukládá dávky do PostgreSQL, worker je odesílá
+bez závislosti na prohlížeči. Před deployem nastavte proměnnou s `--skip-deploys`,
+web při nasazení provede migraci. Během souběžného nasazování může nový worker
+čekat na migraci; další průchod frontou ji automaticky zachytí. Při rollbacku
+zachovejte tabulky a data fronty. Podrobnosti: `docs/participant-invitations.md`.
+
 Worker potřebuje stejné `NODE_ENV`, `APP_ENV`, `APP_BASE_URL`,
 `PUBLIC_SITE_URL`, `DATABASE_URL`, `REDIS_URL`, `REDIS_FAMILY`,
 `REDIS_CONNECT_TIMEOUT_MS` a `RELEASE_SHA`. Dále používá

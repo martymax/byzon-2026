@@ -6,6 +6,9 @@ import {
 } from '@byzon/domain/contracts/admin-engagement';
 import {
   adminInvitationRecipientsSchema,
+  invitationBatchesSchema,
+  invitationBatchCreatedSchema,
+  createInvitationBatchSchema,
   type AdminInvitationRecipient,
   adminAnnouncementListResponseSchema,
   adminAnnouncementDeleteResponseSchema,
@@ -728,7 +731,95 @@ const reservationAfter = (
       : [],
 });
 
+type MockInvitationBatch = {
+  id: string;
+  createdAt: string;
+  userIds: string[];
+  key: string;
+};
+let memoryInvitationBatches: MockInvitationBatch[] = [];
+const readMockInvitationBatches = (): MockInvitationBatch[] => {
+  if (typeof sessionStorage === 'undefined') return memoryInvitationBatches;
+  try {
+    return JSON.parse(
+      sessionStorage.getItem('byzon-mock-invitation-batches') ?? '[]',
+    ) as MockInvitationBatch[];
+  } catch {
+    return [];
+  }
+};
+const saveMockInvitationBatches = (batches: MockInvitationBatch[]) => {
+  memoryInvitationBatches = batches;
+  if (typeof sessionStorage !== 'undefined')
+    sessionStorage.setItem(
+      'byzon-mock-invitation-batches',
+      JSON.stringify(batches),
+    );
+};
+const mockBatchComplete = (batch: MockInvitationBatch) =>
+  Date.now() - Date.parse(batch.createdAt) >= 12_000;
+
 export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
+  http.get('*/api/v1/admin/events/:eventId/invitations/batches', () => {
+    const batches = readMockInvitationBatches();
+    return mockJsonResponse(
+      invitationBatchesSchema,
+      {
+        eventId: adminFixtureIds.event,
+        batches: batches.map((batch) => ({
+          id: batch.id,
+          createdAt: batch.createdAt,
+          total: batch.userIds.length,
+          pending: mockBatchComplete(batch) ? 0 : batch.userIds.length,
+          processing: 0,
+          delivered: mockBatchComplete(batch) ? batch.userIds.length : 0,
+          failed: 0,
+          skipped: 0,
+          failedUserIds: [],
+        })),
+        queuedUserIds: batches
+          .filter((batch) => !mockBatchComplete(batch))
+          .flatMap((batch) => batch.userIds),
+      },
+      successOptions('admin.mock.invitation-batches'),
+    );
+  }),
+  http.post(
+    '*/api/v1/admin/events/:eventId/invitations/batches',
+    async ({ request }) => {
+      const body = createInvitationBatchSchema.parse(await request.json());
+      const batches = readMockInvitationBatches();
+      const key = request.headers.get('idempotency-key') ?? '';
+      const replay = batches.find((batch) => batch.key === key);
+      const queuedIds = new Set(
+        batches
+          .filter((batch) => !mockBatchComplete(batch))
+          .flatMap((batch) => batch.userIds),
+      );
+      const userIds = body.userIds.filter((id) => !queuedIds.has(id));
+      const batch = replay ?? {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        userIds,
+        key,
+      };
+      if (!replay && userIds.length)
+        saveMockInvitationBatches([batch, ...batches].slice(0, 30));
+      return mockJsonResponse(
+        invitationBatchCreatedSchema,
+        {
+          eventId: adminFixtureIds.event,
+          batchId: replay || userIds.length ? batch.id : null,
+          queued: batch.userIds.length,
+          alreadyQueued: replay ? 0 : body.userIds.length - userIds.length,
+        },
+        {
+          ...successOptions('admin.mock.invitation-batch-create'),
+          status: 202,
+        },
+      );
+    },
+  ),
   http.get('*/api/v1/admin/events/:eventId/invitations', ({ params }) => {
     const denied = authorize(
       adminReadProblemSchema,

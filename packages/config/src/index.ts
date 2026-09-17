@@ -230,6 +230,7 @@ const baseEnvSchema = z.object({
 const workerEnvSchema = baseEnvSchema
   .extend({
     ...mailEnvSchema,
+    BETTER_AUTH_SECRET: z.string().min(32),
     WORKER_CONCURRENCY_EMAIL: z.coerce.number().int().positive().default(2),
     WORKER_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(4),
   })

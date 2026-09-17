@@ -4,18 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { guidePath, guidesForRoles } from '@byzon/mail/guides';
 import {
   adminInvitationRecipientsSchema,
+  invitationBatchCreatedSchema,
+  invitationBatchesSchema,
+  type InvitationBatch,
   type AdminInvitationRecipients,
   type AdminInvitationRecipient,
   type AdminInvitationRole,
 } from '@byzon/domain/contracts';
 import { requestPrivateJson, PrivateApiError } from '@/lib/private-json';
-import {
-  requestAdminParticipantInvite,
-  requestAdminTeamInvitation,
-} from '@/lib/admin-api';
 import { AdminBulkCheckbox } from './admin-bulk-selection';
-import { adminBulkApiResult } from './admin-bulk-api';
-import type { AdminBulkOutcome } from './admin-bulk';
 import { AdminModal } from './admin-modal';
 import { createAdminIdempotencyKey } from './admin-workspace-runtime';
 import { useAdminWorkspace } from './admin-workspace-shell';
@@ -24,7 +21,6 @@ import {
   invitationRoleLabels,
   invitationStatusLabels,
   selectVisibleRecipients,
-  sendInvitationBatch,
 } from './admin-invitations-model';
 import styles from './admin-workspace.module.css';
 import invitationStyles from './admin-invitations.module.css';
@@ -35,7 +31,7 @@ export function AdminInvitationsWorkspace() {
 }
 
 function Invitations() {
-  const { api, eventId, context, permissions, invalidateSensitive } =
+  const { eventId, context, permissions, invalidateSensitive } =
     useAdminWorkspace();
   const [items, setItems] = useState<AdminInvitationRecipient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,17 +48,15 @@ function Invitations() {
   const [review, setReview] = useState<
     readonly AdminInvitationRecipient[] | null
   >(null);
-  const [progress, setProgress] = useState<{
-    completed: number;
-    total: number;
-  } | null>(null);
-  const [paused, setPaused] = useState(false);
-  const [stopping, setStopping] = useState(false);
-  const [outcomes, setOutcomes] = useState<readonly AdminBulkOutcome[]>([]);
-  const batchController = useRef<AbortController | null>(null);
-  const requestController = useRef<AbortController | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [batches, setBatches] = useState<InvitationBatch[]>([]);
+  const [queuedIds, setQueuedIds] = useState<ReadonlySet<string>>(new Set());
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueError, setQueueError] = useState('');
+  const [notice, setNotice] = useState('');
   const keys = useRef(new Map<string, string>());
-  const mounted = useRef(true);
+  const submitting = useRef(false);
+  const deliveredCount = useRef<number | null>(null);
   const allCheckbox = useRef<HTMLInputElement>(null);
   const allowed = [
     'role:manage',
@@ -70,39 +64,72 @@ function Invitations() {
     'ticket:any:manage',
   ].every((permission) => permissions.some((value) => value === permission));
   const writable = allowed && context.event.phase !== 'archived';
-  const busy = progress !== null;
   const visible = filterInvitationRecipients(items, roles, query, status);
-  const selectable = visible.filter((item) => item.delivery !== null);
+  const selectable = visible.filter(
+    (item) => item.delivery !== null && !queuedIds.has(item.userId),
+  );
   const selectedVisible = selectable.filter((item) =>
     selected.has(item.userId),
   ).length;
   const chosen = items.filter(
-    (item) => selected.has(item.userId) && item.delivery !== null,
+    (item) =>
+      selected.has(item.userId) &&
+      item.delivery !== null &&
+      !queuedIds.has(item.userId),
   );
   const hiddenCount = chosen.filter((item) => !visible.includes(item)).length;
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      batchController.current?.abort();
-      requestController.current?.abort();
-    };
-  }, []);
   useEffect(() => {
     if (allCheckbox.current)
       allCheckbox.current.indeterminate =
         selectedVisible > 0 && selectedVisible < selectable.length;
   }, [selectedVisible, selectable.length]);
   useEffect(() => {
-    if (!busy) return;
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
+    if (!allowed) return;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const data = await requestPrivateJson(
+          `/api/v1/admin/events/${eventId}/invitations/batches`,
+          invitationBatchesSchema,
+          { signal: abort.signal },
+        );
+        if (abort.signal.aborted) return;
+        if (data.eventId !== eventId) throw new Error('Invalid batch event');
+        setBatches(data.batches);
+        setQueuedIds(new Set(data.queuedUserIds));
+        setQueueLoading(false);
+        setQueueError('');
+        const count = data.batches.reduce(
+          (sum, batch) => sum + batch.delivered,
+          0,
+        );
+        if (deliveredCount.current !== null && deliveredCount.current !== count)
+          setReload((value) => value + 1);
+        deliveredCount.current = count;
+      } catch (caught) {
+        if (abort.signal.aborted) return;
+        if (
+          caught instanceof PrivateApiError &&
+          [401, 403].includes(caught.status)
+        ) {
+          invalidateSensitive('Přístup se změnil. Přihlaste se znovu.');
+          return;
+        }
+        setQueueError(
+          'Průběh se nepodařilo aktualizovat. Rozesílání na serveru pokračuje; načtení zkusíme znovu.',
+        );
+      } finally {
+        if (!abort.signal.aborted) timer = setTimeout(() => void poll(), 5000);
+      }
     };
-    window.addEventListener('beforeunload', beforeUnload);
-    return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [busy]);
+    void poll();
+    return () => {
+      abort.abort();
+      clearTimeout(timer);
+    };
+  }, [allowed, eventId, invalidateSensitive, reload]);
   useEffect(() => {
     if (!allowed) return;
     const abort = new AbortController();
@@ -146,88 +173,55 @@ function Invitations() {
   }, [allowed, eventId, invalidateSensitive, reload]);
 
   const send = async () => {
-    if (!review || busy || batchController.current || !writable) return;
+    if (!review || submitting.current || !writable) return;
+    submitting.current = true;
     const batch = review;
-    const abort = new AbortController();
-    const requests = new AbortController();
-    batchController.current = abort;
-    requestController.current = requests;
+    const userIds = batch.map((item) => item.userId).sort();
+    const fingerprint = userIds.join(',');
+    const key =
+      keys.current.get(fingerprint) ??
+      createAdminIdempotencyKey('invitation-batch');
+    keys.current.set(fingerprint, key);
     setReview(null);
-    setOutcomes([]);
-    setStopping(false);
-    setProgress({ completed: 0, total: batch.length });
-    const results = await sendInvitationBatch({
-      items: batch,
-      signal: abort.signal,
-      onPause: (value) => {
-        if (mounted.current) setPaused(value);
-      },
-      onProgress: (completed) => {
-        if (mounted.current) setProgress({ completed, total: batch.length });
-      },
-      execute: async (item) => {
-        const keyId = `${item.delivery}:${item.userId}`;
-        const key =
-          keys.current.get(keyId) ?? createAdminIdempotencyKey('invitations');
-        keys.current.set(keyId, key);
-        const result =
-          item.delivery === 'team'
-            ? await requestAdminTeamInvitation(
-                api,
-                eventId,
-                { memberId: item.userId },
-                key,
-                requests.signal,
-              )
-            : await requestAdminParticipantInvite(
-                api,
-                eventId,
-                item.userId,
-                { participantId: item.userId },
-                key,
-                requests.signal,
-              );
-        if (!result.ok && result.status === 429)
-          return { ok: false, stop: true, rateLimited: true };
-        if (result.ok && result.kind === 'success') {
-          if (
-            result.data.eventId !== eventId ||
-            ('memberId' in result.data
-              ? result.data.memberId
-              : result.data.participantId) !== item.userId
-          ) {
-            return {
-              ok: false,
-              stop: true,
-              message: 'Server nepotvrdil správného příjemce. Obnovte seznam.',
-            };
-          }
-          keys.current.delete(keyId);
-          if (mounted.current)
-            setItems((current) =>
-              current.map((recipient) =>
-                recipient.userId === item.userId
-                  ? { ...recipient, invitation: result.data.invitation }
-                  : recipient,
-              ),
-            );
-        }
-        return adminBulkApiResult(result, invalidateSensitive);
-      },
-    });
-    if (!mounted.current) return;
-    batchController.current = null;
-    requestController.current = null;
-    setProgress(null);
-    setPaused(false);
-    setOutcomes(results);
-    setSelected(
-      new Set(
-        results
-          .filter((result) => result.status !== 'succeeded')
-          .map((result) => result.id),
-      ),
-    );
+    setBusy(true);
+    setNotice('');
+    setError('');
+    try {
+      const result = await requestPrivateJson(
+        `/api/v1/admin/events/${eventId}/invitations/batches`,
+        invitationBatchCreatedSchema,
+        { body: { userIds }, key },
+      );
+      if (result.eventId !== eventId) throw new Error('Invalid batch event');
+      keys.current.delete(fingerprint);
+      setQueuedIds((current) => new Set([...current, ...userIds]));
+      setSelected(
+        (current) =>
+          new Set([...current].filter((id) => !userIds.includes(id))),
+      );
+      setNotice(
+        result.queued > 0
+          ? `Zařazeno do fronty: ${result.queued}. Stránku můžete zavřít, pozvánky se odešlou na pozadí.${result.alreadyQueued ? ` Již ve frontě: ${result.alreadyQueued}.` : ''}`
+          : 'Vybraní příjemci už jsou ve frontě. Stránku můžete zavřít.',
+      );
+      setReload((value) => value + 1);
+    } catch (caught) {
+      if (
+        caught instanceof PrivateApiError &&
+        [401, 403].includes(caught.status)
+      )
+        invalidateSensitive('Přístup se změnil. Přihlaste se znovu.');
+      else
+        setError(
+          caught instanceof PrivateApiError
+            ? caught.message
+            : 'Server nepotvrdil zařazení. Zkontrolujte průběh dávky nebo znovu odešlete stejný výběr; opakovaný požadavek nevytvoří další dávku.',
+        );
+      setReload((value) => value + 1);
+    } finally {
+      setBusy(false);
+      submitting.current = false;
+    }
   };
 
   return (
@@ -261,35 +255,94 @@ function Invitations() {
               {error}
             </p>
           ) : null}
-          {outcomes.length > 0 ? (
-            <section className={styles.panel} aria-label="Výsledek rozesílání">
-              <p role="status">
-                <strong>
-                  Odesláno:{' '}
-                  {
-                    outcomes.filter((item) => item.status === 'succeeded')
-                      .length
-                  }{' '}
-                  z {outcomes.length}.
-                </strong>{' '}
-                {outcomes.some((item) => item.status !== 'succeeded')
-                  ? 'Nedokončení příjemci zůstali zaškrtnutí. Výběr můžete znovu odeslat.'
-                  : 'Všechny vybrané pozvánky byly odeslány.'}
+          {notice ? (
+            <p className={styles.helper} role="status">
+              {notice}
+            </p>
+          ) : null}
+          {busy ? <p role="status">Ukládám dávku do fronty…</p> : null}
+          {queueLoading && !queueError ? (
+            <p role="status">Načítám stav fronty…</p>
+          ) : null}
+          {queueError ? (
+            <p className={styles.warning} role="alert">
+              {queueError}
+            </p>
+          ) : null}
+          {batches.length > 0 ? (
+            <section
+              className={styles.panel}
+              aria-labelledby="invitation-queue-title"
+            >
+              <h2 id="invitation-queue-title">Průběh rozesílání</h2>
+              <p className={styles.helper}>
+                Dávky se zpracovávají i po zavření stránky. Dočasné chyby se
+                opakují automaticky. Zde najdete průběh i po návratu.
               </p>
-              {outcomes.some((item) => item.status !== 'succeeded') ? (
-                <ul className={invitationStyles.results}>
-                  {outcomes
-                    .filter((item) => item.status !== 'succeeded')
-                    .map((item) => (
-                      <li key={item.id}>
-                        <strong>{item.label}</strong> —{' '}
-                        {item.status === 'skipped'
-                          ? 'Neodesláno'
-                          : (item.message ?? 'Odeslání se nepodařilo.')}
-                      </li>
-                    ))}
-                </ul>
-              ) : null}
+              <ul className={invitationStyles.batches}>
+                {batches.map((batch) => {
+                  const active = batch.pending + batch.processing;
+                  return (
+                    <li key={batch.id}>
+                      <div className={invitationStyles.batchHeading}>
+                        <strong>
+                          {active
+                            ? 'Probíhá rozesílání'
+                            : batch.failed || batch.skipped
+                              ? 'Dokončeno s neodeslanými pozvánkami'
+                              : 'Rozesílání dokončeno'}
+                        </strong>
+                        <time dateTime={batch.createdAt}>
+                          {new Date(batch.createdAt).toLocaleString('cs-CZ', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                            timeZone: 'Europe/Prague',
+                          })}
+                        </time>
+                      </div>
+                      <p>
+                        Odesláno:{' '}
+                        <strong>
+                          {batch.delivered} z {batch.total}
+                        </strong>
+                        {active
+                          ? ` · Ve frontě: ${batch.pending} · Odesílá se: ${batch.processing}`
+                          : ''}
+                        {batch.failed ? ` · Nezdařilo se: ${batch.failed}` : ''}
+                        {batch.skipped ? ` · Přeskočeno: ${batch.skipped}` : ''}
+                      </p>
+                      {active ? (
+                        <progress
+                          value={batch.delivered + batch.failed + batch.skipped}
+                          max={batch.total}
+                          aria-label="Průběh dávky"
+                        />
+                      ) : null}
+                      {batch.skipped ? (
+                        <p className={styles.helper}>
+                          Přeskočení příjemci už nemají odpovídající přístup,
+                          změnili e-mail nebo byl jejich odkaz použit.
+                        </p>
+                      ) : null}
+                      {batch.failedUserIds.length > 0 ? (
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          disabled={!writable || busy || loading}
+                          onClick={() => {
+                            setSelected(new Set(batch.failedUserIds));
+                            setNotice(
+                              'Vybrány pouze neúspěšné pozvánky z této dávky. Zkontrolujte příjemce a potvrďte nové odeslání.',
+                            );
+                          }}
+                        >
+                          Vybrat neúspěšné ({batch.failedUserIds.length})
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           ) : null}
           <section
@@ -435,7 +488,12 @@ function Invitations() {
                         selectedIds: selected,
                         onSelectionChange: setSelected,
                       }}
-                      disabled={!writable || busy || item.delivery === null}
+                      disabled={
+                        !writable ||
+                        busy ||
+                        item.delivery === null ||
+                        queuedIds.has(item.userId)
+                      }
                     />
                     <div className={invitationStyles.person}>
                       <strong>{item.displayName}</strong>
@@ -464,7 +522,9 @@ function Invitations() {
                     </div>
                     <div className={invitationStyles.status}>
                       <span className={styles.statusBadge}>
-                        {invitationStatusLabels[item.invitation.status]}
+                        {queuedIds.has(item.userId)
+                          ? 'Ve frontě'
+                          : invitationStatusLabels[item.invitation.status]}
                       </span>
                       {item.invitation.lastSentAt ? (
                         <time dateTime={item.invitation.lastSentAt}>
@@ -509,43 +569,18 @@ function Invitations() {
               <button
                 type="button"
                 className={styles.button}
-                disabled={!writable || loading || busy || chosen.length === 0}
+                disabled={
+                  !writable ||
+                  loading ||
+                  queueLoading ||
+                  busy ||
+                  chosen.length === 0
+                }
                 onClick={() => setReview(chosen)}
               >
                 Odeslat pozvánky ({chosen.length})
               </button>
             </div>
-            {progress ? (
-              <div className={invitationStyles.progress}>
-                <p role="status">
-                  {stopping
-                    ? 'Zastavuji po dokončení aktuální pozvánky…'
-                    : paused
-                      ? 'Krátká pauza před další dávkou. Rozesílání bude automaticky pokračovat.'
-                      : 'Odesílám pozvánky…'}{' '}
-                  {progress.completed} / {progress.total}
-                </p>
-                <progress
-                  value={progress.completed}
-                  max={progress.total}
-                  aria-label="Průběh rozesílání"
-                />
-                <p className={styles.helper}>
-                  Stránku nechte otevřenou, dokud se rozesílání nedokončí.
-                </p>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  disabled={stopping}
-                  onClick={() => {
-                    setStopping(true);
-                    batchController.current?.abort();
-                  }}
-                >
-                  Zastavit rozesílání
-                </button>
-              </div>
-            ) : null}
           </section>
         </>
       )}
@@ -567,7 +602,8 @@ function Invitations() {
           <div className={styles.dialogBody}>
             <p>
               Pozvánka s osobním přihlašovacím odkazem přijde na uvedené
-              e-maily. Celkem příjemců: <strong>{review.length}</strong>.
+              e-maily. Po potvrzení se rozesílání uloží do fronty a poběží na
+              pozadí. Celkem příjemců: <strong>{review.length}</strong>.
             </p>
             {review.some((item) => item.invitation.status !== 'not_sent') ? (
               <p className={styles.warning}>

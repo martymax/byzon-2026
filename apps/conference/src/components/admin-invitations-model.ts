@@ -2,7 +2,6 @@ import type {
   AdminInvitationRecipient,
   AdminInvitationRole,
 } from '@byzon/domain/contracts';
-import type { AdminBulkOutcome, AdminBulkResult } from './admin-bulk';
 
 export const invitationRoleLabels: Record<AdminInvitationRole, string> = {
   participant: 'Účastník',
@@ -46,93 +45,4 @@ export function selectVisibleRecipients(
   const next = new Set(selected);
   visible.forEach((id) => (checked ? next.add(id) : next.delete(id)));
   return next;
-}
-
-export const waitForInvitationWindow = (
-  milliseconds: number,
-  signal: AbortSignal,
-): Promise<void> =>
-  new Promise((resolve) => {
-    if (signal.aborted) {
-      resolve();
-      return;
-    }
-    const finish = () => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, milliseconds);
-    signal.addEventListener('abort', finish, { once: true });
-  });
-
-/** Ten sends per minute respect the existing participant mutation limit. */
-export async function sendInvitationBatch({
-  items,
-  execute,
-  signal,
-  onProgress,
-  onPause,
-  wait = waitForInvitationWindow,
-}: {
-  items: readonly AdminInvitationRecipient[];
-  execute: (
-    item: AdminInvitationRecipient,
-  ) => Promise<AdminBulkResult & { rateLimited?: boolean }>;
-  signal: AbortSignal;
-  onProgress: (completed: number) => void;
-  onPause: (paused: boolean) => void;
-  wait?: typeof waitForInvitationWindow;
-}): Promise<readonly AdminBulkOutcome[]> {
-  const outcomes: AdminBulkOutcome[] = [];
-  let stopped = false;
-  for (const [index, item] of items.entries()) {
-    if (!stopped && !signal.aborted && index > 0 && index % 10 === 0) {
-      onPause(true);
-      await wait(61_000, signal);
-      onPause(false);
-    }
-    if (stopped || signal.aborted) {
-      outcomes.push({
-        id: item.userId,
-        label: item.displayName,
-        status: 'skipped',
-      });
-      continue;
-    }
-    let result: AdminBulkResult & { rateLimited?: boolean };
-    try {
-      result = await execute(item);
-      if (result.rateLimited && !signal.aborted) {
-        onPause(true);
-        await wait(61_000, signal);
-        onPause(false);
-        if (signal.aborted) {
-          outcomes.push({
-            id: item.userId,
-            label: item.displayName,
-            status: 'skipped',
-          });
-          continue;
-        }
-        result = await execute(item);
-      }
-    } catch {
-      result = {
-        ok: false,
-        stop: true,
-        message:
-          'Server nepotvrdil odeslání. Opakováním výběru ověříte stejný pokus.',
-      };
-    }
-    outcomes.push({
-      id: item.userId,
-      label: item.displayName,
-      status: result.ok ? 'succeeded' : 'failed',
-      ...(result.message ? { message: result.message } : {}),
-    });
-    stopped = result.stop === true;
-    onProgress(index + 1);
-  }
-  return outcomes;
 }

@@ -1162,6 +1162,7 @@ export const adminAuditActionSchema = z.enum([
   'team.member_updated',
   'team.member_removed',
   'team.invitation_sent',
+  'invitations.batch_queued',
   'reservation.admin_cancelled',
   'session.capacity_updated',
   'waitlist.auto_cancelled',

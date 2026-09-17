@@ -1,4 +1,10 @@
-import { schema, type Database } from '@byzon/database';
+import {
+  schema,
+  invitationCandidateFields,
+  invitationCandidateConditions,
+  invitationDelivery,
+  type Database,
+} from '@byzon/database';
 import {
   adminInvitationRecipientsSchema,
   adminInvitationRoleSchema,
@@ -10,29 +16,18 @@ import { ApiProblemError, getRequestId, problemResponse } from './api/problem';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError, requireEventPermission } from './policy';
 
-interface Dependencies {
+export interface InvitationDependencies {
   db: Database;
   currentEventSlug?: string;
   getSession(headers: Headers): Promise<{ user: { id: string } } | null>;
 }
 
-export const invitationDelivery = (
-  roles: AdminInvitationRecipient['roles'],
-  participantReady: boolean,
-): AdminInvitationRecipient['delivery'] => {
-  if (roles.includes('organizer_admin')) return 'team';
-  if (participantReady) return 'participant';
-  return roles.some((role) =>
-    ['room_operator', 'moderator', 'checkin_operator'].includes(role),
-  )
-    ? 'team'
-    : null;
-};
+export { invitationDelivery } from '@byzon/database';
 
 export async function handleAdminInvitationRecipients(
   request: Request,
   eventId: string,
-  dependencies: Dependencies,
+  dependencies: InvitationDependencies,
 ): Promise<Response> {
   const requestId = getRequestId(request.headers);
   const headers = {
@@ -49,37 +44,7 @@ export async function handleAdminInvitationRecipients(
       detail: 'Přehled pozvánek není pro tento účet dostupný.',
     });
   try {
-    if (!z.string().uuid().safeParse(eventId).success) throw denied();
-    const session = await dependencies.getSession(request.headers);
-    if (!session)
-      throw new ApiProblemError({
-        status: 401,
-        code: 'AUTHENTICATION_REQUIRED',
-        title: 'Authentication required',
-        detail: 'Přihlaste se znovu do administrace.',
-      });
-    const event = await dependencies.db.query.events.findFirst({
-      columns: { id: true },
-      where: and(
-        eq(schema.events.id, eventId),
-        eq(
-          schema.events.slug,
-          dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
-        ),
-      ),
-    });
-    if (!event) throw denied();
-    const policy = await requireEventPermission(
-      dependencies.db,
-      { userId: session.user.id },
-      eventId,
-      'role:manage',
-    );
-    if (
-      !policy.allows('participant:operational:read') ||
-      !policy.allows('ticket:any:manage')
-    )
-      throw denied();
+    await authorizeInvitationAccess(request, eventId, dependencies);
     const query = z
       .strictObject({ cursor: z.string().uuid().optional() })
       .safeParse(Object.fromEntries(new URL(request.url).searchParams));
@@ -92,37 +57,12 @@ export async function handleAdminInvitationRecipients(
       });
     const rows = await dependencies.db
       .select({
-        userId: schema.users.id,
-        displayName: schema.users.name,
-        email: schema.users.email,
-        emailVerified: schema.users.emailVerified,
-        roles: sql<string[]>`array(
-        select distinct ${schema.eventRoles.role}::text from ${schema.eventRoles}
-        where ${schema.eventRoles.eventId} = ${eventId}
-          and ${schema.eventRoles.userId} = ${schema.users.id}
-          and ${schema.eventRoles.revokedAt} is null
-      )`,
+        ...invitationCandidateFields(eventId),
         lastSentAt: sql<string | Date | null>`(
         select max(${schema.auditLogs.createdAt}) from ${schema.auditLogs}
         where ${schema.auditLogs.eventId} = ${eventId}
           and ${schema.auditLogs.targetId} = ${schema.users.id}::text
           and ${schema.auditLogs.action} in ('participant.invitation_sent', 'team.invitation_sent')
-      )`,
-        participantReady: sql<boolean>`exists (
-        select 1 from ${schema.participantProfiles}
-        where ${schema.participantProfiles.eventId} = ${eventId}
-          and ${schema.participantProfiles.userId} = ${schema.users.id}
-          and (exists (
-            select 1 from ${schema.tickets}
-            where ${schema.tickets.eventId} = ${eventId}
-              and ${schema.tickets.holderUserId} = ${schema.users.id}
-              and ${schema.tickets.status} = 'activated'
-          ) or exists (
-            select 1 from ${schema.ticketSourceParticipants}
-            where ${schema.ticketSourceParticipants.eventId} = ${eventId}
-              and ${schema.ticketSourceParticipants.userId} = ${schema.users.id}
-              and ${schema.ticketSourceParticipants.sourceStatus} = 'paid'
-          ))
       )`,
       })
       .from(schema.eventMemberships)
@@ -132,8 +72,7 @@ export async function handleAdminInvitationRecipients(
       )
       .where(
         and(
-          eq(schema.eventMemberships.eventId, eventId),
-          eq(schema.eventMemberships.status, 'active'),
+          invitationCandidateConditions(eventId),
           query.data.cursor
             ? gt(schema.users.id, query.data.cursor)
             : undefined,
@@ -188,4 +127,50 @@ export async function handleAdminInvitationRecipients(
     );
     return response;
   }
+}
+
+export async function authorizeInvitationAccess(
+  request: Request,
+  eventId: string,
+  dependencies: InvitationDependencies,
+) {
+  const denied = () =>
+    new ApiProblemError({
+      status: 403,
+      code: 'EVENT_ACCESS_DENIED',
+      title: 'Event access denied',
+      detail: 'Přehled pozvánek není pro tento účet dostupný.',
+    });
+  if (!z.string().uuid().safeParse(eventId).success) throw denied();
+  const session = await dependencies.getSession(request.headers);
+  if (!session)
+    throw new ApiProblemError({
+      status: 401,
+      code: 'AUTHENTICATION_REQUIRED',
+      title: 'Authentication required',
+      detail: 'Přihlaste se znovu do administrace.',
+    });
+  const event = await dependencies.db.query.events.findFirst({
+    columns: { id: true, status: true },
+    where: and(
+      eq(schema.events.id, eventId),
+      eq(
+        schema.events.slug,
+        dependencies.currentEventSlug ?? CURRENT_EVENT_SLUG,
+      ),
+    ),
+  });
+  if (!event) throw denied();
+  const policy = await requireEventPermission(
+    dependencies.db,
+    { userId: session.user.id },
+    eventId,
+    'role:manage',
+  );
+  if (
+    !policy.allows('participant:operational:read') ||
+    !policy.allows('ticket:any:manage')
+  )
+    throw denied();
+  return { actorId: session.user.id, event };
 }

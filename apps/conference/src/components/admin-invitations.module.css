@@ -75,16 +75,6 @@
 .sendBar p {
   margin: 0.25rem 0 0;
 }
-.progress {
-  flex-basis: 100%;
-  display: grid;
-  justify-items: start;
-  gap: 0.75rem;
-}
-.progress progress {
-  width: 100%;
-  accent-color: var(--admin-primary);
-}
 .review {
   max-height: 40vh;
   overflow-y: auto;
@@ -118,4 +108,34 @@
   .sendBar {
     padding: 1rem;
   }
+}
+
+.batches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 28rem;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+.batches li {
+  padding-block: 1rem;
+  border-top: 1px solid var(--admin-border);
+}
+.batches p {
+  margin-block: 0.5rem;
+}
+.batches progress {
+  width: 100%;
+  accent-color: var(--admin-primary);
+}
+.batchHeading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  justify-content: space-between;
+}
+.batchHeading time {
+  color: var(--admin-muted);
+  font-size: 0.875rem;
 }

@@ -47,6 +47,7 @@ const actionCategories = {
   'team.member_added': 'role',
   'team.member_updated': 'role',
   'team.member_removed': 'role',
+  'invitations.batch_queued': 'support',
   'team.invitation_sent': 'role',
   'reservation.admin_cancelled': 'reservation',
   'session.capacity_updated': 'reservation',

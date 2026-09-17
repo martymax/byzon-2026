@@ -124,6 +124,7 @@ export const adminAuditActionLabels = {
   'team.member_added': 'Přidal člena týmu',
   'team.member_updated': 'Upravil člena týmu',
   'team.member_removed': 'Odebral člena týmu',
+  'invitations.batch_queued': 'Dávka pozvánek zařazena do fronty',
   'team.invitation_sent': 'Odeslal pozvánku členovi týmu',
   'reservation.admin_cancelled': 'Zrušil rezervaci',
   'session.capacity_updated': 'Změnil kapacitu aktivity',
