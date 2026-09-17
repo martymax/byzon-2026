@@ -133,7 +133,7 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         "LEGAL PLUS partner": (home, '/assets/img/2026/09/legal-plus.svg'),
         "dm partner": (home, '/assets/img/2026/09/dm.svg'),
         "opening with mayor": (program, "Zahájení a slovo primátorky"),
-        "Andrea Bílá talk": (program, "Jak lidsky získat GenZ a vést s energií"),
+        "Andrea Bílá talk": (program, "Nejsem šéf. Jsem leader: Jak lidsky získat Gen Z a vést s energií"),
         "Bude Hub address": (program, "Rudolfovská tř. 34, České Budějovice"),
     }
     absent = [name for name, (document, marker) in required_markers.items() if marker not in document]
@@ -150,7 +150,10 @@ def validate_critical_contract(content: dict[str, object]) -> None:
         if program.count(f'href="/program/{slug}/"') != 2:
             fail(f"Desktop and mobile program must both link to: {slug}")
         detail = (PUBLIC_ROOT / "program" / slug / "index.html").read_text(encoding="utf-8")
-        if 'class="session-annotation"' in detail:
+        if slug == 'jak-lidsky-ziskat-genz-a-vest-s-energii':
+            if 'Protože dobrý lídr nemusí mít všechny odpovědi. Potřebuje mít důvěru lidí.' not in detail:
+                fail('Andrea Bílá session must render the full annotation')
+        elif 'class="session-annotation"' in detail:
             fail(f"Title-only session must not render an annotation section: {slug}")
 
     partner_link_pattern = re.compile(

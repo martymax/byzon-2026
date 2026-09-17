@@ -495,12 +495,18 @@
     "list": [
       {
         "slug": "jak-lidsky-ziskat-genz-a-vest-s-energii",
-        "title": "Jak lidsky získat GenZ a vést s energií",
+        "title": "Nejsem šéf. Jsem leader: Jak lidsky získat Gen Z a vést s energií",
         "kind": "Přednáška",
         "speakers": [
           "andrea-bila"
         ],
-        "annotation": []
+        "annotation": [
+          "Jak vést lidi v době, kdy autorita z pozice přestává fungovat? A co když leadership nezačíná v zasedačce, ale v každodenních vztazích?",
+          "Do pracovního prostředí přichází generace Z s novými očekáváními a ještě výrazněji ukazuje, že samotná pozice, titul ani formální autorita k dobrému vedení nestačí. Lidé chtějí rozumět smyslu, cítit důvěru a následovat člověka, kterému věří.",
+          "Během své profesní cesty jsem prošla korporátem, školstvím, neziskovým sektorem i dobrovolnickou organizací JCI, kde jsem za svůj přístup k vedení získala ocenění Leader roku 2022. Současně jsem se učila vést i v té nejnáročnější roli – jako máma dvou malých dětí.",
+          "V přednášce ukážu, proč je lidskost jednou z nejsilnějších leadershipových kompetencí současnosti. Na konkrétních příbězích a zkušenostech představím principy, které pomáhají budovat důvěru, rozvíjet lidi a vytvářet prostředí, kde chtějí růst a přebírat odpovědnost – bez ohledu na generaci.",
+          "Protože dobrý lídr nemusí mít všechny odpovědi. Potřebuje mít důvěru lidí."
+        ]
       },
       {
         "slug": "jak-na-networking",
@@ -1348,7 +1354,7 @@
               },
               {
                 "time": "13:45 - 14:15",
-                "title": "Jak lidsky získat GenZ a vést s energií",
+                "title": "Nejsem šéf. Jsem leader: Jak lidsky získat Gen Z a vést s energií",
                 "meta": "Andrea Bílá",
                 "slug": "leadership-stage-jak-lidsky-ziskat-genz-a-vest-s-energii-13451415",
                 "speakerSlugs": [
