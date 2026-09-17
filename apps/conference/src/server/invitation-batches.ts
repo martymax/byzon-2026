@@ -171,22 +171,15 @@ export async function handleInvitationBatches(
             .values({ id: batchId, eventId, createdBy: actorId });
           // Chunk inserts to stay below PostgreSQL's parameter limit for large selections.
           for (let offset = 0; offset < recipients.length; offset += 500) {
-            await tx
-              .insert(schema.invitationDeliveries)
-              .values(
-                recipients
-                  .slice(offset, offset + 500)
-                  .map((row) => ({
-                    id: generateUuidV7(),
-                    batchId,
-                    eventId,
-                    userId: row.userId,
-                    delivery: invitationDelivery(
-                      row.roles,
-                      row.participantReady,
-                    )!,
-                  })),
-              );
+            await tx.insert(schema.invitationDeliveries).values(
+              recipients.slice(offset, offset + 500).map((row) => ({
+                id: generateUuidV7(),
+                batchId,
+                eventId,
+                userId: row.userId,
+                delivery: invitationDelivery(row.roles, row.participantReady)!,
+              })),
+            );
           }
           await writeAuditLog(tx, {
             eventId,

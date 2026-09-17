@@ -161,16 +161,14 @@ export async function dispatchInvitationOnce(
           .where(owned(job))
           .returning({ id: jobs.id });
         if (!updated.length) return false;
-        await tx
-          .insert(schema.verifications)
-          .values({
-            id: job.id,
-            identifier: tokenHash,
-            value: JSON.stringify({ email: recipient.email }),
-            expiresAt: new Date(
-              now.getTime() + ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS * 1000,
-            ),
-          });
+        await tx.insert(schema.verifications).values({
+          id: job.id,
+          identifier: tokenHash,
+          value: JSON.stringify({ email: recipient.email }),
+          expiresAt: new Date(
+            now.getTime() + ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS * 1000,
+          ),
+        });
         return true;
       });
       if (!prepared) return 'skipped';

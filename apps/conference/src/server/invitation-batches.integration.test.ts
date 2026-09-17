@@ -123,26 +123,22 @@ integration('durable invitation batches', () => {
               : ('moderator' as const),
       })),
     );
-    await client.db
-      .insert(schema.participantProfiles)
-      .values({
-        eventId,
-        userId: ids[224]!,
-        firstName: 'Demo',
-        lastName: 'Účastník',
-        contactEmail: `${ids[224]}@example.test`,
-      });
-    await client.db
-      .insert(schema.tickets)
-      .values({
-        id: crypto.randomUUID(),
-        eventId,
-        holderUserId: ids[224]!,
-        codeHmac: eventId.replaceAll('-', '').repeat(2),
-        codeSuffix: 'QUEUE225',
-        status: 'activated',
-        claimedAt: new Date(),
-      });
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: ids[224]!,
+      firstName: 'Demo',
+      lastName: 'Účastník',
+      contactEmail: `${ids[224]}@example.test`,
+    });
+    await client.db.insert(schema.tickets).values({
+      id: crypto.randomUUID(),
+      eventId,
+      holderUserId: ids[224]!,
+      codeHmac: eventId.replaceAll('-', '').repeat(2),
+      codeSuffix: 'QUEUE225',
+      status: 'activated',
+      claimedAt: new Date(),
+    });
   });
   beforeEach(async () => {
     send.mockReset().mockResolvedValue(undefined);
