@@ -1,7 +1,10 @@
 'use client';
 
 import {
-  canApplyTicketImportPreview,
+  canCompleteTicketImportRow,
+  ticketImportParticipantDetailsSchema,
+  type TicketImportParticipantDetails,
+  type TicketImportRow,
   isTicketImportRowSelectable,
   ticketImportApplyRequestSchema,
   type TicketImportApplyRequest,
@@ -93,6 +96,8 @@ const sourceStatusLabels = {
 const identitySourceLabels: Record<TicketImportIdentitySource, string> = {
   named_participant: 'Účastník z „prodeje na jméno“',
   single_paid_ticket_buyer: 'Kupující = účastník (1 uhrazená vstupenka)',
+  group_ticket_contact: 'Známý kontakt · jedna vstupenka v objednávce',
+  imported_participant: 'Účastník přiřazený ke vstupence',
   manual_review: 'Kontakt kupujícího · vyžaduje ruční přiřazení',
 };
 
@@ -170,6 +175,10 @@ export const AdminImportWorkspace = ({
   const [preview, setPreview] = useState<TicketImportPreviewResponse | null>(
     null,
   );
+  const [participantDetails, setParticipantDetails] = useState<
+    Record<string, TicketImportParticipantDetails>
+  >({});
+  const [editingRow, setEditingRow] = useState<TicketImportRow | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [report, setReport] = useState<TicketImportApplyResponse | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<readonly string[]>([]);
@@ -200,8 +209,13 @@ export const AdminImportWorkspace = ({
     [filter, preview],
   );
   const selectableRows = useMemo(
-    () => preview?.rows.filter(isTicketImportRowSelectable) ?? [],
-    [preview],
+    () =>
+      preview?.rows.filter(
+        (row) =>
+          isTicketImportRowSelectable(row) ||
+          (canCompleteTicketImportRow(row) && participantDetails[row.rowId]),
+      ) ?? [],
+    [preview, participantDetails],
   );
   const selectedRowIdSet = useMemo(
     () => new Set(selectedRowIds),
@@ -231,9 +245,11 @@ export const AdminImportWorkspace = ({
           row.issues.map(({ message }) => message).join('; ') || 'Bez problému',
         orderSummary: orderTicketSummary(row),
         purchaseDate: formatPurchaseDate(row.purchasedOn),
-        row,
+        row: participantDetails[row.rowId]
+          ? { ...row, ...participantDetails[row.rowId] }
+          : row,
       })),
-    [visibleRows],
+    [visibleRows, participantDetails],
   );
   const firstVisibleRow =
     filteredRows.length === 0 ? 0 : pageIndex * importPageSize + 1;
@@ -250,12 +266,13 @@ export const AdminImportWorkspace = ({
         expectedImpact: preview.summary,
         selectedRowIds: selectedRows.map(({ rowId }) => rowId),
         reason,
+        participantDetails: selectedRows.flatMap(({ rowId }) =>
+          participantDetails[rowId] ? [participantDetails[rowId]] : [],
+        ),
       })
     : null;
   const canPrepareApply =
-    preview !== null &&
-    canApplyTicketImportPreview(preview) &&
-    selectedRows.length > 0;
+    preview !== null && selectableRows.length > 0 && selectedRows.length > 0;
   const applyValidationFailed =
     attempted && requestCandidate?.success === false;
 
@@ -272,6 +289,8 @@ export const AdminImportWorkspace = ({
     setError(null);
     setErrorScope(null);
     setPreview(null);
+    setParticipantDetails({});
+    setEditingRow(null);
     setReport(null);
     setSelectedRowIds([]);
     setPending(null);
@@ -355,6 +374,8 @@ export const AdminImportWorkspace = ({
       if (isAdminSecurityFailure(result)) {
         setPending(null);
         setPreview(null);
+        setParticipantDetails({});
+        setEditingRow(null);
         invalidateSensitive(
           adminFailureMessage(result.failure, result.metadata?.requestId),
         );
@@ -386,6 +407,8 @@ export const AdminImportWorkspace = ({
 
   const backToSource = () => {
     setPreview(null);
+    setParticipantDetails({});
+    setEditingRow(null);
     setReport(null);
     setSelectedRowIds([]);
     setPending(null);
@@ -408,7 +431,9 @@ export const AdminImportWorkspace = ({
         ? 2
         : 1;
   const blockingCount = preview
-    ? preview.summary.conflict + preview.summary.unknown
+    ? preview.summary.conflict +
+      preview.summary.unknown -
+      Object.keys(participantDetails).length
     : 0;
   const noChanges = preview ? selectableRows.length === 0 : false;
   const impactText = preview
@@ -550,11 +575,11 @@ export const AdminImportWorkspace = ({
           {blockingCount > 0 ? (
             <div className={styles.warning} role="alert">
               <strong>
-                Opravu ve zdroji prodeje vyžaduje:{' '}
+                Doplnění údajů nebo kontrolu vyžaduje:{' '}
                 {formatCzechCount(blockingCount, adminCountForms.record)}.
               </strong>{' '}
-              Tyto záznamy nelze vybrat, bezpečné nové účastníky ale můžete
-              importovat samostatně.
+              Chybějící údaje doplňte přes „Doplnit a vybrat“. Připravené
+              účastníky můžete importovat samostatně.
             </div>
           ) : noChanges ? (
             <p className={styles.callout} role="status">
@@ -570,7 +595,7 @@ export const AdminImportWorkspace = ({
           <div className={styles.summaryGrid} aria-label="Souhrn změn">
             <div className={styles.metric}>
               <small>Lze importovat</small>
-              <strong>{preview.summary.new}</strong>
+              <strong>{selectableRows.length}</strong>
             </div>
             <div className={styles.metric}>
               <small>Beze změny</small>
@@ -587,7 +612,9 @@ export const AdminImportWorkspace = ({
             <div className={styles.metric}>
               <small>Ke kontrole</small>
               <strong>
-                {preview.summary.conflict} / {preview.summary.unknown}
+                {preview.summary.conflict -
+                  Object.keys(participantDetails).length}{' '}
+                / {preview.summary.unknown}
               </strong>
             </div>
           </div>
@@ -699,10 +726,13 @@ export const AdminImportWorkspace = ({
                         >
                           {row.identityRepair
                             ? 'Doplnění účastníka'
-                            : statusLabels[row.status]}
+                            : participantDetails[row.rowId]
+                              ? 'Údaje doplněny'
+                              : statusLabels[row.status]}
                         </span>
                       </div>
-                      {isTicketImportRowSelectable(row) ? (
+                      {isTicketImportRowSelectable(row) ||
+                      participantDetails[row.rowId] ? (
                         <label className={styles.importCardChoice}>
                           <input
                             aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
@@ -728,6 +758,20 @@ export const AdminImportWorkspace = ({
                             : 'Tento záznam nelze importovat.'}
                         </p>
                       )}
+                      {canCompleteTicketImportRow(row) ? (
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={
+                            busy !== null || pending !== null || report !== null
+                          }
+                          onClick={() => setEditingRow(row)}
+                        >
+                          {participantDetails[row.rowId]
+                            ? 'Upravit údaje'
+                            : 'Doplnit a vybrat'}
+                        </button>
+                      ) : null}
                       <dl>
                         <dt>E-mail</dt>
                         <dd>{row.contactEmail ?? 'Neuveden'}</dd>
@@ -773,11 +817,17 @@ export const AdminImportWorkspace = ({
                         <dd>
                           {row.identityRepair
                             ? 'Změna přiřazení účastníka'
-                            : statusLabels[row.status]}{' '}
+                            : participantDetails[row.rowId]
+                              ? 'Údaje doplněny'
+                              : statusLabels[row.status]}{' '}
                           · {sourceStatusLabels[row.sourceStatus]}
                         </dd>
                         <dt>Poznámka</dt>
-                        <dd>{issueMessage}</dd>
+                        <dd>
+                          {participantDetails[row.rowId]
+                            ? 'Údaje doplněny pro tuto vstupenku.'
+                            : issueMessage}
+                        </dd>
                       </dl>
                     </li>
                   ),
@@ -819,7 +869,8 @@ export const AdminImportWorkspace = ({
                         key={row.rowId}
                       >
                         <td className={styles.importSelectionCell}>
-                          {isTicketImportRowSelectable(row) ? (
+                          {isTicketImportRowSelectable(row) ||
+                          participantDetails[row.rowId] ? (
                             <label className={styles.importRowChoice}>
                               <input
                                 aria-label={`Vybrat ${row.contactName ?? `záznam ${row.sourceRowNumber}`} k importu`}
@@ -843,6 +894,22 @@ export const AdminImportWorkspace = ({
                                 : 'Nelze importovat'}
                             </small>
                           )}
+                          {canCompleteTicketImportRow(row) ? (
+                            <button
+                              className={styles.secondaryButton}
+                              type="button"
+                              disabled={
+                                busy !== null ||
+                                pending !== null ||
+                                report !== null
+                              }
+                              onClick={() => setEditingRow(row)}
+                            >
+                              {participantDetails[row.rowId]
+                                ? 'Upravit údaje'
+                                : 'Doplnit a vybrat'}
+                            </button>
+                          ) : null}
                         </td>
                         <td className={styles.referenceCell}>
                           <span>
@@ -892,11 +959,17 @@ export const AdminImportWorkspace = ({
                           >
                             {row.identityRepair
                               ? 'Doplnění účastníka'
-                              : statusLabels[row.status]}
+                              : participantDetails[row.rowId]
+                                ? 'Údaje doplněny'
+                                : statusLabels[row.status]}
                           </span>
                           <small>{sourceStatusLabels[row.sourceStatus]}</small>
                         </td>
-                        <td>{issueMessage}</td>
+                        <td>
+                          {participantDetails[row.rowId]
+                            ? 'Údaje doplněny pro tuto vstupenku.'
+                            : issueMessage}
+                        </td>
                       </tr>
                     ),
                   )}
@@ -977,13 +1050,14 @@ export const AdminImportWorkspace = ({
             </dl>
           </AdminTechnicalDetails>
 
-          {!canApplyTicketImportPreview(preview) ? (
+          {!(selectableRows.length > 0) ? (
             <p className={styles.warning} role="status">
               V této kontrole není žádný nový účastník, kterého lze importovat.
-              Problémové záznamy opravte v SimpleShopu a načtěte je znovu.
+              Chybějící údaje doplňte tlačítkem „Doplnit a vybrat“. Ostatní
+              problémy opravte v SimpleShopu a načtěte znovu.
             </p>
           ) : null}
-          {canApplyTicketImportPreview(preview) && !report ? (
+          {selectableRows.length > 0 && !report ? (
             <section
               aria-labelledby="ticket-confirm-title"
               className={styles.importConfirmSection}
@@ -1085,6 +1159,33 @@ export const AdminImportWorkspace = ({
         </section>
       ) : null}
 
+      {editingRow && preview ? (
+        <ParticipantDetailsDialog
+          row={editingRow}
+          details={participantDetails[editingRow.rowId]}
+          rows={preview.rows.map((row) =>
+            participantDetails[row.rowId]
+              ? {
+                  ...row,
+                  ...participantDetails[row.rowId],
+                  identitySource: 'named_participant' as const,
+                }
+              : row,
+          )}
+          onDismiss={() => setEditingRow(null)}
+          onSave={(details) => {
+            setParticipantDetails((current) => ({
+              ...current,
+              [details.rowId]: details,
+            }));
+            setSelectedRowIds((current) => [
+              ...new Set([...current, details.rowId]),
+            ]);
+            setEditingRow(null);
+          }}
+        />
+      ) : null}
+
       {confirming && pending && preview ? (
         <AdminConfirmDialog
           acknowledgement="Zkontroloval/a jsem vybrané účastníky a chci je importovat."
@@ -1100,5 +1201,106 @@ export const AdminImportWorkspace = ({
         />
       ) : null}
     </div>
+  );
+};
+
+const ParticipantDetailsDialog = ({
+  row,
+  details,
+  rows,
+  onSave,
+  onDismiss,
+}: {
+  row: TicketImportRow;
+  details: TicketImportParticipantDetails | undefined;
+  rows: readonly TicketImportRow[];
+  onSave: (details: TicketImportParticipantDetails) => void;
+  onDismiss: () => void;
+}) => {
+  const [draft, setDraft] = useState({
+    rowId: row.rowId,
+    contactName: details?.contactName ?? '',
+    contactEmail: details?.contactEmail ?? '',
+    contactCompany: details?.contactCompany ?? '',
+    contactPosition: details?.contactPosition ?? '',
+    contactPhone: details?.contactPhone ?? '',
+  });
+  const parsed = ticketImportParticipantDetailsSchema.safeParse({
+    ...draft,
+    contactCompany: draft.contactCompany.trim() || null,
+    contactPosition: draft.contactPosition.trim() || null,
+    contactPhone: draft.contactPhone.trim() || null,
+  });
+  const duplicate = rows.some(
+    (other) =>
+      other.rowId !== row.rowId &&
+      other.sourceOrderId === row.sourceOrderId &&
+      other.sourceStatus === 'paid' &&
+      other.identitySource !== 'manual_review' &&
+      other.contactEmail?.toLowerCase() ===
+        draft.contactEmail.trim().toLowerCase(),
+  );
+  return (
+    <AdminConfirmDialog
+      title="Doplnit účastníka vstupenky"
+      description={`Vstupenka ${row.sourceTicketId} · doklad ${row.sourceOrderId}. Vyplňte údaje skutečného účastníka. Existující účet se stejným e-mailem se při importu spáruje s touto vstupenkou.`}
+      acknowledgement="Potvrzuji, že údaje patří účastníkovi této vstupenky."
+      confirmLabel="Uložit údaje a vybrat"
+      confirmDisabled={!parsed.success || duplicate}
+      onDismiss={onDismiss}
+      onConfirm={() => {
+        if (parsed.success && !duplicate) onSave(parsed.data);
+      }}
+      impact={
+        <div>
+          <p className={styles.helper}>
+            Povinné jsou jméno a vlastní e-mail účastníka. Údaje se uloží až
+            potvrzením importu.
+          </p>
+          {(
+            [
+              ['contactName', 'Jméno a příjmení', 160],
+              ['contactEmail', 'E-mail', 320],
+              ['contactCompany', 'Firma (nepovinné)', 160],
+              ['contactPosition', 'Pozice (nepovinné)', 160],
+              ['contactPhone', 'Telefon (nepovinné)', 64],
+            ] as const
+          ).map(([field, label, maxLength]) => (
+            <label className={styles.field} key={field}>
+              <span>{label}</span>
+              <input
+                value={draft[field]}
+                maxLength={maxLength}
+                type={
+                  field === 'contactEmail'
+                    ? 'email'
+                    : field === 'contactPhone'
+                      ? 'tel'
+                      : 'text'
+                }
+                required={field === 'contactName' || field === 'contactEmail'}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    [field]: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          ))}
+          {duplicate ? (
+            <p className={styles.warning} role="alert">
+              Tento e-mail už patří jiné vstupence v objednávce. Doplňte vlastní
+              e-mail dalšího účastníka.
+            </p>
+          ) : null}
+          {!parsed.success && draft.contactName && draft.contactEmail ? (
+            <p className={styles.warning} role="status">
+              Zkontrolujte formát e-mailu a zadané údaje.
+            </p>
+          ) : null}
+        </div>
+      }
+    />
   );
 };

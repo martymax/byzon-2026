@@ -584,7 +584,7 @@ integration('P4-03 SimpleShop participant apply integration', () => {
       ...simpleShopGroupEmails.slice(2),
     ]);
     const sharedPreview = await preview(shared);
-    expect(sharedPreview.summary).toMatchObject({ new: 3, conflict: 2 });
+    expect(sharedPreview.summary).toMatchObject({ new: 4, conflict: 1 });
     const bodyFor = (value: typeof sharedPreview) => ({
       eventId,
       previewId: value.previewId,
@@ -960,5 +960,152 @@ integration('P4-03 SimpleShop participant apply integration', () => {
     const again = await preview(corrected);
     expect(again.summary).toMatchObject({ new: 0, unchanged: 5, conflict: 0 });
     expect(again.rows.every((row) => !row.identityRepair)).toBe(true);
+  });
+  it('imports a known group contact, completes remaining identity, links an existing account and preserves the mapping', async () => {
+    const group: SimpleShopTicketSourceSnapshot = {
+      ...snapshot,
+      snapshotDigest: 'd'.repeat(64),
+      records: snapshot.records.map((record, index) => ({
+        ...record,
+        externalId: `970001${index}`,
+        orderExternalId: '9800010',
+        orderTicketCount: 3,
+        orderTicketPosition: index + 1,
+        contactEmail: 'known-group-contact@example.test',
+        identitySource: index === 0 ? 'group_ticket_contact' : 'manual_review',
+      })),
+    };
+    const first = await preview(group);
+    expect(first.summary).toMatchObject({ new: 1, conflict: 1, excluded: 1 });
+    const bodyFor = (value: typeof first, rowIndex: number) => ({
+      eventId,
+      previewId: value.previewId,
+      previewVersion: value.previewVersion,
+      expectedImpact: value.summary,
+      selectedRowIds: [value.rows[rowIndex]!.rowId],
+      reason: 'Doplnění účastníků skupinové objednávky.',
+    });
+    expect(
+      (
+        await applyRequest(
+          bodyFor(first, 0),
+          'group-completion-first',
+          adminId,
+          fixedNow,
+          group,
+        )
+      ).status,
+    ).toBe(200);
+    const second = await preview(group);
+    expect(second.rows[0]!.status).toBe('unchanged');
+    expect(second.rows[1]!.status).toBe('conflict');
+    expect(
+      (
+        await applyRequest(
+          bodyFor(second, 1),
+          'group-completion-missing',
+          adminId,
+          fixedNow,
+          group,
+        )
+      ).status,
+    ).toBe(409);
+    const details = {
+      rowId: second.rows[1]!.rowId,
+      contactName: 'Doplněný účastník',
+      contactEmail: 'known-group-contact@example.test',
+      contactCompany: null,
+      contactPosition: null,
+      contactPhone: null,
+    };
+    expect(
+      (
+        await applyRequest(
+          { ...bodyFor(second, 1), participantDetails: [details] },
+          'group-completion-duplicate',
+          adminId,
+          fixedNow,
+          group,
+        )
+      ).status,
+    ).toBe(409);
+    const body = {
+      ...bodyFor(second, 1),
+      participantDetails: [
+        {
+          ...details,
+          contactEmail: `simpleshop-participant-${participantId}@example.invalid`,
+        },
+      ],
+    };
+    const applied = await applyRequest(
+      body,
+      'group-completion-success',
+      adminId,
+      fixedNow,
+      group,
+    );
+    expect(applied.status).toBe(200);
+    const reference = await client.db.query.ticketSourceParticipants.findFirst({
+      where: and(
+        eq(schema.ticketSourceParticipants.eventId, eventId),
+        eq(schema.ticketSourceParticipants.externalId, '9700011'),
+      ),
+    });
+    expect(reference?.userId).toBe(participantId);
+    expect(
+      (
+        await applyRequest(
+          body,
+          'group-completion-success',
+          adminId,
+          fixedNow,
+          group,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await applyRequest(
+          {
+            ...body,
+            participantDetails: [
+              {
+                ...body.participantDetails[0]!,
+                contactEmail: 'changed@example.test',
+              },
+            ],
+          },
+          'group-completion-changed-replay',
+          adminId,
+          fixedNow,
+          group,
+        )
+      ).status,
+    ).toBe(409);
+    const third = await preview(group);
+    expect(third.summary).toMatchObject({
+      unchanged: 2,
+      conflict: 0,
+      excluded: 1,
+    });
+    expect(third.rows[1]).toMatchObject({
+      identitySource: 'imported_participant',
+      contactEmail: body.participantDetails[0]!.contactEmail,
+    });
+    expect(
+      (
+        await applyRequest(
+          {
+            ...bodyFor(third, 2),
+            participantDetails: [{ ...details, rowId: third.rows[2]!.rowId }],
+          },
+          'group-completion-unpaid',
+          adminId,
+          fixedNow,
+          group,
+        )
+      ).status,
+    ).toBe(409);
   });
 });

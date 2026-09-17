@@ -13,6 +13,7 @@ import {
   ticketImportApplyResponseSchema,
   ticketImportSummarySchema,
   type TicketImportApplyResponse,
+  type TicketImportParticipantDetails,
   type TicketImportSummary,
 } from '@byzon/domain/contracts/ticket-import';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -36,7 +37,7 @@ import {
   type SimpleShopTicketSourceAdapter,
 } from './simpleshop-ticket-source';
 
-const REQUEST_MAX_BYTES = 32_768;
+const REQUEST_MAX_BYTES = 1_000_000;
 const PREVIEW_TTL_MS = 20 * 60_000;
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 const PREVIEW_VERSION = 1;
@@ -249,8 +250,20 @@ const participantNameFrom = (
   };
 };
 
+const completionDigest = (
+  details: readonly TicketImportParticipantDetails[] = [],
+): string =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(
+        [...details].sort((a, b) => a.rowId.localeCompare(b.rowId)),
+      ),
+    )
+    .digest('hex');
+
 const appliedAuditAfterSchema = z.object({
   selectedRowIds: z.array(uuidSchema).min(1),
+  completionDigest: z.string().optional(),
   created: z.number().int().nonnegative(),
   statusChanged: z.number().int().nonnegative(),
   unchanged: z.number().int().nonnegative(),
@@ -291,6 +304,7 @@ const existingAppliedResponse = async (
   previewId: string,
   completedAt: Date,
   requestedRowIds: readonly string[],
+  details: readonly TicketImportParticipantDetails[] | undefined,
 ): Promise<TicketImportApplyResponse> => {
   const audit = await transaction.query.auditLogs.findFirst({
     columns: { id: true, after: true },
@@ -305,7 +319,9 @@ const existingAppliedResponse = async (
   const after = appliedAuditAfterSchema.safeParse(audit.after);
   if (
     !after.success ||
-    !sameRowSelection(after.data.selectedRowIds, requestedRowIds)
+    !sameRowSelection(after.data.selectedRowIds, requestedRowIds) ||
+    (after.data.completionDigest ?? completionDigest()) !==
+      completionDigest(details)
   ) {
     throw previewBlocked(
       'The preview was already applied with a different row selection.',
@@ -420,6 +436,7 @@ export const applySimpleShopTicketImport = async (
             batch.id,
             batch.appliedAt,
             parsed.data.selectedRowIds,
+            parsed.data.participantDetails,
           );
           return { status: 200, body: replay, resultReference: batch.id };
         }
@@ -457,18 +474,27 @@ export const applySimpleShopTicketImport = async (
         if (selectedRows.some((row) => row === undefined)) {
           throw new TicketImportStaleError(PREVIEW_VERSION);
         }
-        if (
-          selectedRows.some(
-            (row) =>
-              row?.previewStatus !== 'new' ||
-              row.sourceStatus !== 'paid' ||
-              row.mappedStatus !== 'valid' ||
-              row.validationErrors.length > 0,
-          )
-        ) {
-          throw previewBlocked(
-            'Only safe new participants from this preview can be imported.',
-          );
+        const detailsByRowId = new Map(
+          (parsed.data.participantDetails ?? []).map((details) => [
+            details.rowId,
+            details,
+          ]),
+        );
+        for (const row of selectedRows) {
+          if (!row) throw new TicketImportStaleError(PREVIEW_VERSION);
+          const completing = detailsByRowId.has(row.id);
+          const eligible = completing
+            ? row.previewStatus === 'conflict' &&
+              row.validationErrors.length === 1 &&
+              row.validationErrors[0] === 'participant_identity_manual_review'
+            : row.previewStatus === 'new' &&
+              row.mappedStatus === 'valid' &&
+              row.validationErrors.length === 0;
+          if (!eligible || row.sourceStatus !== 'paid') {
+            throw previewBlocked(
+              'Only new or explicitly completed participants can be imported.',
+            );
+          }
         }
         const sourceByExternalId = new Map(
           snapshot.records.map((record) => [record.externalId, record]),
@@ -498,7 +524,28 @@ export const applySimpleShopTicketImport = async (
         const relevantRows = parsed.data.selectedRowIds.map((rowId) => {
           const reconciled = reconciledByRowId.get(rowId);
           if (!reconciled) throw new TicketImportStaleError(PREVIEW_VERSION);
-          return reconciled;
+          const details = detailsByRowId.get(rowId);
+          if (!details) return reconciled;
+          if (reconciled.source.identitySource !== 'manual_review') {
+            throw previewBlocked(
+              'Only unresolved participant details can be completed.',
+            );
+          }
+          const contact = {
+            contactName: details.contactName,
+            contactEmail: details.contactEmail,
+            contactCompany: details.contactCompany,
+            contactPosition: details.contactPosition,
+            contactPhone: details.contactPhone,
+          };
+          return {
+            ...reconciled,
+            source: {
+              ...reconciled.source,
+              ...contact,
+              identitySource: 'named_participant' as const,
+            },
+          };
         });
         if (
           relevantRows.some(
@@ -511,6 +558,63 @@ export const applySimpleShopTicketImport = async (
           throw previewBlocked(
             'The preview contains an unresolved participant identity.',
           );
+        }
+        // Serialize assignments within each order, including partial imports.
+        const orderIds = [
+          ...new Set(relevantRows.map(({ source }) => source.orderExternalId)),
+        ].sort();
+        for (const orderId of orderIds) {
+          await acquireTransactionLock(
+            transaction,
+            `ticket-import-order:${eventId}:${orderId}`,
+          );
+        }
+        const assignedContacts = await transaction
+          .select({
+            externalId: schema.ticketSourceParticipants.externalId,
+            orderExternalId: schema.ticketSourceParticipants.orderExternalId,
+            email: schema.users.email,
+          })
+          .from(schema.ticketSourceParticipants)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.ticketSourceParticipants.userId),
+          )
+          .where(
+            and(
+              eq(schema.ticketSourceParticipants.eventId, eventId),
+              inArray(
+                schema.ticketSourceParticipants.orderExternalId,
+                orderIds,
+              ),
+            ),
+          );
+        for (const { source } of relevantRows) {
+          const duplicateSelected = relevantRows.some(
+            ({ source: other }) =>
+              other.externalId !== source.externalId &&
+              other.orderExternalId === source.orderExternalId &&
+              other.contactEmail === source.contactEmail,
+          );
+          const duplicateAssigned = assignedContacts.some(
+            (other) =>
+              other.externalId !== source.externalId &&
+              other.orderExternalId === source.orderExternalId &&
+              other.email.toLowerCase() === source.contactEmail,
+          );
+          const duplicateReserved = snapshot.records.some(
+            (other) =>
+              other.externalId !== source.externalId &&
+              other.orderExternalId === source.orderExternalId &&
+              other.sourceStatus === 'paid' &&
+              other.identitySource !== 'manual_review' &&
+              other.contactEmail === source.contactEmail,
+          );
+          if (duplicateSelected || duplicateAssigned || duplicateReserved) {
+            throw previewBlocked(
+              'Each participant in an order must have their own email address.',
+            );
+          }
         }
         const externalIds = relevantRows.map(({ source }) => source.externalId);
         for (const externalId of [...externalIds].sort()) {
@@ -798,6 +902,10 @@ export const applySimpleShopTicketImport = async (
               selectedCount: parsed.data.selectedRowIds.length,
               created: newRows.length,
               identityRepaired: existing.size,
+              manuallyCompletedRowIds: [...detailsByRowId.keys()],
+              completionDigest: completionDigest(
+                parsed.data.participantDetails,
+              ),
               statusChanged: 0,
               unchanged: 0,
               skipped: summary.data.total - parsed.data.selectedRowIds.length,

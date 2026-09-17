@@ -4,6 +4,7 @@ export interface ImportedParticipantReference {
   readonly id: string;
   readonly userId: string;
   readonly email: string;
+  readonly name?: string;
   readonly version: number;
   readonly orderExternalId: string;
   readonly membershipStatus: string;

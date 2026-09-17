@@ -3961,4 +3961,107 @@ describe('F4 contract-first admin journeys', () => {
     expect(document.body.textContent).not.toContain('raw-secret-token');
     await expectComponentToPassAxe(adminRoot());
   });
+  it('completes missing ticket identity in a modal and submits its ticket mapping', async () => {
+    const base = ticketImportPreviewFixtures.simpleshop_readonly!;
+    const row = {
+      ...base.rows[0]!,
+      status: 'conflict' as const,
+      incomingState: null,
+      currentState: null,
+      identitySource: 'manual_review' as const,
+      issues: [
+        {
+          code: 'participant_identity_manual_review' as const,
+          message: 'Doplňte účastníka.',
+        },
+      ],
+    };
+    const preview = {
+      ...base,
+      eventId: adminFixtureIds.event,
+      rows: [row, ...base.rows.slice(1)],
+      summary: {
+        ...base.summary,
+        new: base.summary.new - 1,
+        conflict: base.summary.conflict + 1,
+      },
+    };
+    const api = organizerApi((endpoint) => {
+      if (endpoint === adminTicketImportPreviewEndpoint)
+        return success(preview);
+      if (endpoint === adminTicketImportApplyEndpoint)
+        return success({
+          ...ticketImportApplyFixtures.applied!,
+          eventId: adminFixtureIds.event,
+          previewId: preview.previewId,
+          previewVersion: preview.previewVersion,
+          selectedRowIds: [row.rowId],
+          result: { created: 1, statusChanged: 0, unchanged: 0 },
+        });
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminImportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await screen.getByRole('button', { name: 'Načíst ze SimpleShopu' }).click();
+    await screen.getByRole('button', { name: 'Doplnit a vybrat' }).click();
+    const dialog = screen.getByRole('dialog');
+    await expect
+      .element(dialog.getByRole('button', { name: 'Uložit údaje a vybrat' }))
+      .toBeDisabled();
+    await dialog
+      .getByRole('textbox', { name: 'Jméno a příjmení' })
+      .fill('Další Účastník');
+    await dialog
+      .getByRole('textbox', { name: 'E-mail', exact: true })
+      .fill('dalsi@example.test');
+    await acknowledgeDialog(screen);
+    await expectComponentToPassAxe(document.body);
+    await dialog.getByRole('button', { name: 'Uložit údaje a vybrat' }).click();
+    await expect
+      .element(
+        screen.getByRole('checkbox', {
+          name: 'Vybrat Další Účastník k importu',
+        }),
+      )
+      .toBeChecked();
+    await screen
+      .getByRole('textbox', { name: 'Důvod importu' })
+      .fill('Doplnění údajů dalšího účastníka.');
+    await screen
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
+    await acknowledgeDialog(screen);
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Importovat vybrané (1)' })
+      .click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Vybraní účastníci byli importováni',
+        }),
+      )
+      .toBeVisible();
+    const call = vi
+      .mocked(api.request)
+      .mock.calls.find(
+        ([endpoint]) => endpoint === adminTicketImportApplyEndpoint,
+      );
+    expect(call?.[1]).toMatchObject({
+      body: {
+        selectedRowIds: [row.rowId],
+        expectedImpact: preview.summary,
+        participantDetails: [
+          {
+            rowId: row.rowId,
+            contactName: 'Další Účastník',
+            contactEmail: 'dalsi@example.test',
+          },
+        ],
+      },
+    });
+  });
 });

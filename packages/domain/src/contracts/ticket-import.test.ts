@@ -391,6 +391,43 @@ describe('CS-IMPORT-01 contracts', () => {
     ).toBe(false);
   });
 
+  it('accepts only complete participant details attached to unique selected tickets', () => {
+    const details = {
+      rowId: newRow.rowId,
+      contactName: 'Další Účastník',
+      contactEmail: ' NEXT@example.test ',
+      contactCompany: null,
+      contactPosition: null,
+      contactPhone: null,
+    };
+    const request = {
+      eventId: ids.event,
+      previewId: ids.preview,
+      previewVersion: 3,
+      expectedImpact: preview.summary,
+      selectedRowIds: [newRow.rowId],
+      reason: 'Doplnění údajů účastníka.',
+      participantDetails: [details],
+    };
+    expect(
+      ticketImportApplyRequestSchema.parse(request).participantDetails?.[0]
+        ?.contactEmail,
+    ).toBe('next@example.test');
+    for (const invalid of [
+      [details, details],
+      [{ ...details, rowId: ids.rowUnknown }],
+      [{ ...details, contactName: ' ' }],
+      [{ ...details, contactEmail: 'invalid' }],
+    ]) {
+      expect(
+        ticketImportApplyRequestSchema.safeParse({
+          ...request,
+          participantDetails: invalid,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
   it('enumerates stale, blocked and idempotency apply failures', () => {
     const stale = {
       type: problemTypeForCode('IMPORT_PREVIEW_STALE'),

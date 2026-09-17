@@ -82,6 +82,8 @@ const optionalContactTextSchema = (maximum: number) =>
 export const ticketImportIdentitySourceSchema = z.enum([
   'named_participant',
   'single_paid_ticket_buyer',
+  'group_ticket_contact',
+  'imported_participant',
   'manual_review',
 ]);
 
@@ -530,14 +532,52 @@ const selectedTicketImportRowIdsSchema = z
     }
   });
 
-export const ticketImportApplyRequestSchema = z.strictObject({
-  eventId: uuidSchema,
-  previewId: uuidSchema,
-  previewVersion: versionSchema,
-  expectedImpact: ticketImportSummarySchema,
-  selectedRowIds: selectedTicketImportRowIdsSchema,
-  reason: reasonSchema,
+export const canCompleteTicketImportRow = (row: TicketImportRow): boolean =>
+  row.status === 'conflict' &&
+  row.sourceStatus === 'paid' &&
+  row.currentState === null &&
+  row.identitySource === 'manual_review' &&
+  row.issues.length === 1 &&
+  row.issues[0]?.code === 'participant_identity_manual_review';
+
+export const ticketImportParticipantDetailsSchema = z.strictObject({
+  rowId: uuidSchema,
+  contactName: safeInlineTextSchema(160).transform((value) => value.trim()),
+  contactEmail: z.string().trim().toLowerCase().pipe(z.email().max(320)),
+  contactCompany: optionalContactTextSchema(160),
+  contactPosition: optionalContactTextSchema(160),
+  contactPhone: optionalContactTextSchema(64),
 });
+export type TicketImportParticipantDetails = z.infer<
+  typeof ticketImportParticipantDetailsSchema
+>;
+
+export const ticketImportApplyRequestSchema = z
+  .strictObject({
+    eventId: uuidSchema,
+    previewId: uuidSchema,
+    previewVersion: versionSchema,
+    expectedImpact: ticketImportSummarySchema,
+    selectedRowIds: selectedTicketImportRowIdsSchema,
+    reason: reasonSchema,
+    participantDetails: z
+      .array(ticketImportParticipantDetailsSchema)
+      .max(TICKET_IMPORT_MAX_PREVIEW_ROWS)
+      .optional(),
+  })
+  .superRefine((request, context) => {
+    const ids = request.participantDetails?.map(({ rowId }) => rowId) ?? [];
+    if (
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !request.selectedRowIds.includes(id))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['participantDetails'],
+        message: 'Details must belong to unique selected rows',
+      });
+    }
+  });
 
 export type TicketImportApplyRequest = z.infer<
   typeof ticketImportApplyRequestSchema

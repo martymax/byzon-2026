@@ -210,6 +210,8 @@ export const ticketImportSourceStatusLabels = {
 export const ticketImportIdentitySourceLabels = {
   named_participant: 'Účastník z prodeje na jméno',
   single_paid_ticket_buyer: 'Kupující jediné uhrazené vstupenky',
+  group_ticket_contact: 'Známý kontakt skupinové objednávky',
+  imported_participant: 'Účastník přiřazený ke vstupence',
   manual_review: 'Identitu je potřeba ověřit ručně',
 } satisfies Record<TicketImportIdentitySource, string>;
 

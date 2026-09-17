@@ -381,6 +381,31 @@ const rowFor = (
       ],
     };
   }
+  if (
+    existing?.participant &&
+    currentState === 'active' &&
+    existing.participant.membershipStatus === 'active' &&
+    existing.participant.orderExternalId === source.orderExternalId &&
+    (source.identitySource === 'manual_review' ||
+      source.identitySource === 'group_ticket_contact')
+  ) {
+    return {
+      rowId,
+      sourceRowNumber: source.sourceRowNumber,
+      ...participant,
+      contactName: existing.participant.name ?? source.contactName,
+      contactEmail: existing.participant.email,
+      contactCompany: null,
+      contactPosition: null,
+      contactPhone: null,
+      identitySource: 'imported_participant',
+      sourceStatus: source.sourceStatus,
+      status: 'unchanged',
+      incomingState: 'active',
+      currentState,
+      issues: [],
+    };
+  }
   if (source.identitySource === 'manual_review') {
     return {
       rowId,
@@ -617,6 +642,7 @@ export const createDatabaseTicketImportPreviewStore = (
             version: schema.ticketSourceParticipants.version,
             orderExternalId: schema.ticketSourceParticipants.orderExternalId,
             email: schema.users.email,
+            name: schema.users.name,
             membershipStatus: schema.eventMemberships.status,
           })
           .from(schema.ticketSourceParticipants)

@@ -304,7 +304,7 @@ describe('SimpleShopTicketSourceAdapter', () => {
         ` ${simpleShopGroupEmails[0]!.toUpperCase()} `,
         ...simpleShopGroupEmails.slice(2),
       ],
-      expectedNew: 3,
+      expectedNew: 4,
     },
     {
       name: 'one participant without an email',
@@ -313,7 +313,7 @@ describe('SimpleShopTicketSourceAdapter', () => {
         '',
         ...simpleShopGroupEmails.slice(2),
       ],
-      expectedNew: 4,
+      expectedNew: 5,
     },
   ])(
     'previews a paid group with $name without merging or multiplying tickets',
@@ -372,7 +372,11 @@ describe('SimpleShopTicketSourceAdapter', () => {
       expect(
         response.rows
           .filter((row) => row.status === 'new')
-          .every((row) => row.identitySource === 'named_participant'),
+          .every((row) =>
+            ['named_participant', 'group_ticket_contact'].includes(
+              row.identitySource,
+            ),
+          ),
       ).toBe(true);
       for (const row of response.rows.filter(
         (row) => row.status === 'conflict',
@@ -387,7 +391,7 @@ describe('SimpleShopTicketSourceAdapter', () => {
     },
   );
 
-  it('uses a buyer only for a single paid ticket and flags group buyers for review', async () => {
+  it('uses a buyer once per order and flags remaining group tickets for review', async () => {
     const identityRows = [
       [
         '7000010',
@@ -462,7 +466,26 @@ describe('SimpleShopTicketSourceAdapter', () => {
 
     expect(
       snapshot.records.map(({ identitySource }) => identitySource),
-    ).toEqual(['single_paid_ticket_buyer', 'manual_review', 'manual_review']);
+    ).toEqual([
+      'single_paid_ticket_buyer',
+      'group_ticket_contact',
+      'manual_review',
+    ]);
+    const reversed = await createSimpleShopTicketSourceAdapter({
+      ...credentials,
+      fetch: successfulFetch([...identityRows].reverse()),
+      maxAttempts: 1,
+    }).fetchPreviewSource();
+    expect(
+      reversed.records.find(
+        (row) => row.identitySource === 'group_ticket_contact',
+      )?.externalId,
+    ).toBe(
+      snapshot.records.find(
+        (row) => row.identitySource === 'group_ticket_contact',
+      )?.externalId,
+    );
+
     expect(
       snapshot.records.map(({ orderTicketCount, orderTicketPosition }) => [
         orderTicketCount,

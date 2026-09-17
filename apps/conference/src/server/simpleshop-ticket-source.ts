@@ -439,7 +439,6 @@ const parseExport = (
     throw new SimpleShopTicketSourceError('invalid_payload');
   }
   const paidTicketCountByOrder = new Map<string, number>();
-  const paidNamedEmailCountsByOrder = new Map<string, Map<string, number>>();
   const ticketRowsByOrder = new Map<string, ParsedSimpleShopTicketRow[]>();
   for (const row of parsedTicketRows) {
     const orderRows = ticketRowsByOrder.get(row.orderExternalId) ?? [];
@@ -450,39 +449,41 @@ const parseExport = (
       row.orderExternalId,
       (paidTicketCountByOrder.get(row.orderExternalId) ?? 0) + 1,
     );
-    if (row.namedContactEmail !== null) {
-      const emailCounts =
-        paidNamedEmailCountsByOrder.get(row.orderExternalId) ?? new Map();
-      emailCounts.set(
-        row.namedContactEmail,
-        (emailCounts.get(row.namedContactEmail) ?? 0) + 1,
-      );
-      paidNamedEmailCountsByOrder.set(row.orderExternalId, emailCounts);
-    }
   }
   const records: SimpleShopTicketSourceRecord[] = parsedTicketRows.map(
     (row) => {
       const hasNamedParticipant = row.namedContactEmail !== null;
-      // An account is keyed by email. Reusing a group contact would silently
-      // merge multiple tickets/people into one participant membership.
-      const hasSharedParticipantEmail =
-        row.sourceStatus === 'paid' &&
-        row.namedContactEmail !== null &&
-        (paidNamedEmailCountsByOrder
-          .get(row.orderExternalId)
-          ?.get(row.namedContactEmail) ?? 0) > 1;
-      const canUseSingleTicketBuyer =
-        row.sourceStatus === 'paid' &&
-        paidTicketCountByOrder.get(row.orderExternalId) === 1 &&
-        row.buyerEmail !== null;
+      // Reserve each email for one stable ticket. Prefer a named attendee over
+      // buyer fallback, then use the lowest external ID (not export ordering).
+      const email = row.namedContactEmail ?? row.buyerEmail;
+      const candidates = ticketRowsByOrder
+        .get(row.orderExternalId)!
+        .filter(
+          (candidate) =>
+            candidate.sourceStatus === 'paid' &&
+            (candidate.namedContactEmail ?? candidate.buyerEmail) === email,
+        )
+        .sort(
+          (left, right) =>
+            Number(right.namedContactEmail !== null) -
+              Number(left.namedContactEmail !== null) ||
+            left.externalId.length - right.externalId.length ||
+            left.externalId.localeCompare(right.externalId),
+        );
+      const canUseContact =
+        email !== null && candidates[0]?.externalId === row.externalId;
       const identitySource: TicketImportIdentitySource =
-        hasSharedParticipantEmail
-          ? 'manual_review'
-          : hasNamedParticipant
+        row.sourceStatus !== 'paid'
+          ? hasNamedParticipant
             ? 'named_participant'
-            : canUseSingleTicketBuyer
-              ? 'single_paid_ticket_buyer'
-              : 'manual_review';
+            : 'manual_review'
+          : !canUseContact
+            ? 'manual_review'
+            : hasNamedParticipant
+              ? 'named_participant'
+              : paidTicketCountByOrder.get(row.orderExternalId) === 1
+                ? 'single_paid_ticket_buyer'
+                : 'group_ticket_contact';
       return {
         sourceRowNumber: row.sourceRowNumber,
         externalId: row.externalId,
