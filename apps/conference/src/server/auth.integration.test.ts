@@ -14,6 +14,10 @@ import {
 import { logoutAllSessions } from './logout-all';
 import { performIdentitySessionAction } from './identity';
 import { FakeAuthMailProvider } from './mail';
+import {
+  confirmMagicLink,
+  showMagicLinkConfirmation,
+} from './magic-link-confirmation';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -320,7 +324,7 @@ integration('magic-link authentication integration', () => {
     await requestLink(activationAuth, ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS);
   });
 
-  it('stores a hashed token and consumes it on first use', async () => {
+  it('preserves a token through scanner GETs, then consumes it only on confirmed POST', async () => {
     const requested = await auth.handler(
       new Request('http://localhost:3000/api/auth/sign-in/magic-link', {
         method: 'POST',
@@ -340,7 +344,25 @@ integration('magic-link authentication integration', () => {
       .from(schema.verifications);
     expect(stored.some(({ value }) => value === token)).toBe(false);
 
-    const firstUse = await auth.handler(new Request(deliveredUrl));
+    for (const method of ['GET', 'HEAD', 'GET']) {
+      const scanned = showMagicLinkConfirmation(
+        new Request(deliveredUrl, { method }),
+        'http://localhost:3000',
+      );
+      expect(scanned.status).toBe(303);
+      expect(scanned.headers.get('set-cookie')).toBeNull();
+    }
+    const submit = () =>
+      confirmMagicLink(
+        new Request('http://localhost:3000/api/auth/magic-link/verify', {
+          method: 'POST',
+          headers: { origin: 'http://localhost:3000' },
+          body: new URLSearchParams(new URL(deliveredUrl).search),
+        }),
+        'http://localhost:3000',
+        auth.handler,
+      );
+    const firstUse = await submit();
     expect(firstUse.status).toBeGreaterThanOrEqual(300);
     expect(firstUse.status).toBeLessThan(400);
     expect(firstUse.headers.get('set-cookie')).toContain(
@@ -349,7 +371,8 @@ integration('magic-link authentication integration', () => {
     expect(firstUse.headers.get('set-cookie')).toContain('HttpOnly');
     expect(firstUse.headers.get('set-cookie')).toContain('SameSite=Lax');
 
-    const secondUse = await auth.handler(new Request(deliveredUrl));
+    const secondUse = await submit();
+    expect(secondUse.headers.get('set-cookie')).toBeNull();
     expect(secondUse.headers.get('location')).toContain('INVALID_TOKEN');
   });
 
@@ -373,7 +396,15 @@ integration('magic-link authentication integration', () => {
          where "value"::jsonb ->> 'email' = $1`,
         [email],
       );
-      const expired = await auth.handler(new Request(original));
+      const expired = await confirmMagicLink(
+        new Request('http://localhost:3000/api/auth/magic-link/verify', {
+          method: 'POST',
+          headers: { origin: 'http://localhost:3000' },
+          body: new URLSearchParams(original.search),
+        }),
+        'http://localhost:3000',
+        auth.handler,
+      );
       expect(expired.headers.get('set-cookie')).toBeNull();
       const recovery = new URL(expired.headers.get('location')!);
       expect(recovery.pathname).toBe('/prihlaseni');

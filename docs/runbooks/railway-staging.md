@@ -14,6 +14,16 @@ Obě služby používají
 `Konference BYZON <jsem@byzon.cz>` (`MAIL_FROM_NAME` a `MAIL_FROM`).
 E-maily se odesílají skutečným příjemcům. Přihlašovací odkaz platí 30 minut,
 aktivační a pozvánkový odkaz 24 hodin; odkazy jsou jednorázové.
+
+Od 17. 9. 2026 otevření přihlašovacího nebo pozvánkového odkazu pouze zobrazí
+stránku `/prihlaseni/potvrzeni`. Přihlášení dokončí až tlačítko „Dokončit
+přihlášení“ přes formulářový POST se stejným originem. GET ani HEAD token
+nespotřebovávají, takže běžná automatická kontrola odkazů v e-mailu uživatele
+nepřihlásí místo něj. Ochrana platí i pro dříve odeslané odkazy; již použité
+nebo vypršelé odkazy je nutné vyžádat znovu. Potvrzovací stránka se neukládá
+do cache a posílá v Referer pouze origin bez tokenu (politika `origin` zachovává
+hlavičku Origin nutnou pro nativní POST i bez JavaScriptu).
+
 `BYZON_TIMELESS_TEST_MODE` se nepoužívá. Administrátor zapíná časově neomezené testování pro své přihlášení v `/app/nastaveni`; nejde o globální přepínač prostředí. Podrobnosti: [Testovací režim](../timeless-test-mode.md).
 
 Web používá `/railway.web.json`, worker `/railway.worker.json`. Nový deploy

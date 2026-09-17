@@ -43,11 +43,17 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: '/prihlaseni',
+        source: '/prihlaseni/:path*',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },
           { key: 'Referrer-Policy', value: 'no-referrer' },
         ],
+      },
+      {
+        source: '/prihlaseni/potvrzeni',
+        // Keep the native POST Origin header while never sending the token URL
+        // in Referer. no-referrer would turn the form's Origin into "null".
+        headers: [{ key: 'Referrer-Policy', value: 'origin' }],
       },
       {
         source: '/chyba-pristupu',

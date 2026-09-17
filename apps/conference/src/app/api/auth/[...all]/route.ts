@@ -7,10 +7,16 @@ import {
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS,
   auth,
   createAuth,
+  getAuthAppOrigin,
   magicLinkPurposeForAccount,
 } from '@/server/auth';
 import { database } from '@/server/database';
 import { authMailProvider } from '@/server/mail';
+import { MAGIC_LINK_VERIFY_PATH } from '../../../../lib/magic-link-confirmation';
+import {
+  confirmMagicLink,
+  showMagicLinkConfirmation,
+} from '../../../../server/magic-link-confirmation';
 
 const loginHandlers = toNextJsHandler(auth);
 const activationHandlers = toNextJsHandler(
@@ -41,9 +47,17 @@ const policyControlledRequest = (
   });
 };
 
-export const GET = loginHandlers.GET;
+export const GET = (request: Request) =>
+  new URL(request.url).pathname.replace(/\/+$/, '') === MAGIC_LINK_VERIFY_PATH
+    ? showMagicLinkConfirmation(request, getAuthAppOrigin())
+    : loginHandlers.GET(request);
 
 export const POST = async (request: Request): Promise<Response> => {
+  if (
+    new URL(request.url).pathname.replace(/\/+$/, '') === MAGIC_LINK_VERIFY_PATH
+  ) {
+    return confirmMagicLink(request, getAuthAppOrigin(), loginHandlers.GET);
+  }
   if (new URL(request.url).pathname !== magicLinkRequestPath) {
     return loginHandlers.POST(request);
   }

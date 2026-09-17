@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const routeMocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   handledBy: [] as string[],
+  verify: vi.fn(
+    async () =>
+      new Response(null, { status: 302, headers: { location: '/app' } }),
+  ),
 }));
 
 vi.mock('better-auth/next-js', () => ({
   toNextJsHandler: (instance: { readonly kind: string }) => ({
-    GET: vi.fn(),
+    GET: routeMocks.verify,
     POST: async (request: Request) => {
       routeMocks.handledBy.push(instance.kind);
       return Response.json({
@@ -22,6 +26,7 @@ vi.mock('@/server/auth', () => ({
   ACTIVATION_MAGIC_LINK_EXPIRES_IN_SECONDS: 86_400,
   auth: { kind: 'login' },
   createAuth: vi.fn(() => ({ kind: 'activation' })),
+  getAuthAppOrigin: () => 'https://app.example.test',
   magicLinkPurposeForAccount: (emailVerified: boolean | undefined) =>
     emailVerified === false ? 'account-activation' : 'sign-in',
 }));
@@ -36,7 +41,58 @@ vi.mock('@/server/database', () => ({
 
 vi.mock('@/server/mail', () => ({ authMailProvider: {} }));
 
-import { POST } from './route';
+import { GET, POST } from './route';
+
+describe('public magic-link confirmation boundary', () => {
+  beforeEach(() => routeMocks.verify.mockClear());
+
+  it.each(['GET', 'HEAD'])(
+    'never verifies a token on %s, including old email links',
+    async (method) => {
+      const response = await GET(
+        new Request(
+          'https://app.example.test/api/auth/magic-link/verify?token=secret&callbackURL=%2Fapp',
+          { method },
+        ),
+      );
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe(
+        'https://app.example.test/prihlaseni/potvrzeni?token=secret&callbackURL=%2Fapp',
+      );
+      expect(response.headers.get('cache-control')).toContain('no-store');
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(response.headers.get('set-cookie')).toBeNull();
+      expect(routeMocks.verify).not.toHaveBeenCalled();
+    },
+  );
+
+  it('verifies only on a same-origin form submission and redirects with GET', async () => {
+    const response = await POST(
+      new Request('https://app.example.test/api/auth/magic-link/verify', {
+        method: 'POST',
+        headers: { origin: 'https://app.example.test' },
+        body: new URLSearchParams({ token: 'secret', callbackURL: '/app' }),
+      }),
+    );
+    expect(response.status).toBe(303);
+    expect(routeMocks.verify).toHaveBeenCalledOnce();
+  });
+
+  it.each([undefined, 'https://attacker.example'])(
+    'rejects an untrusted form origin (%s)',
+    async (origin) => {
+      const response = await POST(
+        new Request('https://app.example.test/api/auth/magic-link/verify', {
+          method: 'POST',
+          headers: origin ? { origin } : {},
+          body: new URLSearchParams({ token: 'secret' }),
+        }),
+      );
+      expect(response.status).toBe(403);
+      expect(routeMocks.verify).not.toHaveBeenCalled();
+    },
+  );
+});
 
 const magicLinkRequest = () =>
   new Request('https://app.example.test/api/auth/sign-in/magic-link', {
