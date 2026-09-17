@@ -289,6 +289,55 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
     });
   });
 
+  test('paginates and sorts the participant list up to 250 rows', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'admin-1280');
+    await waitForAdminRoute(
+      page,
+      '/admin/ucastnici?adminQa=max-page',
+      'Účastníci',
+    );
+    await expect(page.locator('table tbody tr')).toHaveCount(25);
+    const pagination = page.getByRole('navigation', {
+      name: 'Stránkování účastníků',
+    });
+    await pagination
+      .getByRole('button', { name: 'Další', exact: true })
+      .click();
+    await expect(
+      pagination.getByText('Zobrazeno 26–50 z 250 účastníků'),
+    ).toBeVisible();
+    await page
+      .getByRole('combobox', { name: 'Řadit podle' })
+      .selectOption('displayName');
+    await page
+      .getByRole('combobox', { name: 'Směr řazení' })
+      .selectOption('desc');
+    await expect(
+      pagination.getByText('Zobrazeno 1–25 z 250 účastníků'),
+    ).toBeVisible();
+    await expect(page.locator('table tbody tr').first()).toContainText(
+      'Syntetický účastník 250',
+    );
+    await page
+      .getByRole('combobox', { name: 'Účastníků na stránku' })
+      .selectOption('250');
+    await expect(page.locator('table tbody tr')).toHaveCount(250);
+    await expect(
+      pagination.getByRole('button', { name: 'Další', exact: true }),
+    ).toBeDisabled();
+    await page
+      .getByRole('searchbox', { name: 'Filtrovat účastníky' })
+      .fill('max-page-001');
+    await expect(page.locator('table tbody tr')).toHaveCount(1);
+    await expect(
+      pagination.getByText('Zobrazeno 1–1 z 1 účastníků'),
+    ).toBeVisible();
+    await expectPageToPassAxe(page);
+    await expectNoPageOverflow(page);
+  });
+
   test('keeps contract-maximum admin pages within interaction budgets', async ({
     page,
   }, testInfo) => {
