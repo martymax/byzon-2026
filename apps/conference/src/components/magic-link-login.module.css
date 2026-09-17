@@ -1,0 +1,11 @@
+.submit {
+  min-inline-size: min(100%, 16rem);
+}
+
+.status {
+  min-block-size: 3lh;
+  margin-block-start: -0.75rem;
+  color: var(--byzon-text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
 import { MagicLinkLogin } from '../../components/magic-link-login';
@@ -11,7 +11,111 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/prihlaseni?returnTo=%2Fadmin');
 });
 
+afterEach(() => vi.useRealTimers());
+
 describe('production magic-link login', () => {
+  it('explains the wait immediately, prevents duplicate sends and confirms only after the response', async () => {
+    let complete!: (response: Response) => void;
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const screen = await renderComponent(
+      <main>
+        <MagicLinkLogin fetch={fetch} />
+      </main>,
+    );
+    await screen.getByLabelText('E-mail').fill('participant@example.test');
+    const button = screen.getByRole('button', {
+      name: 'Poslat přihlašovací odkaz',
+    });
+    const initialWidth = button.element().getBoundingClientRect().width;
+    const form = screen.getByLabelText('E-mail').element().closest('form')!;
+    const initialHeight = form.getBoundingClientRect().height;
+    await button.click();
+
+    await expect
+      .element(screen.getByRole('status'))
+      .toHaveTextContent(
+        'Odesíláme odkaz na váš e-mail. Může to trvat několik sekund.',
+      );
+    const sending = screen.getByRole('button', { name: 'Odesíláme odkaz…' });
+    await expect.element(sending).toBeDisabled();
+    await expect
+      .element(screen.getByLabelText('E-mail'))
+      .toHaveAttribute('readonly');
+    expect(sending.element().getBoundingClientRect().width).toBe(initialWidth);
+    expect(form.getBoundingClientRect().height).toBe(initialHeight);
+    form.requestSubmit();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .not.toBeInTheDocument();
+    await expectComponentToPassAxe(document.body);
+
+    complete(Response.json({ status: true }));
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toBeVisible();
+    await expect
+      .element(
+        screen.getByText(
+          'Odesíláme odkaz na váš e-mail. Může to trvat několik sekund.',
+        ),
+      )
+      .not.toBeInTheDocument();
+  });
+
+  it('explains a longer wait and restores an editable form after failure and a fresh wait on retry', async () => {
+    let complete!: (response: Response) => void;
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const screen = await renderComponent(
+      <main>
+        <MagicLinkLogin fetch={fetch} recovery />
+      </main>,
+    );
+    await screen.getByLabelText('E-mail').fill('participant@example.test');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await screen.getByRole('button', { name: 'Poslat nový odkaz' }).click();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect
+      .element(screen.getByRole('status'))
+      .toHaveTextContent(
+        'Stále čekáme na potvrzení odeslání. Stránku prosím neobnovujte.',
+      );
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .not.toBeInTheDocument();
+    complete(new Response(null, { status: 503 }));
+    await expect
+      .element(screen.getByText('Odkaz se nepodařilo odeslat'))
+      .toBeVisible();
+    await expect
+      .element(screen.getByLabelText('E-mail'))
+      .not.toHaveAttribute('readonly');
+    await expect
+      .element(screen.getByLabelText('E-mail'))
+      .toHaveValue('participant@example.test');
+    await screen.getByRole('button', { name: 'Poslat nový odkaz' }).click();
+    await expect
+      .element(screen.getByRole('status'))
+      .toHaveTextContent(
+        'Odesíláme odkaz na váš e-mail. Může to trvat několik sekund.',
+      );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    complete(Response.json({ status: true }));
+    await expect
+      .element(screen.getByRole('heading', { name: 'Zkontrolujte e-mail' }))
+      .toBeVisible();
+  });
+
   it('uses the role-aware destination when no protected route is explicit', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Promise.resolve(Response.json({ status: true }, { status: 200 })),

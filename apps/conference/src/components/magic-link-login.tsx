@@ -9,9 +9,10 @@ import {
   StatePanel,
 } from '@byzon/ui';
 import { activationEmailSchema } from '@byzon/domain/contracts';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { POST_LOGIN_DESTINATION, type AuthReturnTo } from '../lib/auth-return';
+import styles from './magic-link-login.module.css';
 
 type LoginFailure =
   'offline' | 'rate_limited' | 'unknown_account' | 'unavailable';
@@ -36,9 +37,16 @@ export const MagicLinkLogin = ({
   const [failure, setFailure] = useState<LoginFailure>();
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [takingLonger, setTakingLonger] = useState(false);
   const submitLocked = useRef(false);
   const feedback = useRef<HTMLDivElement>(null);
   const recovering = !directEmailLogin && (recovery || invalidLink);
+
+  useEffect(() => {
+    if (!submitting || directEmailLogin) return;
+    const timer = window.setTimeout(() => setTakingLonger(true), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [submitting, directEmailLogin]);
 
   const focusFeedback = () => {
     requestAnimationFrame(() => {
@@ -62,6 +70,7 @@ export const MagicLinkLogin = ({
     const normalizedEmail = parsed.data.toLowerCase();
     setFieldError(undefined);
     setFailure(undefined);
+    setTakingLonger(false);
     setSubmitting(true);
     try {
       const response = await fetch(
@@ -230,6 +239,7 @@ export const MagicLinkLogin = ({
             id="login-email"
             inputMode="email"
             maxLength={320}
+            readOnly={submitting}
             onChange={(event) => {
               setEmail(event.currentTarget.value);
               setFieldError(undefined);
@@ -242,8 +252,9 @@ export const MagicLinkLogin = ({
         </FormField>
         <div className="activation-form-actions">
           <Button
+            className={styles.submit}
             loading={submitting}
-            loadingLabel={directEmailLogin ? 'Přihlašuji…' : 'Odesílám…'}
+            loadingLabel={directEmailLogin ? 'Přihlašuji…' : 'Odesíláme odkaz…'}
             type="submit"
           >
             {directEmailLogin
@@ -253,6 +264,15 @@ export const MagicLinkLogin = ({
                 : 'Poslat přihlašovací odkaz'}
           </Button>
         </div>
+        {!directEmailLogin ? (
+          <p className={styles.status} role="status" aria-atomic="true">
+            {submitting
+              ? takingLonger
+                ? 'Stále čekáme na potvrzení odeslání. Stránku prosím neobnovujte.'
+                : 'Odesíláme odkaz na váš e-mail. Může to trvat několik sekund.'
+              : 'Odeslání e-mailu může trvat několik sekund.'}
+          </p>
+        ) : null}
       </form>
     </section>
   );
