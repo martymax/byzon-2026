@@ -1,4 +1,5 @@
 import '../../app/styles.css';
+import { page } from 'vitest/browser';
 import {
   adminAnnouncementPreviewResponseSchema,
   adminAnnouncementSendResponseSchema,
@@ -256,6 +257,7 @@ const participantListResponse = () => ({
     reservationCount: index + 1,
     profileVersion: 1,
     ticketVersion: record.version,
+    createdAt: '2026-08-20T08:00:00.000Z',
     updatedAt: '2026-09-02T10:00:00.000Z',
     availableActions: record.availableActions,
   })),
@@ -1993,7 +1995,7 @@ describe('F4 contract-first admin journeys', () => {
     expect(requests[0]).toMatchObject({
       path: `/api/v1/admin/events/${adminFixtureIds.event}/participants/list`,
       cache: 'no-store',
-      body: { query: '', limit: 100, offset: 0 },
+      body: { query: '', limit: 25, offset: 0 },
     });
 
     await screen
@@ -2004,6 +2006,94 @@ describe('F4 contract-first admin journeys', () => {
       body: { query: 'citlivy@example.test' },
     });
     expect(window.location.href).not.toContain('citlivy');
+    await expectComponentToPassAxe(adminRoot());
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    await page.viewport(
+      viewport.width,
+      Math.ceil(adminRoot().scrollHeight) + 32,
+    );
+    window.scrollTo(0, 0);
+    await page.screenshot({
+      element: adminRoot(),
+      path: `../../../../../test-results/participant-pagination-${viewport.width}.png`,
+    });
+    await page.viewport(viewport.width, viewport.height);
+  });
+
+  it('paginates participants and resets the page when sorting or changing page size', async () => {
+    const requests: {
+      limit: number;
+      offset: number;
+      sortBy: string;
+      sortDirection: string;
+    }[] = [];
+    const api = organizerApi((endpoint, options) => {
+      if (endpoint === adminParticipantListEndpoint) {
+        const body = (options as { body: (typeof requests)[number] }).body;
+        requests.push(body);
+        const base = participantListResponse();
+        return success({
+          ...base,
+          items: Array.from({ length: 212 }, (_, index) => ({
+            ...base.items[index % base.items.length]!,
+            participantId: `019fa100-0000-7000-8000-${String(index + 1).padStart(12, '0')}`,
+            displayName: `Účastník ${index + 1}`,
+          })).slice(body.offset, body.offset + body.limit),
+          pageInfo: {
+            total: 212,
+            offset: body.offset,
+            hasMore: body.offset + body.limit < 212,
+          },
+        });
+      }
+      throw new Error('Unexpected admin endpoint.');
+    });
+    const screen = await renderComponent(
+      <AdminWorkspaceShell api={api} environment="mocked">
+        <AdminSupportWorkspace />
+      </AdminWorkspaceShell>,
+    );
+    await expect
+      .element(screen.getByRole('button', { name: 'Další', exact: true }))
+      .toBeEnabled();
+    await screen.getByRole('button', { name: 'Další', exact: true }).click();
+    await vi.waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ offset: 25, limit: 25 }),
+    );
+    await screen
+      .getByRole('combobox', { name: 'Řadit podle' })
+      .selectOptions('createdAt');
+    await vi.waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ offset: 0, sortBy: 'createdAt' }),
+    );
+    await screen
+      .getByRole('combobox', { name: 'Směr řazení' })
+      .selectOptions('desc');
+    await vi.waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({
+        offset: 0,
+        sortDirection: 'desc',
+      }),
+    );
+    await expect
+      .element(screen.getByRole('combobox', { name: 'Účastníků na stránku' }))
+      .toBeEnabled();
+    await screen
+      .getByRole('combobox', { name: 'Účastníků na stránku' })
+      .selectOptions('250');
+    await vi.waitFor(() =>
+      expect(requests.at(-1)).toMatchObject({ offset: 0, limit: 250 }),
+    );
+    await expect
+      .element(screen.getByRole('button', { name: 'Další', exact: true }))
+      .toBeDisabled();
+    await vi.waitFor(() =>
+      expect(
+        document.querySelectorAll('input[aria-label^="Vybrat Účastník"]'),
+      ).toHaveLength(212),
+    );
+    expect(document.body.textContent).not.toContain('Zobrazit další v seznamu');
+    expect(document.body.textContent).not.toContain('Načíst další účastníky');
     await expectComponentToPassAxe(adminRoot());
   });
 
@@ -2064,6 +2154,7 @@ describe('F4 contract-first admin journeys', () => {
           reservationCount: 0,
           profileVersion: 1,
           ticketVersion: 1,
+          createdAt: '2026-08-20T08:00:00.000Z',
           updatedAt: createdDetail.updatedAt,
           availableActions: ['block'] as const,
         };

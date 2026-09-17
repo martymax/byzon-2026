@@ -603,7 +603,7 @@ const maxPageTicketPreview = (): TicketImportPreviewResponse => {
 };
 
 const maxPageParticipantItems = (): readonly AdminParticipantListItem[] =>
-  Array.from({ length: 100 }, (_, index) => {
+  Array.from({ length: 250 }, (_, index) => {
     const serial = index + 1;
     return {
       eventId: adminFixtureIds.event,
@@ -623,6 +623,7 @@ const maxPageParticipantItems = (): readonly AdminParticipantListItem[] =>
       reservationCount: serial % 4,
       profileVersion: 1,
       ticketVersion: 1,
+      createdAt: '2026-08-20T08:00:00.000Z',
       updatedAt: '2026-09-02T10:00:00.000Z',
       availableActions: ['block' as const],
     };
@@ -1566,6 +1567,7 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
               ).length,
               profileVersion: detail.profileVersion,
               ticketVersion: ticket.version,
+              createdAt: '2026-08-20T08:00:00.000Z',
               updatedAt: detail.updatedAt,
               availableActions: ticket.availableActions,
             },
@@ -1587,6 +1589,28 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
             body.data.ticketStates.includes(participant.ticketState)) &&
           (body.data.networkingStates.length === 0 ||
             body.data.networkingStates.includes(participant.networkingState))
+        );
+      });
+      const sortValue = (item: AdminParticipantListItem): string | number => {
+        if (body.data.sortBy === 'invitation')
+          return { not_sent: 0, sent: 1, accepted: 2 }[item.invitation.status];
+        if (body.data.sortBy === 'networkingState')
+          return { disabled: 0, enabled: 1, moderated: 2 }[
+            item.networkingState
+          ];
+        if (body.data.sortBy === 'checkedIn') return Number(item.checkedIn);
+        return item[body.data.sortBy];
+      };
+      candidates.sort((left, right) => {
+        const a = sortValue(left),
+          b = sortValue(right);
+        const result =
+          typeof a === 'number' && typeof b === 'number'
+            ? a - b
+            : String(a).localeCompare(String(b), 'cs');
+        return (
+          result * (body.data.sortDirection === 'asc' ? 1 : -1) ||
+          left.participantId.localeCompare(right.participantId)
         );
       });
       const page = candidates.slice(

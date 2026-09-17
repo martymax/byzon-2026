@@ -2041,7 +2041,6 @@
 
 .participantTableWrap {
   max-width: 100%;
-  height: clamp(16rem, 45vh, 36rem);
   overflow: auto;
   border-top: 1px solid var(--admin-border);
   contain: layout paint;
@@ -2049,7 +2048,7 @@
 
 .participantTable {
   width: 100%;
-  min-width: 66rem;
+  min-width: 50rem;
   border-collapse: collapse;
 }
 
@@ -2220,20 +2219,6 @@
 
 .participantEmpty strong {
   color: var(--admin-ink);
-}
-
-.participantLoadMore {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border-top: 1px solid var(--admin-border);
-  color: var(--admin-muted);
-}
-
-.participantLoadMore p {
-  margin: 0;
 }
 
 .participantBackLink {
@@ -2753,14 +2738,8 @@
 
   .participantBulkBar > div,
   .participantBulkBar button,
-  .participantLoadMore button,
   .participantSaveBar button {
     width: 100%;
-  }
-
-  .participantLoadMore {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .participantWideField {
@@ -3555,6 +3534,55 @@ label.dataCard > input:is([type='checkbox'], [type='radio']) {
 }
 @media (max-width: 48rem) {
   .contentList li > .bulkContentIdentity {
+    width: 100%;
+  }
+}
+
+.participantSortControls,
+.participantPagination,
+.participantPageButtons,
+.participantPageNumber {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.participantSortControls {
+  align-items: end;
+  gap: 0.75rem;
+  padding: 0 1.5rem 1.25rem;
+}
+
+.participantPagination {
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--admin-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.participantPagination p {
+  margin: 0;
+  color: var(--admin-muted);
+}
+
+.participantPageButtons button[aria-current='page'] {
+  background: var(--admin-primary);
+  color: var(--admin-surface);
+  border-color: var(--admin-primary);
+}
+
+@media (max-width: 48rem) {
+  .participantSortControls,
+  .participantPagination {
+    padding-inline: 1rem;
+  }
+  .participantSortControls > label {
+    flex: 1 1 10rem;
+    min-width: 0;
+  }
+  .participantPageButtons {
     width: 100%;
   }
 }

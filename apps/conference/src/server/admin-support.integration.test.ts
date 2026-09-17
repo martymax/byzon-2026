@@ -1,6 +1,8 @@
 import { createDatabaseClient, schema } from '@byzon/database';
 import {
   adminParticipantCreateResponseSchema,
+  adminParticipantListResponseSchema,
+  adminParticipantSortSchema,
   adminParticipantInviteResponseSchema,
   supportMutationResponseSchema,
   supportSearchResponseSchema,
@@ -10,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   handleAdminParticipantCreate,
+  handleAdminParticipantList,
   handleAdminParticipantInvite,
   handleAdminSupportMutation,
   handleAdminSupportSearch,
@@ -166,6 +169,89 @@ integration('admin participant support integration', () => {
     getSession: vi.fn(async () => ({ user: { id: actorId } })),
     now: () => now,
     rateLimit,
+  });
+
+  it('sorts the full deduplicated participant list before paging, including creation dates', async () => {
+    const otherId = crypto.randomUUID();
+    await client.db.insert(schema.users).values({
+      id: otherId,
+      name: 'Adam Nový',
+      email: `${otherId}@example.invalid`,
+    });
+    await client.db
+      .insert(schema.eventMemberships)
+      .values({ eventId, userId: otherId, status: 'active' });
+    await client.db.insert(schema.participantProfiles).values({
+      eventId,
+      userId: otherId,
+      firstName: 'Adam',
+      lastName: 'Nový',
+      contactEmail: `${otherId}@example.invalid`,
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    await client.db.insert(schema.tickets).values({
+      id: crypto.randomUUID(),
+      eventId,
+      holderUserId: otherId,
+      codeHmac: 'c'.repeat(64),
+      codeSuffix: 'ADAM123',
+      status: 'activated',
+      claimedAt: now,
+    });
+    const list = async (body: object) => {
+      const response = await handleAdminParticipantList(
+        new Request(
+          `${origin}/api/v1/admin/events/${eventId}/participants/list`,
+          {
+            method: 'POST',
+            headers: { origin, 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          },
+        ),
+        eventId,
+        dependencies(),
+      );
+      expect(response.status).toBe(200);
+      return adminParticipantListResponseSchema.parse(await response.json());
+    };
+    try {
+      const first = await list({ limit: 1 });
+      expect(first.items.map((item) => item.participantId)).toEqual([otherId]);
+      expect(first.pageInfo).toEqual({ total: 2, offset: 0, hasMore: true });
+      const second = await list({ limit: 1, offset: 1 });
+      expect(second.items[0]?.participantId).toBe(participantId);
+      expect(second.items[0]?.ticketId).toBe(ticketId);
+      expect(second.pageInfo.hasMore).toBe(false);
+      const newest = await list({
+        limit: 1,
+        sortBy: 'createdAt',
+        sortDirection: 'desc',
+      });
+      expect(newest.items[0]?.participantId).toBe(participantId);
+      const oldest = await list({
+        limit: 1,
+        sortBy: 'createdAt',
+        sortDirection: 'asc',
+      });
+      expect(oldest.items[0]?.createdAt).toBe('2025-01-01T00:00:00.000Z');
+      for (const sortBy of adminParticipantSortSchema.options) {
+        const asc = await list({ limit: 250, sortBy, sortDirection: 'asc' });
+        expect(asc.items).toHaveLength(2);
+        const desc = await list({ limit: 250, sortBy, sortDirection: 'desc' });
+        expect(desc.items).toHaveLength(2);
+      }
+      const filtered = await list({ query: 'Adam', sortBy: 'createdAt' });
+      expect(filtered.items[0]?.participantId).toBe(otherId);
+      expect(filtered.pageInfo.total).toBe(1);
+    } finally {
+      await client.db
+        .delete(schema.tickets)
+        .where(eq(schema.tickets.holderUserId, otherId));
+      await client.db
+        .delete(schema.participantProfiles)
+        .where(eq(schema.participantProfiles.userId, otherId));
+      await client.db.delete(schema.users).where(eq(schema.users.id, otherId));
+    }
   });
 
   it('searches through a POST body, deduplicates people and returns complete admin identities', async () => {

@@ -43,6 +43,26 @@ const activeRecord = {
 };
 
 describe('CS-SUPPORT-01 contracts', () => {
+  it('caps participant pages at 250 and validates sort parameters', () => {
+    expect(
+      adminParticipantListRequestSchema.safeParse({
+        limit: 250,
+        sortBy: 'createdAt',
+        sortDirection: 'desc',
+      }).success,
+    ).toBe(true);
+    for (const input of [
+      { limit: 251 },
+      { limit: 0 },
+      { sortBy: 'unknown' },
+      { sortDirection: 'invalid' },
+    ]) {
+      expect(adminParticipantListRequestSchema.safeParse(input).success).toBe(
+        false,
+      );
+    }
+  });
+
   it('supports an initial participant list, filters and complete editable detail', () => {
     const listItem = {
       eventId: ids.event,
@@ -64,6 +84,7 @@ describe('CS-SUPPORT-01 contracts', () => {
       reservationCount: 2,
       profileVersion: 1,
       ticketVersion: 3,
+      createdAt: '2026-08-20T08:00:00.000Z',
       updatedAt: '2026-09-02T10:00:00.000Z',
       availableActions: ['block'] as const,
     };
@@ -71,6 +92,8 @@ describe('CS-SUPPORT-01 contracts', () => {
       query: '',
       ticketStates: [],
       networkingStates: [],
+      sortBy: 'displayName',
+      sortDirection: 'asc',
       limit: 100,
       offset: 0,
     });

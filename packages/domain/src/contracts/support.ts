@@ -170,6 +170,20 @@ export const adminParticipantInvitationSchema = z.strictObject({
   lastSentAt: dateTimeSchema.nullable(),
 });
 
+export const adminParticipantSortSchema = z.enum([
+  'displayName',
+  'contactEmail',
+  'company',
+  'jobTitle',
+  'ticketState',
+  'referenceSuffix',
+  'invitation',
+  'networkingState',
+  'reservationCount',
+  'checkedIn',
+  'createdAt',
+]);
+
 export const adminParticipantListRequestSchema = z.strictObject({
   query: z
     .string()
@@ -189,7 +203,9 @@ export const adminParticipantListRequestSchema = z.strictObject({
     .max(3)
     .refine((values) => new Set(values).size === values.length)
     .default([]),
-  limit: z.number().int().min(1).max(100).default(100),
+  sortBy: adminParticipantSortSchema.default('displayName'),
+  sortDirection: z.enum(['asc', 'desc']).default('asc'),
+  limit: z.number().int().min(1).max(250).default(100),
   offset: z.number().int().min(0).max(10_000).default(0),
 });
 
@@ -214,6 +230,7 @@ export const adminParticipantListItemSchema = z.strictObject({
   reservationCount: z.number().int().nonnegative(),
   profileVersion: versionSchema,
   ticketVersion: versionSchema,
+  createdAt: dateTimeSchema,
   updatedAt: dateTimeSchema,
   availableActions: z.array(supportActionSchema).max(5),
 });
@@ -226,7 +243,7 @@ export const adminParticipantListResponseSchema = z
   .strictObject({
     eventId: uuidSchema,
     generatedAt: dateTimeSchema,
-    items: z.array(adminParticipantListItemSchema).max(100),
+    items: z.array(adminParticipantListItemSchema).max(250),
     pageInfo: z.strictObject({
       total: z.number().int().nonnegative(),
       offset: z.number().int().nonnegative(),

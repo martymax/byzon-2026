@@ -1028,61 +1028,89 @@ export const handleAdminParticipantList = async (
     }
 
     const where = and(...filters);
-    const [rows, filteredCountRows, summaryRows] = await Promise.all([
-      dependencies.db
-        .selectDistinctOn([schema.participantProfiles.userId], {
-          participantId: schema.participantProfiles.userId,
-          ticketId: participantAccess.id,
-          firstName: schema.participantProfiles.firstName,
-          lastName: schema.participantProfiles.lastName,
-          contactEmail: schema.participantProfiles.contactEmail,
-          company: schema.participantProfiles.company,
-          jobTitle: schema.participantProfiles.jobTitle,
-          accessSource: participantAccess.source,
-          referenceSuffix: participantAccess.referenceValue,
-          ticketStatus: participantAccess.status,
-          networkingEnabled: schema.participantProfiles.networkingEnabled,
-          moderationStatus: schema.participantProfiles.moderationStatus,
-          profileVersion: schema.participantProfiles.version,
-          ticketVersion: participantAccess.version,
-          emailVerified: schema.users.emailVerified,
-          lastInvitationSentAt: sql<Date | string | null>`(
+    const participants = dependencies.db
+      .selectDistinctOn([schema.participantProfiles.userId], {
+        participantId: schema.participantProfiles.userId,
+        ticketId: participantAccess.id,
+        firstName: schema.participantProfiles.firstName,
+        lastName: schema.participantProfiles.lastName,
+        contactEmail: schema.participantProfiles.contactEmail,
+        company: schema.participantProfiles.company,
+        jobTitle: schema.participantProfiles.jobTitle,
+        accessSource: participantAccess.source,
+        referenceSuffix: participantAccess.referenceValue,
+        ticketStatus: participantAccess.status,
+        networkingEnabled: schema.participantProfiles.networkingEnabled,
+        moderationStatus: schema.participantProfiles.moderationStatus,
+        profileVersion: sql<number>`${schema.participantProfiles.version}`.as(
+          'profile_version',
+        ),
+        ticketVersion: sql<number>`${participantAccess.version}`.as(
+          'ticket_version',
+        ),
+        emailVerified: schema.users.emailVerified,
+        lastInvitationSentAt: sql<Date | string | null>`(
             select max(${schema.auditLogs.createdAt})
             from ${schema.auditLogs}
             where ${schema.auditLogs.eventId} = ${eventId}
               and ${schema.auditLogs.action} = 'participant.invitation_sent'
               and ${schema.auditLogs.targetId} = ${schema.participantProfiles.userId}::text
-          )`,
-          updatedAt: schema.participantProfiles.updatedAt,
-          checkedIn: sql<boolean>`exists (
+          )`.as('last_invitation_sent_at'),
+        createdAt: schema.participantProfiles.createdAt,
+        updatedAt: schema.participantProfiles.updatedAt,
+        checkedIn: sql<boolean>`exists (
             select 1 from ${schema.checkIns}
             where ${schema.checkIns.eventId} = ${eventId}
               and ${schema.checkIns.holderUserId} = ${schema.participantProfiles.userId}
               and ${schema.checkIns.undoneAt} is null
-          )`,
-          reservationCount: sql<number>`(
+          )`.as('checked_in'),
+        reservationCount: sql<number>`(
             select count(*)::int from ${schema.reservations}
             where ${schema.reservations.eventId} = ${eventId}
               and ${schema.reservations.userId} = ${schema.participantProfiles.userId}
               and ${schema.reservations.status} = 'confirmed'
-          )`,
-        })
-        .from(schema.participantProfiles)
-        .innerJoin(
-          schema.users,
-          eq(schema.users.id, schema.participantProfiles.userId),
-        )
-        .innerJoin(
-          participantAccess,
-          and(
-            eq(participantAccess.eventId, schema.participantProfiles.eventId),
-            eq(participantAccess.userId, schema.participantProfiles.userId),
-          ),
-        )
-        .where(where)
+          )`.as('reservation_count'),
+      })
+      .from(schema.participantProfiles)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.participantProfiles.userId),
+      )
+      .innerJoin(
+        participantAccess,
+        and(
+          eq(participantAccess.eventId, schema.participantProfiles.eventId),
+          eq(participantAccess.userId, schema.participantProfiles.userId),
+        ),
+      )
+      .where(where)
+      .orderBy(
+        schema.participantProfiles.userId,
+        desc(participantAccess.updatedAt),
+      )
+      .as('listed_participants');
+
+    const sortColumns = {
+      displayName: sql`lower(${participants.firstName} || ' ' || ${participants.lastName}) collate "cs-x-icu"`,
+      contactEmail: sql`lower(${participants.contactEmail})`,
+      company: sql`lower(coalesce(${participants.company}, '')) collate "cs-x-icu"`,
+      jobTitle: sql`lower(coalesce(${participants.jobTitle}, '')) collate "cs-x-icu"`,
+      ticketState: sql`${participants.ticketStatus}::text`,
+      referenceSuffix: sql`right(regexp_replace(${participants.referenceSuffix}, '[^A-Za-z0-9]', '', 'g'), 8)`,
+      invitation: sql`case when ${participants.emailVerified} then 2 when ${participants.lastInvitationSentAt} is not null then 1 else 0 end`,
+      networkingState: sql`case when ${participants.moderationStatus} = 'hidden' then 2 when ${participants.networkingEnabled} then 1 else 0 end`,
+      reservationCount: participants.reservationCount,
+      checkedIn: participants.checkedIn,
+      createdAt: participants.createdAt,
+    };
+    const direction = parsed.data.sortDirection === 'asc' ? asc : desc;
+    const [rows, filteredCountRows, summaryRows] = await Promise.all([
+      dependencies.db
+        .select()
+        .from(participants)
         .orderBy(
-          schema.participantProfiles.userId,
-          desc(participantAccess.updatedAt),
+          direction(sortColumns[parsed.data.sortBy]),
+          asc(participants.participantId),
         )
         .limit(parsed.data.limit)
         .offset(parsed.data.offset),
@@ -1125,45 +1153,42 @@ export const handleAdminParticipantList = async (
     ]);
     const total = Number(filteredCountRows[0]?.count ?? 0);
     const summary = summaryRows[0];
-    const items = rows
-      .map((row) => {
-        const state = ticketState(row.ticketStatus);
-        const invitation = invitationFrom(row);
-        return {
-          eventId,
-          participantId: row.participantId,
-          ticketId: row.ticketId,
-          displayName: safeLabel(
-            `${row.firstName} ${row.lastName}`,
-            'Účastník bez jména',
-          ),
-          contactEmail: row.contactEmail,
-          company: row.company ?? '',
-          jobTitle: row.jobTitle ?? '',
-          referenceSuffix: suffix(row.referenceSuffix),
-          ticketState: state,
-          accessState:
-            invitation.status === 'accepted'
-              ? ('claimed' as const)
-              : invitation.status === 'sent'
-                ? ('recovery_pending' as const)
-                : ('not_claimed' as const),
-          networkingState: networkingStateFrom(row),
-          invitation,
-          checkedIn: row.checkedIn,
-          reservationCount: Number(row.reservationCount),
-          profileVersion: row.profileVersion,
-          ticketVersion: row.ticketVersion,
-          updatedAt: row.updatedAt.toISOString(),
-          availableActions:
-            row.accessSource === 'ticket'
-              ? availableActionsForTicketState(state)
-              : [],
-        };
-      })
-      .sort((left, right) =>
-        left.displayName.localeCompare(right.displayName, 'cs'),
-      );
+    const items = rows.map((row) => {
+      const state = ticketState(row.ticketStatus);
+      const invitation = invitationFrom(row);
+      return {
+        eventId,
+        participantId: row.participantId,
+        ticketId: row.ticketId,
+        displayName: safeLabel(
+          `${row.firstName} ${row.lastName}`,
+          'Účastník bez jména',
+        ),
+        contactEmail: row.contactEmail,
+        company: row.company ?? '',
+        jobTitle: row.jobTitle ?? '',
+        referenceSuffix: suffix(row.referenceSuffix),
+        ticketState: state,
+        accessState:
+          invitation.status === 'accepted'
+            ? ('claimed' as const)
+            : invitation.status === 'sent'
+              ? ('recovery_pending' as const)
+              : ('not_claimed' as const),
+        networkingState: networkingStateFrom(row),
+        invitation,
+        checkedIn: row.checkedIn,
+        reservationCount: Number(row.reservationCount),
+        profileVersion: row.profileVersion,
+        ticketVersion: row.ticketVersion,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        availableActions:
+          row.accessSource === 'ticket'
+            ? availableActionsForTicketState(state)
+            : [],
+      };
+    });
     const body = adminParticipantListResponseSchema.parse({
       eventId,
       generatedAt: (dependencies.now?.() ?? new Date()).toISOString(),

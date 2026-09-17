@@ -440,14 +440,23 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
       '/admin/ucastnici?adminQa=max-page',
       'Účastníci',
     );
-    await capture('participant-list-100', 'load-and-render', async () => {
+    await capture('participant-list-250', 'load-and-render', async () => {
       await expect(
-        page.getByText('100 odpovídá aktuálním filtrům'),
+        page.getByText('250 odpovídá aktuálním filtrům'),
       ).toBeVisible();
-      await expect(page.locator('table tbody tr')).toHaveCount(20);
-      await expect(page.getByText('20 z 100 načtených')).toBeVisible();
+      await expect(page.locator('table tbody tr')).toHaveCount(25);
+      await expect(
+        page.getByText('Zobrazeno 1–25 z 250 účastníků'),
+      ).toBeVisible();
+      await page
+        .getByRole('combobox', { name: 'Účastníků na stránku' })
+        .selectOption('250');
+      await expect(page.locator('table tbody tr')).toHaveCount(250);
+      await expect(
+        page.getByText('Zobrazeno 1–250 z 250 účastníků'),
+      ).toBeVisible();
     });
-    await capture('participant-list-100', 'filter', async () => {
+    await capture('participant-list-250', 'filter', async () => {
       await page
         .getByRole('searchbox', { name: 'Filtrovat účastníky' })
         .fill('max-page-001');
@@ -455,7 +464,7 @@ test.describe('AUX-12 admin cross-route quality gate', () => {
         page.getByText('1 odpovídá aktuálním filtrům'),
       ).toBeVisible();
     });
-    await capture('participant-list-100', 'open-detail', async () => {
+    await capture('participant-list-250', 'open-detail', async () => {
       await page
         .getByRole('link', { name: 'Syntetický účastník 001' })
         .first()

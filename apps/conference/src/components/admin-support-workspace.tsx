@@ -7,6 +7,7 @@ import {
   type AdminParticipantCreateRequest,
   type AdminParticipantDetail,
   type AdminParticipantListItem,
+  type AdminParticipantListRequest,
   type AdminParticipantNetworkingState,
   type SupportTicketState,
 } from '@byzon/domain/contracts/support';
@@ -52,8 +53,19 @@ import {
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
 
-const participantPageSize = 100;
-const participantRenderChunkSize = 20;
+const participantSortOptions = {
+  displayName: 'Jméno',
+  contactEmail: 'E-mail',
+  company: 'Firma',
+  jobTitle: 'Pozice',
+  ticketState: 'Stav vstupenky',
+  referenceSuffix: 'Číslo vstupenky',
+  invitation: 'Stav pozvánky',
+  networkingState: 'Networking',
+  reservationCount: 'Počet rezervací',
+  checkedIn: 'Odbavení',
+  createdAt: 'Datum vytvoření / importu',
+} satisfies Record<AdminParticipantListRequest['sortBy'], string>;
 const participantCompactDataViewQuery = '(max-width: 48rem)';
 const emptyParticipantCreateForm = {
   firstName: '',
@@ -251,6 +263,9 @@ const ParticipantTableRow = memo(
           {participant.displayName}
         </Link>
         <span>{participant.contactEmail}</span>
+        <small className={styles.participantCellNote}>
+          Vytvořeno: {formatDateTime(participant.createdAt)}
+        </small>
       </td>
       <td className={styles.participantCompanyCell}>
         <strong>{participant.company || '—'}</strong>
@@ -370,6 +385,10 @@ const ParticipantCard = memo(
           </strong>
         </p>
         <p>
+          <span>Vytvořeno / importováno</span>
+          <strong>{formatDateTime(participant.createdAt)}</strong>
+        </p>
+        <p>
           <span>Rezervace</span>
           <strong>{participant.reservationCount}</strong>
         </p>
@@ -392,7 +411,6 @@ const ParticipantDataView = memo(
     items,
     invitationAction,
     onAllSelectionChange,
-    onScrollEnd,
     onSelectionChange,
     selectionDisabled = false,
     selectedCount,
@@ -403,7 +421,6 @@ const ParticipantDataView = memo(
     readonly items: readonly AdminParticipantListItem[];
     readonly invitationAction: ParticipantInvitationAction | null;
     readonly onAllSelectionChange: (checked: boolean) => void;
-    readonly onScrollEnd: () => void;
     readonly selectionDisabled?: boolean;
     readonly onSelectionChange: (
       participantId: string,
@@ -430,18 +447,7 @@ const ParticipantDataView = memo(
     }
 
     return (
-      <div
-        className={styles.participantTableWrap}
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          if (
-            element.scrollTop + element.clientHeight >=
-            element.scrollHeight - 64
-          ) {
-            onScrollEnd();
-          }
-        }}
-      >
+      <div className={styles.participantTableWrap}>
         <table className={styles.participantTable}>
           <caption className={styles.visuallyHidden}>Účastníci akce</caption>
           <thead>
@@ -516,7 +522,18 @@ export const AdminSupportWorkspace = () => {
     checkedIn: 0,
   });
   const [filteredTotal, setFilteredTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sortBy, setSortBy] =
+    useState<AdminParticipantListRequest['sortBy']>('displayName');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const pageCount = Math.max(1, Math.ceil(filteredTotal / pageSize));
+  const resetPage = () => {
+    requestFence.cancel('participant-list');
+    setBusy(true);
+    setPage(1);
+    setSelectedIds(new Set());
+  };
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -537,20 +554,23 @@ export const AdminSupportWorkspace = () => {
     useState<PendingParticipantCreate | null>(null);
   const [reload, setReload] = useState(0);
   const compactDataView = useCompactDataView();
-  const [renderedItemCount, setRenderedItemCount] = useState(
-    participantRenderChunkSize,
-  );
-
-  const load = async (append = false) => {
-    const offset = append ? items.length : 0;
+  const load = async () => {
+    const offset = (page - 1) * pageSize;
     const parsed = adminParticipantListRequestSchema.safeParse({
       query,
       ticketStates: ticketState ? [ticketState] : [],
       networkingStates: networkingState ? [networkingState] : [],
-      limit: participantPageSize,
+      limit: pageSize,
+      sortBy,
+      sortDirection,
       offset,
     });
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      setBusy(false);
+      setItems([]);
+      setError('Upravte hledaný výraz. Některé znaky nejsou podporované.');
+      return;
+    }
     const request = requestFence.begin('participant-list');
     setBusy(true);
     setError(null);
@@ -576,32 +596,56 @@ export const AdminSupportWorkspace = () => {
       return;
     }
     if (result.kind !== 'success') return;
+    const lastPage = Math.max(
+      1,
+      Math.ceil(result.data.pageInfo.total / pageSize),
+    );
+    if (page > lastPage) {
+      setPage(lastPage);
+      return;
+    }
     startTransition(() => {
-      setItems((current) =>
-        append ? [...current, ...result.data.items] : result.data.items,
-      );
+      setItems(result.data.items);
       setSummary(result.data.summary);
       setFilteredTotal(result.data.pageInfo.total);
-      setHasMore(result.data.pageInfo.hasMore);
-      if (!append) {
-        setRenderedItemCount(
-          Math.min(participantRenderChunkSize, result.data.items.length),
+      setSelectedIds((current) => {
+        const visible = new Set(
+          result.data.items.map(({ participantId }) => participantId),
         );
-        setSelectedIds((current) => {
-          const visible = new Set(
-            result.data.items.map(({ participantId }) => participantId),
-          );
-          return new Set([...current].filter((id) => visible.has(id)));
-        });
-      }
+        return new Set([...current].filter((id) => visible.has(id)));
+      });
     });
   };
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), query ? 250 : 0);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(timeout);
+      requestFence.cancel('participant-list');
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, ticketState, networkingState, eventId, reload]);
+  }, [
+    query,
+    ticketState,
+    networkingState,
+    sortBy,
+    sortDirection,
+    page,
+    pageSize,
+    eventId,
+    reload,
+  ]);
+
+  const changePage = (value: number) => {
+    if (value === page) return;
+    requestFence.cancel('participant-list');
+    setBusy(true);
+    setSelectedIds(new Set());
+    setPage(value);
+    document
+      .getElementById('participant-list-title')
+      ?.scrollIntoView({ block: 'start' });
+  };
 
   const createCandidate = adminParticipantCreateRequestSchema.safeParse({
     reason: createForm.reason,
@@ -677,6 +721,7 @@ export const AdminSupportWorkspace = () => {
     setCreateAttempted(false);
     setCreateError(null);
     setPendingCreate(null);
+    resetPage();
     setQuery('');
     setTicketState('');
     setNetworkingState('');
@@ -701,10 +746,6 @@ export const AdminSupportWorkspace = () => {
     [items, selectedIds],
   );
   const allSelected = items.length > 0 && selected.length === items.length;
-  const renderedItems = useMemo(
-    () => items.slice(0, renderedItemCount),
-    [items, renderedItemCount],
-  );
   const changeParticipantSelection = useCallback(
     (participantId: string, checked: boolean) =>
       setSelectedIds((current) => {
@@ -723,15 +764,6 @@ export const AdminSupportWorkspace = () => {
           : new Set(),
       ),
     [items],
-  );
-  const revealMoreParticipants = useCallback(
-    () =>
-      startTransition(() =>
-        setRenderedItemCount((current) =>
-          Math.min(items.length, current + participantRenderChunkSize),
-        ),
-      ),
-    [items.length],
   );
   const sendRowInvitation = useCallback(
     async (participant: AdminParticipantListItem) => {
@@ -896,7 +928,7 @@ export const AdminSupportWorkspace = () => {
               autoComplete="off"
               maxLength={80}
               onChange={(event) => {
-                setSelectedIds(new Set());
+                resetPage();
                 setQuery(event.target.value);
               }}
               placeholder="Jméno, e-mail, firma nebo vstupenka…"
@@ -907,9 +939,10 @@ export const AdminSupportWorkspace = () => {
           <label className={styles.participantFilterField}>
             <span>Vstupenka</span>
             <select
-              onChange={(event) =>
-                setTicketState(event.target.value as SupportTicketState | '')
-              }
+              onChange={(event) => {
+                resetPage();
+                setTicketState(event.target.value as SupportTicketState | '');
+              }}
               value={ticketState}
             >
               <option value="">Všechny stavy</option>
@@ -922,11 +955,12 @@ export const AdminSupportWorkspace = () => {
           <label className={styles.participantFilterField}>
             <span>Networking</span>
             <select
-              onChange={(event) =>
+              onChange={(event) => {
+                resetPage();
                 setNetworkingState(
                   event.target.value as AdminParticipantNetworkingState | '',
-                )
-              }
+                );
+              }}
               value={networkingState}
             >
               <option value="">Všechny stavy</option>
@@ -939,6 +973,7 @@ export const AdminSupportWorkspace = () => {
             <button
               className={styles.participantClearFilters}
               onClick={() => {
+                resetPage();
                 setQuery('');
                 setTicketState('');
                 setNetworkingState('');
@@ -948,6 +983,40 @@ export const AdminSupportWorkspace = () => {
               Zrušit filtry
             </button>
           ) : null}
+        </div>
+
+        <div className={styles.participantSortControls}>
+          <label className={styles.participantFilterField}>
+            <span>Řadit podle</span>
+            <select
+              value={sortBy}
+              onChange={(event) => {
+                resetPage();
+                setSortBy(
+                  event.target.value as AdminParticipantListRequest['sortBy'],
+                );
+              }}
+            >
+              {Object.entries(participantSortOptions).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.participantFilterField}>
+            <span>Směr řazení</span>
+            <select
+              value={sortDirection}
+              onChange={(event) => {
+                resetPage();
+                setSortDirection(event.target.value as 'asc' | 'desc');
+              }}
+            >
+              <option value="asc">Vzestupně</option>
+              <option value="desc">Sestupně</option>
+            </select>
+          </label>
         </div>
 
         {canMutate ? (
@@ -996,46 +1065,85 @@ export const AdminSupportWorkspace = () => {
             }
             allSelected={allSelected}
             compact={compactDataView}
-            items={renderedItems}
+            items={items}
             invitationAction={invitationAction}
             onAllSelectionChange={changeAllParticipantSelection}
-            onScrollEnd={revealMoreParticipants}
             onSelectionChange={changeParticipantSelection}
             selectedCount={selected.length}
             selectedIds={selectedIds}
           />
         ) : null}
-        {renderedItems.length < items.length ? (
-          <div className={styles.participantLoadMore}>
-            <p>
-              V seznamu je zobrazeno {renderedItems.length} z {items.length}{' '}
-              načtených účastníků.
-            </p>
-            <button
-              className={styles.secondaryButton}
-              onClick={revealMoreParticipants}
-              type="button"
-            >
-              Zobrazit další v seznamu
-            </button>
-          </div>
-        ) : null}
-        {hasMore ? (
-          <div className={styles.participantLoadMore}>
-            <p>
-              Zobrazeno {items.length} z {filteredTotal} odpovídajících
-              účastníků.
-            </p>
-            <button
-              className={styles.secondaryButton}
+        <nav
+          className={styles.participantPagination}
+          aria-label="Stránkování účastníků"
+        >
+          <p role="status" aria-live="polite">
+            {busy
+              ? 'Načítám…'
+              : `Zobrazeno ${items.length ? (page - 1) * pageSize + 1 : 0}–${items.length ? (page - 1) * pageSize + items.length : 0} z ${filteredTotal} účastníků`}
+          </p>
+          <label className={styles.participantFilterField}>
+            <span>Účastníků na stránku</span>
+            <select
+              value={pageSize}
               disabled={busy}
-              onClick={() => void load(true)}
-              type="button"
+              onChange={(event) => {
+                resetPage();
+                setPageSize(Number(event.target.value));
+              }}
             >
-              {busy ? 'Načítám…' : 'Načíst další účastníky'}
+              {[25, 50, 100, 250].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className={styles.participantPageButtons}>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={busy || page === 1}
+              onClick={() => changePage(page - 1)}
+            >
+              Předchozí
+            </button>
+            {Array.from(
+              new Set([
+                1,
+                ...Array.from(
+                  { length: 5 },
+                  (_, index) => page + index - 2,
+                ).filter((value) => value > 1 && value < pageCount),
+                pageCount,
+              ]),
+            ).map((value, index, pages) => (
+              <span key={value} className={styles.participantPageNumber}>
+                {index > 0 && value - pages[index - 1]! > 1 ? (
+                  <span aria-hidden="true">…</span>
+                ) : null}
+                <button
+                  className={styles.secondaryButton}
+                  aria-label={`Stránka ${value}`}
+                  aria-current={page === value ? 'page' : undefined}
+                  disabled={busy}
+                  type="button"
+                  onClick={() => changePage(value)}
+                >
+                  {value}
+                </button>
+              </span>
+            ))}
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={busy || page >= pageCount}
+              onClick={() => changePage(page + 1)}
+            >
+              Další
             </button>
           </div>
-        ) : null}
+        </nav>
       </section>
 
       {createOpen ? (
