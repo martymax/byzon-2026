@@ -2603,6 +2603,48 @@ describe('F4 contract-first admin journeys', () => {
     ).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['2026-09-18T08:30:00Z', 'Europe/Prague', '10:30'],
+    ['2026-01-18T08:30:00Z', 'Europe/Prague', '09:30'],
+    ['2026-09-18T10:30:00+02:00', 'Europe/Prague', '10:30'],
+    ['2026-09-18T08:30:00Z', 'America/New_York', '04:30'],
+  ])(
+    'shows reservation activity %s in event timezone %s as %s',
+    async (startsAt, timezone, expectedTime) => {
+      window.history.replaceState({}, '', '/admin/rezervace');
+      const context = structuredClone(adminContextFixtures.organizer!);
+      context.event.timezone = timezone;
+      const sessions = structuredClone(
+        adminReservationSessionFixtures.complete!,
+      );
+      sessions.items = sessions.items.slice(0, 1).map((session) => ({
+        ...session,
+        sessionTitle: 'Koučovací zóna',
+        startsAt,
+        localDate: startsAt.slice(0, 10),
+        roomLabel: 'Testovací sál',
+      }));
+      const api = organizerApi((endpoint) => {
+        if (endpoint === adminReservationSessionsEndpoint)
+          return success(sessions);
+        throw new Error('Unexpected reservation endpoint.');
+      }, context);
+      const screen = await renderComponent(
+        <AdminWorkspaceShell api={api} environment="production">
+          <AdminReservationsWorkspace />
+        </AdminWorkspaceShell>,
+      );
+      await expect
+        .element(screen.getByText('Koučovací zóna', { exact: true }).last())
+        .toBeVisible();
+      await expect
+        .element(
+          screen.getByText(new RegExp(`${expectedTime} · Testovací sál`)),
+        )
+        .toBeVisible();
+    },
+  );
+
   it('shows the canonical reservation route session-first with accessible capacity progress', async () => {
     window.history.replaceState({}, '', '/admin/rezervace');
     const fullSessions = {

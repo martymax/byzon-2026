@@ -93,8 +93,23 @@ const reservationStateLabels: Record<ReservationItem['state'], string> = {
 };
 
 export const AdminReservationsRedesign = () => {
-  const { api, context, eventId, invalidateSensitive, permissions } =
-    useAdminWorkspace();
+  const {
+    api,
+    context,
+    eventId,
+    eventTimezone,
+    invalidateSensitive,
+    permissions,
+  } = useAdminWorkspace();
+  const timeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('cs-CZ', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: eventTimezone,
+      }),
+    [eventTimezone],
+  );
   const requestFence = useAdminRequestFence();
   const canRead = permissions.includes('reservation:any:read');
   const canManage =
@@ -711,7 +726,9 @@ export const AdminReservationsRedesign = () => {
                           session.localDate
                             ? formatProgramDay(session.localDate)
                             : null,
-                          session.startsAt?.slice(11, 16),
+                          session.startsAt
+                            ? timeFormatter.format(new Date(session.startsAt))
+                            : null,
                           session.roomLabel,
                         ]
                           .filter(Boolean)
