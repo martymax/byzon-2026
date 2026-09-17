@@ -73,6 +73,7 @@ import {
   adminAnnouncementSendEndpoint,
   adminAnnouncementTargetsEndpoint,
   adminAnnouncementListEndpoint,
+  adminAnnouncementDraftListEndpoint,
   adminAuditEndpoint,
   adminContextEndpoint,
   adminEngagementMutationEndpoint,
@@ -213,7 +214,8 @@ const organizerApi = (
   createApi((endpoint, options) =>
     endpoint === adminContextEndpoint
       ? success(context)
-      : endpoint === adminAnnouncementListEndpoint
+      : endpoint === adminAnnouncementListEndpoint ||
+          endpoint === adminAnnouncementDraftListEndpoint
         ? success({
             eventId: adminFixtureIds.event,
             items: [],
@@ -3264,7 +3266,8 @@ describe('F4 contract-first admin journeys', () => {
       }
       if (
         endpoint === adminAnnouncementTargetsEndpoint ||
-        endpoint === adminAnnouncementListEndpoint
+        endpoint === adminAnnouncementListEndpoint ||
+        endpoint === adminAnnouncementDraftListEndpoint
       ) {
         return failure('session_expired', 401);
       }

@@ -1154,6 +1154,8 @@ export const adminAuditActionSchema = z.enum([
   'ticket_import.preview_created',
   'ticket_import.applied',
   'announcement.send',
+  'announcement.draft_saved',
+  'announcement.draft_deleted',
   'role.grant',
   'role.revoke',
   'role.moderator.assign',

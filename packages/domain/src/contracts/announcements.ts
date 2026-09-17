@@ -399,8 +399,93 @@ export type AdminAnnouncementDraft = z.infer<
   typeof adminAnnouncementDraftSchema
 >;
 
+/** Saved concepts may be incomplete; preview/send still require complete content. */
+export const adminAnnouncementDraftContentSchema = z
+  .strictObject({
+    title: z
+      .string()
+      .max(160)
+      .refine(
+        (value) => !unsafeInlineTextPattern.test(value) && !/[<>]/.test(value),
+      ),
+    bodyText: z
+      .string()
+      .max(4000)
+      .refine(
+        (value) => !unsafeBodyTextPattern.test(value) && !/[<>]/.test(value),
+      ),
+    severity: announcementSeveritySchema,
+    audience: adminAnnouncementAudienceSchema,
+  })
+  .refine(
+    (value) =>
+      value.title.trim().length > 0 || value.bodyText.trim().length > 0,
+    {
+      message: 'Enter a title or message before saving a draft',
+    },
+  );
+
+export const adminAnnouncementSavedDraftSchema = z.strictObject({
+  id: uuidSchema,
+  version: z.number().int().positive(),
+  draft: adminAnnouncementDraftContentSchema,
+  createdBy: uuidSchema,
+  updatedBy: uuidSchema,
+  createdAt: dateTimeSchema,
+  updatedAt: dateTimeSchema,
+});
+export type AdminAnnouncementSavedDraft = z.infer<
+  typeof adminAnnouncementSavedDraftSchema
+>;
+
+export const adminAnnouncementDraftResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  item: adminAnnouncementSavedDraftSchema,
+});
+export const adminAnnouncementDraftListResponseSchema = z.strictObject({
+  eventId: uuidSchema,
+  items: z.array(adminAnnouncementSavedDraftSchema).max(20),
+  nextCursor: uuidSchema.nullable(),
+});
+export const adminAnnouncementDraftMutationRequestSchema = z.discriminatedUnion(
+  'action',
+  [
+    z.strictObject({
+      action: z.literal('save'),
+      draftId: uuidSchema,
+      expectedVersion: z.number().int().nonnegative(),
+      draft: adminAnnouncementDraftContentSchema,
+    }),
+    z.strictObject({
+      action: z.literal('delete'),
+      draftId: uuidSchema,
+      expectedVersion: z.number().int().positive(),
+    }),
+  ],
+);
+export type AdminAnnouncementDraftMutationRequest = z.infer<
+  typeof adminAnnouncementDraftMutationRequestSchema
+>;
+export const adminAnnouncementDraftMutationResponseSchema =
+  z.discriminatedUnion('outcome', [
+    adminAnnouncementDraftResponseSchema.extend({
+      outcome: z.literal('saved'),
+    }),
+    z.strictObject({
+      eventId: uuidSchema,
+      draftId: uuidSchema,
+      outcome: z.literal('deleted'),
+    }),
+  ]);
+
+const announcementSourceDraftSchema = z.strictObject({
+  id: uuidSchema,
+  version: z.number().int().positive(),
+});
+
 export const adminAnnouncementPreviewRequestSchema = z.strictObject({
   draft: adminAnnouncementDraftSchema,
+  sourceDraft: announcementSourceDraftSchema.optional(),
 });
 
 export type AdminAnnouncementPreviewRequest = z.infer<
@@ -413,6 +498,7 @@ export const adminAnnouncementPreviewResponseSchema = z
     previewId: uuidSchema,
     previewVersion: z.number().int().positive(),
     draft: adminAnnouncementDraftSchema,
+    sourceDraft: announcementSourceDraftSchema.optional(),
     audience: z.strictObject({
       recipientCount: z.number().int().nonnegative().max(100_000),
       excludedCount: z.number().int().nonnegative().max(100_000),
@@ -522,9 +608,29 @@ const adminAnnouncementReadProblems = [
   announcementInternalErrorProblemSchema,
 ] as const;
 
+const announcementDraftProblems = [
+  defineApiProblemSchema('ANNOUNCEMENT_DRAFT_NOT_FOUND', 404),
+  defineApiProblemSchema('ANNOUNCEMENT_DRAFT_STALE', 409),
+  defineApiProblemSchema('ANNOUNCEMENT_DRAFT_ALREADY_SENT', 409),
+] as const;
+
+export const adminAnnouncementDraftProblemSchema = z.discriminatedUnion(
+  'code',
+  [
+    ...adminAnnouncementReadProblems,
+    ...announcementDraftProblems,
+    idempotencyKeyReusedProblemSchema,
+    idempotencyInProgressProblemSchema,
+  ],
+);
+
 export const adminAnnouncementPreviewProblemSchema = z.discriminatedUnion(
   'code',
-  [...adminAnnouncementReadProblems, announcementEmptyAudienceProblemSchema],
+  [
+    ...adminAnnouncementReadProblems,
+    ...announcementDraftProblems,
+    announcementEmptyAudienceProblemSchema,
+  ],
 );
 
 export const adminAnnouncementTargetProblemSchema = z.discriminatedUnion(
@@ -534,6 +640,7 @@ export const adminAnnouncementTargetProblemSchema = z.discriminatedUnion(
 
 export const adminAnnouncementSendProblemSchema = z.discriminatedUnion('code', [
   ...adminAnnouncementReadProblems,
+  ...announcementDraftProblems,
   announcementEmptyAudienceProblemSchema,
   announcementStalePreviewProblemSchema,
   announcementPreviewExpiredProblemSchema,

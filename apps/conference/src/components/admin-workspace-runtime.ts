@@ -74,6 +74,12 @@ const baseAdminFailureMessage = (failure: ApiFailure<ApiProblem>): string => {
       return 'Kontrola už není aktuální. Vytvořte novou a oznámení znovu zkontrolujte.';
     case 'IMPORT_PREVIEW_BLOCKED':
       return 'Kontrola obsahuje konflikt nebo neznámý stav. Změny zatím nelze použít.';
+    case 'ANNOUNCEMENT_DRAFT_STALE':
+      return 'Koncept mezitím upravil jiný uživatel. Vaše změny zůstaly ve formuláři. Otevřete aktuální koncept z přehledu a zkontrolujte jej.';
+    case 'ANNOUNCEMENT_DRAFT_NOT_FOUND':
+      return 'Koncept už není dostupný. Obnovte přehled konceptů.';
+    case 'ANNOUNCEMENT_DRAFT_ALREADY_SENT':
+      return 'Tento koncept už někdo odeslal. Najdete ho v odeslaných oznámeních.';
     case 'ANNOUNCEMENT_EMPTY_AUDIENCE':
       return 'Vybrané publikum nemá žádné příjemce.';
     case 'EVENT_ACCESS_DENIED':

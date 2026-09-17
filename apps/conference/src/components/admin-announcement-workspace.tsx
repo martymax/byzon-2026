@@ -1,6 +1,9 @@
 'use client';
 
 import {
+  adminAnnouncementDraftContentSchema,
+  type AdminAnnouncementSavedDraft,
+  type AdminAnnouncementDraftMutationRequest,
   adminAnnouncementPreviewRequestSchema,
   adminAnnouncementSendRequestSchema,
   type AdminAnnouncementDraft,
@@ -15,11 +18,14 @@ import { AdminTechnicalDetails } from '@byzon/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  requestAdminAnnouncementDraft,
+  requestAdminAnnouncementDraftMutation,
   requestAdminAnnouncementPreview,
   requestAdminAnnouncementSend,
   requestAdminAnnouncementTargets,
 } from '@/lib/admin-api';
 
+import { AdminAnnouncementDrafts } from './admin-announcement-drafts';
 import { AdminAnnouncementHistory } from './admin-announcement-history';
 import { AdminConfirmDialog } from './admin-confirm-dialog';
 import { adminCountForms, formatCzechCount } from './admin-copy';
@@ -35,6 +41,11 @@ import {
   useAdminWorkspace,
 } from './admin-workspace-shell';
 import styles from './admin-workspace.module.css';
+
+type PendingDraftMutation = Readonly<{
+  body: AdminAnnouncementDraftMutationRequest;
+  idempotencyKey: string;
+}>;
 
 type PendingSend = Readonly<{
   body: AdminAnnouncementSendRequest;
@@ -71,7 +82,9 @@ export const AdminAnnouncementWorkspace = ({
   const [pending, setPending] = useState<PendingSend | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
-  const [busy, setBusy] = useState<'preview' | 'send' | null>(null);
+  const [busy, setBusy] = useState<
+    'preview' | 'send' | 'save' | 'load' | 'delete' | null
+  >(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
@@ -83,6 +96,20 @@ export const AdminAnnouncementWorkspace = ({
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [targetsReload, setTargetsReload] = useState(0);
   const availableTargets = targets ?? loadedTargets;
+  const titleRef = useRef<HTMLInputElement>(null);
+  const [savedDraft, setSavedDraft] =
+    useState<AdminAnnouncementSavedDraft | null>(null);
+  const [draftsRevision, setDraftsRevision] = useState(0);
+  const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  const [pendingDraftMutation, setPendingDraftMutation] =
+    useState<PendingDraftMutation | null>(null);
+  const [deleteDraft, setDeleteDraft] =
+    useState<AdminAnnouncementSavedDraft | null>(null);
+  const [switchDraft, setSwitchDraft] = useState<{ id: string | null } | null>(
+    null,
+  );
+  const editingLocked =
+    busy !== null || pending !== null || pendingDraftMutation !== null;
 
   const targetDateFormatter = useMemo(
     () =>
@@ -100,11 +127,19 @@ export const AdminAnnouncementWorkspace = ({
   const selectedTarget = availableTargets.find(
     (target) => target.sessionId === sessionId,
   );
-  const dirty =
-    title.length > 0 ||
-    bodyText.length > 0 ||
-    reason.length > 0 ||
-    audienceKind === 'session';
+  const draftContent: AdminAnnouncementDraft = {
+    title,
+    bodyText,
+    severity,
+    audience:
+      audienceKind === 'event'
+        ? { kind: 'event' }
+        : { kind: 'session', sessionId },
+  };
+  const contentDirty = savedDraft
+    ? JSON.stringify(draftContent) !== JSON.stringify(savedDraft.draft)
+    : title.length > 0 || bodyText.length > 0 || audienceKind === 'session';
+  const dirty = contentDirty || reason.length > 0;
 
   useEffect(() => {
     if (!dirty) return;
@@ -130,6 +165,8 @@ export const AdminAnnouncementWorkspace = ({
   const draftValidationFailed = attempted && !draftCandidate.success;
 
   const resetImmutablePreview = () => {
+    setDraftMessage(null);
+    setReason('');
     setPreview(null);
     setPending(null);
     setConfirming(false);
@@ -140,6 +177,12 @@ export const AdminAnnouncementWorkspace = ({
   };
 
   const wipe = useCallback(() => {
+    setSavedDraft(null);
+    setPendingDraftMutation(null);
+    setDraftMessage(null);
+    setDraftError(null);
+    setSendError(null);
+    setSwitchDraft(null);
     setTitle('');
     setBodyText('');
     setAudienceKind('event');
@@ -245,7 +288,16 @@ export const AdminAnnouncementWorkspace = ({
       );
       return;
     }
-    void createPreview(draftCandidate.data);
+    if (savedDraft && contentDirty) {
+      setDraftError('Před kontrolou uložte změny konceptu.');
+      return;
+    }
+    void createPreview({
+      ...draftCandidate.data,
+      ...(savedDraft
+        ? { sourceDraft: { id: savedDraft.id, version: savedDraft.version } }
+        : {}),
+    });
   };
 
   const sendCandidate = preview
@@ -308,7 +360,12 @@ export const AdminAnnouncementWorkspace = ({
         setAmbiguous(false);
         if (currentDraft) {
           await createPreview(
-            { draft: currentDraft },
+            {
+              draft: currentDraft,
+              ...(preview?.sourceDraft
+                ? { sourceDraft: preview.sourceDraft }
+                : {}),
+            },
             adminFailureMessage(result.failure, result.metadata?.requestId),
           );
         }
@@ -326,7 +383,130 @@ export const AdminAnnouncementWorkspace = ({
       const receipt = result.data;
       wipe();
       setSent(receipt);
+      setDraftsRevision((value) => value + 1);
     }
+  };
+
+  const openDraft = async (id: string | null) => {
+    setSwitchDraft(null);
+    if (id === null) {
+      wipe();
+      titleRef.current?.focus();
+      return;
+    }
+    const request = requestFence.begin('announcement-draft-open');
+    setBusy('load');
+    setDraftError(null);
+    const result = await requestAdminAnnouncementDraft(
+      api,
+      eventId,
+      id,
+      request.signal,
+    );
+    if (!request.isCurrent()) return;
+    request.finish();
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        wipe();
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      setDraftError(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      setDraftsRevision((value) => value + 1);
+      return;
+    }
+    if (result.kind === 'success') {
+      const item = result.data.item;
+      wipe();
+      setSavedDraft(item);
+      setTitle(item.draft.title);
+      setBodyText(item.draft.bodyText);
+      setAudienceKind(item.draft.audience.kind);
+      setSessionId(
+        item.draft.audience.kind === 'session'
+          ? item.draft.audience.sessionId
+          : '',
+      );
+      requestAnimationFrame(() => titleRef.current?.focus());
+    }
+  };
+  const chooseDraft = (id: string | null) => {
+    if (dirty) {
+      setSwitchDraft({ id });
+      titleRef.current?.focus();
+    } else void openDraft(id);
+  };
+  const mutateDraft = async (attempt: PendingDraftMutation) => {
+    const request = requestFence.begin('announcement-draft-mutation');
+    setPendingDraftMutation(attempt);
+    setDeleteDraft(null);
+    setBusy(attempt.body.action);
+    setDraftError(null);
+    setDraftMessage(null);
+    const result = await requestAdminAnnouncementDraftMutation(
+      api,
+      eventId,
+      attempt.body,
+      attempt.idempotencyKey,
+      request.signal,
+    );
+    if (!request.isCurrent()) return;
+    request.finish();
+    setBusy(null);
+    if (!result.ok) {
+      if (isAdminSecurityFailure(result)) {
+        wipe();
+        invalidateSensitive(
+          adminFailureMessage(result.failure, result.metadata?.requestId),
+        );
+        return;
+      }
+      if (!isAmbiguousAdminMutationFailure(result))
+        setPendingDraftMutation(null);
+      setDraftError(
+        adminFailureMessage(result.failure, result.metadata?.requestId),
+      );
+      return;
+    }
+    setPendingDraftMutation(null);
+    if (result.kind === 'success') {
+      resetImmutablePreview();
+      setAttempted(false);
+      if (result.data.outcome === 'saved') {
+        setSavedDraft(result.data.item);
+        setDraftMessage(
+          'Koncept je uložený. Později ho můžete otevřít vy nebo jiný oprávněný správce.',
+        );
+      } else {
+        if (savedDraft?.id === result.data.draftId) wipe();
+        setDraftMessage('Koncept byl smazán.');
+      }
+      setDraftsRevision((value) => value + 1);
+    }
+  };
+  const saveDraft = () => {
+    const content = adminAnnouncementDraftContentSchema.safeParse(draftContent);
+    setAttempted(false);
+    if (!content.success) {
+      setDraftError(
+        'Vyplňte alespoň nadpis nebo zprávu a zvolte platné publikum. Text nesmí obsahovat HTML značky.',
+      );
+      return;
+    }
+    void mutateDraft({
+      body: {
+        action: 'save',
+        draftId: savedDraft?.id ?? crypto.randomUUID(),
+        expectedVersion: savedDraft?.version ?? 0,
+        draft: content.data,
+      },
+      idempotencyKey: createAdminIdempotencyKey('announcement-draft'),
+    });
   };
 
   const previewSessionId =
@@ -350,8 +530,12 @@ export const AdminAnnouncementWorkspace = ({
         <h1>Oznámení účastníkům</h1>
         <p>
           Připravte kritickou provozní zprávu, zkontrolujte její publikum a až
-          potom ji odešlete do aplikace.
+          potom ji odešlete. Rozepsané oznámení můžete uložit jako koncept na
+          později.
         </p>
+        <a className={styles.secondaryButton} href="#announcement-drafts">
+          Přejít na koncepty
+        </a>
       </header>
 
       <ol className={styles.importSteps} aria-label="Postup odeslání oznámení">
@@ -377,7 +561,7 @@ export const AdminAnnouncementWorkspace = ({
 
       {dirty && !sent ? (
         <p className={styles.warning} role="status">
-          Máte rozpracované změny. Před odchodem je dokončete nebo smažte.
+          Máte neuložené změny. Před odchodem je uložte jako koncept.
         </p>
       ) : null}
       {recoveryMessage ? (
@@ -408,7 +592,55 @@ export const AdminAnnouncementWorkspace = ({
       ) : null}
 
       <section className={styles.panel} aria-labelledby="announcement-draft">
-        <h2 id="announcement-draft">Text a publikum</h2>
+        <div className={styles.panelHeader}>
+          <h2 id="announcement-draft">
+            {savedDraft ? 'Úprava konceptu' : 'Text a publikum'}
+          </h2>
+          <button
+            className={styles.secondaryButton}
+            disabled={editingLocked}
+            onClick={() => chooseDraft(null)}
+            type="button"
+          >
+            Nové oznámení
+          </button>
+        </div>
+        {savedDraft ? (
+          <p className={styles.muted}>
+            Koncept uložen{' '}
+            {targetDateFormatter.format(new Date(savedDraft.updatedAt))}. Před
+            odesláním znovu zkontrolujte aktuální příjemce.
+          </p>
+        ) : null}
+        {draftMessage ? (
+          <p className={styles.success} role="status">
+            {draftMessage}
+          </p>
+        ) : null}
+        {busy === 'load' ? <p role="status">Otevírám koncept…</p> : null}
+        {switchDraft ? (
+          <section className={styles.warning} role="alert">
+            <p>
+              Ve formuláři máte neuložené změny. Chcete je zahodit a pokračovat?
+            </p>
+            <div className={styles.actionRow}>
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setSwitchDraft(null)}
+                type="button"
+              >
+                Pokračovat v úpravách
+              </button>
+              <button
+                className={styles.dangerButton}
+                onClick={() => void openDraft(switchDraft.id)}
+                type="button"
+              >
+                Zahodit změny a pokračovat
+              </button>
+            </div>
+          </section>
+        ) : null}
         {draftValidationFailed || draftError ? (
           <section
             className={styles.errorSummary}
@@ -416,7 +648,7 @@ export const AdminAnnouncementWorkspace = ({
             role="alert"
             tabIndex={-1}
           >
-            <h2>Oznámení zatím nelze zkontrolovat</h2>
+            <h2>Oznámení vyžaduje pozornost</h2>
             <p id="admin-announcement-draft-error">
               {draftError ??
                 'Doplňte nadpis, zprávu a platné publikum bez HTML značek.'}
@@ -429,8 +661,9 @@ export const AdminAnnouncementWorkspace = ({
             <input
               aria-describedby="admin-announcement-title-count"
               aria-invalid={draftValidationFailed}
-              disabled={pending !== null}
+              disabled={editingLocked}
               maxLength={160}
+              ref={titleRef}
               onChange={(event) => {
                 setTitle(event.target.value);
                 resetImmutablePreview();
@@ -452,7 +685,7 @@ export const AdminAnnouncementWorkspace = ({
           <textarea
             aria-describedby="admin-announcement-body-help"
             aria-invalid={draftValidationFailed}
-            disabled={pending !== null}
+            disabled={editingLocked}
             maxLength={4000}
             onChange={(event) => {
               setBodyText(event.target.value);
@@ -468,7 +701,7 @@ export const AdminAnnouncementWorkspace = ({
           <label className={styles.field}>
             <span>Komu</span>
             <select
-              disabled={pending !== null}
+              disabled={editingLocked}
               onChange={(event) => {
                 const nextKind = event.target.value as 'event' | 'session';
                 setAudienceKind(nextKind);
@@ -482,7 +715,7 @@ export const AdminAnnouncementWorkspace = ({
               value={audienceKind}
             >
               <option value="event">Všem účastníkům akce</option>
-              {availableTargets.length > 0 ? (
+              {availableTargets.length > 0 || audienceKind === 'session' ? (
                 <option value="session">Účastníkům jedné aktivity</option>
               ) : null}
             </select>
@@ -492,13 +725,18 @@ export const AdminAnnouncementWorkspace = ({
               <span>Aktivita</span>
               <select
                 aria-invalid={draftValidationFailed}
-                disabled={pending !== null}
+                disabled={editingLocked}
                 onChange={(event) => {
                   setSessionId(event.target.value);
                   resetImmutablePreview();
                 }}
                 value={sessionId}
               >
+                {!selectedTarget ? (
+                  <option value={sessionId} disabled>
+                    Aktivita není dostupná – vyberte jinou
+                  </option>
+                ) : null}
                 {availableTargets.map((target) => (
                   <option key={target.sessionId} value={target.sessionId}>
                     {targetLabel(target)}
@@ -532,14 +770,35 @@ export const AdminAnnouncementWorkspace = ({
           </small>
         </article>
 
-        <button
-          className={styles.button}
-          disabled={busy !== null || pending !== null}
-          onClick={previewDraft}
-          type="button"
-        >
-          {busy === 'preview' ? 'Počítám publikum…' : 'Zkontrolovat oznámení'}
-        </button>
+        <div className={styles.actionRow}>
+          <button
+            className={styles.secondaryButton}
+            disabled={editingLocked || (savedDraft !== null && !contentDirty)}
+            onClick={saveDraft}
+            type="button"
+          >
+            {busy === 'save' ? 'Ukládám koncept…' : 'Uložit koncept'}
+          </button>
+          <button
+            className={styles.button}
+            disabled={editingLocked}
+            onClick={previewDraft}
+            type="button"
+          >
+            {busy === 'preview' ? 'Počítám publikum…' : 'Zkontrolovat oznámení'}
+          </button>
+          {pendingDraftMutation && busy === null ? (
+            <button
+              className={styles.secondaryButton}
+              onClick={() => void mutateDraft(pendingDraftMutation)}
+              type="button"
+            >
+              {pendingDraftMutation.body.action === 'save'
+                ? 'Zopakovat uložení konceptu'
+                : 'Zopakovat smazání konceptu'}
+            </button>
+          ) : null}
+        </div>
       </section>
 
       {preview ? (
@@ -632,7 +891,7 @@ export const AdminAnnouncementWorkspace = ({
             <textarea
               aria-describedby="admin-announcement-reason-help"
               aria-invalid={sendValidationFailed}
-              disabled={pending !== null}
+              disabled={editingLocked}
               onChange={(event) => setReason(event.target.value)}
               value={reason}
             />
@@ -643,11 +902,7 @@ export const AdminAnnouncementWorkspace = ({
           <div className={styles.actionRow}>
             <button
               className={styles.dangerButton}
-              disabled={
-                busy !== null ||
-                pending !== null ||
-                preview.audience.recipientCount === 0
-              }
+              disabled={editingLocked || preview.audience.recipientCount === 0}
               onClick={prepareSend}
               type="button"
             >
@@ -685,7 +940,37 @@ export const AdminAnnouncementWorkspace = ({
         </section>
       ) : null}
 
+      <AdminAnnouncementDrafts
+        revision={draftsRevision}
+        disabled={editingLocked}
+        activeId={savedDraft?.id}
+        onOpen={chooseDraft}
+        onDelete={setDeleteDraft}
+      />
       <AdminAnnouncementHistory revision={sent?.announcementId} />
+      {deleteDraft ? (
+        <AdminConfirmDialog
+          title="Smazat koncept oznámení?"
+          description="Koncept už nebude dostupný ani ostatním správcům. Žádné oznámení se neodešle."
+          impact={<p>{deleteDraft.draft.title || 'Koncept bez nadpisu'}</p>}
+          acknowledgement="Chci tento koncept smazat."
+          confirmLabel="Potvrdit smazání konceptu"
+          danger
+          onDismiss={() => setDeleteDraft(null)}
+          onConfirm={() =>
+            void mutateDraft({
+              body: {
+                action: 'delete',
+                draftId: deleteDraft.id,
+                expectedVersion: deleteDraft.version,
+              },
+              idempotencyKey: createAdminIdempotencyKey(
+                'announcement-draft-delete',
+              ),
+            })
+          }
+        />
+      ) : null}
 
       {confirming && pending && preview ? (
         <AdminConfirmDialog

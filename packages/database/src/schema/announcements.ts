@@ -24,6 +24,46 @@ export const announcementAudienceKind = pgEnum('announcement_audience_kind', [
   'session',
 ]);
 
+export const announcementDrafts = pgTable(
+  'announcement_drafts',
+  {
+    id: uuid('id').primaryKey(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    version: integer('version').default(1).notNull(),
+    draft: jsonb('draft_json').$type<Record<string, unknown>>().notNull(),
+    createdBy: uuid('created_by').notNull(),
+    updatedBy: uuid('updated_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    sentAnnouncementId: uuid('sent_announcement_id'),
+  },
+  (table) => [
+    unique('announcement_drafts_event_id_id_unique').on(
+      table.eventId,
+      table.id,
+    ),
+    foreignKey({
+      columns: [table.eventId, table.createdBy],
+      foreignColumns: [eventMemberships.eventId, eventMemberships.userId],
+      name: 'announcement_drafts_creator_event_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.eventId, table.updatedBy],
+      foreignColumns: [eventMemberships.eventId, eventMemberships.userId],
+      name: 'announcement_drafts_editor_event_fk',
+    }).onDelete('restrict'),
+    index('announcement_drafts_event_id_idx').on(table.eventId, table.id),
+    check('announcement_drafts_version_check', sql`${table.version} > 0`),
+  ],
+);
+
 export const announcementPreviews = pgTable(
   'announcement_previews',
   {
@@ -32,6 +72,8 @@ export const announcementPreviews = pgTable(
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
     version: integer('version').default(1).notNull(),
+    sourceDraftId: uuid('source_draft_id'),
+    sourceDraftVersion: integer('source_draft_version'),
     draft: jsonb('draft_json').$type<Record<string, unknown>>().notNull(),
     recipientUserIds: jsonb('recipient_user_ids_json')
       .$type<string[]>()
@@ -59,6 +101,15 @@ export const announcementPreviews = pgTable(
       table.createdAt,
     ),
     check('announcement_previews_version_check', sql`${table.version} > 0`),
+    foreignKey({
+      columns: [table.eventId, table.sourceDraftId],
+      foreignColumns: [announcementDrafts.eventId, announcementDrafts.id],
+      name: 'announcement_previews_draft_event_fk',
+    }).onDelete('restrict'),
+    check(
+      'announcement_previews_source_draft_check',
+      sql`(${table.sourceDraftId} is null and ${table.sourceDraftVersion} is null) or (${table.sourceDraftId} is not null and ${table.sourceDraftVersion} is not null and ${table.sourceDraftVersion} > 0)`,
+    ),
     check(
       'announcement_previews_count_check',
       sql`${table.recipientCount} >= 0`,

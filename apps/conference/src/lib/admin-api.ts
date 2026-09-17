@@ -63,6 +63,12 @@ import {
   type AdminTeamMemberMutationRequest,
 } from '@byzon/domain/contracts/admin';
 import {
+  adminAnnouncementDraftListResponseSchema,
+  adminAnnouncementDraftResponseSchema,
+  adminAnnouncementDraftMutationRequestSchema,
+  adminAnnouncementDraftMutationResponseSchema,
+  adminAnnouncementDraftProblemSchema,
+  type AdminAnnouncementDraftMutationRequest,
   adminAnnouncementListResponseSchema,
   adminAnnouncementDeleteResponseSchema,
   adminAnnouncementDeleteProblemSchema,
@@ -407,6 +413,9 @@ export const adminAnnouncementPreviewEndpoint = defineApiEndpoint({
     'VALIDATION_FAILED',
     'INTERNAL_ERROR',
     'ANNOUNCEMENT_EMPTY_AUDIENCE',
+    'ANNOUNCEMENT_DRAFT_NOT_FOUND',
+    'ANNOUNCEMENT_DRAFT_STALE',
+    'ANNOUNCEMENT_DRAFT_ALREADY_SENT',
   ],
   responseKind: 'json',
   retry: 'never',
@@ -444,6 +453,9 @@ export const adminAnnouncementSendEndpoint = defineApiEndpoint({
     'VALIDATION_FAILED',
     'INTERNAL_ERROR',
     'ANNOUNCEMENT_EMPTY_AUDIENCE',
+    'ANNOUNCEMENT_DRAFT_NOT_FOUND',
+    'ANNOUNCEMENT_DRAFT_STALE',
+    'ANNOUNCEMENT_DRAFT_ALREADY_SENT',
     'ANNOUNCEMENT_PREVIEW_STALE',
     'ANNOUNCEMENT_PREVIEW_EXPIRED',
     'IDEMPOTENCY_KEY_REUSED',
@@ -1092,7 +1104,10 @@ export const requestAdminAnnouncementPreview = async (
       cache: 'no-store',
       ...(signal ? { signal } : {}),
     }),
-    (data) => data.eventId === eventId && sameJson(data.draft, body.draft),
+    (data) =>
+      data.eventId === eventId &&
+      sameJson(data.draft, body.draft) &&
+      sameJson(data.sourceDraft ?? null, body.sourceDraft ?? null),
   );
 
 export const requestAdminAnnouncementTargets = async (
@@ -1528,4 +1543,93 @@ export const requestAdminAnnouncementDelete = async (
     }),
     (data) =>
       data.eventId === eventId && data.announcementId === announcementId,
+  );
+
+export const adminAnnouncementDraftListEndpoint = defineApiEndpoint({
+  ...adminAnnouncementTargetsEndpoint,
+  successSchema: adminAnnouncementDraftListResponseSchema,
+});
+export const adminAnnouncementDraftEndpoint = defineApiEndpoint({
+  ...adminAnnouncementTargetsEndpoint,
+  successSchema: adminAnnouncementDraftResponseSchema,
+  problemSchema: adminAnnouncementDraftProblemSchema,
+  problemCodes: [
+    ...adminAnnouncementTargetsEndpoint.problemCodes,
+    'ANNOUNCEMENT_DRAFT_NOT_FOUND',
+    'ANNOUNCEMENT_DRAFT_STALE',
+    'ANNOUNCEMENT_DRAFT_ALREADY_SENT',
+  ],
+});
+export const adminAnnouncementDraftMutationEndpoint = defineApiEndpoint({
+  ...adminAnnouncementDraftEndpoint,
+  method: 'POST',
+  requestSchema: adminAnnouncementDraftMutationRequestSchema,
+  successSchema: adminAnnouncementDraftMutationResponseSchema,
+  problemCodes: [
+    ...adminAnnouncementDraftEndpoint.problemCodes,
+    'IDEMPOTENCY_KEY_REUSED',
+    'IDEMPOTENCY_IN_PROGRESS',
+  ],
+  retry: 'never',
+  idempotency: 'required',
+});
+export const requestAdminAnnouncementDraftList = async (
+  api: ApiPort,
+  eventId: string,
+  cursor?: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminAnnouncementDraftListEndpoint, {
+      path: eventPath(
+        eventId,
+        `/announcements/drafts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId,
+  );
+
+export const requestAdminAnnouncementDraft = async (
+  api: ApiPort,
+  eventId: string,
+  draftId: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminAnnouncementDraftEndpoint, {
+      path: eventPath(
+        eventId,
+        `/announcements/drafts/${encodeURIComponent(draftId)}`,
+      ),
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) => data.eventId === eventId && data.item.id === draftId,
+  );
+
+export const requestAdminAnnouncementDraftMutation = async (
+  api: ApiPort,
+  eventId: string,
+  body: AdminAnnouncementDraftMutationRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  correlated(
+    await api.request(adminAnnouncementDraftMutationEndpoint, {
+      path: eventPath(eventId, '/announcements/drafts'),
+      body,
+      idempotencyKey,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+    (data) =>
+      data.eventId === eventId &&
+      (body.action === 'save'
+        ? data.outcome === 'saved' &&
+          data.item.id === body.draftId &&
+          data.item.version === body.expectedVersion + 1 &&
+          sameJson(data.item.draft, body.draft)
+        : data.outcome === 'deleted' && data.draftId === body.draftId),
   );

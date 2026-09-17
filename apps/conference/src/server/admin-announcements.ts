@@ -9,6 +9,12 @@ import {
 } from '@byzon/database';
 import {
   adminAnnouncementDraftSchema,
+  adminAnnouncementDraftContentSchema,
+  adminAnnouncementDraftListResponseSchema,
+  adminAnnouncementDraftResponseSchema,
+  adminAnnouncementDraftMutationRequestSchema,
+  adminAnnouncementDraftMutationResponseSchema,
+  adminAnnouncementSavedDraftSchema,
   adminAnnouncementListResponseSchema,
   adminAnnouncementDeleteResponseSchema,
   adminAnnouncementPreviewRequestSchema,
@@ -18,7 +24,7 @@ import {
   adminAnnouncementTargetListResponseSchema,
   type AdminAnnouncementDraft,
 } from '@byzon/domain/contracts';
-import { and, asc, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -124,6 +130,58 @@ const requireAdmin = async (
   }
   return identity.user.id;
 };
+
+const requireSavedDraft = async (
+  db: Database | DatabaseTransaction,
+  eventId: string,
+  id: string,
+  version?: number,
+) => {
+  const row = await db.query.announcementDrafts.findFirst({
+    where: and(
+      eq(schema.announcementDrafts.eventId, eventId),
+      eq(schema.announcementDrafts.id, id),
+    ),
+  });
+  if (!row || row.deletedAt) {
+    throw apiProblem(
+      404,
+      'ANNOUNCEMENT_DRAFT_NOT_FOUND',
+      'Draft not found',
+      'The announcement draft is unavailable.',
+    );
+  }
+  if (row.sentAnnouncementId) {
+    throw apiProblem(
+      409,
+      'ANNOUNCEMENT_DRAFT_ALREADY_SENT',
+      'Draft already sent',
+      'This draft has already been sent.',
+    );
+  }
+  if (version !== undefined && row.version !== version) {
+    throw apiProblem(
+      409,
+      'ANNOUNCEMENT_DRAFT_STALE',
+      'Draft changed',
+      'Reload the draft before making further changes.',
+    );
+  }
+  return row;
+};
+
+const savedDraftResponse = (
+  row: typeof schema.announcementDrafts.$inferSelect,
+) =>
+  adminAnnouncementSavedDraftSchema.parse({
+    id: row.id,
+    version: row.version,
+    draft: row.draft,
+    createdBy: row.createdBy,
+    updatedBy: row.updatedBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  });
 
 const activeParticipantIds = async (
   db: Database | DatabaseTransaction,
@@ -360,6 +418,31 @@ export const handleAdminAnnouncementPreview = async (
         transaction,
         `announcement-audience:${eventId}`,
       );
+      if (body.data.sourceDraft) {
+        const source = body.data.sourceDraft;
+        await acquireTransactionLock(
+          transaction,
+          `announcement-draft:${eventId}:${source.id}`,
+        );
+        const saved = await requireSavedDraft(
+          transaction,
+          eventId,
+          source.id,
+          source.version,
+        );
+        if (
+          JSON.stringify(
+            adminAnnouncementDraftContentSchema.parse(saved.draft),
+          ) !== JSON.stringify(body.data.draft)
+        ) {
+          throw apiProblem(
+            409,
+            'ANNOUNCEMENT_DRAFT_STALE',
+            'Draft changed',
+            'Save the draft before previewing it.',
+          );
+        }
+      }
       const audience = await audienceSnapshot(
         transaction,
         eventId,
@@ -385,6 +468,8 @@ export const handleAdminAnnouncementPreview = async (
         id: previewId,
         eventId,
         version: 1,
+        sourceDraftId: body.data.sourceDraft?.id ?? null,
+        sourceDraftVersion: body.data.sourceDraft?.version ?? null,
         draft: body.data.draft,
         recipientUserIds: audience.recipientIds,
         recipientCount: audience.recipientIds.length,
@@ -404,6 +489,9 @@ export const handleAdminAnnouncementPreview = async (
         },
         createdAt: now.toISOString(),
         expiresAt: expiresAt.toISOString(),
+        ...(body.data.sourceDraft
+          ? { sourceDraft: body.data.sourceDraft }
+          : {}),
       });
     });
     return Response.json(response, {
@@ -550,6 +638,18 @@ export const handleAdminAnnouncementSend = async (
           });
           return { status: 200, body: response };
         }
+        if (preview.sourceDraftId) {
+          await acquireTransactionLock(
+            transaction,
+            `announcement-draft:${eventId}:${preview.sourceDraftId}`,
+          );
+          await requireSavedDraft(
+            transaction,
+            eventId,
+            preview.sourceDraftId,
+            preview.sourceDraftVersion!,
+          );
+        }
         let sessionTitle: string | null = null;
         if (draft.audience.kind === 'session') {
           sessionTitle =
@@ -612,6 +712,21 @@ export const handleAdminAnnouncementSend = async (
           .update(schema.announcementPreviews)
           .set({ sentAnnouncementId: announcementId })
           .where(eq(schema.announcementPreviews.id, preview.id));
+        if (preview.sourceDraftId) {
+          await transaction
+            .update(schema.announcementDrafts)
+            .set({
+              sentAnnouncementId: announcementId,
+              updatedBy: actorId,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(schema.announcementDrafts.eventId, eventId),
+                eq(schema.announcementDrafts.id, preview.sourceDraftId),
+              ),
+            );
+        }
         const auditId = await writeAuditLog(transaction, {
           eventId,
           actorId,
@@ -625,6 +740,9 @@ export const handleAdminAnnouncementSend = async (
             severity: 'critical',
             audienceKind: draft.audience.kind,
             recipientCount: preview.recipientCount,
+            ...(preview.sourceDraftId
+              ? { draftId: preview.sourceDraftId }
+              : {}),
           },
         });
         const response = adminAnnouncementSendResponseSchema.parse({
@@ -832,6 +950,289 @@ export const handleAdminAnnouncementDelete = async (
             eventId,
             announcementId,
             outcome: 'deleted',
+          }),
+        };
+      },
+    );
+    return Response.json(result.body, {
+      status: result.status,
+      headers: {
+        ...privateHeaders(requestId),
+        'idempotency-replayed': String(result.replayed),
+      },
+    });
+  } catch (error) {
+    const response = problemResponse(error, requestId);
+    Object.entries(privateHeaders(requestId)).forEach(([name, value]) =>
+      response.headers.set(name, value),
+    );
+    return response;
+  }
+};
+
+/** Drafts are shared by the event's announcement administrators, not owned by a browser or creator. */
+export const handleAdminAnnouncementDrafts = async (
+  request: Request,
+  eventId: string,
+  dependencies: AdminAnnouncementDependencies,
+  draftId?: string,
+): Promise<Response> => {
+  const requestId = getRequestId(request.headers);
+  try {
+    if (request.method !== 'GET' && (request.method !== 'POST' || draftId)) {
+      throw apiProblem(
+        405,
+        'METHOD_NOT_ALLOWED',
+        'Method not allowed',
+        'The method is not supported.',
+      );
+    }
+    if (
+      request.method !== 'GET' &&
+      request.headers.get('origin') !== dependencies.allowedOrigin
+    ) {
+      throw apiProblem(
+        403,
+        'EVENT_ACCESS_DENIED',
+        'Event access denied',
+        'The request origin is not allowed.',
+      );
+    }
+    const actorId = await requireAdmin(request, eventId, dependencies);
+    if (request.method === 'GET') {
+      if (draftId) {
+        if (!uuidSchema.safeParse(draftId).success) {
+          throw apiProblem(
+            404,
+            'ANNOUNCEMENT_DRAFT_NOT_FOUND',
+            'Draft not found',
+            'The announcement draft is unavailable.',
+          );
+        }
+        const row = await requireSavedDraft(dependencies.db, eventId, draftId);
+        return Response.json(
+          adminAnnouncementDraftResponseSchema.parse({
+            eventId,
+            item: savedDraftResponse(row),
+          }),
+          { headers: privateHeaders(requestId) },
+        );
+      }
+      const cursor = new URL(request.url).searchParams.get('cursor');
+      if (cursor !== null && !uuidSchema.safeParse(cursor).success) {
+        throw apiProblem(
+          422,
+          'VALIDATION_FAILED',
+          'Invalid cursor',
+          'The draft cursor is invalid.',
+        );
+      }
+      // Draft IDs are client-generated for safe retries; use creation time for chronological pages.
+      const anchor = cursor
+        ? await dependencies.db.query.announcementDrafts.findFirst({
+            columns: { id: true, createdAt: true },
+            where: and(
+              eq(schema.announcementDrafts.eventId, eventId),
+              eq(schema.announcementDrafts.id, cursor),
+            ),
+          })
+        : undefined;
+      if (cursor && !anchor)
+        throw apiProblem(
+          422,
+          'VALIDATION_FAILED',
+          'Invalid cursor',
+          'The draft cursor is unavailable.',
+        );
+      const rows = await dependencies.db.query.announcementDrafts.findMany({
+        where: and(
+          eq(schema.announcementDrafts.eventId, eventId),
+          isNull(schema.announcementDrafts.deletedAt),
+          isNull(schema.announcementDrafts.sentAnnouncementId),
+          anchor
+            ? or(
+                lt(schema.announcementDrafts.createdAt, anchor.createdAt),
+                and(
+                  eq(schema.announcementDrafts.createdAt, anchor.createdAt),
+                  lt(schema.announcementDrafts.id, anchor.id),
+                ),
+              )
+            : undefined,
+        ),
+        orderBy: [
+          desc(schema.announcementDrafts.createdAt),
+          desc(schema.announcementDrafts.id),
+        ],
+        limit: 21,
+      });
+      const page = rows.slice(0, 20);
+      return Response.json(
+        adminAnnouncementDraftListResponseSchema.parse({
+          eventId,
+          items: page.map(savedDraftResponse),
+          nextCursor: rows.length > 20 ? page.at(-1)!.id : null,
+        }),
+        { headers: privateHeaders(requestId) },
+      );
+    }
+    const raw = await parseJson(request);
+    const body = adminAnnouncementDraftMutationRequestSchema.safeParse(raw);
+    if (!body.success) {
+      throw apiProblem(
+        422,
+        'VALIDATION_FAILED',
+        'Invalid draft',
+        'The draft and expected version are required.',
+      );
+    }
+    const input = body.data;
+    const now = dependencies.now?.() ?? new Date();
+    const result = await executeIdempotentMutation(
+      dependencies.db,
+      {
+        eventId,
+        actorId,
+        scope: 'announcement.draft',
+        key: readIdempotencyKey(request.headers),
+        requestHash: hashIdempotencyRequest({
+          method: request.method,
+          path: new URL(request.url).pathname,
+          body: JSON.stringify(raw),
+        }),
+        ttlMs: IDEMPOTENCY_TTL_MS,
+        now,
+      },
+      async (transaction) => {
+        await acquireTransactionLock(
+          transaction,
+          `announcement-draft:${eventId}:${input.draftId}`,
+        );
+        if (input.action === 'delete') {
+          await requireSavedDraft(
+            transaction,
+            eventId,
+            input.draftId,
+            input.expectedVersion,
+          );
+          await transaction
+            .update(schema.announcementDrafts)
+            .set({
+              deletedAt: now,
+              updatedAt: now,
+              updatedBy: actorId,
+              version: input.expectedVersion + 1,
+            })
+            .where(
+              and(
+                eq(schema.announcementDrafts.eventId, eventId),
+                eq(schema.announcementDrafts.id, input.draftId),
+              ),
+            );
+          await writeAuditLog(transaction, {
+            eventId,
+            actorId,
+            actorType: 'user',
+            action: 'announcement.draft_deleted',
+            targetType: 'announcement_draft',
+            targetId: input.draftId,
+            requestId,
+            reason: 'Koncept oznámení odstraněn.',
+            after: { deleted: true },
+          });
+          return {
+            status: 200,
+            body: adminAnnouncementDraftMutationResponseSchema.parse({
+              eventId,
+              draftId: input.draftId,
+              outcome: 'deleted',
+            }),
+          };
+        }
+        // Audience membership is deliberately resolved only when preparing to send.
+        if (input.draft.audience.kind === 'session') {
+          const target = await transaction.query.programSessions.findFirst({
+            columns: { id: true },
+            where: and(
+              eq(schema.programSessions.eventId, eventId),
+              eq(schema.programSessions.id, input.draft.audience.sessionId),
+              inArray(schema.programSessions.status, ['draft', 'published']),
+            ),
+          });
+          if (!target)
+            throw apiProblem(
+              422,
+              'VALIDATION_FAILED',
+              'Invalid audience',
+              'The session audience is unavailable.',
+            );
+        }
+        let row: typeof schema.announcementDrafts.$inferSelect | undefined;
+        if (input.expectedVersion === 0) {
+          [row] = await transaction
+            .insert(schema.announcementDrafts)
+            .values({
+              id: input.draftId,
+              eventId,
+              version: 1,
+              draft: input.draft,
+              createdBy: actorId,
+              updatedBy: actorId,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoNothing()
+            .returning();
+          if (!row)
+            throw apiProblem(
+              409,
+              'ANNOUNCEMENT_DRAFT_STALE',
+              'Draft changed',
+              'Reload the draft before making further changes.',
+            );
+        } else {
+          await requireSavedDraft(
+            transaction,
+            eventId,
+            input.draftId,
+            input.expectedVersion,
+          );
+          [row] = await transaction
+            .update(schema.announcementDrafts)
+            .set({
+              draft: input.draft,
+              version: input.expectedVersion + 1,
+              updatedBy: actorId,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(schema.announcementDrafts.eventId, eventId),
+                eq(schema.announcementDrafts.id, input.draftId),
+              ),
+            )
+            .returning();
+        }
+        if (!row) throw new Error('Draft write returned no row');
+        await writeAuditLog(transaction, {
+          eventId,
+          actorId,
+          actorType: 'user',
+          action: 'announcement.draft_saved',
+          targetType: 'announcement_draft',
+          targetId: row.id,
+          requestId,
+          reason: 'Koncept oznámení uložen.',
+          after: {
+            version: row.version,
+            audienceKind: input.draft.audience.kind,
+          },
+        });
+        return {
+          status: input.expectedVersion === 0 ? 201 : 200,
+          body: adminAnnouncementDraftMutationResponseSchema.parse({
+            eventId,
+            item: savedDraftResponse(row),
+            outcome: 'saved',
           }),
         };
       },

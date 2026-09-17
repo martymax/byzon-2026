@@ -10,6 +10,13 @@ import {
   invitationBatchCreatedSchema,
   createInvitationBatchSchema,
   type AdminInvitationRecipient,
+  adminAnnouncementDraftListResponseSchema,
+  adminAnnouncementDraftResponseSchema,
+  adminAnnouncementDraftMutationRequestSchema,
+  adminAnnouncementDraftMutationResponseSchema,
+  adminAnnouncementDraftProblemSchema,
+  type AdminAnnouncementSavedDraft,
+  problemTypeForCode,
   adminAnnouncementListResponseSchema,
   adminAnnouncementDeleteResponseSchema,
   adminAnnouncementDeleteProblemSchema,
@@ -186,6 +193,9 @@ interface AdminMockState {
   teamMembers: AdminTeamMember[];
   teamVersion: number;
   settings: AdminEventSettings;
+  savedAnnouncementDrafts: Map<string, AdminAnnouncementSavedDraft>;
+  sentAnnouncementDrafts: Set<string>;
+  announcementSourceDraft: { id: string; version: number } | null;
   announcementHistory: AdminAnnouncementListItem[];
   announcementDraft: AdminAnnouncementDraft | null;
   announcementPreviewId: string | null;
@@ -284,6 +294,9 @@ const initialState = (): AdminMockState => {
     ],
     teamVersion: 1,
     settings: clone(adminEventSettingsFixtures.open!),
+    savedAnnouncementDrafts: new Map(),
+    sentAnnouncementDrafts: new Set(),
+    announcementSourceDraft: null,
     announcementHistory: [],
     announcementDraft: null,
     announcementPreviewId: null,
@@ -429,6 +442,20 @@ const storeMutation = (
     response,
   });
 };
+
+const draftProblem = (code: string, status: number) =>
+  mockProblemResponse(
+    adminAnnouncementDraftProblemSchema,
+    {
+      code,
+      status,
+      type: problemTypeForCode(code),
+      title: 'Draft unavailable',
+      detail: 'Reload the announcement draft.',
+      requestId: 'admin-mock-announcement-draft',
+    },
+    { fixtureName: 'admin.mock.draft-problem' },
+  );
 
 const scenario = (value: string): string => value.toLocaleLowerCase('en-US');
 
@@ -2172,6 +2199,124 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
     );
   }),
 
+  http.get(
+    '*/api/v1/admin/events/:eventId/announcements/drafts',
+    ({ params, request }) => {
+      const denied = authorize(
+        adminAnnouncementDraftProblemSchema,
+        ['announcement:send'],
+        'admin.mock.drafts',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId))
+        return draftProblem('EVENT_ACCESS_DENIED', 403);
+      const cursor = new URL(request.url).searchParams.get('cursor');
+      const items = [...state.savedAnnouncementDrafts.values()]
+        .filter(
+          (item) =>
+            !state.sentAnnouncementDrafts.has(item.id) &&
+            (!cursor || item.id < cursor),
+        )
+        .sort((a, b) => b.id.localeCompare(a.id));
+      return mockJsonResponse(
+        adminAnnouncementDraftListResponseSchema,
+        {
+          eventId: adminFixtureIds.event,
+          items: items.slice(0, 20),
+          nextCursor: items.length > 20 ? items[19]!.id : null,
+        },
+        successOptions('admin.mock.drafts'),
+      );
+    },
+  ),
+  http.get(
+    '*/api/v1/admin/events/:eventId/announcements/drafts/:draftId',
+    ({ params }) => {
+      const denied = authorize(
+        adminAnnouncementDraftProblemSchema,
+        ['announcement:send'],
+        'admin.mock.draft',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId))
+        return draftProblem('EVENT_ACCESS_DENIED', 403);
+      const id = String(params.draftId);
+      const item = state.savedAnnouncementDrafts.get(id);
+      if (!item) return draftProblem('ANNOUNCEMENT_DRAFT_NOT_FOUND', 404);
+      if (state.sentAnnouncementDrafts.has(id))
+        return draftProblem('ANNOUNCEMENT_DRAFT_ALREADY_SENT', 409);
+      return mockJsonResponse(
+        adminAnnouncementDraftResponseSchema,
+        { eventId: adminFixtureIds.event, item },
+        successOptions('admin.mock.draft'),
+      );
+    },
+  ),
+  http.post(
+    '*/api/v1/admin/events/:eventId/announcements/drafts',
+    async ({ params, request }) => {
+      const denied = authorize(
+        adminAnnouncementDraftProblemSchema,
+        ['announcement:send'],
+        'admin.mock.draft-mutation',
+      );
+      if (denied) return denied;
+      if (!routeMatchesEvent(params.eventId))
+        return draftProblem('EVENT_ACCESS_DENIED', 403);
+      const body = adminAnnouncementDraftMutationRequestSchema.safeParse(
+        await request.json().catch(() => undefined),
+      );
+      if (!body.success) return draftProblem('VALIDATION_FAILED', 422);
+      const attempt = mutationResult(request, 'announcement-draft', body.data);
+      if (!attempt || attempt.kind === 'collision')
+        return draftProblem('IDEMPOTENCY_KEY_REUSED', 409);
+      if (attempt.kind === 'replay')
+        return mockJsonResponse(
+          adminAnnouncementDraftMutationResponseSchema,
+          attempt.response,
+          successOptions('admin.mock.draft-replay'),
+        );
+      const input = body.data;
+      const existing = state.savedAnnouncementDrafts.get(input.draftId);
+      if (state.sentAnnouncementDrafts.has(input.draftId))
+        return draftProblem('ANNOUNCEMENT_DRAFT_ALREADY_SENT', 409);
+      if (!existing && input.expectedVersion > 0)
+        return draftProblem('ANNOUNCEMENT_DRAFT_NOT_FOUND', 404);
+      if ((existing?.version ?? 0) !== input.expectedVersion)
+        return draftProblem('ANNOUNCEMENT_DRAFT_STALE', 409);
+      const now = new Date().toISOString();
+      const item =
+        input.action === 'save'
+          ? {
+              id: input.draftId,
+              version: input.expectedVersion + 1,
+              draft: input.draft,
+              createdBy: existing?.createdBy ?? adminFixtureIds.operator,
+              updatedBy: adminFixtureIds.operator,
+              createdAt: existing?.createdAt ?? now,
+              updatedAt: now,
+            }
+          : null;
+      if (item) state.savedAnnouncementDrafts.set(item.id, item);
+      else state.savedAnnouncementDrafts.delete(input.draftId);
+      const response = adminAnnouncementDraftMutationResponseSchema.parse(
+        item
+          ? { eventId: adminFixtureIds.event, outcome: 'saved', item }
+          : {
+              eventId: adminFixtureIds.event,
+              outcome: 'deleted',
+              draftId: input.draftId,
+            },
+      );
+      storeMutation(attempt, 'announcement-draft', response);
+      return mockJsonResponse(
+        adminAnnouncementDraftMutationResponseSchema,
+        response,
+        successOptions('admin.mock.draft-mutation'),
+      );
+    },
+  ),
+
   http.get('*/api/v1/admin/events/:eventId/announcements', ({ params }) => {
     const denied = authorize(
       adminAnnouncementTargetProblemSchema,
@@ -2295,6 +2440,18 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.announcement-preview-empty' },
         );
       }
+      if (body.data.sourceDraft) {
+        const source = body.data.sourceDraft;
+        const item = state.savedAnnouncementDrafts.get(source.id);
+        if (!item) return draftProblem('ANNOUNCEMENT_DRAFT_NOT_FOUND', 404);
+        if (state.sentAnnouncementDrafts.has(source.id))
+          return draftProblem('ANNOUNCEMENT_DRAFT_ALREADY_SENT', 409);
+        if (
+          item.version !== source.version ||
+          JSON.stringify(item.draft) !== JSON.stringify(body.data.draft)
+        )
+          return draftProblem('ANNOUNCEMENT_DRAFT_STALE', 409);
+      }
       state.announcementPreviewVersion += 1;
       const empty = scenario(body.data.draft.title).includes('empty');
       const base = empty
@@ -2305,11 +2462,15 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
         eventId: adminFixtureIds.event,
         previewVersion: state.announcementPreviewVersion,
         draft: body.data.draft,
+        ...(body.data.sourceDraft
+          ? { sourceDraft: body.data.sourceDraft }
+          : {}),
         audience: empty
           ? { recipientCount: 0, excludedCount: 440, sample: [] }
           : base.audience,
       });
       state.announcementDraft = response.draft;
+      state.announcementSourceDraft = response.sourceDraft ?? null;
       state.announcementPreviewId = response.previewId;
       state.announcementRecipientCount = response.audience.recipientCount;
       return mockJsonResponse(
@@ -2393,6 +2554,15 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           { fixtureName: 'admin.mock.announcement-send-stale' },
         );
       }
+      if (state.announcementSourceDraft) {
+        const source = state.announcementSourceDraft;
+        const item = state.savedAnnouncementDrafts.get(source.id);
+        if (!item) return draftProblem('ANNOUNCEMENT_DRAFT_NOT_FOUND', 404);
+        if (state.sentAnnouncementDrafts.has(source.id))
+          return draftProblem('ANNOUNCEMENT_DRAFT_ALREADY_SENT', 409);
+        if (item.version !== source.version)
+          return draftProblem('ANNOUNCEMENT_DRAFT_STALE', 409);
+      }
       const response = adminAnnouncementSendResponseSchema.parse({
         ...clone(adminAnnouncementSendFixtures.sent!),
         eventId: adminFixtureIds.event,
@@ -2441,6 +2611,8 @@ export const adminMockHandlers: readonly RequestHandler[] = Object.freeze([
           ),
         ];
       }
+      if (state.announcementSourceDraft)
+        state.sentAnnouncementDrafts.add(state.announcementSourceDraft.id);
       storeMutation(attempt, 'announcement-send', response);
       return mockJsonResponse(
         adminAnnouncementSendResponseSchema,

@@ -40,6 +40,8 @@ const actionCategories = {
   'ticket_import.preview_created': 'import',
   'ticket_import.applied': 'import',
   'announcement.send': 'announcement',
+  'announcement.draft_saved': 'announcement',
+  'announcement.draft_deleted': 'announcement',
   'role.grant': 'role',
   'role.revoke': 'role',
   'role.moderator.assign': 'role',

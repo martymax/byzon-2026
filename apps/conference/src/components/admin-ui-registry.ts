@@ -117,6 +117,8 @@ export const adminAuditActionLabels = {
   'ticket_import.preview_created': 'Načetl změny vstupenek',
   'ticket_import.applied': 'Použil změny vstupenek',
   'announcement.send': 'Odeslal kritické oznámení',
+  'announcement.draft_saved': 'Uložení konceptu oznámení',
+  'announcement.draft_deleted': 'Smazání konceptu oznámení',
   'role.grant': 'Přiřadil provozní roli',
   'role.revoke': 'Odebral provozní roli',
   'role.moderator.assign': 'Přiřadil moderátora',

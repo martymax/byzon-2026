@@ -166,3 +166,52 @@ describe('CS-ANN-01 admin contracts', () => {
     );
   });
 });
+
+it('separates incomplete saved drafts from complete send previews and binds previews to a saved version', async () => {
+  const {
+    adminAnnouncementDraftContentSchema,
+    adminAnnouncementDraftMutationRequestSchema,
+  } = await import('./announcements.js');
+  const incomplete = { ...draft, bodyText: '' };
+  expect(
+    adminAnnouncementDraftContentSchema.safeParse(incomplete).success,
+  ).toBe(true);
+  expect(
+    adminAnnouncementPreviewRequestSchema.safeParse({ draft: incomplete })
+      .success,
+  ).toBe(false);
+  expect(
+    adminAnnouncementDraftContentSchema.safeParse({
+      ...draft,
+      title: '',
+      bodyText: ' ',
+    }).success,
+  ).toBe(false);
+  expect(
+    adminAnnouncementDraftContentSchema.safeParse({
+      ...draft,
+      bodyText: '<script>alert(1)</script>',
+    }).success,
+  ).toBe(false);
+  const sourceDraft = { id: ids.preview, version: 3 };
+  expect(
+    adminAnnouncementPreviewRequestSchema.parse({ draft, sourceDraft })
+      .sourceDraft,
+  ).toEqual(sourceDraft);
+  expect(
+    adminAnnouncementDraftMutationRequestSchema.safeParse({
+      action: 'delete',
+      draftId: ids.preview,
+      expectedVersion: 0,
+    }).success,
+  ).toBe(false);
+  expect(
+    adminAnnouncementDraftMutationRequestSchema.safeParse({
+      action: 'save',
+      draftId: ids.preview,
+      expectedVersion: 0,
+      draft: incomplete,
+      createdBy: ids.event,
+    }).success,
+  ).toBe(false);
+});
