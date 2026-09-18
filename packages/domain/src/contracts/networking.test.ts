@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  NETWORKING_INTRODUCTION_MAX_LENGTH,
   networkingDirectoryProfileSchema,
   networkingDirectoryQuerySchema,
   networkingSettingsUpdateRequestSchema,
@@ -24,6 +25,43 @@ const base = {
 };
 
 describe('networking contracts', () => {
+  it('accepts pasted paragraphs, tabs, bullets and emoji in introductions', () => {
+    const introduction =
+      'Pomáhám firmám 😊\r\n\r\n• Strategie\n\t◦ Produkty\n1. Spolupráce';
+    expect(
+      networkingSettingsUpdateRequestSchema.parse({ ...base, introduction })
+        .introduction,
+    ).toBe(introduction);
+  });
+
+  it('enforces the introduction limit and still rejects unsafe controls', () => {
+    for (const introduction of [
+      'a'.repeat(NETWORKING_INTRODUCTION_MAX_LENGTH + 1),
+      'Text\u0000text',
+      'Text\u202Etext',
+      'Text\u2066text',
+    ]) {
+      expect(
+        networkingSettingsUpdateRequestSchema.safeParse({
+          ...base,
+          introduction,
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      networkingSettingsUpdateRequestSchema.safeParse({
+        ...base,
+        introduction: 'a'.repeat(NETWORKING_INTRODUCTION_MAX_LENGTH),
+      }).success,
+    ).toBe(true);
+    expect(
+      networkingSettingsUpdateRequestSchema.safeParse({
+        ...base,
+        company: 'Firma\ns.r.o.',
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts only the six fixed today_hunting values and unique selections', () => {
     expect(todayHuntingSchema.safeParse('custom').success).toBe(false);
     expect(

@@ -3336,6 +3336,11 @@ main > .ui-participant-nav-spacer {
   gap: var(--byzon-space-2);
   font-style: normal;
 }
+.networking-profile-introduction {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
 .networking-profile-number {
   margin: 0;
 }

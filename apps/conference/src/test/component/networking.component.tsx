@@ -6,7 +6,10 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '../../app/styles.css';
-import { NetworkingDirectory } from '../../components/networking-directory';
+import {
+  NetworkingDirectory,
+  NetworkingProfile,
+} from '../../components/networking-directory';
 import {
   networkingDirectoryEndpoint,
   networkingSettingsReadEndpoint,
@@ -81,6 +84,82 @@ beforeEach(() => {
 });
 
 describe('participant networking settings', () => {
+  it('counts introduction edits and saves pasted formatting across form resets', async () => {
+    const updates: NetworkingSettingsUpdateRequest[] = [];
+    const screen = await renderComponent(
+      <NetworkingDirectory
+        api={networkingApi((body) => updates.push(body), {
+          ...settings,
+          introduction: 'Ahoj',
+        })}
+      />,
+    );
+    const field = screen.getByLabelText('Krátké představení');
+    await expect
+      .element(field)
+      .toHaveAccessibleDescription(/4 \/ 1\s000 znaků/);
+    const introduction = 'Pomáhám firmám 😊\n\n• Strategie\n\t◦ Produkty';
+    await field.fill(introduction);
+    await expect
+      .element(field)
+      .toHaveAccessibleDescription(
+        new RegExp(`${introduction.length} / 1\\s000 znaků`),
+      );
+    await screen.getByRole('button', { name: 'Uložit nastavení' }).click();
+    await expect
+      .element(screen.getByText('Profil je uložený a okamžitě skrytý.'))
+      .toBeVisible();
+    expect(updates[0]?.introduction).toBe(introduction);
+    await expect.element(field).toHaveValue(introduction);
+    await expect
+      .element(field)
+      .toHaveAccessibleDescription(
+        new RegExp(`${introduction.length} / 1\\s000 znaků`),
+      );
+    await field.fill('a'.repeat(1000));
+    await expect
+      .element(field)
+      .toHaveAccessibleDescription(/1\s000 \/ 1\s000 znaků/);
+    await expect.element(field).toHaveAttribute('maxlength', '1000');
+    await field.fill('');
+    await expect
+      .element(field)
+      .toHaveAccessibleDescription(/0 \/ 1\s000 znaků/);
+    await expectComponentToPassAxe(screen.container);
+  });
+
+  it('preserves paragraphs and indentation in the displayed profile', async () => {
+    const introduction =
+      'Ahoj 😊\n\n• Strategie\n\t◦ Produkty\n<script>alert(1)</script>';
+    const api: ApiPort = {
+      request: vi.fn(async () =>
+        success({
+          profileId: settings.userId,
+          displayName: 'Alex',
+          company: '',
+          jobTitle: '',
+          introduction,
+          participantNumber: null,
+          todayHunting: [],
+          contacts: { email: null, phone: null, linkedinUrl: null },
+        }),
+      ) as unknown as ApiPort['request'],
+    };
+    const screen = await renderComponent(
+      <NetworkingProfile api={api} profileId={settings.userId} />,
+    );
+    await expect
+      .element(screen.getByRole('heading', { name: 'Alex' }))
+      .toBeVisible();
+    const text = screen.container.querySelector(
+      '.networking-profile-introduction',
+    )!;
+    expect(text.textContent).toBe(introduction);
+    expect(getComputedStyle(text).whiteSpace).toBe('pre-wrap');
+    expect(getComputedStyle(text).overflowWrap).toBe('anywhere');
+    expect(text.querySelector('script')).toBeNull();
+  });
+
   it('lets the participant opt in with validated public profile fields', async () => {
     const updates: NetworkingSettingsUpdateRequest[] = [];
     const screen = await renderComponent(

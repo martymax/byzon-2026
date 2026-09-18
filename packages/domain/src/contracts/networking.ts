@@ -5,15 +5,23 @@ import { identityEmailSchema, identityPhoneSchema } from './identity.js';
 
 const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime({ offset: true });
-const cleanText = (maximum: number) =>
+const cleanText = (maximum: number, multiline = false) =>
   z
     .string()
     .max(maximum)
     .refine((value) => value === value.trim(), 'Text must be canonical')
     .refine(
-      (value) => !/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]/.test(value),
+      (value) =>
+        !(
+          multiline
+            ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u202A-\u202E\u2066-\u2069]/
+            : /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]/
+        ).test(value),
       'Text contains unsafe control characters',
     );
+
+export const NETWORKING_INTRODUCTION_MAX_LENGTH = 1_000;
+const introductionSchema = cleanText(NETWORKING_INTRODUCTION_MAX_LENGTH, true);
 
 export const todayHuntingSchema = z.enum([
   'know_how',
@@ -49,7 +57,7 @@ export const networkingSettingsSchema = z.strictObject({
   userId: uuidSchema,
   version: z.number().int().positive(),
   networkingEnabled: z.boolean(),
-  introduction: cleanText(1_000),
+  introduction: introductionSchema,
   company: cleanText(160),
   jobTitle: cleanText(160),
   participantNumber: networkingParticipantNumberSchema.nullable(),
@@ -67,7 +75,7 @@ export const networkingSettingsUpdateRequestSchema = z
   .strictObject({
     expectedVersion: z.number().int().positive(),
     networkingEnabled: z.boolean(),
-    introduction: cleanText(1_000),
+    introduction: introductionSchema,
     company: cleanText(160),
     jobTitle: cleanText(160),
     participantNumber: networkingParticipantNumberSchema.nullable(),
@@ -102,7 +110,7 @@ export const networkingDirectoryProfileSchema = z.strictObject({
   displayName: cleanText(257).min(1),
   company: cleanText(160),
   jobTitle: cleanText(160),
-  introduction: cleanText(1_000),
+  introduction: introductionSchema,
   participantNumber: networkingParticipantNumberSchema.nullable(),
   todayHunting: networkingTodayHuntingSchema,
   contacts: z.strictObject({

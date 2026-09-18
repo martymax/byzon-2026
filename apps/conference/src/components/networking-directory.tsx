@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  NETWORKING_INTRODUCTION_MAX_LENGTH,
   networkingSettingsUpdateRequestSchema,
   type NetworkingDirectoryProfile,
   type NetworkingSettings,
@@ -73,7 +74,12 @@ const fieldIds: Record<EditableField, string> = {
   linkedinUrl: 'networking-linkedin',
 };
 
-const validationMessage = (field: EditableField): string => {
+const validationMessage = (field: EditableField, code: string): string => {
+  if (field === 'introduction') {
+    return code === 'too_big'
+      ? 'Zkraťte představení na nejvýše 1 000 znaků.'
+      : 'Text obsahuje nepovolený skrytý znak. Odstavce, tabulátory, odrážky a emoji jsou povolené.';
+  }
   if (field === 'participantNumber') {
     return 'Zadejte 1 až 8 číslic bez mezer.';
   }
@@ -269,6 +275,7 @@ export const NetworkingDirectory = ({
         ) {
           nextErrors[field as EditableField] = validationMessage(
             field as EditableField,
+            issue.code,
           );
         }
       }
@@ -434,20 +441,11 @@ export const NetworkingDirectory = ({
             </FormField>
           </div>
 
-          <FormField
+          <NetworkingIntroductionField
+            initialValue={settings.introduction}
+            disabled={working}
             {...(errors.introduction ? { error: errors.introduction } : {})}
-            helperText="Krátce popište, čemu se věnujete a s kým se chcete propojit."
-            label="Krátké představení"
-          >
-            <Textarea
-              defaultValue={settings.introduction}
-              disabled={working}
-              id={fieldIds.introduction}
-              maxLength={1000}
-              name="introduction"
-              rows={5}
-            />
-          </FormField>
+          />
 
           <fieldset className="networking-hunting" id={fieldIds.todayHunting}>
             <legend>Dnes hledám</legend>
@@ -615,6 +613,35 @@ export const NetworkingDirectory = ({
   );
 };
 
+const NetworkingIntroductionField = ({
+  initialValue,
+  disabled,
+  error,
+}: {
+  readonly initialValue: string;
+  readonly disabled: boolean;
+  readonly error?: string;
+}) => {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <FormField
+      {...(error ? { error } : {})}
+      helperText={`${value.length.toLocaleString('cs-CZ')} / ${NETWORKING_INTRODUCTION_MAX_LENGTH.toLocaleString('cs-CZ')} znaků. Krátce popište, čemu se věnujete a s kým se chcete propojit. Můžete použít odstavce, tabulátory, odrážky a emoji.`}
+      label="Krátké představení"
+    >
+      <Textarea
+        value={value}
+        onChange={(event) => setValue(event.currentTarget.value)}
+        disabled={disabled}
+        id={fieldIds.introduction}
+        maxLength={NETWORKING_INTRODUCTION_MAX_LENGTH}
+        name="introduction"
+        rows={5}
+      />
+    </FormField>
+  );
+};
+
 export const NetworkingProfile = ({
   api = browserInteractionsApi,
   profileId,
@@ -640,7 +667,11 @@ export const NetworkingProfile = ({
         </p>
       ) : null}
       <p>{[profile.jobTitle, profile.company].filter(Boolean).join(' · ')}</p>
-      {profile.introduction ? <p>{profile.introduction}</p> : null}
+      {profile.introduction ? (
+        <p className="networking-profile-introduction">
+          {profile.introduction}
+        </p>
+      ) : null}
       <ul>
         {profile.todayHunting.map((value) => (
           <li key={value}>{hunting[value]}</li>
