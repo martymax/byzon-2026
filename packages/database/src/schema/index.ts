@@ -12,3 +12,4 @@ export * from './profiles.js';
 export * from './privacy.js';
 export * from './tickets.js';
 export * from './invitations.js';
+export * from './conference-feedback.js';

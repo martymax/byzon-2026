@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   load: vi.fn(),
+  feedbackLink: vi.fn(),
   redirect: vi.fn((href: string) => {
     throw new Error(`redirect:${href}`);
   }),
@@ -19,6 +20,9 @@ vi.mock('@/server/auth', () => ({
 vi.mock('@/server/current-event', () => ({
   loadParticipantCurrentEvent: mocks.load,
 }));
+vi.mock('@/server/participant-feedback-link', () => ({
+  participantFeedbackLink: mocks.feedbackLink,
+}));
 import EventRatingPage from './page';
 
 beforeEach(() => vi.clearAllMocks());
@@ -29,13 +33,15 @@ it('redirects anonymous visitors back through participant login before loading t
   );
   expect(mocks.load).not.toHaveBeenCalled();
 });
-it('allows a signed-in participant to reach the available event page', async () => {
+it('routes a signed-in participant to the same resumable evaluation used in email', async () => {
   mocks.getSession.mockResolvedValue({ user: { id: 'participant' } });
   mocks.load.mockResolvedValue({
     kind: 'available',
-    event: { endsAt: new Date('2026-09-19T20:00:00Z') },
+    event: { id: 'event', endsAt: new Date('2026-09-19T20:00:00Z') },
   });
-  const result = await EventRatingPage();
-  expect(result).toBeTruthy();
-  expect(mocks.redirect).not.toHaveBeenCalled();
+  mocks.feedbackLink.mockResolvedValue('/hodnoceni/scoped-token');
+  await expect(EventRatingPage()).rejects.toThrow(
+    'redirect:/hodnoceni/scoped-token',
+  );
+  expect(mocks.feedbackLink).toHaveBeenCalledWith('event', 'participant');
 });

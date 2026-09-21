@@ -79,6 +79,7 @@ const currentRecipient = async (
   db: Database,
   delivery: Delivery,
   now: Date,
+  feedback = false,
 ) => {
   const [recipient] = await db
     .select({
@@ -109,7 +110,7 @@ const currentRecipient = async (
         eq(schema.participantProfiles.eventId, delivery.eventId),
         eq(schema.participantProfiles.userId, delivery.userId),
         eq(schema.eventMemberships.status, 'active'),
-        eq(schema.users.emailVerified, true),
+        feedback ? undefined : eq(schema.users.emailVerified, true),
         inArray(schema.events.status, ['activation_open', 'live', 'ended']),
         or(
           isNull(schema.events.operationalDataAnonymizesAt),
@@ -125,7 +126,13 @@ const currentRecipient = async (
       where: and(
         eq(schema.eventRoles.eventId, delivery.eventId),
         eq(schema.eventRoles.userId, delivery.userId),
-        eq(schema.eventRoles.role, 'participant'),
+        feedback
+          ? inArray(schema.eventRoles.role, [
+              'participant',
+              'speaker',
+              'moderator',
+            ])
+          : eq(schema.eventRoles.role, 'participant'),
         isNull(schema.eventRoles.revokedAt),
       ),
     }),
@@ -300,26 +307,20 @@ const stillRelevant = async (
     }
   }
   if (p.kind === 'rating_reminder') {
-    if (
-      !recipient.ratingEmailsEnabled ||
-      now.getTime() < recipient.endsAt.getTime() + 12 * HOUR
-    )
-      return false;
-    const [feature, rating] = await Promise.all([
-      db.query.eventFeatures.findFirst({
-        columns: { ratingsEnabled: true },
-        where: eq(schema.eventFeatures.eventId, row.eventId),
-      }),
-      db.query.ratings.findFirst({
-        columns: { id: true },
-        where: and(
-          eq(schema.ratings.eventId, row.eventId),
-          eq(schema.ratings.userId, row.userId),
-          eq(schema.ratings.targetType, 'event'),
-        ),
-      }),
-    ]);
-    return feature?.ratingsEnabled === true && !rating;
+    // Retired login-based invitations must not race administrator campaigns.
+    return false;
+  }
+  if (p.kind === 'conference_feedback') {
+    if (!recipient.ratingEmailsEnabled) return false;
+    const feedback = await db.query.conferenceFeedbackResponses.findFirst({
+      columns: { id: true, completedAt: true },
+      where: and(
+        eq(schema.conferenceFeedbackResponses.id, p.feedbackId!),
+        eq(schema.conferenceFeedbackResponses.eventId, row.eventId),
+        eq(schema.conferenceFeedbackResponses.userId, row.userId),
+      ),
+    });
+    return Boolean(feedback && !feedback.completedAt);
   }
   if (p.kind === 'announcement') {
     const [feature, target] = await Promise.all([
@@ -366,7 +367,12 @@ export const dispatchEmailOnce = async (
       await finish(db, delivery, now, 'invalid_payload', true);
       return 'failed';
     }
-    const recipient = await currentRecipient(db, delivery, now);
+    const recipient = await currentRecipient(
+      db,
+      delivery,
+      now,
+      parsed.data.kind === 'conference_feedback',
+    );
     if (
       !recipient ||
       !(await stillRelevant(db, delivery, parsed.data, now, recipient))
@@ -389,6 +395,17 @@ export const dispatchEmailOnce = async (
       .where(owned(delivery))
       .returning({ id: schema.emailDeliveries.id });
     if (!saved.length) return 'skipped';
+    const archived =
+      parsed.data.kind === 'conference_feedback'
+        ? createNotificationEmail(
+            {
+              ...parsed.data,
+              feedbackUrl: new URL('/hodnoceni/odkaz-skryt', appOrigin).href,
+            },
+            recipient,
+            appOrigin,
+          )
+        : content;
     await sendRecordedEmail(
       db,
       {
@@ -400,9 +417,9 @@ export const dispatchEmailOnce = async (
         sender: process.env.MAIL_FROM_NAME
           ? `${process.env.MAIL_FROM_NAME} <${process.env.MAIL_FROM}>`
           : (process.env.MAIL_FROM ?? null),
-        subject: content.subject,
-        html: content.html,
-        text: content.text,
+        subject: archived.subject,
+        html: archived.html,
+        text: archived.text,
       },
       () =>
         transport.send({

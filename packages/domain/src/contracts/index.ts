@@ -21,3 +21,4 @@ export * from './ticket-import.js';
 
 export * from './program-access.js';
 export * from './admin-email.js';
+export * from './conference-feedback.js';

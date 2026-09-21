@@ -29,6 +29,7 @@ export const emailKindLabels: Record<AdminEmailKind, string> = {
   program_changed: 'Změna programu',
   announcement: 'Oznámení',
   rating_reminder: 'Hodnocení konference',
+  conference_feedback: 'Pozvánka k hodnocení',
 };
 
 const previewDocument = (html: string) =>
@@ -48,7 +49,9 @@ const EmailContent = ({ message }: { message: AdminEmailDetail }) => {
       </dl>
       {message.authLinkRedacted ? (
         <p className={mailStyles.note}>
-          Jednorázový přihlašovací nebo aktivační odkaz je v archivu skrytý.
+          {message.kind === 'conference_feedback'
+            ? 'Osobní odkaz na hodnocení je v archivu skrytý.'
+            : 'Jednorázový přihlašovací nebo aktivační odkaz je v archivu skrytý.'}{' '}
           Ostatní obsah zprávy je zachovaný.
         </p>
       ) : null}

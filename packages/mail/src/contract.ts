@@ -39,6 +39,7 @@ export const notificationKindSchema = z.enum([
   'program_changed',
   'announcement',
   'rating_reminder',
+  'conference_feedback',
 ]);
 export type NotificationKind = z.infer<typeof notificationKindSchema>;
 export const notificationSessionSchema = z.object({
@@ -57,7 +58,8 @@ export const notificationSessionSchema = z.object({
     .optional(),
 });
 export type NotificationSession = z.infer<typeof notificationSessionSchema>;
-/** Public event content only. Recipient details are resolved and checked at delivery. */
+/** Recipient details are resolved at delivery. Feedback URLs are scoped bearer
+ * capabilities and must be redacted from the email history. */
 export const notificationPayloadSchema = z
   .object({
     kind: notificationKindSchema,
@@ -82,8 +84,20 @@ export const notificationPayloadSchema = z
     title: inline(160).optional(),
     body: z.string().max(12_000).optional(),
     cancelledByOrganizer: z.boolean().optional(),
+    feedbackId: z.uuid().optional(),
+    feedbackUrl: z.string().url().max(2048).optional(),
+    reminder: z.boolean().optional(),
   })
   .superRefine((value, context) => {
+    if (
+      value.kind === 'conference_feedback' &&
+      (!value.feedbackId || !value.feedbackUrl)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['feedbackId'],
+        message: 'Feedback identity and scoped URL are required',
+      });
     if (
       [
         'reservation_confirmed',

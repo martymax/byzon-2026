@@ -114,6 +114,7 @@ export const handleAdminEmail = async (
               'account-activation',
               'participant-invitation',
               'team-invitation',
+              'conference_feedback',
             ].includes(row.kind) && row.contentAvailable,
         }),
         { headers },

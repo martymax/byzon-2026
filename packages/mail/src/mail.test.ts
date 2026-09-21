@@ -67,6 +67,50 @@ describe('Czech greetings', () => {
 const origin = 'https://app.example.test';
 const url = `${origin}/api/auth/magic-link/verify?token=synthetic%26%22&callbackURL=%2Fadmin`;
 describe('email templates', () => {
+  it('renders repeatable survey links and honest saving/privacy copy in both formats', () => {
+    const payload = notificationPayloadSchema.parse({
+      kind: 'conference_feedback',
+      eventName: 'BYZON 2026',
+      timezone: 'Europe/Prague',
+      feedbackId: '01940000-0000-7000-8000-000000000001',
+      feedbackUrl: `${origin}/hodnoceni/test-survey-capability`,
+      reminder: false,
+    });
+    const content = createNotificationEmail(
+      payload,
+      { firstName: 'Martin' },
+      origin,
+    );
+    expect(content.text).toContain('Nemusíte se přihlašovat');
+    expect(content.text).toContain('i na jiném zařízení');
+    expect(content.text).toContain('částečně vyplněné');
+    expect(content.text).toContain('propojené s Vaší účastí');
+    expect(content.html).toContain(payload.feedbackUrl);
+    expect(content.text).not.toContain('funguje jen jednou');
+    expect(content.text).not.toContain('/api/auth');
+    expect(
+      createNotificationEmail({ ...payload, reminder: true }, {}, origin)
+        .subject,
+    ).toContain('Ještě');
+    expect(() =>
+      createNotificationEmail(
+        { ...payload, feedbackUrl: `${origin}/app` },
+        {},
+        origin,
+      ),
+    ).toThrow();
+    expect(() =>
+      createNotificationEmail(
+        { ...payload, feedbackUrl: 'https://evil.test/hodnoceni/token' },
+        {},
+        origin,
+      ),
+    ).toThrow();
+    expect(
+      notificationPayloadSchema.safeParse({ ...payload, feedbackId: undefined })
+        .success,
+    ).toBe(false);
+  });
   it.each<AuthEmailPurpose>([
     'participant-invitation',
     'account-activation',

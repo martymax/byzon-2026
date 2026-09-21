@@ -33,6 +33,14 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
       },
       {
+        source: '/hodnoceni/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+        ],
+      },
+      {
         source: '/aktivace/odkaz',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },

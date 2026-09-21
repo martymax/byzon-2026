@@ -429,7 +429,74 @@ integration('transactional email delivery', () => {
     ).toBe('idle');
   });
 
-  it('schedules one event rating email after 12 hours and delivers to the rating page', async () => {
+  it('delivers a survey to an unactivated participant and redacts the scoped link from history', async () => {
+    const feedbackId = crypto.randomUUID();
+    await client.db.insert(schema.conferenceFeedbackResponses).values({
+      id: feedbackId,
+      eventId,
+      userId,
+      tokenHash: 'b'.repeat(64),
+    });
+    await client.db
+      .update(schema.users)
+      .set({ emailVerified: false })
+      .where(eq(schema.users.id, userId));
+    const feedbackUrl =
+      'https://app.example.test/hodnoceni/synthetic-private-survey-token';
+    const payload = notificationPayloadSchema.parse({
+      ...basePayload,
+      sessions: [],
+      kind: 'conference_feedback',
+      feedbackId,
+      feedbackUrl,
+      reminder: false,
+    });
+    await queue(payload);
+    const send = vi.fn<(message: DeliveryMessage) => Promise<void>>(
+      async () => {},
+    );
+    try {
+      expect(
+        await dispatchEmailOnce(
+          client.db,
+          { send },
+          'https://app.example.test',
+          now,
+        ),
+      ).toBe('delivered');
+      expect(send.mock.calls[0]![0].text).toContain(feedbackUrl);
+      const archive = await client.db.query.emailMessages.findFirst({
+        where: eq(schema.emailMessages.eventId, eventId),
+      });
+      expect(archive?.text).toContain('/hodnoceni/odkaz-skryt');
+      expect(archive?.text).not.toContain('synthetic-private-survey-token');
+      expect(archive?.html).not.toContain('synthetic-private-survey-token');
+      await queue({ ...payload, reminder: true });
+      await client.db
+        .update(schema.conferenceFeedbackResponses)
+        .set({ completedAt: now })
+        .where(eq(schema.conferenceFeedbackResponses.id, feedbackId));
+      expect(
+        await dispatchEmailOnce(
+          client.db,
+          { send },
+          'https://app.example.test',
+          now,
+        ),
+      ).toBe('skipped');
+      expect(send).toHaveBeenCalledTimes(1);
+    } finally {
+      await client.db
+        .update(schema.users)
+        .set({ emailVerified: true })
+        .where(eq(schema.users.id, userId));
+      await client.db
+        .delete(schema.conferenceFeedbackResponses)
+        .where(eq(schema.conferenceFeedbackResponses.id, feedbackId));
+    }
+  });
+
+  it('skips retired login-based reminders so they cannot race explicit feedback campaigns', async () => {
     expect(
       await scheduleRatingEmails(
         client.db,
@@ -449,10 +516,8 @@ integration('transactional email delivery', () => {
         'https://app.example.test',
         ratingNow,
       ),
-    ).toBe('delivered');
-    expect(send.mock.calls[0]![0].text).toContain(
-      'https://app.example.test/app/hodnoceni',
-    );
+    ).toBe('skipped');
+    expect(send).not.toHaveBeenCalled();
   });
 
   it.each(['preference', 'feature', 'rated'] as const)(

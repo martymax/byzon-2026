@@ -76,6 +76,9 @@ describe('onboarding request boundary', () => {
     '/api/auth/sign-out',
     '/health/ready',
     '/api/v1/public/events/byzon-2026/content',
+    '/hodnoceni/scoped-token',
+    '/hodnoceni/demo',
+    '/api/v1/feedback/scoped-token',
   ])('keeps recovery and public route %s available', async (path) => {
     vi.stubEnv('NODE_ENV', 'production');
     const response = await proxy(

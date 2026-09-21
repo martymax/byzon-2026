@@ -12,7 +12,12 @@ export const within = (path: string, root: string) =>
 
 export const requiresOnboardingAccess = (pathname: string): boolean => {
   const path = pathname.replace(/\/+$/, '') || '/';
-  if (recoveryPaths.has(path) || within(path, '/api/v1/public')) return false;
+  if (
+    recoveryPaths.has(path) ||
+    within(path, '/api/v1/public') ||
+    within(path, '/api/v1/feedback')
+  )
+    return false;
   return ['/app', '/admin', '/host', '/moderator', '/api/v1'].some((root) =>
     within(path, root),
   );

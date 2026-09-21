@@ -274,6 +274,38 @@ export const createNotificationEmail = (
 ): EmailContent => {
   const p = notificationPayloadSchema.parse(payload);
   const origin = safeOrigin(appOrigin);
+  if (p.kind === 'conference_feedback') {
+    const url = actionUrl(p.feedbackUrl!, origin);
+    if (!/^\/hodnoceni\/[^/]+$/.test(new URL(url).pathname))
+      throw new Error('Invalid feedback action path');
+    return render({
+      appOrigin: origin,
+      subject: `${p.eventName}: ${p.reminder ? 'Ještě nám můžete říct, jaký byl Váš BYZON' : 'Jaký byl Váš BYZON? Zajímá nás Váš pohled'}`,
+      preheader:
+        'Pár minut pro příští BYZON. Bez přihlášení, s automatickým ukládáním.',
+      eyebrow: 'BYZON VAŠIMA OČIMA',
+      title: 'Co si odnášíte?',
+      accent: 'A co příště lépe?',
+      greeting: czechGreeting(recipient.firstName, recipient.emailSalutation),
+      body: p.reminder
+        ? 'ještě jednou děkujeme, že jste byli součástí BYZONu. Pokud máte chvilku, budeme rádi za Váš pohled. Jestli už máte hodnocení rozepsané, navážete přesně tam, kde jste skončili.'
+        : 'děkujeme, že jste byli součástí BYZONu. Co Vás inspirovalo, co Vám chybělo a co máme příště udělat lépe? Vaše zkušenost nám pomůže připravit další ročník. Oceníme pochvalu i upřímnou kritiku.',
+      cta: p.reminder ? 'Pokračovat v hodnocení' : 'Podělit se o zkušenost',
+      url,
+      note: 'Přibližně 5–8 minut podle Vaší role. Delší komentáře a hodnocení jednotlivých vystoupení jsou dobrovolné.',
+      sections: [
+        {
+          title: 'Vlastním tempem, klidně na vícekrát',
+          lines: [
+            'Nemusíte se přihlašovat. Odpovědi průběžně ukládáme a stejný odkaz můžete otevřít znovu, i na jiném zařízení. Pomůže nám i částečně vyplněné hodnocení.',
+          ],
+        },
+      ],
+      footer:
+        'Odkaz je osobní a otevírá pouze Vaše hodnocení. Nepřeposílejte ho prosím. Hodnocení je dobrovolné a odpovědi jsou propojené s Vaší účastí.\nDalší e-maily k hodnocení můžete odmítnout odpovědí na tuto zprávu nebo v nastavení profilu.',
+      settingsUrl: new URL('/app/profil', origin).href,
+    });
+  }
   const date = (value: string) =>
     new Intl.DateTimeFormat('cs-CZ', {
       timeZone: p.timezone,

@@ -3,7 +3,7 @@ import { readWorkerEnv } from '@byzon/config';
 import { createDatabaseClient } from '@byzon/database';
 import { createRedisConnection } from '@byzon/redis';
 import { createMailTransport } from '@byzon/mail/transport';
-import { dispatchEmailOnce, scheduleRatingEmails } from './email.js';
+import { dispatchEmailOnce } from './email.js';
 import { dispatchInvitationOnce } from './invitations.js';
 
 import { dispatchSupportedOutboxOnce } from './outbox.js';
@@ -89,15 +89,11 @@ logger.info(
 
 let dispatchRunning = false;
 let dispatchPromise: Promise<void> = Promise.resolve();
-let lastRatingScanAt = 0;
 const dispatch = async (): Promise<void> => {
   if (dispatchRunning) return;
   dispatchRunning = true;
   try {
-    if (Date.now() - lastRatingScanAt >= 60_000) {
-      await scheduleRatingEmails(database.db);
-      lastRatingScanAt = Date.now();
-    }
+    // Conference feedback campaigns are explicitly launched in administration.
     for (let i = 0; i < env.WORKER_CONCURRENCY_EMAIL; i += 1) {
       const emailOutcome = await dispatchEmailOnce(
         database.db,

@@ -13,6 +13,7 @@ export const adminEmailKindSchema = z.enum([
   'program_changed',
   'announcement',
   'rating_reminder',
+  'conference_feedback',
 ]);
 export type AdminEmailKind = z.infer<typeof adminEmailKindSchema>;
 export const adminEmailQuerySchema = z.strictObject({

@@ -1,0 +1,490 @@
+.header,
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+.header > a,
+.sectionHeader > a {
+  flex-shrink: 0;
+}
+.header > a {
+  gap: 0.55rem;
+}
+.viewSwitch {
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+.viewButton {
+  padding: 0.75rem 0;
+  min-height: 2.75rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--admin-muted);
+  background: transparent;
+  font: 600 1rem/1.4 var(--byzon-font-body);
+  cursor: pointer;
+}
+.viewButton[aria-pressed='true'] {
+  border-bottom-color: var(--admin-primary);
+  color: var(--admin-primary);
+}
+.viewButton:hover {
+  color: var(--admin-primary);
+}
+.viewButton:active {
+  opacity: 0.8;
+}
+.viewButton:focus-visible,
+.question summary:focus-visible,
+.recipientCheckbox:focus-visible {
+  outline: 3px solid var(--admin-focus);
+  outline-offset: 3px;
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(12rem, 18rem) minmax(12rem, 18rem) auto;
+  justify-content: start;
+  align-items: end;
+  gap: 1rem;
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  padding: 1rem 0;
+  margin: 0;
+}
+.summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 7rem;
+}
+.summary dt {
+  color: var(--admin-muted);
+  font-size: 0.8125rem;
+}
+.summary dd {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 650;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.note,
+.footnote {
+  max-width: 74ch;
+  color: var(--admin-muted);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.note {
+  margin: 0.6rem 0 0;
+}
+.footnote {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+.responseRate {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1.15rem 0;
+  font-size: 0.875rem;
+}
+.responseRate > span {
+  color: var(--admin-muted);
+}
+.reportControls {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto;
+  align-items: end;
+  gap: 1rem 2rem;
+  margin: 1rem 0;
+}
+.reportControls input[type='checkbox'] {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+.question {
+  border-top: 1px solid var(--admin-border);
+}
+.question:last-of-type {
+  border-bottom: 1px solid var(--admin-border);
+}
+.question summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  cursor: pointer;
+  list-style: none;
+}
+.question summary::-webkit-details-marker {
+  display: none;
+}
+.question summary::before {
+  content: '';
+  flex: 0 0 0.45rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+.question[open] summary::before {
+  transform: rotate(45deg);
+}
+.question summary:hover .questionTitle {
+  color: var(--admin-primary);
+}
+.questionTitle {
+  flex: 1;
+  font-weight: 600;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.questionMeta {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.questionMeta > span {
+  color: var(--admin-muted);
+  font-size: 0.8125rem;
+}
+.questionMeta > strong {
+  font-size: 1rem;
+}
+.questionBody {
+  padding: 0 0 1.5rem 1.5rem;
+}
+.questionBody > .note {
+  margin-top: 0;
+}
+.distribution {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0.25rem;
+  padding: 0;
+  list-style: none;
+  max-width: 54rem;
+}
+.distribution li {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(6rem, 1.15fr) 6.5rem;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+.barTrack {
+  height: 0.65rem;
+  background: var(--admin-surface-subtle);
+  border-radius: 0.2rem;
+  overflow: hidden;
+}
+.barTrack > span {
+  display: block;
+  height: 100%;
+  width: var(--answer-share, 0%);
+  background: var(--admin-primary);
+  border-radius: 0.2rem;
+}
+.distributionCount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.distributionCount small {
+  color: var(--admin-muted);
+  font-size: inherit;
+}
+.comments {
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+.comments li {
+  padding: 1rem 0;
+}
+.comments li + li {
+  border-top: 1px solid var(--admin-border);
+}
+.comments p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 74ch;
+  margin: 0 0 0.4rem;
+  line-height: 1.65;
+}
+.comments span {
+  font-size: 0.8125rem;
+  color: var(--admin-muted);
+}
+.empty {
+  padding: 1.75rem 0;
+  max-width: 68ch;
+}
+.empty p {
+  color: var(--admin-muted);
+  line-height: 1.65;
+}
+.mailKind {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+  margin: 1.5rem 0;
+}
+.mailKind legend {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.mailKind label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+.mailKind input {
+  margin-top: 0.2rem;
+  accent-color: var(--admin-primary);
+  width: 1rem;
+  height: 1rem;
+}
+.mailKind span {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+.mailKind small {
+  color: var(--admin-muted);
+  font-size: 0.8125rem;
+}
+.mailKind:disabled label {
+  cursor: not-allowed;
+}
+.selectionBar,
+.pagination,
+.sendFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 0;
+}
+.selectionBar p,
+.pagination p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.selectionBar p > span,
+.pagination p {
+  color: var(--admin-muted);
+}
+.selectionBar > div,
+.pagination > div {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.recipients {
+  min-width: 48rem;
+}
+.recipients th[scope='row'] {
+  font-weight: 400;
+}
+.recipients th[scope='row'] strong {
+  font-weight: 600;
+}
+.recipientCheckbox {
+  width: 1.5rem;
+  height: 1.5rem;
+  accent-color: var(--admin-primary);
+  cursor: pointer;
+}
+.recipientList {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (max-width: 48rem) {
+  .recipientList {
+    display: block;
+  }
+  .recipientList > li {
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .recipientList > li:first-child {
+    border-top: 1px solid var(--admin-border);
+  }
+  .recipientList > li[data-selected='true'] {
+    background: var(--admin-surface-brand);
+  }
+  .mobileRecipientName {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    cursor: pointer;
+    min-height: 2.75rem;
+  }
+  .mobileRecipientName input {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+    accent-color: var(--admin-primary);
+  }
+  .mobileRecipientName > span {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .mobileRecipientName > span > span {
+    font-size: 0.8125rem;
+    color: var(--admin-muted);
+  }
+  .recipientList dl {
+    display: grid;
+    gap: 0.4rem;
+    padding-left: 2.25rem;
+    font-size: 0.8125rem;
+  }
+  .recipientList dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .recipientList dt {
+    color: var(--admin-muted);
+  }
+  .recipientList dd {
+    margin: 0;
+    text-align: right;
+  }
+  .recipientList p {
+    padding-left: 2.25rem;
+  }
+}
+.recipientCheckbox:disabled {
+  cursor: not-allowed;
+}
+.recipientEmail,
+.recipientReason {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--admin-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.recipientReason {
+  font-style: italic;
+}
+.status {
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+.status[data-status='completed'] {
+  color: var(--admin-primary);
+  font-weight: 600;
+}
+.recipients [data-mail-state='failed'] {
+  color: var(--admin-danger);
+  font-weight: 600;
+}
+.sendFooter {
+  border-top: 1px solid var(--admin-border);
+  padding-top: 1.25rem;
+}
+.sendFooter p {
+  max-width: 48ch;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--admin-muted);
+}
+.confirmRecipients {
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.retry p {
+  color: var(--admin-muted);
+  font-size: 0.875rem;
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 960px) {
+  .header,
+  .sectionHeader {
+    flex-direction: column;
+  }
+  .reportControls {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+@media (max-width: 640px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+  .summary {
+    gap: 1rem 1.5rem;
+  }
+  .summary div {
+    min-width: calc(50% - 1rem);
+  }
+  .question summary {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+  .questionTitle {
+    min-width: calc(100% - 2rem);
+  }
+  .questionMeta {
+    padding-left: 1.25rem;
+  }
+  .questionBody {
+    padding-left: 0;
+  }
+  .distribution li {
+    grid-template-columns: minmax(0, 1fr) 6rem;
+    gap: 0.5rem;
+  }
+  .distribution li > span:first-child {
+    grid-column: 1 / -1;
+  }
+  .mailKind {
+    flex-direction: column;
+  }
+  .sendFooter > button {
+    width: 100%;
+  }
+  .viewSwitch {
+    gap: 1.25rem;
+  }
+  .viewButton {
+    font-size: 0.9375rem;
+  }
+}

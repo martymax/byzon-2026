@@ -39,6 +39,7 @@ type AdminWorkspaceSection =
   | 'emails'
   | 'announcements'
   | 'engagement'
+  | 'feedback'
   | 'reservations'
   | 'content'
   | 'roles'
@@ -167,6 +168,13 @@ const navigationGroups: readonly AdminNavigationGroup[] = [
         section: 'engagement',
       },
       {
+        href: '/admin/hodnoceni',
+        icon: 'reports',
+        label: 'Hodnocení konference',
+        permission: 'event:settings:manage',
+        section: 'feedback',
+      },
+      {
         href: '/check-in',
         icon: 'checkin',
         label: 'Odbavení',
@@ -242,6 +250,11 @@ const sectionPermissions: Readonly<
     'participant:operational:read',
     'program:manage',
     'role:manage',
+  ],
+  feedback: [
+    'role:manage',
+    'participant:operational:read',
+    'ticket:any:manage',
   ],
   reservations: ['reservation:any:read'],
   content: ['program:manage'],
@@ -419,7 +432,11 @@ const visibleNavigationGroups = (
   navigationGroups.flatMap((group) => {
     const items = group.items.filter((item) => {
       if (item.capability) return context.capabilities[item.capability];
-      if (item.section === 'engagement' || item.section === 'invitations')
+      if (
+        item.section === 'engagement' ||
+        item.section === 'invitations' ||
+        item.section === 'feedback'
+      )
         return mayAccess(context, item.section);
       return item.permission
         ? context.actor.permissions.includes(item.permission)

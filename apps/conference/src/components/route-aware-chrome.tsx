@@ -20,7 +20,8 @@ export const RouteAwareChrome = ({
   const hostRoute = pathname === '/host' || pathname.startsWith('/host/');
   const signedInApplicationRoute = participantRoute || hostRoute;
 
-  if (isAdminPath(pathname)) return children;
+  if (isAdminPath(pathname) || pathname.startsWith('/hodnoceni/'))
+    return children;
 
   return (
     <>
