@@ -862,7 +862,7 @@ export function ConferenceFeedback({
                 </p>
                 {step.id === 'intro' ? (
                   <div className={styles.introFacts}>
-                    <span>Přibližně 5–8 minut</span>
+                    <span>Maximálně 5 minut</span>
                     <span>Ukládáme každou odpověď</span>
                   </div>
                 ) : (

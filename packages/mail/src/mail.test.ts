@@ -67,7 +67,7 @@ describe('Czech greetings', () => {
 const origin = 'https://app.example.test';
 const url = `${origin}/api/auth/magic-link/verify?token=synthetic%26%22&callbackURL=%2Fadmin`;
 describe('email templates', () => {
-  it('renders repeatable survey links and honest saving/privacy copy in both formats', () => {
+  it('renders concise survey invitations and reminders in both formats', () => {
     const payload = notificationPayloadSchema.parse({
       kind: 'conference_feedback',
       eventName: 'BYZON 2026',
@@ -81,10 +81,21 @@ describe('email templates', () => {
       { firstName: 'Martin' },
       origin,
     );
-    expect(content.text).toContain('Nemusíte se přihlašovat');
-    expect(content.text).toContain('i na jiném zařízení');
-    expect(content.text).toContain('částečně vyplněné');
-    expect(content.text).toContain('propojené s Vaší účastí');
+    for (const reminder of [false, true]) {
+      const email = createNotificationEmail(
+        { ...payload, reminder },
+        {},
+        origin,
+      );
+      for (const body of [email.html, email.text]) {
+        expect(body).toContain('Vyplnění Vám zabere maximálně 5 minut.');
+        expect(body).not.toContain('5–8 minut');
+        expect(body).not.toContain('Vlastním tempem, klidně na vícekrát');
+        expect(body).not.toContain('Nemusíte se přihlašovat');
+        expect(body).not.toContain('Odkaz je osobní');
+        expect(body).not.toContain('Další e-maily k hodnocení');
+      }
+    }
     expect(content.html).toContain(payload.feedbackUrl);
     expect(content.text).not.toContain('funguje jen jednou');
     expect(content.text).not.toContain('/api/auth');
