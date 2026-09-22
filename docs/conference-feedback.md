@@ -27,8 +27,8 @@ se serverovými odpověďmi, nebo použít neodeslané změny z tohoto prohlíž
 Role se potvrdí v prvním kroku. Nápověda vychází z existujících rolí a vazby
 firmy na partnera; potvrzená odpověď má přednost. Role hodnocení nemění oprávnění
 účtu. Společné otázky doplňuje spolupráce a konkrétní otázky pro každou roli.
-Větvení skrývá nerelevantní zkušenosti. Demografické otázky jsou dobrovolně
-rozbalitelné na konci. Změna role vyloučí neaktuální větev z reportu.
+Větvení skrývá nerelevantní zkušenosti. Demografické otázky jsou na konci vždy viditelné
+a jejich vyplnění je dobrovolné. Změna role vyloučí neaktuální větev z reportu.
 
 ## Rozesílání a výsledky
 

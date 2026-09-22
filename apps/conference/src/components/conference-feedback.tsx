@@ -932,20 +932,25 @@ export function ConferenceFeedback({
                 </details>
               ) : null}
               {last ? (
-                <details className={styles.programDisclosure}>
-                  <summary>
+                <section
+                  className={styles.aboutSection}
+                  aria-labelledby="feedback-about-heading"
+                >
+                  <h2
+                    id="feedback-about-heading"
+                    className={styles.aboutHeading}
+                  >
                     Ještě něco o vás <span>Volitelné</span>
-                  </summary>
+                  </h2>
                   <p className={styles.hint}>
-                    Pomůže nám to lépe poznat účastníky. Tuto část můžete celou
-                    vynechat.
+                    Pomůže nám to lépe poznat účastníky.
                   </p>
                   {questions
                     .filter((question) =>
                       CONFERENCE_FEEDBACK_ABOUT_IDS.includes(question.id),
                     )
                     .map(renderQuestion)}
-                </details>
+                </section>
               ) : null}
               <footer className={styles.navigation}>
                 {stepIndex > 0 ? (

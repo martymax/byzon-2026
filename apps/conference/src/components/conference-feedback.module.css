@@ -431,6 +431,29 @@
 .programDisclosure > :is(.question, .textField) {
   margin-top: 2rem;
 }
+.aboutSection {
+  border-top: 1px solid var(--feedback-border);
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+}
+.aboutHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.aboutHeading span {
+  color: var(--feedback-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.aboutSection > :is(.question, .textField) {
+  margin-top: 2rem;
+}
 .stage > summary {
   padding: 0.75rem 0;
   cursor: pointer;
