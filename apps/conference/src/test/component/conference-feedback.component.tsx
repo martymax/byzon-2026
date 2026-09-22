@@ -76,7 +76,7 @@ it('keeps demo answers local, branches by role and resumes after reopening', asy
       page.getByRole('heading', { name: 'Inspirace, kterou si odnášíte' }),
     )
     .toBeVisible();
-  await expect.element(page.getByText('Část 3 z 10')).toBeVisible();
+  await expect.element(page.getByText('Část 3 z 11')).toBeVisible();
   expect(fetcher).not.toHaveBeenCalled();
 });
 
@@ -178,7 +178,7 @@ it('finishes only after the last answer saves and can reopen completed feedback'
       answers = { ...answers, ...JSON.parse(init!.body as string).answers };
     return json(
       initial({
-        currentStep: 'future',
+        currentStep: 'about',
         answers,
         ...(method === 'POST' ? { completedAt: '2026-09-21T10:00:00Z' } : {}),
       }),
@@ -189,9 +189,9 @@ it('finishes only after the last answer saves and can reopen completed feedback'
   );
   await page
     .getByRole('textbox', {
-      name: 'Koho nebo jaké téma byste rádi viděli příště? Volitelné',
+      name: 'Odkud jste (město nebo obec)? Volitelné',
     })
-    .fill('Praktické případové studie');
+    .fill('Praha');
   await page.getByRole('button', { name: 'Dokončit hodnocení' }).click();
   await expect
     .element(page.getByRole('heading', { name: 'Děkujeme. Tohle má smysl.' }))
@@ -199,7 +199,7 @@ it('finishes only after the last answer saves and can reopen completed feedback'
   expect(operations.indexOf('PATCH')).toBeLessThan(operations.indexOf('POST'));
   expect(
     fetcher.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1]?.body,
-  ).toContain('Praktické případové studie');
+  ).toContain('Praha');
   await expectComponentToPassAxe(screen.container);
   await page
     .getByRole('button', { name: 'Prohlédnout nebo upravit odpovědi' })
@@ -257,7 +257,7 @@ it('offers a working completion retry when confirmation fails after answers are 
       if (completions === 1) return json({}, 503);
       return json(initial({ completedAt: '2026-09-21T10:00:00Z' }));
     }
-    return json(initial({ currentStep: 'future' }));
+    return json(initial({ currentStep: 'about' }));
   });
   await renderComponent(<ConferenceFeedback token={token} fetcher={fetcher} />);
   await page.getByRole('button', { name: 'Dokončit hodnocení' }).click();

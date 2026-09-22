@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  CONFERENCE_FEEDBACK_ABOUT_IDS,
   getConferenceFeedbackRole,
   getConferenceFeedbackSteps,
   getVisibleConferenceFeedbackQuestions,
@@ -751,7 +750,9 @@ export function ConferenceFeedback({
                                     ? 'Spolupráce s týmem'
                                     : item.id === 'role'
                                       ? 'Vaše role podrobněji'
-                                      : 'Příští BYZON'}
+                                      : item.id === 'future'
+                                        ? 'Příští BYZON'
+                                        : 'O vás'}
                   </span>
                 </button>
               </li>
@@ -930,27 +931,6 @@ export function ConferenceFeedback({
                     </details>
                   ))}
                 </details>
-              ) : null}
-              {last ? (
-                <section
-                  className={styles.aboutSection}
-                  aria-labelledby="feedback-about-heading"
-                >
-                  <h2
-                    id="feedback-about-heading"
-                    className={styles.aboutHeading}
-                  >
-                    Ještě něco o vás <span>Volitelné</span>
-                  </h2>
-                  <p className={styles.hint}>
-                    Pomůže nám to lépe poznat účastníky.
-                  </p>
-                  {questions
-                    .filter((question) =>
-                      CONFERENCE_FEEDBACK_ABOUT_IDS.includes(question.id),
-                    )
-                    .map(renderQuestion)}
-                </section>
               ) : null}
               <footer className={styles.navigation}>
                 {stepIndex > 0 ? (

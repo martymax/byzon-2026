@@ -438,16 +438,15 @@ export const CONFERENCE_FEEDBACK_STEPS: ConferenceFeedbackStep[] = [
   {
     id: 'future',
     title: 'Co si přejete příště?',
-    description: 'Poslední zastávka. Pomozte nám připravit další BYZON.',
+    description: 'Pomozte nám připravit další BYZON.',
     questionIds: ['returnIntention', 'nextSpeaker', 'partners'],
   },
-];
-export const CONFERENCE_FEEDBACK_ABOUT_IDS = [
-  'city',
-  'gender',
-  'genderOther',
-  'ticketSource',
-  'instagram',
+  {
+    id: 'about',
+    title: 'Ještě něco o vás',
+    description: 'Pomůže nám to lépe poznat účastníky.',
+    questionIds: ['city', 'gender', 'genderOther', 'ticketSource', 'instagram'],
+  },
 ];
 export const getConferenceFeedbackRole = (
   answers: ConferenceFeedbackAnswers,
