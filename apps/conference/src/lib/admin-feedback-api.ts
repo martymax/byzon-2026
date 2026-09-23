@@ -1,5 +1,8 @@
 import {
   feedbackAdminOverviewSchema,
+  feedbackRespondentsResponseSchema,
+  feedbackRespondentDetailSchema,
+  type FeedbackRespondentsQuery,
   feedbackSendRequestSchema,
   feedbackSendResponseSchema,
 } from '@byzon/domain/contracts';
@@ -90,5 +93,51 @@ export const sendFeedbackInvitations = (
     path: `/api/v1/admin/events/${encodeURIComponent(eventId)}/feedback/send`,
     body,
     idempotencyKey,
+    signal,
+  });
+
+export const feedbackRespondentsEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: feedbackRespondentsResponseSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: readProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+export const feedbackRespondentEndpoint = defineApiEndpoint({
+  method: 'GET',
+  requestSchema: null,
+  successSchema: feedbackRespondentDetailSchema,
+  problemSchema: adminReadProblemSchema,
+  problemCodes: readProblemCodes,
+  responseKind: 'json',
+  retry: 'safe-read',
+  idempotency: 'forbidden',
+});
+export const feedbackRespondentsParameters = (
+  query: FeedbackRespondentsQuery,
+) => new URLSearchParams({ ...query, page: String(query.page) }).toString();
+export const requestFeedbackRespondents = (
+  api: ApiPort,
+  eventId: string,
+  query: FeedbackRespondentsQuery,
+  signal: AbortSignal,
+) =>
+  api.request(feedbackRespondentsEndpoint, {
+    path: `/api/v1/admin/events/${encodeURIComponent(eventId)}/feedback/respondents?${feedbackRespondentsParameters(query)}`,
+    cache: 'no-store',
+    signal,
+  });
+export const requestFeedbackRespondent = (
+  api: ApiPort,
+  eventId: string,
+  participantId: string,
+  signal: AbortSignal,
+) =>
+  api.request(feedbackRespondentEndpoint, {
+    path: `/api/v1/admin/events/${encodeURIComponent(eventId)}/feedback/respondents/${encodeURIComponent(participantId)}`,
+    cache: 'no-store',
     signal,
   });

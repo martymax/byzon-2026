@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./current-event', () => ({ CURRENT_EVENT_SLUG: 'byzon-2026' }));
 import {
   aggregateFeedbackQuestions,
+  respondentFeedbackSections,
   createFeedbackToken,
   feedbackCsvCell,
   hashFeedbackToken,
@@ -118,5 +119,40 @@ describe('feedback capabilities and report semantics', () => {
     expect(feedbackCsvCell('Český; "text"\nDruhý řádek')).toBe(
       '"Český; ""text""\nDruhý řádek"',
     );
+  });
+});
+
+describe('individual feedback report', () => {
+  it('decodes answer labels, preserves comments, and excludes irrelevant role and attendance branches', () => {
+    const sections = respondentFeedbackSections(
+      {
+        participantRole: 'attendee',
+        score: '5',
+        comment: 'First line\nSecond line',
+        coachingAttended: 'no',
+        coachingScore: '4',
+        speakerSupport: '4',
+        gender: 'woman',
+        genderOther: 'old hidden answer',
+      },
+      'attendee',
+    );
+    const answers = sections.flatMap((section) => section.answers);
+    expect(answers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'score', value: 'Výborná' }),
+        expect.objectContaining({
+          id: 'comment',
+          value: 'First line\nSecond line',
+        }),
+        expect.objectContaining({ id: 'city', value: null }),
+      ]),
+    );
+    for (const id of ['speakerSupport', 'coachingScore', 'genderOther'])
+      expect(answers.some((answer) => answer.id === id)).toBe(false);
+    expect(sections.some((section) => section.id === 'collaboration')).toBe(
+      false,
+    );
+    expect(sections.at(-1)?.id).toBe('about');
   });
 });

@@ -2,6 +2,7 @@
 
 Veřejné týmové demo: `https://app.byzon.cz/hodnoceni/demo`.
 Administrace: `/admin/hodnoceni` (Výsledky a Rozesílání).
+Přehled konkrétních respondentů: `/admin/hodnoceni/ucastnici`.
 
 Demo ukazuje stejnou e-mailovou šablonu a dotazník jako skutečný průchod.
 Odpovědi ukládá pouze do prohlížeče, nikdy nevolá API pro skutečné hodnocení.
@@ -49,6 +50,18 @@ odpovědí a relevantních účastníků; „nevyužil/a jsem“ není nula a ne
 do průměru. Výsledky i CSV respektují filtr role a stavu. Starší odeslané
 hodnocení zůstává zachované a při otevření nového průchodu se převede.
 CSV používá UTF-8 BOM, středník a ochranu proti spuštění vzorců z komentářů.
+
+### Hodnocení podle účastníků
+
+Samostatný přehled obsahuje pouze účastníky s alespoň jednou uloženou odpovědí,
+včetně rozpracovaných a starších hodnocení. Nabízí hledání jména i e-mailu
+(bez ohledu na diakritiku), filtry role a stavu, řazení a stránky po 25 lidech.
+Detail se načítá samostatně a ukazuje odpovědi po částech dotazníku s čitelnými
+názvy voleb. Nezodpovězené otázky lze zobrazit přepínačem. Skryté větve nejsou
+součástí detailu. Seznam ani detail neobsahují osobní přístupový token.
+Obě API ověřují administrátorská oprávnění a vazbu na aktuální akci; odpovědi
+používají `private, no-store`. Detail lze přímo otevřít administračním odkazem,
+zpětný odkaz zachová filtry seznamu. Datum se zobrazuje v časové zóně akce.
 
 ## UX podklady
 

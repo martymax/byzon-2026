@@ -13,6 +13,10 @@ import {
   conferenceFeedbackRoleSchema,
   feedbackAdminOverviewSchema,
   feedbackFilterSchema,
+  feedbackRespondentsQuerySchema,
+  feedbackRespondentsResponseSchema,
+  feedbackRespondentDetailSchema,
+  type FeedbackRespondent,
   feedbackSendRequestSchema,
   feedbackSendResponseSchema,
   type ConferenceFeedbackRole,
@@ -36,7 +40,10 @@ import { loadEventSurveyProgram } from './event-survey';
 import { CURRENT_EVENT_SLUG } from './current-event';
 import { EventAccessDeniedError } from './policy';
 // Shared metadata keeps visibility, validation and reporting aligned with the questionnaire.
-import { CONFERENCE_FEEDBACK_QUESTIONS } from '../lib/conference-feedback';
+import {
+  CONFERENCE_FEEDBACK_QUESTIONS,
+  getConferenceFeedbackSteps,
+} from '../lib/conference-feedback';
 
 type DB = Database | DatabaseTransaction;
 type Feedback = typeof schema.conferenceFeedbackResponses.$inferSelect;
@@ -503,6 +510,11 @@ const buildOverview = async (
 ): Promise<{
   data: FeedbackAdminOverview;
   answers: Map<string, Record<string, string>>;
+  timestamps: Map<
+    string,
+    { updatedAt: string | null; completedAt: string | null }
+  >;
+  questions: FeedbackQuestion[];
 }> => {
   const [event, candidates, responses, deliveries, program, legacyRatings] =
     await Promise.all([
@@ -548,6 +560,10 @@ const buildOverview = async (
     if (!mailByUser.has(delivery.userId))
       mailByUser.set(delivery.userId, delivery);
   const answers = new Map<string, Record<string, string>>();
+  const timestamps = new Map<
+    string,
+    { updatedAt: string | null; completedAt: string | null }
+  >();
   const recipients = candidates
     .map((candidate): FeedbackRecipient => {
       const legacy = legacyByUser.get(candidate.userId);
@@ -557,6 +573,7 @@ const buildOverview = async (
           ? {
               answers: legacyFeedbackAnswers(legacy),
               startedAt: legacy.createdAt,
+              updatedAt: legacy.createdAt,
               completedAt: legacy.createdAt,
               invitedAt: null,
               remindedAt: null,
@@ -567,6 +584,10 @@ const buildOverview = async (
         candidate.userId,
         visibleFeedbackAnswers(row?.answers ?? {}, role),
       );
+      timestamps.set(candidate.userId, {
+        updatedAt: row?.updatedAt?.toISOString() ?? null,
+        completedAt: row?.completedAt?.toISOString() ?? null,
+      });
       const mail = mailByUser.get(candidate.userId);
       return {
         id: candidate.userId,
@@ -658,6 +679,8 @@ const buildOverview = async (
     }
   return {
     answers,
+    timestamps,
+    questions: [...questionList(), ...sessionQuestions],
     data: {
       eventId,
       eventName: event.name,
@@ -695,6 +718,35 @@ const buildOverview = async (
   };
 };
 
+export function respondentFeedbackSections(
+  answers: Record<string, string>,
+  role: ConferenceFeedbackRole,
+  questions: readonly FeedbackQuestion[] = questionList(),
+) {
+  return getConferenceFeedbackSteps({ ...answers, participantRole: role }).map(
+    (step) => ({
+      id: step.id,
+      title: step.title,
+      answers: questions
+        .filter(
+          (question) =>
+            (step.questionIds.includes(question.id) ||
+              (step.id === 'program' && question.id.startsWith('session:'))) &&
+            visibleQuestion(question, role, answers),
+        )
+        .map((question) => ({
+          id: question.id,
+          label: question.label,
+          value: answers[question.id]?.trim()
+            ? (question.options?.find(
+                (option) => option.value === answers[question.id],
+              )?.label ?? answers[question.id]!)
+            : null,
+        })),
+    }),
+  );
+}
+
 /** Quote all cells and neutralize spreadsheet formulas, including leading whitespace/control prefixes. */
 export const feedbackCsvCell = (value: unknown): string => {
   let text = value == null ? '' : String(value);
@@ -707,7 +759,9 @@ export async function handleAdminConferenceFeedback(
   request: Request,
   eventId: string,
   deps: FeedbackDependencies,
-  action: 'overview' | 'export' | 'send' = 'overview',
+  action:
+    'overview' | 'export' | 'send' | 'respondents' | 'respondent' = 'overview',
+  participantId?: string,
 ): Promise<Response> {
   const requestId = getRequestId(request.headers);
   const headers = responseHeaders(requestId);
@@ -967,6 +1021,106 @@ export async function handleAdminConferenceFeedback(
         },
       );
       return Response.json(result.body, { status: result.status, headers });
+    }
+    if (action === 'respondents' || action === 'respondent') {
+      const query = feedbackRespondentsQuerySchema.safeParse(
+        Object.fromEntries(new URL(request.url).searchParams),
+      );
+      if (!query.success) throw invalid('Neplatný filtr respondentů.');
+      if (
+        action === 'respondent' &&
+        !z.string().uuid().safeParse(participantId).success
+      )
+        throw invalid('Neplatný identifikátor účastníka.');
+      const { data, answers, timestamps, questions } = await buildOverview(
+        deps.db,
+        eventId,
+        action === 'respondent' ? { role: 'all', status: 'all' } : query.data,
+        now,
+      );
+      const respondents: FeedbackRespondent[] = data.recipients.flatMap(
+        (person) => {
+          const values = answers.get(person.id) ?? {};
+          const answerCount = Object.values(values).filter((value) =>
+            value.trim(),
+          ).length;
+          if (!answerCount || person.status === 'not_started') return [];
+          const score = values.score;
+          return [
+            {
+              id: person.id,
+              name: person.name,
+              email: person.email,
+              role: person.role,
+              status: person.status,
+              answerCount,
+              overallRating:
+                questions
+                  .find((question) => question.id === 'score')
+                  ?.options?.find((option) => option.value === score)?.label ??
+                null,
+              ...timestamps.get(person.id)!,
+            },
+          ];
+        },
+      );
+      if (action === 'respondent') {
+        const respondent = respondents.find(
+          (person) => person.id === participantId,
+        );
+        if (!respondent)
+          throw new ApiProblemError({
+            status: 404,
+            code: 'ADMIN_RESOURCE_NOT_FOUND',
+            title: 'Hodnocení není dostupné',
+            detail: 'Tento účastník nemá dostupné odpovědi pro tuto akci.',
+          });
+        return Response.json(
+          feedbackRespondentDetailSchema.parse({
+            data: {
+              eventId,
+              respondent,
+              sections: respondentFeedbackSections(
+                answers.get(respondent.id)!,
+                respondent.role,
+                questions,
+              ),
+            },
+          }),
+          { headers },
+        );
+      }
+      const normalize = (value: string) =>
+        value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('cs');
+      const search = normalize(query.data.search);
+      const matching = respondents.filter((person) =>
+        normalize(`${person.name} ${person.email}`).includes(search),
+      );
+      matching.sort(
+        (a, b) =>
+          (query.data.sort === 'updated'
+            ? (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+            : 0) ||
+          a.name.localeCompare(b.name, 'cs') ||
+          a.id.localeCompare(b.id),
+      );
+      const pageSize = 25;
+      const page = Math.min(
+        query.data.page,
+        Math.max(1, Math.ceil(matching.length / pageSize)),
+      );
+      return Response.json(
+        feedbackRespondentsResponseSchema.parse({
+          data: {
+            eventId,
+            items: matching.slice((page - 1) * pageSize, page * pageSize),
+            total: matching.length,
+            page,
+            pageSize,
+          },
+        }),
+        { headers },
+      );
     }
     const parsed = feedbackFilterSchema.safeParse(
       Object.fromEntries(new URL(request.url).searchParams),

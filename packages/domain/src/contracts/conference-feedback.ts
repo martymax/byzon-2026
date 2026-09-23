@@ -150,3 +150,60 @@ export type FeedbackRecipient = z.infer<typeof feedbackRecipientSchema>;
 export type FeedbackQuestionReport = z.infer<
   typeof feedbackQuestionReportSchema
 >;
+
+export const feedbackRespondentsQuerySchema = z.strictObject({
+  role: conferenceFeedbackRoleSchema.or(z.literal('all')).default('all'),
+  status: z.enum(['all', 'in_progress', 'completed']).default('all'),
+  search: z.string().trim().max(200).default(''),
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+  sort: z.enum(['updated', 'name']).default('updated'),
+});
+export const feedbackRespondentSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  email: z.string(),
+  role: conferenceFeedbackRoleSchema,
+  status: z.enum(['in_progress', 'completed']),
+  answerCount: z.number().int().min(1),
+  overallRating: z.string().nullable(),
+  updatedAt: z.string().datetime().nullable(),
+  completedAt: z.string().datetime().nullable(),
+});
+export const feedbackRespondentsResponseSchema = z.object({
+  data: z.object({
+    eventId: z.string().uuid(),
+    items: z.array(feedbackRespondentSchema),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+  }),
+});
+export const feedbackRespondentDetailSchema = z.object({
+  data: z.object({
+    eventId: z.string().uuid(),
+    respondent: feedbackRespondentSchema,
+    sections: z.array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        answers: z.array(
+          z.object({
+            id: z.string(),
+            label: z.string(),
+            value: z.string().nullable(),
+          }),
+        ),
+      }),
+    ),
+  }),
+});
+export type FeedbackRespondentsQuery = z.infer<
+  typeof feedbackRespondentsQuerySchema
+>;
+export type FeedbackRespondent = z.infer<typeof feedbackRespondentSchema>;
+export type FeedbackRespondents = z.infer<
+  typeof feedbackRespondentsResponseSchema
+>['data'];
+export type FeedbackRespondentDetail = z.infer<
+  typeof feedbackRespondentDetailSchema
+>['data'];

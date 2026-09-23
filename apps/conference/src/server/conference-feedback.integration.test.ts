@@ -287,6 +287,128 @@ integration('scoped conference feedback', () => {
     expect(csv).not.toContain(token);
     expect(csv).not.toContain('@example.invalid');
   });
+  it('restricts named respondent reports to admins and the current event, with filtered partial answers', async () => {
+    for (const action of ['respondents', 'respondent'] as const) {
+      expect(
+        (
+          await handleAdminConferenceFeedback(
+            adminRequest(),
+            eventId,
+            deps,
+            action,
+            participantId,
+          )
+        ).status,
+      ).toBe(401);
+      expect(
+        (
+          await handleAdminConferenceFeedback(
+            adminRequest(),
+            eventId,
+            {
+              ...deps,
+              getSession: async () => ({ user: { id: participantId } }),
+            },
+            action,
+            participantId,
+          )
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await handleAdminConferenceFeedback(
+            adminRequest(),
+            generateUuidV7(),
+            admin,
+            action,
+            participantId,
+          )
+        ).status,
+      ).toBe(403);
+    }
+    const response = await handleAdminConferenceFeedback(
+      adminRequest('/respondents?search=ucastnik&status=in_progress'),
+      eventId,
+      admin,
+      'respondents',
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    const list = (await response.json()).data;
+    expect(list.items.map((person: { id: string }) => person.id)).toEqual([
+      participantId,
+    ]);
+    expect(list.items[0]).toMatchObject({
+      name: 'Test Účastník',
+      status: 'in_progress',
+    });
+    expect(list.items[0].answerCount).toBeGreaterThan(0);
+    expect(list.items[0]).not.toHaveProperty('answers');
+    expect(JSON.stringify(list)).not.toContain(token);
+    const detail = await handleAdminConferenceFeedback(
+      adminRequest(),
+      eventId,
+      admin,
+      'respondent',
+      participantId,
+    );
+    expect(detail.status).toBe(200);
+    const person = (await detail.json()).data;
+    expect(person.respondent.id).toBe(participantId);
+    expect(
+      person.sections.flatMap(
+        (section: { answers: unknown[] }) => section.answers,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'score', value: 'Výborná' }),
+      ]),
+    );
+    expect(JSON.stringify(person)).not.toContain(token);
+    expect(
+      (
+        await handleAdminConferenceFeedback(
+          adminRequest(),
+          eventId,
+          admin,
+          'respondent',
+          otherId,
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await handleAdminConferenceFeedback(
+          adminRequest(),
+          eventId,
+          admin,
+          'respondent',
+          generateUuidV7(),
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await handleAdminConferenceFeedback(
+          adminRequest('/respondents?page=0'),
+          eventId,
+          admin,
+          'respondents',
+        )
+      ).status,
+    ).toBe(422);
+    const empty = await handleAdminConferenceFeedback(
+      adminRequest('/respondents?search=does-not-exist'),
+      eventId,
+      admin,
+      'respondents',
+    );
+    expect((await empty.json()).data).toMatchObject({
+      items: [],
+      total: 0,
+      page: 1,
+    });
+  });
   it('queues opted-in unverified participants once; does not send messages during creation', async () => {
     const body = {
       kind: 'invitation',

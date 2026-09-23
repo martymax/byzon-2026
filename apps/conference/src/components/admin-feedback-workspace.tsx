@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type {
   FeedbackAdminOverview,
@@ -346,6 +347,12 @@ export const AdminFeedbackWorkspace = () => {
         >
           Výsledky
         </button>
+        <Link
+          className={feedbackStyles.viewButton}
+          href="/admin/hodnoceni/ucastnici"
+        >
+          Podle účastníků
+        </Link>
         <button
           className={feedbackStyles.viewButton}
           type="button"
