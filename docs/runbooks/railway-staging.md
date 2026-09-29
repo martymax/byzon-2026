@@ -31,6 +31,8 @@ webu spouští pouze `db:migrate`; automatický seed a import obsahu se při
 přejmenování vypínají, aby se zachovala ručně upravená data. Publikace obsahu
 zůstává samostatnou akcí v administraci. Worker migrace nespouští.
 Nasazuje se přes Git integraci z `main`, bez force push a bez `railway up`.
+Produkční build webu i workeru ověřuje větev `main` a Git commit SHA
+z Railway GitHub integrace. Upload bez této identity build odmítne.
 
 Přepnutí runtime na `APP_ENV=production` následovalo až po potvrzení
 skutečného doručení testovacího e-mailu. Mailpit produkční validace odmítá.
