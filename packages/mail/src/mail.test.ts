@@ -67,6 +67,33 @@ describe('Czech greetings', () => {
 const origin = 'https://app.example.test';
 const url = `${origin}/api/auth/magic-link/verify?token=synthetic%26%22&callbackURL=%2Fadmin`;
 describe('email templates', () => {
+  it('renders five distinct gentle feedback reminders and preserves legacy round one', () => {
+    const payload = {
+      kind: 'conference_feedback' as const,
+      sessions: [],
+      eventName: 'BYZON 2026',
+      timezone: 'Europe/Prague',
+      feedbackId: '01940000-0000-7000-8000-000000000001',
+      feedbackUrl: `${origin}/hodnoceni/example`,
+      reminder: true,
+    };
+    const emails = [1, 2, 3, 4, 5].map((reminderNumber) =>
+      createNotificationEmail({ ...payload, reminderNumber }, {}, origin),
+    );
+    expect(new Set(emails.map((email) => email.subject)).size).toBe(5);
+    expect(new Set(emails.map((email) => email.text)).size).toBe(5);
+    expect(createNotificationEmail(payload, {}, origin)).toEqual(emails[0]);
+    for (const email of emails) {
+      expect(email.html).toContain(payload.feedbackUrl);
+      expect(email.text).toContain(payload.feedbackUrl);
+    }
+    expect(emails[4]!.text).toContain('další připomínku už neposíláme');
+    for (const reminderNumber of [0, 6, 1.5])
+      expect(
+        notificationPayloadSchema.safeParse({ ...payload, reminderNumber })
+          .success,
+      ).toBe(false);
+  });
   it('renders concise survey invitations and reminders in both formats', () => {
     const payload = notificationPayloadSchema.parse({
       kind: 'conference_feedback',

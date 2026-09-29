@@ -85,7 +85,11 @@ export const requestFeedbackOverview = (
 export const sendFeedbackInvitations = (
   api: ApiPort,
   eventId: string,
-  body: { kind: 'invitation' | 'reminder'; participantIds: string[] },
+  body: {
+    kind: 'invitation' | 'reminder';
+    reminderNumber?: number;
+    participantIds: string[];
+  },
   idempotencyKey: string,
   signal: AbortSignal,
 ) =>

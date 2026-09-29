@@ -5,6 +5,8 @@ Administrace: `/admin/hodnoceni` (Výsledky a Rozesílání).
 Přehled konkrétních respondentů: `/admin/hodnoceni/ucastnici`.
 
 Demo ukazuje stejnou e-mailovou šablonu a dotazník jako skutečný průchod.
+V záložce e-mailů lze přepínat první pozvánku a 1. až 5. jemnou připomínku.
+Všechny náhledy používají přímo šablony skutečné rozesílky.
 Odpovědi ukládá pouze do prohlížeče, nikdy nevolá API pro skutečné hodnocení.
 Lze vyzkoušet účastníka, speakera, moderátora i partnera a ukázku resetovat.
 
@@ -37,6 +39,12 @@ Organizátor vybere pozvánku nebo připomenutí, filtr a konkrétní příjemce
 Před zařazením do fronty vidí počet a kontrolu výběru. Samotné nasazení
 žádné pozvánky nerozesílá. Původní automatický rozesílač po 12 hodinách je
 vyřazený, aby nevznikaly souběžné kampaně se starým přihlašovacím odkazem.
+
+Připomínky mají pět samostatných variant a administrátor vybírá jejich pořadí.
+Další kolo lze zařadit teprve po úspěšném odeslání předchozího. Každé kolo
+se příjemci odešle nejvýše jednou; selhané odeslání lze zopakovat. Pátá
+připomínka je poslední. Přehled příjemců ukazuje pořadí, stav a datum každého
+kola. Dříve odeslaná připomínka se počítá jako první, bez opakovaného odeslání.
 
 Fronta respektuje odmítnutí e-mailů k hodnocení, dokončená hodnocení,
 odebrání přístupu a žádosti o smazání. Účastník nemusí mít aktivovaný účet.

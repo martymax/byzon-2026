@@ -6,6 +6,7 @@ export type FeedbackMailKind = 'invitation' | 'reminder';
 export const feedbackRecipientIneligibility = (
   recipient: FeedbackRecipient,
   kind: FeedbackMailKind,
+  reminderNumber = 1,
 ): string | null => {
   if (!recipient.emailEnabled) return 'E-maily jsou vypnuté';
   if (recipient.status === 'completed') return 'Hodnocení už dokončeno';
@@ -22,10 +23,23 @@ export const feedbackRecipientIneligibility = (
     return 'Pozvánka už byla zařazena';
   if (kind === 'reminder' && !recipient.invitedAt)
     return 'Nejprve pošlete pozvánku';
+  if (kind === 'reminder' && reminderNumber > 1) {
+    const previous = recipient.reminders?.find(
+      (row) => row.number === reminderNumber - 1,
+    );
+    if (previous?.status !== 'delivered')
+      return `Nejprve musí být odeslána ${reminderNumber - 1}. připomínka`;
+  }
+  const current = recipient.reminders?.find(
+    (row) => row.number === reminderNumber,
+  );
   if (
     kind === 'reminder' &&
-    recipient.remindedAt &&
-    recipient.mailStatus !== 'failed'
+    ((current && current.status !== 'failed') ||
+      (reminderNumber === 1 &&
+        !current &&
+        recipient.remindedAt &&
+        recipient.mailStatus !== 'failed'))
   )
     return 'Připomenutí už bylo zařazeno';
   return null;

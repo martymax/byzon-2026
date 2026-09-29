@@ -87,6 +87,7 @@ export const notificationPayloadSchema = z
     feedbackId: z.uuid().optional(),
     feedbackUrl: z.string().url().max(2048).optional(),
     reminder: z.boolean().optional(),
+    reminderNumber: z.number().int().min(1).max(5).optional(),
   })
   .superRefine((value, context) => {
     if (

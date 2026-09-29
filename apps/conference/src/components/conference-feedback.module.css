@@ -850,3 +850,16 @@
     transform: none;
   }
 }
+.emailVariant {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.emailVariant select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.6rem;
+  font: inherit;
+}

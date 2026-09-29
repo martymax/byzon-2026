@@ -1015,11 +1015,18 @@ export function ConferenceFeedback({
 export function ConferenceFeedbackDemo({
   emailHtml,
   emailSubject,
+  emailVariants,
 }: {
   emailHtml: string;
   emailSubject: string;
+  emailVariants?: { label: string; html: string; subject: string }[];
 }) {
   const [tab, setTab] = useState<'email' | 'survey'>('email');
+  const [emailIndex, setEmailIndex] = useState(0);
+  const variants = emailVariants ?? [
+    { label: 'První pozvánka', html: emailHtml, subject: emailSubject },
+  ];
+  const selectedEmail = variants[emailIndex] ?? variants[0]!;
   const emailFrame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     if (tab !== 'email') return;
@@ -1038,7 +1045,7 @@ export function ConferenceFeedbackDemo({
       frame.removeEventListener('load', resize);
       window.removeEventListener('resize', resize);
     };
-  }, [tab, emailHtml]);
+  }, [tab, selectedEmail.html]);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
@@ -1078,7 +1085,7 @@ export function ConferenceFeedbackDemo({
             }}
             onClick={() => setTab('email')}
           >
-            Návrh e-mailu
+            Návrhy e-mailů
           </button>
           <button
             type="button"
@@ -1109,17 +1116,30 @@ export function ConferenceFeedbackDemo({
         <div className={styles.emailIntroduction}>
           <h1>Pozvání, které otevře dialog.</h1>
           <p>
-            Takto pozveme účastníky k hodnocení. Tlačítko v ostrém e-mailu
-            otevře jejich osobní dotazník bez přihlašování.
+            Prohlédněte si pozvánku a všech pět jemných připomínek. Tlačítko v
+            ostrém e-mailu otevře jejich osobní dotazník bez přihlašování.
           </p>
+          <label className={styles.emailVariant}>
+            <span>Varianta e-mailu</span>
+            <select
+              value={emailIndex}
+              onChange={(event) => setEmailIndex(Number(event.target.value))}
+            >
+              {variants.map((variant, index) => (
+                <option key={variant.label} value={index}>
+                  {variant.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <div className={styles.emailSubject}>
           <span>Předmět</span>
-          <strong>{emailSubject}</strong>
+          <strong>{selectedEmail.subject}</strong>
         </div>
         <iframe
           ref={emailFrame}
-          title="Návrh e-mailu s pozvánkou k hodnocení"
+          title={`Návrh e-mailu: ${selectedEmail.label}`}
           sandbox="allow-same-origin"
           onLoad={(event) => {
             const frame = event.currentTarget;
@@ -1127,7 +1147,7 @@ export function ConferenceFeedbackDemo({
             if (document)
               frame.style.height = `${document.body.scrollHeight + 24}px`;
           }}
-          srcDoc={emailHtml.replace(
+          srcDoc={selectedEmail.html.replace(
             '</head>',
             '<style>a{pointer-events:none!important;cursor:default!important}</style></head>',
           )}

@@ -108,7 +108,7 @@ const success = (data: unknown) => ({
   metadata: { requestId: 'feedback-admin-test' },
 });
 
-const setup = async (sendResult?: () => unknown) => {
+const setup = async (sendResult?: () => unknown, data = overview) => {
   const sends = vi.fn((options: unknown) => {
     void options;
     return (
@@ -126,8 +126,7 @@ const setup = async (sendResult?: () => unknown) => {
     request: vi.fn(async (endpoint: unknown, options: unknown) => {
       if (endpoint === adminContextEndpoint)
         return success(adminContextFixtures.organizer!);
-      if (endpoint === feedbackOverviewEndpoint)
-        return success({ data: overview });
+      if (endpoint === feedbackOverviewEndpoint) return success({ data });
       if (endpoint === feedbackSendEndpoint) {
         sends(options);
         return sends.mock.results.at(-1)?.value;
@@ -149,6 +148,75 @@ const setup = async (sendResult?: () => unknown) => {
 beforeEach(() => window.history.replaceState({}, '', '/admin/hodnoceni'));
 
 describe('conference feedback administration', () => {
+  it('shows reminder history and queues the selected round from one to five', async () => {
+    const data = structuredClone(overview);
+    data.recipients[1]!.remindedAt = '2026-09-22T10:00:00.000Z';
+    data.recipients[1]!.reminders = [
+      {
+        number: 1,
+        status: 'delivered',
+        queuedAt: '2026-09-22T10:00:00.000Z',
+        sentAt: '2026-09-22T10:00:00.000Z',
+      },
+    ];
+    const { screen, sends } = await setup(undefined, data);
+    await screen
+      .getByRole('button', { name: 'Rozesílání e-mailů', exact: true })
+      .click();
+    await screen.getByRole('radio', { name: /Jemné připomenutí/ }).click();
+    const select = screen.getByRole('combobox', { name: 'Pořadí připomínky' });
+    await select.selectOptions('5');
+    await expect
+      .element(
+        screen.getByRole('button', { name: 'Vybrat vhodné (0)', exact: true }),
+      )
+      .toBeDisabled();
+    await select.selectOptions('2');
+    const visibleRecipients =
+      window.innerWidth <= 768
+        ? screen.getByRole('list', { name: 'Příjemci hodnocení' })
+        : screen.getByRole('table');
+    await expect
+      .element(
+        visibleRecipients.getByText('1. připomínka: Odesláno', {
+          exact: false,
+        }),
+      )
+      .toBeVisible();
+    await screen
+      .getByRole('button', { name: 'Vybrat vhodné (1)', exact: true })
+      .click();
+    await screen
+      .getByRole('button', { name: 'Zkontrolovat a odeslat (1)' })
+      .click();
+    await expect
+      .element(
+        screen.getByRole('heading', {
+          name: 'Odeslat 2. připomínku hodnocení?',
+        }),
+      )
+      .toBeVisible();
+    await screen
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Odeslat 1 e-mail' })
+      .click();
+    await expect.poll(() => sends.mock.calls.length).toBe(1);
+    expect(sends.mock.calls[0]?.[0]).toMatchObject({
+      body: {
+        kind: 'reminder',
+        reminderNumber: 2,
+        participantIds: [data.recipients[1]!.id],
+      },
+    });
+    await expectComponentToPassAxe(
+      document.querySelector<HTMLElement>('[data-admin-root]')!,
+    );
+    window.scrollTo(0, 0);
+    await page.screenshot({
+      path: `.vitest-attachments/admin-feedback-reminders-${window.innerWidth}.png`,
+      fullPage: true,
+    });
+  });
   it('reports partial answers, excludes skipped ratings and offers a filtered export', async () => {
     const { screen } = await setup();
     await expect

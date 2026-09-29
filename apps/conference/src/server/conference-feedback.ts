@@ -532,6 +532,9 @@ const buildOverview = async (
           userId: schema.emailDeliveries.userId,
           status: schema.emailDeliveries.status,
           lastError: schema.emailDeliveries.lastError,
+          payload: schema.emailDeliveries.payload,
+          createdAt: schema.emailDeliveries.createdAt,
+          deliveredAt: schema.emailDeliveries.deliveredAt,
         })
         .from(schema.emailDeliveries)
         .where(
@@ -556,9 +559,16 @@ const buildOverview = async (
   const byUser = new Map(responses.map((row) => [row.userId, row]));
   const legacyByUser = new Map(legacyRatings.map((row) => [row.userId, row]));
   const mailByUser = new Map<string, (typeof deliveries)[number]>();
-  for (const delivery of deliveries)
+  const remindersByUser = new Map<string, typeof deliveries>();
+  for (const delivery of deliveries) {
     if (!mailByUser.has(delivery.userId))
       mailByUser.set(delivery.userId, delivery);
+    if (delivery.payload.reminder === true) {
+      const reminders = remindersByUser.get(delivery.userId) ?? [];
+      reminders.push(delivery);
+      remindersByUser.set(delivery.userId, reminders);
+    }
+  }
   const answers = new Map<string, Record<string, string>>();
   const timestamps = new Map<
     string,
@@ -603,6 +613,22 @@ const buildOverview = async (
             : 'not_started',
         invitedAt: row?.invitedAt?.toISOString() ?? null,
         remindedAt: row?.remindedAt?.toISOString() ?? null,
+        reminders: (remindersByUser.get(candidate.userId) ?? [])
+          .map((delivery) => ({
+            number:
+              typeof delivery.payload.reminderNumber === 'number'
+                ? delivery.payload.reminderNumber
+                : 1,
+            status:
+              delivery.status === 'delivered' && delivery.lastError
+                ? ('skipped' as const)
+                : delivery.status,
+            queuedAt: delivery.createdAt.toISOString(),
+            sentAt: delivery.lastError
+              ? null
+              : (delivery.deliveredAt?.toISOString() ?? null),
+          }))
+          .sort((a, b) => a.number - b.number),
         mailStatus: mail
           ? mail.lastError && mail.status === 'delivered'
             ? 'skipped'
@@ -901,7 +927,24 @@ export async function handleAdminConferenceFeedback(
           const responseByUser = new Map(
             responses.map((row) => [row.userId, row]),
           );
-          const deduplicationKey = `conference_feedback:${parsed.data.kind}:v1`;
+          const reminderNumber = parsed.data.reminderNumber ?? 1;
+          // Preserve the original key and payload compatibility for reminder 1.
+          const reminderKey = (number: number) =>
+            number === 1
+              ? 'conference_feedback:reminder:v1'
+              : `conference_feedback:reminder:${number}:v1`;
+          const deduplicationKey =
+            parsed.data.kind === 'reminder'
+              ? reminderKey(reminderNumber)
+              : 'conference_feedback:invitation:v1';
+          const previousRoundByUser = new Map(
+            existingDeliveries
+              .filter(
+                (row) =>
+                  row.deduplicationKey === reminderKey(reminderNumber - 1),
+              )
+              .map((row) => [row.userId, row]),
+          );
           const previousByUser = new Map(
             existingDeliveries
               .filter((row) => row.deduplicationKey === deduplicationKey)
@@ -919,14 +962,20 @@ export async function handleAdminConferenceFeedback(
           for (const candidate of eligible) {
             const response = responseByUser.get(candidate.userId)!;
             const previous = previousByUser.get(candidate.userId);
+            const previousRound = previousRoundByUser.get(candidate.userId);
             if (
               response.completedAt ||
               activeUsers.has(candidate.userId) ||
               (parsed.data.kind === 'invitation' && response.remindedAt) ||
+              (parsed.data.kind === 'reminder' &&
+                (!response.invitedAt ||
+                  (reminderNumber > 1 &&
+                    (previousRound?.status !== 'delivered' ||
+                      previousRound.lastError)))) ||
               (previous?.status !== 'failed' &&
                 (parsed.data.kind === 'invitation'
                   ? response.invitedAt
-                  : !response.invitedAt || response.remindedAt))
+                  : previous || (reminderNumber === 1 && response.remindedAt)))
             )
               continue;
             const token = createFeedbackToken(deps.tokenSecret, response);
@@ -943,6 +992,7 @@ export async function handleAdminConferenceFeedback(
               feedbackId: response.id,
               feedbackUrl: `${deps.allowedOrigin}/hodnoceni/${token}`,
               reminder: parsed.data.kind === 'reminder',
+              ...(parsed.data.kind === 'reminder' ? { reminderNumber } : {}),
             };
             const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60_000);
             if (previous?.status === 'failed') {
@@ -1007,6 +1057,7 @@ export async function handleAdminConferenceFeedback(
             requestId,
             after: {
               kind: parsed.data.kind,
+              ...(parsed.data.kind === 'reminder' ? { reminderNumber } : {}),
               queued,
               skipped: selected.size - queued,
             },

@@ -66,6 +66,7 @@ export const feedbackFilterSchema = z.strictObject({
 });
 export const feedbackSendRequestSchema = z.strictObject({
   kind: z.enum(['invitation', 'reminder']),
+  reminderNumber: z.number().int().min(1).max(5).optional(),
   participantIds: z
     .array(z.string().uuid())
     .min(1)
@@ -88,6 +89,22 @@ export const feedbackRecipientSchema = z.object({
   status: conferenceFeedbackStatusSchema,
   invitedAt: z.string().datetime().nullable(),
   remindedAt: z.string().datetime().nullable(),
+  reminders: z
+    .array(
+      z.object({
+        number: z.number().int().min(1).max(5),
+        status: z.enum([
+          'pending',
+          'processing',
+          'delivered',
+          'failed',
+          'skipped',
+        ]),
+        queuedAt: z.string().datetime(),
+        sentAt: z.string().datetime().nullable(),
+      }),
+    )
+    .optional(),
   mailStatus: z.enum([
     'not_sent',
     'pending',

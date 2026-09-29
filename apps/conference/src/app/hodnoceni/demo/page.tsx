@@ -27,11 +27,35 @@ export default function ConferenceFeedbackDemoPage() {
     {},
     origin,
   );
+  const emailVariants = [
+    { label: 'První pozvánka', html: email.html, subject: email.subject },
+    ...[1, 2, 3, 4, 5].map((reminderNumber) => {
+      const reminder = createNotificationEmail(
+        notificationPayloadSchema.parse({
+          kind: 'conference_feedback',
+          eventName: 'BYZON 2026',
+          timezone: 'Europe/Prague',
+          feedbackId: '01940000-0000-7000-8000-000000000001',
+          feedbackUrl: `${origin.replace(/\/$/, '')}/hodnoceni/demo#dotaznik`,
+          reminder: true,
+          reminderNumber,
+        }),
+        {},
+        origin,
+      );
+      return {
+        label: `${reminderNumber}. připomínka${reminderNumber === 5 ? ' (poslední)' : ''}`,
+        html: reminder.html,
+        subject: reminder.subject,
+      };
+    }),
+  ];
   return (
     <main id="main">
       <ConferenceFeedbackDemo
         emailHtml={email.html}
         emailSubject={email.subject}
+        emailVariants={emailVariants}
       />
     </main>
   );

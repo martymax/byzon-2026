@@ -16,6 +16,46 @@ const recipient: FeedbackRecipient = {
 };
 
 describe('feedback recipient preview', () => {
+  it('offers the next round only after delivery and allows retrying its failed attempt', () => {
+    const invited: FeedbackRecipient = {
+      ...recipient,
+      invitedAt: '2026-09-21T10:00:00.000Z',
+      remindedAt: '2026-09-22T10:00:00.000Z',
+      mailStatus: 'delivered',
+      reminders: [
+        {
+          number: 1,
+          status: 'delivered',
+          queuedAt: '2026-09-22T10:00:00.000Z',
+          sentAt: '2026-09-22T10:00:01.000Z',
+        },
+      ],
+    };
+    expect(feedbackRecipientIneligibility(invited, 'reminder', 2)).toBeNull();
+    expect(
+      feedbackRecipientIneligibility(invited, 'reminder', 3),
+    ).not.toBeNull();
+    expect(
+      feedbackRecipientIneligibility(invited, 'reminder', 1),
+    ).not.toBeNull();
+    const failed: FeedbackRecipient = {
+      ...invited,
+      mailStatus: 'failed',
+      reminders: [
+        ...invited.reminders!,
+        {
+          number: 2,
+          status: 'failed',
+          queuedAt: '2026-09-23T10:00:00.000Z',
+          sentAt: null,
+        },
+      ],
+    };
+    expect(feedbackRecipientIneligibility(failed, 'reminder', 2)).toBeNull();
+    expect(
+      feedbackRecipientIneligibility(failed, 'reminder', 3),
+    ).not.toBeNull();
+  });
   it('allows retrying a failed delivery in its original category only', () => {
     const invited: FeedbackRecipient = {
       ...recipient,

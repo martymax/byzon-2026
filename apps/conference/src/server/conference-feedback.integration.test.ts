@@ -555,6 +555,79 @@ integration('scoped conference feedback', () => {
       String(retried!.payload.feedbackUrl),
     );
   });
+  it('sends reminders one through five in order, deduplicates retries and reports each delivery', async () => {
+    const now = new Date('2024-01-02T12:00:00Z');
+    const send = vi.fn<(message: DeliveryMessage) => Promise<void>>(
+      async () => {},
+    );
+    const subjects = new Set<string>();
+    for (const reminderNumber of [1, 2, 3, 4, 5]) {
+      const body = {
+        kind: 'reminder',
+        participantIds: [otherId],
+        ...(reminderNumber > 1 ? { reminderNumber } : {}),
+      };
+      const key = generateUuidV7();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const result = await handleAdminConferenceFeedback(
+          adminRequest('/send', body, key),
+          eventId,
+          { ...admin, now: () => now },
+          'send',
+        );
+        expect(result.status).toBe(202);
+        expect((await result.json()).data.queued).toBe(1);
+      }
+      const repeated = await handleAdminConferenceFeedback(
+        adminRequest('/send', body),
+        eventId,
+        { ...admin, now: () => now },
+        'send',
+      );
+      expect((await repeated.json()).data.queued).toBe(0);
+      if (reminderNumber < 5) {
+        const tooEarly = await handleAdminConferenceFeedback(
+          adminRequest('/send', {
+            ...body,
+            reminderNumber: reminderNumber + 1,
+          }),
+          eventId,
+          { ...admin, now: () => now },
+          'send',
+        );
+        expect((await tooEarly.json()).data.queued).toBe(0);
+      }
+      expect(await dispatchEmailOnce(client.db, { send }, origin, now)).toBe(
+        'delivered',
+      );
+      subjects.add(send.mock.calls.at(-1)![0].subject);
+      const report = await (
+        await handleAdminConferenceFeedback(adminRequest(), eventId, admin)
+      ).json();
+      const recipient = report.data.recipients.find(
+        (row: { id: string }) => row.id === otherId,
+      );
+      expect(recipient.reminders).toHaveLength(reminderNumber);
+      expect(recipient.reminders.at(-1)).toMatchObject({
+        number: reminderNumber,
+        status: 'delivered',
+        sentAt: now.toISOString(),
+      });
+    }
+    expect(send).toHaveBeenCalledTimes(5);
+    expect(subjects.size).toBe(5);
+    const invalid = await handleAdminConferenceFeedback(
+      adminRequest('/send', {
+        kind: 'reminder',
+        reminderNumber: 6,
+        participantIds: [otherId],
+      }),
+      eventId,
+      admin,
+      'send',
+    );
+    expect(invalid.status).toBe(422);
+  });
   it('revokes tokens on signing-secret rotation and blocks blank completion', async () => {
     const original = await ensureConferenceFeedbackResponse(
       client.db,

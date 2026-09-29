@@ -138,6 +138,7 @@ const QuestionReport = ({ question }: { question: FeedbackQuestionReport }) => {
 
 interface PendingSend {
   kind: FeedbackMailKind;
+  reminderNumber: number;
   participantIds: string[];
   key: string;
   previewNames: string[];
@@ -158,6 +159,7 @@ export const AdminFeedbackWorkspace = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [kind, setKind] = useState<FeedbackMailKind>('invitation');
+  const [reminderNumber, setReminderNumber] = useState(1);
   const [search, setSearch] = useState('');
   const [questionSearch, setQuestionSearch] = useState('');
   const [includeEmpty, setIncludeEmpty] = useState(false);
@@ -230,7 +232,8 @@ export const AdminFeedbackWorkspace = () => {
     [report, search],
   );
   const eligible = recipients.filter(
-    (recipient) => !feedbackRecipientIneligibility(recipient, kind),
+    (recipient) =>
+      !feedbackRecipientIneligibility(recipient, kind, reminderNumber),
   );
   const selectedRecipients = eligible.filter((recipient) =>
     selected.has(recipient.id),
@@ -254,6 +257,7 @@ export const AdminFeedbackWorkspace = () => {
     if (loading || selectedRecipients.length === 0 || locked) return;
     setPending({
       kind,
+      reminderNumber,
       participantIds: selectedRecipients.map((recipient) => recipient.id),
       key: createAdminIdempotencyKey('feedback-send'),
       previewNames: selectedRecipients
@@ -276,6 +280,9 @@ export const AdminFeedbackWorkspace = () => {
       eventId,
       {
         kind: operation.kind,
+        ...(operation.kind === 'reminder'
+          ? { reminderNumber: operation.reminderNumber }
+          : {}),
         participantIds: operation.participantIds,
       },
       operation.key,
@@ -610,10 +617,36 @@ export const AdminFeedbackWorkspace = () => {
                   />
                   <span>
                     <strong>Jemné připomenutí</strong>
-                    <small>Jednou pozvaným, kteří ještě nedokončili.</small>
+                    <small>
+                      Pozvaným, kteří ještě nedokončili. Nejvýše pětkrát.
+                    </small>
                   </span>
                 </label>
               </fieldset>
+              {kind === 'reminder' ? (
+                <label className={styles.field}>
+                  <span>Pořadí připomínky</span>
+                  <select
+                    value={reminderNumber}
+                    disabled={locked}
+                    onChange={(event) => {
+                      setReminderNumber(Number(event.target.value));
+                      setSelected(new Set());
+                      setPage(0);
+                    }}
+                  >
+                    {[1, 2, 3, 4, 5].map((number) => (
+                      <option key={number} value={number}>
+                        {number}. připomínka{number === 5 ? ' (poslední)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    Každé kolo má vlastní jemný text. Další připomínku lze
+                    vybrat až po odeslání předchozí.
+                  </small>
+                </label>
+              ) : null}
               <label className={styles.field}>
                 <span>Najít příjemce</span>
                 <input
@@ -697,6 +730,7 @@ export const AdminFeedbackWorkspace = () => {
                         selected={selected.has(recipient.id)}
                         disabled={locked || loading}
                         kind={kind}
+                        reminderNumber={reminderNumber}
                         toggle={toggleRecipient}
                         date={date}
                       />
@@ -724,6 +758,7 @@ export const AdminFeedbackWorkspace = () => {
                   const reason = feedbackRecipientIneligibility(
                     recipient,
                     kind,
+                    reminderNumber,
                   );
                   return (
                     <li
@@ -769,11 +804,7 @@ export const AdminFeedbackWorkspace = () => {
                           Pozvánka: {date(recipient.invitedAt)}
                         </p>
                       ) : null}
-                      {recipient.remindedAt ? (
-                        <p className={feedbackStyles.note}>
-                          Připomenutí: {date(recipient.remindedAt)}
-                        </p>
-                      ) : null}
+                      <ReminderHistory recipient={recipient} date={date} />
                       {reason ? (
                         <p
                           className={feedbackStyles.recipientReason}
@@ -858,7 +889,7 @@ export const AdminFeedbackWorkspace = () => {
         open={confirming && pending !== null}
         title={
           pending?.kind === 'reminder'
-            ? 'Odeslat připomenutí hodnocení?'
+            ? `Odeslat ${pending.reminderNumber}. připomínku hodnocení?`
             : 'Odeslat pozvánku k hodnocení?'
         }
         actionLabel={`Odeslat ${feedbackEmailCount(pending?.participantIds.length ?? 0)}`}
@@ -902,6 +933,7 @@ const RecipientRow = ({
   selected,
   disabled,
   kind,
+  reminderNumber,
   toggle,
   date,
 }: {
@@ -909,10 +941,15 @@ const RecipientRow = ({
   selected: boolean;
   disabled: boolean;
   kind: FeedbackMailKind;
+  reminderNumber: number;
   toggle: (id: string) => void;
   date: (value: string | null) => string;
 }) => {
-  const reason = feedbackRecipientIneligibility(recipient, kind);
+  const reason = feedbackRecipientIneligibility(
+    recipient,
+    kind,
+    reminderNumber,
+  );
   return (
     <tr data-bulk-selected={selected ? 'true' : undefined}>
       <td>
@@ -967,12 +1004,31 @@ const RecipientRow = ({
             Pozvánka: {date(recipient.invitedAt)}
           </small>
         ) : null}
-        {recipient.remindedAt ? (
-          <small className={feedbackStyles.recipientEmail}>
-            Připomenutí: {date(recipient.remindedAt)}
-          </small>
-        ) : null}
+        <ReminderHistory recipient={recipient} date={date} />
       </td>
     </tr>
   );
 };
+
+const ReminderHistory = ({
+  recipient,
+  date,
+}: {
+  recipient: FeedbackRecipient;
+  date: (value: string | null) => string;
+}) =>
+  recipient.reminders?.length ? (
+    <div aria-label="Historie připomínek">
+      {recipient.reminders.map((reminder) => (
+        <small key={reminder.number} className={feedbackStyles.recipientEmail}>
+          {reminder.number}. připomínka:{' '}
+          {feedbackMailStatusLabels[reminder.status]} ·{' '}
+          {date(reminder.sentAt ?? reminder.queuedAt)}
+        </small>
+      ))}
+    </div>
+  ) : recipient.remindedAt ? (
+    <small className={feedbackStyles.recipientEmail}>
+      1. připomínka: {date(recipient.remindedAt)}
+    </small>
+  ) : null;

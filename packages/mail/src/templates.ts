@@ -278,9 +278,31 @@ export const createNotificationEmail = (
     const url = actionUrl(p.feedbackUrl!, origin);
     if (!/^\/hodnoceni\/[^/]+$/.test(new URL(url).pathname))
       throw new Error('Invalid feedback action path');
+    const reminderCopy = [
+      [
+        'Ještě nám můžete říct, jaký byl Váš BYZON',
+        'ještě jednou děkujeme, že jste byli součástí BYZONu. Pokud máte chvilku, budeme rádi za Váš pohled. Jestli už máte hodnocení rozepsané, navážete přesně tam, kde jste skončili.',
+      ],
+      [
+        'Malé připomenutí hodnocení BYZONu',
+        'jen se lehce připomínáme s hodnocením BYZONu. Pokud se Vám najde chvilka, potěší nás, co se Vám líbilo a co byste příště uvítali jinak. I pár odpovědí nám pomůže.',
+      ],
+      [
+        'Váš pohled na BYZON nás stále zajímá',
+        'posíláme malé připomenutí pro chvíli, kdy se Vám to bude hodit. Rádi se dozvíme, co si z BYZONu odnášíte. Nemusíte odpovědět na všechno a k rozepsanému hodnocení se můžete kdykoliv vrátit.',
+      ],
+      [
+        'Chvilka na ohlédnutí za BYZONem?',
+        'pokud máte chuť se ještě ohlédnout za BYZONem, Váš osobní odkaz je stále po ruce. Oceníme i krátký postřeh. A pokud teď na hodnocení není prostor, je to úplně v pořádku.',
+      ],
+      [
+        'Poslední malé připomenutí hodnocení BYZONu',
+        'naposledy se jemně připomínáme s hodnocením BYZONu. Pokud se chcete podělit o svou zkušenost, budeme rádi. Pokud ne, nic se neděje — další připomínku už neposíláme. Děkujeme, že jste byli s námi.',
+      ],
+    ][(p.reminderNumber ?? 1) - 1]!;
     return render({
       appOrigin: origin,
-      subject: `${p.eventName}: ${p.reminder ? 'Ještě nám můžete říct, jaký byl Váš BYZON' : 'Jaký byl Váš BYZON? Zajímá nás Váš pohled'}`,
+      subject: `${p.eventName}: ${p.reminder ? reminderCopy[0] : 'Jaký byl Váš BYZON? Zajímá nás Váš pohled'}`,
       preheader:
         'Pár minut pro příští BYZON. Bez přihlášení, s automatickým ukládáním.',
       eyebrow: 'BYZON VAŠIMA OČIMA',
@@ -288,7 +310,7 @@ export const createNotificationEmail = (
       accent: 'A co příště lépe?',
       greeting: czechGreeting(recipient.firstName, recipient.emailSalutation),
       body: p.reminder
-        ? 'ještě jednou děkujeme, že jste byli součástí BYZONu. Pokud máte chvilku, budeme rádi za Váš pohled. Jestli už máte hodnocení rozepsané, navážete přesně tam, kde jste skončili.'
+        ? reminderCopy[1]!
         : 'děkujeme, že jste byli součástí BYZONu. Co Vás inspirovalo, co Vám chybělo a co máme příště udělat lépe? Vaše zkušenost nám pomůže připravit další ročník. Oceníme pochvalu i upřímnou kritiku.',
       cta: p.reminder ? 'Pokračovat v hodnocení' : 'Podělit se o zkušenost',
       url,
